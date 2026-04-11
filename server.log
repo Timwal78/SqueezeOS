@@ -1,0 +1,20 @@
+Error loading tokens: Expecting ',' delimiter: line 6 column 1 (char 352)
+2026-04-01 08:15:58,704 - data_providers - INFO - [DATA] Initializing...
+2026-04-01 08:15:58,710 - data_providers - INFO - [ALPACA] Ready (AKV39V...)
+2026-04-01 08:15:58,724 - data_providers - INFO - [POLYGON] Ready (PNAXUe...)
+2026-04-01 08:15:58,731 - data_providers - INFO - [ALPHAV] Ready (F6GL94...)
+2026-04-01 08:15:58,740 - data_providers - INFO - [DATA] Ready
+2026-04-01 08:15:58,745 - squeeze_analyzer - INFO - [SQUEEZE] Institutional Analyzer v4.2 loaded (8-module sigmoid scoring)
+2026-04-01 08:15:58,752 - options_service - INFO - [OPTIONS] Service ready
+2026-04-01 08:15:58,774 - performance_tracker - ERROR - [PERFORMANCE] Load error: Expecting ',' delimiter: line 4065 column 5 (char 86164)
+2026-04-01 08:15:58,787 - execution_engine - INFO - [EXECUTION] Loaded 0 active trades.
+2026-04-01 08:15:58,797 - options_intelligence - INFO - [OPTIONS_INTEL] Options Intelligence initialized
+2026-04-01 08:15:58,804 - discord_alerts - INFO - [DISCORD] Webhooks: squeeze, flow, all | squeeze>=50 | flow>=20
+2026-04-01 08:15:58,810 - rmre_bridge - INFO - [RMRE] Data manager linked for MTF discovery
+2026-04-01 08:15:58,815 - rmre_bridge - INFO - [RMRE] Pre-loading history for AMC...
+2026-04-01 08:15:58,847 - data_providers - WARNING - [POLYGON] Aggs AMC: HTTPSConnectionPool(host='api.polygon.io', port=443): Max retries exceeded with url: /v2/aggs/ticker/AMC/range/1/day/1774872958820/1775045758820?apiKey=PNAXUeDhr9iIAi4GfMppOAaORTr8URpK&limit=252&sort=desc (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden')))
+2026-04-01 08:15:58,860 - rmre_bridge - INFO - [RMRE] Pre-loading history for GME...
+2026-04-01 08:16:10,845 - data_providers - WARNING - [POLYGON] Aggs GME: HTTPSConnectionPool(host='api.polygon.io', port=443): Max retries exceeded with url: /v2/aggs/ticker/GME/range/1/day/1774872970833/1775045770833?apiKey=PNAXUeDhr9iIAi4GfMppOAaORTr8URpK&limit=252&sort=desc (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden')))
+2026-04-01 08:16:10,855 - rmre_bridge - INFO - [RMRE] Pre-loading history for XRT...
+2026-04-01 08:16:22,869 - data_providers - WARNING - [POLYGON] Aggs XRT: HTTPSConnectionPool(host='api.polygon.io', port=443): Max retries exceeded with url: /v2/aggs/ticker/XRT/range/1/day/1774872982845/1775045782845?apiKey=PNAXUeDhr9iIAi4GfMppOAaORTr8URpK&limit=252&sort=desc (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden')))
+2026-04-01 08:16:22,875 - rmre_bridge - INFO - [RMRE] Pre-loading history for IWM...

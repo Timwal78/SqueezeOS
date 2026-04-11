@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQUEEZE OS v5.0 | Institutional Trading Terminal</title>
+    <link rel="stylesheet" href="styles.css?v=5.1">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        #perf-badge {
+            position: fixed;
+            top: 60px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--neon-blue);
+            padding: 8px 15px;
+            border-radius: 4px;
+            z-index: 1000;
+            display: flex;
+            gap: 20px;
+            box-shadow: 0 0 15px rgba(0, 163, 255, 0.2);
+            pointer-events: none;
+            font-family: var(--font-mono);
+            transition: all 0.3s ease;
+        }
+        .perf-item { display: flex; flex-direction: column; }
+        .perf-label { font-size: 8px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+        .perf-val { font-size: 12px; font-weight: 900; color: #fff; }
+        .perf-val.pos { color: var(--neon-green); }
+        .perf-val.neg { color: var(--neon-red); }
+
+        /* Firehose waterfall styles */
+        .firehose-row {
+            padding: 4px 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            line-height: 1.5;
+            transition: background 0.3s ease;
+        }
+        .firehose-row:hover {
+            background: rgba(0,212,255,0.05);
+        }
+        @keyframes firehose-flash {
+            0% { background: rgba(0,255,136,0.15); }
+            100% { background: transparent; }
+        }
+        #firehose-list {
+            scroll-behavior: smooth;
+        }
+    </style>
+</head>
+
+<body class="beastmode">
+    <div id="perf-badge">
+        <div class="perf-item">
+            <span class="perf-label">SCANNER</span>
+            <span id="badge-scan-count" class="perf-val pos">LIVE</span>
+        </div>
+        <div class="perf-item">
+            <span class="perf-label">FLOW</span>
+            <span id="badge-flow-count" class="perf-val pos">0</span>
+        </div>
+        <div class="perf-item">
+            <span class="perf-label">SWEET SPOT</span>
+            <span id="badge-sweetspot" class="perf-val pos">$2-$60</span>
+        </div>
+    </div>
+    <div id="desktop">
+        <header id="taskbar">
+            <h1 class="main-title">SQUEEZE OS <span style="color:var(--neon-blue); font-weight:900;">PRO</span></h1>
+            <div class="system-status">
+                <span class="status-dot live"></span>
+                <span class="status-text">INSTITUTIONAL TIER: VERIFIED</span>
+            </div>
+            <div class="header-actions">
+                <button class="badge neon-blue" onclick="AnalyticalEngine.toggleAudit()" style="cursor:pointer; font-weight:950; font-size:10px;">MA</button>
+                <div class="badge neon-blue" id="active-symbol-badge" style="font-size:13px; padding:3px 10px; font-weight:950; letter-spacing:2px;">AMC</div>
+                <div class="status-indicator">
+                    <span class="pulse"></span>
+                    <span style="font-size: 10px; color: var(--neon-green); font-weight: 800; letter-spacing: 1px;">SYSTEM ONLINE</span>
+                </div>
+                <span id="stream-indicator" style="display:none;margin-left:12px;font-size:10px;color:var(--neon-pink);font-weight:800;letter-spacing:1px;"><span class="pulse-dot" style="background:#FF1493;display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:4px;"></span>LIVE</span>
+            </div>
+            <div class="system-stats">
+                <div class="search-container">
+                    <input type="text" id="global-search" placeholder="FIND SYMBOL..." class="arcane-search">
+                    <button class="search-btn" onclick="AnalyticalEngine.search()">🔍</button>
+                </div>
+                <div class="stat-item">
+                    <span class="label">BACKEND</span>
+                    <span id="backend-status" class="status-indicator offline">OFFLINE</span>
+                </div>
+                <div class="stat-item">
+                    <span class="label">SCHWAB API</span>
+                    <span id="schwab-status" class="status-indicator offline">OFFLINE</span>
+                </div>
+                <div class="stat-item">
+                    <span class="label">EQUITY</span>
+                    <span id="total-equity" class="perf-val" style="color:var(--neon-green); font-size:11px;">$0.00</span>
+                </div>
+                <div class="stat-item" style="border-left: 1px solid rgba(0,163,255,0.2); padding-left:12px;">
+                    <span class="label">TRADING MODE</span>
+                    <button id="trading-mode-btn" onclick="AnalyticalEngine.toggleTradingMode()" class="badge" style="background:rgba(0,163,255,0.1); border:1px solid var(--neon-blue); color:var(--neon-blue); cursor:pointer; font-size:9px; padding:2px 8px;">SHADOW</button>
+                </div>
+                <div class="clock" id="clock">00:00:00</div>
+            </div>
+        </header>
+
+        <div id="desktop-grid" class="arcane-grid" style="grid-template-columns: 300px 1fr 300px 380px; grid-template-rows: 1fr 240px;">
+            <!-- CHRONICLE OF EVENTS (Scanner) -->
+            <section id="chronicle" class="tiled-panel">
+                <div class="tiled-panel-header">
+                    <span class="tiled-panel-title">🚨 Option Heat Alarms</span>
+                    <span class="badge badge-live">ALERTS</span>
+                </div>
+                <div id="chronicle-list" class="tiled-panel-content">
+                    <!-- Dynamic Rows -->
+                </div>
+            </section>
+
+            <!-- ARCANE GRIMOIRE (Detailed View) -->
+            <section id="grimoire" class="tiled-panel">
+                <div class="tiled-panel-header">
+                    <span class="tiled-panel-title">📖 Arcane Grimoire</span>
+                    <div id="active-symbol-badge" class="badge badge-scanning" style="font-size:14px; padding:3px 10px; font-weight:950; letter-spacing:2px; display:none;"></div>
+                </div>
+                <div id="reversal-badge" style="flex-shrink:0;"></div>
+                <div id="grimoire-details" class="tiled-panel-content">
+                    <div class="loading-msg"><span class="spinner"></span>INITIALIZING...</div>
+                </div>
+            </section>
+
+            <!-- SPELLS OF ENCHANTMENTS (Flow / Alerts) -->
+            <section id="spells" class="tiled-panel">
+                <div class="tiled-panel-header">
+                    <span class="tiled-panel-title">🪄 Spells of Enchantments</span>
+                    <span class="badge badge-scanning">FLOW</span>
+                </div>
+                <div id="spell-list" class="tiled-panel-content">
+                    <!-- Dynamic Flow Alerts -->
+                </div>
+            </section>
+
+            <!-- ACTION BOARD: Top squeeze candidates ranked by Beast Score + Flow Confirmation -->
+            <div class="tiled-panel" id="intel-stack" style="display:flex;flex-direction:column;overflow-y:auto;">
+                <div class="tiled-panel-header" style="flex-shrink:0;">
+                    <span class="tiled-panel-title">🎯 ACTION BOARD <span id="action-sync" class="sync-ts">SYNCING...</span></span>
+                    <span class="badge badge-live">TOP PICKS</span>
+                </div>
+                <div class="tiled-panel-content" id="action-board-content" style="flex:1;overflow-y:auto;padding:8px;">
+                    <div class="loading-msg">SCANNING FOR TOP SETUPS...</div>
+                </div>
+                <!-- Keep hidden intel panels for data continuity -->
+                <div id="intel-options-content" style="display:none;"></div>
+                <div id="intel-fme-content" style="display:none;"></div>
+                <div id="intel-mm-content" style="display:none;"></div>
+                <div id="intel-cascade-content" style="display:none;"></div>
+            </div>
+
+            <!-- BOTTOM TIER: NO TABS — ALL VISIBLE, DENSE, FLOWING -->
+            <div id="bottom-tier" style="grid-column: 1 / span 4; display:grid; grid-template-columns: 2fr 1.2fr 1.2fr; gap:4px; min-height:220px;">
+                <!-- LEFT: LIVE FIREHOSE WATERFALL -->
+                <section class="tiled-panel" style="overflow:hidden;">
+                    <div class="tiled-panel-header">
+                        <span class="tiled-panel-title">🔥 LIVE OPTIONS FLOW</span>
+                        <span class="badge badge-live" id="firehose-count">0</span>
+                    </div>
+                    <div id="firehose-list" class="tiled-panel-content" style="overflow-y:auto; font-family:var(--font-mono); font-size:12px; max-height:180px;"></div>
+                </section>
+
+                <!-- CENTER: COMMAND TERMINAL WATERFALL -->
+                <section class="tiled-panel" style="overflow:hidden;">
+                    <div class="tiled-panel-header">
+                        <span class="tiled-panel-title">🖥️ SCANNER FEED</span>
+                        <span class="badge badge-live">LIVE</span>
+                    </div>
+                    <div id="terminal-list" class="tiled-panel-content terminal-large" style="overflow-y:auto; max-height:180px;"></div>
+                </section>
+
+                <!-- RIGHT: WHALE WATCH + TOP MOVERS -->
+                <section class="tiled-panel" style="overflow:hidden;">
+                    <div class="tiled-panel-header">
+                        <span class="tiled-panel-title">🔍 INSTITUTIONAL DISCOVERY <span id="discovery-sync" class="sync-ts">SYNCING...</span></span>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span class="badge badge-live" style="background:var(--neon-blue); color:black;" id="trading-mode-badge">SHADOW MODE</span>
+                            <span class="badge badge-live" id="discovery-ts">ACTIVE</span>
+                        </div>
+                    </div>
+                    <div id="discovery-list" class="tiled-panel-content" style="overflow-y:auto; max-height:180px; font-family:var(--font-mono); font-size:11px;">
+                        <div class="loading-msg">AWAKENING DISCOVERY ENGINE...</div>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <nav id="dock">
+            <button class="dock-item" onclick="AnalyticalEngine.refreshAll()">
+                <span class="icon">🔄</span>
+                <span class="label">Sync Force</span>
+            </button>
+            <button class="dock-item" onclick="AnalyticalEngine.toggleAudit()">
+                <span class="icon">📜</span>
+                <span class="label">Manifesto</span>
+            </button>
+            <button class="dock-item" onclick="WindowManager.openSettings()">
+                <span class="icon">⚙️</span>
+                <span class="label">Settings</span>
+            </button>
+        </nav>
+    </div>
+
+    <!-- SPOTLIGHT OVERLAY (Stream Mode Highlight) -->
+    <div id="spotlight-overlay" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:9999;background:rgba(5,7,10,0.95);padding:40px;box-sizing:border-box;">
+        <div id="spotlight-content" style="height:100%;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto 1fr 1fr;gap:16px;">
+            <div id="spotlight-header" style="grid-column:1/3;text-align:center;color:#00FFFF;font-size:24px;font-weight:900;letter-spacing:2px;margin-bottom:20px;"></div>
+            <div id="spotlight-left" style="overflow:hidden;border:2px solid #FF1493;border-radius:4px;background:rgba(255,20,147,0.05);padding:12px;"></div>
+            <div id="spotlight-right" style="overflow:hidden;border:2px solid #00FFFF;border-radius:4px;background:rgba(0,255,255,0.05);padding:12px;"></div>
+        </div>
+    </div>
+
+    <!-- Core Scripts -->
+    <script src="window-manager.js?v=5.0"></script>
+    <script src="holy-grail.js?v=5.0"></script>
+    <script src="squeeze-radar.js?v=5.0"></script>
+    <script src="options-flow.js?v=5.0"></script>
+    <script src="settings.js?v=5.0"></script>
+    <script src="schwab-integration.js?v=5.0"></script>
+    <div id="audit-overlay">
+        <h4>📜 MANIFESTO COMPLIANCE AUDIT</h4>
+        <div id="audit-content">
+            <div class="loading-msg">FETCHING AUDIT DATA...</div>
+        </div>
+        <button class="badge neon-red" onclick="AnalyticalEngine.toggleAudit()" style="width:100%; margin-top:10px; cursor:pointer;">CLOSE AUDIT</button>
+    </div>
+
+    <div id="execution-audit-overlay" class="mdi-window" style="display:none; width:450px; left: calc(50% - 225px); top: 15vh; z-index: 2000;">
+        <div class="mdi-window-header">
+            <span class="window-title">🛡️ INSTITUTIONAL TRADE AUDIT</span>
+            <button class="badge neon-red" onclick="AnalyticalEngine.closeExecutionAudit()" style="cursor:pointer; background:transparent; border:none; font-size:14px;">✕</button>
+        </div>
+        <div class="mdi-window-content" id="execution-audit-content" style="background: var(--bg-deep); height: 350px; overflow-y: auto; padding: 20px;">
+            <div class="loading-msg">WAITING FOR EXECUTION...</div>
+        </div>
+    </div>
+
+    <script src="analytical-engine.js?v=5.0"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log("🚀 SQUEEZE OS v5.0 Booting...");
+
+            // Initialize WindowManager for system overlays (Settings, etc.)
+            WindowManager.init();
+
+            // Global Clock Sync
+            setInterval(() => {
+                document.getElementById('clock').textContent = new Date().toLocaleTimeString();
+            }, 1000);
+
+            // Arcane Engine is automatically initialized at the end of analytical-engine.js
+        });
+    </script>
+</body>
+
+</html>

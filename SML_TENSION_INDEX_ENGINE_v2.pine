@@ -1,0 +1,425 @@
+//@version=6
+indicator("SML TENSION INDEX ENGINE™ MTF", shorttitle="SML TENSION INDEX ENGINE", overlay=false, max_labels_count=500, max_lines_count=500, max_boxes_count=100)
+
+//==================================================================================================
+// SML TENSION INDEX ENGINE (TIE) + DUAL GREEN + MTF ALIGNMENT
+// ScriptMasterLabs — INSTITUTIONAL FLAGSHIP
+// 4-Phase Histogram + Release Vector + Smart Buy/Sell/Hold + MTF Filter + Discord JSON Alerts
+//==================================================================================================
+
+//==================================================================================================
+// INPUTS
+//==================================================================================================
+string gEngine = "Engine"
+string engineMode = input.string("Active", "Engine Mode", options=["Cooldown", "Sniper", "Active", "Aggressive"], group=gEngine)
+int scoreLen = input.int(34, "Core Lookback", minval=10, maxval=200, group=gEngine)
+int fastLen = input.int(8, "Fast Mean Length", minval=2, maxval=50, group=gEngine)
+int slowLen = input.int(21, "Slow Mean Length", minval=5, maxval=100, group=gEngine)
+int persistLen = input.int(8, "Persistence Length", minval=2, maxval=50, group=gEngine)
+
+string gComp = "Compression / Trap"
+int bbLen = input.int(20, "BB Length", minval=5, maxval=100, group=gComp)
+float bbMult = input.float(2.0, "BB Mult", minval=0.5, maxval=5.0, step=0.1, group=gComp)
+int atrLen = input.int(14, "ATR Length", minval=5, maxval=100, group=gComp)
+int trapLen = input.int(10, "Trap Lookback", minval=3, maxval=50, group=gComp)
+int volLen = input.int(20, "Volume Length", minval=5, maxval=100, group=gComp)
+
+string gMTF = "MTF"
+string mtfMode = input.string("Full", "MTF Mode", options=["Off", "Filter", "Full"], group=gMTF)
+bool useTF1 = input.bool(true, "Use TF 1 (Macro)", group=gMTF)
+bool useTF2 = input.bool(true, "Use TF 2 (Anchor)", group=gMTF)
+bool useTF3 = input.bool(true, "Use TF 3 (Tactical)", group=gMTF)
+bool useTF4 = input.bool(false, "Use TF 4 (Micro)", group=gMTF)
+string tf1 = input.timeframe("M", "TF 1 — Macro", group=gMTF)
+string tf2 = input.timeframe("W", "TF 2 — Anchor", group=gMTF)
+string tf3 = input.timeframe("D", "TF 3 — Tactical", group=gMTF)
+string tf4 = input.timeframe("240", "TF 4 — Micro", group=gMTF)
+bool showMTFInTable = input.bool(true, "Show MTF In Table", group=gMTF)
+
+string gVis = "Visuals"
+bool showVector = input.bool(true, "Show Release Vector", group=gVis)
+bool showMarkers = input.bool(true, "Show Buy/Sell Markers", group=gVis)
+bool showTable = input.bool(true, "Show Smart Table", group=gVis)
+string tableSizeInput = input.string("Small", "Table Size", options=["Small", "Normal"], group=gVis)
+
+string gCols = "Colors"
+color phase1Color = input.color(#ffe600, "Phase 1 Color", group=gCols)
+color phase2Color = input.color(#ff9f0a, "Phase 2 Color", group=gCols)
+color phase3Color = input.color(#ff375f, "Phase 3 Color", group=gCols)
+color phase4Color = input.color(#39ff14, "Phase 4 Color", group=gCols)
+color vectorBaseColor = input.color(#00e5ff, "Release Vector Color", group=gCols)
+int vectorBaseWidth = input.int(2, "Release Vector Base Width", minval=1, maxval=3, group=gCols)
+
+string gAlerts = "Alerts"
+string alertPack = input.string("Core", "Alert Pack", options=["Minimal", "Core", "All"], group=gAlerts)
+bool fireDynamicAlerts = input.bool(true, "Fire alert() JSON", group=gAlerts)
+
+//==================================================================================================
+// HELPERS
+//==================================================================================================
+fClamp(_x, _lo, _hi) => math.max(_lo, math.min(_hi, _x))
+fSafeDiv(_a, _b) => _b == 0.0 or na(_b) ? 0.0 : _a / _b
+fNorm(_src, _len) => fClamp(fSafeDiv(_src - ta.lowest(_src, _len), math.max(ta.highest(_src, _len) - ta.lowest(_src, _len), 0.000001)), 0.0, 1.0)
+fRound2(_x) => math.round(_x * 100.0) / 100.0
+fTxtSize(_s) => _s == "Small" ? size.small : size.normal
+fDirLabel(_v, _thr) => _v > _thr ? "BULL" : _v < -_thr ? "BEAR" : "NEUTRAL"
+fPhaseLabel(_p) => _p == 4 ? "4 GO" : _p == 3 ? "3 RED" : _p == 2 ? "2 ORNG" : "1 YEL"
+
+//==================================================================================================
+// MODE PROFILE
+//==================================================================================================
+float compW = engineMode == "Cooldown" ? 0.38 : engineMode == "Sniper" ? 0.36 : engineMode == "Aggressive" ? 0.31 : 0.35
+float trapW = engineMode == "Cooldown" ? 0.23 : engineMode == "Sniper" ? 0.22 : engineMode == "Aggressive" ? 0.18 : 0.20
+float effortW = engineMode == "Cooldown" ? 0.14 : engineMode == "Sniper" ? 0.15 : engineMode == "Aggressive" ? 0.17 : 0.15
+float persistW = engineMode == "Cooldown" ? 0.18 : engineMode == "Sniper" ? 0.19 : engineMode == "Aggressive" ? 0.17 : 0.20
+float biasW = engineMode == "Cooldown" ? 0.07 : engineMode == "Sniper" ? 0.08 : engineMode == "Aggressive" ? 0.17 : 0.10
+float phase2Th = engineMode == "Cooldown" ? 42.0 : engineMode == "Sniper" ? 38.0 : engineMode == "Aggressive" ? 28.0 : 35.0
+float phase3Th = engineMode == "Cooldown" ? 62.0 : engineMode == "Sniper" ? 58.0 : engineMode == "Aggressive" ? 46.0 : 55.0
+float phase4Th = engineMode == "Cooldown" ? 84.0 : engineMode == "Sniper" ? 80.0 : engineMode == "Aggressive" ? 66.0 : 75.0
+float vecTrig = engineMode == "Cooldown" ? 28.0 : engineMode == "Sniper" ? 24.0 : engineMode == "Aggressive" ? 14.0 : 18.0
+float persistGate = engineMode == "Cooldown" ? 0.64 : engineMode == "Sniper" ? 0.58 : engineMode == "Aggressive" ? 0.42 : 0.50
+float confirmGate = engineMode == "Cooldown" ? 0.60 : engineMode == "Sniper" ? 0.55 : engineMode == "Aggressive" ? 0.40 : 0.48
+
+//==================================================================================================
+// CORE SERIES
+//==================================================================================================
+float atr = ta.atr(atrLen)
+float atrSafe = math.max(atr, syminfo.mintick)
+float basis = ta.sma(close, bbLen)
+float dev = ta.stdev(close, bbLen) * bbMult
+float bbUpper = basis + dev
+float bbLower = basis - dev
+float bbWidth = fSafeDiv(bbUpper - bbLower, math.max(math.abs(basis), 0.000001))
+float body = math.abs(close - open)
+float rangeBar = math.max(high - low, syminfo.mintick)
+float bodyFrac = fSafeDiv(body, rangeBar)
+
+// FIX: DOJI guard — if range is negligible, closeLoc = 0.5 (neutral, not bottom)
+bool isDoji = (high - low) <= syminfo.mintick
+float closeLoc = isDoji ? 0.5 : fSafeDiv(close - low, rangeBar)
+
+bool insideBar = high <= high[1] and low >= low[1]
+float insideDensity = ta.sma(insideBar ? 1.0 : 0.0, persistLen)
+
+float emaFast = ta.ema(close, fastLen)
+float emaSlow = ta.ema(close, slowLen)
+float volMA = ta.sma(volume, volLen)
+float slopeFast = emaFast - emaFast[1]
+float slopeSlow = emaSlow - emaSlow[1]
+float meanDist = fSafeDiv(close - emaFast, atrSafe)
+float upperWick = high - math.max(open, close)
+float lowerWick = math.min(open, close) - low
+
+float hhPrev = ta.highest(high[1], trapLen)
+float llPrev = ta.lowest(low[1], trapLen)
+bool breakUpFail = high > hhPrev and close < hhPrev
+bool breakDnFail = low < llPrev and close > llPrev
+bool upperReject = upperWick > body * 1.2 and closeLoc < 0.40
+bool lowerReject = lowerWick > body * 1.2 and closeLoc > 0.60
+
+float rangeVsAtr = fSafeDiv(rangeBar, atrSafe)
+float volRel = fSafeDiv(volume, math.max(volMA, 1.0))
+float effortSmallMove = volRel > 1.15 and rangeVsAtr < 0.85 ? 1.0 : 0.0
+float vacuumMove = volRel < 0.95 and rangeVsAtr > 1.25 ? 1.0 : 0.0
+
+// FIX: Symmetric sequence counting — both use same candle structure logic
+float seqUp = (close > close[1] ? 1.0 : 0.0) + (low > low[1] ? 1.0 : 0.0) + (emaFast > emaSlow ? 1.0 : 0.0)
+float seqDn = (close < close[1] ? 1.0 : 0.0) + (low < low[1] ? 1.0 : 0.0) + (emaFast < emaSlow ? 1.0 : 0.0)
+
+//==================================================================================================
+// LOCAL TIE SUB-SCORES
+//==================================================================================================
+float bbComp = 1.0 - fNorm(bbWidth, scoreLen)
+float atrComp = 1.0 - fNorm(atr, scoreLen)
+float bodySupp = 1.0 - fClamp(bodyFrac, 0.0, 1.0)
+float compressionScore = fClamp(bbComp * 0.38 + atrComp * 0.32 + bodySupp * 0.18 + insideDensity * 0.12, 0.0, 1.0)
+
+// FIX: Normalized slope component — removed 100x multiplier that destroyed gradient
+// slopeNorm now yields ~0.0-1.0 for typical moves (slope / ATR gives bars-of-ATR rate of change)
+float slopeNorm = fClamp(fSafeDiv(slopeFast, atrSafe), -1.0, 1.0)
+
+// FIX: biasBull/biasBear — internal weights now sum to ~1.0 before clamping
+float biasBull = fClamp((closeLoc - 0.5) * 0.60 + fClamp(meanDist, -1.0, 1.0) * 0.20 + slopeNorm * 0.15 + seqUp / 6.0, -1.0, 1.0)
+float biasBear = fClamp((0.5 - closeLoc) * 0.60 + fClamp(-meanDist, -1.0, 1.0) * 0.20 + (-slopeNorm) * 0.15 + seqDn / 6.0, -1.0, 1.0)
+float biasSigned = fClamp(biasBull - biasBear, -1.0, 1.0)
+float biasMagnitude = math.abs(biasSigned)
+
+// FIX: Trap logic — separated pure trap from recovery continuation
+// trapBull/trapBear are PURE TRAP signals only (fakeout reversals + wick rejection)
+float trapBull = fClamp((breakDnFail ? 0.60 : 0.0) + (lowerReject ? 0.40 : 0.0), 0.0, 1.0)
+float trapBear = fClamp((breakUpFail ? 0.60 : 0.0) + (upperReject ? 0.40 : 0.0), 0.0, 1.0)
+float trapScore = fClamp(math.max(trapBull, trapBear), 0.0, 1.0)
+
+// FIX: effortScore sub-weights now sum to 1.0 (was 1.25)
+float effortDiverge = fClamp(math.abs(volRel - rangeVsAtr) / 2.0, 0.0, 1.0)
+float effortScore = fClamp(effortSmallMove * 0.45 + vacuumMove * 0.35 + effortDiverge * 0.20, 0.0, 1.0)
+
+float rawPersistSeed = fClamp(compressionScore * 0.45 + trapScore * 0.20 + biasMagnitude * 0.20 + effortScore * 0.15, 0.0, 1.0)
+float persistenceScore = fClamp(ta.sma(rawPersistSeed, persistLen), 0.0, 1.0)
+
+float tensionCore = compressionScore * compW + trapScore * trapW + effortScore * effortW + persistenceScore * persistW + biasMagnitude * biasW
+float tensionRaw = fClamp(tensionCore, 0.0, 1.0)
+float tensionScore = fClamp(tensionRaw * 100.0, 0.0, 100.0)
+
+bool structureOkay = compressionScore > 0.25 and (trapScore > 0.18 or effortScore > 0.18 or biasMagnitude > 0.30)
+bool persistenceOkay = persistenceScore >= persistGate
+bool explosiveGreen = tensionScore >= phase4Th and structureOkay and persistenceOkay
+
+int localPhase = explosiveGreen ? 4 : tensionScore >= phase3Th ? 3 : tensionScore >= phase2Th ? 2 : 1
+
+//==================================================================================================
+// RELEASE VECTOR
+// FIX: slopeBias removed 100x multiplier — now produces gradient [-1, 1]
+// FIX: closeLoc rebalanced to contribute ±0.15 (was ±0.10)
+// FIX: component weights rebalanced so no single component dominates
+//==================================================================================================
+float wickBias = fClamp(fSafeDiv(lowerWick - upperWick, rangeBar), -1.0, 1.0)
+float meanBias = fClamp(meanDist, -1.0, 1.0)
+float slopeBias = fClamp(fSafeDiv(slopeFast * 2.0 + slopeSlow, atrSafe), -1.0, 1.0)
+float failBias = trapBull > trapBear ? 1.0 : trapBear > trapBull ? -1.0 : 0.0
+float seqBias = fClamp((seqUp - seqDn) / 3.0, -1.0, 1.0)
+
+// closeLoc mapped to [-1, 1] range: 0.0 → -1.0, 0.5 → 0.0, 1.0 → +1.0
+float locBias = fClamp((closeLoc - 0.5) * 2.0, -1.0, 1.0)
+
+// Weights sum to 1.0: slope 0.25 + loc 0.20 + mean 0.18 + wick 0.15 + fail 0.12 + seq 0.10
+float rawVector = fClamp(slopeBias * 0.25 + locBias * 0.20 + meanBias * 0.18 + wickBias * 0.15 + failBias * 0.12 + seqBias * 0.10, -1.0, 1.0)
+float releaseVector = rawVector * 100.0
+
+//==================================================================================================
+// MTF PACKS
+// FIX: Renamed from HTF/LTF to TF1-4 (Macro→Micro) — honest labeling
+// Weights: TF1 (Macro) 0.30, TF2 (Anchor) 0.30, TF3 (Tactical) 0.25, TF4 (Micro) 0.15
+//==================================================================================================
+float c = close
+float o = open
+float h = high
+float l = low
+float v = volume
+
+[tf1Close, tf1Open, tf1High, tf1Low, tf1Fast, tf1Slow, tf1Atr, tf1Vol, tf1VolMA, tf1HighPrev, tf1LowPrev] = request.security(syminfo.tickerid, tf1, [c, o, h, l, ta.ema(c, fastLen), ta.ema(c, slowLen), ta.atr(atrLen), v, ta.sma(v, volLen), ta.highest(h[1], trapLen), ta.lowest(l[1], trapLen)], lookahead=barmerge.lookahead_off)
+[tf2Close, tf2Open, tf2High, tf2Low, tf2Fast, tf2Slow, tf2Atr, tf2Vol, tf2VolMA, tf2HighPrev, tf2LowPrev] = request.security(syminfo.tickerid, tf2, [c, o, h, l, ta.ema(c, fastLen), ta.ema(c, slowLen), ta.atr(atrLen), v, ta.sma(v, volLen), ta.highest(h[1], trapLen), ta.lowest(l[1], trapLen)], lookahead=barmerge.lookahead_off)
+[tf3Close, tf3Open, tf3High, tf3Low, tf3Fast, tf3Slow, tf3Atr, tf3Vol, tf3VolMA, tf3HighPrev, tf3LowPrev] = request.security(syminfo.tickerid, tf3, [c, o, h, l, ta.ema(c, fastLen), ta.ema(c, slowLen), ta.atr(atrLen), v, ta.sma(v, volLen), ta.highest(h[1], trapLen), ta.lowest(l[1], trapLen)], lookahead=barmerge.lookahead_off)
+[tf4Close, tf4Open, tf4High, tf4Low, tf4Fast, tf4Slow, tf4Atr, tf4Vol, tf4VolMA, tf4HighPrev, tf4LowPrev] = request.security(syminfo.tickerid, tf4, [c, o, h, l, ta.ema(c, fastLen), ta.ema(c, slowLen), ta.atr(atrLen), v, ta.sma(v, volLen), ta.highest(h[1], trapLen), ta.lowest(l[1], trapLen)], lookahead=barmerge.lookahead_off)
+
+// TF1 (Macro — Monthly default)
+float tf1Range = math.max(tf1High - tf1Low, syminfo.mintick)
+float tf1Loc = fSafeDiv(tf1Close - tf1Low, tf1Range)
+float tf1Trend = tf1Fast > tf1Slow ? 1.0 : tf1Fast < tf1Slow ? -1.0 : 0.0
+float tf1Mean = fClamp(fSafeDiv(tf1Close - tf1Fast, math.max(tf1Atr, syminfo.mintick)), -1.0, 1.0)
+bool tf1BullTrap = tf1Low < tf1LowPrev and tf1Close > tf1LowPrev
+bool tf1BearTrap = tf1High > tf1HighPrev and tf1Close < tf1HighPrev
+float tf1TrapAdj = tf1BullTrap ? 0.20 : tf1BearTrap ? -0.20 : 0.0
+float tf1VolAdj = fClamp(fSafeDiv(tf1Vol, math.max(tf1VolMA, 1.0)) - 1.0, -0.5, 0.5) * 0.10
+float tf1Score = fClamp(tf1Trend * 0.50 + (tf1Loc - 0.5) * 0.50 + tf1Mean * 0.20 + tf1TrapAdj + tf1VolAdj, -1.0, 1.0) * 100.0
+
+// TF2 (Anchor — Weekly default)
+float tf2Range = math.max(tf2High - tf2Low, syminfo.mintick)
+float tf2Loc = fSafeDiv(tf2Close - tf2Low, tf2Range)
+float tf2Trend = tf2Fast > tf2Slow ? 1.0 : tf2Fast < tf2Slow ? -1.0 : 0.0
+float tf2Mean = fClamp(fSafeDiv(tf2Close - tf2Fast, math.max(tf2Atr, syminfo.mintick)), -1.0, 1.0)
+bool tf2BullTrap = tf2Low < tf2LowPrev and tf2Close > tf2LowPrev
+bool tf2BearTrap = tf2High > tf2HighPrev and tf2Close < tf2HighPrev
+float tf2TrapAdj = tf2BullTrap ? 0.20 : tf2BearTrap ? -0.20 : 0.0
+float tf2VolAdj = fClamp(fSafeDiv(tf2Vol, math.max(tf2VolMA, 1.0)) - 1.0, -0.5, 0.5) * 0.10
+float tf2Score = fClamp(tf2Trend * 0.50 + (tf2Loc - 0.5) * 0.50 + tf2Mean * 0.20 + tf2TrapAdj + tf2VolAdj, -1.0, 1.0) * 100.0
+
+// TF3 (Tactical — Daily default)
+float tf3Range = math.max(tf3High - tf3Low, syminfo.mintick)
+float tf3Loc = fSafeDiv(tf3Close - tf3Low, tf3Range)
+float tf3Trend = tf3Fast > tf3Slow ? 1.0 : tf3Fast < tf3Slow ? -1.0 : 0.0
+float tf3Mean = fClamp(fSafeDiv(tf3Close - tf3Fast, math.max(tf3Atr, syminfo.mintick)), -1.0, 1.0)
+bool tf3BullTrap = tf3Low < tf3LowPrev and tf3Close > tf3LowPrev
+bool tf3BearTrap = tf3High > tf3HighPrev and tf3Close < tf3HighPrev
+float tf3TrapAdj = tf3BullTrap ? 0.18 : tf3BearTrap ? -0.18 : 0.0
+float tf3VolAdj = fClamp(fSafeDiv(tf3Vol, math.max(tf3VolMA, 1.0)) - 1.0, -0.5, 0.5) * 0.12
+float tf3Score = fClamp(tf3Trend * 0.55 + (tf3Loc - 0.5) * 0.55 + tf3Mean * 0.22 + tf3TrapAdj + tf3VolAdj, -1.0, 1.0) * 100.0
+
+// TF4 (Micro — 4H default)
+float tf4Range = math.max(tf4High - tf4Low, syminfo.mintick)
+float tf4Loc = fSafeDiv(tf4Close - tf4Low, tf4Range)
+float tf4Trend = tf4Fast > tf4Slow ? 1.0 : tf4Fast < tf4Slow ? -1.0 : 0.0
+float tf4Mean = fClamp(fSafeDiv(tf4Close - tf4Fast, math.max(tf4Atr, syminfo.mintick)), -1.0, 1.0)
+bool tf4BullTrap = tf4Low < tf4LowPrev and tf4Close > tf4LowPrev
+bool tf4BearTrap = tf4High > tf4HighPrev and tf4Close < tf4HighPrev
+float tf4TrapAdj = tf4BullTrap ? 0.18 : tf4BearTrap ? -0.18 : 0.0
+float tf4VolAdj = fClamp(fSafeDiv(tf4Vol, math.max(tf4VolMA, 1.0)) - 1.0, -0.5, 0.5) * 0.12
+float tf4Score = fClamp(tf4Trend * 0.55 + (tf4Loc - 0.5) * 0.55 + tf4Mean * 0.22 + tf4TrapAdj + tf4VolAdj, -1.0, 1.0) * 100.0
+
+// FIX: Rebalanced MTF weights — Macro/Anchor weighted equally, Tactical/Micro secondary
+float mtfWeightTotal = (useTF1 ? 0.30 : 0.0) + (useTF2 ? 0.30 : 0.0) + (useTF3 ? 0.25 : 0.0) + (useTF4 ? 0.15 : 0.0)
+float mtfRaw = (useTF1 ? tf1Score * 0.30 : 0.0) + (useTF2 ? tf2Score * 0.30 : 0.0) + (useTF3 ? tf3Score * 0.25 : 0.0) + (useTF4 ? tf4Score * 0.15 : 0.0)
+float mtfAlign = mtfWeightTotal > 0.0 ? mtfRaw / mtfWeightTotal : 0.0
+
+int bullCount = (useTF1 and tf1Score > 15.0 ? 1 : 0) + (useTF2 and tf2Score > 15.0 ? 1 : 0) + (useTF3 and tf3Score > 15.0 ? 1 : 0) + (useTF4 and tf4Score > 15.0 ? 1 : 0)
+int bearCount = (useTF1 and tf1Score < -15.0 ? 1 : 0) + (useTF2 and tf2Score < -15.0 ? 1 : 0) + (useTF3 and tf3Score < -15.0 ? 1 : 0) + (useTF4 and tf4Score < -15.0 ? 1 : 0)
+int sitCount = (useTF1 and math.abs(tf1Score) <= 15.0 ? 1 : 0) + (useTF2 and math.abs(tf2Score) <= 15.0 ? 1 : 0) + (useTF3 and math.abs(tf3Score) <= 15.0 ? 1 : 0) + (useTF4 and math.abs(tf4Score) <= 15.0 ? 1 : 0)
+string mtfVerdict = mtfAlign > 50.0 ? "STRONG BULL" : mtfAlign > 20.0 ? "LEAN BULL" : mtfAlign < -50.0 ? "STRONG BEAR" : mtfAlign < -20.0 ? "LEAN BEAR" : "MIXED"
+
+bool mtfBullSupport = bullCount >= 2 and mtfAlign > 20.0
+bool mtfBearSupport = bearCount >= 2 and mtfAlign < -20.0
+// FIX: Tactical fire uses TF3/TF4 (tactical + micro) — the timeframes closest to your chart
+bool mtfBullFire = (useTF3 and tf3Score > 25.0) or (useTF4 and tf4Score > 25.0)
+bool mtfBearFire = (useTF3 and tf3Score < -25.0) or (useTF4 and tf4Score < -25.0)
+bool mtfOpposesBull = mtfAlign < -20.0
+bool mtfOpposesBear = mtfAlign > 20.0
+
+//==================================================================================================
+// DUAL GREEN SYSTEM
+//==================================================================================================
+bool trendGreenBull = tensionScore >= phase3Th and persistenceScore >= math.max(persistGate - 0.08, 0.34) and releaseVector > vecTrig and mtfBullSupport and mtfBullFire
+bool trendGreenBear = tensionScore >= phase3Th and persistenceScore >= math.max(persistGate - 0.08, 0.34) and releaseVector < -vecTrig and mtfBearSupport and mtfBearFire
+bool trendGreen = mtfMode != "Off" and (trendGreenBull or trendGreenBear)
+bool finalGreen = explosiveGreen or trendGreen
+int phase = finalGreen ? 4 : localPhase
+
+float phaseScale = phase == 1 ? 0.35 : phase == 2 ? 0.58 : phase == 3 ? 0.82 : 1.00
+float displayVector = showVector ? releaseVector * phaseScale : na
+
+//==================================================================================================
+// SMART SIGNALS
+//==================================================================================================
+float confirmBull = (close > emaFast ? 0.25 : 0.0) + (close > open ? 0.20 : 0.0) + (emaFast > emaSlow ? 0.20 : 0.0) + (trapBull > trapBear ? 0.20 : 0.0) + (closeLoc > 0.60 ? 0.15 : 0.0)
+float confirmBear = (close < emaFast ? 0.25 : 0.0) + (close < open ? 0.20 : 0.0) + (emaFast < emaSlow ? 0.20 : 0.0) + (trapBear > trapBull ? 0.20 : 0.0) + (closeLoc < 0.40 ? 0.15 : 0.0)
+
+bool localBullIgnition = finalGreen and releaseVector >= vecTrig and confirmBull >= confirmGate
+bool localBearIgnition = finalGreen and releaseVector <= -vecTrig and confirmBear >= confirmGate
+
+bool bullAllowed = mtfMode == "Off" ? true : mtfMode == "Filter" ? not mtfOpposesBull : mtfBullSupport or mtfAlign > 10.0
+bool bearAllowed = mtfMode == "Off" ? true : mtfMode == "Filter" ? not mtfOpposesBear : mtfBearSupport or mtfAlign < -10.0
+
+bool bullIgnition = localBullIgnition and bullAllowed
+bool bearIgnition = localBearIgnition and bearAllowed
+bool trapWarning = phase >= 3 and ((breakUpFail and releaseVector < 0) or (breakDnFail and releaseVector > 0))
+bool standDown = mtfMode != "Off" and phase <= 2 and sitCount >= 2
+bool greenAgainstHTF = finalGreen and ((releaseVector > 0 and mtfOpposesBull) or (releaseVector < 0 and mtfOpposesBear))
+
+bool phase2Entry = phase == 2 and phase[1] < 2
+bool phase3Entry = phase == 3 and phase[1] < 3
+bool phase4Entry = phase == 4 and phase[1] < 4
+bool vectorIgnition = phase >= 3 and math.abs(releaseVector) >= vecTrig and math.abs(releaseVector[1]) < vecTrig
+bool fullBullConfluence = bullIgnition and trapBull >= trapBear and compressionScore > 0.30 and (mtfMode == "Off" or mtfBullSupport)
+bool fullBearConfluence = bearIgnition and trapBear >= trapBull and compressionScore > 0.30 and (mtfMode == "Off" or mtfBearSupport)
+
+string smartState = standDown ? "STAND DOWN" : bullIgnition ? "BUY" : bearIgnition ? "SELL" : phase >= 3 ? "HOLD / WATCH" : "HOLD"
+string smartBias = bullIgnition ? "BULL" : bearIgnition ? "BEAR" : fDirLabel(releaseVector, vecTrig)
+color smartColor = standDown ? color.new(color.gray, 20) : bullIgnition ? color.lime : bearIgnition ? color.red : phase == 4 ? phase4Color : phase == 3 ? phase3Color : phase == 2 ? phase2Color : phase1Color
+color histColor = phase == 4 ? phase4Color : phase == 3 ? phase3Color : phase == 2 ? phase2Color : phase1Color
+
+//==================================================================================================
+// PLOTS
+//==================================================================================================
+plot(tensionScore, title="Tension Histogram", style=plot.style_histogram, color=histColor, linewidth=4)
+hline(phase2Th, "Phase 2", color=color.new(phase2Color, 70), linestyle=hline.style_dotted)
+hline(phase3Th, "Phase 3", color=color.new(phase3Color, 70), linestyle=hline.style_dotted)
+hline(phase4Th, "Explosive Green Threshold", color=color.new(phase4Color, 75), linestyle=hline.style_dotted)
+hline(0.0, "Vector Zero", color=color.new(color.gray, 82))
+
+plot(showVector and phase == 1 ? displayVector : na, title="Release Vector P1", color=color.new(vectorBaseColor, 78), linewidth=vectorBaseWidth)
+plot(showVector and phase == 2 ? displayVector : na, title="Release Vector P2", color=color.new(vectorBaseColor, 58), linewidth=math.min(vectorBaseWidth + 1, 4))
+plot(showVector and phase == 3 ? displayVector : na, title="Release Vector P3", color=color.new(vectorBaseColor, 28), linewidth=math.min(vectorBaseWidth + 1, 4))
+plot(showVector and phase == 4 ? displayVector : na, title="Release Vector P4", color=color.new(vectorBaseColor, 0), linewidth=math.min(vectorBaseWidth + 2, 5))
+
+plotshape(showMarkers and bullIgnition, title="Smart Buy", style=shape.triangleup, location=location.bottom, color=color.lime, size=size.small, text="BUY", textcolor=color.black)
+plotshape(showMarkers and bearIgnition, title="Smart Sell", style=shape.triangledown, location=location.top, color=color.red, size=size.small, text="SELL", textcolor=color.white)
+plotshape(showMarkers and phase == 4 and not bullIgnition and not bearIgnition, title="Armed Hold", style=shape.circle, location=location.bottom, color=color.new(phase4Color, 0), size=size.tiny, text="ARM", textcolor=color.black)
+plotshape(showMarkers and trapWarning, title="Trap Warning", style=shape.xcross, location=location.top, color=color.orange, size=size.tiny, text="TRAP", textcolor=color.white)
+plotshape(showMarkers and standDown, title="Stand Down", style=shape.square, location=location.bottom, color=color.gray, size=size.tiny, text="NO", textcolor=color.white)
+
+//==================================================================================================
+// SMART HORIZONTAL TABLE
+//==================================================================================================
+var table tieTable = table.new(position.top_center, 8, 2, bgcolor=color.new(color.black, 0), frame_color=color.new(color.gray, 55), frame_width=1, border_width=1)
+
+if barstate.islast and showTable
+    table.cell(tieTable, 0, 0, "MODE", text_color=color.white, bgcolor=color.new(color.silver, 75), text_size=fTxtSize(tableSizeInput))
+    table.cell(tieTable, 1, 0, "PHASE", text_color=color.white, bgcolor=color.new(color.silver, 75), text_size=fTxtSize(tableSizeInput))
+    table.cell(tieTable, 2, 0, "TENSION", text_color=color.white, bgcolor=color.new(color.silver, 75), text_size=fTxtSize(tableSizeInput))
+    table.cell(tieTable, 3, 0, "VECTOR", text_color=color.white, bgcolor=color.new(color.silver, 75), text_size=fTxtSize(tableSizeInput))
+    table.cell(tieTable, 4, 0, "STATE", text_color=color.white, bgcolor=color.new(color.silver, 75), text_size=fTxtSize(tableSizeInput))
+    table.cell(tieTable, 5, 0, "BIAS", text_color=color.white, bgcolor=color.new(color.silver, 75), text_size=fTxtSize(tableSizeInput))
+    table.cell(tieTable, 6, 0, "ALIGN", text_color=color.white, bgcolor=color.new(color.silver, 75), text_size=fTxtSize(tableSizeInput))
+    table.cell(tieTable, 7, 0, "STACK", text_color=color.white, bgcolor=color.new(color.silver, 75), text_size=fTxtSize(tableSizeInput))
+
+    table.cell(tieTable, 0, 1, engineMode, text_color=color.white, bgcolor=color.new(color.blue, 75), text_size=fTxtSize(tableSizeInput))
+    table.cell(tieTable, 1, 1, fPhaseLabel(phase), text_color=color.black, bgcolor=histColor, text_size=fTxtSize(tableSizeInput))
+    table.cell(tieTable, 2, 1, str.tostring(fRound2(tensionScore)), text_color=color.white, bgcolor=color.new(histColor, 60), text_size=fTxtSize(tableSizeInput))
+    table.cell(tieTable, 3, 1, str.tostring(fRound2(releaseVector)), text_color=color.white, bgcolor=color.new(vectorBaseColor, 65), text_size=fTxtSize(tableSizeInput))
+    table.cell(tieTable, 4, 1, smartState, text_color=standDown or bearIgnition ? color.white : color.black, bgcolor=smartColor, text_size=fTxtSize(tableSizeInput))
+    table.cell(tieTable, 5, 1, smartBias, text_color=color.white, bgcolor=releaseVector > vecTrig ? color.new(color.green, 55) : releaseVector < -vecTrig ? color.new(color.red, 55) : color.new(color.gray, 60), text_size=fTxtSize(tableSizeInput))
+    table.cell(tieTable, 6, 1, showMTFInTable ? str.tostring(fRound2(mtfAlign)) : "—", text_color=color.white, bgcolor=mtfAlign > 20.0 ? color.new(color.green, 60) : mtfAlign < -20.0 ? color.new(color.red, 60) : color.new(color.orange, 60), text_size=fTxtSize(tableSizeInput))
+    table.cell(tieTable, 7, 1, showMTFInTable ? str.tostring(bullCount) + "B/" + str.tostring(bearCount) + "S/" + str.tostring(sitCount) + "X" : "—", text_color=color.white, bgcolor=color.new(color.black, 35), text_size=fTxtSize(tableSizeInput))
+
+if barstate.islast and not showTable
+    table.clear(tieTable, 0, 0, 7, 1)
+
+//==================================================================================================
+// DISCORD JSON
+//==================================================================================================
+fJson(_event, _signal, _phase, _score, _vector, _mode, _align, _stack, _mtfMode) => "{\"content\":\"TIE Alert\",\"embeds\":[{\"title\":\"SML Tension Index Engine\",\"description\":\"" + _event + "\",\"color\":3447003,\"fields\":[{\"name\":\"Ticker\",\"value\":\"" + syminfo.ticker + "\",\"inline\":true},{\"name\":\"Timeframe\",\"value\":\"" + timeframe.period + "\",\"inline\":true},{\"name\":\"Mode\",\"value\":\"" + _mode + "\",\"inline\":true},{\"name\":\"MTF\",\"value\":\"" + _mtfMode + "\",\"inline\":true},{\"name\":\"Signal\",\"value\":\"" + _signal + "\",\"inline\":true},{\"name\":\"Phase\",\"value\":\"" + str.tostring(_phase) + "\",\"inline\":true},{\"name\":\"Price\",\"value\":\"" + str.tostring(close, format.mintick) + "\",\"inline\":true},{\"name\":\"Tension\",\"value\":\"" + str.tostring(fRound2(_score)) + "\",\"inline\":true},{\"name\":\"Vector\",\"value\":\"" + str.tostring(fRound2(_vector)) + "\",\"inline\":true},{\"name\":\"Align\",\"value\":\"" + str.tostring(fRound2(_align)) + "\",\"inline\":true},{\"name\":\"Stack\",\"value\":\"" + _stack + "\",\"inline\":true},{\"name\":\"Time\",\"value\":\"" + str.tostring(time) + "\",\"inline\":false}]}]}"
+
+string stackText = str.tostring(bullCount) + "B/" + str.tostring(bearCount) + "S/" + str.tostring(sitCount) + "X"
+
+//==================================================================================================
+// ALERTCONDITION SUPPORT
+//==================================================================================================
+bool mtfBullFlip = mtfAlign > 20.0 and mtfAlign[1] <= 20.0
+bool mtfBearFlip = mtfAlign < -20.0 and mtfAlign[1] >= -20.0
+bool fullStackBull = bullCount >= 3 and bearCount == 0
+bool fullStackBear = bearCount >= 3 and bullCount == 0
+
+alertcondition(phase2Entry, title="TIE Phase 2 Entered", message="TIE Phase 2 Entered")
+alertcondition(phase3Entry, title="TIE Phase 3 Entered", message="TIE Phase 3 Entered")
+alertcondition(phase4Entry, title="TIE Phase 4 Armed", message="TIE Phase 4 Armed")
+alertcondition(vectorIgnition, title="TIE Vector Ignition", message="TIE Vector Ignition")
+alertcondition(bullIgnition, title="TIE Bullish Ignition", message="TIE Bullish Ignition")
+alertcondition(bearIgnition, title="TIE Bearish Ignition", message="TIE Bearish Ignition")
+alertcondition(trapWarning, title="TIE Trap Warning", message="TIE Trap Warning")
+alertcondition(fullBullConfluence, title="TIE Full Bull Confluence", message="TIE Full Bull Confluence")
+alertcondition(fullBearConfluence, title="TIE Full Bear Confluence", message="TIE Full Bear Confluence")
+alertcondition(mtfBullFlip, title="TIE MTF Bull Flip", message="TIE MTF Bull Flip")
+alertcondition(mtfBearFlip, title="TIE MTF Bear Flip", message="TIE MTF Bear Flip")
+alertcondition(fullStackBull, title="TIE Full Stack Bull", message="TIE Full Stack Bull")
+alertcondition(fullStackBear, title="TIE Full Stack Bear", message="TIE Full Stack Bear")
+alertcondition(standDown, title="TIE Stand Down", message="TIE Stand Down")
+alertcondition(greenAgainstHTF, title="TIE Green Against HTF", message="TIE Green Against HTF")
+
+//==================================================================================================
+// DYNAMIC alert() JSON
+// Use TradingView alert type: "Any alert() function call"
+//==================================================================================================
+bool fireMinimal = alertPack == "Minimal"
+bool fireCore = alertPack == "Core"
+bool fireAll = alertPack == "All"
+
+if barstate.isconfirmed and fireDynamicAlerts
+    if fireAll and phase2Entry
+        alert(fJson("Phase 2 Entered", "WATCH", phase, tensionScore, releaseVector, engineMode, mtfAlign, stackText, mtfMode), alert.freq_once_per_bar_close)
+    if (fireCore or fireAll) and phase3Entry
+        alert(fJson("Phase 3 Entered", "ARMING", phase, tensionScore, releaseVector, engineMode, mtfAlign, stackText, mtfMode), alert.freq_once_per_bar_close)
+    if (fireMinimal or fireCore or fireAll) and phase4Entry
+        alert(fJson("Phase 4 Armed", explosiveGreen ? "EXPLOSIVE GREEN" : "TREND GREEN", phase, tensionScore, releaseVector, engineMode, mtfAlign, stackText, mtfMode), alert.freq_once_per_bar_close)
+    if (fireCore or fireAll) and vectorIgnition
+        alert(fJson("Vector Ignition", releaseVector > 0 ? "BULL LEAN" : "BEAR LEAN", phase, tensionScore, releaseVector, engineMode, mtfAlign, stackText, mtfMode), alert.freq_once_per_bar_close)
+    if (fireMinimal or fireCore or fireAll) and bullIgnition
+        alert(fJson("Bullish Ignition", "BUY", phase, tensionScore, releaseVector, engineMode, mtfAlign, stackText, mtfMode), alert.freq_once_per_bar_close)
+    if (fireMinimal or fireCore or fireAll) and bearIgnition
+        alert(fJson("Bearish Ignition", "SELL", phase, tensionScore, releaseVector, engineMode, mtfAlign, stackText, mtfMode), alert.freq_once_per_bar_close)
+    if (fireCore or fireAll) and trapWarning
+        alert(fJson("Trap Warning", "FAKEOUT RISK", phase, tensionScore, releaseVector, engineMode, mtfAlign, stackText, mtfMode), alert.freq_once_per_bar_close)
+    if fireAll and fullBullConfluence
+        alert(fJson("Full Bull Confluence", "BUY CONFIRMED", phase, tensionScore, releaseVector, engineMode, mtfAlign, stackText, mtfMode), alert.freq_once_per_bar_close)
+    if fireAll and fullBearConfluence
+        alert(fJson("Full Bear Confluence", "SELL CONFIRMED", phase, tensionScore, releaseVector, engineMode, mtfAlign, stackText, mtfMode), alert.freq_once_per_bar_close)
+    if (fireCore or fireAll) and mtfBullFlip
+        alert(fJson("MTF Bull Flip", "STACK TURNED BULLISH", phase, tensionScore, releaseVector, engineMode, mtfAlign, stackText, mtfMode), alert.freq_once_per_bar_close)
+    if (fireCore or fireAll) and mtfBearFlip
+        alert(fJson("MTF Bear Flip", "STACK TURNED BEARISH", phase, tensionScore, releaseVector, engineMode, mtfAlign, stackText, mtfMode), alert.freq_once_per_bar_close)
+    if fireAll and fullStackBull
+        alert(fJson("Full Stack Bull", "MTF SUPPORT MAX", phase, tensionScore, releaseVector, engineMode, mtfAlign, stackText, mtfMode), alert.freq_once_per_bar_close)
+    if fireAll and fullStackBear
+        alert(fJson("Full Stack Bear", "MTF PRESSURE MAX", phase, tensionScore, releaseVector, engineMode, mtfAlign, stackText, mtfMode), alert.freq_once_per_bar_close)
+    if (fireMinimal or fireCore or fireAll) and standDown
+        alert(fJson("Stand Down", "NO TRADE", phase, tensionScore, releaseVector, engineMode, mtfAlign, stackText, mtfMode), alert.freq_once_per_bar_close)
+    if (fireCore or fireAll) and greenAgainstHTF
+        alert(fJson("Green Against HTF", "COUNTER-STACK WARNING", phase, tensionScore, releaseVector, engineMode, mtfAlign, stackText, mtfMode), alert.freq_once_per_bar_close)

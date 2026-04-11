@@ -1,0 +1,13 @@
+__pycache__
+.git
+.env
+*.log
+schwab_tokens.json
+schwab_debug.json
+performance_log.json
+trade_log.json
+simulation_report.json
+backtests
+*.pine
+*.md
+.vscode

@@ -1,0 +1,68 @@
+{
+    "active": {},
+    "history": [
+        {
+            "id": "tr_002",
+            "symbol": "GME",
+            "side": "BUY",
+            "qty": 500,
+            "entry_price": 14.2,
+            "current_price": 22.6,
+            "sl": 13.0,
+            "tp": 18.5,
+            "pnl": 4200.000000000001,
+            "pnl_pct": 8.8,
+            "ts": 1711391000.0,
+            "regime": "MM Accumulation",
+            "exit_reason": "TAKE_PROFIT",
+            "status": "CLOSED",
+            "closed_at": 1774558847.7141962
+        },
+        {
+            "id": "tr_001",
+            "symbol": "AMC",
+            "side": "BUY",
+            "qty": 1000,
+            "entry_price": 4.52,
+            "current_price": 0.9826,
+            "sl": 4.1,
+            "tp": 6.8,
+            "pnl": -3537.3999999999996,
+            "pnl_pct": 12.83,
+            "ts": 1711390000.0,
+            "regime": "Squeeze Watch",
+            "exit_reason": "STOP_LOSS",
+            "status": "CLOSED",
+            "closed_at": 1774558847.7141962
+        },
+        {
+            "id": "tr_001",
+            "symbol": "AMC",
+            "side": "BUY",
+            "qty": 1000,
+            "entry_price": 4.52,
+            "current_price": 5.1,
+            "sl": 4.1,
+            "tp": 6.8,
+            "pnl": 580.0,
+            "pnl_pct": 12.83,
+            "ts": 1711390000.0,
+            "regime": "Squeeze Watch"
+        },
+        {
+            "id": "tr_002",
+            "symbol": "GME",
+            "side": "BUY",
+            "qty": 500,
+            "entry_price": 14.2,
+            "current_price": 15.45,
+            "sl": 13.0,
+            "tp": 18.5,
+            "pnl": 625.0,
+            "pnl_pct": 8.8,
+            "ts": 1711391000.0,
+            "regime": "MM Accumulation"
+        }
+    ],
+    "last_updated": 1774558847.7141962
+}

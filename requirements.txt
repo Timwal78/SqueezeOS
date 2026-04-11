@@ -1,0 +1,8 @@
+flask>=3.0
+flask-cors>=5.0
+requests>=2.31
+numpy>=1.26
+pandas>=2.2
+yfinance>=0.2.36
+scipy>=1.12
+python-dotenv>=1.0
