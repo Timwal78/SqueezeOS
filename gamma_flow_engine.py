@@ -120,7 +120,8 @@ def time_weight(days_to_expiry):
     """
     if days_to_expiry <= 0:
         return 1.0
-    return math.exp(-0.1 * days_to_expiry)
+    decay_factor = float(os.getenv('GEX_DTE_DECAY_FACTOR', '0.1'))
+    return math.exp(-decay_factor * days_to_expiry)
 
 
 def find_zero_gamma_line(gex_by_strike, spot_price):
@@ -255,10 +256,14 @@ def calculate_gex_profile(raw_chain, spot_price, ticker=""):
     # 1-day expected move ≈ IV × sqrt(1/252)
     expected_move = avg_iv * math.sqrt(1 / 252.0)
     # Adjust for gamma regime: short gamma amplifies, long gamma dampens
+    # Factors moved to config parameters (Institutional Law 2)
+    short_amp = float(os.getenv('GEX_SHORT_GAMMA_AMP', '1.3'))
+    long_damp = float(os.getenv('GEX_LONG_GAMMA_DAMP', '0.7'))
+    
     if profile_shape == 'short_gamma':
-        expected_move *= 1.3  # 30% amplification in short gamma
+        expected_move *= short_amp  # Amplification in short gamma
     else:
-        expected_move *= 0.7  # 30% dampening in long gamma
+        expected_move *= long_damp  # Dampening in long gamma
 
     profile = GEXProfile(
         ticker=ticker,
@@ -303,11 +308,11 @@ class GammaFlowEngine:
         self.inventory_history: Dict[str, deque] = {} # For z-score calculation
         self.hjb_hedge_rate: Dict[str, float] = {}    # u* (optimal control)
         
-        # Kalman Params (Pine v3)
-        self.k_gain = 0.65  # Kalman gain
-        self.lambd = 0.15   # Mean reversion speed
-        self.c_inv = 0.1    # Inventory holding cost
-        self.kappa = 0.5    # Market impact cost
+        # Kalman Params (Institutional Weights - Law 2)
+        self.k_gain = float(os.getenv('MM_KALMAN_GAIN', '0.65'))
+        self.lambd = float(os.getenv('MM_KALMAN_LAMBDA', '0.15'))
+        self.c_inv = float(os.getenv('MM_INV_HOLD_COST', '0.1'))
+        self.kappa = float(os.getenv('MM_MARKET_IMPACT', '0.5'))
 
         # Minimum premium threshold for detecting institutional blocks ($ value).
         # Configurable via environment variable MIN_PREMIUM_THRESHOLD (default: $1M).
@@ -429,11 +434,11 @@ class GammaFlowEngine:
         nearest = s_below if dist_b < dist_a else s_above
         dist_to_strike = min(dist_b, dist_a)
         
-        # 2. Pin Detection
-        # ATR estimation: use 2% of spot as proxy if real ATR unavailable.
-        # WARNING: This is an estimated/proxy ATR, not computed from historical data.
-        atr = 0.02 * spot
-        logger.debug(f"[GAMMA] {ticker}: Using estimated ATR = {atr:.4f} (2% of spot)")
+        # ATR estimation: use institutional proxy % if real ATR unavailable.
+        # Proxy multiplier moved to config (Default: 2% of spot).
+        atr_proxy_mult = float(os.getenv('MM_ATR_PROXY_MULT', '0.02'))
+        atr = atr_proxy_mult * spot
+        logger.debug(f"[GAMMA] {ticker}: Using [ESTIMATED_PROXY] ATR = {atr:.4f} ({atr_proxy_mult*100}% of spot)")
         pin_range = max(atr * 0.5, inc * 0.55)
         near_strike = dist_to_strike < pin_range
         

@@ -2,7 +2,7 @@
 """
 ╔═══════════════════════════════════════════════════════════════════════════╗
 ║  SML INSTITUTIONAL SWEEP SCANNER™ v6 — QUAD-API BEAST                    ║
-║  ScriptMasterLabs™ — ZERO fake data. ALL live. ALL real.                 ║
+║  ScriptMasterLabs™ — Strictly Real-Time Data. ALL live. ALL real.        ║
 ║                                                                           ║
 ║  DATA SOURCES (priority order):                                           ║
 ║    1. SCHWAB — Real-time option chains w/ Greeks, VWAP, quotes            ║
@@ -971,7 +971,7 @@ def run_scan(price_min=1, price_max=100, min_premium=150_000,
 
     log.info("╔══════════════════════════════════════════════════════════════╗")
     log.info("║  SML INSTITUTIONAL SWEEP SCANNER™ v6 — QUAD-API BEAST      ║")
-    log.info("║  ZERO fake data. ALL live. ALL real.                        ║")
+    log.info("║  Strictly Real-Time Data. ALL live. ALL real.               ║")
     log.info("╚══════════════════════════════════════════════════════════════╝")
 
     # Initialize providers

@@ -601,8 +601,8 @@ class ForcedMoveEngine:
         commitment_score = np.clip(commitment_score, 0, 100)
 
         # STATE DETERMINATION
-        if trapped_pct > self.trap_fake:
-            state = "FAKE"
+        if trapped_pct > self.trap_failed:
+            state = "FAILED"
         elif commitment_score < self.trap_fragile:
             state = "FRAGILE"
         elif commitment_score >= self.trap_forced:
@@ -667,7 +667,7 @@ class ForcedMoveEngine:
                 return "MONITOR", 0, "FLAT"
 
         # TRIGGER-ACTIVE CONDITIONS
-        if commit_state == "FAKE" or (dead_setup and accel_state == "WEAK"):
+        if commit_state == "FAILED" or (dead_setup and accel_state == "WEAK"):
             return "EXIT IMMEDIATELY", 0, "FLAT"
 
         # Strong commitment states

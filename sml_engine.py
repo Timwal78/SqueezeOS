@@ -97,8 +97,8 @@ class SMLEngine:
     def f_meaning_str(direction, sweep):
         if direction == 1: return "Price broke above and held — bullish"
         if direction == -1: return "Price broke below and held — bearish"
-        if sweep == 1: return "Poked above then fell back — fake breakout"
-        if sweep == 2: return "Dipped below then bounced — fake breakdown"
+        if sweep == 1: return "Poked above then fell back — rejected breakout"
+        if sweep == 2: return "Dipped below then bounced — rejected breakdown"
         if sweep == 3: return "Hit both sides — indecision, stay out"
         return "No clear move yet"
 

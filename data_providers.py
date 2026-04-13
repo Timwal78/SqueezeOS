@@ -1,6 +1,6 @@
 """
 SQUEEZE OS v5.0 — Multi-Provider Data Layer
-Auto-discovers tickers. Scans the entire market. Zero fake data.
+Auto-discovers tickers. Scans the entire market. Strictly Real-Time Data.
 
 DISCOVERY (find tickers automatically):
   - Alpaca Screener: most-active + top movers (free, fast)

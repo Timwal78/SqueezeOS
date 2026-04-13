@@ -1,0 +1,23 @@
+# Environment & Secrets
+.env
+schwab_tokens.json
+schwab_debug.json
+
+# Logs & Data
+*.log
+performance_log.json
+trade_log.json
+simulation_report.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

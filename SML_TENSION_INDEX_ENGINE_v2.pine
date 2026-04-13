@@ -406,7 +406,7 @@ if barstate.isconfirmed and fireDynamicAlerts
     if (fireMinimal or fireCore or fireAll) and bearIgnition
         alert(fJson("Bearish Ignition", "SELL", phase, tensionScore, releaseVector, engineMode, mtfAlign, stackText, mtfMode), alert.freq_once_per_bar_close)
     if (fireCore or fireAll) and trapWarning
-        alert(fJson("Trap Warning", "FAKEOUT RISK", phase, tensionScore, releaseVector, engineMode, mtfAlign, stackText, mtfMode), alert.freq_once_per_bar_close)
+        alert(fJson("Trap Warning", "REJECTION RISK", phase, tensionScore, releaseVector, engineMode, mtfAlign, stackText, mtfMode), alert.freq_once_per_bar_close)
     if fireAll and fullBullConfluence
         alert(fJson("Full Bull Confluence", "BUY CONFIRMED", phase, tensionScore, releaseVector, engineMode, mtfAlign, stackText, mtfMode), alert.freq_once_per_bar_close)
     if fireAll and fullBearConfluence

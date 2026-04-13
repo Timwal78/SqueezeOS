@@ -202,7 +202,7 @@ class MarketDataService:
             return rsi.iloc[-1]
         except Exception as e:
             logging.getLogger(__name__).warning(f"[MARKET] RSI calculation failed: {e}")
-            return None  # Return None instead of fake neutral RSI
+            return None  # Return None instead of neutral RSI
     
     def _is_cached_and_fresh(self, cache_key):
         """Check if data is cached and still fresh"""
