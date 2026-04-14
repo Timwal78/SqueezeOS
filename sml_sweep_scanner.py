@@ -803,10 +803,12 @@ def cluster_and_score(sweeps, mkt):
         wide = sum(1 for s in cl["sweeps"] if s["spread_pct"] > 0.20)
         if wide > len(cl["sweeps"]) * 0.5:
             dqs.append("Wide bid/ask spreads (illiquid)")
+        # VWAP against direction = soft penalty (-1pt), NOT a hard disqualifier.
+        # Whale contra-VWAP sweeps are contrarian plays that should still fire.
         if cl["direction"] == "bullish" and vwap > 0 and price < vwap * 0.995:
-            dqs.append("Price below VWAP")
+            sc -= 1; bd["vwap_against"] = -1
         if cl["direction"] == "bearish" and vwap > 0 and price > vwap * 1.005:
-            dqs.append("Price above VWAP")
+            sc -= 1; bd["vwap_against"] = -1
 
         # IV crush warning (flagged on signal card, not a disqualifier)
         avg_iv = sum(s.get("iv", 0) for s in cl["sweeps"]) / len(cl["sweeps"])
@@ -966,7 +968,7 @@ def send_discord(cl):
 # MAIN SCAN
 # ═══════════════════════════════════════════════
 
-def run_scan(price_min=1, price_max=100, min_premium=150_000,
+def run_scan(price_min=2, price_max=500, min_premium=150_000,
              dte_min=2, dte_max=14, min_score=5):
 
     log.info("╔══════════════════════════════════════════════════════════════╗")
@@ -1103,7 +1105,7 @@ if __name__ == "__main__":
     p.add_argument("mode", nargs="?", default="once", help="'once' or 'loop'")
     p.add_argument("interval", nargs="?", type=int, default=15, help="Loop interval (min)")
     p.add_argument("--price-min", type=float, default=1)
-    p.add_argument("--price-max", type=float, default=100)
+    p.add_argument("--price-max", type=float, default=500)
     p.add_argument("--min-premium", type=int, default=150000)
     p.add_argument("--dte-min", type=int, default=2)
     p.add_argument("--dte-max", type=int, default=14)

@@ -147,7 +147,7 @@ def init_services():
                 "rmre": rmre_bridge, "exec": exec_eng, "perf": perf,
                 "gamma": gamma_eng, "delta": delta_mgr, "discord": discord,
                 "signals": signals, "options_intel": options_intel, "forced_move": forced_move,
-                "mre": MeanReversionEngine(bb_period=20, bb_std=2.0, rsi_period=14, max_price=100.0),
+                "mre": MeanReversionEngine(bb_period=20, bb_std=2.0, rsi_period=14, max_price=500.0),
                 "sr_patterns": SRPatternsEngine()
             })
         
