@@ -601,6 +601,14 @@ class DiscordAlerts:
         if not self._can_alert(key):
             return
 
+        # Institutional grade color and emoji maps
+        grade_colors = {
+            'A+': 0x00FF88, 'A': 0x00E676, 'B+': 0x69FF47,
+            'B': 0xFFD740, 'C+': 0xFF9100, 'C': 0xFF6D00
+        }
+        grade_emoji = {
+            'A+': '💎', 'A': '🔥', 'B+': '⚡', 'B': '📊', 'C+': '📈'
+        }
         # Institutional Color: Match Signal Direction
         if signal == 'BUY':
             color = 0x00FF88 # Bullish
