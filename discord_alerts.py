@@ -140,12 +140,21 @@ class DiscordAlerts:
             if not self._can_alert(f'sq_{sym}'):
                 continue
 
-            if score >= 75:
-                color, emoji = 0xFF0000, "🔥"
-            elif score >= 55:
-                color, emoji = 0xFF8C00, "⚡"
+            # Color and Emoji by DIRECTION and INTENSITY
+            direction = item.get('direction', 'NEUTRAL').upper()
+            if direction == 'BULLISH':
+                color = 0x00FF88 # Institutional Bullish Green
+                emoji = "🟢" if score < 75 else "🔥"
+            elif direction == 'BEARISH':
+                color = 0xFF4444 # Institutional Bearish Red
+                emoji = "🔴" if score < 75 else "🔥"
             else:
-                color, emoji = 0x00BFFF, "📊"
+                color = 0x00BFFF
+                emoji = "📊"
+
+            # Intensity override for MOASS potential
+            if score >= 85:
+                emoji = "🚨" # Critical Alert
 
             tier = item.get('tier', '')
             tier_str = f" [{tier}]" if tier else ""
@@ -166,21 +175,29 @@ class DiscordAlerts:
             else:
                 modules = "—"
 
+            # ── Institutional Rank Mapping ──
+            # ALPHA = Small Cap Momentum ($1-$15)
+            # BETA = Mid Cap ($15-$150)
+            # BENCHMARK = Large/Mega Cap (Blue Chips)
+            current_price = item.get('price', 0)
+            if 1.0 <= current_price <= 15.0:
+                rank_label = "RANK: ALPHA ⭐⭐ (SML Small-Cap)"
+            elif current_price > 150.0 or item.get('is_mega'):
+                rank_label = "RANK: BENCHMARK 🏢 (Blue Chip)"
+            else:
+                rank_label = "RANK: BETA ⭐ (Mid-Cap)"
+
             embed = {
                 "embeds": [{
-                    "title": f"{emoji} {sym}{tier_str} — SQUEEZE {item.get('squeeze_level', '')}",
+                    "title": f"🚨 ECHO-SQUEEZE: {sym} ({item.get('squeeze_level', 'SIGNAL')})",
                     "color": color,
                     "fields": [
-                        {"name": "Score", "value": f"**{score}**/100", "inline": True},
-                        {"name": "Price", "value": f"${item.get('price', 0):.2f}", "inline": True},
-                        {"name": "Change", "value": f"{item.get('changePct', 0):+.1f}%", "inline": True},
-                        {"name": "Vol Ratio", "value": f"{item.get('volRatio', 0):.1f}x", "inline": True},
-                        {"name": "Direction", "value": item.get('direction', '—'), "inline": True},
-                        {"name": "Risk", "value": item.get('risk_level', '—'), "inline": True},
-                        {"name": "Modules", "value": f"`{modules}`", "inline": False},
-                        {"name": "Signal", "value": item.get('recommendation', '—'), "inline": False},
+                        {"name": "🧠 INTEL BREADCRUMB", "value": f"**Rank**: `{rank_label}` | **Score**: `{score}/100`", "inline": False},
+                        {"name": "📊 PRIMARY PROJECTION", "value": f"**Direction**: `{item.get('direction', '—')}`\n**Rec**: `{item.get('recommendation', '—')}`", "inline": True},
+                        {"name": "⏳ TIME HORIZON", "value": f"**Price**: `${item.get('price', 0):.2f}`\n**Change**: `{item.get('changePct', 0):+.1f}%`", "inline": True},
+                        {"name": "🌀 ANALYSIS MODULES", "value": f"`{modules}`", "inline": False},
                     ],
-                    "footer": {"text": f"Squeeze OS v5.0 | {datetime.now().strftime('%I:%M %p ET')}"},
+                    "footer": {"text": f"Squeeze OS v5.0 | Institutional Intelligence | {datetime.now().strftime('%I:%M %p ET')}"},
                     "timestamp": datetime.utcnow().isoformat(),
                 }]
             }
@@ -207,37 +224,49 @@ class DiscordAlerts:
         if not qualifying:
             return
 
-        sent = 0
+        # Beast Mode: Group contracts by ticker to prevent Discord spam
+        # Instead of 5 pings for 5 different strikes on AAPL, send 1 consolidated card
+        ticker_groups = {}
         for alert in qualifying:
             sym = alert.get('symbol', '?')
-            key = f"flow_{sym}_{alert.get('strike', 0)}_{alert.get('expiry', '')}"
+            if sym not in ticker_groups:
+                ticker_groups[sym] = []
+            ticker_groups[sym].append(alert)
+
+        sent = 0
+        for sym, contracts in ticker_groups.items():
+            # Use the highest-scored contract as the lead
+            contracts.sort(key=lambda x: x.get('unusual_score', 0), reverse=True)
+            lead = contracts[0]
+            
+            key = f"flow_{sym}_batch"
             if not self._can_alert(key):
                 continue
 
-            opt_type = alert.get('type', 'CALL')
-            strike = alert.get('strike', 0)
-            expiry_fmt = alert.get('expiry_formatted', alert.get('expiry', '?'))
-            dte = alert.get('days_to_expiry', 0)
-            price = alert.get('price', 0)
-            bid = alert.get('bid', 0)
-            ask = alert.get('ask', 0)
-            volume = alert.get('volume', 0)
-            oi = alert.get('open_interest', 0)
-            vol_oi = alert.get('vol_oi_ratio', 0)
-            iv = alert.get('implied_volatility', 0)
-            delta = alert.get('delta', 0)
-            gamma = alert.get('gamma', 0)
-            theta = alert.get('theta', 0)
-            score = alert.get('unusual_score', 0)
-            sentiment = alert.get('sentiment', 'NEUTRAL')
-            flags = alert.get('flags', [])
-            priority = alert.get('alert_priority', 'LOW')
-            source = alert.get('source', '?')
+            opt_type = lead.get('type', 'CALL')
+            strike = lead.get('strike', 0)
+            expiry_fmt = lead.get('expiry_formatted', lead.get('expiry', '?'))
+            dte = lead.get('days_to_expiry', 0)
+            price = lead.get('price', 0)
+            bid = lead.get('bid', 0)
+            ask = lead.get('ask', 0)
+            volume = lead.get('volume', 0)
+            oi = lead.get('open_interest', 0)
+            vol_oi = lead.get('vol_oi_ratio', 0)
+            iv = lead.get('implied_volatility', 0)
+            delta = lead.get('delta', 0)
+            gamma = lead.get('gamma', 0)
+            theta = lead.get('theta', 0)
+            score = lead.get('unusual_score', 0)
+            sentiment = lead.get('sentiment', 'NEUTRAL')
+            flags = lead.get('flags', [])
+            priority = lead.get('alert_priority', 'LOW')
+            source = lead.get('source', '?')
 
             # Color by sentiment + priority
-            is_oi_spike = alert.get('is_oi_spike', False)
-            is_block = alert.get('is_block', False)
-            is_sweep = alert.get('is_sweep', False)
+            is_oi_spike = lead.get('is_oi_spike', False)
+            is_block = lead.get('is_block', False)
+            is_sweep = lead.get('is_sweep', False)
 
             if is_oi_spike and is_sweep:
                 color, title_emoji = 0xFF00FF, "💎" # SWEEP SPIKE
@@ -257,7 +286,7 @@ class DiscordAlerts:
             sent_emoji = "🟢" if sentiment == 'BULLISH' else "🔴" if sentiment == 'BEARISH' else "⚪"
 
             # Contract line
-            sweep = alert.get('sweep_label', '')
+            sweep = lead.get('sweep_label', '')
             if strike > 0:
                 contract = f"{sym} ${strike:.2f} {sweep if sweep else opt_type}"
             else:
@@ -296,7 +325,7 @@ class DiscordAlerts:
                         {"name": "Score", "value": f"**{score}**/100", "inline": True},
 
                         {"name": "💰 Price", "value": f"${price:.2f}", "inline": True},
-                        {"name": "💵 Premium", "value": f"**${alert.get('premium', 0):,.0f}**", "inline": True},
+                        {"name": "💵 Premium", "value": f"**${lead.get('premium', 0):,.0f}**", "inline": True},
                         {"name": "📊 Volume", "value": f"**{volume:,}**", "inline": True},
 
                         {"name": "📈 IV", "value": f"**{iv:.0%}**" if iv > 0 else "—", "inline": True},
@@ -514,7 +543,7 @@ class DiscordAlerts:
         regime_label = new_regime.replace('_', ' ').upper()
         old_label = old_regime.replace('_', ' ').upper()
 
-        moass_line = "\n🚨 **MOASS WATCH ACTIVE** — AMC/GME elevated squeeze probability" if moass else ""
+        moass_line = f"\n🚨 **MOASS WATCH ACTIVE** — Critical short-interest/squeeze threshold reached" if moass else ""
 
         embed = {
             "embeds": [{
@@ -572,13 +601,18 @@ class DiscordAlerts:
         if not self._can_alert(key):
             return
 
-        grade_colors = {'A': 0x00FF88, 'B': 0xFFAA00, 'C': 0x00BFFF}
-        grade_emoji = {'A': '🏆', 'B': '⚡', 'C': '📊'}
-        signal_emoji = {'BUY': '🟢', 'SELL': '🔴', 'WATCH': '👁️'}
+        # Institutional Color: Match Signal Direction
+        if signal == 'BUY':
+            color = 0x00FF88 # Bullish
+            s_emoji = '🟢'
+        elif signal == 'SELL':
+            color = 0xFF4444 # Bearish
+            s_emoji = '🔴'
+        else:
+            color = grade_colors.get(grade, 0x00BFFF)
+            s_emoji = '👁️'
 
-        color = grade_colors.get(grade, 0x00BFFF)
         g_emoji = grade_emoji.get(grade, '📊')
-        s_emoji = signal_emoji.get(signal, '👁️')
 
         moass_tag = " | 🚀 MOASS CANDIDATE" if moass else ""
         contract_str = f"${strike:.2f} {opt_type} exp {expiry}" if strike > 0 else "STOCK"

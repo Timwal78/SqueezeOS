@@ -397,7 +397,7 @@ class SMLEngine:
                 - cascade bias and meaning
                 - bull/bear/avoid counts
         """
-        if symbol not in history or not history[symbol]:
+        if symbol not in history or (isinstance(history[symbol], pd.DataFrame) and history[symbol].empty) or (isinstance(history[symbol], list) and len(history[symbol]) == 0):
             logger.warning(f"[Cascade] No history for {symbol}")
             return {}
 
