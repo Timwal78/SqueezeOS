@@ -1,0 +1,12 @@
+{
+  "system": "ARGUS OMEGA",
+  "ticker": "AMC",
+  "omega_score": 74.9,
+  "conviction": "moderate",
+  "alignment_state": "directional_alignment_with_execution_conflict",
+  "dominant_scenario": "sweep_then_continuation",
+  "risk_state": "elevated_deception",
+  "action_class": "watch_for_sweep",
+  "time_horizon": "2-5 sessions",
+  "briefing": "Bullish pressure is rising, but the structure remains distorted. Historical analogs favor expansion, while liquidity mapping suggests an initial overhead sweep before durable resolution. Deception remains elevated, so breakout chase quality is poor until sweep-and-hold confirmation appears."
+}

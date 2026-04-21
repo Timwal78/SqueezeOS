@@ -1,0 +1,21 @@
+{
+  "ticker": "{{ticker}}",
+  "timeframe": "{{interval}}",
+  "close": {{close}},
+  "argus": {
+    "state_score": 81,
+    "bias": "unstable_bullish",
+    "stability": "distorted",
+    "event_risk": {
+      "expansion": 0.74,
+      "reversal": 0.29,
+      "squeeze": 0.58,
+      "trap": 0.52
+    },
+    "confidence": 0.79,
+    "trigger_map": {
+      "confirm_above": 3.42,
+      "invalidate_below": 2.91
+    }
+  }
+}

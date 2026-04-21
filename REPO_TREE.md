@@ -1,0 +1,35 @@
+# Repo Tree
+
+argus-omega/
+  app/
+    main.py
+    config.py
+  omega/
+    fusion_engine.py
+    normalization.py
+    alignment.py
+    conviction.py
+    scenario_ranker.py
+    action_mapper.py
+    trigger_synthesizer.py
+    narrative_fusion.py
+    utils.py
+  schemas/
+    request.py
+    response.py
+    subsystem.py
+  routes/
+    omega_scan.py
+  tests/
+    test_alignment.py
+    test_conviction.py
+    test_scenarios.py
+    test_actions.py
+    test_fusion.py
+  reference/
+    omega_reference.py
+  Dockerfile
+  docker-compose.yml
+  requirements.txt
+  .env.example
+  README.md

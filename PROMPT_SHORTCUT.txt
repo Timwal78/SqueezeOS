@@ -1,0 +1,11 @@
+Read:
+SPEC_MASTER.md
+MATH/OMEGA_FORMULAS.md
+API/SCHEMAS.md
+REPO_TREE.md
+SKILLS/GUARDRAILS.md
+REFERENCE_IMPL/omega_reference.py
+
+Then build the full production-ready ARGUS OMEGA FastAPI service exactly from these materials.
+Do not simplify the formulas or action logic.
+Show the file tree first, then implement.

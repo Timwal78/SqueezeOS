@@ -1,0 +1,53 @@
+from omega_reference import FusionEngine
+
+engine = FusionEngine()
+
+request = {
+    "ticker": "AMC",
+    "timeframes": ["15m", "1h", "1d"],
+    "argus": {
+        "state_score": 84,
+        "bias": "unstable_bullish",
+        "stability": "distorted",
+        "event_risk": {"expansion": 0.77, "reversal": 0.31, "squeeze": 0.62, "trap": 0.58},
+        "confidence": 0.81,
+        "trigger_map": {"confirm_above": 3.42, "invalidate_below": 2.91},
+    },
+    "echo_forge": {
+        "similarity_score": 0.83,
+        "echo_type": "late_stage_compression",
+        "continuation_probability": 0.68,
+        "reversal_probability": 0.22,
+        "failure_probability": 0.10,
+        "resolution_window_bars": 20,
+        "confidence": 0.78,
+        "top_matches": [],
+    },
+    "liquidity_ghost": {
+        "destination_score": 0.79,
+        "primary_magnet": 3.42,
+        "secondary_magnet": 2.91,
+        "sweep_probability_up": 0.71,
+        "sweep_probability_down": 0.34,
+        "post_sweep_reversal_probability": 0.47,
+        "confidence": 0.75,
+    },
+    "false_reality": {
+        "truth_score": 0.41,
+        "deception_score": 0.72,
+        "breakout_validity": 0.36,
+        "trap_probability": 0.69,
+        "failure_warning": True,
+        "confidence": 0.84,
+    },
+}
+
+out = engine.fuse(
+    request["ticker"],
+    request["timeframes"],
+    request["argus"],
+    request["echo_forge"],
+    request["liquidity_ghost"],
+    request["false_reality"],
+)
+print(out)
