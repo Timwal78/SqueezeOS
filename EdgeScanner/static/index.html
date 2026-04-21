@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EdgeScanner — AI Trading Setups</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-mark">◆</span>
+        <span class="logo-text">Edge<span class="logo-accent">Scanner</span></span>
+        <span class="logo-sub">AI-Powered Setup Detection</span>
+      </div>
+      <div class="header-controls">
+        <div class="status-bar" id="statusBar">
+          <span class="status-dot" id="statusDot"></span>
+          <span id="statusText">Connecting...</span>
+        </div>
+        <button class="btn btn-scan" id="btnScan" onclick="triggerScan()">⟳ Scan Now</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="main">
+    <!-- Filters -->
+    <section class="filters-bar">
+      <div class="filter-group">
+        <label>Direction</label>
+        <select id="filterDir" onchange="applyFilters()">
+          <option value="all">All</option>
+          <option value="bullish">Bullish</option>
+          <option value="bearish">Bearish</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Pattern</label>
+        <select id="filterPattern" onchange="applyFilters()">
+          <option value="all">All Patterns</option>
+          <option value="TTM Squeeze">TTM Squeeze</option>
+          <option value="VWAP Reclaim">VWAP Reclaim</option>
+          <option value="Flag">Bull/Bear Flag</option>
+          <option value="Volume Breakout">Volume Breakout</option>
+          <option value="Oversold Bounce">Oversold Bounce</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Min Edge Score</label>
+        <select id="filterScore" onchange="applyFilters()">
+          <option value="0">Any</option>
+          <option value="60">60+</option>
+          <option value="70">70+</option>
+          <option value="80">80+</option>
+        </select>
+      </div>
+      <div class="filter-group custom-scan">
+        <label>Custom Symbols</label>
+        <input type="text" id="customSymbols" placeholder="AAPL, TSLA, NVDA..." />
+        <button class="btn btn-custom" onclick="runCustomScan()">Scan</button>
+      </div>
+    </section>
+
+    <!-- Stats summary -->
+    <section class="stats-row" id="statsRow">
+      <div class="stat-card">
+        <div class="stat-val" id="statTotal">—</div>
+        <div class="stat-lbl">Setups Found</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val bullish" id="statBull">—</div>
+        <div class="stat-lbl">Bullish</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val bearish" id="statBear">—</div>
+        <div class="stat-lbl">Bearish</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val highlight" id="statTop">—</div>
+        <div class="stat-lbl">Top Edge Score</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" id="statLast">—</div>
+        <div class="stat-lbl">Last Scan</div>
+      </div>
+    </section>
+
+    <!-- Setup cards -->
+    <section class="setups-grid" id="setupsGrid">
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">◎</div>
+        <div class="empty-title">Scanning for setups...</div>
+        <div class="empty-sub">This usually takes 30–60 seconds on first load.</div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
