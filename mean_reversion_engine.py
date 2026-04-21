@@ -95,7 +95,7 @@ class MeanReversionEngine:
                 
                 rsi = float(last['RSI'])
                 z_score = float(last['Z_Score'])
-                rvol = float(last['RRV'] if 'RRV' in last else last['RVOL'])
+                rvol = float(last['RVOL'])
                 sma200 = float(last['SMA200'])
                 is_green = bool(last['is_green'])
                 

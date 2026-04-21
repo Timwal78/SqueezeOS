@@ -80,6 +80,7 @@ class ForcedMoveEngine:
         self.trap_fake = 20.0
         self.trap_fragile = 40.0
         self.trap_forced = 60.0
+        self.trap_failed = 60.0  # trapped_pct > this → move has failed (60%+ wrong-side volume)
 
         # Per-symbol state machines
         self._cooldown_count = defaultdict(int)      # Cooldown counter
@@ -335,7 +336,7 @@ class ForcedMoveEngine:
             (up_vol[i] - dn_vol[i]) / (up_vol[i] + dn_vol[i] + 1e-9)
             for i in range(-20, 0)
         ])
-        vuvd_score = min(100, (vuvd_delta / (self.vuvd_stdev * stdev + 1e-9)) * 50)
+        vuvd_score = min(100, (vuvd_delta / (self.vuvd_stdev * vuvd_stdev + 1e-9)) * 50)
 
         # IV Acceleration
         iv_ratio = current_atr_short / (current_atr_long + 1e-9)

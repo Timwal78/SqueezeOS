@@ -599,9 +599,12 @@ class OptionsIntelligence:
                             # Delta score: preference for certain delta ranges
                             delta_score = self._compute_delta_score(delta, bias)
 
-                            # Overall score
+                            # Overall score — normalize liquidity/value from [50,100] → [0,100]
+                            # before combining so all three components share the same scale
+                            liquidity_norm = (liquidity_score - 50.0) * 2.0
+                            value_norm = (value_score - 50.0) * 2.0
                             overall_score = (
-                                delta_score * 0.35 + liquidity_score * 0.35 + value_score * 0.30
+                                delta_score * 0.35 + liquidity_norm * 0.35 + value_norm * 0.30
                             )
 
                             rec = Recommendation(

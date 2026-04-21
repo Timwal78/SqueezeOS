@@ -793,9 +793,6 @@ def cluster_and_score(sweeps, mkt):
             elif cl["direction"] == "bearish" and price < op:
                 sc += 1; bd["orb_confirm"] = 1
 
-        # ── Grade assignment ──
-        grade = "S" if sc >= 11 else "A" if sc >= 9 else "B" if sc >= 7 else "C" if sc >= 5 else "F"
-
         # ── Disqualifiers ──
         dqs = []
         if len(cl["sweeps"]) < 2:
@@ -809,6 +806,9 @@ def cluster_and_score(sweeps, mkt):
             sc -= 1; bd["vwap_against"] = -1
         if cl["direction"] == "bearish" and vwap > 0 and price > vwap * 1.005:
             sc -= 1; bd["vwap_against"] = -1
+
+        # ── Grade assignment (after all penalties) ──
+        grade = "S" if sc >= 11 else "A" if sc >= 9 else "B" if sc >= 7 else "C" if sc >= 5 else "F"
 
         # IV crush warning (flagged on signal card, not a disqualifier)
         avg_iv = sum(s.get("iv", 0) for s in cl["sweeps"]) / len(cl["sweeps"])

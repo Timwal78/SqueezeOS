@@ -33,12 +33,6 @@ MEGA_CAPS = {
 }
 RULE_3_LIMIT = 3
 
-# Broad Liquid Universe for Discovery
-LIQUID_MID_CAPS = [
-    "AMD", "PLTR", "SOFI", "RIOT", "MARA", "NIO", "AMC", "GME", "DKNG", "SNAP", "UBER", "PYPL", "SQ", "AFRM", "COIN",
-    "AAL", "CCL", "DAL", "UAL", "XOM", "CVX", "OXY", "SLB", "HAL", "RIVN", "LCID", "F", "GM", "BAC", "WFC", "JPM", "C",
-    "T", "VZ", "VZ", "PFE", "MRNA", "ABBV", "PINS", "OPEN", "CHPT", "LUV", "SAVE", "JBLU", "MU", "TXL", "KVUE"
-]
 
 # --- GLOBAL STATE ---
 class GlobalState:
@@ -191,12 +185,10 @@ def worker_scanner():
                 time.sleep(10)
                 continue
             
-            regime_syms = ["SPY", "QQQ", "IWM"] 
+            regime_syms = ["SPY", "QQQ", "IWM"]
             high_priority = list(set(FAVORITES) | set(regime_syms))
             standard_priority = [s for s in universe_list if s not in high_priority]
-            
-            idx = int((time.time() // 60) % 5) * 400
-            targets = high_priority + standard_priority[idx : idx + 400]
+            targets = high_priority + standard_priority
             
             # Rate Limit Protection: Jitter before batch request
             time.sleep(random.uniform(1, 3))
@@ -241,11 +233,9 @@ def worker_flow():
                 continue
                 
             with state.lock:
-                limit = min(50, len(state.scan_results))
-                to_check = list(set([r['symbol'] for r in state.scan_results[:limit]] + FAVORITES))
-            
-            # Slice universe to avoid hitting Schwab too hard in one burst
-            for sym in to_check[:20]:
+                to_check = list(set([r['symbol'] for r in state.scan_results] + FAVORITES))
+
+            for sym in to_check:
                 chain = options.get_options_chain(sym)
                 if chain and 'unusual_activity' in chain:
                     hits = chain['unusual_activity']
@@ -278,10 +268,14 @@ def worker_discovery():
                 time.sleep(10)
                 continue
                 
-            logger.info("[DISCOVERY] Scanning liquid mid-caps for Mean Reversion setups...")
-            
-            # We use a curated liquid list for discovery to ensure high-conviction setups
-            scan_list = LIQUID_MID_CAPS + FAVORITES
+            logger.info("[DISCOVERY] Scanning live discovered universe for Mean Reversion setups...")
+
+            with state.lock:
+                scan_list = list(state.universe.keys())
+            if not scan_list:
+                logger.warning("[DISCOVERY] Universe empty — awaiting data")
+                time.sleep(30)
+                continue
             
             # Incremental Loading: Consume the generator and update state symbol-by-symbol
             with state.lock:
@@ -396,9 +390,12 @@ def worker_sr_patterns():
                 time.sleep(10)
                 continue
             
-            # Merged with meme/low float runners as requested
-            custom_targets = ["AMC", "GME", "HOLO", "FFIE", "YYAI"]
-            scan_list = list(set(LIQUID_MID_CAPS + FAVORITES + custom_targets))
+            with state.lock:
+                scan_list = list(state.universe.keys())
+            if not scan_list:
+                logger.warning("[SR_PATTERNS] Universe empty — awaiting data")
+                time.sleep(30)
+                continue
             
             time.sleep(random.uniform(2, 5))
             
@@ -548,7 +545,7 @@ def get_market_intel():
     """Return combined intel feed from flow + scan highlights."""
     with state.lock:
         flow = list(state.flow_results)
-        scan = list(state.scan_results[:20])
+        scan = list(state.scan_results)
     
     intel = []
     
@@ -586,7 +583,7 @@ def get_beast_signals():
                 'is_mega': s.get('is_mega', False)
             })
     
-    return jsonify({"status": "ok", "data": signals[:20]})
+    return jsonify({"status": "ok", "data": signals})
 
 @app.route('/api/options/intelligence/<symbol>')
 def api_options_intelligence(symbol):

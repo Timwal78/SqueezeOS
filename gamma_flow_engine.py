@@ -255,8 +255,11 @@ def calculate_gex_profile(raw_chain, spot_price, ticker=""):
         logger.warning(f"No ATM IV samples available for {ticker}; using default IV of 0.30")
     # 1-day expected move ≈ IV × sqrt(1/252)
     expected_move = avg_iv * math.sqrt(1 / 252.0)
-    # Adjust for gamma regime: short gamma amplifies, long gamma dampens
-    # Factors moved to config parameters (Institutional Law 2)
+    # Gamma-regime adjustment — configurable per AGENT_LAW §2 (no hidden magic numbers).
+    # GEX_SHORT_GAMMA_AMP (1.3): Dealers are short gamma → they amplify moves to hedge.
+    #                             1.0 = no adjustment; >1.0 = realized vol > implied vol.
+    # GEX_LONG_GAMMA_DAMP (0.7): Dealers are long gamma → they dampen moves by fading.
+    #                             1.0 = no adjustment; <1.0 = realized vol < implied vol.
     short_amp = float(os.getenv('GEX_SHORT_GAMMA_AMP', '1.3'))
     long_damp = float(os.getenv('GEX_LONG_GAMMA_DAMP', '0.7'))
     
@@ -308,7 +311,12 @@ class GammaFlowEngine:
         self.inventory_history: Dict[str, deque] = {} # For z-score calculation
         self.hjb_hedge_rate: Dict[str, float] = {}    # u* (optimal control)
         
-        # Kalman Params (Institutional Weights - Law 2)
+        # Kalman / HJB parameters — all configurable per AGENT_LAW §2 (no hidden magic numbers).
+        # MM_KALMAN_GAIN  (0.65): Weight on latest observation vs. prior estimate.
+        #                         Higher = faster to new data; lower = smoother.
+        # MM_KALMAN_LAMBDA (0.15): Inventory mean-reversion decay rate per bar.
+        # MM_INV_HOLD_COST (0.10): Quadratic cost coefficient for holding inventory (c in HJB).
+        # MM_MARKET_IMPACT (0.50): Linear market-impact coefficient (κ in Avellaneda-Stoikov).
         self.k_gain = float(os.getenv('MM_KALMAN_GAIN', '0.65'))
         self.lambd = float(os.getenv('MM_KALMAN_LAMBDA', '0.15'))
         self.c_inv = float(os.getenv('MM_INV_HOLD_COST', '0.1'))

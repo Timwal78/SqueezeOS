@@ -148,17 +148,16 @@ class PerformanceTracker:
                     max_dd = dd
             self.stats['max_drawdown'] = float(max_dd)
             
-            # 3. Sharpe Ratio (Institutional Scaling)
-            # Use trade-level volatility scaled to an estimated 252-session year
+            # 3. Sharpe Ratio (per-trade, annualized by actual trade count)
+            # pnls are per-trade dollar P&L, not daily returns, so we scale by
+            # sqrt(n_trades) — a trade-frequency-neutral annualization.
             if len(pnls) >= 3:
                 avg_ret = sum(pnls) / len(pnls)
                 variance = sum((p - avg_ret) ** 2 for p in pnls) / len(pnls)
                 std_dev = math.sqrt(variance)
-                
+
                 if std_dev > 0:
-                    # Scaling factor: assumes ~10-20 trades/day for a high-freq desk
-                    # but we'll use 252 for standard daily equivalence
-                    self.stats['sharpe_ratio'] = float((avg_ret / std_dev) * math.sqrt(252))
+                    self.stats['sharpe_ratio'] = float((avg_ret / std_dev) * math.sqrt(len(pnls)))
                 else:
                     self.stats['sharpe_ratio'] = 0.0
         except Exception as e:

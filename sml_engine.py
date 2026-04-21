@@ -621,7 +621,8 @@ class SMLEngine:
         if not is_squeezing.iloc[-1]:
             precursor_score *= 0.5 # Penalty for no squeeze
             
-        squeeze_score = self.f_clamp(precursor_score * 1.15 if is_squeezing.iloc[-1] else 0.0, 0.0, 100.0)
+        squeeze_bias = float(self.settings.get('squeeze_bias', 1.15))
+        squeeze_score = self.f_clamp(precursor_score * squeeze_bias if is_squeezing.iloc[-1] else 0.0, 0.0, 100.0)
         early_window_score = self.f_clamp(30.0 + (compression_score * 10.0), 0.0, 100.0)
         
         target_ema = target_c.ewm(span=int(self.settings['slow_len']), adjust=False).mean()
@@ -701,16 +702,19 @@ class SMLEngine:
         if abs_align < 15.0 and not hurst_trending:
             regime = SMLRegime.STEALTH
             regime_conf = (15.0 - abs_align) / 15.0 * 60.0 + (40.0 if hurst_reverting else 20.0)
-        elif abs_align >= 15.0 and abs_align < 40.0 and hurst_noise:
-            # CONFLICT is already default, just setting conf
-            regime_conf = self.f_clamp(abs_align / 40.0 * 100.0, 20.0, 80.0)
         elif abs_align >= 40.0 and hurst_trending:
             regime = SMLRegime.EXECUTION
             regime_conf = self.f_clamp(abs_align / 100.0 * 80.0 + 20.0, 40.0, 100.0)
+        elif abs_align >= 40.0 and not hurst_trending:
+            # Strong alignment but Hurst not confirming trend persistence — stays CONFLICT
+            regime = SMLRegime.CONFLICT
+            regime_conf = self.f_clamp(abs_align / 100.0 * 60.0 + 20.0, 30.0, 80.0)
         elif abs_align >= 30.0 and not hurst_trending:
-            # Simple approximation of crossing zero logic without full history
             regime = SMLRegime.COLLAPSE
             regime_conf = 60.0
+        elif abs_align >= 15.0 and abs_align < 40.0 and hurst_noise:
+            # CONFLICT is already default, just setting conf
+            regime_conf = self.f_clamp(abs_align / 40.0 * 100.0, 20.0, 80.0)
 
         if squeeze_setup and regime < SMLRegime.EXECUTION:
             regime = SMLRegime.CONFLICT # Squeeze setup often happens in Conflict
