@@ -1,5 +1,5 @@
 //@version=6
-indicator("SML TENSION INDEX ENGINE™ MTF", shorttitle="SML TENSION INDEX ENGINE", overlay=false, max_labels_count=500, max_lines_count=500, max_boxes_count=100)
+indicator("SML TENSION INDEX ENGINE™ MTF", shorttitle="SML TIE", overlay=false, max_labels_count=500, max_lines_count=500, max_boxes_count=100)
 
 //==================================================================================================
 // SML TENSION INDEX ENGINE (TIE) + DUAL GREEN + MTF ALIGNMENT
@@ -47,7 +47,7 @@ color phase1Color = input.color(#ffe600, "Phase 1 Color", group=gCols)
 color phase2Color = input.color(#ff9f0a, "Phase 2 Color", group=gCols)
 color phase3Color = input.color(#ff375f, "Phase 3 Color", group=gCols)
 color phase4Color = input.color(#39ff14, "Phase 4 Color", group=gCols)
-color vectorBaseColor = input.color(#00e5ff, "Release Vector Color", group=gCols)
+color vectorBaseColor = input.color(#ffcc00, "Release Vector Color", group=gCols)
 int vectorBaseWidth = input.int(2, "Release Vector Base Width", minval=1, maxval=3, group=gCols)
 
 string gAlerts = "Alerts"
@@ -60,7 +60,7 @@ bool fireDynamicAlerts = input.bool(true, "Fire alert() JSON", group=gAlerts)
 fClamp(_x, _lo, _hi) => math.max(_lo, math.min(_hi, _x))
 fSafeDiv(_a, _b) => _b == 0.0 or na(_b) ? 0.0 : _a / _b
 fNorm(_src, _len) => fClamp(fSafeDiv(_src - ta.lowest(_src, _len), math.max(ta.highest(_src, _len) - ta.lowest(_src, _len), 0.000001)), 0.0, 1.0)
-fRound2(_x) => math.round(_x * 100.0) / 100.0
+fRound2(_x) => int(math.round(_x * 100.0)) / 100.0
 fTxtSize(_s) => _s == "Small" ? size.small : size.normal
 fDirLabel(_v, _thr) => _v > _thr ? "BULL" : _v < -_thr ? "BEAR" : "NEUTRAL"
 fPhaseLabel(_p) => _p == 4 ? "4 GO" : _p == 3 ? "3 RED" : _p == 2 ? "2 ORNG" : "1 YEL"

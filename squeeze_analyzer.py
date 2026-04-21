@@ -330,15 +330,35 @@ class SqueezeAnalyzer:
         else:
             level, rec, risk = 'NONE', 'No setup', 'MINIMAL'
 
-        # ── Direction with conviction ──
-        if change_pct > 2.0 and s7 >= 7:
+        # ── Direction with Consensus (Institutional Hardening) ──
+        # We look for agreement between price change, VWAP position, trend alignment, and price structure.
+        bullish_indicators = 0
+        bearish_indicators = 0
+        
+        # 1. Price vs Reference
+        if change_pct > 0.5: bullish_indicators += 1
+        elif change_pct < -0.5: bearish_indicators += 1
+        
+        # 2. VWAP position (s4 > 6 is good bullish, s4 < 4 is bearish)
+        if s4 >= 6: bullish_indicators += 1
+        elif s4 <= 3: bearish_indicators += 1
+        
+        # 3. Trend Alignment (s8 >= 7 is bull stack, s8 <= 3 is bear stack)
+        if s8 >= 7: bullish_indicators += 1
+        elif s8 <= 3: bearish_indicators += 1
+        
+        # 4. Price Structure (s7 >= 7 is closing near high, s7 <= 3 is near low)
+        if s7 >= 7: bullish_indicators += 1
+        elif s7 <= 3: bearish_indicators += 1
+
+        if bullish_indicators >= 3:
             direction = 'BULLISH'
+        elif bearish_indicators >= 3:
+            direction = 'BEARISH'
         elif change_pct > 0:
-            direction = 'BULLISH'
-        elif change_pct < -2.0 and s7 <= 3:
-            direction = 'BEARISH'
+            direction = 'BULLISH' # Fallback
         elif change_pct < 0:
-            direction = 'BEARISH'
+            direction = 'BEARISH' # Fallback
         else:
             direction = 'NEUTRAL'
 

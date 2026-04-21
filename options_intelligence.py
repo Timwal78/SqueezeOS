@@ -232,9 +232,28 @@ class OptionsIntelligence:
                             )
 
                             # Only flag as sweep if score is significant
-                            if sweep_score >= 40:  # Threshold
-                                is_bullish = opt_type == "CALL"
+                            # Directional Conviction: Based on trade aggression (Bid/Ask position)
+                            # Call @ Ask = Bullish, Put @ Ask = Bearish
+                            # Call @ Bid = Bearish (Selling), Put @ Bid = Bullish (Selling)
+                            is_bullish = False
+                            last_price = last or mark or ((bid + ask) / 2 if bid and ask else 0)
+                            
+                            if opt_type == "CALL":
+                                if last_price >= ask * 0.99:
+                                    is_bullish = True
+                                elif last_price <= bid * 1.01:
+                                    is_bullish = False
+                                else:
+                                    is_bullish = True  # Default to Call Buy
+                            else: # PUT
+                                if last_price >= ask * 0.99:
+                                    is_bullish = False
+                                elif last_price <= bid * 1.01:
+                                    is_bullish = True
+                                else:
+                                    is_bullish = False # Default to Put Buy
 
+                            if sweep_score >= 40:  # Threshold
                                 sweep = Sweep(
                                     symbol=symbol,
                                     strike=strike,

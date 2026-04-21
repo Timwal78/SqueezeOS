@@ -143,13 +143,13 @@ class DiscordAlerts:
             # Color and Emoji by DIRECTION and INTENSITY
             direction = item.get('direction', 'NEUTRAL').upper()
             if direction == 'BULLISH':
-                color = 0x00FF88 # Institutional Bullish Green
+                color = 0x00FF88 # Institutional Green
                 emoji = "🟢" if score < 75 else "🔥"
             elif direction == 'BEARISH':
-                color = 0xFF4444 # Institutional Bearish Red
+                color = 0xFF4444 # Institutional Red
                 emoji = "🔴" if score < 75 else "🔥"
             else:
-                color = 0x00BFFF
+                color = 0x00BFFF # Institutional Blue
                 emoji = "📊"
 
             # Intensity override for MOASS potential
@@ -269,19 +269,19 @@ class DiscordAlerts:
             is_sweep = lead.get('is_sweep', False)
 
             if is_oi_spike and is_sweep:
-                color, title_emoji = 0xFF00FF, "💎" # SWEEP SPIKE
+                color, title_emoji = 0xFF00FF, "💎" # SWEEP SPIKE (Magenta)
             elif is_oi_spike:
-                color, title_emoji = 0xFF8C00, "🌋" # OI SPIKE
+                color, title_emoji = 0xFF8C00, "🌋" # OI SPIKE (Orange)
             elif is_block:
-                color, title_emoji = 0x00BFFF, "🐋" # BLOCK
+                color, title_emoji = 0x00BFFF, "🐋" # BLOCK (Blue)
             elif priority == 'EXTREME':
-                color, title_emoji = 0xFF0000, "🔥"
+                color, title_emoji = 0xFF4444, "🚨" # Institutional Red
             elif sentiment == 'BULLISH':
-                color, title_emoji = 0x00FF88, "🔔"
+                color, title_emoji = 0x00FF88, "🔔" # Institutional Green
             elif sentiment == 'BEARISH':
-                color, title_emoji = 0xFF4444, "🔔"
+                color, title_emoji = 0xFF4444, "🔔" # Institutional Red
             else:
-                color, title_emoji = 0x888888, "🔔"
+                color, title_emoji = 0x00BFFF, "🔔" # Institutional Blue
 
             sent_emoji = "🟢" if sentiment == 'BULLISH' else "🔴" if sentiment == 'BEARISH' else "⚪"
 

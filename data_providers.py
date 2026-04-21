@@ -233,12 +233,12 @@ class AlpacaProvider:
 # ============================================================
 # POLYGON PROVIDER — discovery + per-symbol quotes
 # ============================================================
+from libsml.rate_guard import PolygonRateGuard
+
 class PolygonProvider:
     def __init__(self):
         self.api_key = os.environ.get('POLYGON_API_KEY', '')
         self.base = 'https://api.polygon.io'
-        self.last_call = 0
-        self.min_interval = 12.0  # RELAXED: 12s (was 13s) — Polygon FREE tier: 5 requests/min = 12s minimum
         if self.available:
             logger.info(f"[POLYGON] Ready ({self.api_key[:6]}...)")
         else:
@@ -249,10 +249,7 @@ class PolygonProvider:
         return bool(self.api_key)
 
     def _rate_limit(self):
-        elapsed = time.time() - self.last_call
-        if elapsed < self.min_interval:
-            time.sleep(self.min_interval - elapsed)
-        self.last_call = time.time()
+        PolygonRateGuard.wait()
 
     # --- DISCOVERY ---
 
@@ -340,8 +337,8 @@ class PolygonProvider:
                             'source': 'polygon',
                         }
                 elif r.status_code == 429:
-                    # RATE LIMIT HIT: Polygon enforces 5/min on free tier — back off and skip this symbol
-                    logger.warning(f"[POLYGON] 429 rate limit hit on {sym} — skipping")
+                    # RATE LIMIT HIT: Use the standardized institutional backoff
+                    PolygonRateGuard.emergency_backoff()
                     break  # Stop processing more symbols this cycle
             except Exception as e:
                 logger.warning(f"[POLYGON] {sym}: {e}")

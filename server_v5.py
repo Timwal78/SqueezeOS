@@ -25,7 +25,7 @@ app = Flask(__name__, static_folder='.', static_url_path='')
 CORS(app)
 
 # --- MANIFESTO LAWS ---
-FAVORITES = ["AMC", "GME", "PLTR", "AMD", "NIO", "SOFI", "RIOT", "MARA"]
+FAVORITES = [] # Purged per Rule 1 (No Demo Data)
 MEGA_CAPS = {
     'AAPL', 'MSFT', 'GOOG', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'LLY', 'V', 'MA', 'AVGO', 'HD', 'COST',
     'JPM', 'UNH', 'WMT', 'BAC', 'XOM', 'CVX', 'PG', 'ORCL', 'ABBV', 'CRM', 'ADBE', 'NFLX', 'AMD', 'INTC', 'DIS',
@@ -34,11 +34,7 @@ MEGA_CAPS = {
 RULE_3_LIMIT = 3
 
 # Broad Liquid Universe for Discovery
-LIQUID_MID_CAPS = [
-    "AMD", "PLTR", "SOFI", "RIOT", "MARA", "NIO", "AMC", "GME", "DKNG", "SNAP", "UBER", "PYPL", "SQ", "AFRM", "COIN",
-    "AAL", "CCL", "DAL", "UAL", "XOM", "CVX", "OXY", "SLB", "HAL", "RIVN", "LCID", "F", "GM", "BAC", "WFC", "JPM", "C",
-    "T", "VZ", "VZ", "PFE", "MRNA", "ABBV", "PINS", "OPEN", "CHPT", "LUV", "SAVE", "JBLU", "MU", "TXL", "KVUE"
-]
+LIQUID_MID_CAPS = [] # Purged per Rule 1 (Use 100% Fetch Policy)
 
 # --- GLOBAL STATE ---
 class GlobalState:
@@ -60,8 +56,10 @@ class GlobalState:
             "universe_size": 0,
             "mega_caps_filtered": 0,
             "uptime_start": time.time(),
-            "trading_mode": "SHADOW"
+            "trading_mode": "SHADOW",
+            "conservation_mode": False
         }
+        self.conservation_until = 0.0
 
     def push_terminal(self, event_type: str, msg: str, symbol: str = '', score: float = 0.0, extra: typing.Optional[dict] = None):
         with self.lock:
@@ -174,6 +172,12 @@ def worker_scanner():
     logger.info("📡 [SENTINEL] Scanner Awakened")
     while True:
         try:
+            now = time.time()
+            if now < state.conservation_until:
+                logger.warning("🛡️ API GUARDIAN: Conservation Mode Active in SqueezeOS.")
+                time.sleep(30)
+                continue
+            
             state.heartbeats["scanner"] = time.time()
             dm = get_service("dm")
             analyzer = get_service("analyzer")
@@ -227,13 +231,23 @@ def worker_scanner():
 
             time.sleep(10)
         except Exception as e:
-            logger.error(f"[SCANNER FAIL] {e}")
-            time.sleep(30)
+            if "429" in str(e):
+                logger.warning("📉 PROTOCOL 429 in SqueezeOS Scanner. Entering 60s Global Hibernation.")
+                state.conservation_until = time.time() + 900 # 15 min
+                time.sleep(60)
+            else:
+                logger.error(f"[SCANNER FAIL] {e}")
+                time.sleep(30)
 
 def worker_flow():
     logger.info("🌊 [SENTINEL] Flow Monitoring Active")
     while True:
         try:
+            now = time.time()
+            if now < state.conservation_until:
+                time.sleep(30)
+                continue
+
             state.heartbeats["flow"] = time.time()
             options = get_service("options")
             if not options:
@@ -262,10 +276,14 @@ def worker_flow():
                 
                 time.sleep(random.uniform(0.5, 1.5)) # Inter-symbol jitter
 
-            time.sleep(30)
+            time.sleep(10)
         except Exception as e:
-            logger.error(f"[FLOW FAIL] {e}")
-            time.sleep(30)
+            if "429" in str(e):
+                state.conservation_until = time.time() + 900
+                time.sleep(60)
+            else:
+                logger.error(f"[FLOW FAIL] {e}")
+                time.sleep(10)
 
 def worker_discovery():
     logger.info("🔭 [SENTINEL] Discovery Engine Awakened")
@@ -433,6 +451,15 @@ def get_auth_status():
     elif schwab_api.refresh_token:
         return jsonify({"status": "AUTH_EXPIRED", "message": "Token expired — click SAVE & AUTHENTICATE to re-login"})
     return jsonify({"status": "OFFLINE", "message": "Not authenticated"})
+
+@app.route('/api/health')
+def api_health():
+    """Health endpoint for supervisor."""
+    return jsonify({
+        "status": "operational",
+        "uptime_sec": round(time.time() - state.audit["uptime_start"]),
+        "trading_mode": state.audit["trading_mode"]
+    })
 
 @app.route('/ping')
 def ping():
