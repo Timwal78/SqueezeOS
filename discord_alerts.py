@@ -27,11 +27,16 @@ class DiscordAlerts:
         self.webhook_squeeze = os.environ.get('DISCORD_WEBHOOK_SQUEEZE', '')
         self.webhook_flow = os.environ.get('DISCORD_WEBHOOK_FLOW', '')
         self.webhook_all = os.environ.get('DISCORD_WEBHOOK_ALL', '')
+        self.webhook_beast = os.environ.get('DISCORD_WEBHOOK_BEAST', '')
+        self.webhook_free = os.environ.get('DISCORD_WEBHOOK_FREE', '')
+        self.webhook_pro = os.environ.get('DISCORD_WEBHOOK_PRO', '')
+        self.webhook_premium = os.environ.get('DISCORD_WEBHOOK_PREMIUM', '')
         self.min_squeeze_score = int(os.environ.get('DISCORD_ALERT_MIN_SCORE', '40'))
         self.min_flow_score = int(os.environ.get('DISCORD_FLOW_MIN_SCORE', '15'))
         self.cooldown = {}
         self.cooldown_sec = 300
         self.rate_limit_until = 0 # Type: int
+        self.dead_webhooks = set()
         
         # ── Robust Session for SSL Resilience ──
         self.session = requests.Session()
@@ -41,12 +46,15 @@ class DiscordAlerts:
             status_forcelist=[500, 502, 503, 504],
             raise_on_status=False
         )
-        self.session.mount('https://', HTTPAdapter(max_retries=retries))
+        # Use more robust adapter settings for SSL stability
+        adapter = HTTPAdapter(max_retries=retries, pool_connections=10, pool_maxsize=10)
+        self.session.mount('https://', adapter)
 
         active = []
         if self.webhook_squeeze: active.append('squeeze')
         if self.webhook_flow: active.append('flow')
         if self.webhook_all: active.append('all')
+        if self.webhook_beast: active.append('beast')
         if active:
             logger.info(f"[DISCORD] Webhooks: {', '.join(active)} | squeeze>={self.min_squeeze_score} | flow>={self.min_flow_score}")
         else:
@@ -54,7 +62,7 @@ class DiscordAlerts:
 
     @property
     def enabled(self):
-        return bool(self.webhook_squeeze or self.webhook_flow or self.webhook_all)
+        return bool(self.webhook_squeeze or self.webhook_flow or self.webhook_all or self.webhook_beast)
 
     def _can_alert(self, key):
         now = time.time()
@@ -67,7 +75,7 @@ class DiscordAlerts:
         self.cooldown[key] = time.time()
 
     def _post(self, url, payload):
-        if not url:
+        if not url or url in self.dead_webhooks:
             return
         
         # TRACE: Log attempt
@@ -85,7 +93,8 @@ class DiscordAlerts:
             logger.info(f"[DISCORD] Response: {r.status_code}")
             
             if r.status_code == 404:
-                logger.error("❌ [DISCORD ACTION REQUIRED] 404 Unknown Webhook. Your URLs in .env are dead/deleted.")
+                logger.error(f"❌ [DISCORD ACTION REQUIRED] 404 Unknown Webhook. Adding to dead-list: {masked}")
+                self.dead_webhooks.add(url)
             elif r.status_code == 429:
                 retry_after = r.json().get('retry_after', 5)
                 self.rate_limit_until = int(time.time() + retry_after)
@@ -121,15 +130,39 @@ class DiscordAlerts:
         }
         self._post(url, payload)
 
+    def send_tiered_alert(self, title: str, message: str, tier: str = 'premium', color: int = 0x00FF00):
+        """Routes alerts based on membership tier (free/pro/premium)."""
+        if not self.enabled:
+            return
+            
+        tier = tier.lower()
+        if tier == 'free':
+            url = self.webhook_free or self.webhook_squeeze or self.webhook_all
+        elif tier == 'pro':
+            url = self.webhook_pro or self.webhook_squeeze or self.webhook_all
+        else:
+            url = self.webhook_premium or self.webhook_squeeze or self.webhook_all
+            
+        if not url:
+            return
+            
+        payload = {
+            "embeds": [{
+                "title": title,
+                "description": message,
+                "color": color,
+                "footer": {"text": f"SML Institutional | Tier: {tier.upper()} | {datetime.now().strftime('%I:%M %p ET')}"},
+                "timestamp": datetime.utcnow().isoformat(),
+            }]
+        }
+        self._post(url, payload)
+
     # ══════════════════════════════════════════════════════════
     # SQUEEZE ALERTS
     # ══════════════════════════════════════════════════════════
 
     def fire_squeeze_alerts(self, scan_results: List[Dict]):
         if not self.enabled:
-            return
-        url = self.webhook_squeeze or self.webhook_all
-        if not url:
             return
 
         for item in scan_results:
@@ -138,6 +171,18 @@ class DiscordAlerts:
             if score < self.min_squeeze_score:
                 continue
             if not self._can_alert(f'sq_{sym}'):
+                continue
+
+            # ── Tier-Based Routing ──────────────────────────────────────────
+            tier = item.get('tier', 'premium').lower()
+            if tier == 'free':
+                url = self.webhook_free or self.webhook_squeeze or self.webhook_all
+            elif tier == 'pro':
+                url = self.webhook_pro or self.webhook_squeeze or self.webhook_all
+            else:
+                url = self.webhook_premium or self.webhook_squeeze or self.webhook_all
+
+            if not url:
                 continue
 
             # Color and Emoji by DIRECTION and INTENSITY
@@ -216,16 +261,12 @@ class DiscordAlerts:
     def fire_flow_alerts(self, flow_results: List[Dict]):
         if not self.enabled:
             return
-        url = self.webhook_flow or self.webhook_all
-        if not url:
-            return
 
         qualifying = [f for f in flow_results if f.get('unusual_score', 0) >= self.min_flow_score]
         if not qualifying:
             return
 
         # Beast Mode: Group contracts by ticker to prevent Discord spam
-        # Instead of 5 pings for 5 different strikes on AAPL, send 1 consolidated card
         ticker_groups = {}
         for alert in qualifying:
             sym = alert.get('symbol', '?')
@@ -238,6 +279,19 @@ class DiscordAlerts:
             # Use the highest-scored contract as the lead
             contracts.sort(key=lambda x: x.get('unusual_score', 0), reverse=True)
             lead = contracts[0]
+
+            # ── Tier-Based Routing ──────────────────────────────────────────
+            # Flow alerts default to Premium unless marked otherwise
+            tier = lead.get('tier', 'premium').lower()
+            if tier == 'free':
+                url = self.webhook_free or self.webhook_flow or self.webhook_all
+            elif tier == 'pro':
+                url = self.webhook_pro or self.webhook_flow or self.webhook_all
+            else:
+                url = self.webhook_premium or self.webhook_flow or self.webhook_all
+
+            if not url:
+                continue
             
             key = f"flow_{sym}_batch"
             if not self._can_alert(key):
@@ -707,3 +761,367 @@ class DiscordAlerts:
             self._mark(key)
             time.sleep(1.0)
 
+    # ══════════════════════════════════════════════════════════
+    # BEAST PAPER / LIVE TRADE NOTIFICATIONS
+    # ══════════════════════════════════════════════════════════
+
+    def fire_beast_trade_alert_full(self, trade_data: Dict, is_live: bool = False):
+        """Send Discord notification when a paper or live trade is executed."""
+        if not self.enabled:
+            return
+        url = self.webhook_beast or self.webhook_all or self.webhook_squeeze
+        if not url:
+            return
+
+        sym = trade_data.get('symbol', '?')
+        side = trade_data.get('side', 'BUY')
+        qty = trade_data.get('qty', 0)
+        price = trade_data.get('price', 0)
+        reason = trade_data.get('reason', '')
+        trade_id = trade_data.get('id', '?')
+        sl = trade_data.get('sl', 0)
+        tp = trade_data.get('tp', 0)
+
+        mode = '🔴 LIVE' if is_live else '📋 PAPER'
+        side_emoji = '🟢' if side == 'BUY' else '🔴'
+        color = 0xFF0000 if is_live else 0x00BFFF  # Red for live, blue for paper
+
+        key = f'beast_trade_{sym}_{trade_id}'
+        if not self._can_alert(key):
+            return
+
+        fields = [
+            {"name": "Mode", "value": f"**{mode}**", "inline": True},
+            {"name": "Side", "value": f"**{side_emoji} {side}**", "inline": True},
+            {"name": "Qty", "value": f"**{qty}**", "inline": True},
+            {"name": "Entry Price", "value": f"**${price:.2f}**", "inline": True},
+            {"name": "Total Value", "value": f"**${qty * price:,.2f}**", "inline": True},
+            {"name": "Reason", "value": reason or '—', "inline": True},
+        ]
+        if tp > 0:
+            fields.append({"name": "Take Profit", "value": f"${tp:.2f}", "inline": True})
+        if sl > 0:
+            fields.append({"name": "Stop Loss", "value": f"${sl:.2f}", "inline": True})
+
+        embed = {
+            "embeds": [{
+                "title": f"🦅 BEAST {mode} TRADE — {side} {sym}",
+                "description": f"**{qty}x {sym}** @ **${price:.2f}** | {reason}",
+                "color": color,
+                "fields": fields,
+                "footer": {"text": f"Squeeze OS v5.0 | BEAST Engine | {datetime.now().strftime('%I:%M %p ET')}"},
+                "timestamp": datetime.utcnow().isoformat(),
+            }]
+        }
+        self._post(url, embed)
+        self._mark(key)
+
+    def fire_beast_exit_alert(self, trade_data: Dict, is_live: bool = False):
+        """Send Discord notification when a paper or live trade is closed."""
+        if not self.enabled:
+            return
+        url = self.webhook_beast or self.webhook_all or self.webhook_squeeze
+        if not url:
+            return
+
+        sym = trade_data.get('symbol', '?')
+        pnl = trade_data.get('pnl', 0)
+        exit_reason = trade_data.get('exit_reason', 'UNKNOWN')
+        entry = trade_data.get('entry_price', 0)
+        exit_price = trade_data.get('current_price', 0)
+        qty = trade_data.get('qty', 0)
+
+        mode = '🔴 LIVE' if is_live else '📋 PAPER'
+        pnl_emoji = '💰' if pnl >= 0 else '📉'
+        color = 0x00FF88 if pnl >= 0 else 0xFF4444
+
+        embed = {
+            "embeds": [{
+                "title": f"{pnl_emoji} BEAST {mode} EXIT — {sym}",
+                "description": f"**{sym}** closed | PnL: **${pnl:+,.2f}** | Reason: {exit_reason}",
+                "color": color,
+                "fields": [
+                    {"name": "Entry", "value": f"${entry:.2f}", "inline": True},
+                    {"name": "Exit", "value": f"${exit_price:.2f}", "inline": True},
+                    {"name": "PnL", "value": f"**${pnl:+,.2f}**", "inline": True},
+                    {"name": "Qty", "value": str(qty), "inline": True},
+                    {"name": "Exit Reason", "value": exit_reason, "inline": True},
+                ],
+                "footer": {"text": f"Squeeze OS v5.0 | BEAST Engine | {datetime.now().strftime('%I:%M %p ET')}"},
+                "timestamp": datetime.utcnow().isoformat(),
+            }]
+        }
+        self._post(url, embed)
+
+    def fire_beast_hedge_dict(self, hedge_data: Dict, is_live: bool = False):
+        """Send Discord notification when a BEAST hedger cycle executes a hedge decision."""
+        if not self.enabled:
+            return
+        url = self.webhook_beast or self.webhook_all or self.webhook_squeeze
+        if not url:
+            return
+
+        sym = hedge_data.get('symbol', '?')
+        action = hedge_data.get('action', 'HEDGE')
+        delta = hedge_data.get('delta', 0.0)
+        gex_regime = hedge_data.get('gex_regime', 'UNKNOWN')
+        conviction = hedge_data.get('conviction', 0)
+        qty = hedge_data.get('qty', 0)
+        price = hedge_data.get('price', 0)
+        reason = hedge_data.get('reason', '')
+
+        mode = '🔴 LIVE' if is_live else '📋 PAPER'
+        color = 0xFF8C00  # Orange for hedge actions
+
+        key = f'beast_hedge_{sym}_{action}_{int(time.time() // 300)}'
+        if not self._can_alert(key):
+            return
+
+        fields = [
+            {"name": "Mode", "value": f"**{mode}**", "inline": True},
+            {"name": "Action", "value": f"**{action}**", "inline": True},
+            {"name": "GEX Regime", "value": gex_regime, "inline": True},
+            {"name": "Delta Exposure", "value": f"{delta:+.2f}Δ", "inline": True},
+            {"name": "Conviction", "value": f"{conviction:.0f}%", "inline": True},
+        ]
+        if qty and price:
+            fields.append({"name": "Qty × Price", "value": f"{qty} @ ${price:.2f}", "inline": True})
+        if reason:
+            fields.append({"name": "Reason", "value": reason, "inline": False})
+
+        embed = {
+            "embeds": [{
+                "title": f"⚡ BEAST HEDGER — {action} {sym} [{mode}]",
+                "description": f"**{sym}** hedged | GEX: {gex_regime} | Delta: {delta:+.2f}",
+                "color": color,
+                "fields": fields,
+                "footer": {"text": f"Squeeze OS v5.0 | BEAST Hedger | {datetime.now().strftime('%I:%M %p ET')}"},
+                "timestamp": datetime.utcnow().isoformat(),
+            }]
+        }
+        self._post(url, embed)
+        self._mark(key)
+
+    def fire_beast_paper_summary(self, hedger_count: int, gex_count: int, shadow_trades: int, total_pnl: float):
+        """Periodic summary of BEAST paper trading status."""
+        if not self.enabled:
+            return
+        url = self.webhook_beast or self.webhook_all
+        if not url:
+            return
+
+        key = 'beast_paper_summary'
+        if not self._can_alert(key):
+            return
+
+        pnl_emoji = '💰' if total_pnl >= 0 else '📉'
+        color = 0x00FF88 if total_pnl >= 0 else 0xFF4444
+
+        embed = {
+            "embeds": [{
+                "title": f"🦅 BEAST Paper Trading Cycle",
+                "color": color,
+                "fields": [
+                    {"name": "Hedger Cycles", "value": str(hedger_count), "inline": True},
+                    {"name": "GEX Scans", "value": str(gex_count), "inline": True},
+                    {"name": "Active Shadow Trades", "value": str(shadow_trades), "inline": True},
+                    {"name": f"{pnl_emoji} Shadow PnL", "value": f"**${total_pnl:+,.2f}**", "inline": True},
+                ],
+                "footer": {"text": f"Squeeze OS v5.0 | BEAST Observer | {datetime.now().strftime('%I:%M %p ET')}"},
+                "timestamp": datetime.utcnow().isoformat(),
+            }]
+        }
+        self._post(url, embed)
+        self._mark(key)
+
+    def fire_beast_hedge_executed(self, symbol: str, side: str, qty: int, price: float, delta: float, reason: str):
+        """Detailed notification for institutional delta-neutralization moves."""
+        if not self.enabled: return
+        url = self.webhook_beast or self.webhook_all
+        if not url: return
+
+        color = 0x00D0FF # Cyan for hedging
+        dir_emoji = "🔵" if side == "BUY" else "🟠"
+        
+        embed = {
+            "embeds": [{
+                "title": f"🛡️ Institutional Hedge: {symbol}",
+                "description": f"**{dir_emoji} {side} {qty} shares @ ${price:.2f}**",
+                "color": color,
+                "fields": [
+                    {"name": "Net Delta", "value": f"{delta:+.2f}", "inline": True},
+                    {"name": "Reason", "value": reason, "inline": True},
+                    {"name": "Status", "value": "✅ EXECUTED (SHADOW)", "inline": True},
+                ],
+                "footer": {"text": f"Squeeze OS v5.0 | BEAST Hedger | {datetime.now().strftime('%I:%M %p ET')}"},
+                "timestamp": datetime.utcnow().isoformat(),
+            }]
+        }
+        self._post(url, embed)
+
+    def fire_beast_trade_alert(self, trade: dict, is_live: bool = False):
+        """High-precision trade alert for BEAST expert signals."""
+        if not self.enabled: return
+        url = self.webhook_beast or self.webhook_all
+        if not url: return
+
+        sym = trade.get('symbol', '?')
+        side = trade.get('side', 'BUY')
+        qty = trade.get('qty', 0)
+        price = trade.get('entry_price', 0.0)
+        regime = trade.get('regime', 'UNKNOWN')
+        
+        color = 0x00FF00 if side == "BUY" else 0xFF0000
+        emoji = "🟢" if side == "BUY" else "🔴"
+        
+        # Extract option-specific info if available
+        strike = trade.get('strike')
+        expiry = trade.get('expiry')
+        dte = trade.get('dte')
+        
+        desc = f"**{emoji} {side} {qty} {sym} @ ${price:.2f}**"
+        if strike and expiry:
+            desc = f"**{emoji} BUY {sym} ${strike} {side} exp {expiry} @ ${price:.2f} ({dte} DTE)**"
+
+        embed = {
+            "embeds": [{
+                "title": f"🦅 BEAST {side} Signal — {sym}",
+                "description": desc,
+                "color": color,
+                "fields": [
+                    {"name": "Regime", "value": regime, "inline": True},
+                    {"name": "Hurst", "value": f"{trade.get('hurst', 0.5):.2f}", "inline": True},
+                    {"name": "Net Pressure", "value": f"{trade.get('net_pressure', 0.0):+.2f}", "inline": True},
+                    {"name": "SL", "value": f"${trade.get('sl', 0.0):.2f}", "inline": True},
+                    {"name": "TP", "value": f"${trade.get('tp', 0.0):.2f}", "inline": True},
+                ],
+                "footer": {"text": f"Squeeze OS v5.0 | BEAST Engine | {datetime.now().strftime('%I:%M %p ET')}"},
+                "timestamp": datetime.utcnow().isoformat(),
+            }]
+        }
+        self._post(url, embed)
+
+    # ══════════════════════════════════════════════════════════
+    # AI TRADE DESK BRIDGE — Keep-Alive & Unified Alerts
+    # ══════════════════════════════════════════════════════════
+
+    def ping_trade_desk(self, trade_desk_url: str) -> dict:
+        """
+        Ping the AI Trade Desk Render service to prevent free-tier cold-start spin-down.
+        Returns health check data or error info.
+        """
+        if not trade_desk_url:
+            return {'ok': False, 'error': 'No trade desk URL configured'}
+        
+        health_url = f"{trade_desk_url.rstrip('/')}/health"
+        try:
+            r = self.session.get(health_url, timeout=60)
+            if r.status_code == 200:
+                data = r.json()
+                logger.info(f"[TRADE DESK] Keep-alive OK: {data.get('service', 'unknown')}")
+                return {'ok': True, 'data': data}
+            else:
+                logger.warning(f"[TRADE DESK] Keep-alive failed: HTTP {r.status_code}")
+                return {'ok': False, 'status': r.status_code}
+        except Exception as e:
+            logger.error(f"[TRADE DESK] Keep-alive error: {e}")
+            return {'ok': False, 'error': str(e)}
+
+    def forward_to_trade_desk(self, trade_desk_url: str, secret: str, signal: Dict):
+        """
+        Forward a high-conviction SqueezeOS signal to the AI Trade Desk webhook,
+        which will format it as a desk-style Discord alert.
+        """
+        if not trade_desk_url or not secret:
+            return
+        
+        webhook_url = f"{trade_desk_url.rstrip('/')}/webhook/tradingview"
+        
+        direction = signal.get('direction', 'NEUTRAL').upper()
+        bias = 'LONG' if direction == 'BULLISH' else 'PUTS' if direction == 'BEARISH' else 'NEUTRAL'
+        score = signal.get('squeeze_score', 0)
+        price = signal.get('price', 0)
+        
+        daily_range = price * 0.02
+        if bias == 'LONG':
+            target_1 = round(price + daily_range, 2)
+            target_2 = round(price + (2 * daily_range), 2)
+            target_3 = round(price + (3 * daily_range), 2)
+            stop = round(price - (0.5 * daily_range), 2)
+        elif bias == 'PUTS':
+            target_1 = round(price - daily_range, 2)
+            target_2 = round(price - (2 * daily_range), 2)
+            target_3 = round(price - (3 * daily_range), 2)
+            stop = round(price + (0.5 * daily_range), 2)
+        else:
+            target_1 = target_2 = target_3 = stop = price
+        
+        rr = abs(target_1 - price) / abs(price - stop) if abs(price - stop) > 0 else 2.0
+        grade = 'A+' if score >= 90 else 'A' if score >= 80 else 'B' if score >= 70 else 'C'
+        
+        payload = {
+            'secret': secret,
+            'source': 'SqueezeOS v5.0 Bridge',
+            'ticker': signal.get('symbol', '?'),
+            'exchange': 'NYSE',
+            'timeframe': '240',
+            'price': price,
+            'alert_type': signal.get('squeeze_level', 'ECHO_SQUEEZE'),
+            'bias': bias,
+            'score': score,
+            'grade': grade,
+            'regime': signal.get('recommendation', 'WATCH'),
+            'entry': price,
+            'stop': stop,
+            'target_1': target_1,
+            'target_2': target_2,
+            'target_3': target_3,
+            'rr': round(rr, 1),
+            'volume_ratio': signal.get('analysis_components', {}).get('volume_profile', 0) / 10,
+            'action': f"{'WATCH_LONG' if bias == 'LONG' else 'WATCH_SHORT' if bias == 'PUTS' else 'MONITOR'}",
+            'reason': f"SqueezeOS Bridge: {signal.get('recommendation', 'WATCH')} | Score {score}/100 | {signal.get('squeeze_level', 'SIGNAL')}"
+        }
+        
+        try:
+            r = self.session.post(webhook_url, json=payload, timeout=30)
+            if r.status_code == 200:
+                logger.info(f"[TRADE DESK] Forwarded {signal.get('symbol', '?')} (score={score}) to AI Trade Desk")
+            else:
+                logger.warning(f"[TRADE DESK] Forward failed: {r.status_code} {r.text[:200]}")
+        except Exception as e:
+            logger.error(f"[TRADE DESK] Forward error: {e}")
+
+    def fire_trade_desk_status(self, is_online: bool, service_name: str = ''):
+        """Post a status update about the AI Trade Desk connection to Discord."""
+        if not self.enabled:
+            return
+        url = self.webhook_all or self.webhook_squeeze
+        if not url:
+            return
+        
+        key = 'trade_desk_status'
+        if not self._can_alert(key):
+            return
+        
+        if is_online:
+            embed = {
+                "embeds": [{
+                    "title": "🔗 AI Trade Desk — CONNECTED",
+                    "description": f"Render bridge is warm and responsive.\n**Service**: {service_name}",
+                    "color": 0x00FF88,
+                    "footer": {"text": f"Squeeze OS v5.0 | Trade Desk Bridge | {datetime.now().strftime('%I:%M %p ET')}"},
+                    "timestamp": datetime.utcnow().isoformat(),
+                }]
+            }
+        else:
+            embed = {
+                "embeds": [{
+                    "title": "⚠️ AI Trade Desk — OFFLINE",
+                    "description": "Render bridge is not responding. TradingView alerts may be lost during cold-start.",
+                    "color": 0xFF4444,
+                    "footer": {"text": f"Squeeze OS v5.0 | Trade Desk Bridge | {datetime.now().strftime('%I:%M %p ET')}"},
+                    "timestamp": datetime.utcnow().isoformat(),
+                }]
+            }
+        self._post(url, embed)
+        self._mark(key)

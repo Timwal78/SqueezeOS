@@ -1,4 +1,6 @@
 import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import json
 import time
 import threading
@@ -6,15 +8,24 @@ import logging
 import math
 import random
 import typing
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, Response, redirect, render_template_string
+from functools import wraps
+from datetime import datetime
 from flask_cors import CORS
 from threading import Lock
+from functools import wraps
+import queue
+
+sse_queues = []
 from data_providers import load_env_file, DataManager
 from schwab_api import schwab_api
 from discord_alerts import DiscordAlerts
 from options_intelligence import OptionsIntelligence
 from forced_move_engine import ForcedMoveEngine
 from mean_reversion_engine import MeanReversionEngine
+from beast_webhook import register_beast_routes
+from iwm_odte_engine import IwmOdteEngine
+from kdp_sentinel_engine import KdpSentinelEngine
 
 # --- INITIALIZATION ---
 load_env_file()
@@ -25,7 +36,7 @@ app = Flask(__name__, static_folder='.', static_url_path='')
 CORS(app)
 
 # --- MANIFESTO LAWS ---
-FAVORITES = [] # Purged per Rule 1 (No Demo Data)
+FAVORITES = ["IWM", "AMC", "GME", "SPY", "QQQ", "VIX"] # Institutional Priority Queue
 MEGA_CAPS = {
     'AAPL', 'MSFT', 'GOOG', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'LLY', 'V', 'MA', 'AVGO', 'HD', 'COST',
     'JPM', 'UNH', 'WMT', 'BAC', 'XOM', 'CVX', 'PG', 'ORCL', 'ABBV', 'CRM', 'ADBE', 'NFLX', 'AMD', 'INTC', 'DIS',
@@ -47,11 +58,14 @@ class GlobalState:
         self.terminal_feed: list[dict] = [] 
         self.last_scan_ts: float = 0.0
         self.last_flow_ts: float = 0.0
+        self.iwm_odte_results: dict = {}
+        self.iwm_odte_engine = None
         self.alert_history: dict[str, float] = {}
         self.heartbeats: dict[str, float] = {"scanner": 0.0, "flow": 0.0, "discovery": 0.0}
         self.beast_signals: list[dict] = []
         self.discovery_results: list[dict] = []
         self.last_discovery_ts: float = 0.0
+        self.kdp_results: dict = {}
         self.audit = {
             "universe_size": 0,
             "mega_caps_filtered": 0,
@@ -60,6 +74,7 @@ class GlobalState:
             "conservation_mode": False
         }
         self.conservation_until = 0.0
+        self.beast_paper_data: dict = {}  # BEAST paper trading observation data
 
     def push_terminal(self, event_type: str, msg: str, symbol: str = '', score: float = 0.0, extra: typing.Optional[dict] = None):
         with self.lock:
@@ -75,6 +90,14 @@ class GlobalState:
             self.terminal_feed.insert(0, entry)
             if len(self.terminal_feed) > 200:
                 self.terminal_feed = self.terminal_feed[:200]
+            
+            # Dispatch to SSE listeners
+            global sse_queues
+            for q in sse_queues:
+                try:
+                    q.put_nowait(entry)
+                except:
+                    pass
 
     def push_flow(self, flow_data: dict):
         with self.lock:
@@ -90,7 +113,8 @@ class GlobalState:
             if len(self.flow_results) > 500:
                 self.flow_results = self.flow_results[:500]
 
-    def can_alert(self, key, cooldown=3600):
+    def can_alert(self, key, category=None, cooldown=3600):
+        """Standardized cooldown guard with optional category tagging."""
         with self.lock:
             now = time.time()
             if key in self.alert_history and (now - self.alert_history[key] < cooldown):
@@ -98,7 +122,21 @@ class GlobalState:
             self.alert_history[key] = now
             return True
 
+    def log_event(self, msg: str, level: str = "INFO"):
+        """BEAST-compatible event logging for terminal and audit trail."""
+        logger.info(f"[EVENT] {msg}")
+        self.push_terminal('EVENT', msg)
+
 state = GlobalState()
+
+# --- UTILITIES ---
+def require_localhost(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if request.remote_addr not in ['127.0.0.1', '::1', 'localhost']:
+            return jsonify({"status": "error", "message": "Unauthorized: Localhost only"}), 403
+        return f(*args, **kwargs)
+    return decorated_function
 
 # --- SERVICE LAYER ---
 _services = {}
@@ -117,11 +155,21 @@ def init_services():
         from delta_neutrality import DeltaNeutralityEngine
         from sr_patterns_engine import SRPatternsEngine
         
+        # MythosArchitect requires PyTorch — fall back to base StrategyArchitect if unavailable
+        try:
+            from BEAST.architect.mythos_architect import MythosArchitect
+            _architect_cls = MythosArchitect
+            logger.info("[BEAST] MythosArchitect loaded (OpenMythos + StrategyArchitect)")
+        except Exception as e:
+            logger.warning(f"[BEAST] MythosArchitect unavailable ({e}), falling back to StrategyArchitect")
+            from BEAST.architect.strategy_architect import StrategyArchitect as _architect_cls
+        
         dm = DataManager(schwab_api)
         analyzer = SqueezeAnalyzer()
         options_svc = OptionsProService()
         perf = PerformanceTracker()
-        exec_eng = ExecutionEngine(schwab_api, rmre_bridge, perf)
+        discord = DiscordAlerts()
+        exec_eng = ExecutionEngine(schwab_api, rmre_bridge, perf, discord)
         delta_mgr = DeltaNeutralityEngine(exec_eng)
         
         watchlist = []
@@ -136,8 +184,10 @@ def init_services():
         gamma_eng = GammaFlowEngine(dm.polygon, watchlist + FAVORITES)
         options_intel = OptionsIntelligence()
         forced_move = ForcedMoveEngine()
-        discord = DiscordAlerts()
         signals = SignalEmitter(gamma_eng, gamma_eng)
+        
+        iwm_engine = IwmOdteEngine(dm)
+        kdp_engine = KdpSentinelEngine(dm)
         
         with state.lock:
             _services.update({
@@ -145,8 +195,10 @@ def init_services():
                 "rmre": rmre_bridge, "exec": exec_eng, "perf": perf,
                 "gamma": gamma_eng, "delta": delta_mgr, "discord": discord,
                 "signals": signals, "options_intel": options_intel, "forced_move": forced_move,
+                "iwm_engine": iwm_engine, "kdp_engine": kdp_engine,
                 "mre": MeanReversionEngine(bb_period=20, bb_std=2.0, rsi_period=14, max_price=500.0),
-                "sr_patterns": SRPatternsEngine()
+                "sr_patterns": SRPatternsEngine(),
+                "mythos_arch": _architect_cls()
             })
         
         def preload_task():
@@ -298,8 +350,11 @@ def worker_discovery():
                 
             logger.info("[DISCOVERY] Scanning liquid mid-caps for Mean Reversion setups...")
             
-            # We use a curated liquid list for discovery to ensure high-conviction setups
-            scan_list = LIQUID_MID_CAPS + FAVORITES
+            # Use live-discovered universe from scanner instead of empty hardcoded list
+            with state.lock:
+                live_universe = [r['symbol'] for r in state.scan_results[:50] if r.get('price', 0) >= 2.0 and r.get('price', 0) <= 500.0]
+            
+            scan_list = list(set(live_universe + FAVORITES))
             
             # Incremental Loading: Consume the generator and update state symbol-by-symbol
             with state.lock:
@@ -396,6 +451,21 @@ def worker_autopilot():
                 else:
                     exec_eng.execute_shadow_trade(symbol, side, qty, price)
                 
+                # Discord notification for trade execution
+                discord = get_service("discord")
+                if discord:
+                    discord.fire_beast_trade_alert({
+                        'symbol': symbol,
+                        'side': side,
+                        'qty': qty,
+                        'entry_price': price,
+                        'regime': 'AUTOPILOT',
+                        'hurst': 0.0,
+                        'net_pressure': 0.0,
+                        'sl': 0.0,
+                        'tp': 0.0,
+                    }, is_live=exec_eng.live_mode)
+                
                 exec_eng.last_autopilot_entry = time.time()
 
             time.sleep(30) # Poll frequency
@@ -432,6 +502,254 @@ def worker_sr_patterns():
             logger.error(f"[SR PATTERNS FAIL] {e}")
             time.sleep(60)
 
+def worker_beast_paper():
+    """BEAST Paper Trading Observer — runs hedger dry-runs + GEX scans for weekend observation."""
+    logger.info("🦅 [BEAST] Paper Trading Observer Awakened")
+    while True:
+        try:
+            exec_eng = get_service("exec")
+            if not exec_eng:
+                time.sleep(30)
+                continue
+            
+            # Load watchlist for monitoring
+            watchlist_syms = []
+            if os.path.exists('watchlist.json'):
+                try:
+                    with open('watchlist.json', 'r') as f:
+                        raw = json.load(f)
+                        watchlist_syms = raw if isinstance(raw, list) else raw.get('symbols', [])
+                except Exception:
+                    pass
+            
+            # Filter to equity symbols only (skip crypto)
+            equity_syms = [s for s in watchlist_syms if s not in ('XRP', 'BTC', 'ETH', 'DOGE')]
+            if not equity_syms:
+                equity_syms = ['AMC', 'GME', 'SPY']
+            
+            beast_paper_data = {
+                'hedger_snapshots': [],
+                'gex_regimes': [],
+                'ts': time.time()
+            }
+            
+            # Phase 1: Run hedger dry-run cycles
+            hedger = exec_eng.beast_hedger
+            if hedger and getattr(hedger, 'available', False):
+                for sym in equity_syms[:5]:  # Top 5 to avoid rate limits
+                    try:
+                        result = hedger.run_cycle(sym)
+                        status = result.get('status', 'UNKNOWN')
+                        beast_paper_data['hedger_snapshots'].append({
+                            'symbol': sym,
+                            'status': status,
+                            'delta_from_target': result.get('delta_from_target', 0),
+                            'snapshot': result.get('snapshot', {}),
+                            'ts': time.time()
+                        })
+
+                        # --- EXPERT PRECISION: Fire alert on new trade execution (Dry Run) ---
+                        if status in ('DRY_RUN', 'SUBMITTED'):
+                            trade_info = result.get('result', {})
+                            if trade_info:
+                                discord.fire_beast_hedge_executed(
+                                    symbol=sym,
+                                    side=trade_info.get('side', 'UNKNOWN'),
+                                    qty=trade_info.get('qty', 0),
+                                    price=trade_info.get('mid', 0.0),
+                                    delta=result.get('delta_from_target', 0),
+                                    reason=f"Institutional {sym} Rebalance"
+                                )
+                        state.push_terminal('BEAST', f"🦅 HEDGER {sym}: {result.get('status', '?')} | Δ={result.get('delta_from_target', 0)}", symbol=sym)
+                        time.sleep(1)  # Rate limit breathe
+                    except Exception as e:
+                        logger.warning(f"[BEAST] Hedger cycle failed for {sym}: {e}")
+            else:
+                beast_paper_data['hedger_snapshots'].append({'status': 'HEDGER_OFFLINE', 'reason': 'Alpaca keys missing or init failed'})
+            
+            # Phase 2: GEX regime scan for top symbols
+            for sym in equity_syms[:3]:
+                try:
+                    gex_data = exec_eng.get_gamma_walls(sym)
+                    if gex_data:
+                        gex_data['symbol'] = sym
+                        beast_paper_data['gex_regimes'].append(gex_data)
+                        regime = gex_data.get('regime', '?')
+                        cw = gex_data.get('call_wall', '?')
+                        pw = gex_data.get('put_wall', '?')
+                        state.push_terminal('BEAST', f"📊 GEX {sym}: {regime} | CW=${cw} PW=${pw}", symbol=sym)
+                except Exception as e:
+                    logger.warning(f"[BEAST] GEX scan failed for {sym}: {e}")
+            
+            # Store in global state
+            with state.lock:
+                state.beast_paper_data = beast_paper_data
+            
+            logger.info(f"🦅 [BEAST] Paper Trading Cycle Complete — {len(beast_paper_data['hedger_snapshots'])} hedger, {len(beast_paper_data['gex_regimes'])} GEX")
+            
+            # Discord notification for paper trading cycle
+            discord = get_service("discord")
+            if discord:
+                perf = get_service("perf")
+                total_pnl = 0.0
+                shadow_count = 0
+                if perf:
+                    summary = perf.get_summary()
+                    total_pnl = summary.get('total_pnl', 0.0)
+                exec_eng_d = get_service("exec")
+                if exec_eng_d:
+                    shadow_count = len(exec_eng_d.get_active_trades())
+                discord.fire_beast_paper_summary(
+                    hedger_count=len(beast_paper_data['hedger_snapshots']),
+                    gex_count=len(beast_paper_data['gex_regimes']),
+                    shadow_trades=shadow_count,
+                    total_pnl=total_pnl
+                )
+            
+            time.sleep(300)  # 5 min cycles
+        except Exception as e:
+            logger.error(f"[BEAST PAPER FAIL] {e}")
+            time.sleep(60)
+
+def worker_iwm_odte():
+    """Background worker for IWM 0DTE institutional scanning."""
+    logger.info("Starting IWM 0DTE Institutional Sentinel...")
+    # Delay start to allow other services to warm up
+    time.sleep(10)
+    
+    while True:
+        try:
+            dm = get_service("dm")
+            if not dm:
+                time.sleep(10)
+                continue
+                
+            engine = IwmOdteEngine(dm)
+            state.iwm_odte_engine = engine
+            
+            scan = engine.run_scan()
+            if scan and 'error' not in scan:
+                with state.lock:
+                    state.iwm_odte_results = scan
+                
+                bias = scan.get('bias', 'NEUTRAL')
+                best = scan.get('best')
+                if best:
+                    score = best.get('score', 0)
+                    msg = f"🦉 [IWM 0DTE] {bias} | BEST: {best['side'].upper()} {best['strike']} score={score}"
+                    
+                    # High Conviction Alert
+                    category = 'BEAST_ALERT' if score >= 75 else 'BEAST'
+                    state.push_terminal(category, msg, symbol='IWM')
+                    
+                    if score >= 75:
+                        logger.info(f"🔥 HIGH CONVICTION IWM: {msg}")
+            
+            # 5 minute cycle
+            time.sleep(300)
+        except Exception as e:
+            logger.error(f"[IWM-0DTE FAIL] {e}")
+            time.sleep(60)
+
+
+
+
+def worker_kdp_sentinel():
+    """Expert-Precision KDP Sentinel Worker."""
+    logger.info("Starting KDP Institutional Sentinel...")
+    time.sleep(20)
+    
+    while True:
+        try:
+            kdp_engine = get_service("kdp_engine")
+            if kdp_engine:
+                chain = schwab_api.get_option_chains("KDP")
+                if chain and 'error' not in chain:
+                    with state.lock:
+                        quote = state.quotes.get("KDP", {})
+                    
+                    results = kdp_engine.run_scan(chain, quote)
+                    
+                    with state.lock:
+                        state.kdp_results = results
+                    
+                    # High conviction alert logic
+                    top = results.get('top_contracts', [])
+                    if top:
+                        best = top[0]
+                        score = best.get('score', 0)
+                        if score >= 75:
+                            msg = f"🦅 [KDP HIGH CONVICTION] {best['type']} ${best['strike']} | SCORE: {score} | OI/Vol: {best.get('oi_vol_ratio')}x"
+                            state.push_terminal('BEAST_ALERT', msg, symbol='KDP', extra={'score': score})
+                        elif score >= 60:
+                            msg = f"🦉 [KDP ACTIVE] {best['type']} ${best['strike']} | Score: {score}"
+                            state.push_terminal('SYSTEM', msg, symbol='KDP')
+            
+            time.sleep(600) # 10 min cycle
+        except Exception as e:
+            logger.error(f"[KDP SENTINEL FAIL] {e}")
+            time.sleep(60)
+
+
+TRADE_DESK_URL = os.environ.get('TRADE_DESK_URL', 'https://sml-ai-trade-desk.onrender.com')
+TRADE_DESK_SECRET = os.environ.get('TRADE_DESK_SECRET', 'SML_TRADEDESK_2026')
+
+def worker_trade_desk_bridge():
+    """Keep the AI Trade Desk Render service warm and forward high-conviction signals."""
+    logger.info("🔗 [TRADE DESK] Bridge Worker Awakened")
+    time.sleep(15)  # Let other services initialize first
+    
+    last_ping = 0
+    trade_desk_online = False
+    forwarded_signals = set()  # Dedup forwarded signals
+    
+    while True:
+        try:
+            discord = get_service("discord")
+            if not discord:
+                time.sleep(10)
+                continue
+            
+            now = time.time()
+            
+            # ── Phase 1: Keep-Alive Ping (every 8 minutes to stay under 10min spin-down) ──
+            if now - last_ping >= 480:
+                result = discord.ping_trade_desk(TRADE_DESK_URL)
+                was_online = trade_desk_online
+                trade_desk_online = result.get('ok', False)
+                last_ping = now
+                
+                # Fire status alert on state change
+                if trade_desk_online != was_online:
+                    service_name = result.get('data', {}).get('service', '') if trade_desk_online else ''
+                    discord.fire_trade_desk_status(trade_desk_online, service_name)
+                
+                state.push_terminal('SYSTEM', f"🔗 Trade Desk: {'ONLINE' if trade_desk_online else 'OFFLINE'}")
+            
+            # ── Phase 2: Forward High-Conviction Signals (score >= 80) ──
+            if trade_desk_online:
+                with state.lock:
+                    top_signals = [s for s in state.scan_results if s.get('squeeze_score', 0) >= 80]
+                
+                for signal in top_signals[:5]:
+                    sym = signal.get('symbol', '')
+                    sig_key = f"{sym}_{int(now // 1800)}"  # 30-min dedup window
+                    if sig_key in forwarded_signals:
+                        continue
+                    
+                    discord.forward_to_trade_desk(TRADE_DESK_URL, TRADE_DESK_SECRET, signal)
+                    forwarded_signals.add(sig_key)
+                    state.push_terminal('BRIDGE', f"📡 Forwarded {sym} (score={signal.get('squeeze_score', 0)}) to AI Trade Desk")
+                    time.sleep(2)  # Rate limit
+                
+                # Cleanup old dedup keys
+                if len(forwarded_signals) > 200:
+                    forwarded_signals.clear()
+            
+            time.sleep(30)
+        except Exception as e:
+            logger.error(f"[TRADE DESK BRIDGE] {e}")
+            time.sleep(60)
 
 # --- ROUTES ---
 
@@ -440,8 +758,42 @@ def index_v5():
     return send_from_directory('.', 'index.html')
 
 @app.route('/api/auth/url')
-def get_auth_url():
+def get_auth_url_route():
+    # Pass redirect_uri from request if provided to support multi-port dashboards
+    redirect_uri = request.args.get('redirect_uri')
+    if redirect_uri:
+        schwab_api.redirect_uri = redirect_uri
     return jsonify({"status": "success", "url": schwab_api.get_auth_url()})
+
+@app.route('/api/auth/exchange', methods=['POST'])
+def api_auth_exchange():
+    data = request.json
+    code = data.get('code')
+    if not code:
+        return jsonify({"status": "error", "message": "No code provided"}), 400
+    
+    redirect_uri = data.get('redirect_uri')
+    if redirect_uri:
+        schwab_api.redirect_uri = redirect_uri
+        
+    res = schwab_api.exchange_code(code)
+    return jsonify(res)
+
+@app.route('/callback')
+def oauth_callback():
+    return send_from_directory('.', 'callback.html')
+
+@app.route('/api/auth/tokens')
+@require_localhost
+def get_auth_tokens():
+    """Secure bridge for Schwab tokens to external systems. Restricted to Localhost."""
+    return jsonify({
+        "status": "success",
+        "access_token": schwab_api.access_token,
+        "refresh_token": schwab_api.refresh_token,
+        "expires_at": schwab_api.token_expires_at,
+        "updated_at": datetime.now().isoformat()
+    })
 
 @app.route('/api/auth/status')
 def get_auth_status():
@@ -594,9 +946,76 @@ def get_market_intel():
     
     return jsonify({"status": "success", "data": intel})
 
-@app.route('/api/beast/signals')
-def get_beast_signals():
-    """Return top squeeze candidates as beast-mode signals."""
+@app.route('/api/market/reversal')
+def get_market_reversal():
+    """Return reversal scan signals — symbols showing momentum exhaustion or breakout setups."""
+    symbol = request.args.get('symbol', '').strip().upper()
+    with state.lock:
+        scan = list(state.scan_results)
+    
+    # Filter for high-score signals with directional clarity
+    reversals = []
+    for s in scan:
+        score = s.get('squeeze_score', 0)
+        direction = s.get('direction', 'NEUTRAL')
+        if score >= 60 and direction != 'NEUTRAL':
+            if not symbol or s.get('symbol') == symbol:
+                reversals.append({
+                    'symbol': s['symbol'],
+                    'direction': direction,
+                    'score': score,
+                    'price': s.get('price', 0),
+                    'setup': 'REVERSAL' if s.get('is_mega') else 'MOMENTUM',
+                    'ts': s.get('ts', 0)
+                })
+    
+    reversals.sort(key=lambda x: -x['score'])
+    return jsonify({"status": "success", "data": reversals[:20]})
+
+@app.route('/api/market/signals')
+def get_market_signals():
+    """Combined signal feed — active scan + flow signals for frontend signal table."""
+    with state.lock:
+        scan = list(state.scan_results[:30])
+        flow = list(state.flow_results[:20])
+    
+    signals = []
+    
+    # Scan-based signals
+    for s in scan:
+        score = s.get('squeeze_score', 0)
+        if score >= 50:
+            signals.append({
+                'type': 'SQUEEZE',
+                'symbol': s['symbol'],
+                'action': s.get('direction', 'NEUTRAL'),
+                'score': score,
+                'price': s.get('price', 0),
+                'is_mega': s.get('is_mega', False),
+                'ts': s.get('ts', 0)
+            })
+    
+    # Flow-based signals
+    for f in flow:
+        score = f.get('unusual_score', 0)
+        if score >= 60:
+            signals.append({
+                'type': 'FLOW',
+                'symbol': f.get('symbol', ''),
+                'action': f.get('sentiment', 'NEUTRAL'),
+                'score': score,
+                'strike': f.get('strike', 0),
+                'expiry': f.get('expiry_formatted', ''),
+                'premium': f.get('premium', 0),
+                'ts': f.get('seen_time', 0)
+            })
+    
+    signals.sort(key=lambda x: -x['score'])
+    return jsonify({"status": "success", "data": signals[:30]})
+
+@app.route('/api/beast/scan-signals')
+def get_beast_scan_signals():
+    """Return top squeeze candidates as beast-mode scan signals (distinct from webhook signals)."""
     with state.lock:
         scan = list(state.scan_results)
     
@@ -614,6 +1033,134 @@ def get_beast_signals():
             })
     
     return jsonify({"status": "ok", "data": signals[:20]})
+
+@app.route('/api/beast/paper')
+def api_beast_paper():
+    """Returns current BEAST paper trading observation data."""
+    paper_data = getattr(state, 'beast_paper_data', {})
+    # Also include shadow trades from execution engine
+    exec_eng = get_service("exec")
+    shadow_trades = []
+    trade_history = []
+    if exec_eng:
+        shadow_trades = exec_eng.get_active_trades()
+        trade_history = exec_eng.get_trade_history()[:20]
+    
+    return jsonify({
+        "status": "ok",
+        "hedger_snapshots": paper_data.get('hedger_snapshots', []),
+        "gex_regimes": paper_data.get('gex_regimes', []),
+        "shadow_trades": shadow_trades,
+        "trade_history": trade_history,
+        "last_update": paper_data.get('ts', 0),
+        "iwm_odte": state.iwm_odte_results
+    })
+
+@app.route('/api/beast/iwm_odte')
+def api_beast_iwm_odte():
+    """Dedicated endpoint for IWM 0DTE data."""
+    with state.lock:
+        return jsonify({"status": "success", "data": state.iwm_odte_results})
+
+@app.route('/api/beast/kdp')
+def api_beast_kdp():
+    """Dedicated endpoint for KDP monitoring data."""
+    with state.lock:
+        return jsonify({"status": "success", "data": state.kdp_results})
+
+@app.route('/api/beast/readiness')
+def api_beast_readiness():
+    """Go/No-Go checklist for live trading transition."""
+    exec_eng = get_service("exec")
+    perf = get_service("perf")
+    
+    checks = []
+    
+    # 1. Alpaca Connection
+    hedger_available = False
+    if exec_eng and exec_eng.beast_hedger:
+        hedger_available = getattr(exec_eng.beast_hedger, 'available', False)
+    checks.append({
+        'name': 'Alpaca Paper Connected',
+        'passed': hedger_available,
+        'detail': 'PAPER mode active' if hedger_available else 'Hedger offline — check ALPACA_API_KEY'
+    })
+    
+    # 2. Hedger executing dry-runs
+    paper_data = getattr(state, 'beast_paper_data', {})
+    hedger_snaps = paper_data.get('hedger_snapshots', [])
+    hedger_running = len(hedger_snaps) > 0 and hedger_snaps[0].get('status') != 'HEDGER_OFFLINE'
+    checks.append({
+        'name': 'Hedger Dry-Runs Active',
+        'passed': hedger_running,
+        'detail': f'{len(hedger_snaps)} snapshots collected' if hedger_running else 'No hedger data yet'
+    })
+    
+    # 3. GEX data flowing
+    gex_data = paper_data.get('gex_regimes', [])
+    gex_ok = len(gex_data) > 0
+    checks.append({
+        'name': 'GEX Data Flowing',
+        'passed': gex_ok,
+        'detail': f'{len(gex_data)} symbols scanned' if gex_ok else 'No GEX data'
+    })
+    
+    # 4. Shadow PnL check
+    shadow_pnl = 0.0
+    if perf:
+        summary = perf.get_summary()
+        shadow_pnl = summary.get('total_pnl', 0.0)
+    pnl_ok = shadow_pnl >= -50.0  # Allow up to -$50 drawdown
+    checks.append({
+        'name': 'Shadow PnL Acceptable',
+        'passed': pnl_ok,
+        'detail': f'${shadow_pnl:.2f} total PnL' if shadow_pnl != 0 else 'No trades executed yet'
+    })
+    
+    # 5. Kill switch NOT present
+    import tempfile
+    kill_path = os.path.join(tempfile.gettempdir(), 'sml_hedger', 'sml_hedger_kill')
+    kill_present = os.path.exists(kill_path)
+    checks.append({
+        'name': 'Kill Switch Clear',
+        'passed': not kill_present,
+        'detail': 'No kill switch file' if not kill_present else f'KILL SWITCH ACTIVE at {kill_path}'
+    })
+    
+    all_passed = all(c['passed'] for c in checks)
+    
+    return jsonify({
+        'status': 'GO' if all_passed else 'NO_GO',
+        'checks': checks,
+        'recommendation': 'System ready for live transition' if all_passed else 'Address failing checks before going live',
+        'ts': time.time()
+    })
+
+@app.route('/api/beast/gex/<symbol>')
+def api_beast_gex(symbol):
+    try:
+        exec_eng = get_service("exec")
+        if not exec_eng: return jsonify({"error": "Exec engine offline"}), 503
+        data = exec_eng.get_gamma_walls(symbol)
+        return jsonify({"status": "success", "data": data})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/beast/architect', methods=['POST'])
+def api_beast_architect():
+    try:
+        data = request.json
+        thesis = data.get('thesis', '')
+        symbol = data.get('symbol', None)
+        if not thesis: return jsonify({"error": "No thesis"}), 400
+        
+        m_arch = get_service("mythos_arch")
+        if not m_arch: return jsonify({"error": "Architect offline"}), 503
+        
+        result = m_arch.architect(thesis, symbol)
+        return jsonify({"status": "success", "data": result})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/options/intelligence/<symbol>')
 def api_options_intelligence(symbol):
@@ -640,9 +1187,10 @@ def api_forced_move(symbol):
 @app.route('/api/settings')
 def get_settings():
     return jsonify({
-        'schwabKey': os.environ.get('SCHWAB_CLIENT_ID', ''),
-        'schwabSecret': os.environ.get('SCHWAB_CLIENT_SECRET', ''),
-        'alpacaKey': os.environ.get('ALPACA_API_KEY', ''),
+        'schwabKey': os.environ.get('SCHWAB_CLIENT_ID', 'cOb3GLiEmhfxGyfWUSDvaqqYayNUTVuCexRlzRbSumWvz5I6'),
+        'schwabSecret': os.environ.get('SCHWAB_CLIENT_SECRET', 'Uyn7D7MRvYE2TQ88jHNLLiC79p9RH3qB73OJaAEw1A3ElDm5QtgBwSR5Ei1uNX6I'),
+        'alpacaKey': os.environ.get('ALPACA_API_KEY', 'AKV39V1APUHWMFCQ2GA0'),
+        'alpacaSecret': os.environ.get('ALPACA_API_SECRET', 'edlztEfaib5gGj0hQbfoV4Ezm6vdy8FnuFfW9Mx9'),
         'polyKey': os.environ.get('POLYGON_API_KEY', ''),
         'webhook': os.environ.get('DISCORD_WEBHOOK_ALL', '')
     })
@@ -670,36 +1218,7 @@ def save_schwab_settings():
     schwab_api.client_secret = data.get('secret', '') or schwab_api.client_secret
     return jsonify({"status": "success"})
 
-@app.route('/api/auth/exchange', methods=['POST'])
-def exchange_auth_code():
-    """Exchange Schwab OAuth authorization code for access + refresh tokens."""
-    data = request.json or {}
-    code = data.get('code', '')
-    if not code:
-        return jsonify({"status": "error", "message": "No auth code provided"}), 400
 
-    # Hot-swap credentials if the frontend sends them
-    client_id = data.get('client_id')
-    client_secret = data.get('client_secret')
-    redirect_uri = data.get('redirect_uri')
-    if client_id:
-        schwab_api.client_id = client_id
-        _update_env_key('SCHWAB_CLIENT_ID', client_id)
-    if client_secret:
-        schwab_api.client_secret = client_secret
-        _update_env_key('SCHWAB_CLIENT_SECRET', client_secret)
-    if redirect_uri:
-        schwab_api.redirect_uri = redirect_uri
-        if not schwab_api.redirect_uri.endswith('/'):
-            schwab_api.redirect_uri += '/'
-        _update_env_key('SCHWAB_REDIRECT_URI', redirect_uri)
-
-    result = schwab_api.exchange_code(code)
-    if result.get('status') == 'success':
-        state.push_terminal('SYSTEM', '🔑 Schwab OAuth: Session Established')
-        return jsonify({"status": "success"})
-    else:
-        return jsonify({"status": "error", "message": result.get('message', 'Token exchange failed')})
 
 @app.route('/api/settings/backups', methods=['POST'])
 def save_backup_settings():
@@ -733,7 +1252,7 @@ def save_discord_settings():
         try:
             import requests as req
             payload = {
-                "content": "🧪 **SQUEEZE OS v4.1** — Test alert received! Your webhook is active.",
+                "content": "🧪 **SQUEEZE OS v5.0** — Test alert received! Your webhook is active.",
                 "username": "SqueezeOS"
             }
             r = req.post(webhook, json=payload, timeout=10)
@@ -776,19 +1295,105 @@ def get_trading_balances():
         bal["alpaca"] = {"equity": acc.get("equity"), "buying_power": acc.get("buying_power")}
     except: pass
     try:
-        accs = dm.schwab.schwab.get_balances()
-        if accs:
+        accs = dm.schwab.schwab.get_accounts()
+        if accs and isinstance(accs, list):
             acc = accs[0]
             bal["schwab"] = {"equity": acc.get("currentBalances", {}).get("liquidationValue"), "buying_power": acc.get("currentBalances", {}).get("buyingPower")}
     except: pass
     return jsonify({"status": "success", "balances": bal})
 
+# --- RISK & PERFORMANCE ---
+@app.route('/api/trade/positions')
+@require_localhost
+def get_portfolio_positions():
+    exec_eng = get_service("exec")
+    if not exec_eng or not exec_eng.delta_engine:
+        return jsonify({"status": "error", "message": "Delta Engine Unavailable"}), 503
+    try:
+        # Calculate live delta stress across all positions
+        delta_data = exec_eng.delta_engine.calculate_basket_delta(state.quotes)
+        return jsonify({
+            "status": "success",
+            "delta_stress": delta_data,
+            "active_trades": exec_eng.get_active_trades()
+        })
+    except Exception as e:
+        logger.error(f"Error calculating portfolio delta: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/trade/performance')
+@app.route('/api/performance/stats')
+@require_localhost
+def get_performance_stats():
+    exec_eng = get_service("exec")
+    if not exec_eng or not exec_eng.tracker:
+        return jsonify({"status": "error", "message": "Performance Tracker Unavailable"}), 503
+    return jsonify({
+        "status": "success",
+        "stats": exec_eng.tracker.get_summary()
+    })
+
+
+@app.route('/api/trade-desk/status')
+def api_trade_desk_status():
+    """Check AI Trade Desk connectivity and bridge status."""
+    discord = get_service("discord")
+    if not discord:
+        return jsonify({"status": "error", "message": "Discord service unavailable"}), 503
+    
+    result = discord.ping_trade_desk(TRADE_DESK_URL)
+    return jsonify({
+        "status": "success",
+        "trade_desk_online": result.get('ok', False),
+        "trade_desk_url": TRADE_DESK_URL,
+        "service_info": result.get('data', {}),
+        "error": result.get('error', None)
+    })
+# --- INSTITUTIONAL BRIDGES ---
+
+@app.route('/api/beast/events')
+def api_beast_events():
+    """Server-Sent Events for real-time institutional alerts."""
+    def stream():
+        q = queue.Queue(maxsize=100)
+        sse_queues.append(q)
+        try:
+            # Yield initial heartbeat
+            yield f"data: {json.dumps({'type': 'CONNECTED', 'msg': 'Institutional SSE Active'})}\n\n"
+            while True:
+                event = q.get()
+                yield f"data: {json.dumps(event)}\n\n"
+        finally:
+            if q in sse_queues:
+                sse_queues.remove(q)
+            
+    return Response(stream(), mimetype='text/event-stream')
+
 if __name__ == "__main__":
     init_services()
+    # Register BEAST webhook routes (TradingView Pine → SqueezeOS → Discord)
+    register_beast_routes(app, state)
     threading.Thread(target=worker_scanner, daemon=True).start()
     threading.Thread(target=worker_flow, daemon=True).start()
     threading.Thread(target=worker_discovery, daemon=True).start()
     threading.Thread(target=worker_autopilot, daemon=True).start()
     threading.Thread(target=worker_sr_patterns, daemon=True).start()
+    threading.Thread(target=worker_beast_paper, daemon=True).start()
+    threading.Thread(target=worker_iwm_odte, daemon=True).start()
+    threading.Thread(target=worker_kdp_sentinel, daemon=True).start()
+    threading.Thread(target=worker_trade_desk_bridge, daemon=True).start()
     port = int(os.environ.get("PORT", 8182))
-    app.run(host='0.0.0.0', port=port, use_reloader=False, threaded=True)
+    
+    # SSL Context — required for Schwab OAuth callback (redirect_uri = https://127.0.0.1:8182/callback)
+    import ssl
+    cert_file = os.path.expanduser('~/.squeeze_os_cert.pem')
+    key_file = os.path.expanduser('~/.squeeze_os_key.pem')
+    ssl_ctx = None
+    if os.path.exists(cert_file) and os.path.exists(key_file):
+        ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ssl_ctx.load_cert_chain(cert_file, key_file)
+        logger.info(f"🔒 SSL ENABLED — HTTPS on port {port}")
+    else:
+        logger.warning("⚠️ SSL cert/key not found — running plain HTTP (Schwab OAuth will fail)")
+    
+    app.run(host='0.0.0.0', port=port, use_reloader=False, threaded=True, ssl_context=ssl_ctx)
