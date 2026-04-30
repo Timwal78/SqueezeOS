@@ -14,8 +14,15 @@ from datetime import datetime
 from typing import Dict, List, Optional, Any
 from threading import Lock
 from delta_neutrality import DeltaNeutralityEngine
-from BEAST.gex.sml_gex_engine import GEXEngine
-from BEAST.hedger.autonomous_hedger import AutonomousHedger, HedgerConfig
+try:
+    from BEAST.gex.sml_gex_engine import GEXEngine
+    from BEAST.hedger.autonomous_hedger import AutonomousHedger, HedgerConfig
+except ImportError:
+    # BEAST module not deployed — stub out for graceful degradation
+    GEXEngine = None
+    AutonomousHedger = None
+    class HedgerConfig:
+        def __init__(self, **kw): pass
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +58,10 @@ class ExecutionEngine:
         self.gex_cache: Dict[str, Dict] = {}
         self.last_gex_update = 0
         try:
-            self.beast_hedger = AutonomousHedger(HedgerConfig(dry_run=True))
+            if AutonomousHedger is not None:
+                self.beast_hedger = AutonomousHedger(HedgerConfig(dry_run=True))
+            else:
+                self.beast_hedger = None
         except Exception as e:
             logger.warning(f"[BEAST] Hedger init failed (will continue without): {e}")
             self.beast_hedger = None
@@ -208,6 +218,8 @@ class ExecutionEngine:
         if symbol in self.gex_cache and (now - self.last_gex_update) < 3600:
             return self.gex_cache[symbol]
             
+        if GEXEngine is None:
+            return {}
         try:
             engine = GEXEngine(symbol.upper(), max_expiries=3)
             snap = engine.compute()
