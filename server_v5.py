@@ -155,14 +155,24 @@ def init_services():
         from delta_neutrality import DeltaNeutralityEngine
         from sr_patterns_engine import SRPatternsEngine
         
-        # MythosArchitect requires PyTorch — fall back to base StrategyArchitect if unavailable
+        # MythosArchitect requires PyTorch + BEAST module — graceful multi-level fallback
+        _architect_cls = None
         try:
             from BEAST.architect.mythos_architect import MythosArchitect
             _architect_cls = MythosArchitect
             logger.info("[BEAST] MythosArchitect loaded (OpenMythos + StrategyArchitect)")
         except Exception as e:
-            logger.warning(f"[BEAST] MythosArchitect unavailable ({e}), falling back to StrategyArchitect")
-            from BEAST.architect.strategy_architect import StrategyArchitect as _architect_cls
+            logger.warning(f"[BEAST] MythosArchitect unavailable ({e})")
+            try:
+                from BEAST.architect.strategy_architect import StrategyArchitect as _architect_cls
+                logger.info("[BEAST] StrategyArchitect loaded (fallback)")
+            except Exception as e2:
+                logger.warning(f"[BEAST] StrategyArchitect also unavailable ({e2}), using no-op stub")
+                class _StubArchitect:
+                    """No-op stub when BEAST module is not deployed."""
+                    def analyze(self, *a, **kw): return {}
+                    def get_strategy(self, *a, **kw): return {}
+                _architect_cls = _StubArchitect
         
         dm = DataManager(schwab_api)
         analyzer = SqueezeAnalyzer()
