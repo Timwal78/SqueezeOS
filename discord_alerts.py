@@ -25,8 +25,8 @@ class DiscordAlerts:
 
     def __init__(self):
         self.webhook_squeeze = os.environ.get('DISCORD_WEBHOOK_SQUEEZE', '')
-        self.webhook_flow = os.environ.get('DISCORD_WEBHOOK_FLOW', '')
-        self.webhook_all = os.environ.get('DISCORD_WEBHOOK_ALL', '')
+        self.webhook_flow = os.environ.get('DISCORD_WEBHOOK_FLOW', '') or os.environ.get('DISCORD_WEBHOOK_OPTIONS', '')
+        self.webhook_all = os.environ.get('DISCORD_WEBHOOK_ALL', '') or os.environ.get('DISCORD_WEBHOOK_URL', '')
         self.webhook_beast = os.environ.get('DISCORD_WEBHOOK_BEAST', '')
         self.webhook_free = os.environ.get('DISCORD_WEBHOOK_FREE', '')
         self.webhook_pro = os.environ.get('DISCORD_WEBHOOK_PRO', '')
