@@ -258,6 +258,10 @@ def worker_scanner():
             time.sleep(random.uniform(1, 3))
             
             quotes = dm.get_quotes(targets, fast_only=True)
+            
+            # MANIFESTO: $50 SWEET SPOT CAP — FAVORITES (IWM etc.) always pass
+            quotes = {s: q for s, q in quotes.items() if s in FAVORITES or q.get('price', 0) <= 50.0}
+            
             results = analyzer.analyze_batch(quotes)
             
             with state.lock:

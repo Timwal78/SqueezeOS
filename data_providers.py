@@ -785,8 +785,8 @@ class DataManager:
                     open_p = bar.get('open', 0)
                     chg_pct = ((price - open_p) / open_p * 100) if open_p > 0 else 0
                     
-                    # MANIFESTO: WIDE OPEN FETCH — 10k vol minimum, penny stocks to megacaps
-                    if vol >= 10000 and 0.01 <= price <= 50000 and abs(chg_pct) >= 0.05:
+                    # MANIFESTO: WIDE OPEN FETCH — 10k vol minimum, $50 SWEET SPOT CAP
+                    if vol >= 10000 and 0.01 <= price <= 50.0 and abs(chg_pct) >= 0.05:
                         if sym not in universe:
                             universe[sym] = bar
                             universe[sym]['discovery'] = 'polygon_scan'
