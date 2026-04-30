@@ -22,6 +22,9 @@ from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
+# Suppress noisy yfinance delisting errors
+logging.getLogger('yfinance').setLevel(logging.CRITICAL)
+
 # ============================================================
 # BULLETPROOF .env loader
 # ============================================================
@@ -60,9 +63,17 @@ load_env_file()
 # ============================================================
 class AlpacaProvider:
     def __init__(self):
-        self.api_key = os.environ.get('ALPACA_API_KEY', '')
-        self.api_secret = os.environ.get('ALPACA_API_SECRET', '')
-        self.data_base = 'https://data.alpaca.markets'
+        self.api_key = os.environ.get('ALPACA_API_KEY', 'AKV39V1APUHWMFCQ2GA0')
+        self.api_secret = os.environ.get('ALPACA_API_SECRET', 'edlztEfaib5gGj0hQbfoV4Ezm6vdy8FnuFfW9Mx9')
+        # Respect ALPACA_PAPER flag for data and API endpoints
+        is_paper = os.environ.get('ALPACA_PAPER', 'false').lower() == 'true'
+        if is_paper:
+            self.data_base = 'https://data.alpaca.markets' # Data is often the same, but let's be explicit if needed
+            self.api_base = 'https://paper-api.alpaca.markets'
+        else:
+            self.data_base = 'https://data.alpaca.markets'
+            self.api_base = 'https://api.alpaca.markets'
+        
         self.last_call = 0
         self.min_interval = 0.1  # RELAXED: 100ms (was 350ms) — Alpaca allows high frequency
         if self.available:
@@ -191,7 +202,7 @@ class AlpacaProvider:
             return {}
         self._rate_limit()
         try:
-            url = f"{self.data_base.replace('data', 'api')}/v2/account" # Switch from data.alpaca to api.alpaca
+            url = f"{self.api_base}/v2/account"
             r = requests.get(url, headers=self._headers(), timeout=15)
             if r.status_code == 200:
                 return r.json()
@@ -205,7 +216,7 @@ class AlpacaProvider:
             return {"status": "error", "message": "Not configured"}
         self._rate_limit()
         try:
-            url = f"{self.data_base.replace('data', 'api')}/v2/orders"
+            url = f"{self.api_base}/v2/orders"
             payload = {
                 "symbol": symbol,
                 "qty": qty,
@@ -228,12 +239,101 @@ class AlpacaProvider:
         except Exception as e:
             logger.error(f"[ALPACA] Order error: {e}")
             return {"status": "error", "message": str(e)}
+    def get_option_contracts(self, symbol: str, max_dte: int = 10) -> List[dict]:
+        """Fetch option contracts for a symbol."""
+        if not self.available:
+            return []
+        self._rate_limit()
+        try:
+            start = datetime.now().strftime('%Y-%m-%d')
+            end = (datetime.now() + timedelta(days=max_dte)).strftime('%Y-%m-%d')
+            params = {
+                'underlying_symbols': symbol,
+                'status': 'active',
+                'expiration_date_gte': start,
+                'expiration_date_lte': end,
+                'limit': 10000
+            }
+            r = requests.get(f"{self.api_base}/v2/options/contracts", headers=self._headers(), params=params, timeout=20)
+            if r.status_code == 200:
+                data = r.json()
+                return data.get('option_contracts', data.get('contracts', []))
+            else:
+                logger.warning(f"[ALPACA] Option contracts {r.status_code}: {r.text[:200]}")
+        except Exception as e:
+            logger.error(f"[ALPACA] Option contracts error: {e}")
+        return []
+
+    def get_option_snapshots(self, symbols: List[str]) -> Dict[str, dict]:
+        """Fetch option snapshots for a list of symbols."""
+        if not self.available or not symbols:
+            return {}
+        results = {}
+        batch_size = 100
+        for i in range(0, len(symbols), batch_size):
+            batch = symbols[i:i + batch_size]
+            self._rate_limit()
+            try:
+                params = {'symbols': ','.join(batch), 'feed': 'opra'}
+                r = requests.get(f"{self.data_base}/v1beta1/options/snapshots", headers=self._headers(), params=params, timeout=30)
+                if r.status_code == 200:
+                    data = r.json()
+                    # Standardize format: Alpaca snapshots can be a dict or {snapshots: {...}}
+                    snaps = data.get('snapshots', data if isinstance(data, dict) else {})
+                    results.update(snaps)
+                else:
+                    logger.warning(f"[ALPACA] Option snap {r.status_code}: {r.text[:200]}")
+            except Exception as e:
+                logger.error(f"[ALPACA] Option snap error: {e}")
+        return results
+
+    def get_historical_bars(self, symbol: str, timeframe: str = '1Day', limit: int = 40) -> List[dict]:
+        """Fetch historical stock bars."""
+        if not self.available:
+            return []
+        self._rate_limit()
+        try:
+            end = datetime.now().strftime('%Y-%m-%d')
+            start = (datetime.now() - timedelta(days=limit + 10)).strftime('%Y-%m-%d')
+            params = {
+                'timeframe': timeframe,
+                'start': start,
+                'end': end,
+                'limit': limit,
+                'feed': 'iex',
+                'sort': 'desc'
+            }
+            r = requests.get(f"{self.data_base}/v2/stocks/{symbol}/bars", headers=self._headers(), params=params, timeout=20)
+            if r.status_code == 200:
+                data = r.json()
+                bars = data.get('bars', [])
+                # Return in chronological order
+                return sorted(bars, key=lambda x: x.get('t', ''))
+            else:
+                logger.warning(f"[ALPACA] Stock bars {r.status_code}: {r.text[:200]}")
+        except Exception as e:
+            logger.error(f"[ALPACA] Stock bars error: {e}")
+        return []
 
 
 # ============================================================
 # POLYGON PROVIDER — discovery + per-symbol quotes
 # ============================================================
-from libsml.rate_guard import PolygonRateGuard
+# Resilient libsml import — works regardless of PYTHONPATH / working directory.
+# libsml lives at: scratch/libsml/ (parent of SqueezeOS directory)
+import sys as _sys
+_libsml_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _libsml_root not in _sys.path:
+    _sys.path.insert(0, _libsml_root)
+try:
+    from libsml.rate_guard import PolygonRateGuard
+except ImportError as _e:
+    logger.warning(f"[POLYGON] libsml.rate_guard not found ({_e}). Using no-op rate guard.")
+    class PolygonRateGuard:
+        @staticmethod
+        def wait(): pass
+        @staticmethod
+        def emergency_backoff(): import time; time.sleep(60)
 
 class PolygonProvider:
     def __init__(self):
@@ -621,7 +721,7 @@ class DataManager:
 
     # --- AUTO-DISCOVERY ---
 
-    def discover_universe(self, progress_cb=None, limit=2000) -> Dict[str, dict]:
+    def discover_universe(self, progress_cb=None, limit=10000) -> Dict[str, dict]:
         universe = {}
         
         def is_junk(sym):
@@ -685,8 +785,8 @@ class DataManager:
                     open_p = bar.get('open', 0)
                     chg_pct = ((price - open_p) / open_p * 100) if open_p > 0 else 0
                     
-                    # TRULY WIDE OPEN: 50k vol (was 100k), 0.1% move (was 0.5%)
-                    if vol >= 50000 and 0.10 <= price <= 50000 and abs(chg_pct) >= 0.1:
+                    # MANIFESTO: WIDE OPEN FETCH — 10k vol minimum, penny stocks to megacaps
+                    if vol >= 10000 and 0.01 <= price <= 50000 and abs(chg_pct) >= 0.05:
                         if sym not in universe:
                             universe[sym] = bar
                             universe[sym]['discovery'] = 'polygon_scan'
@@ -760,3 +860,11 @@ class DataManager:
                 remaining = [s for s in remaining if s not in results]
 
         return results
+    def get_historical_bars(self, symbol: str, timeframe: str = '1Day', limit: int = 40) -> List[dict]:
+        return self.alpaca.get_historical_bars(symbol, timeframe, limit)
+
+    def get_option_contracts(self, symbol: str, max_dte: int = 10) -> List[dict]:
+        return self.alpaca.get_option_contracts(symbol, max_dte)
+
+    def get_option_snapshots(self, symbols: List[str]) -> Dict[str, dict]:
+        return self.alpaca.get_option_snapshots(symbols)

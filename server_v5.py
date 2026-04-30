@@ -238,7 +238,7 @@ def worker_scanner():
                 time.sleep(5)
                 continue
             
-            u_map = dm.discover_universe(limit=2000)
+            u_map = dm.discover_universe(limit=10000)  # MANIFESTO: FULL FETCH — no artificial cap
             with state.lock:
                 state.universe = u_map
                 universe_list = list(u_map.keys())
@@ -251,8 +251,8 @@ def worker_scanner():
             high_priority = list(set(FAVORITES) | set(regime_syms))
             standard_priority = [s for s in universe_list if s not in high_priority]
             
-            idx = int((time.time() // 60) % 5) * 400
-            targets = high_priority + standard_priority[idx : idx + 400]
+            # MANIFESTO: FULL FETCH — scan ENTIRE discovered universe every cycle
+            targets = high_priority + standard_priority
             
             # Rate Limit Protection: Jitter before batch request
             time.sleep(random.uniform(1, 3))
@@ -281,7 +281,7 @@ def worker_scanner():
             if exec_eng:
                 exec_eng.update_live_prices(quotes)
 
-            time.sleep(10)
+            time.sleep(5)  # MANIFESTO: Faster scan cycles
         except Exception as e:
             if "429" in str(e):
                 logger.warning("📉 PROTOCOL 429 in SqueezeOS Scanner. Entering 60s Global Hibernation.")
@@ -311,7 +311,7 @@ def worker_flow():
                 to_check = list(set([r['symbol'] for r in state.scan_results[:limit]] + FAVORITES))
             
             # Slice universe to avoid hitting Schwab too hard in one burst
-            for sym in to_check[:20]:
+            for sym in to_check[:50]:  # MANIFESTO: FULL FETCH — expanded flow monitoring
                 chain = options.get_options_chain(sym)
                 if chain and 'unusual_activity' in chain:
                     hits = chain['unusual_activity']
