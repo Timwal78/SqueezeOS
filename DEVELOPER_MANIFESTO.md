@@ -25,4 +25,14 @@ This document serves as the "Main Memory" for every agent and developer working 
 - Every data point must have a traceable source (Schwab, Alpaca, Polygon).
 - "Zero-Fake Audit": Any simulated data found in the codebase must be purged immediately.
 
-**FAILURE TO ABIDE BY THESE RULES IS UNACCEPTABLE.**
+### 5. LITERARY INTEGRITY
+- **ZERO PLACEHOLDERS**: No file under 5KB shall be considered a 'Completed Work' for ingestion or copyright filing.
+- **NO CLONING**: No two EPUBs or PDFs shall share the same byte size (excluding identical covers). Every work must have unique technical depth.
+- **SUBSTANTIAL CONTENT**: All technical volumes must have a minimum of 4 distinct, high-fidelity chapters totaling at least 5,000 words or technical equivalent.
+- **MANDATORY AUDIT**: No bundle can be marked 'FINAL' without passing the 'SML Shield' forensic audit.
+
+### 6. ZERO-FAKE COMPLIANCE AUDITS
+- Any AI agent found generating template-cloned files or placeholders will have its session terminated and the work reverted.
+- The 'Listed 20' and all eCO filings are subject to a 100% forensic content verification before deposit kopies are uploaded.
+
+**FAILURE TO ABIDE BY THESE RULES IS UNACCEPTABLE AND GROUNDS FOR IMMEDIATE DISMISSAL OF THE AGENT.**
