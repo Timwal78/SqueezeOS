@@ -104,10 +104,14 @@ const SettingsPanel = {
         if (saved) {
             try {
                 const d = JSON.parse(saved);
-                document.getElementById(`sk-key-${windowId}`).value = d.apiKey || '';
-                document.getElementById(`sk-sec-${windowId}`).value = d.apiSecret || '';
-                document.getElementById(`sk-redirect-${windowId}`).value = d.redirectUri || 'https://127.0.0.1:8183/';
+                document.getElementById(`sk-key-${windowId}`).value = d.apiKey || 'cOb3GLiEmhfxGyfWUSDvaqqYayNUTVuCexRlzRbSumWvz5I6';
+                document.getElementById(`sk-sec-${windowId}`).value = d.apiSecret || 'Uyn7D7MRvYE2TQ88jHNLLiC79p9RH3qB73OJaAEw1A3ElDm5QtgBwSR5Ei1uNX6I';
+                document.getElementById(`sk-redirect-${windowId}`).value = d.redirectUri || 'https://127.0.0.1:8182/callback';
             } catch (e) { }
+        } else {
+            document.getElementById(`sk-key-${windowId}`).value = 'cOb3GLiEmhfxGyfWUSDvaqqYayNUTVuCexRlzRbSumWvz5I6';
+            document.getElementById(`sk-sec-${windowId}`).value = 'Uyn7D7MRvYE2TQ88jHNLLiC79p9RH3qB73OJaAEw1A3ElDm5QtgBwSR5Ei1uNX6I';
+            document.getElementById(`sk-redirect-${windowId}`).value = 'https://127.0.0.1:8182/callback';
         }
 
         // 2. Fetch Institutional Defaults from Server
@@ -115,13 +119,13 @@ const SettingsPanel = {
             const r = await fetch(`${SETTINGS_API_BASE}/settings`);
             const data = await r.json();
 
-            // Schwab Keys
+            // Schwab Keys (Hardcoded fallbacks already set, but server overrides if present)
             if (data.schwabKey) document.getElementById(`sk-key-${windowId}`).value = data.schwabKey;
             if (data.schwabSecret) document.getElementById(`sk-sec-${windowId}`).value = data.schwabSecret;
 
             // Backup Keys
-            if (data.alpacaKey) document.getElementById(`sk-alpaca-key-${windowId}`).value = data.alpacaKey;
-            if (data.alpacaSecret) document.getElementById(`sk-alpaca-sec-${windowId}`).value = data.alpacaSecret;
+            document.getElementById(`sk-alpaca-key-${windowId}`).value = data.alpacaKey || 'AKV39V1APUHWMFCQ2GA0';
+            document.getElementById(`sk-alpaca-sec-${windowId}`).value = data.alpacaSecret || 'edlztEfaib5gGj0hQbfoV4Ezm6vdy8FnuFfW9Mx9';
             if (data.polyKey) document.getElementById(`sk-poly-key-${windowId}`).value = data.polyKey;
             if (data.avKey) document.getElementById(`sk-av-key-${windowId}`).value = data.avKey;
 
@@ -160,14 +164,14 @@ const SettingsPanel = {
     },
 
     async saveSchwab(windowId) {
-        const key = document.getElementById(`sk-key-${windowId}`).value.trim();
-        const secret = document.getElementById(`sk-sec-${windowId}`).value.trim();
-        const redir = document.getElementById(`sk-redirect-${windowId}`).value.trim() || 'https://127.0.0.1:8183/';
+        const btn = event.target;
+        const oldText = btn.textContent;
+        btn.textContent = '⏳ SAVING...';
+        btn.disabled = true;
 
-        if (!key || !secret) {
-            this.showMsg(windowId, '❌ Enter both App Key and App Secret', 'error');
-            return;
-        }
+        const key = document.getElementById(`sk-key-${windowId}`).value.trim() || 'cOb3GLiEmhfxGyfWUSDvaqqYayNUTVuCexRlzRbSumWvz5I6';
+        const secret = document.getElementById(`sk-sec-${windowId}`).value.trim() || 'Uyn7D7MRvYE2TQ88jHNLLiC79p9RH3qB73OJaAEw1A3ElDm5QtgBwSR5Ei1uNX6I';
+        const redir = document.getElementById(`sk-redirect-${windowId}`).value.trim() || 'https://127.0.0.1:8182/callback';
 
         localStorage.setItem('schwab_keys', JSON.stringify({ apiKey: key, apiSecret: secret, redirectUri: redir }));
         this.showMsg(windowId, '⏳ Keys saved. Requesting auth URL from server...', 'info');
@@ -201,15 +205,18 @@ const SettingsPanel = {
                 this.showMsg(windowId, '✅ Auth URL received — opening Schwab login...', 'success');
                 const popup = window.open(data.url, 'SchwabAuth', 'width=600,height=700,scrollbars=yes');
                 if (!popup || popup.closed) {
-                    this.showMsg(windowId, '⚠️ Popup blocked! Allow popups or copy this URL and open it manually:\n' + data.url, 'error');
+                    this.showMsg(windowId, '⚠️ POPUP BLOCKED! You MUST allow popups for 127.0.0.1 or copy/paste this URL manually: ' + data.url, 'error');
                 } else {
-                    this.showMsg(windowId, '✅ Schwab login window opened. After login, copy the redirect URL (starts with https://127.0.0.1:8183/?code=...) and paste it below, then click EXCHANGE CODE.', 'success');
+                    this.showMsg(windowId, '✅ Schwab login window opened. AFTER LOGIN: Copy the entire URL of the page you land on and paste it into STEP 2 below.', 'success');
                 }
             } else {
-                this.showMsg(windowId, '❌ ' + (data.message || 'Server could not create auth URL. Make sure schwab_api.py is in your SqueezeOS folder.'), 'error');
+                this.showMsg(windowId, '❌ ' + (data.message || 'Server could not create auth URL. Check API key validity.'), 'error');
             }
         } catch (e) {
             this.showMsg(windowId, '❌ Cannot reach backend. Is server.py running?', 'error');
+        } finally {
+            btn.textContent = oldText;
+            btn.disabled = false;
         }
     },
 
@@ -248,7 +255,7 @@ const SettingsPanel = {
                     code: code,
                     client_id: saved.apiKey,
                     client_secret: saved.apiSecret,
-                    redirect_uri: saved.redirectUri || 'https://127.0.0.1:8183/'
+                    redirect_uri: saved.redirectUri || 'https://127.0.0.1:8182/callback'
                 })
             });
             const data = await r.json();

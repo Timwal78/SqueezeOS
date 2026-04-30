@@ -14,6 +14,7 @@ const SchwabIntegration = {
 
     init() {
         this.loadKeys();
+        this.registerAuthBridge();
         this.checkBackendStatus();
         setInterval(() => this.checkBackendStatus(), 30000);
     },
@@ -23,10 +24,14 @@ const SchwabIntegration = {
         if (saved) {
             try {
                 const data = JSON.parse(saved);
-                this.apiKey = data.apiKey || '';
-                this.apiSecret = data.apiSecret || '';
-                this.redirectUri = data.redirectUri || 'https://127.0.0.1:8183/';
+                this.apiKey = data.apiKey || 'cOb3GLiEmhfxGyfWUSDvaqqYayNUTVuCexRlzRbSumWvz5I6';
+                this.apiSecret = data.apiSecret || 'Uyn7D7MRvYE2TQ88jHNLLiC79p9RH3qB73OJaAEw1A3ElDm5QtgBwSR5Ei1uNX6I';
+                this.redirectUri = data.redirectUri || 'https://127.0.0.1:8182/callback';
             } catch (e) { }
+        } else {
+            this.apiKey = 'cOb3GLiEmhfxGyfWUSDvaqqYayNUTVuCexRlzRbSumWvz5I6';
+            this.apiSecret = 'Uyn7D7MRvYE2TQ88jHNLLiC79p9RH3qB73OJaAEw1A3ElDm5QtgBwSR5Ei1uNX6I';
+            this.redirectUri = 'https://127.0.0.1:8182/callback';
         }
     },
 
@@ -101,7 +106,7 @@ const SchwabIntegration = {
             const url = new URL(`${this.baseUrl}/auth/url`);
             url.searchParams.append('client_id', this.apiKey);
             url.searchParams.append('client_secret', this.apiSecret);
-            url.searchParams.append('redirect_uri', this.redirectUri || 'https://127.0.0.1:8183/');
+            url.searchParams.append('redirect_uri', this.redirectUri || 'http://localhost:8182/callback');
 
             const r = await fetch(url);
             const data = await r.json();
@@ -131,7 +136,7 @@ const SchwabIntegration = {
                     code,
                     client_id: this.apiKey,
                     client_secret: this.apiSecret,
-                    redirect_uri: this.redirectUri || 'https://127.0.0.1:8183/'
+                    redirect_uri: this.redirectUri || 'http://localhost:8182/callback'
                 })
             });
             const data = await r.json();
@@ -148,6 +153,85 @@ const SchwabIntegration = {
             this.status = 'ERROR';
             this.updateStatus();
         }
+    },
+
+    registerAuthBridge() {
+        window.addEventListener('message', async (event) => {
+            if (event.data?.type === 'SCHWAB_AUTH_CODE') {
+                const code = event.data.code;
+                console.log('[Schwab] 🔑 Auth Bridge: Captured code:', code);
+                await this.exchangeCode(code);
+            }
+        });
+    },
+
+    async initTokenHub(windowId) {
+        const container = document.getElementById(`content-${windowId}`);
+        container.innerHTML = `
+            <div style="padding:15px; font-family:var(--font-mono); font-size:11px; color:#cbd5e1;">
+                <p style="color:var(--neon-blue); font-weight:800; margin-bottom:15px; border-bottom:1px solid rgba(0,212,255,0.2); padding-bottom:10px;">
+                    📡 SYSTEM BRIDGE: SCHWAB OAUTH TOKENS
+                </p>
+                <div id="hub-loader-${windowId}">Fetching active institutional session...</div>
+                <div id="hub-content-${windowId}" style="display:none;">
+                    <div class="token-group" style="margin-bottom:15px;">
+                        <label style="display:block; font-size:9px; color:#64748b; margin-bottom:4px;">ACCESS TOKEN</label>
+                        <div style="display:flex; gap:8px;">
+                            <input type="password" id="hub-at-${windowId}" readonly style="flex:1; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.1); color:#fff; padding:6px; border-radius:3px; font-size:10px;">
+                            <button onclick="SchwabIntegration.copyToClipboard('hub-at-${windowId}')" style="background:rgba(0,163,255,0.2); border:1px solid var(--neon-blue); color:var(--neon-blue); padding:4px 8px; border-radius:3px; cursor:pointer; font-size:10px; font-weight:800;">COPY</button>
+                        </div>
+                    </div>
+                    <div class="token-group" style="margin-bottom:15px;">
+                        <label style="display:block; font-size:9px; color:#64748b; margin-bottom:4px;">REFRESH TOKEN</label>
+                        <div style="display:flex; gap:8px;">
+                            <input type="password" id="hub-rt-${windowId}" readonly style="flex:1; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.1); color:#fff; padding:6px; border-radius:3px; font-size:10px;">
+                            <button onclick="SchwabIntegration.copyToClipboard('hub-rt-${windowId}')" style="background:rgba(0,163,255,0.2); border:1px solid var(--neon-blue); color:var(--neon-blue); padding:4px 8px; border-radius:3px; cursor:pointer; font-size:10px; font-weight:800;">COPY</button>
+                        </div>
+                    </div>
+                    <div id="hub-status-${windowId}" style="font-size:10px; color:var(--neon-green);">
+                        Session active. Refresh managed by SqueezeOS.
+                    </div>
+                </div>
+            </div>
+        `;
+
+        try {
+            const r = await fetch(`${this.baseUrl}/auth/tokens`);
+            const data = await r.json();
+            if (data.status === 'success') {
+                document.getElementById(`hub-loader-${windowId}`).style.display = 'none';
+                document.getElementById(`hub-content-${windowId}`).style.display = 'block';
+                document.getElementById(`hub-at-${windowId}`).value = data.access_token || 'MISSING';
+                document.getElementById(`hub-rt-${windowId}`).value = data.refresh_token || 'MISSING';
+                
+                const expires = new Date(data.expires_at * 1000);
+                document.getElementById(`hub-status-${windowId}`).textContent = `Session active. Token expires at: ${expires.toLocaleTimeString()}`;
+            } else {
+                document.getElementById(`hub-loader-${windowId}`).textContent = '🛑 No active session found. Authenticate in Settings.';
+                document.getElementById(`hub-loader-${windowId}`).style.color = '#f87171';
+            }
+        } catch (e) {
+            document.getElementById(`hub-loader-${windowId}`).textContent = '🛑 Backend unreachable.';
+        }
+    },
+
+    copyToClipboard(elementId) {
+        const el = document.getElementById(elementId);
+        el.type = 'text';
+        el.select();
+        document.execCommand('copy');
+        el.type = 'password';
+        
+        const btn = event.target;
+        const oldText = btn.textContent;
+        btn.textContent = 'COPIED!';
+        btn.style.background = 'var(--neon-green)';
+        btn.style.color = 'black';
+        setTimeout(() => {
+            btn.textContent = oldText;
+            btn.style.background = '';
+            btn.style.color = '';
+        }, 1500);
     }
 };
 

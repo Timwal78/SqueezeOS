@@ -51,6 +51,36 @@
         #firehose-list {
             scroll-behavior: smooth;
         }
+        /* BEAST MODE Panel Styles */
+        .beast-section {
+            background: rgba(0,0,0,0.4);
+            border: 1px solid rgba(0,255,127,0.15);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .beast-section-title {
+            background: rgba(0,255,127,0.08);
+            color: #00FF7F;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            padding: 8px 12px;
+            margin: 0;
+            border-bottom: 1px solid rgba(0,255,127,0.15);
+        }
+        .beast-section-body {
+            padding: 10px 12px;
+            font-family: var(--font-mono);
+        }
+        .beast-dock {
+            background: rgba(0,255,127,0.1) !important;
+            border: 1px solid rgba(0,255,127,0.3) !important;
+        }
+        .beast-dock:hover {
+            background: rgba(0,255,127,0.25) !important;
+            box-shadow: 0 0 12px rgba(0,255,127,0.3);
+        }
     </style>
 </head>
 
@@ -202,13 +232,21 @@
                 <span class="icon">🔄</span>
                 <span class="label">Sync Force</span>
             </button>
+            <button class="dock-item beast-dock" onclick="BeastPanel.toggle()">
+                <span class="icon">🦅</span>
+                <span class="label">BEAST MODE</span>
+            </button>
             <button class="dock-item" onclick="AnalyticalEngine.toggleAudit()">
                 <span class="icon">📜</span>
                 <span class="label">Manifesto</span>
             </button>
-            <button class="dock-item" onclick="WindowManager.openSettings()">
+            <button class="dock-item" onclick="WindowManager.createWindow('settings')">
                 <span class="icon">⚙️</span>
                 <span class="label">Settings</span>
+            </button>
+            <button class="dock-item" onclick="WindowManager.createWindow('schwab-hub')" style="border-left:1px solid rgba(255,255,255,0.1); padding-left:15px;">
+                <span class="icon">🔑</span>
+                <span class="label">Token Hub</span>
             </button>
         </nav>
     </div>
@@ -247,7 +285,80 @@
         </div>
     </div>
 
+    <script src="beast-panel.js?v=5.1"></script>
     <script src="analytical-engine.js?v=5.0"></script>
+
+    <!-- BEAST MODE OVERLAY -->
+    <div id="beast-overlay" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:9990;background:rgba(5,7,10,0.97);overflow-y:auto;padding:20px 40px;box-sizing:border-box;">
+        <div style="max-width:1400px;margin:0 auto;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+                <h2 style="color:#00FF7F;font-family:var(--font-mono);font-size:22px;letter-spacing:3px;margin:0;">🦅 BEAST MODE — PAPER TRADING OBSERVER</h2>
+                <button onclick="BeastPanel.toggle()" style="background:none;border:1px solid #FF1493;color:#FF1493;padding:6px 16px;cursor:pointer;font-family:var(--font-mono);font-size:12px;border-radius:3px;">✕ CLOSE</button>
+            </div>
+
+            <!-- READINESS CHECKLIST -->
+            <div id="beast-readiness" class="beast-section">
+                <h3 class="beast-section-title">🎯 LIVE READINESS CHECKLIST</h3>
+                <div id="beast-readiness-content" class="beast-section-body">
+                    <div style="color:var(--text-dim);font-size:11px;">Loading readiness data...</div>
+                </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:16px;margin-top:16px;">
+                <!-- HEDGER SNAPSHOTS -->
+                <div id="beast-hedger" class="beast-section">
+                    <h3 class="beast-section-title">⚖️ AUTONOMOUS HEDGER (DRY-RUN)</h3>
+                    <div id="beast-hedger-content" class="beast-section-body" style="max-height:250px;overflow-y:auto;">
+                        <div style="color:var(--text-dim);font-size:11px;">Waiting for hedger cycles...</div>
+                    </div>
+                </div>
+
+                <!-- GEX REGIME MONITOR -->
+                <div id="beast-gex" class="beast-section">
+                    <h3 class="beast-section-title">📊 GEX REGIME MONITOR</h3>
+                    <div id="beast-gex-content" class="beast-section-body" style="max-height:250px;overflow-y:auto;">
+                        <div style="color:var(--text-dim);font-size:11px;">Waiting for GEX scans...</div>
+                    </div>
+                </div>
+
+                <!-- IWM 0DTE INSTITUTIONAL PRO -->
+                <div id="beast-iwm" class="beast-section">
+                    <h3 class="beast-section-title">🦉 IWM 0DTE INSTITUTIONAL PRO</h3>
+                    <div id="beast-iwm-content" class="beast-section-body" style="max-height:250px;overflow-y:auto;">
+                        <div style="color:var(--text-dim);font-size:11px;">Waiting for IWM Sentinel...</div>
+                    </div>
+                </div>
+
+                <!-- KDP INSTITUTIONAL TRACKER -->
+                <div id="beast-kdp" class="beast-section">
+                    <h3 class="beast-section-title">🦅 KDP INSTITUTIONAL TRACKER</h3>
+                    <div id="beast-kdp-content" class="beast-section-body" style="max-height:250px;overflow-y:auto;">
+                        <div style="color:var(--text-dim);font-size:11px;">Waiting for KDP Sentinel...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SHADOW TRADE LOG -->
+            <div id="beast-trades" class="beast-section" style="margin-top:16px;">
+                <h3 class="beast-section-title">📋 SHADOW TRADE LOG</h3>
+                <div id="beast-trades-content" class="beast-section-body" style="max-height:200px;overflow-y:auto;">
+                    <div style="color:var(--text-dim);font-size:11px;">No shadow trades yet...</div>
+                </div>
+            </div>
+
+            <!-- STRATEGY ARCHITECT -->
+            <div id="beast-architect" class="beast-section" style="margin-top:16px;">
+                <h3 class="beast-section-title">🧠 STRATEGY ARCHITECT</h3>
+                <div class="beast-section-body">
+                    <div style="display:flex;gap:8px;margin-bottom:12px;">
+                        <input type="text" id="beast-thesis-input" placeholder='Enter thesis: "AMC will rip higher next 2 weeks"' style="flex:1;background:rgba(0,0,0,0.5);border:1px solid rgba(0,255,127,0.3);color:#fff;padding:8px 12px;font-family:var(--font-mono);font-size:12px;border-radius:3px;">
+                        <button onclick="BeastPanel.runArchitect()" style="background:rgba(0,255,127,0.15);border:1px solid #00FF7F;color:#00FF7F;padding:8px 16px;cursor:pointer;font-family:var(--font-mono);font-size:11px;font-weight:700;border-radius:3px;white-space:nowrap;">ARCHITECT</button>
+                    </div>
+                    <div id="beast-architect-content" style="font-family:var(--font-mono);font-size:11px;color:var(--text-dim);">Enter a market thesis to generate optimal strategies.</div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {

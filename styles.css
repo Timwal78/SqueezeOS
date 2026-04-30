@@ -1616,3 +1616,73 @@ body.stream-overlay ::-webkit-scrollbar-thumb { background: rgba(0, 212, 255, 0.
     #taskbar { height: 40px !important; }
     #dock { height: 48px !important; }
 }
+
+/* ── MOBILE RESPONSIVENESS (PHASE 1: HARDENING) ── */
+@media (max-width: 1200px) {
+    .arcane-grid {
+        grid-template-columns: 1fr 1fr !important;
+        grid-template-rows: auto auto auto !important;
+        height: auto !important;
+        overflow-y: auto !important;
+    }
+    #bottom-tier {
+        grid-column: 1 / span 2 !important;
+    }
+    #perf-badge {
+        display: none !important; /* Hide density badge on small screens */
+    }
+    #taskbar {
+        padding: 0 10px;
+    }
+    .system-stats {
+        display: none; /* Hide complex stats on mobile taskbar */
+    }
+}
+
+@media (max-width: 768px) {
+    .arcane-grid {
+        grid-template-columns: 1fr !important;
+        grid-template-rows: auto !important;
+    }
+    #bottom-tier {
+        grid-column: 1 / span 1 !important;
+        grid-template-columns: 1fr !important;
+    }
+    .tiled-panel {
+        height: 350px !important;
+    }
+    #grimoire {
+        order: -1; /* Symbol details first on mobile */
+    }
+    .main-title {
+        font-size: 14px !important;
+    }
+    .dock-item .label {
+        display: none; /* Icons only on small mobile dock */
+    }
+    .dock-item {
+        min-width: 50px;
+    }
+    #beast-overlay {
+        padding: 10px !important;
+    }
+    #beast-overlay h2 {
+        font-size: 14px !important;
+    }
+    .beast-section-body {
+        padding: 5px;
+    }
+    #beast-overlay div[style*="grid-template-columns:1fr 1fr"] {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+/* ── MOBILE TOUCH OPTIMIZATIONS ── */
+@media (pointer: coarse) {
+    .dock-item {
+        padding: 12px 18px; /* Larger hit targets */
+    }
+    .tiled-panel-content {
+        -webkit-overflow-scrolling: touch;
+    }
+}

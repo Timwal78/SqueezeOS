@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import pandas as pd
 import math
@@ -32,19 +33,19 @@ class SMLEngine:
 
     def __init__(self, settings=None):
         self.settings = settings or {
-            "norm_len": 55,
-            "fast_len": 5,
-            "slow_len": 21,
-            "roc_len": 5,
-            "vol_len": 20,
-            "hurst_len": 100,
-            "bb_len": 20,
-            "bb_mult": 2.0,
-            "atr_len": 14,
-            "swing_len": 10,
-            "precursor_bias": 1.15,
-            "squeeze_bias": 1.15,
-            "mode_profile": "Early" # Options: Early, Balanced, Strict
+            "norm_len": int(os.getenv("SML_NORM_LEN", "55")),
+            "fast_len": int(os.getenv("SML_FAST_LEN", "5")),
+            "slow_len": int(os.getenv("SML_SLOW_LEN", "21")),
+            "roc_len": int(os.getenv("SML_ROC_LEN", "5")),
+            "vol_len": int(os.getenv("SML_VOL_LEN", "20")),
+            "hurst_len": int(os.getenv("SML_HURST_LEN", "100")),
+            "bb_len": int(os.getenv("SML_BB_LEN", "20")),
+            "bb_mult": float(os.getenv("SML_BB_MULT", "2.0")),
+            "atr_len": int(os.getenv("SML_ATR_LEN", "14")),
+            "swing_len": int(os.getenv("SML_SWING_LEN", "10")),
+            "precursor_bias": float(os.getenv("SML_PRECURSOR_BIAS", "1.15")),
+            "squeeze_bias": float(os.getenv("SML_SQUEEZE_BIAS", "1.15")),
+            "mode_profile": os.getenv("SML_MODE_PROFILE", "Early") 
         }
 
     # ═══════════════════════════════════════════════════════════

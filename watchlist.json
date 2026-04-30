@@ -1,1 +1,3 @@
-{"symbols": ["AMC", "GME", "XRT", "IWM", "QQQ", "SPY", "XRP", "USAS", "MSOS"]}
+{
+    "symbols": ["IWM", "AMC", "GME", "SPY", "QQQ", "VIX", "TSLA", "NVDA", "AAPL", "MSFT"]
+}

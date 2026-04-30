@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Schwab Auth Callback</title>
+</head>
+<body style="background: #0f172a; color: #38bdf8; font-family: monospace; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0;">
+    <div style="text-align: center; border: 1px solid #0ea5e9; padding: 20px; border-radius: 8px; background: rgba(0,0,0,0.4);">
+        <h2 style="margin-top: 0;">📡 OAUTH BRIDGE</h2>
+        <div id="status">Capturing authorization code...</div>
+        <div style="font-size: 10px; color: #64748b; margin-top: 20px;" id="code-display"></div>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+        
+        if (code) {
+            document.getElementById('status').innerText = "✅ CODE CAPTURED. SYNCING...";
+            document.getElementById('code-display').innerText = "CODE: " + code.substring(0, 8) + "...";
+            
+            // Send to opener (SqueezeOS main window)
+            if (window.opener) {
+                window.opener.postMessage({ type: 'SCHWAB_AUTH_CODE', code: code }, '*');
+                document.getElementById('status').innerText = "✅ SYNCED TO SQUEEZE OS. CLOSING...";
+                setTimeout(() => window.close(), 1500);
+            } else {
+                document.getElementById('status').innerHTML = "🛑 OPENER NOT FOUND.<br>COPY THIS CODE MANUALLY:<br><br><textarea style='width:100%;height:60px;background:#000;color:#0f0;border:1px solid #333;font-size:10px;'>" + code + "</textarea>";
+            }
+        } else {
+            document.getElementById('status').innerText = "🛑 NO CODE FOUND IN URL.";
+            document.getElementById('status').style.color = "#f87171";
+        }
+    </script>
+</body>
+</html>

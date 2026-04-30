@@ -8,18 +8,23 @@ import os
 import json
 import time
 import logging
+import pandas as pd
+import numpy as np
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 from threading import Lock
 from delta_neutrality import DeltaNeutralityEngine
+from BEAST.gex.sml_gex_engine import GEXEngine
+from BEAST.hedger.autonomous_hedger import AutonomousHedger, HedgerConfig
 
 logger = logging.getLogger(__name__)
 
 class ExecutionEngine:
-    def __init__(self, schwab_api, rmre_bridge, performance_tracker=None):
+    def __init__(self, schwab_api, rmre_bridge, performance_tracker=None, discord_alerts=None):
         self.schwab = schwab_api
         self.rmre = rmre_bridge
         self.tracker = performance_tracker
+        self.discord = discord_alerts
         self.lock = Lock()
         
         self.live_mode = False # Default to Shadow Mode for safety
@@ -35,8 +40,21 @@ class ExecutionEngine:
         self.active_trades: Dict[str, Dict] = {}
         self.load_trades()
         
+        # --- RISK UPGRADE: ATR-based Dynamic SL ---
+        self.atr_multiplier = 1.5 # Standard institutional trail
+        self.meme_atr_multiplier = 2.5 # Extra room for AMC/GME
+        
         # Phase 2: Risk Management
         self.delta_engine = DeltaNeutralityEngine(self, rmre_bridge)
+        
+        # BEAST Integration: GEX Engine & Autonomous Hedger
+        self.gex_cache: Dict[str, Dict] = {}
+        self.last_gex_update = 0
+        try:
+            self.beast_hedger = AutonomousHedger(HedgerConfig(dry_run=True))
+        except Exception as e:
+            logger.warning(f"[BEAST] Hedger init failed (will continue without): {e}")
+            self.beast_hedger = None
 
     def load_trades(self):
         if os.path.exists(self.trade_log_path):
@@ -111,7 +129,40 @@ class ExecutionEngine:
             except Exception as e:
                 logger.error(f"[EXECUTION] Save error: {e}")
 
-    def should_execute(self, symbol: str, side: str) -> Dict[str, Any]:
+    def calculate_atr(self, symbol: str, period: int = 14) -> float:
+        """
+        Calculates the Average True Range (ATR) using minute-level aggregates.
+        """
+        if not self.tracker or not self.tracker.data_manager:
+            return 0.0
+            
+        dm = self.tracker.data_manager
+        if not dm.polygon or not dm.polygon.available:
+            return 0.0
+            
+        try:
+            # Fetch last 30 minutes of 1m data
+            aggs = dm.polygon.get_aggregates(symbol, 1, 'minute', limit=period + 5)
+            if not aggs or len(aggs) < period:
+                return 0.0
+                
+            # Sort by timestamp (asc) for ATR calculation
+            df = pd.DataFrame(aggs).sort_values('timestamp')
+            
+            # TR = max(H-L, |H-Cp|, |L-Cp|)
+            df['prev_close'] = df['close'].shift(1)
+            df['tr'] = np.maximum(df['high'] - df['low'], 
+                       np.maximum(abs(df['high'] - df['prev_close']), 
+                                  abs(df['low'] - df['prev_close'])))
+            
+            # Simple Moving Average of TR for ATR
+            atr = df['tr'].tail(period).mean()
+            return float(atr)
+        except Exception as e:
+            logger.error(f"[RISK] ATR Calculation Error for {symbol}: {e}")
+            return 0.0
+
+    def should_execute(self, symbol: str, side: str, is_live: bool = False) -> Dict[str, Any]:
         """
         Institutional Filter: Hurst-Regime Validation.
         Enforces entry ONLY in trending regimes with high hurst conviction.
@@ -125,8 +176,10 @@ class ExecutionEngine:
             label = regime.get('regime_label', 'UNKNOWN')
             
             # Law 1: Hurst Filtering
-            # Hurst > 0.55 indicates institutional trending conviction
-            is_trending = hurst > 0.55
+            # Shadow Mode: > 0.55
+            # LIVE Mode: > 0.60 (Institutional Tier Only)
+            threshold = 0.62 if is_live else 0.55
+            is_trending = hurst > threshold
             
             # Law 2: Regime Filtering
             # Entry allowed in EXECUTION (Trending) or CONFLICT (Early Squeeze Setup)
@@ -137,7 +190,7 @@ class ExecutionEngine:
             
             # Rejection Logic
             if not is_trending:
-                return {"allow": False, "reason": f"FILTERED: Lack of Hurst Conviction ({hurst:.2f})"}
+                return {"allow": False, "reason": f"FILTERED: Lack of Hurst Conviction ({hurst:.2f} < {threshold})"}
             if not allow_regime:
                 return {"allow": False, "reason": f"FILTERED: Invalid Regime State ({label})"}
                 
@@ -145,6 +198,34 @@ class ExecutionEngine:
         except Exception as e:
             logger.error(f"[EXECUTION] Filtering Error: {e}")
             return {"allow": True, "reason": "Bypass Error - Safety Default"}
+
+    def get_gamma_walls(self, symbol: str) -> Dict[str, Any]:
+        """
+        Institutional Gamma Wall Detection via BEAST GEX Engine.
+        Returns call_wall, put_wall, and zero_gamma_level.
+        """
+        now = time.time()
+        if symbol in self.gex_cache and (now - self.last_gex_update) < 3600:
+            return self.gex_cache[symbol]
+            
+        try:
+            engine = GEXEngine(symbol.upper(), max_expiries=3)
+            snap = engine.compute()
+            
+            result = {
+                "call_wall": float(snap.call_wall) if snap.call_wall is not None else None,
+                "put_wall": float(snap.put_wall) if snap.put_wall is not None else None,
+                "zero_gamma": float(snap.zero_gamma_level) if snap.zero_gamma_level is not None else None,
+                "regime": snap.gex_regime,
+                "total_gex": float(snap.total_gex),
+                "updated_at": now
+            }
+            self.gex_cache[symbol] = result
+            self.last_gex_update = now
+            return result
+        except Exception as e:
+            logger.error(f"[GEX] Error for {symbol}: {e}")
+            return {}
 
     def execute_shadow_trade(self, symbol: str, side: str, quantity: int, price: float):
         """
@@ -182,18 +263,32 @@ class ExecutionEngine:
             except Exception as e:
                 logger.warning(f"[SHADOW] RMRE compute error: {e}")
         
-        # Automated TP/SL Logic based on Swing (IT) Profile
-        it_range = ranges.get('it', {})
-        sl = float(it_range.get('low', entry_price * 0.95))
-        tp = float(it_range.get('high', entry_price * 1.05))
+        # Automated TP/SL Logic: ATR-Based Dynamic Risk
+        atr = self.calculate_atr(symbol)
+        multiplier = self.meme_atr_multiplier if symbol in ('AMC', 'GME') else self.atr_multiplier
+        
+        if atr > 0:
+            # Dynamic SL based on ATR
+            sl = entry_price - (atr * multiplier) if side == 'BUY' else entry_price + (atr * multiplier)
+            # TP targeted at 2x SL distance (Risk/Reward 1:2)
+            tp = entry_price + (atr * multiplier * 2.0) if side == 'BUY' else entry_price - (atr * multiplier * 2.0)
+            risk_type = "ATR_DYNAMIC"
+        else:
+            # Fallback to RMRE ranges or 5% default
+            it_range = ranges.get('it', {})
+            sl = float(it_range.get('low', entry_price * 0.95))
+            tp = float(it_range.get('high', entry_price * 1.05))
+            risk_type = "RMRE_STATIC"
         
         # 3. Regime-Aware Risk Tuning
         if regime_label == 'CONFLICT':
+            # Tighter stops in conflict (Squeeze watch)
             dist = abs(entry_price - sl)
-            sl = entry_price - (dist * 0.8) if side == 'BUY' else entry_price + (dist * 0.8)
+            sl = entry_price - (dist * 0.7) if side == 'BUY' else entry_price + (dist * 0.7)
         elif regime_label == 'EXECUTION':
+            # Let runners breathe in execution
             dist = abs(entry_price - tp)
-            tp = entry_price + (dist * 1.15) if side == 'BUY' else entry_price - (dist * 1.15)
+            tp = entry_price + (dist * 1.25) if side == 'BUY' else entry_price - (dist * 1.25)
 
         trade_id = f"SHADOW_{symbol}_{int(time.time())}"
         
@@ -218,6 +313,11 @@ class ExecutionEngine:
             self.active_trades[trade_id] = trade
         
         self.save_trades()
+        
+        # Expert Precision: Fire real-time notification
+        if self.discord:
+            self.discord.fire_beast_trade_alert(trade)
+            
         return trade
 
     def execute_live_trade(self, symbol: str, side: str, quantity: int, price: float):
@@ -230,7 +330,7 @@ class ExecutionEngine:
             logger.error(msg)
             return {"status": "REJECTED", "reason": msg}
 
-        validation = self.should_execute(symbol, side)
+        validation = self.should_execute(symbol, side, is_live=True)
         if not validation['allow']:
             logger.warning(f"🛑 LIVE Filtered: {symbol} - {validation['reason']}")
             return {"status": "FILTERED", "reason": validation['reason']}
@@ -282,6 +382,10 @@ class ExecutionEngine:
             with self.lock:
                 self.active_trades[trade_id] = trade
             self.save_trades()
+            
+            if self.discord:
+                self.discord.fire_beast_trade_alert(trade)
+            
             return trade
         
         return res
@@ -356,6 +460,14 @@ class ExecutionEngine:
             # Periodically check HJB Delta Neutrality (approx every price loop)
             self.execute_hjb_hedge(quotes)
             
+            # BEAST: Autonomous Hedging based on Portfolio Notional
+            if self.beast_hedger and getattr(self.beast_hedger, 'available', False):
+                total_notional = sum(t['current_price'] * t['qty'] for t in self.active_trades.values())
+                hedge_shares = self.beast_hedger.manage_delta(total_notional, quotes)
+                if hedge_shares != 0:
+                    logger.info(f"[BEAST] Delta Stress Detected. Suggested Hedge: {hedge_shares} shares")
+                # In production, we would trigger self.execute_live_trade here if autopilot enabled
+            
             # Update Delta Stress History for Performance Analytics
             if self.tracker and self.delta_engine:
                 delta_data = self.delta_engine.calculate_basket_delta(quotes)
@@ -369,15 +481,28 @@ class ExecutionEngine:
                     
                     # 4. Trailing SL Logic (Only in EXECUTION regime)
                     if trade.get('regime') == 'EXECUTION':
-                        if trade['side'] == 'BUY':
-                            # Trail by 1.5 ATR approx (using 2% as proxy)
-                            new_sl = price * 0.98
-                            if new_sl > trade['sl']:
-                                trade['sl'] = new_sl
+                        atr = self.calculate_atr(sym)
+                        multiplier = self.meme_atr_multiplier if sym in ('AMC', 'GME') else self.atr_multiplier
+                        
+                        if atr > 0:
+                            if trade['side'] == 'BUY':
+                                new_sl = price - (atr * multiplier)
+                                if new_sl > trade.get('sl', 0):
+                                    trade['sl'] = new_sl
+                            else:
+                                new_sl = price + (atr * multiplier)
+                                if new_sl < trade.get('sl', price * 2):
+                                    trade['sl'] = new_sl
                         else:
-                            new_sl = price * 1.02
-                            if new_sl < trade['sl']:
-                                trade['sl'] = new_sl
+                            # Fallback to proxy if ATR fails
+                            if trade['side'] == 'BUY':
+                                new_sl = price * 0.98
+                                if new_sl > trade.get('sl', 0):
+                                    trade['sl'] = new_sl
+                            else:
+                                new_sl = price * 1.02
+                                if new_sl < trade.get('sl', price * 2):
+                                    trade['sl'] = new_sl
 
                     # Check SL
                     if trade['side'] == 'BUY' and price <= trade['sl']:

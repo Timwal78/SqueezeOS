@@ -21,11 +21,9 @@ class SchwabAPI:
     Handles OAuth2 flow and market data requests.
     """
     def __init__(self, client_id=None, client_secret=None, redirect_uri=None):
-        self.client_id = client_id or os.environ.get('SCHWAB_CLIENT_ID')
-        self.client_secret = client_secret or os.environ.get('SCHWAB_CLIENT_SECRET')
-        self.redirect_uri = redirect_uri or os.environ.get('SCHWAB_REDIRECT_URI', 'https://127.0.0.1:8183/')
-        if self.redirect_uri and not self.redirect_uri.endswith('/'):
-            self.redirect_uri += '/'
+        self.client_id = client_id or os.environ.get('SCHWAB_CLIENT_ID', 'cOb3GLiEmhfxGyfWUSDvaqqYayNUTVuCexRlzRbSumWvz5I6')
+        self.client_secret = client_secret or os.environ.get('SCHWAB_CLIENT_SECRET', 'Uyn7D7MRvYE2TQ88jHNLLiC79p9RH3qB73OJaAEw1A3ElDm5QtgBwSR5Ei1uNX6I')
+        self.redirect_uri = redirect_uri or os.environ.get('SCHWAB_REDIRECT_URI', 'https://127.0.0.1:8182/callback')
         
         self.base_url = "https://api.schwabapi.com"
         self.token_file = os.path.join(os.path.dirname(__file__), 'schwab_tokens.json')

@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 
 class OptionsProService:
     def __init__(self):
-        self.alpaca_key = os.environ.get('ALPACA_API_KEY', '')
-        self.alpaca_secret = os.environ.get('ALPACA_API_SECRET', '')
+        self.alpaca_key = os.environ.get('ALPACA_API_KEY', 'AKV39V1APUHWMFCQ2GA0')
+        self.alpaca_secret = os.environ.get('ALPACA_API_SECRET', 'edlztEfaib5gGj0hQbfoV4Ezm6vdy8FnuFfW9Mx9')
         self.last_call = 0
         self.min_interval = 0.1  # RELAXED: 100ms (was 500ms) between requests
         self._schwab_api = None
@@ -177,7 +177,14 @@ class OptionsProService:
             process_map(call_map, 'CALL')
             process_map(put_map, 'PUT')
             alerts.sort(key=lambda x: x['unusual_score'], reverse=True)
-            return {'symbol': symbol, 'unusual_activity': alerts, 'source': 'schwab', 'underlying_price': underlying_price}
+            return {
+                'symbol': symbol, 
+                'unusual_activity': alerts, 
+                'source': 'schwab', 
+                'underlying_price': underlying_price,
+                '_raw_calls': call_map,
+                '_raw_puts': put_map
+            }
         except Exception as e:
             logger.error(f"[OPTIONS] Schwab chain {symbol}: {e}")
             return None

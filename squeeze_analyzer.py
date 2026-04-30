@@ -18,6 +18,10 @@ No fake data. No placeholders. Institutional grade.
 """
 import math
 import logging
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -198,11 +202,14 @@ class SqueezeAnalyzer:
             return 0.0
 
         pos = (price - low) / (high - low)
+        
+        high_thresh = float(os.getenv('SQUEEZE_STRUC_HIGH', '0.85'))
+        mid_thresh = float(os.getenv('SQUEEZE_STRUC_MID', '0.70'))
 
         # Closing near high = strength
-        if pos >= 0.85:
+        if pos >= high_thresh:
             return 10.0
-        elif pos >= 0.70:
+        elif pos >= mid_thresh:
             return 8.0
         elif pos >= 0.50:
             return 5.0

@@ -49,6 +49,7 @@ const WindowManager = {
 
         requestAnimationFrame(() => {
             if (type === 'settings' && window.SettingsPanel) SettingsPanel.init(id);
+            if (type === 'schwab-hub' && window.SchwabIntegration) window.SchwabIntegration.initTokenHub(id);
         });
         return id;
     },
@@ -56,6 +57,7 @@ const WindowManager = {
     getConfig(type) {
         return {
             'settings': { title: '⚙️ SYSTEM SETTINGS', width: '400px', height: '500px' },
+            'schwab-hub': { title: '🔑 SCHWAB TOKEN HUB', width: '420px', height: '320px' },
         }[type] || { title: 'Window', width: '400px', height: '300px' };
     },
 
