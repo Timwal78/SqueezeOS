@@ -21,6 +21,16 @@ from typing import List, Dict
 logger = logging.getLogger(__name__)
 
 
+def _llm_commentary(symbol: str, data: dict, timeout: int = 15) -> str:
+    """Non-blocking LLM commentary — returns empty string on any failure."""
+    try:
+        from free_llm import get_llm
+        llm = get_llm()
+        return llm.analyze_signal(symbol, data)
+    except Exception:
+        return ""
+
+
 class DiscordAlerts:
 
     def __init__(self):
@@ -246,6 +256,9 @@ class DiscordAlerts:
                     "timestamp": datetime.utcnow().isoformat(),
                 }]
             }
+            ai_note = _llm_commentary(sym, item)
+            if ai_note:
+                embed["embeds"][0]["fields"].append({"name": "🤖 AI ANALYST", "value": ai_note, "inline": False})
             self._post(url, embed)
             self._mark(f'sq_{sym}')
             time.sleep(2.0)
@@ -999,6 +1012,9 @@ class DiscordAlerts:
                 "timestamp": datetime.utcnow().isoformat(),
             }]
         }
+        ai_note = _llm_commentary(sym, trade)
+        if ai_note:
+            embed["embeds"][0]["fields"].append({"name": "🤖 AI ANALYST", "value": ai_note, "inline": False})
         self._post(url, embed)
 
     # ══════════════════════════════════════════════════════════

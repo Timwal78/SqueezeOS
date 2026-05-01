@@ -168,11 +168,30 @@ def init_services():
                 from BEAST.architect.strategy_architect import StrategyArchitect as _architect_cls
                 logger.info("[BEAST] StrategyArchitect loaded (fallback)")
             except Exception as e2:
-                logger.warning(f"[BEAST] StrategyArchitect also unavailable ({e2}), using no-op stub")
+                logger.warning(f"[BEAST] StrategyArchitect also unavailable ({e2}), falling back to FreeLLM architect")
                 class _StubArchitect:
-                    """No-op stub when BEAST module is not deployed."""
-                    def analyze(self, *a, **kw): return {}
-                    def get_strategy(self, *a, **kw): return {}
+                    """FreeLLM-backed architect when BEAST module is not deployed."""
+                    def analyze(self, symbol=None, signal=None, **kw):
+                        try:
+                            from free_llm import get_llm
+                            commentary = get_llm().analyze_signal(symbol or 'UNKNOWN', signal or kw)
+                            return {"commentary": commentary, "source": "free_llm"}
+                        except Exception:
+                            return {}
+                    def get_strategy(self, symbol=None, context=None, **kw):
+                        try:
+                            from free_llm import get_llm
+                            rating = get_llm().score_trade(symbol or 'UNKNOWN', context or kw)
+                            return {"rating": rating, "source": "free_llm"}
+                        except Exception:
+                            return {}
+                    def architect(self, thesis, symbol=None):
+                        try:
+                            from free_llm import get_llm
+                            commentary = get_llm().commentary(f"Ticker: {symbol or 'UNKNOWN'}\nThesis: {thesis}")
+                            return {"commentary": commentary, "source": "free_llm"}
+                        except Exception:
+                            return {}
                 _architect_cls = _StubArchitect
         
         dm = DataManager(schwab_api)
