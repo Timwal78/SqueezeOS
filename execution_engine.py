@@ -588,8 +588,15 @@ class ExecutionEngine:
         # Add to performance tracker
         if self.tracker:
             self.tracker.add_trade_result(trade['pnl'], is_hedge=trade.get('is_hedge', False))
-            
+
         logger.info(f"[EXECUTION] Closed {trade_id} | PnL: ${trade['pnl']:.2f}")
+
+        if self.discord:
+            try:
+                self.discord.fire_beast_exit_alert(trade, is_live=self.live_mode)
+            except Exception as e:
+                logger.warning(f"[EXECUTION] Exit alert failed: {e}")
+
         return trade
 
 class SignalEmitter:

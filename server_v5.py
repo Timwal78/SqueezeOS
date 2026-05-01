@@ -26,6 +26,7 @@ from mean_reversion_engine import MeanReversionEngine
 from beast_webhook import register_beast_routes
 from iwm_odte_engine import IwmOdteEngine
 from kdp_sentinel_engine import KdpSentinelEngine
+from free_llm import get_llm
 
 # --- INITIALIZATION ---
 load_env_file()
@@ -167,11 +168,30 @@ def init_services():
                 from BEAST.architect.strategy_architect import StrategyArchitect as _architect_cls
                 logger.info("[BEAST] StrategyArchitect loaded (fallback)")
             except Exception as e2:
-                logger.warning(f"[BEAST] StrategyArchitect also unavailable ({e2}), using no-op stub")
+                logger.warning(f"[BEAST] StrategyArchitect also unavailable ({e2}), falling back to FreeLLM architect")
                 class _StubArchitect:
-                    """No-op stub when BEAST module is not deployed."""
-                    def analyze(self, *a, **kw): return {}
-                    def get_strategy(self, *a, **kw): return {}
+                    """FreeLLM-backed architect when BEAST module is not deployed."""
+                    def analyze(self, symbol=None, signal=None, **kw):
+                        try:
+                            from free_llm import get_llm
+                            commentary = get_llm().analyze_signal(symbol or 'UNKNOWN', signal or kw)
+                            return {"commentary": commentary, "source": "free_llm"}
+                        except Exception:
+                            return {}
+                    def get_strategy(self, symbol=None, context=None, **kw):
+                        try:
+                            from free_llm import get_llm
+                            rating = get_llm().score_trade(symbol or 'UNKNOWN', context or kw)
+                            return {"rating": rating, "source": "free_llm"}
+                        except Exception:
+                            return {}
+                    def architect(self, thesis, symbol=None):
+                        try:
+                            from free_llm import get_llm
+                            commentary = get_llm().commentary(f"Ticker: {symbol or 'UNKNOWN'}\nThesis: {thesis}")
+                            return {"commentary": commentary, "source": "free_llm"}
+                        except Exception:
+                            return {}
                 _architect_cls = _StubArchitect
         
         dm = DataManager(schwab_api)
@@ -270,7 +290,11 @@ def worker_scanner():
             quotes = dm.get_quotes(targets, fast_only=True)
             
             # MANIFESTO: $50 SWEET SPOT CAP — FAVORITES (IWM etc.) always pass
+            before = len(quotes)
             quotes = {s: q for s, q in quotes.items() if s in FAVORITES or q.get('price', 0) <= 50.0}
+            filtered = before - len(quotes)
+            if filtered:
+                logger.info(f"[SCANNER] Price cap filtered {filtered} symbols (>${50}), {len(quotes)} remaining")
             
             results = analyzer.analyze_batch(quotes)
             
@@ -606,17 +630,20 @@ def worker_beast_paper():
             if discord:
                 perf = get_service("perf")
                 total_pnl = 0.0
-                shadow_count = 0
+                active_trades = []
                 if perf:
                     summary = perf.get_summary()
                     total_pnl = summary.get('total_pnl', 0.0)
                 exec_eng_d = get_service("exec")
+                recent_closed = []
                 if exec_eng_d:
-                    shadow_count = len(exec_eng_d.get_active_trades())
+                    active_trades = exec_eng_d.get_active_trades()
+                    recent_closed = exec_eng_d.get_trade_history()[:5]
                 discord.fire_beast_paper_summary(
                     hedger_count=len(beast_paper_data['hedger_snapshots']),
                     gex_count=len(beast_paper_data['gex_regimes']),
-                    shadow_trades=shadow_count,
+                    active_trades=active_trades,
+                    recent_closed=recent_closed,
                     total_pnl=total_pnl
                 )
             
@@ -1198,15 +1225,21 @@ def api_forced_move(symbol):
         return jsonify(fm.analyze(symbol.upper(), bars, vix))
     except Exception as e: return jsonify({"error": str(e)}), 500
 
+def _mask(val: str) -> str:
+    """Show only last 4 chars of a secret."""
+    if not val or len(val) <= 4:
+        return '••••'
+    return '••••' + val[-4:]
+
 @app.route('/api/settings')
 def get_settings():
     return jsonify({
-        'schwabKey': os.environ.get('SCHWAB_CLIENT_ID', 'cOb3GLiEmhfxGyfWUSDvaqqYayNUTVuCexRlzRbSumWvz5I6'),
-        'schwabSecret': os.environ.get('SCHWAB_CLIENT_SECRET', 'Uyn7D7MRvYE2TQ88jHNLLiC79p9RH3qB73OJaAEw1A3ElDm5QtgBwSR5Ei1uNX6I'),
-        'alpacaKey': os.environ.get('ALPACA_API_KEY', 'AKV39V1APUHWMFCQ2GA0'),
-        'alpacaSecret': os.environ.get('ALPACA_API_SECRET', 'edlztEfaib5gGj0hQbfoV4Ezm6vdy8FnuFfW9Mx9'),
-        'polyKey': os.environ.get('POLYGON_API_KEY', ''),
-        'webhook': os.environ.get('DISCORD_WEBHOOK_ALL', '')
+        'schwabKey':    _mask(os.environ.get('SCHWAB_CLIENT_ID', '')),
+        'schwabSecret': _mask(os.environ.get('SCHWAB_CLIENT_SECRET', '')),
+        'alpacaKey':    _mask(os.environ.get('ALPACA_API_KEY', '')),
+        'alpacaSecret': _mask(os.environ.get('ALPACA_API_SECRET', '')),
+        'polyKey':      _mask(os.environ.get('POLYGON_API_KEY', '')),
+        'webhook':      _mask(os.environ.get('DISCORD_WEBHOOK_ALL', '')),
     })
 
 def _update_env_key(key, value):
@@ -1382,6 +1415,46 @@ def api_beast_events():
                 sse_queues.remove(q)
             
     return Response(stream(), mimetype='text/event-stream')
+
+# ── Free LLM (Ollama / local Llama) ──────────────────────────────────────────
+
+@app.route('/api/ai/status')
+def api_ai_status():
+    llm = get_llm()
+    available = llm.is_available()
+    models = llm.list_models() if available else []
+    return jsonify({"available": available, "model": llm.model, "models": models})
+
+@app.route('/api/ai/analyze', methods=['POST'])
+def api_ai_analyze():
+    try:
+        data = request.json or {}
+        mode = data.get('mode', 'signal')   # signal | options | score | commentary
+
+        llm = get_llm()
+        if not llm.is_available():
+            return jsonify({"error": "Ollama not running. Start with: ollama run llama3.2"}), 503
+
+        if mode == 'signal':
+            symbol = data.get('symbol', 'UNKNOWN')
+            result = llm.analyze_signal(symbol, data.get('signal', {}))
+        elif mode == 'options':
+            symbol = data.get('symbol', 'UNKNOWN')
+            result = llm.options_thesis(symbol, data.get('chain', {}))
+        elif mode == 'score':
+            symbol = data.get('symbol', 'UNKNOWN')
+            result = llm.score_trade(symbol, data.get('context', {}))
+        elif mode == 'commentary':
+            prompt = data.get('prompt', '')
+            if not prompt:
+                return jsonify({"error": "prompt required for commentary mode"}), 400
+            result = llm.commentary(prompt)
+        else:
+            return jsonify({"error": f"Unknown mode: {mode}"}), 400
+
+        return jsonify({"status": "ok", "mode": mode, "response": result})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     init_services()
