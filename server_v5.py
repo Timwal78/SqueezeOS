@@ -626,17 +626,17 @@ def worker_beast_paper():
             if discord:
                 perf = get_service("perf")
                 total_pnl = 0.0
-                shadow_count = 0
+                active_trades = []
                 if perf:
                     summary = perf.get_summary()
                     total_pnl = summary.get('total_pnl', 0.0)
                 exec_eng_d = get_service("exec")
                 if exec_eng_d:
-                    shadow_count = len(exec_eng_d.get_active_trades())
+                    active_trades = exec_eng_d.get_active_trades()
                 discord.fire_beast_paper_summary(
                     hedger_count=len(beast_paper_data['hedger_snapshots']),
                     gex_count=len(beast_paper_data['gex_regimes']),
-                    shadow_trades=shadow_count,
+                    active_trades=active_trades,
                     total_pnl=total_pnl
                 )
             
