@@ -1456,6 +1456,31 @@ def api_ai_analyze():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# ── Credit Beast — AI Credit Repair PWA ──────────────────────────────────────
+
+@app.route('/credit')
+def credit_app():
+    return send_from_directory('.', 'credit_repair.html')
+
+@app.route('/credit_manifest.json')
+def credit_manifest():
+    return send_from_directory('.', 'credit_manifest.json')
+
+@app.route('/credit_sw.js')
+def credit_sw():
+    return send_from_directory('.', 'credit_sw.js'), 200, {'Content-Type': 'application/javascript'}
+
+# Register all /api/credit/* routes from credit_repair_server
+try:
+    from credit_repair_server import app as _credit_app
+    for rule in _credit_app.url_map.iter_rules():
+        if rule.rule.startswith('/api/credit'):
+            endpoint = 'credit_' + rule.endpoint
+            app.add_url_rule(rule.rule, endpoint, _credit_app.view_functions[rule.endpoint], methods=list(rule.methods - {'HEAD', 'OPTIONS'}))
+    logger.info("[CREDIT BEAST] Routes registered at /credit and /api/credit/*")
+except Exception as e:
+    logger.warning(f"[CREDIT BEAST] Could not register routes: {e}")
+
 if __name__ == "__main__":
     init_services()
     # Register BEAST webhook routes (TradingView Pine → SqueezeOS → Discord)
