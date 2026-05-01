@@ -1456,7 +1456,7 @@ def api_ai_analyze():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# ── Credit Beast — AI Credit Repair PWA ──────────────────────────────────────
+# ── Credit Beast — AI Credit Repair PWA (static files only) ─────────────────
 
 @app.route('/credit')
 def credit_app():
@@ -1469,13 +1469,6 @@ def credit_manifest():
 @app.route('/credit_sw.js')
 def credit_sw():
     return send_from_directory('.', 'credit_sw.js'), 200, {'Content-Type': 'application/javascript'}
-
-try:
-    from credit_repair_server import credit_bp
-    app.register_blueprint(credit_bp)
-    logger.info("[CREDIT BEAST] Blueprint registered — /credit and /api/credit/* live")
-except Exception as e:
-    logger.warning(f"[CREDIT BEAST] Blueprint failed: {e}")
 
 if __name__ == "__main__":
     init_services()
