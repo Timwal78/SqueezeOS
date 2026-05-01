@@ -417,7 +417,7 @@ class DiscordAlerts:
                 }]
             }
 
-            self._post(url, embed)
+            _llm_commentary_async(lambda e, u=url: self._post(u, e), embed, sym, lead)
             self._mark(key)
             sent += 1
             time.sleep(2.0)
@@ -588,7 +588,7 @@ class DiscordAlerts:
                 "timestamp": datetime.utcnow().isoformat(),
             }]
         }
-        self._post(url, embed)
+        _llm_commentary_async(lambda e, u=url: self._post(u, e), embed, ticker, signal_dict)
         self._mark(key)
 
     # ══════════════════════════════════════════════════════════
@@ -643,7 +643,7 @@ class DiscordAlerts:
                 "timestamp": datetime.utcnow().isoformat(),
             }]
         }
-        self._post(url, embed)
+        _llm_commentary_async(lambda e, u=url: self._post(u, e), embed, new_regime, regime_data)
         self._mark(key)
 
     # ══════════════════════════════════════════════════════════
@@ -727,7 +727,7 @@ class DiscordAlerts:
                 "timestamp": datetime.utcnow().isoformat(),
             }]
         }
-        self._post(url, embed)
+        _llm_commentary_async(lambda e, u=url: self._post(u, e), embed, sym, reversal_data)
         self._mark(key)
 
     # ══════════════════════════════════════════════════════════
@@ -782,7 +782,7 @@ class DiscordAlerts:
                     "timestamp": datetime.utcnow().isoformat(),
                 }]
             }
-            self._post(url, embed)
+            _llm_commentary_async(lambda e, u=url: self._post(u, e), embed, sym, hit)
             self._mark(key)
             time.sleep(1.0)
 
@@ -876,7 +876,7 @@ class DiscordAlerts:
                 "timestamp": datetime.utcnow().isoformat(),
             }]
         }
-        self._post(url, embed)
+        _llm_commentary_async(lambda e, u=url: self._post(u, e), embed, sym, trade_data)
 
     def fire_beast_hedge_dict(self, hedge_data: Dict, is_live: bool = False):
         """Send Discord notification when a BEAST hedger cycle executes a hedge decision."""
