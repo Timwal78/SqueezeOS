@@ -7,7 +7,7 @@ import json
 import uuid
 import time
 from datetime import datetime, timedelta
-from flask import Blueprint, request, jsonify, send_from_directory
+from flask import Blueprint, request, jsonify
 
 credit_bp = Blueprint('credit', __name__)
 
@@ -105,19 +105,7 @@ def escalation_needed(dispute):
     deadline = get_deadline(sent)
     return datetime.now() > deadline
 
-# ── Routes ──────────────────────────────────────────────────────────────────
-
-@credit_bp.route('/')
-def index():
-    return send_from_directory('.', 'credit_repair.html')
-
-@credit_bp.route('/manifest.json')
-def manifest():
-    return send_from_directory('.', 'credit_manifest.json')
-
-@credit_bp.route('/credit_sw.js')
-def sw():
-    return send_from_directory('.', 'credit_sw.js'), 200, {'Content-Type': 'application/javascript'}
+# ── Routes (API only — static files served by server_v5.py) ─────────────────
 
 @credit_bp.route('/api/credit/profile', methods=['GET', 'POST'])
 def profile():
