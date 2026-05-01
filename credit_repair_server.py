@@ -1,19 +1,15 @@
 """
 CREDIT REPAIR BEAST — AI-Powered Dispute Engine
-Auto-generates FCRA/FDCPA letters, tracks all 3 bureaus, escalates automatically.
-Deploy on Render free tier. Install on phone via homescreen save (PWA).
+Registered as a Flask Blueprint into server_v5.py.
 """
 import os
 import json
 import uuid
 import time
 from datetime import datetime, timedelta
-from flask import Flask, request, jsonify, send_from_directory
-from flask_cors import CORS
-from free_llm import get_llm
+from flask import Blueprint, request, jsonify, send_from_directory
 
-app = Flask(__name__, static_folder='.', static_url_path='')
-CORS(app)
+credit_bp = Blueprint('credit', __name__)
 
 DATA_FILE = 'credit_disputes.json'
 BUREAUS = ['equifax', 'experian', 'transunion']
@@ -111,19 +107,19 @@ def escalation_needed(dispute):
 
 # ── Routes ──────────────────────────────────────────────────────────────────
 
-@app.route('/')
+@credit_bp.route('/')
 def index():
     return send_from_directory('.', 'credit_repair.html')
 
-@app.route('/manifest.json')
+@credit_bp.route('/manifest.json')
 def manifest():
     return send_from_directory('.', 'credit_manifest.json')
 
-@app.route('/credit_sw.js')
+@credit_bp.route('/credit_sw.js')
 def sw():
     return send_from_directory('.', 'credit_sw.js'), 200, {'Content-Type': 'application/javascript'}
 
-@app.route('/api/credit/profile', methods=['GET', 'POST'])
+@credit_bp.route('/api/credit/profile', methods=['GET', 'POST'])
 def profile():
     data = load_data()
     if request.method == 'POST':
@@ -132,7 +128,7 @@ def profile():
         return jsonify({"status": "saved"})
     return jsonify(data.get('profile', {}))
 
-@app.route('/api/credit/items', methods=['GET'])
+@credit_bp.route('/api/credit/items', methods=['GET'])
 def get_items():
     data = load_data()
     items = data.get('items', [])
@@ -143,7 +139,7 @@ def get_items():
                 d['needs_escalation'] = True
     return jsonify(items)
 
-@app.route('/api/credit/items', methods=['POST'])
+@credit_bp.route('/api/credit/items', methods=['POST'])
 def add_item():
     data = load_data()
     item = request.json
@@ -154,14 +150,14 @@ def add_item():
     save_data(data)
     return jsonify({"status": "added", "id": item['id']})
 
-@app.route('/api/credit/items/<item_id>', methods=['DELETE'])
+@credit_bp.route('/api/credit/items/<item_id>', methods=['DELETE'])
 def delete_item(item_id):
     data = load_data()
     data['items'] = [i for i in data['items'] if i.get('id') != item_id]
     save_data(data)
     return jsonify({"status": "deleted"})
 
-@app.route('/api/credit/generate', methods=['POST'])
+@credit_bp.route('/api/credit/generate', methods=['POST'])
 def generate_letter():
     body = request.json or {}
     item_id     = body.get('item_id')
@@ -250,7 +246,7 @@ def generate_letter():
 
     return jsonify({"status": "ok", "letter": letter, "dispute_id": dispute['id']})
 
-@app.route('/api/credit/dispute/<item_id>/<dispute_id>/status', methods=['POST'])
+@credit_bp.route('/api/credit/dispute/<item_id>/<dispute_id>/status', methods=['POST'])
 def update_dispute_status(item_id, dispute_id):
     body   = request.json or {}
     status = body.get('status', 'PENDING')
@@ -270,7 +266,7 @@ def update_dispute_status(item_id, dispute_id):
     save_data(data)
     return jsonify({"status": "updated"})
 
-@app.route('/api/credit/score', methods=['GET', 'POST'])
+@credit_bp.route('/api/credit/score', methods=['GET', 'POST'])
 def score_log():
     data = load_data()
     if request.method == 'POST':
@@ -282,7 +278,7 @@ def score_log():
         return jsonify({"status": "logged"})
     return jsonify(data.get('score_log', []))
 
-@app.route('/api/credit/stats', methods=['GET'])
+@credit_bp.route('/api/credit/stats', methods=['GET'])
 def stats():
     data  = load_data()
     items = data.get('items', [])
@@ -308,6 +304,12 @@ def stats():
         "letters_generated": len(all_disputes),
     })
 
+# Standalone runner (optional — normally loaded as blueprint by server_v5.py)
 if __name__ == '__main__':
+    from flask import Flask
+    from flask_cors import CORS
+    standalone = Flask(__name__, static_folder='.', static_url_path='')
+    CORS(standalone)
+    standalone.register_blueprint(credit_bp)
     port = int(os.environ.get('CREDIT_PORT', 8183))
-    app.run(host='0.0.0.0', port=port, debug=False)
+    standalone.run(host='0.0.0.0', port=port, debug=False)
