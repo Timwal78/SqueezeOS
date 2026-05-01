@@ -26,6 +26,7 @@ from mean_reversion_engine import MeanReversionEngine
 from beast_webhook import register_beast_routes
 from iwm_odte_engine import IwmOdteEngine
 from kdp_sentinel_engine import KdpSentinelEngine
+from free_llm import get_llm
 
 # --- INITIALIZATION ---
 load_env_file()
@@ -1382,6 +1383,46 @@ def api_beast_events():
                 sse_queues.remove(q)
             
     return Response(stream(), mimetype='text/event-stream')
+
+# ── Free LLM (Ollama / local Llama) ──────────────────────────────────────────
+
+@app.route('/api/ai/status')
+def api_ai_status():
+    llm = get_llm()
+    available = llm.is_available()
+    models = llm.list_models() if available else []
+    return jsonify({"available": available, "model": llm.model, "models": models})
+
+@app.route('/api/ai/analyze', methods=['POST'])
+def api_ai_analyze():
+    try:
+        data = request.json or {}
+        mode = data.get('mode', 'signal')   # signal | options | score | commentary
+
+        llm = get_llm()
+        if not llm.is_available():
+            return jsonify({"error": "Ollama not running. Start with: ollama run llama3.2"}), 503
+
+        if mode == 'signal':
+            symbol = data.get('symbol', 'UNKNOWN')
+            result = llm.analyze_signal(symbol, data.get('signal', {}))
+        elif mode == 'options':
+            symbol = data.get('symbol', 'UNKNOWN')
+            result = llm.options_thesis(symbol, data.get('chain', {}))
+        elif mode == 'score':
+            symbol = data.get('symbol', 'UNKNOWN')
+            result = llm.score_trade(symbol, data.get('context', {}))
+        elif mode == 'commentary':
+            prompt = data.get('prompt', '')
+            if not prompt:
+                return jsonify({"error": "prompt required for commentary mode"}), 400
+            result = llm.commentary(prompt)
+        else:
+            return jsonify({"error": f"Unknown mode: {mode}"}), 400
+
+        return jsonify({"status": "ok", "mode": mode, "response": result})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     init_services()
