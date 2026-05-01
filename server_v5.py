@@ -290,7 +290,11 @@ def worker_scanner():
             quotes = dm.get_quotes(targets, fast_only=True)
             
             # MANIFESTO: $50 SWEET SPOT CAP — FAVORITES (IWM etc.) always pass
+            before = len(quotes)
             quotes = {s: q for s, q in quotes.items() if s in FAVORITES or q.get('price', 0) <= 50.0}
+            filtered = before - len(quotes)
+            if filtered:
+                logger.info(f"[SCANNER] Price cap filtered {filtered} symbols (>${50}), {len(quotes)} remaining")
             
             results = analyzer.analyze_batch(quotes)
             
@@ -631,12 +635,15 @@ def worker_beast_paper():
                     summary = perf.get_summary()
                     total_pnl = summary.get('total_pnl', 0.0)
                 exec_eng_d = get_service("exec")
+                recent_closed = []
                 if exec_eng_d:
                     active_trades = exec_eng_d.get_active_trades()
+                    recent_closed = exec_eng_d.get_trade_history()[:5]
                 discord.fire_beast_paper_summary(
                     hedger_count=len(beast_paper_data['hedger_snapshots']),
                     gex_count=len(beast_paper_data['gex_regimes']),
                     active_trades=active_trades,
+                    recent_closed=recent_closed,
                     total_pnl=total_pnl
                 )
             
@@ -1218,15 +1225,21 @@ def api_forced_move(symbol):
         return jsonify(fm.analyze(symbol.upper(), bars, vix))
     except Exception as e: return jsonify({"error": str(e)}), 500
 
+def _mask(val: str) -> str:
+    """Show only last 4 chars of a secret."""
+    if not val or len(val) <= 4:
+        return '••••'
+    return '••••' + val[-4:]
+
 @app.route('/api/settings')
 def get_settings():
     return jsonify({
-        'schwabKey': os.environ.get('SCHWAB_CLIENT_ID', 'cOb3GLiEmhfxGyfWUSDvaqqYayNUTVuCexRlzRbSumWvz5I6'),
-        'schwabSecret': os.environ.get('SCHWAB_CLIENT_SECRET', 'Uyn7D7MRvYE2TQ88jHNLLiC79p9RH3qB73OJaAEw1A3ElDm5QtgBwSR5Ei1uNX6I'),
-        'alpacaKey': os.environ.get('ALPACA_API_KEY', 'AKV39V1APUHWMFCQ2GA0'),
-        'alpacaSecret': os.environ.get('ALPACA_API_SECRET', 'edlztEfaib5gGj0hQbfoV4Ezm6vdy8FnuFfW9Mx9'),
-        'polyKey': os.environ.get('POLYGON_API_KEY', ''),
-        'webhook': os.environ.get('DISCORD_WEBHOOK_ALL', '')
+        'schwabKey':    _mask(os.environ.get('SCHWAB_CLIENT_ID', '')),
+        'schwabSecret': _mask(os.environ.get('SCHWAB_CLIENT_SECRET', '')),
+        'alpacaKey':    _mask(os.environ.get('ALPACA_API_KEY', '')),
+        'alpacaSecret': _mask(os.environ.get('ALPACA_API_SECRET', '')),
+        'polyKey':      _mask(os.environ.get('POLYGON_API_KEY', '')),
+        'webhook':      _mask(os.environ.get('DISCORD_WEBHOOK_ALL', '')),
     })
 
 def _update_env_key(key, value):

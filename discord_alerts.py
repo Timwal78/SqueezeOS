@@ -12,6 +12,7 @@ Configure in .env:
 import os
 import time
 import logging
+import threading
 import requests
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
@@ -21,14 +22,28 @@ from typing import List, Dict
 logger = logging.getLogger(__name__)
 
 
-def _llm_commentary(symbol: str, data: dict, timeout: int = 15) -> str:
-    """Non-blocking LLM commentary — returns empty string on any failure."""
-    try:
-        from free_llm import get_llm
-        llm = get_llm()
-        return llm.analyze_signal(symbol, data)
-    except Exception:
-        return ""
+def _llm_commentary_async(post_fn, embed: dict, symbol: str, data: dict):
+    """Fire-and-forget: post the embed immediately, then patch with AI commentary."""
+    post_fn(embed)
+
+    def _add_ai():
+        try:
+            from free_llm import get_llm
+            note = get_llm().analyze_signal(symbol, data)
+            if not note:
+                return
+            # Build a follow-up embed with just the AI note
+            ai_embed = {
+                "embeds": [{
+                    "description": f"🤖 **AI ANALYST — {symbol}**\n{note}",
+                    "color": embed["embeds"][0].get("color", 0x00BFFF),
+                }]
+            }
+            post_fn(ai_embed)
+        except Exception:
+            pass
+
+    threading.Thread(target=_add_ai, daemon=True).start()
 
 
 class DiscordAlerts:
@@ -256,10 +271,7 @@ class DiscordAlerts:
                     "timestamp": datetime.utcnow().isoformat(),
                 }]
             }
-            ai_note = _llm_commentary(sym, item)
-            if ai_note:
-                embed["embeds"][0]["fields"].append({"name": "🤖 AI ANALYST", "value": ai_note, "inline": False})
-            self._post(url, embed)
+            _llm_commentary_async(lambda e, u=url: self._post(u, e), embed, sym, item)
             self._mark(f'sq_{sym}')
             time.sleep(2.0)
 
@@ -915,7 +927,7 @@ class DiscordAlerts:
         self._post(url, embed)
         self._mark(key)
 
-    def fire_beast_paper_summary(self, hedger_count: int, gex_count: int, active_trades: list, total_pnl: float):
+    def fire_beast_paper_summary(self, hedger_count: int, gex_count: int, active_trades: list, total_pnl: float, recent_closed: list = None):
         """Periodic summary of BEAST paper trading — shows every open position with PnL."""
         if not self.enabled:
             return
@@ -961,6 +973,19 @@ class DiscordAlerts:
                 })
         else:
             fields.append({"name": "Open Positions", "value": "None", "inline": False})
+
+        if recent_closed:
+            closed_lines = []
+            for t in recent_closed:
+                sym    = t.get('symbol', '?')
+                side   = t.get('side', '?')
+                pnl    = t.get('pnl', 0.0)
+                entry  = t.get('entry_price', 0.0)
+                exited = t.get('current_price', 0.0)
+                reason = t.get('exit_reason', '?')
+                arrow  = '✅' if pnl >= 0 else '❌'
+                closed_lines.append(f"{arrow} **{sym}** {side} | Entry `${entry:.2f}` → `${exited:.2f}` | PnL `${pnl:+.2f}` | {reason}")
+            fields.append({"name": "📋 Recent Closed", "value": "\n".join(closed_lines), "inline": False})
 
         embed = {
             "embeds": [{
@@ -1039,10 +1064,7 @@ class DiscordAlerts:
                 "timestamp": datetime.utcnow().isoformat(),
             }]
         }
-        ai_note = _llm_commentary(sym, trade)
-        if ai_note:
-            embed["embeds"][0]["fields"].append({"name": "🤖 AI ANALYST", "value": ai_note, "inline": False})
-        self._post(url, embed)
+        _llm_commentary_async(lambda e, u=url: self._post(u, e), embed, sym, trade)
 
     # ══════════════════════════════════════════════════════════
     # AI TRADE DESK BRIDGE — Keep-Alive & Unified Alerts
