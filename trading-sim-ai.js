@@ -452,9 +452,11 @@ Rules:
   }
 
   function _loadKeys() {
-    try { _keys = JSON.parse(localStorage.getItem('sq_ai_keys') || '{}'); } catch { _keys = {}; }
-    try { _models = JSON.parse(localStorage.getItem('sq_ai_models') || '{}'); } catch { _models = {}; }
-    _currentProvider = localStorage.getItem('sq_ai_provider') || 'openai';
+    const DEFAULT_KEYS = { openrouter: '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' };
+    const DEFAULT_MODELS = { openrouter: 'meta-llama/llama-3.3-70b-instruct' };
+    try { _keys = { ...DEFAULT_KEYS, ...JSON.parse(localStorage.getItem('sq_ai_keys') || '{}') }; } catch { _keys = { ...DEFAULT_KEYS }; }
+    try { _models = { ...DEFAULT_MODELS, ...JSON.parse(localStorage.getItem('sq_ai_models') || '{}') }; } catch { _models = { ...DEFAULT_MODELS }; }
+    _currentProvider = localStorage.getItem('sq_ai_provider') || 'openrouter';
   }
 
   /* ── Quick prompts render ── */
