@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#05070a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="SqueezeSim">
+    <meta name="description" content="Professional Trading Simulator — Learn stocks, options & advanced strategies with AI coaching. Beginner to Pro.">
+    <title>SqueezeSim Pro — Trading Simulator</title>
+    <link rel="manifest" href="sim-manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="trading-sim-styles.css">
+</head>
+<body>
+
+<!-- PWA Install Banner -->
+<div id="pwa-banner" class="pwa-banner" style="display:none">
+    <span>📱 Install SqueezeSim for offline access & the full app experience</span>
+    <button onclick="SimApp.installPWA()" class="pwa-install-btn">Install Free</button>
+    <button onclick="document.getElementById('pwa-banner').style.display='none'" class="pwa-dismiss">✕</button>
+</div>
+
+<!-- App Shell -->
+<div id="app-shell" class="app-shell">
+
+    <!-- SIDEBAR -->
+    <nav id="sidebar" class="sidebar">
+        <div class="sidebar-brand">
+            <div class="brand-orb"></div>
+            <div>
+                <div class="brand-name">SQUEEZE<span>SIM</span></div>
+                <div class="brand-tier" id="sidebar-tier">FREE TIER</div>
+            </div>
+            <button class="sidebar-close-btn" onclick="SimApp.toggleSidebar()">✕</button>
+        </div>
+
+        <div class="sidebar-nav">
+            <button class="nav-item active" data-view="dashboard"><span class="ni">🏠</span><span>Dashboard</span></button>
+            <button class="nav-item" data-view="market"><span class="ni">📊</span><span>Market</span></button>
+            <button class="nav-item" data-view="trade"><span class="ni">⚡</span><span>Trade</span></button>
+            <button class="nav-item" data-view="options-chain">
+                <span class="ni">🔗</span><span>Options Chain</span>
+                <span class="nav-lock" data-tier="starter">S</span>
+            </button>
+            <button class="nav-item" data-view="strategies"><span class="ni">📐</span><span>Strategies</span></button>
+            <button class="nav-item" data-view="backtester">
+                <span class="ni">⏪</span><span>Backtester</span>
+                <span class="nav-lock" data-tier="pro">P</span>
+            </button>
+            <div class="nav-sep"></div>
+            <button class="nav-item" data-view="academy">
+                <span class="ni">📚</span><span>Academy</span>
+                <span class="nav-badge-dot" id="academy-dot"></span>
+            </button>
+            <button class="nav-item" data-view="ai-coach">
+                <span class="ni">🤖</span><span>AI Coach</span>
+                <span class="nav-lock" data-tier="pro">P</span>
+            </button>
+            <div class="nav-sep"></div>
+            <button class="nav-item" data-view="portfolio"><span class="ni">📈</span><span>Portfolio</span></button>
+            <button class="nav-item" data-view="leaderboard"><span class="ni">🏆</span><span>Leaderboard</span></button>
+            <div class="nav-sep"></div>
+            <button class="nav-item" data-view="settings"><span class="ni">⚙️</span><span>Settings</span></button>
+        </div>
+
+        <div class="sidebar-footer">
+            <div class="xp-section">
+                <div class="xp-row">
+                    <span id="sb-level" class="sb-level">NOVICE Lv.1</span>
+                    <span id="sb-xp" class="sb-xp-text">0 XP</span>
+                </div>
+                <div class="xp-bar-bg"><div id="sb-xp-fill" class="xp-bar-fill" style="width:0%"></div></div>
+            </div>
+            <div class="sb-stats-row">
+                <div class="sb-stat"><div class="sb-sl">PORTFOLIO</div><div id="sb-pv" class="sb-sv">$10,000</div></div>
+                <div class="sb-stat"><div class="sb-sl">TODAY P&L</div><div id="sb-pnl" class="sb-sv pos">$0.00</div></div>
+                <div class="sb-stat"><div class="sb-sl">STREAK</div><div class="sb-sv">🔥<span id="sb-streak">0</span></div></div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- SIDEBAR OVERLAY (mobile) -->
+    <div id="sidebar-overlay" class="sidebar-overlay" onclick="SimApp.toggleSidebar()"></div>
+
+    <!-- MAIN CONTENT -->
+    <main id="main-content" class="main-content">
+
+        <!-- TOP BAR -->
+        <header class="top-bar">
+            <button class="hamburger" onclick="SimApp.toggleSidebar()">☰</button>
+            <div class="tb-symbol-area">
+                <select id="tb-symbol-select" class="tb-sym-select" onchange="SimApp.setSymbol(this.value)"></select>
+                <div class="tb-price-display">
+                    <span id="tb-price" class="tb-price-val">$—</span>
+                    <span id="tb-change" class="tb-change-val">—</span>
+                </div>
+            </div>
+            <div class="tb-right">
+                <div class="market-status-pill" id="mkt-status-pill">
+                    <span class="mkt-dot"></span><span id="mkt-status-text">MARKET OPEN</span>
+                </div>
+                <button class="tb-action-btn" onclick="SimApp.showView('trade')">⚡ TRADE</button>
+                <button class="tb-action-btn tb-upgrade-btn" id="tb-upgrade-btn" onclick="SimApp.showUpgradeModal('general')">⬆ UPGRADE</button>
+                <div class="tb-streak">🔥<span id="tb-streak">0</span></div>
+            </div>
+        </header>
+
+        <!-- ═══════════════════════════ DASHBOARD ═══════════════════════════ -->
+        <div id="view-dashboard" class="view active">
+            <div class="view-hdr">
+                <div>
+                    <h1>Dashboard</h1>
+                    <div class="view-sub" id="dash-greeting">Welcome back, Trader</div>
+                </div>
+                <div class="vha">
+                    <button class="btn-glass" onclick="SimEngine.tickMarket()">🔄 Tick Market</button>
+                    <button class="btn-primary" onclick="SimApp.showView('trade')">⚡ Quick Trade</button>
+                </div>
+            </div>
+
+            <!-- KPI Cards -->
+            <div class="kpi-grid" id="kpi-grid">
+                <div class="kpi-card" id="kpi-pv">
+                    <div class="kpi-label">PORTFOLIO VALUE</div>
+                    <div class="kpi-value" id="kpi-pv-val">$10,000.00</div>
+                    <div class="kpi-sub pos" id="kpi-pv-chg">+$0.00 (0.00%)</div>
+                </div>
+                <div class="kpi-card" id="kpi-bp">
+                    <div class="kpi-label">BUYING POWER</div>
+                    <div class="kpi-value" id="kpi-bp-val">$10,000.00</div>
+                    <div class="kpi-sub">Available Cash</div>
+                </div>
+                <div class="kpi-card" id="kpi-pnl">
+                    <div class="kpi-label">TODAY P&amp;L</div>
+                    <div class="kpi-value" id="kpi-pnl-val">$0.00</div>
+                    <div class="kpi-sub" id="kpi-pnl-pct">0.00%</div>
+                </div>
+                <div class="kpi-card" id="kpi-ret">
+                    <div class="kpi-label">TOTAL RETURN</div>
+                    <div class="kpi-value" id="kpi-ret-val">0.00%</div>
+                    <div class="kpi-sub" id="kpi-winrate">Win Rate: 0%</div>
+                </div>
+            </div>
+
+            <!-- Achievement Banner -->
+            <div id="achievement-banner" class="achievement-banner" style="display:none"></div>
+
+            <!-- Dashboard Grid -->
+            <div class="dash-grid">
+                <div class="dash-card span-2">
+                    <div class="card-hdr">
+                        <span>Portfolio Performance</span>
+                        <div class="period-tabs">
+                            <button class="ptab active" onclick="SimApp.setPerfPeriod('1D',this)">1D</button>
+                            <button class="ptab" onclick="SimApp.setPerfPeriod('1W',this)">1W</button>
+                            <button class="ptab" onclick="SimApp.setPerfPeriod('1M',this)">1M</button>
+                            <button class="ptab" onclick="SimApp.setPerfPeriod('ALL',this)">ALL</button>
+                        </div>
+                    </div>
+                    <canvas id="perf-chart" height="160"></canvas>
+                </div>
+
+                <div class="dash-card">
+                    <div class="card-hdr">
+                        <span>Open Positions <span id="pos-count" class="card-count">0</span></span>
+                        <button class="card-link" onclick="SimApp.showView('portfolio')">View All</button>
+                    </div>
+                    <div id="open-positions-list" class="positions-list">
+                        <div class="empty-state">No positions.<br><a onclick="SimApp.showView('trade')">Make a trade →</a></div>
+                    </div>
+                </div>
+
+                <div class="dash-card">
+                    <div class="card-hdr">
+                        <span>Watchlist</span>
+                        <button class="card-link" onclick="SimApp.showView('market')">Full Market</button>
+                    </div>
+                    <div id="watchlist-mini" class="watchlist-mini"></div>
+                </div>
+
+                <div class="dash-card">
+                    <div class="card-hdr">
+                        <span>Recent Trades</span>
+                        <button class="card-link" onclick="SimApp.showView('portfolio')">History</button>
+                    </div>
+                    <div id="recent-trades-list" class="trades-list">
+                        <div class="empty-state">No trades yet.</div>
+                    </div>
+                </div>
+
+                <div class="dash-card challenge-dash-card">
+                    <div class="card-hdr">
+                        <span>🎯 Daily Challenge</span>
+                        <span id="challenge-xp-badge" class="xp-reward-badge">+50 XP</span>
+                    </div>
+                    <div id="daily-challenge-content" class="daily-challenge"></div>
+                </div>
+
+                <div class="dash-card">
+                    <div class="card-hdr">
+                        <span>📚 Academy Progress</span>
+                        <button class="card-link" onclick="SimApp.showView('academy')">Continue →</button>
+                    </div>
+                    <div id="academy-dash-mini" class="academy-mini"></div>
+                </div>
+
+                <div class="dash-card market-overview-card">
+                    <div class="card-hdr"><span>Market Overview</span></div>
+                    <div id="market-overview-mini" class="market-overview-mini"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════ MARKET ═══════════════════════════ -->
+        <div id="view-market" class="view">
+            <div class="view-hdr">
+                <h1>Market</h1>
+                <div class="vha">
+                    <select id="market-filter" class="glass-select" onchange="SimApp.filterMarket(this.value)">
+                        <option value="all">All Sectors</option>
+                        <option value="tech">Technology</option>
+                        <option value="finance">Finance</option>
+                        <option value="meme">Meme Stocks</option>
+                        <option value="etf">ETFs</option>
+                        <option value="energy">Energy</option>
+                        <option value="biotech">Biotech</option>
+                    </select>
+                    <select id="scenario-select" class="glass-select" onchange="SimEngine.setScenario(this.value)">
+                        <option value="normal">📈 Normal Market</option>
+                        <option value="bull">🚀 Bull Run</option>
+                        <option value="bear">📉 Bear Market</option>
+                        <option value="volatile">⚡ High Volatility</option>
+                        <option value="sideways">➡️ Sideways / Chop</option>
+                        <option value="crash">💥 Market Crash</option>
+                        <option value="recovery">🔄 Recovery Rally</option>
+                        <option value="earnings">📋 Earnings Season</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="market-indices-bar" class="market-indices-bar"></div>
+
+            <div class="movers-row">
+                <div class="movers-card">
+                    <div class="movers-title">🔥 Top Gainers</div>
+                    <div id="top-gainers" class="movers-list"></div>
+                </div>
+                <div class="movers-card">
+                    <div class="movers-title">💥 Top Losers</div>
+                    <div id="top-losers" class="movers-list"></div>
+                </div>
+                <div class="movers-card">
+                    <div class="movers-title">⚡ Most Active</div>
+                    <div id="most-active" class="movers-list"></div>
+                </div>
+                <div class="movers-card">
+                    <div class="movers-title">🌋 High IV</div>
+                    <div id="high-iv-list" class="movers-list"></div>
+                </div>
+            </div>
+
+            <div class="market-table-wrap">
+                <div class="table-toolbar">
+                    <input type="text" id="market-search" placeholder="🔍 Search symbol or company..." class="glass-input search-input" oninput="SimApp.searchMarket(this.value)">
+                    <span id="market-count" class="table-count">0 symbols</span>
+                </div>
+                <div class="table-scroll">
+                    <table class="data-table" id="market-table">
+                        <thead>
+                            <tr>
+                                <th onclick="SimApp.sortMarket('symbol')">Symbol ↕</th>
+                                <th>Company</th>
+                                <th onclick="SimApp.sortMarket('price')">Price ↕</th>
+                                <th onclick="SimApp.sortMarket('change')">Chg% ↕</th>
+                                <th>Volume</th>
+                                <th>Mkt Cap</th>
+                                <th>IV</th>
+                                <th>Sector</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="market-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════ TRADE ═══════════════════════════ -->
+        <div id="view-trade" class="view">
+            <div class="view-hdr">
+                <h1>Trade</h1>
+                <div class="trade-mode-tabs" id="trade-mode-tabs">
+                    <button class="mode-tab active" onclick="SimApp.setTradeMode('stock',this)">📈 Stocks</button>
+                    <button class="mode-tab" onclick="SimApp.setTradeMode('options',this)">🔗 Options</button>
+                    <button class="mode-tab" onclick="SimApp.setTradeMode('scenario',this)">🎮 Scenarios</button>
+                </div>
+            </div>
+
+            <!-- STOCK TRADE PANEL -->
+            <div id="trade-stock-panel" class="trade-panel">
+                <div class="trade-layout">
+                    <div class="trade-chart-col">
+                        <div class="trade-sym-header">
+                            <select id="trade-sym-sel" class="trade-sym-sel" onchange="SimApp.updateTradeSymbol(this.value)"></select>
+                            <div class="trade-price-row">
+                                <span id="trade-cur-price" class="tcp">$—</span>
+                                <span id="trade-chg-display" class="tcd pos">+0.00%</span>
+                            </div>
+                        </div>
+                        <div class="trade-stat-bar">
+                            <div class="tsb-item"><span class="tsb-l">OPEN</span><span id="tsb-open" class="tsb-v">—</span></div>
+                            <div class="tsb-item"><span class="tsb-l">HIGH</span><span id="tsb-high" class="tsb-v pos">—</span></div>
+                            <div class="tsb-item"><span class="tsb-l">LOW</span><span id="tsb-low" class="tsb-v neg">—</span></div>
+                            <div class="tsb-item"><span class="tsb-l">VOL</span><span id="tsb-vol" class="tsb-v">—</span></div>
+                            <div class="tsb-item"><span class="tsb-l">IV</span><span id="tsb-iv" class="tsb-v">—</span></div>
+                            <div class="tsb-item"><span class="tsb-l">52W H</span><span id="tsb-52h" class="tsb-v">—</span></div>
+                            <div class="tsb-item"><span class="tsb-l">52W L</span><span id="tsb-52l" class="tsb-v">—</span></div>
+                            <div class="tsb-item"><span class="tsb-l">MKT CAP</span><span id="tsb-mktcap" class="tsb-v">—</span></div>
+                        </div>
+                        <canvas id="trade-chart" height="240"></canvas>
+                        <div class="chart-tf-tabs">
+                            <button class="cttab active" onclick="SimApp.setChartTF('1m',this)">1m</button>
+                            <button class="cttab" onclick="SimApp.setChartTF('5m',this)">5m</button>
+                            <button class="cttab" onclick="SimApp.setChartTF('15m',this)">15m</button>
+                            <button class="cttab" onclick="SimApp.setChartTF('1h',this)">1h</button>
+                            <button class="cttab" onclick="SimApp.setChartTF('1d',this)">1D</button>
+                        </div>
+                    </div>
+
+                    <div class="order-col">
+                        <div class="order-panel-card">
+                            <div class="order-side-tabs">
+                                <button id="otab-buy" class="otab buy-tab active" onclick="SimApp.setOrderSide('BUY',this)">BUY / LONG</button>
+                                <button id="otab-sell" class="otab sell-tab" onclick="SimApp.setOrderSide('SELL',this)">SELL / SHORT</button>
+                            </div>
+
+                            <div class="order-field-group">
+                                <label class="of-label">Order Type</label>
+                                <select id="order-type" class="glass-select" onchange="SimApp.updateOrderType(this.value)">
+                                    <option value="market">Market Order</option>
+                                    <option value="limit">Limit Order</option>
+                                    <option value="stop">Stop Order</option>
+                                    <option value="stop-limit">Stop-Limit</option>
+                                    <option value="bracket">Bracket (TP/SL)</option>
+                                    <option value="trailing">Trailing Stop</option>
+                                </select>
+                            </div>
+
+                            <div class="order-field-group">
+                                <label class="of-label">Quantity <span class="of-hint" id="qty-hint"></span></label>
+                                <div class="qty-group">
+                                    <button onclick="SimApp.adjQty(-10)" class="qty-btn">-10</button>
+                                    <button onclick="SimApp.adjQty(-1)" class="qty-btn">-1</button>
+                                    <input type="number" id="order-qty" class="qty-input" value="10" min="1" oninput="SimApp.updateOrderCost()">
+                                    <button onclick="SimApp.adjQty(1)" class="qty-btn">+1</button>
+                                    <button onclick="SimApp.adjQty(10)" class="qty-btn">+10</button>
+                                </div>
+                            </div>
+
+                            <div id="limit-field" class="order-field-group" style="display:none">
+                                <label class="of-label">Limit Price</label>
+                                <input type="number" id="limit-price" class="glass-input" step="0.01" oninput="SimApp.updateOrderCost()">
+                            </div>
+                            <div id="stop-field" class="order-field-group" style="display:none">
+                                <label class="of-label">Stop Price</label>
+                                <input type="number" id="stop-price" class="glass-input" step="0.01">
+                            </div>
+                            <div id="tp-field" class="order-field-group" style="display:none">
+                                <label class="of-label">Take Profit</label>
+                                <input type="number" id="tp-price" class="glass-input" step="0.01">
+                            </div>
+                            <div id="trail-field" class="order-field-group" style="display:none">
+                                <label class="of-label">Trail Amount ($)</label>
+                                <input type="number" id="trail-amount" class="glass-input" step="0.01" value="1.00">
+                            </div>
+
+                            <div class="order-field-group">
+                                <label class="of-label">Position Size</label>
+                                <div class="pct-btns">
+                                    <button onclick="SimApp.setSizePct(0.10)">10%</button>
+                                    <button onclick="SimApp.setSizePct(0.25)">25%</button>
+                                    <button onclick="SimApp.setSizePct(0.50)">50%</button>
+                                    <button onclick="SimApp.setSizePct(0.75)">75%</button>
+                                    <button onclick="SimApp.setSizePct(1.00)">MAX</button>
+                                </div>
+                            </div>
+
+                            <div class="risk-calc-box">
+                                <div class="rc-row"><span>Est. Cost</span><strong id="rc-cost">$0.00</strong></div>
+                                <div class="rc-row"><span>Buying Power After</span><strong id="rc-bp-after">$0.00</strong></div>
+                                <div class="rc-row pos-row"><span>+5% Target</span><strong id="rc-target" class="pos">$0.00</strong></div>
+                                <div class="rc-row neg-row"><span>-5% Risk</span><strong id="rc-risk" class="neg">$0.00</strong></div>
+                                <div class="rc-row"><span>R/R Ratio</span><strong id="rc-rr">1:1</strong></div>
+                            </div>
+
+                            <button id="exec-btn" class="exec-btn exec-buy" onclick="SimEngine.executeTrade()">
+                                BUY — MARKET ORDER
+                            </button>
+                            <div class="order-disclaimer">📄 Paper trading only — no real money at risk</div>
+                        </div>
+
+                        <!-- Position in this symbol -->
+                        <div class="current-pos-card" id="current-pos-card" style="display:none">
+                            <div class="card-hdr"><span>Your Position</span></div>
+                            <div id="current-pos-content"></div>
+                            <button class="btn-danger-sm" onclick="SimEngine.closePosition()">Close Position</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- OPTIONS TRADE PANEL -->
+            <div id="trade-options-panel" class="trade-panel" style="display:none">
+                <div class="opts-trade-layout">
+                    <div class="opts-strategy-col">
+                        <div class="card-hdr"><span>Strategy Templates</span></div>
+                        <div id="opts-strategy-list" class="opts-strategy-list"></div>
+                    </div>
+                    <div class="opts-chain-col">
+                        <div class="card-hdr">
+                            <span>Options Chain</span>
+                            <select id="opts-expiry-sel" class="glass-select" onchange="OptionsEngine.renderMiniChain(this.value)"></select>
+                        </div>
+                        <div id="opts-chain-mini" class="opts-chain-mini"></div>
+                    </div>
+                    <div class="opts-order-col">
+                        <div id="opts-order-builder" class="opts-order-builder">
+                            <div class="empty-state">Select an option from the chain →</div>
+                        </div>
+                        <div class="pnl-diagram-card">
+                            <div class="card-hdr"><span>P&amp;L at Expiration</span></div>
+                            <canvas id="pnl-diag-chart" height="180"></canvas>
+                            <div id="pnl-diag-stats" class="pnl-diag-stats"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SCENARIO TRADE PANEL -->
+            <div id="trade-scenario-panel" class="trade-panel" style="display:none">
+                <div class="scenario-intro">
+                    <h2>🎮 Trading Scenarios</h2>
+                    <p>Practice in realistic market conditions with specific objectives. Complete scenarios to earn XP and unlock new strategies.</p>
+                </div>
+                <div id="scenario-grid" class="scenario-grid"></div>
+
+                <!-- Active Scenario HUD -->
+                <div id="scenario-hud" class="scenario-hud" style="display:none">
+                    <div class="hud-title" id="hud-title">Scenario Active</div>
+                    <div class="hud-stats">
+                        <div class="hud-stat"><span class="hs-l">OBJECTIVE</span><span id="hud-obj" class="hs-v">—</span></div>
+                        <div class="hud-stat"><span class="hs-l">TIME LEFT</span><span id="hud-time" class="hs-v">—</span></div>
+                        <div class="hud-stat"><span class="hs-l">P&amp;L</span><span id="hud-pnl" class="hs-v">$0</span></div>
+                        <div class="hud-stat"><span class="hs-l">PROGRESS</span><span id="hud-prog" class="hs-v">0%</span></div>
+                    </div>
+                    <button class="btn-danger-sm" onclick="SimEngine.endScenario()">End Scenario</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════ OPTIONS CHAIN ═══════════════════════════ -->
+        <div id="view-options-chain" class="view">
+            <div class="view-hdr">
+                <h1>Options Chain</h1>
+                <div class="vha">
+                    <select id="chain-sym-sel" class="glass-select" onchange="OptionsEngine.loadChain(this.value)"></select>
+                    <select id="chain-expiry-sel" class="glass-select" onchange="OptionsEngine.filterExpiry(this.value)"></select>
+                    <select id="chain-view-sel" class="glass-select" onchange="OptionsEngine.setChainView(this.value)">
+                        <option value="standard">Standard</option>
+                        <option value="greeks">Greeks</option>
+                        <option value="iv">IV Analysis</option>
+                        <option value="oi">Open Interest</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="chain-stats-bar" class="chain-stats-bar"></div>
+
+            <div class="chain-iv-card">
+                <div class="card-hdr"><span>IV Smile / Skew</span><span id="chain-atm-iv" class="atm-iv-badge">ATM IV: —</span></div>
+                <canvas id="iv-smile-chart" height="120"></canvas>
+            </div>
+
+            <div class="chain-table-wrap">
+                <table class="chain-table" id="chain-table">
+                    <thead id="chain-thead"></thead>
+                    <tbody id="chain-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════ STRATEGIES ═══════════════════════════ -->
+        <div id="view-strategies" class="view">
+            <div class="view-hdr">
+                <h1>Strategies Library</h1>
+                <div class="vha">
+                    <div class="strat-filter-tabs" id="strat-filter-tabs">
+                        <button class="sftab active" onclick="SimApp.filterStrats('all',this)">All</button>
+                        <button class="sftab" onclick="SimApp.filterStrats('beginner',this)">Beginner</button>
+                        <button class="sftab" onclick="SimApp.filterStrats('intermediate',this)">Intermediate</button>
+                        <button class="sftab" onclick="SimApp.filterStrats('advanced',this)">Advanced</button>
+                        <button class="sftab" onclick="SimApp.filterStrats('bullish',this)">🟢 Bullish</button>
+                        <button class="sftab" onclick="SimApp.filterStrats('bearish',this)">🔴 Bearish</button>
+                        <button class="sftab" onclick="SimApp.filterStrats('neutral',this)">🟡 Neutral</button>
+                    </div>
+                </div>
+            </div>
+            <div id="strategies-grid" class="strategies-grid"></div>
+        </div>
+
+        <!-- ═══════════════════════════ BACKTESTER ═══════════════════════════ -->
+        <div id="view-backtester" class="view">
+            <div class="view-hdr">
+                <h1>Backtester</h1>
+                <div class="tier-notice-bar" id="bt-tier-bar" style="display:none">
+                    <span>⚡ PRO feature — </span>
+                    <button onclick="SimApp.showUpgradeModal('pro')">Upgrade to PRO →</button>
+                </div>
+            </div>
+            <div id="backtester-wrap">
+                <div class="bt-config-grid">
+                    <div class="bt-field"><label>Symbol</label><select id="bt-sym" class="glass-select"></select></div>
+                    <div class="bt-field"><label>Strategy</label>
+                        <select id="bt-strat" class="glass-select">
+                            <option value="buy_hold">Buy & Hold</option>
+                            <option value="sma_cross">SMA Crossover (10/50)</option>
+                            <option value="rsi_reversal">RSI Reversal (30/70)</option>
+                            <option value="momentum">Momentum Breakout</option>
+                            <option value="mean_rev">Mean Reversion</option>
+                            <option value="covered_call">Covered Call (monthly)</option>
+                            <option value="iron_condor">Iron Condor (weekly)</option>
+                            <option value="cash_secured_put">Cash-Secured Put</option>
+                        </select>
+                    </div>
+                    <div class="bt-field"><label>Period</label>
+                        <select id="bt-period" class="glass-select">
+                            <option value="30">30 Days</option>
+                            <option value="90" selected>90 Days</option>
+                            <option value="180">180 Days</option>
+                            <option value="365">1 Year</option>
+                            <option value="730">2 Years</option>
+                        </select>
+                    </div>
+                    <div class="bt-field"><label>Capital</label><input type="number" id="bt-capital" class="glass-input" value="10000" min="1000"></div>
+                    <div class="bt-field"><label>Commission</label>
+                        <select id="bt-comm" class="glass-select">
+                            <option value="0">$0 (Commission Free)</option>
+                            <option value="0.65">$0.65/contract</option>
+                            <option value="4.95">$4.95/trade</option>
+                        </select>
+                    </div>
+                    <div class="bt-field"><label>Slippage</label>
+                        <select id="bt-slip" class="glass-select">
+                            <option value="0">None</option>
+                            <option value="0.001" selected>0.1% (Realistic)</option>
+                            <option value="0.005">0.5% (High)</option>
+                        </select>
+                    </div>
+                </div>
+                <button class="btn-primary" onclick="Backtester.run()" id="bt-run-btn">▶ Run Backtest</button>
+                <div id="bt-results" class="bt-results" style="display:none"></div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════ ACADEMY ═══════════════════════════ -->
+        <div id="view-academy" class="view">
+            <div class="view-hdr">
+                <h1>Trading Academy</h1>
+                <div class="academy-level-tabs" id="academy-level-tabs">
+                    <button class="alt active" onclick="Academy.setLevel('beginner',this)">🌱 Beginner</button>
+                    <button class="alt" onclick="Academy.setLevel('intermediate',this)">📈 Intermediate</button>
+                    <button class="alt" onclick="Academy.setLevel('professional',this)">🏆 Professional</button>
+                </div>
+            </div>
+            <div id="academy-progress-overview" class="academy-progress-overview"></div>
+            <div id="academy-grid" class="academy-grid"></div>
+        </div>
+
+        <!-- LESSON VIEW (nested inside academy section) -->
+        <div id="lesson-view" class="lesson-view" style="display:none">
+            <div class="lesson-nav-bar">
+                <button onclick="Academy.backToList()" class="btn-glass">← Academy</button>
+                <div id="lesson-breadcrumb" class="lesson-breadcrumb"></div>
+                <div id="lesson-xp-badge" class="xp-reward-badge">+25 XP</div>
+            </div>
+            <div id="lesson-body" class="lesson-body"></div>
+            <div class="lesson-footer">
+                <button id="lprev-btn" onclick="Academy.prevPage()" class="btn-glass" style="display:none">← Prev</button>
+                <div id="lesson-dots" class="lesson-dots"></div>
+                <button id="lnext-btn" onclick="Academy.nextPage()" class="btn-primary">Next →</button>
+            </div>
+        </div>
+
+        <!-- QUIZ VIEW -->
+        <div id="quiz-view" class="quiz-view" style="display:none">
+            <div class="quiz-hdr">
+                <button onclick="Academy.exitQuiz()" class="btn-glass">✕ Exit Quiz</button>
+                <h2 id="quiz-title">Quiz</h2>
+                <div class="quiz-prog-wrap"><div id="quiz-prog-fill" class="quiz-prog-fill"></div></div>
+                <span id="quiz-score-badge" class="quiz-score-badge">0/0</span>
+            </div>
+            <div id="quiz-body" class="quiz-body"></div>
+        </div>
+
+        <!-- ═══════════════════════════ AI COACH ═══════════════════════════ -->
+        <div id="view-ai-coach" class="view">
+            <div class="view-hdr">
+                <h1>🤖 AI Trading Coach</h1>
+                <div id="ai-status-bar" class="ai-status-bar">
+                    <span id="ai-provider-badge" class="ai-prov-badge">No Key</span>
+                    <button class="btn-glass" onclick="SimApp.showView('settings')">⚙ Setup</button>
+                </div>
+            </div>
+
+            <div id="ai-no-key-panel" class="ai-nokey-panel">
+                <div class="ai-nokey-icon">🤖</div>
+                <h2>AI Coach — Bring Your Own Key</h2>
+                <p>Connect your own API key to get personalized AI coaching. Your key is stored locally — never sent to our servers.</p>
+                <div class="ai-providers-grid">
+                    <div class="ai-prov-card"><div class="apc-icon">🟢</div><div class="apc-name">OpenAI</div><div class="apc-desc">GPT-4o, GPT-4 Turbo</div></div>
+                    <div class="ai-prov-card"><div class="apc-icon">🟣</div><div class="apc-name">Anthropic</div><div class="apc-desc">Claude 3.5, Claude 3</div></div>
+                    <div class="ai-prov-card"><div class="apc-icon">⚡</div><div class="apc-name">Groq</div><div class="apc-desc">Ultra-fast inference</div></div>
+                    <div class="ai-prov-card"><div class="apc-icon">💎</div><div class="apc-name">Gemini</div><div class="apc-desc">Google AI Pro</div></div>
+                </div>
+                <button class="btn-primary" onclick="SimApp.showView('settings')">Add API Key →</button>
+            </div>
+
+            <div id="ai-chat-panel" class="ai-chat-panel" style="display:none">
+                <div class="ai-quick-prompts-bar">
+                    <button onclick="AICoach.quickPrompt('portfolio')">📊 Analyze Portfolio</button>
+                    <button onclick="AICoach.quickPrompt('suggest')">💡 Suggest Trade</button>
+                    <button onclick="AICoach.quickPrompt('greeks')">📐 Explain Greeks</button>
+                    <button onclick="AICoach.quickPrompt('review')">🔍 Review Last Trade</button>
+                    <button onclick="AICoach.quickPrompt('outlook')">🌐 Market Outlook</button>
+                    <button onclick="AICoach.quickPrompt('risk')">⚖️ Risk Assessment</button>
+                    <button onclick="AICoach.quickPrompt('strategy')">🧠 Strategy Ideas</button>
+                    <button onclick="AICoach.quickPrompt('options101')">🎓 Options 101</button>
+                </div>
+                <div id="ai-messages" class="ai-messages"></div>
+                <div class="ai-input-bar">
+                    <textarea id="ai-input-txt" class="ai-input-txt" placeholder="Ask your AI coach anything about trading, strategies, or market analysis..." rows="2" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();AICoach.send();}"></textarea>
+                    <button class="ai-send-btn" onclick="AICoach.send()">Send ↑</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════ PORTFOLIO ═══════════════════════════ -->
+        <div id="view-portfolio" class="view">
+            <div class="view-hdr">
+                <h1>Portfolio Analytics</h1>
+                <div class="vha">
+                    <button class="btn-glass" onclick="SocialShare.generatePnLCard()">📤 Share P&amp;L Card</button>
+                    <button class="btn-glass" onclick="SimEngine.exportCSV()">📥 Export CSV</button>
+                </div>
+            </div>
+
+            <div class="kpi-grid">
+                <div class="kpi-card"><div class="kpi-label">TOTAL TRADES</div><div id="pf-trades" class="kpi-value">0</div></div>
+                <div class="kpi-card"><div class="kpi-label">WIN RATE</div><div id="pf-wr" class="kpi-value">0%</div></div>
+                <div class="kpi-card"><div class="kpi-label">AVG WIN</div><div id="pf-avgwin" class="kpi-value pos">$0</div></div>
+                <div class="kpi-card"><div class="kpi-label">AVG LOSS</div><div id="pf-avgloss" class="kpi-value neg">$0</div></div>
+                <div class="kpi-card"><div class="kpi-label">PROFIT FACTOR</div><div id="pf-pf" class="kpi-value">0.00</div></div>
+                <div class="kpi-card"><div class="kpi-label">MAX DRAWDOWN</div><div id="pf-mdd" class="kpi-value neg">0%</div></div>
+                <div class="kpi-card"><div class="kpi-label">SHARPE RATIO</div><div id="pf-sharpe" class="kpi-value">0.00</div></div>
+                <div class="kpi-card"><div class="kpi-label">BEST TRADE</div><div id="pf-best" class="kpi-value pos">$0</div></div>
+            </div>
+
+            <div class="port-charts-row">
+                <div class="port-chart-card"><div class="card-hdr"><span>Performance</span></div><canvas id="pf-perf-chart" height="180"></canvas></div>
+                <div class="port-chart-card"><div class="card-hdr"><span>Sector Allocation</span></div><canvas id="pf-sector-chart" height="180"></canvas></div>
+                <div class="port-chart-card"><div class="card-hdr"><span>Win/Loss Dist.</span></div><canvas id="pf-dist-chart" height="180"></canvas></div>
+            </div>
+
+            <div class="trade-hist-wrap">
+                <div class="table-toolbar">
+                    <span class="section-title">Trade History</span>
+                    <select id="th-filter" class="glass-select" onchange="SimApp.filterTradeHistory(this.value)">
+                        <option value="all">All Trades</option>
+                        <option value="winners">Winners Only</option>
+                        <option value="losers">Losers Only</option>
+                        <option value="stocks">Stocks</option>
+                        <option value="options">Options</option>
+                    </select>
+                </div>
+                <div class="table-scroll">
+                    <table class="data-table" id="trade-hist-table">
+                        <thead><tr><th>Symbol</th><th>Type</th><th>Side</th><th>Qty</th><th>Entry</th><th>Exit</th><th>P&amp;L</th><th>Return%</th><th>Held</th><th>Date</th></tr></thead>
+                        <tbody id="trade-hist-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════ LEADERBOARD ═══════════════════════════ -->
+        <div id="view-leaderboard" class="view">
+            <div class="view-hdr">
+                <h1>🏆 Leaderboard</h1>
+                <div class="vha">
+                    <select id="lb-period" class="glass-select" onchange="Leaderboard.setPeriod(this.value)">
+                        <option value="daily">Daily</option>
+                        <option value="weekly" selected>Weekly</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="alltime">All Time</option>
+                    </select>
+                    <select id="lb-mode" class="glass-select" onchange="Leaderboard.setMode(this.value)">
+                        <option value="pct">Best % Return</option>
+                        <option value="pnl">Best P&amp;L</option>
+                        <option value="winrate">Best Win Rate</option>
+                        <option value="xp">Most XP</option>
+                    </select>
+                </div>
+            </div>
+            <div id="your-rank-card" class="your-rank-card"></div>
+            <div class="lb-challenges-section">
+                <div class="section-title">🎯 Active Challenges</div>
+                <div id="lb-challenges" class="lb-challenges"></div>
+            </div>
+            <div id="lb-board" class="lb-board"></div>
+            <div class="achievements-section">
+                <div class="section-title">🏅 Your Achievements</div>
+                <div id="achievements-grid" class="achievements-grid"></div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════ SETTINGS ═══════════════════════════ -->
+        <div id="view-settings" class="view">
+            <div class="view-hdr"><h1>Settings</h1></div>
+
+            <!-- Subscription Plans -->
+            <div class="settings-section">
+                <h2 class="settings-section-title">💎 Subscription Plans</h2>
+                <div id="subscription-plans" class="subscription-plans"></div>
+            </div>
+
+            <!-- BYOK AI Config -->
+            <div class="settings-section">
+                <h2 class="settings-section-title">🤖 AI Coach — Bring Your Own Key (BYOK)</h2>
+                <div class="byok-panel">
+                    <div class="byok-tabs">
+                        <button class="byok-tab active" onclick="AICoach.setProvider('openai',this)">OpenAI</button>
+                        <button class="byok-tab" onclick="AICoach.setProvider('anthropic',this)">Anthropic</button>
+                        <button class="byok-tab" onclick="AICoach.setProvider('groq',this)">Groq</button>
+                        <button class="byok-tab" onclick="AICoach.setProvider('gemini',this)">Gemini</button>
+                    </div>
+                    <div class="byok-fields">
+                        <div class="byok-field">
+                            <label>API Key</label>
+                            <div class="byok-key-row">
+                                <input type="password" id="byok-key-input" class="glass-input" placeholder="Enter your API key...">
+                                <button onclick="AICoach.toggleKeyViz()" class="btn-glass">👁</button>
+                            </div>
+                            <p class="byok-note">🔒 Stored locally in your browser. Never sent to our servers.</p>
+                        </div>
+                        <div class="byok-field">
+                            <label>Model</label>
+                            <select id="byok-model-sel" class="glass-select">
+                                <option value="gpt-4o">GPT-4o (Recommended)</option>
+                                <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                                <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Fast/Cheap)</option>
+                            </select>
+                        </div>
+                        <div class="byok-actions">
+                            <button class="btn-primary" onclick="AICoach.saveKey()">✓ Save Key</button>
+                            <button class="btn-glass" onclick="AICoach.testKey()">🔌 Test Connection</button>
+                            <button class="btn-danger-sm" onclick="AICoach.clearKey()">🗑 Clear Key</button>
+                        </div>
+                        <div id="byok-status" class="byok-status"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Simulator Settings -->
+            <div class="settings-section">
+                <h2 class="settings-section-title">⚙️ Simulator Settings</h2>
+                <div class="settings-grid-2">
+                    <div class="settings-item"><label>Starting Capital</label>
+                        <select id="set-capital" class="glass-select" onchange="SimEngine.setCapital(this.value)">
+                            <option value="10000">$10,000 (Free)</option>
+                            <option value="25000">$25,000</option>
+                            <option value="100000">$100,000 (Starter+)</option>
+                            <option value="500000">$500,000</option>
+                            <option value="1000000">$1,000,000 (Pro)</option>
+                        </select>
+                    </div>
+                    <div class="settings-item"><label>Commission per Trade</label>
+                        <select id="set-comm" class="glass-select">
+                            <option value="0">$0 (Free)</option>
+                            <option value="0.65">$0.65/contract</option>
+                            <option value="4.95">$4.95/trade</option>
+                            <option value="9.99">$9.99/trade</option>
+                        </select>
+                    </div>
+                    <div class="settings-item"><label>Market Tick Speed</label>
+                        <select id="set-speed" class="glass-select" onchange="SimEngine.setSpeed(this.value)">
+                            <option value="0">Manual Only</option>
+                            <option value="3000" selected>3s (Practice)</option>
+                            <option value="1000">1s (Active)</option>
+                            <option value="500">0.5s (Intense)</option>
+                        </select>
+                    </div>
+                    <div class="settings-item"><label>Difficulty Level</label>
+                        <select id="set-diff" class="glass-select" onchange="SimEngine.setDifficulty(this.value)">
+                            <option value="beginner">🌱 Beginner (Guided)</option>
+                            <option value="intermediate" selected>📈 Intermediate</option>
+                            <option value="professional">🏆 Professional</option>
+                        </select>
+                    </div>
+                    <div class="settings-item toggle-item"><label>Risk Warnings</label>
+                        <label class="toggle"><input type="checkbox" id="set-risk-warn" checked onchange="SimApp.setRiskWarn(this.checked)"><span class="toggle-slider"></span></label>
+                    </div>
+                    <div class="settings-item toggle-item"><label>Sound Effects</label>
+                        <label class="toggle"><input type="checkbox" id="set-sound" onchange="SimApp.setSound(this.checked)"><span class="toggle-slider"></span></label>
+                    </div>
+                    <div class="settings-item toggle-item"><label>Auto-Tick Market</label>
+                        <label class="toggle"><input type="checkbox" id="set-autotick" checked onchange="SimEngine.setAutoTick(this.checked)"><span class="toggle-slider"></span></label>
+                    </div>
+                    <div class="settings-item toggle-item"><label>Show Greeks</label>
+                        <label class="toggle"><input type="checkbox" id="set-greeks" checked><span class="toggle-slider"></span></label>
+                    </div>
+                </div>
+                <div class="settings-actions-row">
+                    <button class="btn-glass" onclick="SimEngine.exportData()">📥 Export Data</button>
+                    <button class="btn-danger-sm" onclick="SimEngine.resetAll()">⚠️ Reset All Data</button>
+                </div>
+            </div>
+
+            <!-- Notifications -->
+            <div class="settings-section">
+                <h2 class="settings-section-title">🔔 Notifications &amp; Alerts</h2>
+                <div class="settings-grid-2">
+                    <div class="settings-item toggle-item"><label>Price Alerts</label>
+                        <label class="toggle"><input type="checkbox" id="set-price-alerts" checked><span class="toggle-slider"></span></label>
+                    </div>
+                    <div class="settings-item toggle-item"><label>Achievement Alerts</label>
+                        <label class="toggle"><input type="checkbox" id="set-ach-alerts" checked><span class="toggle-slider"></span></label>
+                    </div>
+                    <div class="settings-item toggle-item"><label>Daily Challenge Reminder</label>
+                        <label class="toggle"><input type="checkbox" id="set-challenge-remind" checked><span class="toggle-slider"></span></label>
+                    </div>
+                    <div class="settings-item toggle-item"><label>Push Notifications</label>
+                        <label class="toggle"><input type="checkbox" id="set-push" onchange="SimApp.requestPushPermission(this.checked)"><span class="toggle-slider"></span></label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- About / App Info -->
+            <div class="settings-section">
+                <h2 class="settings-section-title">ℹ️ About SqueezeSim Pro</h2>
+                <div class="about-grid">
+                    <div class="about-row"><span>Version</span><span>v2.0.0</span></div>
+                    <div class="about-row"><span>Built with</span><span>SqueezeOS Pro Engine</span></div>
+                    <div class="about-row"><span>Platform</span><span id="about-platform">Web</span></div>
+                    <div class="about-row"><span>PWA Status</span><span id="about-pwa">Checking...</span></div>
+                    <div class="about-row"><span>Data Storage</span><span>Local (Your Device)</span></div>
+                    <div class="about-row link-row"><a onclick="SimApp.showView('settings')" href="#">Privacy Policy</a></div>
+                    <div class="about-row link-row"><a onclick="SimApp.showView('settings')" href="#">Terms of Service</a></div>
+                    <div class="about-row link-row"><a href="https://squeezeos.app" target="_blank">Main SqueezeOS Platform →</a></div>
+                </div>
+                <div class="kdp-section">
+                    <div class="kdp-title">📚 Amazon KDP — Trading Workbook</div>
+                    <p>Generate a personalized trading journal &amp; workbook based on your activity. Print or save as PDF.</p>
+                    <button class="btn-primary" onclick="SimApp.generateKDPWorkbook()">Generate My Workbook</button>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- ═══════════════ GLOBAL OVERLAYS ═══════════════ -->
+
+<!-- Toast Container -->
+<div id="toast-container" class="toast-container"></div>
+
+<!-- Achievement Toast -->
+<div id="ach-toast" class="ach-toast" style="display:none"></div>
+
+<!-- Share Modal -->
+<div id="share-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)SimApp.closeModal('share-modal')">
+    <div class="modal-box">
+        <div class="modal-hdr"><span>📤 Share Your P&amp;L</span><button onclick="SimApp.closeModal('share-modal')">✕</button></div>
+        <div class="share-canvas-wrap"><canvas id="share-canvas" width="600" height="360" class="share-canvas"></canvas></div>
+        <div class="share-style-row">
+            <button class="share-style-btn active" onclick="SocialShare.setCardStyle('dark',this)">Dark</button>
+            <button class="share-style-btn" onclick="SocialShare.setCardStyle('neon',this)">Neon</button>
+            <button class="share-style-btn" onclick="SocialShare.setCardStyle('minimal',this)">Minimal</button>
+            <button class="share-style-btn" onclick="SocialShare.setCardStyle('beast',this)">Beast</button>
+        </div>
+        <div class="share-btns-row">
+            <button onclick="SocialShare.toTwitter()">🐦 Twitter/X</button>
+            <button onclick="SocialShare.toDiscord()">💬 Discord</button>
+            <button onclick="SocialShare.toReddit()">📮 Reddit</button>
+            <button onclick="SocialShare.copyImage()">📋 Copy</button>
+            <button onclick="SocialShare.download()">💾 Download</button>
+            <button onclick="SocialShare.copyLink()">🔗 Link</button>
+        </div>
+    </div>
+</div>
+
+<!-- Strategy Detail Modal -->
+<div id="strat-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)SimApp.closeModal('strat-modal')">
+    <div class="modal-box modal-lg">
+        <div class="modal-hdr"><span id="strat-modal-title">Strategy</span><button onclick="SimApp.closeModal('strat-modal')">✕</button></div>
+        <div id="strat-modal-body" class="modal-body"></div>
+    </div>
+</div>
+
+<!-- Upgrade Modal -->
+<div id="upgrade-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)SimApp.closeModal('upgrade-modal')">
+    <div class="modal-box modal-upgrade">
+        <button class="modal-close-x" onclick="SimApp.closeModal('upgrade-modal')">✕</button>
+        <div class="upgrade-hero">
+            <div id="upgrade-hero-icon">⚡</div>
+            <h2 id="upgrade-hero-title">Unlock PRO Features</h2>
+            <p id="upgrade-hero-desc">Take your trading to the next level</p>
+        </div>
+        <div id="upgrade-plans" class="upgrade-plans"></div>
+    </div>
+</div>
+
+<!-- Scenario Complete Modal -->
+<div id="scenario-complete-modal" class="modal-overlay" style="display:none">
+    <div class="modal-box scenario-complete-modal">
+        <div id="scenario-result-content"></div>
+    </div>
+</div>
+
+<!-- KDP Workbook Modal -->
+<div id="kdp-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)SimApp.closeModal('kdp-modal')">
+    <div class="modal-box modal-lg">
+        <div class="modal-hdr"><span>📚 Your Trading Workbook</span><button onclick="SimApp.closeModal('kdp-modal')">✕</button></div>
+        <div id="kdp-workbook-content" class="kdp-workbook"></div>
+        <div class="modal-footer"><button class="btn-primary" onclick="window.print()">🖨️ Print / Save PDF</button></div>
+    </div>
+</div>
+
+<!-- Scripts -->
+<script src="trading-sim-engine.js"></script>
+<script src="trading-sim-options.js"></script>
+<script src="trading-sim-education.js"></script>
+<script src="trading-sim-social.js"></script>
+<script src="trading-sim-ai.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sim-sw.js').catch(() => {});
+    });
+}
+</script>
+</body>
+</html>

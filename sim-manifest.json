@@ -1,0 +1,104 @@
+{
+  "name": "SqueezeOS Trading Simulator",
+  "short_name": "SqueezeSim",
+  "description": "Professional stock & options trading simulator with AI coaching, scenarios, backtesting, and educational curriculum. Learn to trade risk-free.",
+  "start_url": "/trading-simulator.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a0e1a",
+  "theme_color": "#00d4ff",
+  "lang": "en-US",
+  "dir": "ltr",
+  "categories": ["finance", "education", "games"],
+  "iarc_rating_id": "",
+  "screenshots": [],
+  "related_applications": [],
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "icons/sim-icon-72.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/sim-icon-96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/sim-icon-128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/sim-icon-144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/sim-icon-152.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/sim-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/sim-icon-384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/sim-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Trade Now",
+      "short_name": "Trade",
+      "description": "Open the trading desk",
+      "url": "/trading-simulator.html#market",
+      "icons": [{ "src": "icons/sim-icon-96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "AI Coach",
+      "short_name": "AI Coach",
+      "description": "Get AI trading advice",
+      "url": "/trading-simulator.html#ai-coach",
+      "icons": [{ "src": "icons/sim-icon-96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Leaderboard",
+      "short_name": "Leaderboard",
+      "description": "See global rankings",
+      "url": "/trading-simulator.html#leaderboard",
+      "icons": [{ "src": "icons/sim-icon-96.png", "sizes": "96x96" }]
+    }
+  ],
+  "share_target": {
+    "action": "/trading-simulator.html",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
+  "protocol_handlers": [],
+  "edge_side_panel": {
+    "preferred_width": 480
+  }
+}
