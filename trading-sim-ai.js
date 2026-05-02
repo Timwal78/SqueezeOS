@@ -504,6 +504,22 @@ Rules:
     `).join('');
   }
 
+  /* ── Panel visibility ── */
+  function updateStatus() {
+    const hasKey = !!_keys[_currentProvider];
+    const noKeyPanel = document.getElementById('ai-no-key-panel');
+    const chatPanel  = document.getElementById('ai-chat-panel');
+    if (noKeyPanel) noKeyPanel.style.display = hasKey ? 'none' : 'flex';
+    if (chatPanel)  chatPanel.style.display  = hasKey ? 'flex' : 'none';
+
+    const badge = document.getElementById('ai-provider-badge');
+    if (badge) {
+      const p = PROVIDERS[_currentProvider];
+      badge.textContent = hasKey ? `${p?.icon || ''} ${p?.name || _currentProvider} ✓` : 'No Key';
+      badge.style.color = hasKey ? 'var(--neon-green)' : 'var(--neon-red)';
+    }
+  }
+
   /* ── Keyboard handler ── */
   function handleInputKeydown(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -533,6 +549,7 @@ Rules:
   /* ── Init ── */
   function init() {
     _loadKeys();
+    updateStatus();
 
     const input = document.getElementById('ai-input');
     if (input) input.addEventListener('keydown', handleInputKeydown);
