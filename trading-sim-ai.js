@@ -1,563 +1,330 @@
-/* trading-sim-ai.js — BYOK AI Coach (OpenAI, Anthropic, Groq, Gemini) */
+/* trading-sim-ai.js — BYOK AI Coach */
 'use strict';
 
 const AICoach = (() => {
   const PROVIDERS = {
+    openrouter: {
+      name:'OpenRouter', icon:'🌐',
+      models:['meta-llama/llama-3.3-70b-instruct','anthropic/claude-haiku-4-5','openai/gpt-4o-mini','google/gemini-2.0-flash-001','mistralai/mixtral-8x7b-instruct'],
+      defaultModel:'meta-llama/llama-3.3-70b-instruct',
+      endpoint:'https://openrouter.ai/api/v1/chat/completions',
+      headerKey:'Authorization', headerVal:k=>`Bearer ${k}`,
+      extraHeaders:{'HTTP-Referer':'https://squeezeos.app','X-Title':'SqueezeSim AI Coach'},
+      bodyFn:(model,msgs)=>JSON.stringify({model,messages:msgs,max_tokens:1024,temperature:0.7}),
+      parseFn:r=>r.choices?.[0]?.message?.content||'No response'
+    },
     openai: {
-      name: 'OpenAI',
-      icon: '🤖',
-      models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
-      defaultModel: 'gpt-4o-mini',
-      endpoint: 'https://api.openai.com/v1/chat/completions',
-      headerKey: 'Authorization',
-      headerVal: k => `Bearer ${k}`,
-      bodyFn: (model, messages) => JSON.stringify({ model, messages, max_tokens: 1024, temperature: 0.7 }),
-      parseFn: r => r.choices?.[0]?.message?.content || 'No response'
+      name:'OpenAI', icon:'🤖',
+      models:['gpt-4o','gpt-4o-mini','gpt-4-turbo','gpt-3.5-turbo'],
+      defaultModel:'gpt-4o-mini',
+      endpoint:'https://api.openai.com/v1/chat/completions',
+      headerKey:'Authorization', headerVal:k=>`Bearer ${k}`,
+      bodyFn:(model,msgs)=>JSON.stringify({model,messages:msgs,max_tokens:1024,temperature:0.7}),
+      parseFn:r=>r.choices?.[0]?.message?.content||'No response'
     },
     anthropic: {
-      name: 'Anthropic (Claude)',
-      icon: '⚡',
-      models: ['claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-7'],
-      defaultModel: 'claude-haiku-4-5-20251001',
-      endpoint: 'https://api.anthropic.com/v1/messages',
-      headerKey: 'x-api-key',
-      headerVal: k => k,
-      extraHeaders: { 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-      bodyFn: (model, messages) => {
-        const sys = messages.find(m => m.role === 'system');
-        const msgs = messages.filter(m => m.role !== 'system');
-        return JSON.stringify({
-          model,
-          max_tokens: 1024,
-          system: sys ? sys.content : undefined,
-          messages: msgs
-        });
+      name:'Anthropic (Claude)', icon:'⚡',
+      models:['claude-haiku-4-5-20251001','claude-sonnet-4-6','claude-opus-4-7'],
+      defaultModel:'claude-haiku-4-5-20251001',
+      endpoint:'https://api.anthropic.com/v1/messages',
+      headerKey:'x-api-key', headerVal:k=>k,
+      extraHeaders:{'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      bodyFn:(model,msgs)=>{
+        const sys=msgs.find(m=>m.role==='system');
+        return JSON.stringify({model,max_tokens:1024,system:sys?.content,messages:msgs.filter(m=>m.role!=='system')});
       },
-      parseFn: r => r.content?.[0]?.text || 'No response'
+      parseFn:r=>r.content?.[0]?.text||'No response'
     },
     groq: {
-      name: 'Groq (Fast)',
-      icon: '⚡🚀',
-      models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'],
-      defaultModel: 'llama-3.1-8b-instant',
-      endpoint: 'https://api.groq.com/openai/v1/chat/completions',
-      headerKey: 'Authorization',
-      headerVal: k => `Bearer ${k}`,
-      bodyFn: (model, messages) => JSON.stringify({ model, messages, max_tokens: 1024, temperature: 0.7 }),
-      parseFn: r => r.choices?.[0]?.message?.content || 'No response'
+      name:'Groq (Fast)', icon:'🚀',
+      models:['llama-3.3-70b-versatile','llama-3.1-8b-instant','mixtral-8x7b-32768'],
+      defaultModel:'llama-3.1-8b-instant',
+      endpoint:'https://api.groq.com/openai/v1/chat/completions',
+      headerKey:'Authorization', headerVal:k=>`Bearer ${k}`,
+      bodyFn:(model,msgs)=>JSON.stringify({model,messages:msgs,max_tokens:1024,temperature:0.7}),
+      parseFn:r=>r.choices?.[0]?.message?.content||'No response'
     },
     gemini: {
-      name: 'Google Gemini',
-      icon: '✨',
-      models: ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
-      defaultModel: 'gemini-2.0-flash',
-      endpoint: (model, key) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
-      headerKey: 'Content-Type',
-      headerVal: () => 'application/json',
-      bodyFn: (model, messages) => {
-        const sys = messages.find(m => m.role === 'system');
-        const msgs = messages.filter(m => m.role !== 'system');
+      name:'Google Gemini', icon:'✨',
+      models:['gemini-2.0-flash','gemini-1.5-flash','gemini-1.5-pro'],
+      defaultModel:'gemini-2.0-flash',
+      endpoint:(model,key)=>`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+      headerKey:'Content-Type', headerVal:()=>'application/json',
+      bodyFn:(model,msgs)=>{
+        const sys=msgs.find(m=>m.role==='system');
         return JSON.stringify({
-          system_instruction: sys ? { parts: [{ text: sys.content }] } : undefined,
-          contents: msgs.map(m => ({
-            role: m.role === 'assistant' ? 'model' : 'user',
-            parts: [{ text: m.content }]
-          }))
+          system_instruction:sys?{parts:[{text:sys.content}]}:undefined,
+          contents:msgs.filter(m=>m.role!=='system').map(m=>({role:m.role==='assistant'?'model':'user',parts:[{text:m.content}]}))
         });
       },
-      parseFn: r => r.candidates?.[0]?.content?.parts?.[0]?.text || 'No response',
-      useKeyInUrl: true
-    },
-    openrouter: {
-      name: 'OpenRouter',
-      icon: '🌐',
-      models: ['meta-llama/llama-3.3-70b-instruct', 'anthropic/claude-haiku-4-5', 'openai/gpt-4o-mini', 'google/gemini-2.0-flash-001', 'mistralai/mixtral-8x7b-instruct'],
-      defaultModel: 'meta-llama/llama-3.3-70b-instruct',
-      endpoint: 'https://openrouter.ai/api/v1/chat/completions',
-      headerKey: 'Authorization',
-      headerVal: k => `Bearer ${k}`,
-      extraHeaders: { 'HTTP-Referer': 'https://squeezeos.app', 'X-Title': 'SqueezeSim AI Coach' },
-      bodyFn: (model, messages) => JSON.stringify({ model, messages, max_tokens: 1024, temperature: 0.7 }),
-      parseFn: r => r.choices?.[0]?.message?.content || 'No response'
+      parseFn:r=>r.candidates?.[0]?.content?.parts?.[0]?.text||'No response',
+      useKeyInUrl:true
     }
   };
 
   const QUICK_PROMPTS = [
-    { id: 'analyze', label: '📊 Analyze Portfolio', icon: '📊',
-      fn: () => `Analyze my current trading portfolio and provide actionable insights:\n${_portfolioContext()}` },
-    { id: 'strategy', label: '🎯 Suggest Strategy', icon: '🎯',
-      fn: () => `Based on my trading history and current market conditions, suggest the best trading strategy for me:\n${_portfolioContext()}\n${_marketContext()}` },
-    { id: 'risk', label: '🛡️ Risk Assessment', icon: '🛡️',
-      fn: () => `Assess my current risk exposure and tell me if I should adjust my positions:\n${_portfolioContext()}` },
-    { id: 'options', label: '🔮 Options Advice', icon: '🔮',
-      fn: () => `I want to trade options. Based on my level and portfolio, what options strategies should I consider?\n${_portfolioContext()}` },
-    { id: 'explain', label: '📚 Explain Greeks', icon: '📚',
-      fn: () => 'Explain options Greeks (Delta, Gamma, Theta, Vega, Rho) in simple terms with practical examples for a retail trader.' },
-    { id: 'lesson', label: '🎓 Daily Lesson', icon: '🎓',
-      fn: () => `Give me a concise daily trading lesson appropriate for a ${SimEngine.state.levelName || 'beginner'} level trader. Include one actionable tip I can apply today.` },
-    { id: 'journal', label: '📝 Trade Journal', icon: '📝',
-      fn: () => `Review my recent trades and help me identify patterns, mistakes, and improvements:\n${_recentTradesContext()}` },
-    { id: 'setup', label: '🔭 Scan Setups', icon: '🔭',
-      fn: () => `Given the current simulated market conditions, identify the top 3 trading setups I should be watching:\n${_marketContext()}` }
+    { id:'analyze', label:'📊 Analyze Portfolio', fn:()=>`Analyze my current trading portfolio:\n${_portfolioCtx()}` },
+    { id:'strategy',label:'🎯 Suggest Strategy',  fn:()=>`Suggest the best strategy for me:\n${_portfolioCtx()}\n${_marketCtx()}` },
+    { id:'risk',    label:'🛡️ Risk Assessment',   fn:()=>`Assess my risk exposure:\n${_portfolioCtx()}` },
+    { id:'options', label:'🔮 Options Advice',     fn:()=>`What options strategies suit my level?\n${_portfolioCtx()}` },
+    { id:'explain', label:'📚 Explain Greeks',     fn:()=>'Explain options Greeks (Delta, Gamma, Theta, Vega, Rho) simply with practical examples.' },
+    { id:'lesson',  label:'🎓 Daily Lesson',       fn:()=>`Give me a daily lesson for a ${SimEngine.levelName(SimEngine.getState().gamification.level||1)} trader with one actionable tip.` },
+    { id:'journal', label:'📝 Trade Journal',      fn:()=>`Review my recent trades and find patterns:\n${_tradesCtx()}` },
+    { id:'setup',   label:'🔭 Scan Setups',        fn:()=>`Identify top 3 trading setups to watch:\n${_marketCtx()}` }
   ];
 
-  let _history = [];
-  let _currentProvider = 'openrouter';
-  let _isTyping = false;
-  let _keys = { openrouter: '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' };
-  let _models = { openrouter: 'meta-llama/llama-3.3-70b-instruct' };
+  const DEFAULT_KEYS   = { openrouter:'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' };
+  const DEFAULT_MODELS = { openrouter:'meta-llama/llama-3.3-70b-instruct' };
 
-  /* ── Context builders ── */
-  function _portfolioContext() {
-    const st = SimEngine.state;
-    const pnl = st.portfolio - st.startingCapital;
-    const positions = st.positions || {};
-    const posStr = Object.entries(positions).map(([sym, p]) => {
-      const curr = SimEngine.prices?.[sym] || p.avgPrice;
-      const posPnl = (curr - p.avgPrice) * p.qty;
-      return `  ${sym}: ${p.qty} shares @ $${p.avgPrice.toFixed(2)}, current $${curr.toFixed(2)}, P&L $${posPnl.toFixed(0)}`;
-    }).join('\n') || '  No open positions';
+  let _provider = 'openrouter';
+  let _keys     = { ...DEFAULT_KEYS };
+  let _models   = { ...DEFAULT_MODELS };
+  let _history  = [];
+  let _busy     = false;
 
-    return `Portfolio Value: $${st.portfolio.toLocaleString('en', {maximumFractionDigits:0})}
-Starting Capital: $${st.startingCapital.toLocaleString()}
-Total P&L: ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(0)}
-Return: ${(pnl/st.startingCapital*100).toFixed(2)}%
-Win Rate: ${st.winRate || 0}%
-Total Trades: ${st.totalTrades || 0}
-Level: ${st.levelName || 'Beginner'}
-Open Positions:\n${posStr}`;
+  /* ── Context ── */
+  function _portfolioCtx() {
+    const st  = SimEngine.getState();
+    const pv  = SimEngine.portfolioValue();
+    const pnl = pv - st.portfolio.startingCash;
+    const pos = Object.entries(st.portfolio.positions||{}).map(([k,p]) => {
+      return `  ${p.sym||k}: ${p.type==='option'?p.optType+' $'+p.strike:p.qty+' shares'} @ $${p.avgCost.toFixed(2)}, P&L $${(p.unrealizedPnL||0).toFixed(0)}`;
+    }).join('\n') || '  None';
+    const g = st.gamification;
+    return `Portfolio: $${pv.toLocaleString('en',{maximumFractionDigits:0})} | P&L: ${pnl>=0?'+':''}$${pnl.toFixed(0)} (${(pnl/st.portfolio.startingCash*100).toFixed(1)}%) | Win Rate: ${g.wins+g.losses?Math.round(g.wins/(g.wins+g.losses)*100):0}% | Trades: ${g.totalTrades||0} | Level: ${SimEngine.levelName(g.level||1)}\nOpen Positions:\n${pos}`;
   }
-
-  function _marketContext() {
-    const prices = SimEngine.prices || {};
-    const top5 = Object.entries(prices).slice(0, 5)
-      .map(([sym, p]) => `  ${sym}: $${p.toFixed(2)}`).join('\n');
-    return `Current Market Prices (simulated):\n${top5}`;
+  function _marketCtx() {
+    const syms = SimEngine.getState().symbols;
+    return 'Market (simulated):\n' + Object.values(syms).slice(0,6).map(s=>`  ${s.sym}: $${s.price.toFixed(2)} (${s.changePct>=0?'+':''}${(s.changePct*100).toFixed(1)}%)`).join('\n');
   }
-
-  function _recentTradesContext() {
-    const trades = (SimEngine.state.tradeHistory || []).slice(-10);
-    if (!trades.length) return 'No trades yet.';
-    return trades.map(t =>
-      `  ${t.sym} ${t.side} ${t.qty}@$${t.price.toFixed(2)} → P&L: $${(t.pnl||0).toFixed(0)}`
-    ).join('\n');
+  function _tradesCtx() {
+    const h = SimEngine.getState().portfolio.history.slice(0,10);
+    return h.length ? h.map(t=>`  ${t.sym} ${t.side} ${t.qty}@$${t.entry.toFixed(2)} → $${t.exit.toFixed(2)} P&L:$${t.pnl.toFixed(0)}`).join('\n') : 'No trades yet.';
   }
-
   function _systemPrompt() {
-    const st = SimEngine.state;
-    return `You are an expert trading coach and mentor inside SqueezeOS Trading Simulator. You help users learn to trade stocks and options effectively.
-
-User Profile:
-- Trading Level: ${st.levelName || 'Beginner'}
-- XP: ${st.xp || 0}
-- Portfolio: $${(st.portfolio || 10000).toLocaleString()}
-- Win Rate: ${st.winRate || 0}%
-
-Rules:
-1. Be concise but educational — max 3-4 paragraphs per response
-2. Always relate advice to the user's current level and portfolio
-3. Use specific numbers and percentages when possible
-4. For beginners: explain concepts simply; for pros: be technical
-5. This is a SIMULATOR — educational context only, not real financial advice
-6. Always end with one concrete actionable step the user can take right now`;
+    const g = SimEngine.getState().gamification;
+    return `You are an expert trading coach inside SqueezeOS Trading Simulator. User level: ${SimEngine.levelName(g.level||1)}, XP: ${g.xp||0}, Win Rate: ${g.wins+g.losses?Math.round(g.wins/(g.wins+g.losses)*100):0}%. Be concise (3-4 paragraphs max), educational, and always end with one actionable step. This is a simulator — educational only, not real financial advice.`;
   }
 
   /* ── API call ── */
-  async function _callAPI(userMessage) {
-    const provider = PROVIDERS[_currentProvider];
-    if (!provider) throw new Error('Unknown provider');
-
-    const key = _keys[_currentProvider];
-    if (!key) throw new Error(`No API key set for ${provider.name}. Go to Settings → AI Coach to add your key.`);
-
-    const model = _models[_currentProvider] || provider.defaultModel;
-
+  async function _callAPI(userMsg) {
+    const p = PROVIDERS[_provider];
+    if (!p) throw new Error('Unknown provider');
+    const key = _keys[_provider];
+    if (!key) throw new Error(`No API key for ${p.name}. Add it in Settings → AI Coach.`);
+    const model = _models[_provider] || p.defaultModel;
     const messages = [
-      { role: 'system', content: _systemPrompt() },
-      ..._history.map(h => ({ role: h.role, content: h.content })),
-      { role: 'user', content: userMessage }
+      {role:'system', content:_systemPrompt()},
+      ..._history.map(h=>({role:h.role, content:h.content})),
+      {role:'user', content:userMsg}
     ];
-
-    const endpoint = typeof provider.endpoint === 'function'
-      ? provider.endpoint(model, key)
-      : provider.endpoint;
-
-    const headers = {
-      'Content-Type': 'application/json',
-      [provider.headerKey]: provider.headerVal(key),
-      ...(provider.extraHeaders || {})
-    };
-
-    if (provider.useKeyInUrl) {
-      delete headers[provider.headerKey];
-    }
-
-    const resp = await fetch(endpoint, {
-      method: 'POST',
-      headers,
-      body: provider.bodyFn(model, messages)
-    });
-
+    const endpoint = typeof p.endpoint==='function' ? p.endpoint(model,key) : p.endpoint;
+    const headers  = {'Content-Type':'application/json', [p.headerKey]:p.headerVal(key), ...(p.extraHeaders||{})};
+    if (p.useKeyInUrl) delete headers[p.headerKey];
+    const resp = await fetch(endpoint, {method:'POST', headers, body:p.bodyFn(model,messages)});
     if (!resp.ok) {
-      const errText = await resp.text();
-      let errMsg = `API Error ${resp.status}`;
-      try {
-        const errJson = JSON.parse(errText);
-        errMsg = errJson.error?.message || errJson.message || errMsg;
-      } catch {}
-      throw new Error(errMsg);
+      const txt = await resp.text();
+      let msg = `API Error ${resp.status}`;
+      try { msg = JSON.parse(txt).error?.message || JSON.parse(txt).message || msg; } catch {}
+      throw new Error(msg);
     }
-
-    const data = await resp.json();
-    return provider.parseFn(data);
+    return p.parseFn(await resp.json());
   }
 
   /* ── Chat UI ── */
-  function _appendMessage(role, content, isError) {
+  function _appendMsg(role, content, isErr) {
     const container = document.getElementById('ai-messages');
     if (!container) return;
-
+    const p = PROVIDERS[_provider];
     const div = document.createElement('div');
-    div.className = `ai-msg ai-msg-${role} ${isError ? 'ai-msg-error' : ''}`;
-
-    const avatar = role === 'user' ? '👤' : PROVIDERS[_currentProvider]?.icon || '🤖';
-    const formatted = _formatMessage(content);
-
+    div.className = `ai-msg ai-msg-${role}${isErr?' ai-msg-error':''}`;
     div.innerHTML = `
-      <div class="ai-avatar">${avatar}</div>
+      <div class="ai-avatar">${role==='user'?'👤':p?.icon||'🤖'}</div>
       <div class="ai-bubble">
-        <div class="ai-bubble-content">${formatted}</div>
+        <div class="ai-bubble-content">${_fmt(content)}</div>
         <div class="ai-bubble-meta">${new Date().toLocaleTimeString()}</div>
-      </div>
-    `;
-
+      </div>`;
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
   }
 
-  function _formatMessage(text) {
-    return text
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.+?)\*/g, '<em>$1</em>')
-      .replace(/`(.+?)`/g, '<code>$1</code>')
-      .replace(/\n\n/g, '</p><p>')
-      .replace(/\n/g, '<br>')
-      .replace(/^/, '<p>').replace(/$/, '</p>');
+  function _fmt(t) {
+    return ('<p>' + t
+      .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g,'<em>$1</em>')
+      .replace(/`(.+?)`/g,'<code>$1</code>')
+      .replace(/\n\n/g,'</p><p>')
+      .replace(/\n/g,'<br>') + '</p>');
   }
 
   function _showTyping() {
-    const container = document.getElementById('ai-messages');
-    if (!container) return;
-    const div = document.createElement('div');
-    div.className = 'ai-msg ai-msg-assistant ai-typing';
-    div.id = 'ai-typing-indicator';
-    div.innerHTML = `
-      <div class="ai-avatar">${PROVIDERS[_currentProvider]?.icon || '🤖'}</div>
-      <div class="ai-bubble">
-        <div class="ai-typing-dots"><span></span><span></span><span></span></div>
-      </div>
-    `;
-    container.appendChild(div);
-    container.scrollTop = container.scrollHeight;
+    const c = document.getElementById('ai-messages');
+    if (!c) return;
+    const d = document.createElement('div');
+    d.id = 'ai-typing'; d.className = 'ai-msg ai-msg-assistant';
+    d.innerHTML = `<div class="ai-avatar">${PROVIDERS[_provider]?.icon||'🤖'}</div><div class="ai-bubble"><div class="ai-typing-dots"><span></span><span></span><span></span></div></div>`;
+    c.appendChild(d); c.scrollTop = c.scrollHeight;
   }
+  function _hideTyping() { document.getElementById('ai-typing')?.remove(); }
 
-  function _hideTyping() {
-    const el = document.getElementById('ai-typing-indicator');
-    if (el) el.remove();
-  }
-
-  async function sendMessage(msgOverride) {
-    if (_isTyping) return;
-
+  async function sendMessage(override) {
+    if (_busy) return;
     const input = document.getElementById('ai-input');
-    const msg = msgOverride || (input ? input.value.trim() : '');
+    const msg   = override || (input?input.value.trim():'');
     if (!msg) return;
-
     if (input) input.value = '';
-
-    if (!_keys[_currentProvider]) {
-      _appendMessage('assistant',
-        `⚠️ No API key configured for ${PROVIDERS[_currentProvider]?.name}.\n\nGo to **Settings → AI Coach** and add your API key to start chatting. Your key is stored only in your browser — never sent to our servers.`,
-        true);
+    if (!_keys[_provider]) {
+      _appendMsg('assistant', `⚠️ No API key for **${PROVIDERS[_provider]?.name}**.\n\nGo to **Settings → AI Coach** and paste your key. It's stored only in your browser.`, true);
       return;
     }
-
-    _appendMessage('user', msg);
-    _history.push({ role: 'user', content: msg });
-
-    _isTyping = true;
-    _showTyping();
-
-    const sendBtn = document.getElementById('ai-send-btn');
-    if (sendBtn) sendBtn.disabled = true;
-
+    _appendMsg('user', msg);
+    _history.push({role:'user', content:msg});
+    _busy = true; _showTyping();
+    const btn = document.getElementById('ai-send-btn');
+    if (btn) btn.disabled = true;
     try {
-      const response = await _callAPI(msg);
-      _hideTyping();
-      _appendMessage('assistant', response);
-      _history.push({ role: 'assistant', content: response });
-
-      // Keep history manageable
+      const reply = await _callAPI(msg);
+      _hideTyping(); _appendMsg('assistant', reply);
+      _history.push({role:'assistant', content:reply});
       if (_history.length > 20) _history = _history.slice(-20);
-
-    } catch (err) {
-      _hideTyping();
-      _appendMessage('assistant', `❌ Error: ${err.message}`, true);
+    } catch(err) {
+      _hideTyping(); _appendMsg('assistant', `❌ ${err.message}`, true);
     } finally {
-      _isTyping = false;
-      if (sendBtn) sendBtn.disabled = false;
+      _busy = false;
+      if (btn) btn.disabled = false;
     }
   }
 
   function sendQuickPrompt(id) {
-    const qp = QUICK_PROMPTS.find(q => q.id === id);
-    if (!qp) return;
-    const text = qp.fn();
-    sendMessage(text);
+    const qp = QUICK_PROMPTS.find(q=>q.id===id);
+    if (qp) sendMessage(qp.fn());
   }
 
   function clearChat() {
     _history = [];
-    const container = document.getElementById('ai-messages');
-    if (container) {
-      container.innerHTML = `
-        <div class="ai-welcome">
-          <div class="ai-welcome-icon">${PROVIDERS[_currentProvider]?.icon || '🤖'}</div>
-          <h3>AI Trading Coach</h3>
-          <p>Powered by ${PROVIDERS[_currentProvider]?.name || 'AI'}. Ask me anything about trading, strategies, or your portfolio!</p>
-        </div>
-      `;
+    const c = document.getElementById('ai-messages');
+    if (c) {
+      const p = PROVIDERS[_provider];
+      c.innerHTML = `<div class="ai-welcome"><div style="font-size:48px">${p?.icon||'🤖'}</div><h3>AI Trading Coach</h3><p>Powered by ${p?.name||'AI'}. Ask me anything!</p></div>`;
     }
   }
 
-  /* ── Settings / BYOK UI ── */
-  function renderBYOKSettings() {
-    const el = document.getElementById('byok-panel');
-    if (!el) return;
-
-    el.innerHTML = `
-      <div class="byok-tabs">
-        ${Object.entries(PROVIDERS).map(([id, p]) => `
-          <button class="byok-tab ${id === _currentProvider ? 'active' : ''}"
-            onclick="AICoach.switchProvider('${id}')">
-            ${p.icon} ${p.name}
-          </button>
-        `).join('')}
-      </div>
-      ${Object.entries(PROVIDERS).map(([id, p]) => `
-        <div class="byok-panel-content ${id === _currentProvider ? 'active' : ''}" id="byok-${id}">
-          <div class="byok-intro">
-            <strong>${p.icon} ${p.name}</strong>
-            <span class="byok-status ${_keys[id] ? 'connected' : 'disconnected'}">
-              ${_keys[id] ? '● Connected' : '○ Not configured'}
-            </span>
-          </div>
-          <div class="byok-model-row">
-            <label>Model</label>
-            <select id="model-${id}" onchange="AICoach.setModel('${id}', this.value)">
-              ${p.models.map(m => `<option value="${m}" ${(_models[id]||p.defaultModel)===m?'selected':''}>${m}</option>`).join('')}
-            </select>
-          </div>
-          <div class="byok-key-row">
-            <label>API Key</label>
-            <div class="byok-key-input-wrap">
-              <input type="password" id="key-${id}" placeholder="Enter your ${p.name} API key..."
-                value="${_keys[id] ? '••••••••' + (_keys[id].slice(-4) || '') : ''}"
-                onfocus="if(this.value.startsWith('••')) this.value=''"
-              />
-              <button class="btn-sm" onclick="AICoach.saveKey('${id}')">Save</button>
-              <button class="btn-sm btn-danger" onclick="AICoach.clearKey('${id}')">Clear</button>
-            </div>
-          </div>
-          <div class="byok-actions">
-            <button class="btn-primary" onclick="AICoach.testKey('${id}')">Test Connection</button>
-            <span id="test-result-${id}" class="test-result"></span>
-          </div>
-          <div class="byok-help">
-            <p>🔒 Your API key is stored only in your browser's localStorage. It is never transmitted to our servers.</p>
-            ${_getProviderHelp(id)}
-          </div>
-        </div>
-      `).join('')}
-    `;
+  /* ── Panel show/hide ── */
+  function updateStatus() {
+    const hasKey    = !!_keys[_provider];
+    const noKeyEl   = document.getElementById('ai-no-key-panel');
+    const chatEl    = document.getElementById('ai-chat-panel');
+    if (noKeyEl) noKeyEl.style.display = hasKey ? 'none' : 'flex';
+    if (chatEl)  chatEl.style.display  = hasKey ? 'flex' : 'none';
+    const badge = document.getElementById('ai-provider-badge');
+    if (badge) {
+      const p = PROVIDERS[_provider];
+      badge.textContent = hasKey ? `${p?.icon||''} ${p?.name||_provider} ✓` : 'No Key — Add in Settings';
+      badge.style.color = hasKey ? 'var(--neon-green,#00ff88)' : 'var(--neon-red,#ff4757)';
+    }
+    _syncBYOKUI();
   }
 
-  function _getProviderHelp(id) {
-    const links = {
-      openai: 'Get your key at platform.openai.com/api-keys',
-      anthropic: 'Get your key at console.anthropic.com',
-      groq: 'Get your free key at console.groq.com (very fast, free tier)',
-      gemini: 'Get your free key at aistudio.google.com/apikey'
-    };
-    return `<p>💡 ${links[id] || ''}</p>`;
+  /* ── BYOK static UI sync ── */
+  function _syncBYOKUI() {
+    const keyInput   = document.getElementById('byok-key-input');
+    const modelSel   = document.getElementById('byok-model-sel');
+    const statusEl   = document.getElementById('byok-status');
+    const p          = PROVIDERS[_provider];
+    if (!p) return;
+
+    if (keyInput) {
+      const existing = _keys[_provider];
+      keyInput.value = existing ? '••••••••' + existing.slice(-4) : '';
+      keyInput.placeholder = `Enter ${p.name} API key...`;
+    }
+    if (modelSel) {
+      modelSel.innerHTML = p.models.map(m=>`<option value="${m}" ${(_models[_provider]||p.defaultModel)===m?'selected':''}>${m}</option>`).join('');
+    }
+    if (statusEl) {
+      statusEl.textContent = _keys[_provider] ? `✅ ${p.name} connected` : `○ No key for ${p.name}`;
+      statusEl.style.color = _keys[_provider] ? 'var(--neon-green,#00ff88)' : 'var(--text3,#666)';
+    }
+
+    // highlight active tab
+    document.querySelectorAll('.byok-tab').forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('onclick')?.includes(`'${_provider}'`));
+    });
   }
 
-  function switchProvider(id) {
+  function switchProvider(id, btn) {
     if (!PROVIDERS[id]) return;
-    _currentProvider = id;
-    renderBYOKSettings();
-    renderQuickPrompts();
+    _provider = id;
+    _persist();
+    updateStatus();
     clearChat();
-
-    // Update AI view header
-    const hdr = document.getElementById('ai-provider-name');
-    if (hdr) hdr.textContent = PROVIDERS[id].name;
   }
 
-  function saveKey(providerId) {
-    const input = document.getElementById(`key-${providerId}`);
+  function toggleKeyViz() {
+    const el = document.getElementById('byok-key-input');
+    if (!el) return;
+    if (el.type === 'password') { el.type = 'text'; if (el.value.startsWith('••')) el.value = _keys[_provider]||''; }
+    else { el.type = 'password'; }
+  }
+
+  function saveCurrentKey() {
+    const input = document.getElementById('byok-key-input');
     if (!input) return;
     const val = input.value.trim();
-    if (!val || val.startsWith('••')) return;
-
-    _keys[providerId] = val;
-    _persistKeys();
-    SimApp.toast(`${PROVIDERS[providerId].name} key saved!`, 'success');
-    renderBYOKSettings();
+    if (!val || val.startsWith('••')) { SimApp.toast('Enter a valid key first', 'error'); return; }
+    _keys[_provider] = val;
+    _persist();
+    updateStatus();
+    SimApp.toast(`${PROVIDERS[_provider]?.name} key saved ✓`, 'success');
   }
 
-  function clearKey(providerId) {
-    delete _keys[providerId];
-    _persistKeys();
-    SimApp.toast(`${PROVIDERS[providerId].name} key removed`, 'info');
-    renderBYOKSettings();
+  function clearCurrentKey() {
+    delete _keys[_provider];
+    _persist();
+    const inp = document.getElementById('byok-key-input');
+    if (inp) inp.value = '';
+    updateStatus();
+    SimApp.toast(`${PROVIDERS[_provider]?.name} key removed`, 'info');
   }
 
-  function setModel(providerId, model) {
-    _models[providerId] = model;
-    _persistKeys();
-  }
-
-  async function testKey(providerId) {
-    const resultEl = document.getElementById(`test-result-${providerId}`);
-    if (resultEl) { resultEl.textContent = 'Testing...'; resultEl.className = 'test-result testing'; }
-
-    const prevProvider = _currentProvider;
-    _currentProvider = providerId;
-
+  async function testCurrentKey() {
+    const statusEl = document.getElementById('byok-status');
+    if (statusEl) { statusEl.textContent = 'Testing...'; statusEl.style.color='var(--text2)'; }
     try {
-      const resp = await _callAPI('Say "OK" in exactly 2 words.');
-      _currentProvider = prevProvider;
-      if (resultEl) { resultEl.textContent = '✅ Connected!'; resultEl.className = 'test-result success'; }
-    } catch (err) {
-      _currentProvider = prevProvider;
-      if (resultEl) { resultEl.textContent = `❌ ${err.message.slice(0, 60)}`; resultEl.className = 'test-result error'; }
+      const reply = await _callAPI('Say "OK" in exactly one word.');
+      if (statusEl) { statusEl.textContent = `✅ Connected! Response: "${reply.slice(0,40)}"`; statusEl.style.color='var(--neon-green,#00ff88)'; }
+    } catch(err) {
+      if (statusEl) { statusEl.textContent = `❌ ${err.message.slice(0,80)}`; statusEl.style.color='var(--neon-red,#ff4757)'; }
     }
   }
 
-  function _persistKeys() {
-    localStorage.setItem('sq_ai_keys', JSON.stringify(_keys));
-    localStorage.setItem('sq_ai_models', JSON.stringify(_models));
-    localStorage.setItem('sq_ai_provider', _currentProvider);
+  function _persist() {
+    localStorage.setItem('sq_ai_keys',    JSON.stringify(_keys));
+    localStorage.setItem('sq_ai_models',  JSON.stringify(_models));
+    localStorage.setItem('sq_ai_provider',_provider);
   }
 
   function _loadKeys() {
-    const DEFAULT_KEYS = { openrouter: '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' };
-    const DEFAULT_MODELS = { openrouter: 'meta-llama/llama-3.3-70b-instruct' };
-    try { _keys = { ...DEFAULT_KEYS, ...JSON.parse(localStorage.getItem('sq_ai_keys') || '{}') }; } catch { _keys = { ...DEFAULT_KEYS }; }
-    try { _models = { ...DEFAULT_MODELS, ...JSON.parse(localStorage.getItem('sq_ai_models') || '{}') }; } catch { _models = { ...DEFAULT_MODELS }; }
-    _currentProvider = localStorage.getItem('sq_ai_provider') || 'openrouter';
-  }
-
-  /* ── Quick prompts render ── */
-  function renderQuickPrompts() {
-    const el = document.getElementById('quick-prompts');
-    if (!el) return;
-    el.innerHTML = QUICK_PROMPTS.map(qp => `
-      <button class="quick-prompt-btn" onclick="AICoach.sendQuickPrompt('${qp.id}')">
-        ${qp.icon} ${qp.label}
-      </button>
-    `).join('');
-  }
-
-  /* ── Context-aware suggestions ── */
-  function renderContextSuggestions() {
-    const el = document.getElementById('ai-suggestions');
-    if (!el) return;
-
-    const st = SimEngine.state;
-    const suggestions = [];
-
-    if ((st.totalTrades || 0) === 0) {
-      suggestions.push({ text: "I'm new to trading. What should I do first?", icon: '🌱' });
-    }
-    if ((st.winRate || 0) < 40 && (st.totalTrades || 0) > 10) {
-      suggestions.push({ text: 'My win rate is low. How can I improve?', icon: '📉' });
-    }
-    if (Object.keys(st.positions || {}).length > 3) {
-      suggestions.push({ text: 'I have many open positions. Should I close some?', icon: '⚠️' });
-    }
-    if ((st.levelName || '') === 'Intermediate') {
-      suggestions.push({ text: 'I\'m ready for options. Where should I start?', icon: '🎓' });
-    }
-    if ((st.xp || 0) > 5000) {
-      suggestions.push({ text: 'What advanced strategies should I learn next?', icon: '🚀' });
-    }
-
-    suggestions.push({ text: 'What is the Iron Condor strategy?', icon: '🦅' });
-    suggestions.push({ text: 'How do I manage risk with options?', icon: '🛡️' });
-
-    el.innerHTML = suggestions.slice(0, 4).map(s => `
-      <button class="ai-suggestion-chip" onclick="AICoach.sendMessage('${s.text.replace(/'/g, "\\'")}')">
-        ${s.icon} ${s.text}
-      </button>
-    `).join('');
-  }
-
-  /* ── Keyboard handler ── */
-  function handleInputKeydown(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  }
-
-  /* ── Usage stats ── */
-  function renderUsageStats() {
-    const el = document.getElementById('ai-usage-stats');
-    if (!el) return;
-    const msgs = _history.filter(h => h.role === 'user').length;
-    const st = SimEngine.state;
-    const tier = st.subscriptionTier || 'free';
-    const limits = { free: 10, starter: 50, pro: 200, elite: 'Unlimited' };
-    const limit = limits[tier];
-
-    el.innerHTML = `
-      <span>Messages: <strong>${msgs}</strong></span>
-      <span>Daily limit: <strong>${limit}</strong></span>
-      <span>Provider: <strong>${PROVIDERS[_currentProvider]?.name || 'None'}</strong></span>
-      ${_keys[_currentProvider] ? '<span class="ai-connected">● BYOK Active</span>' : '<span class="ai-disconnected">○ No Key</span>'}
-    `;
+    try { const k = JSON.parse(localStorage.getItem('sq_ai_keys')||'{}');    _keys    = {...DEFAULT_KEYS, ...k};    } catch { _keys    = {...DEFAULT_KEYS};    }
+    try { const m = JSON.parse(localStorage.getItem('sq_ai_models')||'{}');  _models  = {...DEFAULT_MODELS, ...m};  } catch { _models  = {...DEFAULT_MODELS};  }
+    _provider = localStorage.getItem('sq_ai_provider') || 'openrouter';
   }
 
   /* ── Init ── */
   function init() {
     _loadKeys();
-
+    updateStatus();
     const input = document.getElementById('ai-input');
-    if (input) input.addEventListener('keydown', handleInputKeydown);
-
-    renderQuickPrompts();
-    renderBYOKSettings();
-    renderContextSuggestions();
+    if (input) input.addEventListener('keydown', e => {
+      if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    });
   }
 
   return {
-    init,
-    sendMessage,
-    sendQuickPrompt,
-    clearChat,
-    renderBYOKSettings,
-    renderQuickPrompts,
-    renderContextSuggestions,
-    renderUsageStats,
-    switchProvider,
-    saveKey,
-    clearKey,
-    setModel,
-    testKey,
-    handleInputKeydown,
-    PROVIDERS,
-    QUICK_PROMPTS
+    init, updateStatus, clearChat,
+    sendMessage, sendQuickPrompt,
+    switchProvider, toggleKeyViz,
+    saveCurrentKey, clearCurrentKey, testCurrentKey,
+    PROVIDERS, QUICK_PROMPTS
   };
 })();

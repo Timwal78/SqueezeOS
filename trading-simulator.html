@@ -631,19 +631,19 @@
 
             <div id="ai-chat-panel" class="ai-chat-panel" style="display:none">
                 <div class="ai-quick-prompts-bar">
-                    <button onclick="AICoach.quickPrompt('portfolio')">📊 Analyze Portfolio</button>
-                    <button onclick="AICoach.quickPrompt('suggest')">💡 Suggest Trade</button>
-                    <button onclick="AICoach.quickPrompt('greeks')">📐 Explain Greeks</button>
-                    <button onclick="AICoach.quickPrompt('review')">🔍 Review Last Trade</button>
-                    <button onclick="AICoach.quickPrompt('outlook')">🌐 Market Outlook</button>
-                    <button onclick="AICoach.quickPrompt('risk')">⚖️ Risk Assessment</button>
-                    <button onclick="AICoach.quickPrompt('strategy')">🧠 Strategy Ideas</button>
-                    <button onclick="AICoach.quickPrompt('options101')">🎓 Options 101</button>
+                    <button onclick="AICoach.sendQuickPrompt('analyze')">📊 Analyze Portfolio</button>
+                    <button onclick="AICoach.sendQuickPrompt('strategy')">💡 Suggest Trade</button>
+                    <button onclick="AICoach.sendQuickPrompt('explain')">📐 Explain Greeks</button>
+                    <button onclick="AICoach.sendQuickPrompt('journal')">🔍 Review Last Trade</button>
+                    <button onclick="AICoach.sendQuickPrompt('setup')">🌐 Market Outlook</button>
+                    <button onclick="AICoach.sendQuickPrompt('risk')">⚖️ Risk Assessment</button>
+                    <button onclick="AICoach.sendQuickPrompt('lesson')">🧠 Daily Lesson</button>
+                    <button onclick="AICoach.sendQuickPrompt('options')">🎓 Options 101</button>
                 </div>
                 <div id="ai-messages" class="ai-messages"></div>
                 <div class="ai-input-bar">
-                    <textarea id="ai-input-txt" class="ai-input-txt" placeholder="Ask your AI coach anything about trading, strategies, or market analysis..." rows="2" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();AICoach.send();}"></textarea>
-                    <button class="ai-send-btn" onclick="AICoach.send()">Send ↑</button>
+                    <textarea id="ai-input" class="ai-input-txt" placeholder="Ask your AI coach anything about trading, strategies, or market analysis..." rows="2" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();AICoach.sendMessage();}"></textarea>
+                    <button id="ai-send-btn" class="ai-send-btn" onclick="AICoach.sendMessage()">Send ↑</button>
                 </div>
             </div>
         </div>
@@ -653,7 +653,7 @@
             <div class="view-hdr">
                 <h1>Portfolio Analytics</h1>
                 <div class="vha">
-                    <button class="btn-glass" onclick="SocialShare.generatePnLCard()">📤 Share P&amp;L Card</button>
+                    <button class="btn-glass" onclick="SocialSim.openShareModal()">📤 Share P&amp;L Card</button>
                     <button class="btn-glass" onclick="SimEngine.exportCSV()">📥 Export CSV</button>
                 </div>
             </div>
@@ -700,13 +700,13 @@
             <div class="view-hdr">
                 <h1>🏆 Leaderboard</h1>
                 <div class="vha">
-                    <select id="lb-period" class="glass-select" onchange="Leaderboard.setPeriod(this.value)">
+                    <select id="lb-period" class="glass-select" onchange="SocialSim.renderLeaderboard()">
                         <option value="daily">Daily</option>
                         <option value="weekly" selected>Weekly</option>
                         <option value="monthly">Monthly</option>
                         <option value="alltime">All Time</option>
                     </select>
-                    <select id="lb-mode" class="glass-select" onchange="Leaderboard.setMode(this.value)">
+                    <select id="lb-mode" class="glass-select" onchange="SocialSim.renderLeaderboard()">
                         <option value="pct">Best % Return</option>
                         <option value="pnl">Best P&amp;L</option>
                         <option value="winrate">Best Win Rate</option>
@@ -741,17 +741,18 @@
                 <h2 class="settings-section-title">🤖 AI Coach — Bring Your Own Key (BYOK)</h2>
                 <div class="byok-panel">
                     <div class="byok-tabs">
-                        <button class="byok-tab active" onclick="AICoach.setProvider('openai',this)">OpenAI</button>
-                        <button class="byok-tab" onclick="AICoach.setProvider('anthropic',this)">Anthropic</button>
-                        <button class="byok-tab" onclick="AICoach.setProvider('groq',this)">Groq</button>
-                        <button class="byok-tab" onclick="AICoach.setProvider('gemini',this)">Gemini</button>
+                        <button class="byok-tab active" onclick="AICoach.switchProvider('openrouter',this)">🌐 OpenRouter</button>
+                        <button class="byok-tab" onclick="AICoach.switchProvider('openai',this)">🤖 OpenAI</button>
+                        <button class="byok-tab" onclick="AICoach.switchProvider('anthropic',this)">⚡ Anthropic</button>
+                        <button class="byok-tab" onclick="AICoach.switchProvider('groq',this)">🚀 Groq</button>
+                        <button class="byok-tab" onclick="AICoach.switchProvider('gemini',this)">✨ Gemini</button>
                     </div>
                     <div class="byok-fields">
                         <div class="byok-field">
                             <label>API Key</label>
                             <div class="byok-key-row">
                                 <input type="password" id="byok-key-input" class="glass-input" placeholder="Enter your API key...">
-                                <button onclick="AICoach.toggleKeyViz()" class="btn-glass">👁</button>
+                                <button onclick="AICoach.toggleKeyViz()" class="btn-glass" type="button">👁</button>
                             </div>
                             <p class="byok-note">🔒 Stored locally in your browser. Never sent to our servers.</p>
                         </div>
@@ -764,9 +765,9 @@
                             </select>
                         </div>
                         <div class="byok-actions">
-                            <button class="btn-primary" onclick="AICoach.saveKey()">✓ Save Key</button>
-                            <button class="btn-glass" onclick="AICoach.testKey()">🔌 Test Connection</button>
-                            <button class="btn-danger-sm" onclick="AICoach.clearKey()">🗑 Clear Key</button>
+                            <button class="btn-primary" onclick="AICoach.saveCurrentKey()" type="button">✓ Save Key</button>
+                            <button class="btn-glass" onclick="AICoach.testCurrentKey()" type="button">🔌 Test Connection</button>
+                            <button class="btn-danger-sm" onclick="AICoach.clearCurrentKey()" type="button">🗑 Clear Key</button>
                         </div>
                         <div id="byok-status" class="byok-status"></div>
                     </div>
@@ -884,18 +885,18 @@
         <div class="modal-hdr"><span>📤 Share Your P&amp;L</span><button onclick="SimApp.closeModal('share-modal')">✕</button></div>
         <div class="share-canvas-wrap"><canvas id="share-canvas" width="600" height="360" class="share-canvas"></canvas></div>
         <div class="share-style-row">
-            <button class="share-style-btn active" onclick="SocialShare.setCardStyle('dark',this)">Dark</button>
-            <button class="share-style-btn" onclick="SocialShare.setCardStyle('neon',this)">Neon</button>
-            <button class="share-style-btn" onclick="SocialShare.setCardStyle('minimal',this)">Minimal</button>
-            <button class="share-style-btn" onclick="SocialShare.setCardStyle('beast',this)">Beast</button>
+            <button class="share-style-btn active" onclick="SocialSim.setCardStyle('dark',this)">Dark</button>
+            <button class="share-style-btn" onclick="SocialSim.setCardStyle('neon',this)">Neon</button>
+            <button class="share-style-btn" onclick="SocialSim.setCardStyle('minimal',this)">Minimal</button>
+            <button class="share-style-btn" onclick="SocialSim.setCardStyle('beast',this)">Beast</button>
         </div>
         <div class="share-btns-row">
-            <button onclick="SocialShare.toTwitter()">🐦 Twitter/X</button>
-            <button onclick="SocialShare.toDiscord()">💬 Discord</button>
-            <button onclick="SocialShare.toReddit()">📮 Reddit</button>
-            <button onclick="SocialShare.copyImage()">📋 Copy</button>
-            <button onclick="SocialShare.download()">💾 Download</button>
-            <button onclick="SocialShare.copyLink()">🔗 Link</button>
+            <button onclick="SocialSim.shareToTwitter()">🐦 Twitter/X</button>
+            <button onclick="SocialSim.copyDiscord()">💬 Discord</button>
+            <button onclick="SocialSim.shareToReddit()">📮 Reddit</button>
+            <button onclick="SocialSim.copyImage()">📋 Copy</button>
+            <button onclick="SocialSim.downloadCard()">💾 Download</button>
+            <button onclick="SocialSim.copyLink()">🔗 Link</button>
         </div>
     </div>
 </div>
