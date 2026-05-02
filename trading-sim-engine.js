@@ -753,8 +753,7 @@ const SimApp = (() => {
     renderScenarioGrid();
     OptionsEngine.init();
     Academy.init();
-    Leaderboard.init();
-    SocialShare.init();
+    SocialSim.init();
     AICoach.init();
     updateDashboard();
     updateXPBar();
@@ -813,7 +812,7 @@ const SimApp = (() => {
     if (view === 'options-chain') OptionsEngine.loadChain(_state.ui.currentSymbol);
     if (view === 'strategies') renderStrategies('all');
     if (view === 'portfolio') updatePortfolio();
-    if (view === 'leaderboard') Leaderboard.render();
+    if (view === 'leaderboard') SocialSim.render();
     if (view === 'settings')  renderSubscriptionPlans();
     if (view === 'backtester') {
       if (!tierAllows('pro')) { $('bt-tier-bar').style.display='flex'; $('backtester-wrap').style.opacity='0.4'; $('backtester-wrap').style.pointerEvents='none'; }

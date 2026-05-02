@@ -1623,19 +1623,19 @@ body {
 
             <div id="ai-chat-panel" class="ai-chat-panel" style="display:none">
                 <div class="ai-quick-prompts-bar">
-                    <button onclick="AICoach.quickPrompt('portfolio')">📊 Analyze Portfolio</button>
-                    <button onclick="AICoach.quickPrompt('suggest')">💡 Suggest Trade</button>
-                    <button onclick="AICoach.quickPrompt('greeks')">📐 Explain Greeks</button>
-                    <button onclick="AICoach.quickPrompt('review')">🔍 Review Last Trade</button>
-                    <button onclick="AICoach.quickPrompt('outlook')">🌐 Market Outlook</button>
-                    <button onclick="AICoach.quickPrompt('risk')">⚖️ Risk Assessment</button>
-                    <button onclick="AICoach.quickPrompt('strategy')">🧠 Strategy Ideas</button>
-                    <button onclick="AICoach.quickPrompt('options101')">🎓 Options 101</button>
+                    <button onclick="AICoach.sendQuickPrompt('analyze')">📊 Analyze Portfolio</button>
+                    <button onclick="AICoach.sendQuickPrompt('strategy')">💡 Suggest Trade</button>
+                    <button onclick="AICoach.sendQuickPrompt('explain')">📐 Explain Greeks</button>
+                    <button onclick="AICoach.sendQuickPrompt('journal')">🔍 Review Last Trade</button>
+                    <button onclick="AICoach.sendQuickPrompt('setup')">🌐 Market Outlook</button>
+                    <button onclick="AICoach.sendQuickPrompt('risk')">⚖️ Risk Assessment</button>
+                    <button onclick="AICoach.sendQuickPrompt('lesson')">🧠 Daily Lesson</button>
+                    <button onclick="AICoach.sendQuickPrompt('options')">🎓 Options 101</button>
                 </div>
                 <div id="ai-messages" class="ai-messages"></div>
                 <div class="ai-input-bar">
-                    <textarea id="ai-input-txt" class="ai-input-txt" placeholder="Ask your AI coach anything about trading, strategies, or market analysis..." rows="2" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();AICoach.send();}"></textarea>
-                    <button class="ai-send-btn" onclick="AICoach.send()">Send ↑</button>
+                    <textarea id="ai-input" class="ai-input-txt" placeholder="Ask your AI coach anything about trading, strategies, or market analysis..." rows="2" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();AICoach.sendMessage();}"></textarea>
+                    <button id="ai-send-btn" class="ai-send-btn" onclick="AICoach.sendMessage()">Send ↑</button>
                 </div>
             </div>
         </div>
@@ -1645,7 +1645,7 @@ body {
             <div class="view-hdr">
                 <h1>Portfolio Analytics</h1>
                 <div class="vha">
-                    <button class="btn-glass" onclick="SocialShare.generatePnLCard()">📤 Share P&amp;L Card</button>
+                    <button class="btn-glass" onclick="SocialSim.openShareModal()">📤 Share P&amp;L Card</button>
                     <button class="btn-glass" onclick="SimEngine.exportCSV()">📥 Export CSV</button>
                 </div>
             </div>
@@ -1692,13 +1692,13 @@ body {
             <div class="view-hdr">
                 <h1>🏆 Leaderboard</h1>
                 <div class="vha">
-                    <select id="lb-period" class="glass-select" onchange="Leaderboard.setPeriod(this.value)">
+                    <select id="lb-period" class="glass-select" onchange="SocialSim.renderLeaderboard()">
                         <option value="daily">Daily</option>
                         <option value="weekly" selected>Weekly</option>
                         <option value="monthly">Monthly</option>
                         <option value="alltime">All Time</option>
                     </select>
-                    <select id="lb-mode" class="glass-select" onchange="Leaderboard.setMode(this.value)">
+                    <select id="lb-mode" class="glass-select" onchange="SocialSim.renderLeaderboard()">
                         <option value="pct">Best % Return</option>
                         <option value="pnl">Best P&amp;L</option>
                         <option value="winrate">Best Win Rate</option>
@@ -1733,17 +1733,18 @@ body {
                 <h2 class="settings-section-title">🤖 AI Coach — Bring Your Own Key (BYOK)</h2>
                 <div class="byok-panel">
                     <div class="byok-tabs">
-                        <button class="byok-tab active" onclick="AICoach.setProvider('openai',this)">OpenAI</button>
-                        <button class="byok-tab" onclick="AICoach.setProvider('anthropic',this)">Anthropic</button>
-                        <button class="byok-tab" onclick="AICoach.setProvider('groq',this)">Groq</button>
-                        <button class="byok-tab" onclick="AICoach.setProvider('gemini',this)">Gemini</button>
+                        <button class="byok-tab active" onclick="AICoach.switchProvider('openrouter',this)">🌐 OpenRouter</button>
+                        <button class="byok-tab" onclick="AICoach.switchProvider('openai',this)">🤖 OpenAI</button>
+                        <button class="byok-tab" onclick="AICoach.switchProvider('anthropic',this)">⚡ Anthropic</button>
+                        <button class="byok-tab" onclick="AICoach.switchProvider('groq',this)">🚀 Groq</button>
+                        <button class="byok-tab" onclick="AICoach.switchProvider('gemini',this)">✨ Gemini</button>
                     </div>
                     <div class="byok-fields">
                         <div class="byok-field">
                             <label>API Key</label>
                             <div class="byok-key-row">
                                 <input type="password" id="byok-key-input" class="glass-input" placeholder="Enter your API key...">
-                                <button onclick="AICoach.toggleKeyViz()" class="btn-glass">👁</button>
+                                <button onclick="AICoach.toggleKeyViz()" class="btn-glass" type="button">👁</button>
                             </div>
                             <p class="byok-note">🔒 Stored locally in your browser. Never sent to our servers.</p>
                         </div>
@@ -1756,9 +1757,9 @@ body {
                             </select>
                         </div>
                         <div class="byok-actions">
-                            <button class="btn-primary" onclick="AICoach.saveKey()">✓ Save Key</button>
-                            <button class="btn-glass" onclick="AICoach.testKey()">🔌 Test Connection</button>
-                            <button class="btn-danger-sm" onclick="AICoach.clearKey()">🗑 Clear Key</button>
+                            <button class="btn-primary" onclick="AICoach.saveCurrentKey()" type="button">✓ Save Key</button>
+                            <button class="btn-glass" onclick="AICoach.testCurrentKey()" type="button">🔌 Test Connection</button>
+                            <button class="btn-danger-sm" onclick="AICoach.clearCurrentKey()" type="button">🗑 Clear Key</button>
                         </div>
                         <div id="byok-status" class="byok-status"></div>
                     </div>
@@ -1876,18 +1877,18 @@ body {
         <div class="modal-hdr"><span>📤 Share Your P&amp;L</span><button onclick="SimApp.closeModal('share-modal')">✕</button></div>
         <div class="share-canvas-wrap"><canvas id="share-canvas" width="600" height="360" class="share-canvas"></canvas></div>
         <div class="share-style-row">
-            <button class="share-style-btn active" onclick="SocialShare.setCardStyle('dark',this)">Dark</button>
-            <button class="share-style-btn" onclick="SocialShare.setCardStyle('neon',this)">Neon</button>
-            <button class="share-style-btn" onclick="SocialShare.setCardStyle('minimal',this)">Minimal</button>
-            <button class="share-style-btn" onclick="SocialShare.setCardStyle('beast',this)">Beast</button>
+            <button class="share-style-btn active" onclick="SocialSim.setCardStyle('dark',this)">Dark</button>
+            <button class="share-style-btn" onclick="SocialSim.setCardStyle('neon',this)">Neon</button>
+            <button class="share-style-btn" onclick="SocialSim.setCardStyle('minimal',this)">Minimal</button>
+            <button class="share-style-btn" onclick="SocialSim.setCardStyle('beast',this)">Beast</button>
         </div>
         <div class="share-btns-row">
-            <button onclick="SocialShare.toTwitter()">🐦 Twitter/X</button>
-            <button onclick="SocialShare.toDiscord()">💬 Discord</button>
-            <button onclick="SocialShare.toReddit()">📮 Reddit</button>
-            <button onclick="SocialShare.copyImage()">📋 Copy</button>
-            <button onclick="SocialShare.download()">💾 Download</button>
-            <button onclick="SocialShare.copyLink()">🔗 Link</button>
+            <button onclick="SocialSim.shareToTwitter()">🐦 Twitter/X</button>
+            <button onclick="SocialSim.copyDiscord()">💬 Discord</button>
+            <button onclick="SocialSim.shareToReddit()">📮 Reddit</button>
+            <button onclick="SocialSim.copyImage()">📋 Copy</button>
+            <button onclick="SocialSim.downloadCard()">💾 Download</button>
+            <button onclick="SocialSim.copyLink()">🔗 Link</button>
         </div>
     </div>
 </div>
@@ -2686,8 +2687,7 @@ const SimApp = (() => {
     renderScenarioGrid();
     OptionsEngine.init();
     Academy.init();
-    Leaderboard.init();
-    SocialShare.init();
+    SocialSim.init();
     AICoach.init();
     updateDashboard();
     updateXPBar();
@@ -2746,7 +2746,7 @@ const SimApp = (() => {
     if (view === 'options-chain') OptionsEngine.loadChain(_state.ui.currentSymbol);
     if (view === 'strategies') renderStrategies('all');
     if (view === 'portfolio') updatePortfolio();
-    if (view === 'leaderboard') Leaderboard.render();
+    if (view === 'leaderboard') SocialSim.render();
     if (view === 'settings')  renderSubscriptionPlans();
     if (view === 'backtester') {
       if (!tierAllows('pro')) { $('bt-tier-bar').style.display='flex'; $('backtester-wrap').style.opacity='0.4'; $('backtester-wrap').style.pointerEvents='none'; }
@@ -4660,256 +4660,164 @@ const Academy = (() => {
 
 const SocialSim = (() => {
   const CARD_STYLES = {
-    dark: {
-      bg: '#0a0e1a', bg2: '#0d1117', accent: '#00d4ff', accent2: '#00ff88',
-      text: '#ffffff', subtext: '#8892a4', border: '#1e2a3a', glow: 'rgba(0,212,255,0.3)'
-    },
-    neon: {
-      bg: '#0d001a', bg2: '#120020', accent: '#ff00ff', accent2: '#00ffff',
-      text: '#ffffff', subtext: '#cc88ff', border: '#440066', glow: 'rgba(255,0,255,0.4)'
-    },
-    minimal: {
-      bg: '#ffffff', bg2: '#f5f7fa', accent: '#1a1a2e', accent2: '#e94560',
-      text: '#1a1a2e', subtext: '#666688', border: '#e0e4ef', glow: 'rgba(0,0,0,0.1)'
-    },
-    beast: {
-      bg: '#0a0a0a', bg2: '#111111', accent: '#ff6600', accent2: '#ffcc00',
-      text: '#ffffff', subtext: '#aaaaaa', border: '#333333', glow: 'rgba(255,102,0,0.4)'
-    }
+    dark:    { bg:'#0a0e1a', bg2:'#0d1117', accent:'#00d4ff', accent2:'#00ff88', text:'#ffffff', subtext:'#8892a4', border:'#1e2a3a', glow:'rgba(0,212,255,0.3)' },
+    neon:    { bg:'#0d001a', bg2:'#120020', accent:'#ff00ff', accent2:'#00ffff', text:'#ffffff', subtext:'#cc88ff', border:'#440066', glow:'rgba(255,0,255,0.4)' },
+    minimal: { bg:'#ffffff', bg2:'#f5f7fa', accent:'#1a1a2e', accent2:'#e94560', text:'#1a1a2e', subtext:'#666688', border:'#e0e4ef', glow:'rgba(0,0,0,0.1)' },
+    beast:   { bg:'#0a0a0a', bg2:'#111111', accent:'#ff6600', accent2:'#ffcc00', text:'#ffffff', subtext:'#aaaaaa', border:'#333333', glow:'rgba(255,102,0,0.4)' }
   };
 
-  const MOCK_LEADERBOARD = [
-    { rank: 1, name: 'QuantKing', avatar: '👑', pnl: 284750, pct: 284.75, trades: 1247, level: 'Elite', streak: 23 },
-    { rank: 2, name: 'NeonTrader', avatar: '⚡', pnl: 198340, pct: 198.34, trades: 891, level: 'Elite', streak: 15 },
-    { rank: 3, name: 'OptionsMaster', avatar: '🎯', pnl: 167820, pct: 167.82, trades: 2341, level: 'Pro', streak: 31 },
-    { rank: 4, name: 'BullRunner99', avatar: '🐂', pnl: 143290, pct: 143.29, trades: 567, level: 'Pro', streak: 8 },
-    { rank: 5, name: 'AlphaSeeker', avatar: '🚀', pnl: 128450, pct: 128.45, trades: 734, level: 'Pro', streak: 12 },
-    { rank: 6, name: 'GammaScalper', avatar: '🎲', pnl: 112670, pct: 112.67, trades: 1892, level: 'Pro', streak: 19 },
-    { rank: 7, name: 'ThetaGang', avatar: '⏰', pnl: 98340, pct: 98.34, trades: 445, level: 'Intermediate', streak: 7 },
-    { rank: 8, name: 'VegaVault', avatar: '💎', pnl: 87120, pct: 87.12, trades: 312, level: 'Intermediate', streak: 4 },
-    { rank: 9, name: 'MomentumMax', avatar: '📈', pnl: 76890, pct: 76.89, trades: 623, level: 'Intermediate', streak: 9 },
-    { rank: 10, name: 'RiskManager', avatar: '🛡️', pnl: 65430, pct: 65.43, trades: 891, level: 'Intermediate', streak: 22 }
+  const MOCK_LB = [
+    { rank:1,  name:'QuantKing',    avatar:'👑', pnl:284750, pct:284.75, trades:1247, level:'Elite',        streak:23 },
+    { rank:2,  name:'NeonTrader',   avatar:'⚡', pnl:198340, pct:198.34, trades:891,  level:'Elite',        streak:15 },
+    { rank:3,  name:'OptionsMaster',avatar:'🎯', pnl:167820, pct:167.82, trades:2341, level:'Pro',          streak:31 },
+    { rank:4,  name:'BullRunner99', avatar:'🐂', pnl:143290, pct:143.29, trades:567,  level:'Pro',          streak:8  },
+    { rank:5,  name:'AlphaSeeker',  avatar:'🚀', pnl:128450, pct:128.45, trades:734,  level:'Pro',          streak:12 },
+    { rank:6,  name:'GammaScalper', avatar:'🎲', pnl:112670, pct:112.67, trades:1892, level:'Pro',          streak:19 },
+    { rank:7,  name:'ThetaGang',    avatar:'⏰', pnl:98340,  pct:98.34,  trades:445,  level:'Intermediate', streak:7  },
+    { rank:8,  name:'VegaVault',    avatar:'💎', pnl:87120,  pct:87.12,  trades:312,  level:'Intermediate', streak:4  },
+    { rank:9,  name:'MomentumMax',  avatar:'📈', pnl:76890,  pct:76.89,  trades:623,  level:'Intermediate', streak:9  },
+    { rank:10, name:'RiskManager',  avatar:'🛡️', pnl:65430,  pct:65.43,  trades:891,  level:'Intermediate', streak:22 }
   ];
 
   const CHALLENGES = [
-    {
-      id: 'weekly_gain',
-      name: 'Weekly Warrior',
-      desc: 'Achieve 10% portfolio gain this week',
-      icon: '⚔️',
-      xp: 500,
-      type: 'weekly',
-      target: 10,
-      metric: 'pct_gain',
-      ends: _nextSunday()
-    },
-    {
-      id: 'options_streak',
-      name: 'Options Oracle',
-      desc: 'Win 5 options trades in a row',
-      icon: '🔮',
-      xp: 750,
-      type: 'weekly',
-      target: 5,
-      metric: 'options_win_streak',
-      ends: _nextSunday()
-    },
-    {
-      id: 'vol_master',
-      name: 'Volatility Master',
-      desc: 'Profit from the Earnings Squeeze scenario',
-      icon: '💥',
-      xp: 1000,
-      type: 'special',
-      target: 1,
-      metric: 'scenario_earnings',
-      ends: _nextSunday()
-    },
-    {
-      id: 'trade_volume',
-      name: 'Volume King',
-      desc: 'Execute 50 trades this week',
-      icon: '👑',
-      xp: 600,
-      type: 'weekly',
-      target: 50,
-      metric: 'weekly_trades',
-      ends: _nextSunday()
-    },
-    {
-      id: 'risk_disciplined',
-      name: 'Risk Disciplined',
-      desc: 'Keep max drawdown under 5% for 7 days',
-      icon: '🛡️',
-      xp: 800,
-      type: 'weekly',
-      target: 7,
-      metric: 'drawdown_days',
-      ends: _nextSunday()
-    },
-    {
-      id: 'daily_profit',
-      name: 'Daily Grind',
-      desc: 'Achieve positive P&L for 3 consecutive days',
-      icon: '📅',
-      xp: 400,
-      type: 'daily',
-      target: 3,
-      metric: 'daily_streak',
-      ends: _nextMidnight()
-    }
+    { id:'weekly_gain',  name:'Weekly Warrior',   desc:'Achieve 10% portfolio gain this week',  icon:'⚔️',  xp:500,  type:'weekly',  target:10, ends:_nextSunday()   },
+    { id:'opts_streak',  name:'Options Oracle',   desc:'Win 5 options trades in a row',          icon:'🔮',  xp:750,  type:'weekly',  target:5,  ends:_nextSunday()   },
+    { id:'vol_master',   name:'Volatility Master',desc:'Profit from the Earnings scenario',      icon:'💥',  xp:1000, type:'special', target:1,  ends:_nextSunday()   },
+    { id:'trade_vol',    name:'Volume King',      desc:'Execute 50 trades this week',            icon:'👑',  xp:600,  type:'weekly',  target:50, ends:_nextSunday()   },
+    { id:'risk_disc',    name:'Risk Disciplined', desc:'Keep max drawdown under 5% for 7 days', icon:'🛡️', xp:800,  type:'weekly',  target:7,  ends:_nextSunday()   },
+    { id:'daily_profit', name:'Daily Grind',      desc:'Positive P&L for 3 consecutive days',   icon:'📅',  xp:400,  type:'daily',   target:3,  ends:_nextMidnight() }
   ];
 
   function _nextSunday() {
-    const d = new Date();
-    d.setDate(d.getDate() + (7 - d.getDay()));
-    d.setHours(23, 59, 59, 0);
-    return d.getTime();
+    const d = new Date(); d.setDate(d.getDate() + (7 - d.getDay())); d.setHours(23,59,59,0); return d.getTime();
   }
-
   function _nextMidnight() {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    d.setHours(0, 0, 0, 0);
-    return d.getTime();
+    const d = new Date(); d.setDate(d.getDate()+1); d.setHours(0,0,0,0); return d.getTime();
   }
-
   function _timeLeft(ts) {
-    const diff = ts - Date.now();
-    if (diff <= 0) return 'Ended';
-    const h = Math.floor(diff / 3600000);
-    const m = Math.floor((diff % 3600000) / 60000);
-    if (h > 24) return `${Math.floor(h / 24)}d ${h % 24}h`;
-    return `${h}h ${m}m`;
+    const diff = ts - Date.now(); if (diff<=0) return 'Ended';
+    const h = Math.floor(diff/3600000), m = Math.floor((diff%3600000)/60000);
+    return h > 24 ? `${Math.floor(h/24)}d ${h%24}h` : `${h}h ${m}m`;
+  }
+  function _getChallengeProgress(c) {
+    const st = SimEngine.getState();
+    const g  = st.gamification;
+    switch(c.id) {
+      case 'weekly_gain':  return Math.max(0, ((SimEngine.portfolioValue()-st.portfolio.startingCash)/st.portfolio.startingCash*100).toFixed(1)*1);
+      case 'opts_streak':  return g.optionsWinStreak || 0;
+      case 'vol_master':   return (g.completedScenarios||0) > 0 ? 1 : 0;
+      case 'trade_vol':    return g.totalTrades || 0;
+      case 'risk_disc':    return 0;
+      case 'daily_profit': return g.winStreak || 0;
+      default:             return 0;
+    }
   }
 
   /* ── Leaderboard ── */
   function renderLeaderboard() {
-    const st = SimEngine.state;
-    const myPct = st.startingCapital > 0
-      ? ((st.portfolio - st.startingCapital) / st.startingCapital * 100)
-      : 0;
-
+    const st   = SimEngine.getState();
+    const pv   = SimEngine.portfolioValue();
+    const pnl  = pv - st.portfolio.startingCash;
+    const pct  = (pnl / st.portfolio.startingCash * 100);
+    const g    = st.gamification;
     const myEntry = {
-      rank: '?',
-      name: st.username || 'You',
-      avatar: '🤖',
-      pnl: st.portfolio - st.startingCapital,
-      pct: myPct,
-      trades: st.totalTrades,
-      level: st.levelName || 'Beginner',
-      streak: st.currentStreak || 0,
-      isMe: true
+      rank:0, name: st.username||'You', avatar:'🤖',
+      pnl, pct, trades: g.totalTrades||0,
+      level: SimEngine.levelName(g.level||1), streak: g.streak||0, isMe:true
     };
+    const all = [...MOCK_LB, myEntry].sort((a,b)=>b.pct-a.pct);
+    all.forEach((e,i) => { if(e.isMe) e.rank = i+1; });
 
-    const allEntries = [...MOCK_LEADERBOARD, myEntry].sort((a, b) => b.pct - a.pct);
-    allEntries.forEach((e, i) => { if (e.isMe) e.rank = i + 1; });
-
-    const tab = document.getElementById('lb-tab') || 'global';
-    const periodEl = document.getElementById('lb-period');
-    const period = periodEl ? periodEl.value : 'weekly';
-
-    const container = document.getElementById('leaderboard-list');
-    if (!container) return;
-
-    const rankEmoji = (r) => r === 1 ? '🥇' : r === 2 ? '🥈' : r === 3 ? '🥉' : `#${r}`;
-
-    container.innerHTML = allEntries.map(e => `
-      <div class="lb-row ${e.isMe ? 'lb-me' : ''} ${e.rank <= 3 ? 'lb-top' : ''}">
+    const el = document.getElementById('lb-board');
+    if (!el) return;
+    const rankEmoji = r => r===1?'🥇':r===2?'🥈':r===3?'🥉':`#${r}`;
+    el.innerHTML = all.map(e => `
+      <div class="lb-row ${e.isMe?'lb-me':''} ${e.rank<=3?'lb-top':''}">
         <div class="lb-rank">${rankEmoji(e.rank)}</div>
         <div class="lb-avatar">${e.avatar}</div>
         <div class="lb-info">
-          <div class="lb-name">${e.name} ${e.isMe ? '<span class="lb-you-badge">YOU</span>' : ''}</div>
+          <div class="lb-name">${e.name}${e.isMe?' <span class="lb-you-badge">YOU</span>':''}</div>
           <div class="lb-meta">${e.level} • ${e.trades.toLocaleString()} trades • 🔥${e.streak}</div>
         </div>
         <div class="lb-stats">
-          <div class="lb-pct ${e.pct >= 0 ? 'pos' : 'neg'}">${e.pct >= 0 ? '+' : ''}${e.pct.toFixed(1)}%</div>
-          <div class="lb-pnl">${e.pnl >= 0 ? '+' : ''}$${Math.abs(e.pnl).toLocaleString()}</div>
+          <div class="lb-pct ${e.pct>=0?'pos':'neg'}">${e.pct>=0?'+':''}${e.pct.toFixed(1)}%</div>
+          <div class="lb-pnl">${e.pnl>=0?'+':''}$${Math.abs(e.pnl).toLocaleString('en',{maximumFractionDigits:0})}</div>
         </div>
-      </div>
-    `).join('');
+      </div>`).join('');
 
+    renderMyRankCard(myEntry);
     renderChallenges();
-    renderMyStats();
+    renderAchievements();
+  }
+
+  function renderMyRankCard(me) {
+    const el = document.getElementById('your-rank-card');
+    if (!el) return;
+    el.innerHTML = `
+      <div class="yrk-inner">
+        <div class="yrk-rank">#${me.rank}</div>
+        <div class="yrk-info">
+          <strong>${me.name}</strong>
+          <span>${me.level} • 🔥${me.streak} streak</span>
+        </div>
+        <div class="yrk-stats">
+          <span class="${me.pct>=0?'pos':'neg'}">${me.pct>=0?'+':''}${me.pct.toFixed(1)}%</span>
+          <span style="font-size:11px;color:var(--text3)">${me.trades} trades</span>
+        </div>
+      </div>`;
   }
 
   function renderChallenges() {
-    const container = document.getElementById('challenges-list');
-    if (!container) return;
-
-    const st = SimEngine.state;
-    const completed = st.completedChallenges || [];
-
-    container.innerHTML = CHALLENGES.map(c => {
-      const done = completed.includes(c.id);
-      const progress = _getChallengeProgress(c, st);
-      const pct = Math.min(100, (progress / c.target) * 100);
-
+    const el = document.getElementById('lb-challenges');
+    if (!el) return;
+    const st = SimEngine.getState();
+    const done = st.gamification.completedChallenges || [];
+    el.innerHTML = CHALLENGES.map(c => {
+      const isDone = done.includes(c.id);
+      const prog   = _getChallengeProgress(c);
+      const pct    = Math.min(100, (prog/c.target)*100);
       return `
-        <div class="challenge-card ${done ? 'challenge-done' : ''}">
+        <div class="challenge-card ${isDone?'challenge-done':''}">
           <div class="challenge-icon">${c.icon}</div>
           <div class="challenge-body">
-            <div class="challenge-name">${c.name} ${done ? '✅' : ''}</div>
+            <div class="challenge-name">${c.name}${isDone?' ✅':''}</div>
             <div class="challenge-desc">${c.desc}</div>
             <div class="challenge-meta">
               <span class="challenge-type ${c.type}">${c.type}</span>
               <span class="challenge-xp">+${c.xp} XP</span>
               <span class="challenge-time">⏱ ${_timeLeft(c.ends)}</span>
             </div>
-            ${!done ? `
-              <div class="challenge-progress">
-                <div class="challenge-bar">
-                  <div class="challenge-fill" style="width:${pct}%"></div>
-                </div>
-                <span class="challenge-prog-txt">${progress}/${c.target}</span>
-              </div>
-            ` : '<div class="challenge-complete-msg">Challenge Complete! XP Awarded</div>'}
+            ${!isDone?`<div class="challenge-progress">
+              <div class="challenge-bar"><div class="challenge-fill" style="width:${pct}%"></div></div>
+              <span class="challenge-prog-txt">${prog}/${c.target}</span>
+            </div>`:'<div class="challenge-complete-msg">Complete! XP Awarded</div>'}
           </div>
-        </div>
-      `;
+        </div>`;
     }).join('');
   }
 
-  function _getChallengeProgress(c, st) {
-    switch (c.metric) {
-      case 'pct_gain': {
-        const g = ((st.portfolio - st.startingCapital) / st.startingCapital * 100);
-        return Math.max(0, g.toFixed(1) * 1);
-      }
-      case 'options_win_streak': return st.optionsWinStreak || 0;
-      case 'scenario_earnings': return (st.completedScenarios || []).includes('earnings') ? 1 : 0;
-      case 'weekly_trades': return st.weeklyTrades || 0;
-      case 'drawdown_days': return st.drawdownDays || 0;
-      case 'daily_streak': return st.dailyProfitStreak || 0;
-      default: return 0;
-    }
-  }
-
-  function renderMyStats() {
-    const el = document.getElementById('my-lb-stats');
+  function renderAchievements() {
+    const el = document.getElementById('achievements-grid');
     if (!el) return;
-    const st = SimEngine.state;
-    const pnl = st.portfolio - st.startingCapital;
-    const pct = (pnl / st.startingCapital * 100).toFixed(2);
-    el.innerHTML = `
-      <div class="my-stat"><span>Portfolio</span><strong>$${st.portfolio.toLocaleString('en', {maximumFractionDigits:0})}</strong></div>
-      <div class="my-stat"><span>Total P&L</span><strong class="${pnl>=0?'pos':'neg'}">${pnl>=0?'+':''}$${Math.abs(pnl).toLocaleString('en',{maximumFractionDigits:0})}</strong></div>
-      <div class="my-stat"><span>Return</span><strong class="${pct>=0?'pos':'neg'}">${pct>=0?'+':''}${pct}%</strong></div>
-      <div class="my-stat"><span>Win Rate</span><strong>${st.winRate||0}%</strong></div>
-      <div class="my-stat"><span>Level</span><strong>${st.levelName||'Beginner'}</strong></div>
-      <div class="my-stat"><span>XP</span><strong>${(st.xp||0).toLocaleString()}</strong></div>
-    `;
+    const unlocked = SimEngine.getState().gamification.unlockedAchievements || [];
+    if (!unlocked.length) { el.innerHTML = '<div class="empty-state">No achievements yet — keep trading!</div>'; return; }
+    el.innerHTML = unlocked.map(id => {
+      const a = ACHIEVEMENTS.find(a => a.id === id);
+      if (!a) return '';
+      return `<div class="ach-card"><div class="ach-card-icon">${a.icon}</div><div class="ach-card-name">${a.name}</div><div class="ach-card-xp">+${a.xp} XP</div></div>`;
+    }).join('');
   }
 
-  /* ── P&L Card Generator ── */
+  /* ── P&L Card ── */
   let _currentStyle = 'dark';
 
   function openShareModal(tradeData) {
     const modal = document.getElementById('share-modal');
     if (!modal) return;
     modal.style.display = 'flex';
-    _renderCardPreview(tradeData || _buildCardData());
-    _renderShareOptions(tradeData || _buildCardData());
+    const data = tradeData || _buildCardData();
+    const canvas = document.getElementById('share-canvas');
+    if (canvas) drawCard(canvas, data, _currentStyle);
   }
 
   function closeShareModal() {
@@ -4918,35 +4826,21 @@ const SocialSim = (() => {
   }
 
   function _buildCardData() {
-    const st = SimEngine.state;
-    const pnl = st.portfolio - st.startingCapital;
+    const st  = SimEngine.getState();
+    const pv  = SimEngine.portfolioValue();
+    const pnl = pv - st.portfolio.startingCash;
+    const g   = st.gamification;
+    const total = g.wins + g.losses;
     return {
-      type: 'portfolio',
-      symbol: 'PORTFOLIO',
-      pnl: pnl,
-      pct: (pnl / st.startingCapital * 100),
-      portfolio: st.portfolio,
-      winRate: st.winRate || 0,
-      trades: st.totalTrades || 0,
-      level: st.levelName || 'Beginner',
-      xp: st.xp || 0,
-      streak: st.currentStreak || 0,
-      username: st.username || 'Trader'
+      type:'portfolio', symbol:'PORTFOLIO',
+      pnl, pct:(pnl/st.portfolio.startingCash*100),
+      portfolio:pv,
+      winRate: total ? Math.round(g.wins/total*100) : 0,
+      trades: g.totalTrades||0,
+      level: SimEngine.levelName(g.level||1),
+      xp: g.xp||0, streak:g.streak||0,
+      username: st.username||'Trader'
     };
-  }
-
-  function _renderCardPreview(data) {
-    const preview = document.getElementById('card-preview-area');
-    if (!preview) return;
-
-    const canvas = document.createElement('canvas');
-    canvas.width = 800;
-    canvas.height = 450;
-    canvas.id = 'pnl-canvas';
-    canvas.style.cssText = 'width:100%;max-width:600px;border-radius:12px;';
-    preview.innerHTML = '';
-    preview.appendChild(canvas);
-    drawCard(canvas, data, _currentStyle);
   }
 
   function drawCard(canvas, data, styleName) {
@@ -4954,914 +4848,492 @@ const SocialSim = (() => {
     const s = CARD_STYLES[styleName] || CARD_STYLES.dark;
     const W = canvas.width, H = canvas.height;
 
-    // Background gradient
-    const grad = ctx.createLinearGradient(0, 0, W, H);
-    grad.addColorStop(0, s.bg);
-    grad.addColorStop(1, s.bg2);
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, W, H);
+    const grad = ctx.createLinearGradient(0,0,W,H);
+    grad.addColorStop(0, s.bg); grad.addColorStop(1, s.bg2);
+    ctx.fillStyle = grad; ctx.fillRect(0,0,W,H);
 
-    // Border glow
-    ctx.save();
-    ctx.strokeStyle = s.accent;
-    ctx.lineWidth = 2;
-    ctx.shadowColor = s.glow;
-    ctx.shadowBlur = 20;
-    _roundRect(ctx, 2, 2, W - 4, H - 4, 16);
-    ctx.stroke();
+    ctx.save(); ctx.strokeStyle = s.accent; ctx.lineWidth = 2;
+    ctx.shadowColor = s.glow; ctx.shadowBlur = 20;
+    _roundRect(ctx,2,2,W-4,H-4,16); ctx.stroke(); ctx.restore();
+
+    ctx.save(); ctx.strokeStyle = s.border; ctx.lineWidth=0.5; ctx.globalAlpha=0.4;
+    for(let x=40;x<W;x+=80){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+    for(let y=40;y<H;y+=80){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
     ctx.restore();
 
-    // Grid lines
-    ctx.save();
-    ctx.strokeStyle = s.border;
-    ctx.lineWidth = 0.5;
-    ctx.globalAlpha = 0.4;
-    for (let x = 40; x < W; x += 80) {
-      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
-    }
-    for (let y = 40; y < H; y += 80) {
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
-    }
-    ctx.restore();
+    ctx.fillStyle = s.accent; ctx.font = 'bold 16px monospace';
+    ctx.fillText('⚡ SQUEEZESIM PRO', 32, 40);
+    ctx.fillStyle = s.accent; ctx.fillRect(32,52,W-64,1);
 
-    // Logo/brand
-    ctx.fillStyle = s.accent;
-    ctx.font = 'bold 18px "Courier New", monospace';
-    ctx.fillText('⚡ SQUEEZE OS SIMULATOR', 32, 42);
+    ctx.fillStyle = s.subtext; ctx.font = '13px monospace';
+    ctx.fillText('@'+data.username, 32, 72);
+    ctx.fillStyle = s.accent2; ctx.font = 'bold 13px monospace';
+    ctx.fillText('LVL: '+data.level, W-180, 72);
 
-    // Divider
-    ctx.fillStyle = s.accent;
-    ctx.fillRect(32, 54, W - 64, 1);
+    const isPos   = data.pnl >= 0;
+    const pnlClr  = isPos ? (styleName==='minimal'?'#00aa44':'#00ff88') : '#ff4466';
+    const pnlTxt  = (isPos?'+':'') + '$' + Math.abs(data.pnl).toLocaleString('en',{maximumFractionDigits:0});
+    ctx.save(); ctx.fillStyle = pnlClr; ctx.font = 'bold 64px monospace';
+    ctx.shadowColor = pnlClr; ctx.shadowBlur = styleName==='minimal'?0:25;
+    const pw = ctx.measureText(pnlTxt).width;
+    ctx.fillText(pnlTxt, (W-pw)/2, 185); ctx.restore();
 
-    // Username + level
-    ctx.fillStyle = s.subtext;
-    ctx.font = '14px "Courier New", monospace';
-    ctx.fillText(`@${data.username}`, 32, 78);
-    ctx.fillStyle = s.accent2;
-    ctx.font = 'bold 14px "Courier New", monospace';
-    ctx.fillText(`LVL: ${data.level}`, W - 180, 78);
-    ctx.fillStyle = s.subtext;
-    ctx.fillText(`${data.xp.toLocaleString()} XP`, W - 100, 78);
+    const pctTxt = (isPos?'+':'')+data.pct.toFixed(2)+'%';
+    ctx.save(); ctx.fillStyle = pnlClr; ctx.font = 'bold 30px monospace';
+    ctx.shadowColor = pnlClr; ctx.shadowBlur = styleName==='minimal'?0:12;
+    const qw = ctx.measureText(pctTxt).width;
+    ctx.fillText(pctTxt, (W-qw)/2, 228); ctx.restore();
 
-    // Main P&L
-    const isPos = data.pnl >= 0;
-    const pnlColor = isPos ? (styleName === 'minimal' ? '#00aa44' : '#00ff88') : '#ff4466';
-    const pnlText = `${isPos ? '+' : ''}$${Math.abs(data.pnl).toLocaleString('en', { maximumFractionDigits: 0 })}`;
-
-    ctx.save();
-    ctx.fillStyle = pnlColor;
-    ctx.font = 'bold 72px "Courier New", monospace';
-    ctx.shadowColor = pnlColor;
-    ctx.shadowBlur = styleName === 'minimal' ? 0 : 30;
-    const pnlW = ctx.measureText(pnlText).width;
-    ctx.fillText(pnlText, (W - pnlW) / 2, 200);
-    ctx.restore();
-
-    // Percentage
-    const pctText = `${isPos ? '+' : ''}${data.pct.toFixed(2)}%`;
-    ctx.save();
-    ctx.fillStyle = pnlColor;
-    ctx.font = 'bold 36px "Courier New", monospace';
-    ctx.shadowColor = pnlColor;
-    ctx.shadowBlur = styleName === 'minimal' ? 0 : 15;
-    const pctW = ctx.measureText(pctText).width;
-    ctx.fillText(pctText, (W - pctW) / 2, 250);
-    ctx.restore();
-
-    // Symbol/type label
-    ctx.fillStyle = s.subtext;
-    ctx.font = '16px "Courier New", monospace';
+    ctx.fillStyle = s.subtext; ctx.font = '14px monospace';
     const symW = ctx.measureText(data.symbol).width;
-    ctx.fillText(data.symbol, (W - symW) / 2, 280);
+    ctx.fillText(data.symbol, (W-symW)/2, 255);
 
-    // Stats row
     const stats = [
-      { label: 'PORTFOLIO', val: `$${(data.portfolio / 1000).toFixed(1)}K` },
-      { label: 'WIN RATE', val: `${data.winRate}%` },
-      { label: 'TRADES', val: data.trades.toString() },
-      { label: 'STREAK', val: `🔥${data.streak}` }
+      {label:'PORTFOLIO', val:'$'+(data.portfolio/1000).toFixed(1)+'K'},
+      {label:'WIN RATE',  val:data.winRate+'%'},
+      {label:'TRADES',    val:''+data.trades},
+      {label:'STREAK',    val:'🔥'+data.streak}
     ];
-
-    const statW = (W - 64) / stats.length;
-    stats.forEach((stat, i) => {
-      const x = 32 + i * statW + statW / 2;
-      ctx.fillStyle = s.subtext;
-      ctx.font = '11px "Courier New", monospace';
-      const lw = ctx.measureText(stat.label).width;
-      ctx.fillText(stat.label, x - lw / 2, 330);
-
-      ctx.fillStyle = s.text;
-      ctx.font = 'bold 18px "Courier New", monospace';
-      const vw = ctx.measureText(stat.val).width;
-      ctx.fillText(stat.val, x - vw / 2, 355);
+    const sw = (W-64)/stats.length;
+    stats.forEach((st2,i) => {
+      const x = 32 + i*sw + sw/2;
+      ctx.fillStyle = s.subtext; ctx.font = '10px monospace';
+      const lw = ctx.measureText(st2.label).width;
+      ctx.fillText(st2.label, x-lw/2, 300);
+      ctx.fillStyle = s.text; ctx.font = 'bold 16px monospace';
+      const vw = ctx.measureText(st2.val).width;
+      ctx.fillText(st2.val, x-vw/2, 320);
     });
 
-    // Divider
-    ctx.fillStyle = s.border;
-    ctx.fillRect(32, 370, W - 64, 1);
-
-    // Bottom CTA
-    ctx.fillStyle = s.accent;
-    ctx.font = '13px "Courier New", monospace';
-    ctx.fillText('Trade smarter at SqueezeOS.com', 32, 400);
-
-    ctx.fillStyle = s.subtext;
-    ctx.font = '11px "Courier New", monospace';
-    ctx.fillText('Simulated trading for educational purposes', 32, 420);
-
-    // Watermark pattern
-    if (styleName !== 'minimal') {
-      ctx.save();
-      ctx.globalAlpha = 0.04;
-      ctx.fillStyle = s.accent;
-      ctx.font = 'bold 120px "Courier New", monospace';
-      ctx.fillText('SIM', 200, 380);
-      ctx.restore();
-    }
-
+    ctx.fillStyle = s.border; ctx.fillRect(32,335,W-64,1);
+    ctx.fillStyle = s.accent; ctx.font = '12px monospace';
+    ctx.fillText('Trade smarter at SqueezeOS • Educational simulator only', 32, 358);
     return canvas;
   }
 
-  function _roundRect(ctx, x, y, w, h, r) {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y);
-    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-    ctx.lineTo(x + w, y + h - r);
-    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-    ctx.lineTo(x + r, y + h);
-    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-    ctx.lineTo(x, y + r);
-    ctx.quadraticCurveTo(x, y, x + r, y);
-    ctx.closePath();
-  }
-
-  function _renderShareOptions(data) {
-    const el = document.getElementById('share-options-area');
-    if (!el) return;
-    el.innerHTML = `
-      <div class="share-style-row">
-        ${Object.keys(CARD_STYLES).map(k => `
-          <button class="style-btn ${k === _currentStyle ? 'active' : ''}"
-            onclick="SocialSim.setCardStyle('${k}',this)"
-            style="background:${CARD_STYLES[k].bg};color:${CARD_STYLES[k].accent};border-color:${CARD_STYLES[k].accent}">
-            ${k.charAt(0).toUpperCase() + k.slice(1)}
-          </button>
-        `).join('')}
-      </div>
-      <div class="share-buttons-row">
-        <button class="share-btn share-twitter" onclick="SocialSim.shareToTwitter()">
-          𝕏 Twitter/X
-        </button>
-        <button class="share-btn share-reddit" onclick="SocialSim.shareToReddit()">
-          📡 Reddit
-        </button>
-        <button class="share-btn share-discord" onclick="SocialSim.copyDiscord()">
-          💬 Discord Copy
-        </button>
-        <button class="share-btn share-copy" onclick="SocialSim.copyImage()">
-          📋 Copy Image
-        </button>
-        <button class="share-btn share-download" onclick="SocialSim.downloadCard()">
-          ⬇️ Download PNG
-        </button>
-      </div>
-    `;
+  function _roundRect(ctx,x,y,w,h,r) {
+    ctx.beginPath(); ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y);
+    ctx.quadraticCurveTo(x+w,y,x+w,y+r); ctx.lineTo(x+w,y+h-r);
+    ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h); ctx.lineTo(x+r,y+h);
+    ctx.quadraticCurveTo(x,y+h,x,y+h-r); ctx.lineTo(x,y+r);
+    ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
   }
 
   function setCardStyle(style, btn) {
     _currentStyle = style;
-    document.querySelectorAll('.style-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.share-style-btn').forEach(b => b.classList.remove('active'));
     if (btn) btn.classList.add('active');
-    _renderCardPreview(_buildCardData());
-  }
-
-  function _getCanvas() {
-    return document.getElementById('pnl-canvas');
+    const canvas = document.getElementById('share-canvas');
+    if (canvas) drawCard(canvas, _buildCardData(), style);
   }
 
   function _buildShareText(data) {
     const d = data || _buildCardData();
-    const isPos = d.pnl >= 0;
-    const emoji = isPos ? '🚀🟢' : '📉🔴';
-    return `${emoji} Just ${isPos ? 'made' : 'lost'} ${isPos ? '+' : ''}$${Math.abs(d.pnl).toLocaleString()} (${isPos ? '+' : ''}${d.pct.toFixed(2)}%) trading ${d.symbol} on SqueezeOS Simulator!\n\nPortfolio: $${d.portfolio.toLocaleString()} | Win Rate: ${d.winRate}% | Level: ${d.level}\n\n#TradingSimulator #SqueezeOS #PaperTrading #Options`;
+    const e = d.pnl>=0?'🚀🟢':'📉🔴';
+    return `${e} ${d.pnl>=0?'Made':'Lost'} ${d.pnl>=0?'+':''}$${Math.abs(d.pnl).toLocaleString()} (${d.pct.toFixed(2)}%) on SqueezeOS Simulator!\n\nPortfolio: $${d.portfolio.toLocaleString('en',{maximumFractionDigits:0})} | Win Rate: ${d.winRate}% | Level: ${d.level}\n\n#TradingSimulator #SqueezeOS #PaperTrading #Options`;
   }
 
   function shareToTwitter() {
-    const text = encodeURIComponent(_buildShareText());
-    window.open(`https://twitter.com/intent/tweet?text=${text}`, '_blank', 'width=600,height=400');
+    window.open('https://twitter.com/intent/tweet?text='+encodeURIComponent(_buildShareText()), '_blank', 'width=600,height=400');
     SimApp.toast('Opened Twitter/X!', 'success');
   }
-
   function shareToReddit() {
-    const data = _buildCardData();
-    const title = encodeURIComponent(`SqueezeOS Sim: ${data.pnl >= 0 ? '+' : ''}$${Math.abs(data.pnl).toLocaleString()} (${data.pct.toFixed(2)}%) - ${data.symbol}`);
-    const text = encodeURIComponent(_buildShareText(data));
-    window.open(`https://www.reddit.com/r/wallstreetbets/submit?title=${title}&text=${text}`, '_blank');
+    const d = _buildCardData();
+    const t = encodeURIComponent(`SqueezeOS Sim: ${d.pnl>=0?'+':''}$${Math.abs(d.pnl).toLocaleString()} (${d.pct.toFixed(2)}%)`);
+    window.open('https://www.reddit.com/r/wallstreetbets/submit?title='+t+'&text='+encodeURIComponent(_buildShareText(d)), '_blank');
     SimApp.toast('Opened Reddit!', 'success');
   }
-
   async function copyDiscord() {
-    const text = _buildShareText();
-    try {
-      await navigator.clipboard.writeText(text);
-      SimApp.toast('Copied for Discord!', 'success');
-    } catch {
-      SimApp.toast('Copy failed — try manual copy', 'error');
-    }
+    try { await navigator.clipboard.writeText(_buildShareText()); SimApp.toast('Copied for Discord!','success'); }
+    catch { SimApp.toast('Copy failed','error'); }
   }
-
   async function copyImage() {
-    const canvas = _getCanvas();
+    const canvas = document.getElementById('share-canvas');
     if (!canvas) return;
     try {
       canvas.toBlob(async blob => {
-        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-        SimApp.toast('Image copied to clipboard!', 'success');
+        await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);
+        SimApp.toast('Image copied!','success');
       });
-    } catch {
-      SimApp.toast('Image copy not supported in this browser', 'warn');
-    }
+    } catch { SimApp.toast('Image copy not supported in this browser','warn'); }
   }
-
   function downloadCard() {
-    const canvas = _getCanvas();
+    const canvas = document.getElementById('share-canvas');
     if (!canvas) return;
-    const data = _buildCardData();
-    const link = document.createElement('a');
-    link.download = `squeezeos-pnl-${data.symbol}-${Date.now()}.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
-    SimApp.toast('Card downloaded!', 'success');
+    const a = document.createElement('a');
+    a.download = 'squeezesim-pnl-'+Date.now()+'.png';
+    a.href = canvas.toDataURL('image/png'); a.click();
+    SimApp.toast('Card downloaded!','success');
   }
-
-  function shareTradeCard(sym, side, pnl, pct, type) {
-    const st = SimEngine.state;
-    const data = {
-      type: type || 'trade',
-      symbol: sym,
-      pnl: pnl,
-      pct: pct,
-      portfolio: st.portfolio,
-      winRate: st.winRate || 0,
-      trades: st.totalTrades || 0,
-      level: st.levelName || 'Beginner',
-      xp: st.xp || 0,
-      streak: st.currentStreak || 0,
-      username: st.username || 'Trader',
-      side: side
-    };
-    openShareModal(data);
-  }
-
-  /* ── Copy generic link ── */
   async function copyLink() {
-    const url = window.location.href.split('#')[0] + '#simulator';
-    try {
-      await navigator.clipboard.writeText(url);
-      SimApp.toast('Link copied!', 'success');
-    } catch {
-      SimApp.toast('Could not copy link', 'error');
-    }
+    try { await navigator.clipboard.writeText(window.location.href); SimApp.toast('Link copied!','success'); }
+    catch { SimApp.toast('Could not copy link','error'); }
   }
 
-  /* ── Referral system ── */
-  function generateReferralCode() {
-    const st = SimEngine.state;
-    if (st.referralCode) return st.referralCode;
-    const code = 'SQ' + Math.random().toString(36).substr(2, 8).toUpperCase();
-    st.referralCode = code;
-    SimEngine.saveState();
-    return code;
+  function shareTradeCard(sym, pnl, pct) {
+    const st = SimEngine.getState();
+    const g  = st.gamification;
+    const total = g.wins + g.losses;
+    openShareModal({
+      type:'trade', symbol:sym, pnl, pct,
+      portfolio: SimEngine.portfolioValue(),
+      winRate: total?Math.round(g.wins/total*100):0,
+      trades: g.totalTrades||0,
+      level: SimEngine.levelName(g.level||1),
+      xp:g.xp||0, streak:g.streak||0, username:st.username||'Trader'
+    });
   }
 
-  function renderReferralSection() {
-    const el = document.getElementById('referral-section');
-    if (!el) return;
-    const code = generateReferralCode();
-    el.innerHTML = `
-      <div class="referral-card">
-        <h4>🎁 Refer Friends & Earn XP</h4>
-        <p>Share your referral code. Each friend who signs up earns you <strong>500 XP</strong>!</p>
-        <div class="referral-code-row">
-          <span class="referral-code">${code}</span>
-          <button class="btn-sm" onclick="SocialSim.copyReferral('${code}')">Copy</button>
-          <button class="btn-sm" onclick="SocialSim.shareReferral('${code}')">Share</button>
-        </div>
-        <div class="referral-stats">
-          <span>Referrals: <strong>${SimEngine.state.referrals || 0}</strong></span>
-          <span>XP Earned: <strong>${(SimEngine.state.referrals || 0) * 500}</strong></span>
-        </div>
-      </div>
-    `;
-  }
-
-  async function copyReferral(code) {
-    const text = `Join me on SqueezeOS Trading Simulator! Use code ${code} to get started. #SqueezeOS #TradingSimulator`;
-    try {
-      await navigator.clipboard.writeText(text);
-      SimApp.toast('Referral code copied!', 'success');
-    } catch {
-      SimApp.toast('Copy failed', 'error');
-    }
-  }
-
-  function shareReferral(code) {
-    const text = encodeURIComponent(`Join me on SqueezeOS Trading Simulator! Use code ${code} to get started. #SqueezeOS #TradingSimulator`);
-    window.open(`https://twitter.com/intent/tweet?text=${text}`, '_blank');
-  }
-
-  /* ── Init ── */
+  /* ── Init / Render ── */
   function init() {
-    const lbTab = document.getElementById('lb-period');
-    if (lbTab) lbTab.addEventListener('change', renderLeaderboard);
+    const lbPeriod = document.getElementById('lb-period');
+    if (lbPeriod) lbPeriod.addEventListener('change', renderLeaderboard);
+  }
+
+  function render() {
+    renderLeaderboard();
   }
 
   return {
-    init,
-    renderLeaderboard,
-    renderChallenges,
-    openShareModal,
-    closeShareModal,
-    setCardStyle,
-    shareToTwitter,
-    shareToReddit,
-    copyDiscord,
-    copyImage,
-    downloadCard,
-    shareTradeCard,
-    copyLink,
-    drawCard,
-    renderReferralSection,
-    copyReferral,
-    shareReferral,
-    CARD_STYLES
+    init, render,
+    renderLeaderboard, renderChallenges, renderAchievements,
+    openShareModal, closeShareModal,
+    setCardStyle, drawCard,
+    shareToTwitter, shareToReddit, copyDiscord, copyImage, downloadCard, copyLink,
+    shareTradeCard, CARD_STYLES
   };
 })();
 
 </script>
 <script>
-/* trading-sim-ai.js — BYOK AI Coach (OpenAI, Anthropic, Groq, Gemini) */
+/* trading-sim-ai.js — BYOK AI Coach */
 'use strict';
 
 const AICoach = (() => {
   const PROVIDERS = {
+    openrouter: {
+      name:'OpenRouter', icon:'🌐',
+      models:['meta-llama/llama-3.3-70b-instruct','anthropic/claude-haiku-4-5','openai/gpt-4o-mini','google/gemini-2.0-flash-001','mistralai/mixtral-8x7b-instruct'],
+      defaultModel:'meta-llama/llama-3.3-70b-instruct',
+      endpoint:'https://openrouter.ai/api/v1/chat/completions',
+      headerKey:'Authorization', headerVal:k=>`Bearer ${k}`,
+      extraHeaders:{'HTTP-Referer':'https://squeezeos.app','X-Title':'SqueezeSim AI Coach'},
+      bodyFn:(model,msgs)=>JSON.stringify({model,messages:msgs,max_tokens:1024,temperature:0.7}),
+      parseFn:r=>r.choices?.[0]?.message?.content||'No response'
+    },
     openai: {
-      name: 'OpenAI',
-      icon: '🤖',
-      models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
-      defaultModel: 'gpt-4o-mini',
-      endpoint: 'https://api.openai.com/v1/chat/completions',
-      headerKey: 'Authorization',
-      headerVal: k => `Bearer ${k}`,
-      bodyFn: (model, messages) => JSON.stringify({ model, messages, max_tokens: 1024, temperature: 0.7 }),
-      parseFn: r => r.choices?.[0]?.message?.content || 'No response'
+      name:'OpenAI', icon:'🤖',
+      models:['gpt-4o','gpt-4o-mini','gpt-4-turbo','gpt-3.5-turbo'],
+      defaultModel:'gpt-4o-mini',
+      endpoint:'https://api.openai.com/v1/chat/completions',
+      headerKey:'Authorization', headerVal:k=>`Bearer ${k}`,
+      bodyFn:(model,msgs)=>JSON.stringify({model,messages:msgs,max_tokens:1024,temperature:0.7}),
+      parseFn:r=>r.choices?.[0]?.message?.content||'No response'
     },
     anthropic: {
-      name: 'Anthropic (Claude)',
-      icon: '⚡',
-      models: ['claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-7'],
-      defaultModel: 'claude-haiku-4-5-20251001',
-      endpoint: 'https://api.anthropic.com/v1/messages',
-      headerKey: 'x-api-key',
-      headerVal: k => k,
-      extraHeaders: { 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-      bodyFn: (model, messages) => {
-        const sys = messages.find(m => m.role === 'system');
-        const msgs = messages.filter(m => m.role !== 'system');
-        return JSON.stringify({
-          model,
-          max_tokens: 1024,
-          system: sys ? sys.content : undefined,
-          messages: msgs
-        });
+      name:'Anthropic (Claude)', icon:'⚡',
+      models:['claude-haiku-4-5-20251001','claude-sonnet-4-6','claude-opus-4-7'],
+      defaultModel:'claude-haiku-4-5-20251001',
+      endpoint:'https://api.anthropic.com/v1/messages',
+      headerKey:'x-api-key', headerVal:k=>k,
+      extraHeaders:{'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      bodyFn:(model,msgs)=>{
+        const sys=msgs.find(m=>m.role==='system');
+        return JSON.stringify({model,max_tokens:1024,system:sys?.content,messages:msgs.filter(m=>m.role!=='system')});
       },
-      parseFn: r => r.content?.[0]?.text || 'No response'
+      parseFn:r=>r.content?.[0]?.text||'No response'
     },
     groq: {
-      name: 'Groq (Fast)',
-      icon: '⚡🚀',
-      models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'],
-      defaultModel: 'llama-3.1-8b-instant',
-      endpoint: 'https://api.groq.com/openai/v1/chat/completions',
-      headerKey: 'Authorization',
-      headerVal: k => `Bearer ${k}`,
-      bodyFn: (model, messages) => JSON.stringify({ model, messages, max_tokens: 1024, temperature: 0.7 }),
-      parseFn: r => r.choices?.[0]?.message?.content || 'No response'
+      name:'Groq (Fast)', icon:'🚀',
+      models:['llama-3.3-70b-versatile','llama-3.1-8b-instant','mixtral-8x7b-32768'],
+      defaultModel:'llama-3.1-8b-instant',
+      endpoint:'https://api.groq.com/openai/v1/chat/completions',
+      headerKey:'Authorization', headerVal:k=>`Bearer ${k}`,
+      bodyFn:(model,msgs)=>JSON.stringify({model,messages:msgs,max_tokens:1024,temperature:0.7}),
+      parseFn:r=>r.choices?.[0]?.message?.content||'No response'
     },
     gemini: {
-      name: 'Google Gemini',
-      icon: '✨',
-      models: ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
-      defaultModel: 'gemini-2.0-flash',
-      endpoint: (model, key) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
-      headerKey: 'Content-Type',
-      headerVal: () => 'application/json',
-      bodyFn: (model, messages) => {
-        const sys = messages.find(m => m.role === 'system');
-        const msgs = messages.filter(m => m.role !== 'system');
+      name:'Google Gemini', icon:'✨',
+      models:['gemini-2.0-flash','gemini-1.5-flash','gemini-1.5-pro'],
+      defaultModel:'gemini-2.0-flash',
+      endpoint:(model,key)=>`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+      headerKey:'Content-Type', headerVal:()=>'application/json',
+      bodyFn:(model,msgs)=>{
+        const sys=msgs.find(m=>m.role==='system');
         return JSON.stringify({
-          system_instruction: sys ? { parts: [{ text: sys.content }] } : undefined,
-          contents: msgs.map(m => ({
-            role: m.role === 'assistant' ? 'model' : 'user',
-            parts: [{ text: m.content }]
-          }))
+          system_instruction:sys?{parts:[{text:sys.content}]}:undefined,
+          contents:msgs.filter(m=>m.role!=='system').map(m=>({role:m.role==='assistant'?'model':'user',parts:[{text:m.content}]}))
         });
       },
-      parseFn: r => r.candidates?.[0]?.content?.parts?.[0]?.text || 'No response',
-      useKeyInUrl: true
-    },
-    openrouter: {
-      name: 'OpenRouter',
-      icon: '🌐',
-      models: ['meta-llama/llama-3.3-70b-instruct', 'anthropic/claude-haiku-4-5', 'openai/gpt-4o-mini', 'google/gemini-2.0-flash-001', 'mistralai/mixtral-8x7b-instruct'],
-      defaultModel: 'meta-llama/llama-3.3-70b-instruct',
-      endpoint: 'https://openrouter.ai/api/v1/chat/completions',
-      headerKey: 'Authorization',
-      headerVal: k => `Bearer ${k}`,
-      extraHeaders: { 'HTTP-Referer': 'https://squeezeos.app', 'X-Title': 'SqueezeSim AI Coach' },
-      bodyFn: (model, messages) => JSON.stringify({ model, messages, max_tokens: 1024, temperature: 0.7 }),
-      parseFn: r => r.choices?.[0]?.message?.content || 'No response'
+      parseFn:r=>r.candidates?.[0]?.content?.parts?.[0]?.text||'No response',
+      useKeyInUrl:true
     }
   };
 
   const QUICK_PROMPTS = [
-    { id: 'analyze', label: '📊 Analyze Portfolio', icon: '📊',
-      fn: () => `Analyze my current trading portfolio and provide actionable insights:\n${_portfolioContext()}` },
-    { id: 'strategy', label: '🎯 Suggest Strategy', icon: '🎯',
-      fn: () => `Based on my trading history and current market conditions, suggest the best trading strategy for me:\n${_portfolioContext()}\n${_marketContext()}` },
-    { id: 'risk', label: '🛡️ Risk Assessment', icon: '🛡️',
-      fn: () => `Assess my current risk exposure and tell me if I should adjust my positions:\n${_portfolioContext()}` },
-    { id: 'options', label: '🔮 Options Advice', icon: '🔮',
-      fn: () => `I want to trade options. Based on my level and portfolio, what options strategies should I consider?\n${_portfolioContext()}` },
-    { id: 'explain', label: '📚 Explain Greeks', icon: '📚',
-      fn: () => 'Explain options Greeks (Delta, Gamma, Theta, Vega, Rho) in simple terms with practical examples for a retail trader.' },
-    { id: 'lesson', label: '🎓 Daily Lesson', icon: '🎓',
-      fn: () => `Give me a concise daily trading lesson appropriate for a ${SimEngine.state.levelName || 'beginner'} level trader. Include one actionable tip I can apply today.` },
-    { id: 'journal', label: '📝 Trade Journal', icon: '📝',
-      fn: () => `Review my recent trades and help me identify patterns, mistakes, and improvements:\n${_recentTradesContext()}` },
-    { id: 'setup', label: '🔭 Scan Setups', icon: '🔭',
-      fn: () => `Given the current simulated market conditions, identify the top 3 trading setups I should be watching:\n${_marketContext()}` }
+    { id:'analyze', label:'📊 Analyze Portfolio', fn:()=>`Analyze my current trading portfolio:\n${_portfolioCtx()}` },
+    { id:'strategy',label:'🎯 Suggest Strategy',  fn:()=>`Suggest the best strategy for me:\n${_portfolioCtx()}\n${_marketCtx()}` },
+    { id:'risk',    label:'🛡️ Risk Assessment',   fn:()=>`Assess my risk exposure:\n${_portfolioCtx()}` },
+    { id:'options', label:'🔮 Options Advice',     fn:()=>`What options strategies suit my level?\n${_portfolioCtx()}` },
+    { id:'explain', label:'📚 Explain Greeks',     fn:()=>'Explain options Greeks (Delta, Gamma, Theta, Vega, Rho) simply with practical examples.' },
+    { id:'lesson',  label:'🎓 Daily Lesson',       fn:()=>`Give me a daily lesson for a ${SimEngine.levelName(SimEngine.getState().gamification.level||1)} trader with one actionable tip.` },
+    { id:'journal', label:'📝 Trade Journal',      fn:()=>`Review my recent trades and find patterns:\n${_tradesCtx()}` },
+    { id:'setup',   label:'🔭 Scan Setups',        fn:()=>`Identify top 3 trading setups to watch:\n${_marketCtx()}` }
   ];
 
-  let _history = [];
-  let _currentProvider = 'openrouter';
-  let _isTyping = false;
-  let _keys = { openrouter: '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' };
-  let _models = { openrouter: 'meta-llama/llama-3.3-70b-instruct' };
+  const DEFAULT_KEYS   = { openrouter:'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' };
+  const DEFAULT_MODELS = { openrouter:'meta-llama/llama-3.3-70b-instruct' };
 
-  /* ── Context builders ── */
-  function _portfolioContext() {
-    const st = SimEngine.state;
-    const pnl = st.portfolio - st.startingCapital;
-    const positions = st.positions || {};
-    const posStr = Object.entries(positions).map(([sym, p]) => {
-      const curr = SimEngine.prices?.[sym] || p.avgPrice;
-      const posPnl = (curr - p.avgPrice) * p.qty;
-      return `  ${sym}: ${p.qty} shares @ $${p.avgPrice.toFixed(2)}, current $${curr.toFixed(2)}, P&L $${posPnl.toFixed(0)}`;
-    }).join('\n') || '  No open positions';
+  let _provider = 'openrouter';
+  let _keys     = { ...DEFAULT_KEYS };
+  let _models   = { ...DEFAULT_MODELS };
+  let _history  = [];
+  let _busy     = false;
 
-    return `Portfolio Value: $${st.portfolio.toLocaleString('en', {maximumFractionDigits:0})}
-Starting Capital: $${st.startingCapital.toLocaleString()}
-Total P&L: ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(0)}
-Return: ${(pnl/st.startingCapital*100).toFixed(2)}%
-Win Rate: ${st.winRate || 0}%
-Total Trades: ${st.totalTrades || 0}
-Level: ${st.levelName || 'Beginner'}
-Open Positions:\n${posStr}`;
+  /* ── Context ── */
+  function _portfolioCtx() {
+    const st  = SimEngine.getState();
+    const pv  = SimEngine.portfolioValue();
+    const pnl = pv - st.portfolio.startingCash;
+    const pos = Object.entries(st.portfolio.positions||{}).map(([k,p]) => {
+      return `  ${p.sym||k}: ${p.type==='option'?p.optType+' $'+p.strike:p.qty+' shares'} @ $${p.avgCost.toFixed(2)}, P&L $${(p.unrealizedPnL||0).toFixed(0)}`;
+    }).join('\n') || '  None';
+    const g = st.gamification;
+    return `Portfolio: $${pv.toLocaleString('en',{maximumFractionDigits:0})} | P&L: ${pnl>=0?'+':''}$${pnl.toFixed(0)} (${(pnl/st.portfolio.startingCash*100).toFixed(1)}%) | Win Rate: ${g.wins+g.losses?Math.round(g.wins/(g.wins+g.losses)*100):0}% | Trades: ${g.totalTrades||0} | Level: ${SimEngine.levelName(g.level||1)}\nOpen Positions:\n${pos}`;
   }
-
-  function _marketContext() {
-    const prices = SimEngine.prices || {};
-    const top5 = Object.entries(prices).slice(0, 5)
-      .map(([sym, p]) => `  ${sym}: $${p.toFixed(2)}`).join('\n');
-    return `Current Market Prices (simulated):\n${top5}`;
+  function _marketCtx() {
+    const syms = SimEngine.getState().symbols;
+    return 'Market (simulated):\n' + Object.values(syms).slice(0,6).map(s=>`  ${s.sym}: $${s.price.toFixed(2)} (${s.changePct>=0?'+':''}${(s.changePct*100).toFixed(1)}%)`).join('\n');
   }
-
-  function _recentTradesContext() {
-    const trades = (SimEngine.state.tradeHistory || []).slice(-10);
-    if (!trades.length) return 'No trades yet.';
-    return trades.map(t =>
-      `  ${t.sym} ${t.side} ${t.qty}@$${t.price.toFixed(2)} → P&L: $${(t.pnl||0).toFixed(0)}`
-    ).join('\n');
+  function _tradesCtx() {
+    const h = SimEngine.getState().portfolio.history.slice(0,10);
+    return h.length ? h.map(t=>`  ${t.sym} ${t.side} ${t.qty}@$${t.entry.toFixed(2)} → $${t.exit.toFixed(2)} P&L:$${t.pnl.toFixed(0)}`).join('\n') : 'No trades yet.';
   }
-
   function _systemPrompt() {
-    const st = SimEngine.state;
-    return `You are an expert trading coach and mentor inside SqueezeOS Trading Simulator. You help users learn to trade stocks and options effectively.
-
-User Profile:
-- Trading Level: ${st.levelName || 'Beginner'}
-- XP: ${st.xp || 0}
-- Portfolio: $${(st.portfolio || 10000).toLocaleString()}
-- Win Rate: ${st.winRate || 0}%
-
-Rules:
-1. Be concise but educational — max 3-4 paragraphs per response
-2. Always relate advice to the user's current level and portfolio
-3. Use specific numbers and percentages when possible
-4. For beginners: explain concepts simply; for pros: be technical
-5. This is a SIMULATOR — educational context only, not real financial advice
-6. Always end with one concrete actionable step the user can take right now`;
+    const g = SimEngine.getState().gamification;
+    return `You are an expert trading coach inside SqueezeOS Trading Simulator. User level: ${SimEngine.levelName(g.level||1)}, XP: ${g.xp||0}, Win Rate: ${g.wins+g.losses?Math.round(g.wins/(g.wins+g.losses)*100):0}%. Be concise (3-4 paragraphs max), educational, and always end with one actionable step. This is a simulator — educational only, not real financial advice.`;
   }
 
   /* ── API call ── */
-  async function _callAPI(userMessage) {
-    const provider = PROVIDERS[_currentProvider];
-    if (!provider) throw new Error('Unknown provider');
-
-    const key = _keys[_currentProvider];
-    if (!key) throw new Error(`No API key set for ${provider.name}. Go to Settings → AI Coach to add your key.`);
-
-    const model = _models[_currentProvider] || provider.defaultModel;
-
+  async function _callAPI(userMsg) {
+    const p = PROVIDERS[_provider];
+    if (!p) throw new Error('Unknown provider');
+    const key = _keys[_provider];
+    if (!key) throw new Error(`No API key for ${p.name}. Add it in Settings → AI Coach.`);
+    const model = _models[_provider] || p.defaultModel;
     const messages = [
-      { role: 'system', content: _systemPrompt() },
-      ..._history.map(h => ({ role: h.role, content: h.content })),
-      { role: 'user', content: userMessage }
+      {role:'system', content:_systemPrompt()},
+      ..._history.map(h=>({role:h.role, content:h.content})),
+      {role:'user', content:userMsg}
     ];
-
-    const endpoint = typeof provider.endpoint === 'function'
-      ? provider.endpoint(model, key)
-      : provider.endpoint;
-
-    const headers = {
-      'Content-Type': 'application/json',
-      [provider.headerKey]: provider.headerVal(key),
-      ...(provider.extraHeaders || {})
-    };
-
-    if (provider.useKeyInUrl) {
-      delete headers[provider.headerKey];
-    }
-
-    const resp = await fetch(endpoint, {
-      method: 'POST',
-      headers,
-      body: provider.bodyFn(model, messages)
-    });
-
+    const endpoint = typeof p.endpoint==='function' ? p.endpoint(model,key) : p.endpoint;
+    const headers  = {'Content-Type':'application/json', [p.headerKey]:p.headerVal(key), ...(p.extraHeaders||{})};
+    if (p.useKeyInUrl) delete headers[p.headerKey];
+    const resp = await fetch(endpoint, {method:'POST', headers, body:p.bodyFn(model,messages)});
     if (!resp.ok) {
-      const errText = await resp.text();
-      let errMsg = `API Error ${resp.status}`;
-      try {
-        const errJson = JSON.parse(errText);
-        errMsg = errJson.error?.message || errJson.message || errMsg;
-      } catch {}
-      throw new Error(errMsg);
+      const txt = await resp.text();
+      let msg = `API Error ${resp.status}`;
+      try { msg = JSON.parse(txt).error?.message || JSON.parse(txt).message || msg; } catch {}
+      throw new Error(msg);
     }
-
-    const data = await resp.json();
-    return provider.parseFn(data);
+    return p.parseFn(await resp.json());
   }
 
   /* ── Chat UI ── */
-  function _appendMessage(role, content, isError) {
+  function _appendMsg(role, content, isErr) {
     const container = document.getElementById('ai-messages');
     if (!container) return;
-
+    const p = PROVIDERS[_provider];
     const div = document.createElement('div');
-    div.className = `ai-msg ai-msg-${role} ${isError ? 'ai-msg-error' : ''}`;
-
-    const avatar = role === 'user' ? '👤' : PROVIDERS[_currentProvider]?.icon || '🤖';
-    const formatted = _formatMessage(content);
-
+    div.className = `ai-msg ai-msg-${role}${isErr?' ai-msg-error':''}`;
     div.innerHTML = `
-      <div class="ai-avatar">${avatar}</div>
+      <div class="ai-avatar">${role==='user'?'👤':p?.icon||'🤖'}</div>
       <div class="ai-bubble">
-        <div class="ai-bubble-content">${formatted}</div>
+        <div class="ai-bubble-content">${_fmt(content)}</div>
         <div class="ai-bubble-meta">${new Date().toLocaleTimeString()}</div>
-      </div>
-    `;
-
+      </div>`;
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
   }
 
-  function _formatMessage(text) {
-    return text
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.+?)\*/g, '<em>$1</em>')
-      .replace(/`(.+?)`/g, '<code>$1</code>')
-      .replace(/\n\n/g, '</p><p>')
-      .replace(/\n/g, '<br>')
-      .replace(/^/, '<p>').replace(/$/, '</p>');
+  function _fmt(t) {
+    return ('<p>' + t
+      .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g,'<em>$1</em>')
+      .replace(/`(.+?)`/g,'<code>$1</code>')
+      .replace(/\n\n/g,'</p><p>')
+      .replace(/\n/g,'<br>') + '</p>');
   }
 
   function _showTyping() {
-    const container = document.getElementById('ai-messages');
-    if (!container) return;
-    const div = document.createElement('div');
-    div.className = 'ai-msg ai-msg-assistant ai-typing';
-    div.id = 'ai-typing-indicator';
-    div.innerHTML = `
-      <div class="ai-avatar">${PROVIDERS[_currentProvider]?.icon || '🤖'}</div>
-      <div class="ai-bubble">
-        <div class="ai-typing-dots"><span></span><span></span><span></span></div>
-      </div>
-    `;
-    container.appendChild(div);
-    container.scrollTop = container.scrollHeight;
+    const c = document.getElementById('ai-messages');
+    if (!c) return;
+    const d = document.createElement('div');
+    d.id = 'ai-typing'; d.className = 'ai-msg ai-msg-assistant';
+    d.innerHTML = `<div class="ai-avatar">${PROVIDERS[_provider]?.icon||'🤖'}</div><div class="ai-bubble"><div class="ai-typing-dots"><span></span><span></span><span></span></div></div>`;
+    c.appendChild(d); c.scrollTop = c.scrollHeight;
   }
+  function _hideTyping() { document.getElementById('ai-typing')?.remove(); }
 
-  function _hideTyping() {
-    const el = document.getElementById('ai-typing-indicator');
-    if (el) el.remove();
-  }
-
-  async function sendMessage(msgOverride) {
-    if (_isTyping) return;
-
+  async function sendMessage(override) {
+    if (_busy) return;
     const input = document.getElementById('ai-input');
-    const msg = msgOverride || (input ? input.value.trim() : '');
+    const msg   = override || (input?input.value.trim():'');
     if (!msg) return;
-
     if (input) input.value = '';
-
-    if (!_keys[_currentProvider]) {
-      _appendMessage('assistant',
-        `⚠️ No API key configured for ${PROVIDERS[_currentProvider]?.name}.\n\nGo to **Settings → AI Coach** and add your API key to start chatting. Your key is stored only in your browser — never sent to our servers.`,
-        true);
+    if (!_keys[_provider]) {
+      _appendMsg('assistant', `⚠️ No API key for **${PROVIDERS[_provider]?.name}**.\n\nGo to **Settings → AI Coach** and paste your key. It's stored only in your browser.`, true);
       return;
     }
-
-    _appendMessage('user', msg);
-    _history.push({ role: 'user', content: msg });
-
-    _isTyping = true;
-    _showTyping();
-
-    const sendBtn = document.getElementById('ai-send-btn');
-    if (sendBtn) sendBtn.disabled = true;
-
+    _appendMsg('user', msg);
+    _history.push({role:'user', content:msg});
+    _busy = true; _showTyping();
+    const btn = document.getElementById('ai-send-btn');
+    if (btn) btn.disabled = true;
     try {
-      const response = await _callAPI(msg);
-      _hideTyping();
-      _appendMessage('assistant', response);
-      _history.push({ role: 'assistant', content: response });
-
-      // Keep history manageable
+      const reply = await _callAPI(msg);
+      _hideTyping(); _appendMsg('assistant', reply);
+      _history.push({role:'assistant', content:reply});
       if (_history.length > 20) _history = _history.slice(-20);
-
-    } catch (err) {
-      _hideTyping();
-      _appendMessage('assistant', `❌ Error: ${err.message}`, true);
+    } catch(err) {
+      _hideTyping(); _appendMsg('assistant', `❌ ${err.message}`, true);
     } finally {
-      _isTyping = false;
-      if (sendBtn) sendBtn.disabled = false;
+      _busy = false;
+      if (btn) btn.disabled = false;
     }
   }
 
   function sendQuickPrompt(id) {
-    const qp = QUICK_PROMPTS.find(q => q.id === id);
-    if (!qp) return;
-    const text = qp.fn();
-    sendMessage(text);
+    const qp = QUICK_PROMPTS.find(q=>q.id===id);
+    if (qp) sendMessage(qp.fn());
   }
 
   function clearChat() {
     _history = [];
-    const container = document.getElementById('ai-messages');
-    if (container) {
-      container.innerHTML = `
-        <div class="ai-welcome">
-          <div class="ai-welcome-icon">${PROVIDERS[_currentProvider]?.icon || '🤖'}</div>
-          <h3>AI Trading Coach</h3>
-          <p>Powered by ${PROVIDERS[_currentProvider]?.name || 'AI'}. Ask me anything about trading, strategies, or your portfolio!</p>
-        </div>
-      `;
+    const c = document.getElementById('ai-messages');
+    if (c) {
+      const p = PROVIDERS[_provider];
+      c.innerHTML = `<div class="ai-welcome"><div style="font-size:48px">${p?.icon||'🤖'}</div><h3>AI Trading Coach</h3><p>Powered by ${p?.name||'AI'}. Ask me anything!</p></div>`;
     }
   }
 
-  /* ── Settings / BYOK UI ── */
-  function renderBYOKSettings() {
-    const el = document.getElementById('byok-panel');
-    if (!el) return;
-
-    el.innerHTML = `
-      <div class="byok-tabs">
-        ${Object.entries(PROVIDERS).map(([id, p]) => `
-          <button class="byok-tab ${id === _currentProvider ? 'active' : ''}"
-            onclick="AICoach.switchProvider('${id}')">
-            ${p.icon} ${p.name}
-          </button>
-        `).join('')}
-      </div>
-      ${Object.entries(PROVIDERS).map(([id, p]) => `
-        <div class="byok-panel-content ${id === _currentProvider ? 'active' : ''}" id="byok-${id}">
-          <div class="byok-intro">
-            <strong>${p.icon} ${p.name}</strong>
-            <span class="byok-status ${_keys[id] ? 'connected' : 'disconnected'}">
-              ${_keys[id] ? '● Connected' : '○ Not configured'}
-            </span>
-          </div>
-          <div class="byok-model-row">
-            <label>Model</label>
-            <select id="model-${id}" onchange="AICoach.setModel('${id}', this.value)">
-              ${p.models.map(m => `<option value="${m}" ${(_models[id]||p.defaultModel)===m?'selected':''}>${m}</option>`).join('')}
-            </select>
-          </div>
-          <div class="byok-key-row">
-            <label>API Key</label>
-            <div class="byok-key-input-wrap">
-              <input type="password" id="key-${id}" placeholder="Enter your ${p.name} API key..."
-                value="${_keys[id] ? '••••••••' + (_keys[id].slice(-4) || '') : ''}"
-                onfocus="if(this.value.startsWith('••')) this.value=''"
-              />
-              <button class="btn-sm" onclick="AICoach.saveKey('${id}')">Save</button>
-              <button class="btn-sm btn-danger" onclick="AICoach.clearKey('${id}')">Clear</button>
-            </div>
-          </div>
-          <div class="byok-actions">
-            <button class="btn-primary" onclick="AICoach.testKey('${id}')">Test Connection</button>
-            <span id="test-result-${id}" class="test-result"></span>
-          </div>
-          <div class="byok-help">
-            <p>🔒 Your API key is stored only in your browser's localStorage. It is never transmitted to our servers.</p>
-            ${_getProviderHelp(id)}
-          </div>
-        </div>
-      `).join('')}
-    `;
+  /* ── Panel show/hide ── */
+  function updateStatus() {
+    const hasKey    = !!_keys[_provider];
+    const noKeyEl   = document.getElementById('ai-no-key-panel');
+    const chatEl    = document.getElementById('ai-chat-panel');
+    if (noKeyEl) noKeyEl.style.display = hasKey ? 'none' : 'flex';
+    if (chatEl)  chatEl.style.display  = hasKey ? 'flex' : 'none';
+    const badge = document.getElementById('ai-provider-badge');
+    if (badge) {
+      const p = PROVIDERS[_provider];
+      badge.textContent = hasKey ? `${p?.icon||''} ${p?.name||_provider} ✓` : 'No Key — Add in Settings';
+      badge.style.color = hasKey ? 'var(--neon-green,#00ff88)' : 'var(--neon-red,#ff4757)';
+    }
+    _syncBYOKUI();
   }
 
-  function _getProviderHelp(id) {
-    const links = {
-      openai: 'Get your key at platform.openai.com/api-keys',
-      anthropic: 'Get your key at console.anthropic.com',
-      groq: 'Get your free key at console.groq.com (very fast, free tier)',
-      gemini: 'Get your free key at aistudio.google.com/apikey'
-    };
-    return `<p>💡 ${links[id] || ''}</p>`;
+  /* ── BYOK static UI sync ── */
+  function _syncBYOKUI() {
+    const keyInput   = document.getElementById('byok-key-input');
+    const modelSel   = document.getElementById('byok-model-sel');
+    const statusEl   = document.getElementById('byok-status');
+    const p          = PROVIDERS[_provider];
+    if (!p) return;
+
+    if (keyInput) {
+      const existing = _keys[_provider];
+      keyInput.value = existing ? '••••••••' + existing.slice(-4) : '';
+      keyInput.placeholder = `Enter ${p.name} API key...`;
+    }
+    if (modelSel) {
+      modelSel.innerHTML = p.models.map(m=>`<option value="${m}" ${(_models[_provider]||p.defaultModel)===m?'selected':''}>${m}</option>`).join('');
+    }
+    if (statusEl) {
+      statusEl.textContent = _keys[_provider] ? `✅ ${p.name} connected` : `○ No key for ${p.name}`;
+      statusEl.style.color = _keys[_provider] ? 'var(--neon-green,#00ff88)' : 'var(--text3,#666)';
+    }
+
+    // highlight active tab
+    document.querySelectorAll('.byok-tab').forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('onclick')?.includes(`'${_provider}'`));
+    });
   }
 
-  function switchProvider(id) {
+  function switchProvider(id, btn) {
     if (!PROVIDERS[id]) return;
-    _currentProvider = id;
-    renderBYOKSettings();
-    renderQuickPrompts();
+    _provider = id;
+    _persist();
+    updateStatus();
     clearChat();
-
-    // Update AI view header
-    const hdr = document.getElementById('ai-provider-name');
-    if (hdr) hdr.textContent = PROVIDERS[id].name;
   }
 
-  function saveKey(providerId) {
-    const input = document.getElementById(`key-${providerId}`);
+  function toggleKeyViz() {
+    const el = document.getElementById('byok-key-input');
+    if (!el) return;
+    if (el.type === 'password') { el.type = 'text'; if (el.value.startsWith('••')) el.value = _keys[_provider]||''; }
+    else { el.type = 'password'; }
+  }
+
+  function saveCurrentKey() {
+    const input = document.getElementById('byok-key-input');
     if (!input) return;
     const val = input.value.trim();
-    if (!val || val.startsWith('••')) return;
-
-    _keys[providerId] = val;
-    _persistKeys();
-    SimApp.toast(`${PROVIDERS[providerId].name} key saved!`, 'success');
-    renderBYOKSettings();
+    if (!val || val.startsWith('••')) { SimApp.toast('Enter a valid key first', 'error'); return; }
+    _keys[_provider] = val;
+    _persist();
+    updateStatus();
+    SimApp.toast(`${PROVIDERS[_provider]?.name} key saved ✓`, 'success');
   }
 
-  function clearKey(providerId) {
-    delete _keys[providerId];
-    _persistKeys();
-    SimApp.toast(`${PROVIDERS[providerId].name} key removed`, 'info');
-    renderBYOKSettings();
+  function clearCurrentKey() {
+    delete _keys[_provider];
+    _persist();
+    const inp = document.getElementById('byok-key-input');
+    if (inp) inp.value = '';
+    updateStatus();
+    SimApp.toast(`${PROVIDERS[_provider]?.name} key removed`, 'info');
   }
 
-  function setModel(providerId, model) {
-    _models[providerId] = model;
-    _persistKeys();
-  }
-
-  async function testKey(providerId) {
-    const resultEl = document.getElementById(`test-result-${providerId}`);
-    if (resultEl) { resultEl.textContent = 'Testing...'; resultEl.className = 'test-result testing'; }
-
-    const prevProvider = _currentProvider;
-    _currentProvider = providerId;
-
+  async function testCurrentKey() {
+    const statusEl = document.getElementById('byok-status');
+    if (statusEl) { statusEl.textContent = 'Testing...'; statusEl.style.color='var(--text2)'; }
     try {
-      const resp = await _callAPI('Say "OK" in exactly 2 words.');
-      _currentProvider = prevProvider;
-      if (resultEl) { resultEl.textContent = '✅ Connected!'; resultEl.className = 'test-result success'; }
-    } catch (err) {
-      _currentProvider = prevProvider;
-      if (resultEl) { resultEl.textContent = `❌ ${err.message.slice(0, 60)}`; resultEl.className = 'test-result error'; }
+      const reply = await _callAPI('Say "OK" in exactly one word.');
+      if (statusEl) { statusEl.textContent = `✅ Connected! Response: "${reply.slice(0,40)}"`; statusEl.style.color='var(--neon-green,#00ff88)'; }
+    } catch(err) {
+      if (statusEl) { statusEl.textContent = `❌ ${err.message.slice(0,80)}`; statusEl.style.color='var(--neon-red,#ff4757)'; }
     }
   }
 
-  function _persistKeys() {
-    localStorage.setItem('sq_ai_keys', JSON.stringify(_keys));
-    localStorage.setItem('sq_ai_models', JSON.stringify(_models));
-    localStorage.setItem('sq_ai_provider', _currentProvider);
+  function _persist() {
+    localStorage.setItem('sq_ai_keys',    JSON.stringify(_keys));
+    localStorage.setItem('sq_ai_models',  JSON.stringify(_models));
+    localStorage.setItem('sq_ai_provider',_provider);
   }
 
   function _loadKeys() {
-    const DEFAULT_KEYS = { openrouter: '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' };
-    const DEFAULT_MODELS = { openrouter: 'meta-llama/llama-3.3-70b-instruct' };
-    try { _keys = { ...DEFAULT_KEYS, ...JSON.parse(localStorage.getItem('sq_ai_keys') || '{}') }; } catch { _keys = { ...DEFAULT_KEYS }; }
-    try { _models = { ...DEFAULT_MODELS, ...JSON.parse(localStorage.getItem('sq_ai_models') || '{}') }; } catch { _models = { ...DEFAULT_MODELS }; }
-    _currentProvider = localStorage.getItem('sq_ai_provider') || 'openrouter';
-  }
-
-  /* ── Quick prompts render ── */
-  function renderQuickPrompts() {
-    const el = document.getElementById('quick-prompts');
-    if (!el) return;
-    el.innerHTML = QUICK_PROMPTS.map(qp => `
-      <button class="quick-prompt-btn" onclick="AICoach.sendQuickPrompt('${qp.id}')">
-        ${qp.icon} ${qp.label}
-      </button>
-    `).join('');
-  }
-
-  /* ── Context-aware suggestions ── */
-  function renderContextSuggestions() {
-    const el = document.getElementById('ai-suggestions');
-    if (!el) return;
-
-    const st = SimEngine.state;
-    const suggestions = [];
-
-    if ((st.totalTrades || 0) === 0) {
-      suggestions.push({ text: "I'm new to trading. What should I do first?", icon: '🌱' });
-    }
-    if ((st.winRate || 0) < 40 && (st.totalTrades || 0) > 10) {
-      suggestions.push({ text: 'My win rate is low. How can I improve?', icon: '📉' });
-    }
-    if (Object.keys(st.positions || {}).length > 3) {
-      suggestions.push({ text: 'I have many open positions. Should I close some?', icon: '⚠️' });
-    }
-    if ((st.levelName || '') === 'Intermediate') {
-      suggestions.push({ text: 'I\'m ready for options. Where should I start?', icon: '🎓' });
-    }
-    if ((st.xp || 0) > 5000) {
-      suggestions.push({ text: 'What advanced strategies should I learn next?', icon: '🚀' });
-    }
-
-    suggestions.push({ text: 'What is the Iron Condor strategy?', icon: '🦅' });
-    suggestions.push({ text: 'How do I manage risk with options?', icon: '🛡️' });
-
-    el.innerHTML = suggestions.slice(0, 4).map(s => `
-      <button class="ai-suggestion-chip" onclick="AICoach.sendMessage('${s.text.replace(/'/g, "\\'")}')">
-        ${s.icon} ${s.text}
-      </button>
-    `).join('');
-  }
-
-  /* ── Keyboard handler ── */
-  function handleInputKeydown(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  }
-
-  /* ── Usage stats ── */
-  function renderUsageStats() {
-    const el = document.getElementById('ai-usage-stats');
-    if (!el) return;
-    const msgs = _history.filter(h => h.role === 'user').length;
-    const st = SimEngine.state;
-    const tier = st.subscriptionTier || 'free';
-    const limits = { free: 10, starter: 50, pro: 200, elite: 'Unlimited' };
-    const limit = limits[tier];
-
-    el.innerHTML = `
-      <span>Messages: <strong>${msgs}</strong></span>
-      <span>Daily limit: <strong>${limit}</strong></span>
-      <span>Provider: <strong>${PROVIDERS[_currentProvider]?.name || 'None'}</strong></span>
-      ${_keys[_currentProvider] ? '<span class="ai-connected">● BYOK Active</span>' : '<span class="ai-disconnected">○ No Key</span>'}
-    `;
+    try { const k = JSON.parse(localStorage.getItem('sq_ai_keys')||'{}');    _keys    = {...DEFAULT_KEYS, ...k};    } catch { _keys    = {...DEFAULT_KEYS};    }
+    try { const m = JSON.parse(localStorage.getItem('sq_ai_models')||'{}');  _models  = {...DEFAULT_MODELS, ...m};  } catch { _models  = {...DEFAULT_MODELS};  }
+    _provider = localStorage.getItem('sq_ai_provider') || 'openrouter';
   }
 
   /* ── Init ── */
   function init() {
     _loadKeys();
-
+    updateStatus();
     const input = document.getElementById('ai-input');
-    if (input) input.addEventListener('keydown', handleInputKeydown);
-
-    renderQuickPrompts();
-    renderBYOKSettings();
-    renderContextSuggestions();
+    if (input) input.addEventListener('keydown', e => {
+      if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    });
   }
 
   return {
-    init,
-    sendMessage,
-    sendQuickPrompt,
-    clearChat,
-    renderBYOKSettings,
-    renderQuickPrompts,
-    renderContextSuggestions,
-    renderUsageStats,
-    switchProvider,
-    saveKey,
-    clearKey,
-    setModel,
-    testKey,
-    handleInputKeydown,
-    PROVIDERS,
-    QUICK_PROMPTS
+    init, updateStatus, clearChat,
+    sendMessage, sendQuickPrompt,
+    switchProvider, toggleKeyViz,
+    saveCurrentKey, clearCurrentKey, testCurrentKey,
+    PROVIDERS, QUICK_PROMPTS
   };
 })();
 
