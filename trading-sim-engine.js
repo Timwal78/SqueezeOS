@@ -119,7 +119,7 @@ const _state = {
     scenariosComplete: 0, sectorCount: 0, sharedPnL: 0,
     unlockedAchievements: [],
   },
-  subscription: 'free',
+  subscription: 'elite',
   ui: {
     currentView: 'dashboard',
     currentSymbol: 'SPY',
