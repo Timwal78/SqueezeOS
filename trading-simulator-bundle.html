@@ -5370,6 +5370,18 @@ const AICoach = (() => {
       },
       parseFn: r => r.candidates?.[0]?.content?.parts?.[0]?.text || 'No response',
       useKeyInUrl: true
+    },
+    openrouter: {
+      name: 'OpenRouter',
+      icon: '🌐',
+      models: ['meta-llama/llama-3.3-70b-instruct', 'anthropic/claude-haiku-4-5', 'openai/gpt-4o-mini', 'google/gemini-2.0-flash-001', 'mistralai/mixtral-8x7b-instruct'],
+      defaultModel: 'meta-llama/llama-3.3-70b-instruct',
+      endpoint: 'https://openrouter.ai/api/v1/chat/completions',
+      headerKey: 'Authorization',
+      headerVal: k => `Bearer ${k}`,
+      extraHeaders: { 'HTTP-Referer': 'https://squeezeos.app', 'X-Title': 'SqueezeSim AI Coach' },
+      bodyFn: (model, messages) => JSON.stringify({ model, messages, max_tokens: 1024, temperature: 0.7 }),
+      parseFn: r => r.choices?.[0]?.message?.content || 'No response'
     }
   };
 
@@ -5393,10 +5405,10 @@ const AICoach = (() => {
   ];
 
   let _history = [];
-  let _currentProvider = 'openai';
+  let _currentProvider = 'openrouter';
   let _isTyping = false;
-  let _keys = {};
-  let _models = {};
+  let _keys = { openrouter: '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' };
+  let _models = { openrouter: 'meta-llama/llama-3.3-70b-instruct' };
 
   /* ── Context builders ── */
   function _portfolioContext() {
