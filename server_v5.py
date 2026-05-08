@@ -1048,6 +1048,126 @@ def api_auth_exchange():
 def oauth_callback():
     return send_from_directory('.', 'callback.html')
 
+
+# ───────────────────────────────────────────────────────────────────
+# MANUAL OAUTH PASTE — escape hatch when the popup/postMessage chain
+# fails (cert untrusted, popup blocked, parent not listening, etc.)
+# Accepts either a raw auth code OR the entire callback URL Schwab
+# redirected to. Server-side exchange — no JS dependency.
+# ───────────────────────────────────────────────────────────────────
+@app.route('/oauth/manual', methods=['GET', 'POST'])
+def oauth_manual():
+    if request.method == 'POST':
+        payload = request.form or request.json or {}
+        raw = (payload.get('input') or payload.get('code') or payload.get('url') or '').strip()
+        if not raw:
+            return jsonify({"status": "error", "message": "paste a code or callback URL"}), 400
+
+        # Accept either a raw code OR a full callback URL with ?code=...
+        code = raw
+        if raw.startswith('http') and 'code=' in raw:
+            try:
+                from urllib.parse import urlparse, parse_qs
+                qs = parse_qs(urlparse(raw).query)
+                code = (qs.get('code') or [''])[0]
+            except Exception:
+                pass
+
+        if not code:
+            return jsonify({"status": "error", "message": "could not extract code"}), 400
+
+        # Allow overriding redirect_uri to match what was registered with Schwab
+        redirect_uri = payload.get('redirect_uri')
+        if redirect_uri:
+            schwab_api.redirect_uri = redirect_uri
+
+        result = schwab_api.exchange_code(code)
+        if result.get('status') == 'success':
+            return jsonify({"status": "success",
+                            "message": "Schwab OAuth complete — tokens saved"})
+        return jsonify(result), 400
+
+    # GET: render a minimal self-contained form
+    auth_url = schwab_api.get_auth_url()
+    html = """<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>SqueezeOS — Manual OAuth</title>
+<style>
+  body{background:#0f172a;color:#e2e8f0;font-family:system-ui,monospace;
+       max-width:720px;margin:40px auto;padding:0 16px;line-height:1.5}
+  h1{color:#38bdf8;margin-bottom:8px}
+  h2{color:#0ea5e9;font-size:16px;margin-top:24px}
+  .card{background:#111827;border:1px solid #1e293b;border-radius:8px;
+        padding:16px;margin:16px 0}
+  a.btn{display:inline-block;background:#0ea5e9;color:#fff;padding:10px 18px;
+        text-decoration:none;border-radius:6px;font-weight:600}
+  textarea{width:100%;min-height:80px;background:#000;color:#0f0;border:1px solid #334155;
+           padding:8px;font-family:monospace;font-size:13px;border-radius:6px}
+  button{background:#10b981;color:#fff;border:0;padding:10px 18px;border-radius:6px;
+         font-weight:600;cursor:pointer;margin-top:8px}
+  .step{color:#94a3b8;margin-bottom:8px}
+  pre{background:#000;padding:8px;border-radius:4px;overflow-x:auto;font-size:12px}
+  #result{margin-top:12px;padding:12px;border-radius:6px;display:none}
+  .ok{background:#064e3b;color:#10b981}
+  .err{background:#7f1d1d;color:#fca5a5}
+</style></head><body>
+<h1>📡 Schwab OAuth — Manual Path</h1>
+<p class="step">Use this if the popup flow stalls (cert untrusted, popup blocked,
+parent window not listening). Works without HTTPS or JavaScript bridges.</p>
+
+<div class="card">
+  <h2>Step 1 — Authorize with Schwab</h2>
+  <p>Click the button below. Sign in to Schwab. After you approve, your browser
+  will land on a page that may show "connection not private" or fail to load —
+  that is fine. <b>Copy the entire URL from the address bar.</b></p>
+  <p><a class="btn" href="__AUTH_URL__" target="_blank">→ Sign in to Schwab</a></p>
+</div>
+
+<div class="card">
+  <h2>Step 2 — Paste the URL or code</h2>
+  <p class="step">Paste the redirected URL (recommended) <b>or</b> just the
+  <code>code=...</code> value:</p>
+  <textarea id="input" placeholder="https://127.0.0.1:8182/callback?code=C0...."></textarea>
+  <br><button onclick="submitCode()">Exchange for tokens</button>
+  <div id="result"></div>
+</div>
+
+<div class="card">
+  <h2>Diagnostics</h2>
+  <p class="step">Current redirect_uri:</p>
+  <pre id="ru">__REDIRECT_URI__</pre>
+  <p class="step">If Schwab rejects with <code>redirect_uri_mismatch</code>, the
+  URI registered in your Schwab app does not match the one above. Update one
+  of them so they match exactly.</p>
+</div>
+
+<script>
+async function submitCode() {
+  const input = document.getElementById('input').value.trim();
+  const result = document.getElementById('result');
+  result.style.display = 'block';
+  result.className = '';
+  result.textContent = 'Exchanging...';
+  try {
+    const res = await fetch('/oauth/manual', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({input})
+    });
+    const data = await res.json();
+    result.className = data.status === 'success' ? 'ok' : 'err';
+    result.textContent = (data.status === 'success' ? '✅ ' : '❌ ') +
+                         (data.message || JSON.stringify(data));
+  } catch (e) {
+    result.className = 'err';
+    result.textContent = '❌ ' + e.message;
+  }
+}
+</script>
+</body></html>"""
+    html = html.replace("__AUTH_URL__", auth_url)
+    html = html.replace("__REDIRECT_URI__", schwab_api.redirect_uri or '(not set)')
+    return Response(html, mimetype='text/html')
+
 @app.route('/api/auth/tokens')
 @require_localhost
 def get_auth_tokens():
