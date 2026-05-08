@@ -63,8 +63,9 @@ load_env_file()
 # ============================================================
 class AlpacaProvider:
     def __init__(self):
-        self.api_key = os.environ.get('ALPACA_API_KEY', 'AKV39V1APUHWMFCQ2GA0')
-        self.api_secret = os.environ.get('ALPACA_API_SECRET', 'edlztEfaib5gGj0hQbfoV4Ezm6vdy8FnuFfW9Mx9')
+        # Environment-only — see options_service.py for the rotation note.
+        self.api_key = os.environ.get('ALPACA_API_KEY', '')
+        self.api_secret = os.environ.get('ALPACA_API_SECRET', '')
         # Respect ALPACA_PAPER flag for data and API endpoints
         is_paper = os.environ.get('ALPACA_PAPER', 'false').lower() == 'true'
         if is_paper:

@@ -14,8 +14,11 @@ logger = logging.getLogger(__name__)
 
 class OptionsProService:
     def __init__(self):
-        self.alpaca_key = os.environ.get('ALPACA_API_KEY', 'AKV39V1APUHWMFCQ2GA0')
-        self.alpaca_secret = os.environ.get('ALPACA_API_SECRET', 'edlztEfaib5gGj0hQbfoV4Ezm6vdy8FnuFfW9Mx9')
+        # Read from environment only — fallbacks intentionally empty so a
+        # leaked default cannot end up in source. ASSUME the keys previously
+        # hardcoded here are compromised and ROTATE them.
+        self.alpaca_key = os.environ.get('ALPACA_API_KEY', '')
+        self.alpaca_secret = os.environ.get('ALPACA_API_SECRET', '')
         self.last_call = 0
         self.min_interval = 0.1  # RELAXED: 100ms (was 500ms) between requests
         self._schwab_api = None

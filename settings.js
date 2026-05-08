@@ -104,13 +104,13 @@ const SettingsPanel = {
         if (saved) {
             try {
                 const d = JSON.parse(saved);
-                document.getElementById(`sk-key-${windowId}`).value = d.apiKey || 'cOb3GLiEmhfxGyfWUSDvaqqYayNUTVuCexRlzRbSumWvz5I6';
-                document.getElementById(`sk-sec-${windowId}`).value = d.apiSecret || 'Uyn7D7MRvYE2TQ88jHNLLiC79p9RH3qB73OJaAEw1A3ElDm5QtgBwSR5Ei1uNX6I';
+                document.getElementById(`sk-key-${windowId}`).value = d.apiKey || '';
+                document.getElementById(`sk-sec-${windowId}`).value = d.apiSecret || '';
                 document.getElementById(`sk-redirect-${windowId}`).value = d.redirectUri || 'https://127.0.0.1:8182/callback';
             } catch (e) { }
         } else {
-            document.getElementById(`sk-key-${windowId}`).value = 'cOb3GLiEmhfxGyfWUSDvaqqYayNUTVuCexRlzRbSumWvz5I6';
-            document.getElementById(`sk-sec-${windowId}`).value = 'Uyn7D7MRvYE2TQ88jHNLLiC79p9RH3qB73OJaAEw1A3ElDm5QtgBwSR5Ei1uNX6I';
+            document.getElementById(`sk-key-${windowId}`).value = '';
+            document.getElementById(`sk-sec-${windowId}`).value = '';
             document.getElementById(`sk-redirect-${windowId}`).value = 'https://127.0.0.1:8182/callback';
         }
 
@@ -124,8 +124,8 @@ const SettingsPanel = {
             if (data.schwabSecret) document.getElementById(`sk-sec-${windowId}`).value = data.schwabSecret;
 
             // Backup Keys
-            document.getElementById(`sk-alpaca-key-${windowId}`).value = data.alpacaKey || 'AKV39V1APUHWMFCQ2GA0';
-            document.getElementById(`sk-alpaca-sec-${windowId}`).value = data.alpacaSecret || 'edlztEfaib5gGj0hQbfoV4Ezm6vdy8FnuFfW9Mx9';
+            document.getElementById(`sk-alpaca-key-${windowId}`).value = data.alpacaKey || '';
+            document.getElementById(`sk-alpaca-sec-${windowId}`).value = data.alpacaSecret || '';
             if (data.polyKey) document.getElementById(`sk-poly-key-${windowId}`).value = data.polyKey;
             if (data.avKey) document.getElementById(`sk-av-key-${windowId}`).value = data.avKey;
 
@@ -169,8 +169,8 @@ const SettingsPanel = {
         btn.textContent = '⏳ SAVING...';
         btn.disabled = true;
 
-        const key = document.getElementById(`sk-key-${windowId}`).value.trim() || 'cOb3GLiEmhfxGyfWUSDvaqqYayNUTVuCexRlzRbSumWvz5I6';
-        const secret = document.getElementById(`sk-sec-${windowId}`).value.trim() || 'Uyn7D7MRvYE2TQ88jHNLLiC79p9RH3qB73OJaAEw1A3ElDm5QtgBwSR5Ei1uNX6I';
+        const key = document.getElementById(`sk-key-${windowId}`).value.trim() || '';
+        const secret = document.getElementById(`sk-sec-${windowId}`).value.trim() || '';
         const redir = document.getElementById(`sk-redirect-${windowId}`).value.trim() || 'https://127.0.0.1:8182/callback';
 
         localStorage.setItem('schwab_keys', JSON.stringify({ apiKey: key, apiSecret: secret, redirectUri: redir }));

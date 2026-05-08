@@ -11,3 +11,6 @@ simulation_report.json
 upgrade_temp/
 logs/
 node_modules/
+
+# explicit override — never commit live secrets
+.env

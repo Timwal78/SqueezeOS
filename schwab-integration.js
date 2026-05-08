@@ -24,13 +24,13 @@ const SchwabIntegration = {
         if (saved) {
             try {
                 const data = JSON.parse(saved);
-                this.apiKey = data.apiKey || 'cOb3GLiEmhfxGyfWUSDvaqqYayNUTVuCexRlzRbSumWvz5I6';
-                this.apiSecret = data.apiSecret || 'Uyn7D7MRvYE2TQ88jHNLLiC79p9RH3qB73OJaAEw1A3ElDm5QtgBwSR5Ei1uNX6I';
+                this.apiKey = data.apiKey || '';
+                this.apiSecret = data.apiSecret || '';
                 this.redirectUri = data.redirectUri || 'https://127.0.0.1:8182/callback';
             } catch (e) { }
         } else {
-            this.apiKey = 'cOb3GLiEmhfxGyfWUSDvaqqYayNUTVuCexRlzRbSumWvz5I6';
-            this.apiSecret = 'Uyn7D7MRvYE2TQ88jHNLLiC79p9RH3qB73OJaAEw1A3ElDm5QtgBwSR5Ei1uNX6I';
+            this.apiKey = '';
+            this.apiSecret = '';
             this.redirectUri = 'https://127.0.0.1:8182/callback';
         }
     },
