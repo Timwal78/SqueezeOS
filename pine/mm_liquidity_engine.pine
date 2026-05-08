@@ -99,7 +99,7 @@ while cum_total >= bucket_volume
     cum_sell := cum_sell - s
     cum_total := cum_total - bucket_volume
 
-vpin = na
+vpin = float(na)
 if array.size(buy_buckets) >= vpin_buckets
     num = 0.0
     den = 0.0
@@ -118,11 +118,11 @@ if not na(vpin)
     if array.size(vpin_hist) > 400
         array.shift(vpin_hist)
 
-vpin_z = na
+vpin_z = float(na)
 if array.size(vpin_hist) >= 30 and not na(vpin)
     mu = array.avg(vpin_hist)
     sd = array.stdev(vpin_hist)
-    vpin_z := sd > 0 ? (vpin - mu) / sd : na
+    vpin_z := sd > 0 ? (vpin - mu) / sd : float(na)
 
 // ═══════════════════════════════════════════════════════════════
 // SYNTHETIC VANNA/CHARM PROXIES (transparent — labeled below)
@@ -135,8 +135,8 @@ vix    = request.security("CBOE:VIX",   timeframe.period, close, ignore_invalid_
 vix9d  = request.security("CBOE:VIX9D", timeframe.period, close, ignore_invalid_symbol=true)
 vvix   = request.security("CBOE:VVIX",  timeframe.period, close, ignore_invalid_symbol=true)
 
-vanna_proxy = not na(vvix) and not na(vix) and vix > 0 ? (vvix / vix - ta.sma(vvix / vix, 50)) : na
-charm_proxy = not na(vix9d) and not na(vix) and vix > 0 ? (vix9d - vix) / vix : na
+vanna_proxy = not na(vvix) and not na(vix) and vix > 0 ? (vvix / vix - ta.sma(vvix / vix, 50)) : float(na)
+charm_proxy = not na(vix9d) and not na(vix) and vix > 0 ? (vix9d - vix) / vix : float(na)
 
 // Axis-collapse proxy: signs of vanna_proxy and charm_proxy aligned with
 // recent return drift => single-direction force.
@@ -193,13 +193,20 @@ var table dash = table.new(position.top_right, 2, 8, border_width=1)
 if barstate.islast
     table.cell(dash, 0, 0, "MMLE", bgcolor=color.new(color.black, 50), text_color=color.white)
     table.cell(dash, 1, 0, in_state)
-    table.cell(dash, 0, 1, "Composite");   table.cell(dash, 1, 1, str.tostring(in_composite, "#.##"))
-    table.cell(dash, 0, 2, "Active axes"); table.cell(dash, 1, 2, str.tostring(in_active_axes))
-    table.cell(dash, 0, 3, "VPIN");        table.cell(dash, 1, 3, na(vpin) ? "n/a" : str.tostring(vpin, "#.###"))
-    table.cell(dash, 0, 4, "VPIN z");      table.cell(dash, 1, 4, na(vpin_z) ? "n/a" : str.tostring(vpin_z, "#.##"))
-    table.cell(dash, 0, 5, "Vanna prox");  table.cell(dash, 1, 5, na(vanna_proxy) ? "n/a" : str.tostring(vanna_proxy, "#.###"))
-    table.cell(dash, 0, 6, "Charm prox");  table.cell(dash, 1, 6, na(charm_proxy) ? "n/a" : str.tostring(charm_proxy, "#.###"))
-    table.cell(dash, 0, 7, "VCCW open");   table.cell(dash, 1, 7, vccw_open ? "YES" : "no")
+    table.cell(dash, 0, 1, "Composite")
+    table.cell(dash, 1, 1, str.tostring(in_composite, "#.##"))
+    table.cell(dash, 0, 2, "Active axes")
+    table.cell(dash, 1, 2, str.tostring(in_active_axes))
+    table.cell(dash, 0, 3, "VPIN")
+    table.cell(dash, 1, 3, na(vpin) ? "n/a" : str.tostring(vpin, "#.###"))
+    table.cell(dash, 0, 4, "VPIN z")
+    table.cell(dash, 1, 4, na(vpin_z) ? "n/a" : str.tostring(vpin_z, "#.##"))
+    table.cell(dash, 0, 5, "Vanna prox")
+    table.cell(dash, 1, 5, na(vanna_proxy) ? "n/a" : str.tostring(vanna_proxy, "#.###"))
+    table.cell(dash, 0, 6, "Charm prox")
+    table.cell(dash, 1, 6, na(charm_proxy) ? "n/a" : str.tostring(charm_proxy, "#.###"))
+    table.cell(dash, 0, 7, "VCCW open")
+    table.cell(dash, 1, 7, vccw_open ? "YES" : "no")
 
 // ═══════════════════════════════════════════════════════════════
 // ALERTS — Discord-webhook compatible
