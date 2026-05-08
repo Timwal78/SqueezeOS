@@ -8,6 +8,7 @@ const AnalyticalEngine = {
     scanData: [],
     flowData: [],
     intelData: [],
+    mmleData: [],
     gex_cache: {},
     gammaSignals: [],
     gammaChartInstance: null,
@@ -168,6 +169,11 @@ const AnalyticalEngine = {
             if (data.status === 'success') {
                 this.alarmData = data.data;
             }
+            try {
+                const mr = await fetch('/api/mmle/regimes');
+                const md = await mr.json();
+                if (md.status === 'success') this.mmleData = md.data || [];
+            } catch (e) { /* MMLE fallback is best-effort */ }
             this.renderAlarms();
         } catch (e) {
             console.warn('Alarms sync failure:', e.message);
@@ -178,33 +184,65 @@ const AnalyticalEngine = {
         const list = document.getElementById('chronicle-list');
         if (!list) return;
 
-        if (!this.alarmData || this.alarmData.length === 0) {
-            list.innerHTML = '';
+        // Primary: real options-flow alarm clusters (when Polygon/flow feed is hot)
+        if (this.alarmData && this.alarmData.length > 0) {
+            const dataStr = JSON.stringify(this.alarmData);
+            if (this.lastAlarmStr === dataStr) return;
+            this.lastAlarmStr = dataStr;
+
+            list.innerHTML = this.alarmData.map(f => {
+                const clr = f.sentiment === 'BULLISH' ? 'var(--neon-green)' : 'var(--neon-red)';
+                const agg = f.contracts > 1 ? `💎CLUSTER` : (f.max_heat >= 80 ? '⚡SWEEP' : '🔥SPIKE');
+                const isFresh = (Date.now() / 1000) - f.seen_time < 60;
+                const pulseClass = isFresh ? 'heat-pulse' : '';
+                const strikeDisplay = f.cluster_count && f.cluster_count > 1
+                    ? `${f.strikes[0]} +${f.cluster_count - 1} STRIKES`
+                    : `$${f.strikes[0]}`;
+
+                return `
+                    <div class="data-row ${pulseClass}" style="cursor:pointer;" onclick="AnalyticalEngine.selectSymbol('${f.symbol}')">
+                        <div class="sym-badge" style="color:white; font-weight:900;">${f.symbol}</div>
+                        <div style="color:${clr}; font-size:9px; font-weight:800;">${agg}</div>
+                        <div class="price-box" style="color:var(--neon-blue); font-weight:800;">${f.max_heat}</div>
+                        <div class="score-box" style="color:white;">${strikeDisplay}</div>
+                    </div>
+                `;
+            }).join('');
             return;
         }
 
-        const dataStr = JSON.stringify(this.alarmData);
-        if (this.lastAlarmStr === dataStr) return;
-        this.lastAlarmStr = dataStr;
+        // Fallback: MMLE active regimes (always populated by the MMLE worker
+        // even when no flow data is present)
+        if (this.mmleData && this.mmleData.length > 0) {
+            const dataStr = 'MMLE:' + JSON.stringify(this.mmleData);
+            if (this.lastAlarmStr === dataStr) return;
+            this.lastAlarmStr = dataStr;
 
-        list.innerHTML = this.alarmData.map(f => {
-            const clr = f.sentiment === 'BULLISH' ? 'var(--neon-green)' : 'var(--neon-red)';
-            const agg = f.contracts > 1 ? `💎CLUSTER` : (f.max_heat >= 80 ? '⚡SWEEP' : '🔥SPIKE');
-            const isFresh = (Date.now() / 1000) - f.seen_time < 60;
-            const pulseClass = isFresh ? 'heat-pulse' : '';
-            const strikeDisplay = f.cluster_count && f.cluster_count > 1
-                ? `${f.strikes[0]} +${f.cluster_count - 1} STRIKES`
-                : `$${f.strikes[0]}`;
+            list.innerHTML = this.mmleData.map(m => {
+                const stateColor = m.state === 'TNT_LONG' ? 'var(--neon-green)'
+                    : m.state === 'TNT_SHORT' ? 'var(--neon-red)'
+                    : m.state === 'COMPRESSED' ? 'var(--neon-yellow)'
+                    : 'var(--text-dim)';
+                const tag = m.state === 'TNT_LONG' ? '🟢 LONG'
+                    : m.state === 'TNT_SHORT' ? '🔴 SHORT'
+                    : m.state === 'COMPRESSED' ? '⚡ COMPR'
+                    : '⏳ STREAM';
+                const compZ = (m.composite_z || 0).toFixed(1);
+                const magnet = m.target_magnet ? `$${(+m.target_magnet).toFixed(2)}` : '—';
+                return `
+                    <div class="data-row" style="cursor:pointer;" onclick="AnalyticalEngine.selectSymbol('${m.ticker}')">
+                        <div class="sym-badge" style="color:white; font-weight:900;">${m.ticker}</div>
+                        <div style="color:${stateColor}; font-size:9px; font-weight:800;">${tag}</div>
+                        <div class="price-box" style="color:var(--neon-blue); font-weight:800;">${compZ}σ</div>
+                        <div class="score-box" style="color:white;">${magnet}</div>
+                    </div>
+                `;
+            }).join('');
+            return;
+        }
 
-            return `
-                <div class="data-row ${pulseClass}" style="cursor:pointer;" onclick="AnalyticalEngine.selectSymbol('${f.symbol}')">
-                    <div class="sym-badge" style="color:white; font-weight:900;">${f.symbol}</div>
-                    <div style="color:${clr}; font-size:9px; font-weight:800;">${agg}</div>
-                    <div class="price-box" style="color:var(--neon-blue); font-weight:800;">${f.max_heat}</div>
-                    <div class="score-box" style="color:white;">${strikeDisplay}</div>
-                </div>
-            `;
-        }).join('');
+        list.innerHTML = '';
+        this.lastAlarmStr = '';
     },
 
     // ── GRIMOIRE: Detailed Active View ────────────────────────
@@ -406,43 +444,84 @@ const AnalyticalEngine = {
     },
 
     renderFlow() {
-        if (!this.flowData) return;
         const list = document.getElementById('spell-list');
         if (!list) return;
 
-        // Skip if same data
-        const dataStr = JSON.stringify(this.flowData);
-        if (this.lastFlowStr === dataStr) return;
-        this.lastFlowStr = dataStr;
+        // Primary: real options-flow whale alerts (when feed is hot)
+        if (this.flowData && this.flowData.length > 0) {
+            const dataStr = JSON.stringify(this.flowData);
+            if (this.lastFlowStr === dataStr) return;
+            this.lastFlowStr = dataStr;
 
-        if (!window.seenFlowFeed) window.seenFlowFeed = new Set();
-        // LAW 4: PREVENT MEMORY CORRUPTION (Limit set size)
-        if (window.seenFlowFeed.size > 500) window.seenFlowFeed.clear();
+            if (!window.seenFlowFeed) window.seenFlowFeed = new Set();
+            if (window.seenFlowFeed.size > 500) window.seenFlowFeed.clear();
 
-        list.innerHTML = this.flowData.map(f => {
-            const key = f.symbol + f.strike + f.expiry_formatted + f.type + f.seen_time;
-            const isNew = !window.seenFlowFeed.has(key);
-            window.seenFlowFeed.add(key);
+            list.innerHTML = this.flowData.map(f => {
+                const key = f.symbol + f.strike + f.expiry_formatted + f.type + f.seen_time;
+                const isNew = !window.seenFlowFeed.has(key);
+                window.seenFlowFeed.add(key);
 
-            const isFresh = (Date.now() / 1000) - f.seen_time < 60;
-            const pulseClass = isFresh ? 'heat-pulse' : '';
-            const convictionClass = (f.unusual_score && f.unusual_score >= 80) ? 'high-conviction-row' : '';
+                const isFresh = (Date.now() / 1000) - f.seen_time < 60;
+                const pulseClass = isFresh ? 'heat-pulse' : '';
+                const convictionClass = (f.unusual_score && f.unusual_score >= 80) ? 'high-conviction-row' : '';
 
-            const action = (f.sentiment === 'BULLISH' && f.type === 'CALL') ? '🐳 WHALE BUYING' :
-                (f.sentiment === 'BEARISH' && f.type === 'PUT') ? '🐳 WHALE BUYING' :
-                    (f.sentiment === 'BEARISH' && f.type === 'CALL') ? '🚨 WHALE DUMPING' :
-                        (f.sentiment === 'BULLISH' && f.type === 'PUT') ? '🚨 WHALE SELLING' : '👁️ WATCHING';
-            return `
-            <div class="flow-row ${f.sentiment === 'BULLISH' ? 'flow-bull' : 'flow-bear'} ${isNew ? 'anim-new-row' : ''} ${pulseClass} ${convictionClass}">
-                <div class="flow-sym">${f.symbol}</div>
-                <div class="flow-details">
-                    <span style="font-weight:900; color:${f.sentiment === 'BULLISH' ? 'var(--neon-green)' : 'var(--neon-red)'}; font-size:10px;">${action}</span>
-                    <span class="flow-strike">$${f.strike} ${f.sweep_label || f.type}</span>
-                    <span class="flow-exp">${f.expiry_formatted}</span>
+                const action = (f.sentiment === 'BULLISH' && f.type === 'CALL') ? '🐳 WHALE BUYING' :
+                    (f.sentiment === 'BEARISH' && f.type === 'PUT') ? '🐳 WHALE BUYING' :
+                        (f.sentiment === 'BEARISH' && f.type === 'CALL') ? '🚨 WHALE DUMPING' :
+                            (f.sentiment === 'BULLISH' && f.type === 'PUT') ? '🚨 WHALE SELLING' : '👁️ WATCHING';
+                return `
+                <div class="flow-row ${f.sentiment === 'BULLISH' ? 'flow-bull' : 'flow-bear'} ${isNew ? 'anim-new-row' : ''} ${pulseClass} ${convictionClass}">
+                    <div class="flow-sym">${f.symbol}</div>
+                    <div class="flow-details">
+                        <span style="font-weight:900; color:${f.sentiment === 'BULLISH' ? 'var(--neon-green)' : 'var(--neon-red)'}; font-size:10px;">${action}</span>
+                        <span class="flow-strike">$${f.strike} ${f.sweep_label || f.type}</span>
+                        <span class="flow-exp">${f.expiry_formatted}</span>
+                    </div>
+                    <div class="flow-score">${f.unusual_score}</div>
                 </div>
-                <div class="flow-score">${f.unusual_score}</div>
-            </div>
-        `}).join('');
+            `}).join('');
+            return;
+        }
+
+        // Fallback: top squeeze plays from the live scanner. Surfaces real
+        // engine intelligence even when the options-flow feed is empty.
+        const plays = (this.scanData || [])
+            .filter(s => (s.squeeze_score || 0) >= 60)
+            .slice(0, 12);
+
+        if (plays.length > 0) {
+            const dataStr = 'SQZ:' + plays.map(s => `${s.symbol}:${s.squeeze_score}:${s.direction}`).join(',');
+            if (this.lastFlowStr === dataStr) return;
+            this.lastFlowStr = dataStr;
+
+            list.innerHTML = plays.map(s => {
+                const isBull = s.direction === 'BULLISH';
+                const bias = isBull ? 'LONG' : (s.direction === 'BEARISH' ? 'PUTS' : 'WATCH');
+                const action = isBull ? '🟢 SQUEEZE LONG'
+                    : s.direction === 'BEARISH' ? '🔴 SHORT PRESSURE'
+                    : '👁️ MONITOR';
+                const px = (s.price || 0).toFixed(2);
+                const score = Math.round(s.squeeze_score || 0);
+                const lvl = s.squeeze_level || '';
+                const sentClass = isBull ? 'flow-bull' : (s.direction === 'BEARISH' ? 'flow-bear' : '');
+                const conv = score >= 85 ? 'high-conviction-row' : '';
+                return `
+                <div class="flow-row ${sentClass} ${conv}" style="cursor:pointer;" onclick="AnalyticalEngine.selectSymbol('${s.symbol}')">
+                    <div class="flow-sym">${s.symbol}</div>
+                    <div class="flow-details">
+                        <span style="font-weight:900; color:${isBull ? 'var(--neon-green)' : (s.direction === 'BEARISH' ? 'var(--neon-red)' : 'var(--text-dim)')}; font-size:10px;">${action}</span>
+                        <span class="flow-strike">$${px} · ${bias}${lvl ? ' · ' + lvl : ''}</span>
+                        <span class="flow-exp">SQZ ${score}/100</span>
+                    </div>
+                    <div class="flow-score">${score}</div>
+                </div>
+                `;
+            }).join('');
+            return;
+        }
+
+        list.innerHTML = '';
+        this.lastFlowStr = '';
     },
 
     async updateIntel() {

@@ -1229,6 +1229,17 @@ def get_scan():
                 final.append(r)
     return jsonify({"status": "success", "data": final})
 
+@app.route('/api/mmle/regimes')
+def get_mmle_regimes():
+    # Drives the dashboard "Active Regimes" panel as a fallback when
+    # options-flow alarms are empty (no Polygon key, off-hours, etc.).
+    with state.lock:
+        results = list(state.mmle_results.values())
+    interesting = [r for r in results
+                   if r.get('state') and r.get('state') not in ('NEUTRAL',)]
+    interesting.sort(key=lambda r: -(r.get('composite_z') or 0))
+    return jsonify({"status": "success", "data": interesting[:25]})
+
 @app.route('/api/market/quotes')
 def get_quotes():
     symbols = request.args.get('symbols', '').split(',')
