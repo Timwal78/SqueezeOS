@@ -115,7 +115,12 @@ vix    = request.security("CBOE:VIX",   timeframe.period, close, ignore_invalid_
 vix9d  = request.security("CBOE:VIX9D", timeframe.period, close, ignore_invalid_symbol=true)
 vvix   = request.security("CBOE:VVIX",  timeframe.period, close, ignore_invalid_symbol=true)
 
-vanna_proxy = not na(vvix) and not na(vix) and vix > 0 ? (vvix / vix - ta.sma(vvix / vix, 50)) : float(na)
+// Pine v6 requires ta.sma to be called on every bar (CW10004), so we
+// pull the ratio + its SMA out of the ternary.
+vvix_vix     = vvix / vix
+vvix_vix_sma = ta.sma(vvix_vix, 50)
+
+vanna_proxy = not na(vvix) and not na(vix) and vix > 0 ? vvix_vix - vvix_vix_sma : float(na)
 charm_proxy = not na(vix9d) and not na(vix) and vix > 0 ? (vix9d - vix) / vix : float(na)
 
 ret20 = ta.change(close, 20) / nz(close[20], close)
@@ -166,11 +171,17 @@ localLong  = trendUp and vpinReady and (axis_collapse and ret20 > 0 or in_active
 localShort = trendDn and vpinReady and (axis_collapse and ret20 < 0 or in_active_axes >= 3)
 localComp  = vpinReady and not localLong and not localShort
 
+// Resolve regime via if/else (Pine v6 dislikes multi-line ternary chains).
 usePython = in_state != "AUTO"
-resolvedState = usePython ? in_state :
-                localLong ? "TNT_LONG" :
-                localShort ? "TNT_SHORT" :
-                localComp ? "COMPRESSED" : "NEUTRAL"
+resolvedState = "NEUTRAL"
+if usePython
+    resolvedState := in_state
+else if localLong
+    resolvedState := "TNT_LONG"
+else if localShort
+    resolvedState := "TNT_SHORT"
+else if localComp
+    resolvedState := "COMPRESSED"
 
 trapLong  = resolvedState == "TNT_LONG"
 trapShort = resolvedState == "TNT_SHORT"
@@ -196,10 +207,14 @@ plot(emaFast,  "EMA fast",       color=color.new(color.aqua,   60), linewidth=1)
 plot(emaSlow,  "EMA slow",       color=color.new(color.orange, 60), linewidth=1)
 
 // Regime background — louder shading
-bgcolor(resolvedState == "TNT_LONG"      ? color.new(color.green,   80) :
-        resolvedState == "TNT_SHORT"     ? color.new(color.red,     80) :
-        resolvedState == "COMPRESSED"    ? color.new(color.yellow,  90) :
-        na)
+bgClr = color.new(color.gray, 100)
+if resolvedState == "TNT_LONG"
+    bgClr := color.new(color.green, 80)
+else if resolvedState == "TNT_SHORT"
+    bgClr := color.new(color.red, 80)
+else if resolvedState == "COMPRESSED"
+    bgClr := color.new(color.yellow, 90)
+bgcolor(resolvedState == "NEUTRAL" ? na : bgClr)
 
 // FIRE markers — large, can't miss
 plotshape(fireLong,  title="🔥 FIRE LONG",  location=location.belowbar, style=shape.triangleup,   size=size.normal, color=color.new(color.lime,   0), text="LONG",  textcolor=color.white)
@@ -219,10 +234,13 @@ plotshape(vpinSpike, title="⚡ VPIN spike", location=location.bottom, style=sha
 // ═══════════════════════════════════════════════════════════════
 // BEAST MODE PANEL
 // ═══════════════════════════════════════════════════════════════
-beastColor = resolvedState == "TNT_LONG" ? color.new(color.green, 20) :
-             resolvedState == "TNT_SHORT" ? color.new(color.red, 20) :
-             resolvedState == "COMPRESSED" ? color.new(color.yellow, 30) :
-             color.new(color.gray, 50)
+beastColor = color.new(color.gray, 50)
+if resolvedState == "TNT_LONG"
+    beastColor := color.new(color.green, 20)
+else if resolvedState == "TNT_SHORT"
+    beastColor := color.new(color.red, 20)
+else if resolvedState == "COMPRESSED"
+    beastColor := color.new(color.yellow, 30)
 
 var table dash = table.new(position.top_right, 2, 11, border_width=1, border_color=color.new(color.aqua, 50))
 if barstate.islast
