@@ -1,0 +1,199 @@
+//@version=6
+// ════════════════════════════════════════════════════════════════════
+//   MM LIQUIDITY ENGINE — Pine V6 Companion
+//   Vanna/Charm Convergence + Liquidity-Void + VPIN proxy
+//
+//   Role in the closed-loop architecture:
+//     • Pine cannot fetch the option chain. The Python module
+//       (mm_liquidity_engine.py) computes VEX/CEX/VCSC_Γ from the real
+//       Schwab chain and POSTs the regime tag to a webhook.
+//     • This script is the EXECUTION GATE + visualization layer:
+//       it accepts the Python-derived signals (via input.bool / input.float
+//       fields wired through TradingView's "External" indicator system or
+//       refreshed by webhook automation), computes a synthetic VPIN/void
+//       confirmation on bar data, and emits MMLE_FIRE alerts.
+//
+//   Stealth (Full Shield Protocol):
+//     • Iceberg child-size and cadence-jitter live in execution_engine.py.
+//     • This script never prints intent — alert payloads are HMAC-signed
+//       outside Pine and only fire on regime-confirmed bars.
+//
+//   Reference: MM_LIQUIDITY_ENGINE_MANIFEST.md
+// ════════════════════════════════════════════════════════════════════
+
+indicator(title="MMLE — MM Liquidity Engine", shorttitle="MMLE", overlay=true,
+          max_lines_count=200, max_labels_count=200)
+
+// ═══════════════════════════════════════════════════════════════
+// INPUTS — every coefficient parameterized (AGENT_LAW §2)
+// ═══════════════════════════════════════════════════════════════
+grpReg = "Regime (from Python engine)"
+in_state          = input.string("NEUTRAL", "TNT State", options=["NEUTRAL","COMPRESSED","TNT_LONG","TNT_SHORT","AWAITING_STREAM"], group=grpReg)
+in_target_magnet  = input.float(0.0,  "Target Magnet Strike", group=grpReg)
+in_call_wall      = input.float(0.0,  "Call Wall",  group=grpReg)
+in_put_wall       = input.float(0.0,  "Put Wall",   group=grpReg)
+in_composite      = input.float(0.0,  "Composite Score", group=grpReg)
+in_active_axes    = input.int(0,      "Active Axes", group=grpReg)
+
+grpVPIN = "VPIN proxy (bar-derived)"
+vpin_buckets      = input.int(50, "VPIN window (buckets)", minval=10, group=grpVPIN)
+vpin_bucket_pct   = input.float(0.005, "Bucket vol fraction of avg", step=0.001, group=grpVPIN)
+
+grpVCCW = "VCCW intraday gate"
+vccw_open_min     = input.int(585, "Window open (min from midnight ET)", group=grpVCCW)   // 09:45
+vccw_close_min    = input.int(930, "Window close (min from midnight ET)", group=grpVCCW)  // 15:30
+vccw_dte_max      = input.int(3,   "Front-month DTE max", group=grpVCCW)
+in_nearest_dte    = input.int(99,  "Nearest DTE (from Python)", group=grpVCCW)
+
+grpExec = "Execution gate"
+require_lit_align = input.bool(true,  "Require lit-bid imbalance ≥ 0 to fire (ride flow)", group=grpExec)
+fire_on_state     = input.string("TNT_LONG", "Fire on state", options=["TNT_LONG","TNT_SHORT","BOTH"], group=grpExec)
+
+// ═══════════════════════════════════════════════════════════════
+// VPIN PROXY — tick-rule classification on lower TF
+// ═══════════════════════════════════════════════════════════════
+// Lee-Ready tick rule on the *bar* level: classify the bar as buyer- or
+// seller-initiated by close-vs-prior-close. Bucket by cumulative volume.
+prevClose = close[1]
+barSide   = close > prevClose ? 1 : close < prevClose ? -1 : 0
+
+// Streaming bucket aggregation
+var float cum_buy = 0.0
+var float cum_sell = 0.0
+var float cum_total = 0.0
+var float[] buy_buckets  = array.new_float()
+var float[] sell_buckets = array.new_float()
+
+// Bucket size: rolling mean volume × fraction
+avgVol = ta.sma(volume, 200)
+bucket_volume = math.max(1.0, avgVol * vpin_bucket_pct)
+
+if barSide == 1
+    cum_buy := cum_buy + volume
+else if barSide == -1
+    cum_sell := cum_sell + volume
+else
+    cum_buy := cum_buy + volume / 2.0
+    cum_sell := cum_sell + volume / 2.0
+cum_total := cum_total + volume
+
+while cum_total >= bucket_volume
+    scale = bucket_volume / cum_total
+    b = cum_buy * scale
+    s = cum_sell * scale
+    array.push(buy_buckets, b)
+    array.push(sell_buckets, s)
+    if array.size(buy_buckets) > vpin_buckets
+        array.shift(buy_buckets)
+        array.shift(sell_buckets)
+    cum_buy := cum_buy - b
+    cum_sell := cum_sell - s
+    cum_total := cum_total - bucket_volume
+
+vpin = na
+if array.size(buy_buckets) >= vpin_buckets
+    num = 0.0
+    den = 0.0
+    for i = 0 to array.size(buy_buckets) - 1
+        b = array.get(buy_buckets, i)
+        s = array.get(sell_buckets, i)
+        num += math.abs(b - s)
+        den += b + s
+    if den > 0
+        vpin := num / den
+
+// VPIN z-score over a long window
+var float[] vpin_hist = array.new_float()
+if not na(vpin)
+    array.push(vpin_hist, vpin)
+    if array.size(vpin_hist) > 400
+        array.shift(vpin_hist)
+
+vpin_z = na
+if array.size(vpin_hist) >= 30 and not na(vpin)
+    mu = array.avg(vpin_hist)
+    sd = array.stdev(vpin_hist)
+    vpin_z := sd > 0 ? (vpin - mu) / sd : na
+
+// ═══════════════════════════════════════════════════════════════
+// SYNTHETIC VANNA/CHARM PROXIES (transparent — labeled below)
+// Pine has no chain access. The Python engine is authoritative; these
+// are diagnostic-only proxies for chart visualization.
+//   • Vanna proxy: VVIX/VIX divergence z-score
+//   • Charm proxy: VIX9D/VIX term-structure slope
+// ═══════════════════════════════════════════════════════════════
+vix    = request.security("CBOE:VIX",   timeframe.period, close, ignore_invalid_symbol=true)
+vix9d  = request.security("CBOE:VIX9D", timeframe.period, close, ignore_invalid_symbol=true)
+vvix   = request.security("CBOE:VVIX",  timeframe.period, close, ignore_invalid_symbol=true)
+
+vanna_proxy = not na(vvix) and not na(vix) and vix > 0 ? (vvix / vix - ta.sma(vvix / vix, 50)) : na
+charm_proxy = not na(vix9d) and not na(vix) and vix > 0 ? (vix9d - vix) / vix : na
+
+// Axis-collapse proxy: signs of vanna_proxy and charm_proxy aligned with
+// recent return drift => single-direction force.
+ret20 = ta.change(close, 20) / nz(close[20], close)
+axis_collapse = not na(vanna_proxy) and not na(charm_proxy) and
+                math.sign(vanna_proxy) == math.sign(charm_proxy) and
+                math.sign(vanna_proxy) == math.sign(ret20)
+
+// ═══════════════════════════════════════════════════════════════
+// VCCW — intraday window gate
+// ═══════════════════════════════════════════════════════════════
+nyc_minute = (hour(time, "America/New_York") * 60) + minute(time, "America/New_York")
+vccw_open  = nyc_minute >= vccw_open_min and nyc_minute <= vccw_close_min
+              and in_nearest_dte >= 0 and in_nearest_dte <= vccw_dte_max
+
+// ═══════════════════════════════════════════════════════════════
+// REGIME RESOLUTION
+// Pine receives the authoritative state from Python via in_state input.
+// It only adds a *confirmation gate* before emitting fires:
+//   • VCCW open
+//   • axis_collapse (or in_active_axes ≥ 3)
+//   • VPIN z elevated OR Python composite ≥ 3
+//   • If require_lit_align: current bar's volume-direction must match
+//     the magnetization direction (i.e., we ride existing flow rather
+//     than initiating it — Full Shield Protocol)
+// ═══════════════════════════════════════════════════════════════
+trapLong  = in_state == "TNT_LONG"
+trapShort = in_state == "TNT_SHORT"
+
+vpinReady = not na(vpin_z) and vpin_z >= 1.0
+axisReady = axis_collapse or in_active_axes >= 3
+compReady = in_composite >= 3.0 or vpinReady
+
+litAlignedLong  = not require_lit_align or barSide >= 0
+litAlignedShort = not require_lit_align or barSide <= 0
+
+fireLong  = vccw_open and trapLong  and axisReady and compReady and litAlignedLong  and (fire_on_state == "TNT_LONG"  or fire_on_state == "BOTH")
+fireShort = vccw_open and trapShort and axisReady and compReady and litAlignedShort and (fire_on_state == "TNT_SHORT" or fire_on_state == "BOTH")
+
+// ═══════════════════════════════════════════════════════════════
+// VISUALIZATION — walls, magnet, void shading
+// ═══════════════════════════════════════════════════════════════
+plot(in_call_wall    > 0 ? in_call_wall    : na, "Call Wall",  color=color.new(color.red,   0),  linewidth=2, style=plot.style_linebr)
+plot(in_put_wall     > 0 ? in_put_wall     : na, "Put Wall",   color=color.new(color.green, 0),  linewidth=2, style=plot.style_linebr)
+plot(in_target_magnet> 0 ? in_target_magnet: na, "Magnet",     color=color.new(color.fuchsia, 0), linewidth=3, style=plot.style_circles)
+
+bgcolor(in_state == "TNT_LONG"  ? color.new(color.green, 88) : in_state == "TNT_SHORT" ? color.new(color.red, 88) : in_state == "AWAITING_STREAM" ? color.new(color.gray, 92) : na)
+
+plotshape(fireLong,  title="MMLE FIRE LONG",  location=location.belowbar, style=shape.triangleup,   color=color.new(color.lime,   0), size=size.small)
+plotshape(fireShort, title="MMLE FIRE SHORT", location=location.abovebar, style=shape.triangledown, color=color.new(color.orange, 0), size=size.small)
+
+// Diagnostic table (collapsible)
+var table dash = table.new(position.top_right, 2, 8, border_width=1)
+if barstate.islast
+    table.cell(dash, 0, 0, "MMLE", bgcolor=color.new(color.black, 50), text_color=color.white)
+    table.cell(dash, 1, 0, in_state)
+    table.cell(dash, 0, 1, "Composite");   table.cell(dash, 1, 1, str.tostring(in_composite, "#.##"))
+    table.cell(dash, 0, 2, "Active axes"); table.cell(dash, 1, 2, str.tostring(in_active_axes))
+    table.cell(dash, 0, 3, "VPIN");        table.cell(dash, 1, 3, na(vpin) ? "n/a" : str.tostring(vpin, "#.###"))
+    table.cell(dash, 0, 4, "VPIN z");      table.cell(dash, 1, 4, na(vpin_z) ? "n/a" : str.tostring(vpin_z, "#.##"))
+    table.cell(dash, 0, 5, "Vanna prox");  table.cell(dash, 1, 5, na(vanna_proxy) ? "n/a" : str.tostring(vanna_proxy, "#.###"))
+    table.cell(dash, 0, 6, "Charm prox");  table.cell(dash, 1, 6, na(charm_proxy) ? "n/a" : str.tostring(charm_proxy, "#.###"))
+    table.cell(dash, 0, 7, "VCCW open");   table.cell(dash, 1, 7, vccw_open ? "YES" : "no")
+
+// ═══════════════════════════════════════════════════════════════
+// ALERTS — payload consumed by beast_webhook.py / execution_engine.py
+// ═══════════════════════════════════════════════════════════════
+alertcondition(fireLong,  title="MMLE FIRE LONG",  message='{"engine":"MMLE","action":"FIRE_LONG","symbol":"{{ticker}}","price":{{close}},"target":' + str.tostring(in_target_magnet) + ',"composite":' + str.tostring(in_composite) + '}')
+alertcondition(fireShort, title="MMLE FIRE SHORT", message='{"engine":"MMLE","action":"FIRE_SHORT","symbol":"{{ticker}}","price":{{close}},"target":' + str.tostring(in_target_magnet) + ',"composite":' + str.tostring(in_composite) + '}')
