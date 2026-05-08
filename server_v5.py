@@ -26,6 +26,7 @@ from mean_reversion_engine import MeanReversionEngine
 from beast_webhook import register_beast_routes
 from iwm_odte_engine import IwmOdteEngine
 from kdp_sentinel_engine import KdpSentinelEngine
+from mm_liquidity_engine import MMLiquidityEngine, MMLE_CONFIG
 from free_llm import get_llm
 
 # --- INITIALIZATION ---
@@ -67,6 +68,7 @@ class GlobalState:
         self.discovery_results: list[dict] = []
         self.last_discovery_ts: float = 0.0
         self.kdp_results: dict = {}
+        self.mmle_results: dict = {}  # ticker -> latest TNTSignal dict
         self.audit = {
             "universe_size": 0,
             "mega_caps_filtered": 0,
@@ -218,7 +220,8 @@ def init_services():
         
         iwm_engine = IwmOdteEngine(dm)
         kdp_engine = KdpSentinelEngine(dm)
-        
+        mmle_engine = MMLiquidityEngine(MMLE_CONFIG)
+
         with state.lock:
             _services.update({
                 "dm": dm, "analyzer": analyzer, "options": options_svc,
@@ -226,6 +229,7 @@ def init_services():
                 "gamma": gamma_eng, "delta": delta_mgr, "discord": discord,
                 "signals": signals, "options_intel": options_intel, "forced_move": forced_move,
                 "iwm_engine": iwm_engine, "kdp_engine": kdp_engine,
+                "mmle": mmle_engine,
                 "mre": MeanReversionEngine(bb_period=20, bb_std=2.0, rsi_period=14, max_price=500.0),
                 "sr_patterns": SRPatternsEngine(),
                 "mythos_arch": _architect_cls()
@@ -732,6 +736,226 @@ def worker_kdp_sentinel():
             time.sleep(60)
 
 
+# ───────────────────────────────────────────────────────────────────
+# MMLE — MM Liquidity Engine worker (5-min institutional cadence)
+# ───────────────────────────────────────────────────────────────────
+MMLE_UNIVERSE = ["SPY", "QQQ", "IWM"]   # liquid options first; expand from watchlist
+
+
+def _mmle_get_chain(symbol: str):
+    """
+    Provider-agnostic chain fetcher. Order of preference:
+      1. tradier_api.get_option_chain (if module is deployed)
+      2. schwab_api.get_option_chains (default)
+    Returns the raw chain dict in Schwab format (callExpDateMap/putExpDateMap)
+    so downstream code is unchanged. AGENT_LAW §1.1: returns None if no
+    provider yields data — never invents a chain.
+    """
+    # Tradier — preferred when available (per 2026-05-07 SqueezeOS Pro swap).
+    try:
+        import tradier_api  # type: ignore
+        if hasattr(tradier_api, 'get_option_chain_schwab_format'):
+            chain = tradier_api.get_option_chain_schwab_format(symbol)
+            if chain and not chain.get('error'):
+                return chain
+    except ImportError:
+        pass
+    except Exception as e:
+        logger.debug(f"[MMLE] tradier chain fetch failed for {symbol}: {e}")
+
+    # Schwab fallback / default
+    try:
+        chain = schwab_api.get_option_chains(symbol)
+        if chain and not chain.get('error'):
+            return chain
+    except Exception as e:
+        logger.debug(f"[MMLE] schwab chain fetch failed for {symbol}: {e}")
+    return None
+
+def _mmle_compute_atr(bars: list, period: int = 14) -> float:
+    """ATR(14) from a list of OHLC bars (oldest→newest)."""
+    if not bars or len(bars) < 2:
+        return 0.0
+    trs = []
+    prev_close = bars[0].get('close', 0)
+    for b in bars[1:]:
+        h, l, c = b.get('high', 0), b.get('low', 0), b.get('close', 0)
+        tr = max(h - l, abs(h - prev_close), abs(l - prev_close))
+        trs.append(tr)
+        prev_close = c
+    if len(trs) < period:
+        return sum(trs) / max(1, len(trs))
+    return sum(trs[-period:]) / period
+
+
+def _mmle_compute_adv(bars: list, days: int = 20) -> float:
+    """Average daily volume over the last N daily bars."""
+    if not bars:
+        return 0.0
+    vols = [b.get('volume', 0) for b in bars[-days:]]
+    return sum(vols) / max(1, len(vols))
+
+
+def _mmle_estimate_dte(chain: dict) -> int:
+    """Earliest non-negative DTE across call+put expirations in the chain."""
+    from datetime import datetime as _dt
+    today = _dt.utcnow().date()
+    best = None
+    for m in (chain.get('callExpDateMap', {}), chain.get('putExpDateMap', {})):
+        for key in m.keys():
+            if ':' not in key:
+                continue
+            try:
+                d = _dt.strptime(key.split(':')[0], '%Y-%m-%d').date()
+                dte = (d - today).days
+                if dte >= 0 and (best is None or dte < best):
+                    best = dte
+            except Exception:
+                continue
+    return best if best is not None else 99
+
+
+def worker_mmle():
+    """5-min cadence MMLE evaluation across watchlist + FAVORITES (AGENT_LAW §4)."""
+    logger.info("🐍 [MMLE] MM Liquidity Engine worker starting...")
+    time.sleep(15)  # let other engines warm up
+
+    while True:
+        try:
+            engine = get_service("mmle")
+            dm = get_service("dm")
+            if not engine or not dm:
+                time.sleep(10)
+                continue
+
+            watchlist = []
+            try:
+                if os.path.exists('watchlist.json'):
+                    with open('watchlist.json', 'r') as f:
+                        raw = json.load(f)
+                        watchlist = raw if isinstance(raw, list) else raw.get('symbols', [])
+            except Exception:
+                pass
+            universe = list(dict.fromkeys(MMLE_UNIVERSE + watchlist + FAVORITES))
+
+            for sym in universe:
+                if sym in ("VIX",):  # not equity-optionable in this context
+                    continue
+                try:
+                    chain = _mmle_get_chain(sym)
+                    if not chain:
+                        continue
+
+                    quote = state.quotes.get(sym, {}) or {}
+                    spot = float(quote.get('price') or quote.get('last') or 0.0)
+                    if spot <= 0:
+                        last = dm.polygon.get_last_trade(sym)
+                        spot = float(last.get('price', 0) or 0)
+                    if spot <= 0:
+                        continue
+
+                    daily_bars = dm.polygon.get_aggregates(
+                        sym, multiplier=1, timespan='day', limit=30, days_back=45)
+                    daily_bars = sorted(daily_bars, key=lambda b: b.get('timestamp', 0))
+                    atr = _mmle_compute_atr(daily_bars, period=14)
+                    adv = _mmle_compute_adv(daily_bars, days=20)
+
+                    # Feed VPIN with the most recent intraday minute bars.
+                    # Tick-rule classification on bar close-vs-prior-close.
+                    minute_bars = sorted(
+                        dm.polygon.get_aggregates(sym, 1, 'minute', limit=390, days_back=2),
+                        key=lambda b: b.get('timestamp', 0)
+                    )
+                    if minute_bars and adv > 0:
+                        prev_c = minute_bars[0].get('close', 0)
+                        for b in minute_bars[1:]:
+                            c = b.get('close', 0)
+                            v = b.get('volume', 0)
+                            if c <= 0 or v <= 0:
+                                continue
+                            side = 'buy' if c > prev_c else ('sell' if c < prev_c else None)
+                            engine.ingest_trade(sym, c, v, adv=adv, side=side)
+                            prev_c = c
+                    if atr <= 0 or adv <= 0:
+                        # AGENT_LAW §1.1 — pause rather than invent
+                        with state.lock:
+                            state.mmle_results[sym] = {
+                                "ticker": sym, "state": "AWAITING_STREAM",
+                                "notes": ["ATR/ADV unavailable"],
+                                "ts": time.time(),
+                            }
+                        continue
+
+                    # Daily-return σ proxy from daily closes
+                    closes = [b.get('close', 0) for b in daily_bars if b.get('close', 0) > 0]
+                    if len(closes) >= 5:
+                        rets = [(closes[i] / closes[i-1] - 1.0) for i in range(1, len(closes))]
+                        mean = sum(rets) / len(rets)
+                        var = sum((r - mean) ** 2 for r in rets) / len(rets)
+                        sigma_S_daily = max(1e-6, var ** 0.5)
+                    else:
+                        sigma_S_daily = 0.02  # logged below as proxy
+
+                    # Vol-of-vol proxy: not directly available — use ATR%/spot as
+                    # a transparent stand-in (labeled in TNTSignal.notes by engine).
+                    sigma_vol_daily = max(1e-6, atr / max(1.0, spot))
+
+                    nearest_dte = _mmle_estimate_dte(chain)
+
+                    # Lit OFI proxy: % return of last bar (transparent stub —
+                    # the engine flags missing/proxy data internally).
+                    lit_ofi = 0.0
+                    if len(closes) >= 2:
+                        lit_ofi = max(-1.0, min(1.0, (closes[-1] / closes[-2] - 1.0) * 50.0))
+
+                    sig = engine.evaluate(
+                        ticker=sym,
+                        spot=spot,
+                        raw_chain=chain,
+                        atr=atr,
+                        sigma_S_daily=sigma_S_daily,
+                        sigma_vol_daily=sigma_vol_daily,
+                        adv=adv,
+                        nearest_dte=nearest_dte,
+                        lit_ofi=lit_ofi,
+                        dark_prints=None,   # not yet wired — capped to COMPRESSED
+                    )
+
+                    payload = {
+                        "ticker": sig.ticker,
+                        "state": sig.state,
+                        "composite_z": sig.composite_z,
+                        "components": sig.components,
+                        "target_magnet": sig.target_magnet,
+                        "expected_traverse_minutes": sig.expected_traverse_minutes,
+                        "void": (sig.void.__dict__ if sig.void else None),
+                        "notes": sig.notes,
+                        "ts": sig.timestamp,
+                    }
+                    with state.lock:
+                        state.mmle_results[sym] = payload
+
+                    if sig.state in ("TNT_LONG", "TNT_SHORT"):
+                        if state.can_alert(f"mmle_{sym}_{sig.state}",
+                                           category='MMLE', cooldown=900):
+                            arrow = '🟢' if sig.state == 'TNT_LONG' else '🔴'
+                            msg = (f"{arrow} [MMLE] {sym} {sig.state} "
+                                   f"comp={sig.composite_z} → magnet ${sig.target_magnet}")
+                            state.push_terminal('MMLE', msg, symbol=sym,
+                                                score=sig.composite_z * 20)
+                            logger.info(msg)
+                    elif sig.state == "COMPRESSED":
+                        logger.debug(f"[MMLE] {sym} COMPRESSED comp={sig.composite_z}")
+
+                except Exception as inner:
+                    logger.warning(f"[MMLE] {sym}: {inner}")
+
+            time.sleep(300)  # 5-min institutional cadence (AGENT_LAW §4)
+        except Exception as e:
+            logger.error(f"[MMLE FAIL] {e}")
+            time.sleep(60)
+
+
 TRADE_DESK_URL = os.environ.get('TRADE_DESK_URL', 'https://sml-ai-trade-desk.onrender.com')
 TRADE_DESK_SECRET = os.environ.get('TRADE_DESK_SECRET', 'SML_TRADEDESK_2026')
 
@@ -1225,6 +1449,79 @@ def api_forced_move(symbol):
         return jsonify(fm.analyze(symbol.upper(), bars, vix))
     except Exception as e: return jsonify({"error": str(e)}), 500
 
+
+@app.route('/api/mmle')
+def api_mmle_all():
+    """Snapshot of latest MMLE evaluations across the universe."""
+    with state.lock:
+        return jsonify({
+            "results": dict(state.mmle_results),
+            "config": MMLE_CONFIG,
+            "ts": time.time(),
+        })
+
+
+@app.route('/api/mmle/<symbol>')
+def api_mmle_symbol(symbol):
+    """Return the cached MMLE result for a symbol; on miss, evaluate live."""
+    sym = symbol.upper()
+    with state.lock:
+        cached = state.mmle_results.get(sym)
+    if cached and (time.time() - cached.get('ts', 0)) < 600:
+        return jsonify(cached)
+
+    engine = get_service("mmle")
+    dm = get_service("dm")
+    if not engine or not dm:
+        return jsonify({"error": "MMLE not initialized"}), 503
+    try:
+        chain = _mmle_get_chain(sym)
+        if not chain:
+            return jsonify({"ticker": sym, "state": "AWAITING_STREAM",
+                            "notes": ["chain unavailable"]}), 200
+        with state.lock:
+            quote = state.quotes.get(sym, {}) or {}
+        spot = float(quote.get('price') or quote.get('last') or 0.0)
+        if spot <= 0:
+            last = dm.polygon.get_last_trade(sym)
+            spot = float(last.get('price', 0) or 0)
+        if spot <= 0:
+            return jsonify({"ticker": sym, "state": "AWAITING_STREAM",
+                            "notes": ["spot unavailable"]}), 200
+
+        daily_bars = sorted(
+            dm.polygon.get_aggregates(sym, 1, 'day', 30, 45),
+            key=lambda b: b.get('timestamp', 0)
+        )
+        atr = _mmle_compute_atr(daily_bars)
+        adv = _mmle_compute_adv(daily_bars)
+        closes = [b.get('close', 0) for b in daily_bars if b.get('close', 0) > 0]
+        if len(closes) >= 5:
+            rets = [(closes[i] / closes[i-1] - 1.0) for i in range(1, len(closes))]
+            mean = sum(rets) / len(rets)
+            sigma_S_daily = max(1e-6, (sum((r - mean) ** 2 for r in rets) / len(rets)) ** 0.5)
+        else:
+            sigma_S_daily = 0.02
+        sigma_vol_daily = max(1e-6, atr / max(1.0, spot)) if atr > 0 else 0.02
+
+        sig = engine.evaluate(
+            ticker=sym, spot=spot, raw_chain=chain,
+            atr=atr or 1.0, sigma_S_daily=sigma_S_daily,
+            sigma_vol_daily=sigma_vol_daily, adv=adv or 1e6,
+            nearest_dte=_mmle_estimate_dte(chain),
+            lit_ofi=0.0, dark_prints=None,
+        )
+        return jsonify({
+            "ticker": sig.ticker, "state": sig.state,
+            "composite_z": sig.composite_z, "components": sig.components,
+            "target_magnet": sig.target_magnet,
+            "expected_traverse_minutes": sig.expected_traverse_minutes,
+            "void": sig.void.__dict__ if sig.void else None,
+            "notes": sig.notes, "ts": sig.timestamp,
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 def _mask(val: str) -> str:
     """Show only last 4 chars of a secret."""
     if not val or len(val) <= 4:
@@ -1482,6 +1779,7 @@ if __name__ == "__main__":
     threading.Thread(target=worker_beast_paper, daemon=True).start()
     threading.Thread(target=worker_iwm_odte, daemon=True).start()
     threading.Thread(target=worker_kdp_sentinel, daemon=True).start()
+    threading.Thread(target=worker_mmle, daemon=True).start()
     threading.Thread(target=worker_trade_desk_bridge, daemon=True).start()
     port = int(os.environ.get("PORT", 8182))
     
