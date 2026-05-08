@@ -9,6 +9,8 @@ const AnalyticalEngine = {
     flowData: [],
     intelData: [],
     mmleData: [],
+    aiCommentary: {},     // { 'AMC:72': {text, ts} } — client-side cache
+    aiInflight: {},       // { 'AMC': true } — request dedup
     gex_cache: {},
     gammaSignals: [],
     gammaChartInstance: null,
@@ -429,6 +431,45 @@ const AnalyticalEngine = {
         `;
     },
 
+    // ── AI COMMENTARY: B-grade plays only (free OpenRouter, cached) ─────
+    async fetchAiCommentary(symbol, score) {
+        const slotId = `ai-com-${symbol}-${score}`;
+        const cacheKey = `${symbol}:${score}`;
+        const now = Date.now();
+
+        // Client-side cache: 10 min, matches server TTL.
+        const cached = this.aiCommentary[cacheKey];
+        if (cached && (now - cached.ts < 600000)) {
+            const slot = document.getElementById(slotId);
+            if (slot) slot.textContent = cached.text ? `🧠 ${cached.text}` : '';
+            return;
+        }
+
+        if (this.aiInflight[cacheKey]) return;
+        this.aiInflight[cacheKey] = true;
+
+        try {
+            const r = await fetch(`/api/llm/play-commentary?symbol=${encodeURIComponent(symbol)}`);
+            const d = await r.json();
+            const text = d.commentary || '';
+            this.aiCommentary[cacheKey] = { text, ts: now };
+            const slot = document.getElementById(slotId);
+            if (slot) {
+                if (text) {
+                    slot.textContent = `🧠 ${text}`;
+                } else {
+                    // No commentary returned (AI key missing, error, etc.) — collapse the slot
+                    slot.style.display = 'none';
+                }
+            }
+        } catch (e) {
+            const slot = document.getElementById(slotId);
+            if (slot) slot.style.display = 'none';
+        } finally {
+            delete this.aiInflight[cacheKey];
+        }
+    },
+
     // ── SPELLS: Options Flow ──────────────────────────────────
     async updateFlow() {
         try {
@@ -505,6 +546,13 @@ const AnalyticalEngine = {
                 const lvl = s.squeeze_level || '';
                 const sentClass = isBull ? 'flow-bull' : (s.direction === 'BEARISH' ? 'flow-bear' : '');
                 const conv = score >= 85 ? 'high-conviction-row' : '';
+                // Only B-grade plays (70-79) get an AI commentary slot rendered.
+                // A/A+ are self-evident; C is below conviction floor.
+                const isBGrade = score >= 70 && score < 80;
+                const aiSlotId = `ai-com-${s.symbol}-${score}`;
+                const aiSlot = isBGrade
+                    ? `<div id="${aiSlotId}" class="ai-commentary-slot" style="grid-column:1/-1; padding:4px 0 0 4px; font-size:9px; color:var(--text-dim); font-style:italic; border-top:1px dashed rgba(255,255,255,0.06); margin-top:3px;">🧠 thinking…</div>`
+                    : '';
                 return `
                 <div class="flow-row ${sentClass} ${conv}" style="cursor:pointer;" onclick="AnalyticalEngine.selectSymbol('${s.symbol}')">
                     <div class="flow-sym">${s.symbol}</div>
@@ -514,9 +562,16 @@ const AnalyticalEngine = {
                         <span class="flow-exp">SQZ ${score}/100</span>
                     </div>
                     <div class="flow-score">${score}</div>
+                    ${aiSlot}
                 </div>
                 `;
             }).join('');
+
+            // Kick off async AI commentary fetches for B-grade rows only.
+            plays.filter(s => {
+                const sc = Math.round(s.squeeze_score || 0);
+                return sc >= 70 && sc < 80;
+            }).forEach(s => this.fetchAiCommentary(s.symbol, Math.round(s.squeeze_score)));
             return;
         }
 

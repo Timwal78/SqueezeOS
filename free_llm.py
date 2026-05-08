@@ -1,13 +1,17 @@
 """
-Free LLM via OpenRouter — uses free-tier Llama 3 models, no billing required.
-Docs: https://openrouter.ai/docs
+Free LLM via OpenRouter — uses free-tier models, no billing required.
+Default is Llama 3.2 3B; override with OPENROUTER_MODEL env var to switch
+to Grok / DeepSeek / Qwen / etc. (see https://openrouter.ai/models — filter "Free").
 """
 import os
 import json
 from openai import OpenAI
 
 OPENROUTER_BASE = "https://openrouter.ai/api/v1"
-DEFAULT_MODEL   = "meta-llama/llama-3.2-3b-instruct:free"
+DEFAULT_MODEL   = os.environ.get(
+    "OPENROUTER_MODEL",
+    "meta-llama/llama-3.2-3b-instruct:free",
+)
 
 SYSTEM_TRADER = (
     "You are a concise quantitative trading analyst. "
@@ -77,8 +81,25 @@ class FreeLLM:
 _llm: FreeLLM | None = None
 
 
-def get_llm(model: str = DEFAULT_MODEL) -> FreeLLM:
+def get_llm(model: str | None = None) -> FreeLLM:
     global _llm
     if _llm is None:
-        _llm = FreeLLM(model=model)
+        # Resolve at first call so OPENROUTER_MODEL env var is read late.
+        _llm = FreeLLM(model=model or DEFAULT_MODEL)
     return _llm
+
+
+def grade_for_score(score: float) -> str:
+    """Same grading scheme used in discord_alerts.forward_to_trade_desk."""
+    if score >= 90: return 'A+'
+    if score >= 80: return 'A'
+    if score >= 70: return 'B'
+    return 'C'
+
+
+def should_narrate(score: float) -> bool:
+    """Only B grades (70–79) get AI commentary on the dashboard.
+    A/A+ are self-explanatory by their score; C is below conviction floor.
+    Keeps OpenRouter free-tier quota for the calls that actually add signal.
+    """
+    return 70 <= score < 80

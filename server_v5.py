@@ -1844,7 +1844,7 @@ def api_beast_events():
             
     return Response(stream(), mimetype='text/event-stream')
 
-# ── Free LLM (Ollama / local Llama) ──────────────────────────────────────────
+# ── Free LLM (OpenRouter — Llama / Grok / DeepSeek free tier) ───────────────
 
 @app.route('/api/ai/status')
 def api_ai_status():
@@ -1861,7 +1861,7 @@ def api_ai_analyze():
 
         llm = get_llm()
         if not llm.is_available():
-            return jsonify({"error": "Ollama not running. Start with: ollama run llama3.2"}), 503
+            return jsonify({"error": "AI unavailable — set OPENROUTER_API_KEY env var"}), 503
 
         if mode == 'signal':
             symbol = data.get('symbol', 'UNKNOWN')
@@ -1883,6 +1883,74 @@ def api_ai_analyze():
         return jsonify({"status": "ok", "mode": mode, "response": result})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# In-memory cache: AI commentary is generated only for B-grade plays (score 70-79)
+# and held for 10 min. This keeps OpenRouter free-tier quota for signals that
+# actually need narration (A+/A are self-evident, C is below conviction floor).
+_play_commentary_cache: dict = {}
+_PLAY_COMMENTARY_TTL = 600  # seconds
+_play_commentary_lock = threading.Lock()
+
+@app.route('/api/llm/play-commentary')
+def api_play_commentary():
+    """Return a 1-2 sentence AI take on a borderline (B-grade) squeeze play.
+    Empty for A+/A (self-evident) and C (below floor) — by design."""
+    from free_llm import should_narrate, grade_for_score
+
+    symbol = (request.args.get('symbol') or '').strip().upper()
+    if not symbol:
+        return jsonify({"status": "error", "message": "symbol required"}), 400
+
+    with state.lock:
+        play = next((s for s in state.scan_results if s.get('symbol') == symbol), None)
+
+    if not play:
+        return jsonify({"status": "success", "commentary": None, "reason": "not_in_scan"})
+
+    score = float(play.get('squeeze_score') or 0)
+    grade = grade_for_score(score)
+
+    if not should_narrate(score):
+        return jsonify({"status": "success", "commentary": None, "grade": grade,
+                        "reason": "self_evident" if grade in ('A', 'A+') else "below_floor"})
+
+    cache_key = f"{symbol}:{int(score)}:{play.get('direction', '')}:{play.get('squeeze_level', '')}"
+    now = time.time()
+    with _play_commentary_lock:
+        cached = _play_commentary_cache.get(cache_key)
+        if cached and (now - cached['ts'] < _PLAY_COMMENTARY_TTL):
+            return jsonify({"status": "success", "commentary": cached['text'],
+                            "grade": grade, "cached": True})
+
+    llm = get_llm()
+    if not llm.is_available():
+        return jsonify({"status": "success", "commentary": None,
+                        "grade": grade, "reason": "ai_unavailable"})
+
+    try:
+        commentary = llm.analyze_signal(symbol, {
+            'price': play.get('price'),
+            'squeeze_score': score,
+            'squeeze_level': play.get('squeeze_level'),
+            'direction': play.get('direction'),
+            'rel_volume': play.get('rel_volume'),
+        })
+    except Exception as e:
+        logger.warning(f"[LLM] play-commentary failed for {symbol}: {e}")
+        return jsonify({"status": "success", "commentary": None,
+                        "grade": grade, "reason": "llm_error"})
+
+    with _play_commentary_lock:
+        _play_commentary_cache[cache_key] = {'text': commentary, 'ts': now}
+        # bound the cache so it doesn't grow forever
+        if len(_play_commentary_cache) > 200:
+            oldest = sorted(_play_commentary_cache.items(), key=lambda kv: kv[1]['ts'])[:50]
+            for k, _ in oldest:
+                _play_commentary_cache.pop(k, None)
+
+    return jsonify({"status": "success", "commentary": commentary,
+                    "grade": grade, "cached": False})
 
 # ── Credit Beast — AI Credit Repair PWA (static files only) ─────────────────
 
