@@ -145,7 +145,7 @@ const AnalyticalEngine = {
     // ── SCAN: Fetch full scan results for ticker board ────────
     async updateScan() {
         try {
-            const r = await fetch('http://127.0.0.1:8182/api/market/scan');
+            const r = await fetch('/api/market/scan');
             const data = await r.json();
             if (data.status === 'success') {
                 this.scanData = data.data;
@@ -163,7 +163,7 @@ const AnalyticalEngine = {
         try {
             // Always fetch scan data too for ticker board
             await this.updateScan();
-            const r = await fetch('http://127.0.0.1:8182/api/market/alarms');
+            const r = await fetch('/api/market/alarms');
             const data = await r.json();
             if (data.status === 'success') {
                 this.alarmData = data.data;
@@ -211,7 +211,7 @@ const AnalyticalEngine = {
     async updateGrimoire() {
         if (!this.activeSymbol) return;
         try {
-            const r = await fetch(`http://127.0.0.1:8182/api/market/quotes?symbols=${this.activeSymbol}`);
+            const r = await fetch(`/api/market/quotes?symbols=${this.activeSymbol}`);
             const data = await r.json();
             if (data.status === 'success' && data.data[this.activeSymbol]) {
                 const quote = data.data[this.activeSymbol];
@@ -394,7 +394,7 @@ const AnalyticalEngine = {
     // ── SPELLS: Options Flow ──────────────────────────────────
     async updateFlow() {
         try {
-            const r = await fetch('http://127.0.0.1:8182/api/market/flow');
+            const r = await fetch('/api/market/flow');
             const data = await r.json();
             if (data.status === 'success') {
                 this.flowData = data.data;
@@ -447,7 +447,7 @@ const AnalyticalEngine = {
 
     async updateIntel() {
         try {
-            const r = await fetch('http://127.0.0.1:8182/api/market/intel');
+            const r = await fetch('/api/market/intel');
             const data = await r.json();
             if (data.status === 'success') {
                 this.intelData = data.data;
@@ -460,7 +460,7 @@ const AnalyticalEngine = {
 
     async updateBeastSignals() {
         try {
-            const r = await fetch('http://127.0.0.1:8182/api/beast/signals');
+            const r = await fetch('/api/beast/signals');
             const data = await r.json();
             if (data.status === 'ok') {
                 this.beastData = data.data;
@@ -473,7 +473,7 @@ const AnalyticalEngine = {
 
     async fetchOptionsIntel(symbol) {
         try {
-            const r = await fetch(`${this.apiBase || 'http://127.0.0.1:8182/api'}/options/intelligence/${symbol}`);
+            const r = await fetch(`${this.apiBase || '/api'}/options/intelligence/${symbol}`);
             if (r.ok) {
                 const data = await r.json();
                 this.optionsIntelData[symbol] = data;
@@ -485,7 +485,7 @@ const AnalyticalEngine = {
 
     async fetchForcedMove(symbol) {
         try {
-            const r = await fetch(`${this.apiBase || 'http://127.0.0.1:8182/api'}/forced-move/${symbol}`);
+            const r = await fetch(`${this.apiBase || '/api'}/forced-move/${symbol}`);
             if (r.ok) {
                 const data = await r.json();
                 this.forcedMoveData[symbol] = data;
@@ -497,7 +497,7 @@ const AnalyticalEngine = {
 
     async fetchMMIntel(symbol) {
         try {
-            const r = await fetch(`${this.apiBase || 'http://127.0.0.1:8182/api'}/mm-intel/${symbol}`);
+            const r = await fetch(`${this.apiBase || '/api'}/mm-intel/${symbol}`);
             if (r.ok) {
                 const data = await r.json();
                 this.mmIntelData[symbol] = data;
@@ -509,7 +509,7 @@ const AnalyticalEngine = {
 
     async fetchCascade(symbol) {
         try {
-            const r = await fetch(`${this.apiBase || 'http://127.0.0.1:8182/api'}/cascade/${symbol}`);
+            const r = await fetch(`${this.apiBase || '/api'}/cascade/${symbol}`);
             if (r.ok) {
                 const data = await r.json();
                 this.cascadeData[symbol] = data;
@@ -618,7 +618,7 @@ const AnalyticalEngine = {
         try {
             // FIREHOSE: If no symbol active or search query, fetch global news
             const sym = this.activeSymbol || '';
-            const url = sym ? `http://127.0.0.1:8182/api/market/news?symbol=${sym}&limit=15` : `http://127.0.0.1:8182/api/market/news?limit=30`;
+            const url = sym ? `/api/market/news?symbol=${sym}&limit=15` : `/api/market/news?limit=30`;
             const r = await fetch(url);
             const data = await r.json();
             if (data.status === 'success') {
@@ -662,7 +662,7 @@ const AnalyticalEngine = {
     // ── DISCOVERY: Universal Mean Reversion ──────────────────
     async updateDiscovery() {
         try {
-            const r = await fetch('http://127.0.0.1:8182/api/market/discovery');
+            const r = await fetch('/api/market/discovery');
             const data = await r.json();
             if (data.status === 'success') {
                 this.discoveryData = data.data;
@@ -726,7 +726,7 @@ const AnalyticalEngine = {
 
         // Also try the search endpoint if it exists (non-blocking)
         try {
-            const r = await fetch(`http://127.0.0.1:8182/api/search?q=${sym}`);
+            const r = await fetch(`/api/search?q=${sym}`);
             if (!r.ok) console.warn(`Search API returned ${r.status} for ${sym}`);
         } catch (e) {
             // Search endpoint may not exist — that's fine, selectSymbol already fired
@@ -736,7 +736,7 @@ const AnalyticalEngine = {
     // ── WHALES/PICKS: Institutional Intelligence ───────────────
     async updateRecommendations() {
         try {
-            const r = await fetch('http://127.0.0.1:8182/api/market/recommendations');
+            const r = await fetch('/api/market/recommendations');
             const data = await r.json();
             if (data.status === 'success') {
                 this.recommendationData = data.data;
@@ -792,8 +792,8 @@ const AnalyticalEngine = {
     async updateAudit() {
         try {
             const [statusRes, verificationRes] = await Promise.all([
-                fetch('http://127.0.0.1:8182/api/status/audit'),
-                fetch('http://127.0.0.1:8182/api/status/verification')
+                fetch('/api/status/audit'),
+                fetch('/api/status/verification')
             ]);
             
             this.auditData = await statusRes.json();
@@ -846,7 +846,7 @@ const AnalyticalEngine = {
     async updateGammaProfile() {
         if (!this.activeSymbol) return;
         try {
-            const r = await fetch(`http://127.0.0.1:8182/api/market/gex?symbol=${this.activeSymbol}`);
+            const r = await fetch(`/api/market/gex?symbol=${this.activeSymbol}`);
             const data = await r.json();
             if (data.status === 'success') {
                 this.gex_cache[this.activeSymbol] = data.data;
@@ -970,7 +970,7 @@ const AnalyticalEngine = {
 
     async updateGammaSignals() {
         try {
-            const r = await fetch('http://127.0.0.1:8182/api/market/signals');
+            const r = await fetch('/api/market/signals');
             const data = await r.json();
             if (data.status === 'success') {
                 this.gammaSignals = data.data;
@@ -986,7 +986,7 @@ const AnalyticalEngine = {
         const btn = document.querySelector(`button[onclick*="addToWatchlist('${symbol}')"]`);
         try {
             if (btn) { btn.textContent = '⏳ TRACKING...'; btn.disabled = true; }
-            const r = await fetch('http://127.0.0.1:8182/api/watchlist', {
+            const r = await fetch('/api/watchlist', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ symbol })
@@ -1014,7 +1014,7 @@ const AnalyticalEngine = {
     // ── PERFORMANCE ANALYTICS: Verified Track Record ──────────
     async updatePerformance() {
         try {
-            const r = await fetch('http://127.0.0.1:8182/api/performance/stats');
+            const r = await fetch('/api/performance/stats');
             const data = await r.json();
             if (data.status === 'success') {
                 this.perfData = data.stats;
@@ -1108,7 +1108,7 @@ const AnalyticalEngine = {
     // ── SHADOW TRADING: BYOK Execution ───────────────────────
     async updateShadowTrades() {
         try {
-            const r = await fetch('http://127.0.0.1:8182/api/trade/active');
+            const r = await fetch('/api/trade/active');
             const data = await r.json();
             if (data.status === 'success') {
                 this.shadowTrades = data.active || [];
@@ -1160,7 +1160,7 @@ const AnalyticalEngine = {
         console.log(`🚀 Triggering SHADOW ${side} for ${sym}...`);
         
         try {
-            const r = await fetch('http://127.0.0.1:8182/api/trade/shadow', {
+            const r = await fetch('/api/trade/shadow', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ symbol: sym, side: side, qty: 100 })
@@ -1276,7 +1276,7 @@ const AnalyticalEngine = {
 
     async updateAudit() {
         try {
-            const r = await fetch('http://127.0.0.1:8182/api/status/audit');
+            const r = await fetch('/api/status/audit');
             const data = await r.json();
             if (data.status === 'success') {
                 this.renderAudit(data.compliance);
@@ -1419,7 +1419,7 @@ const AnalyticalEngine = {
     // ── RMRE: Regime Intelligence ───────────────────────────
     async updateRegime() {
         try {
-            const r = await fetch(`http://127.0.0.1:8182/api/market/regime?symbol=${this.activeSymbol}`);
+            const r = await fetch(`/api/market/regime?symbol=${this.activeSymbol}`);
             const data = await r.json();
             if (data.status === 'success') {
                 this.regimeData = data.data;
@@ -1552,7 +1552,7 @@ const AnalyticalEngine = {
     // ── LIVE TERMINAL: Chronological Event Stream ─────────────
     async updateTerminalFeed() {
         try {
-            const r = await fetch('http://127.0.0.1:8182/api/terminal/feed?limit=50');
+            const r = await fetch('/api/terminal/feed?limit=50');
             const data = await r.json();
             if (data.status === 'success') {
                 this.terminalFeed = data.data;
@@ -1612,7 +1612,7 @@ const AnalyticalEngine = {
     async updateReversal() {
         try {
             if (!this.activeSymbol) return;
-            const r = await fetch(`http://127.0.0.1:8182/api/market/reversal?symbol=${this.activeSymbol}`);
+            const r = await fetch(`/api/market/reversal?symbol=${this.activeSymbol}`);
             if (!r.ok) {
                 // Server returned 404/500 — try building grade from scanData
                 if (this.scanData && this.scanData.length > 0) {
@@ -1676,7 +1676,7 @@ const AnalyticalEngine = {
     // ── PERFORMANCE ANALYTICS: Verified Track Record ──────────
     async updatePerformance() {
         try {
-            const r = await fetch('http://127.0.0.1:8182/api/performance/stats');
+            const r = await fetch('/api/performance/stats');
             const data = await r.json();
             if (data.status === 'success') {
                 this.perfData = data.stats;
@@ -1786,7 +1786,7 @@ const AnalyticalEngine = {
     // ── INSTITUTIONAL IQ: Delta Neutrality Engine ──────────
     async updateDeltaNeutrality() {
         try {
-            const r = await fetch('http://127.0.0.1:8182/api/trade/positions');
+            const r = await fetch('/api/trade/positions');
             const data = await r.json();
             if (data.status === 'success') {
                 this.deltaStress = data.delta_stress;
@@ -2120,8 +2120,8 @@ const AnalyticalEngine = {
     async updateFirehose() {
         try {
             const [flowRes, termRes] = await Promise.all([
-                fetch('http://127.0.0.1:8182/api/market/flow'),
-                fetch('http://127.0.0.1:8182/api/terminal/feed?limit=30')
+                fetch('/api/market/flow'),
+                fetch('/api/terminal/feed?limit=30')
             ]);
             const flowData = await flowRes.json();
             const termData = await termRes.json();
@@ -2224,7 +2224,7 @@ const AnalyticalEngine = {
     // ── LIVE TRADING CONTROLS ─────────────────────────────
     async updateTradingStatus() {
         try {
-            const r = await fetch('http://127.0.0.1:8182/api/trading/status');
+            const r = await fetch('/api/trading/status');
             const data = await r.json();
             if (data.status === 'success') {
                 const btn = document.getElementById('trading-mode-btn');
@@ -2250,7 +2250,7 @@ const AnalyticalEngine = {
 
     async updateBalances() {
         try {
-            const r = await fetch('http://127.0.0.1:8182/api/trading/balances');
+            const r = await fetch('/api/trading/balances');
             const data = await r.json();
             if (data.status === 'success') {
                 const b = data.balances;
@@ -2286,7 +2286,7 @@ const AnalyticalEngine = {
 
     async setTradingMode(live) {
         try {
-            const r = await fetch('http://127.0.0.1:8182/api/trading/toggle', {
+            const r = await fetch('/api/trading/toggle', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ live: live })

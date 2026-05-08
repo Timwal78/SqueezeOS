@@ -3,7 +3,7 @@
  * Institutional scanning engine with Live Backend Link.
  */
 
-const API_BASE = window.SQUEEZE_OS_CONFIG?.apiBase || 'http://127.0.0.1:8182/api';
+const API_BASE = window.SQUEEZE_OS_CONFIG?.apiBase || '/api';
 
 const SqueezeRadar = {
     baseUrl: API_BASE,

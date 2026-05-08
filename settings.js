@@ -3,7 +3,7 @@
  * Schwab API config with real error/success feedback.
  */
 
-const SETTINGS_API_BASE = window.SQUEEZE_OS_CONFIG?.apiBase || 'http://127.0.0.1:8182/api';
+const SETTINGS_API_BASE = window.SQUEEZE_OS_CONFIG?.apiBase || '/api';
 
 const SettingsPanel = {
     init(windowId) {

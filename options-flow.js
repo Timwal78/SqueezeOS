@@ -3,7 +3,7 @@
  * Institutional tracking of large options orders with Live Backend.
  */
 
-const FLOW_API_BASE = window.SQUEEZE_OS_CONFIG?.apiBase || 'http://127.0.0.1:8182/api';
+const FLOW_API_BASE = window.SQUEEZE_OS_CONFIG?.apiBase || '/api';
 
 const OptionsFlow = {
     baseUrl: FLOW_API_BASE,

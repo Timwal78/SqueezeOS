@@ -4,7 +4,7 @@
  * Auth flow is now driven from Settings panel.
  */
 
-const SCHWAB_API_BASE = window.SQUEEZE_OS_CONFIG?.apiBase || 'http://127.0.0.1:8182/api';
+const SCHWAB_API_BASE = window.SQUEEZE_OS_CONFIG?.apiBase || '/api';
 
 const SchwabIntegration = {
     apiKey: '',
@@ -106,7 +106,7 @@ const SchwabIntegration = {
             const url = new URL(`${this.baseUrl}/auth/url`);
             url.searchParams.append('client_id', this.apiKey);
             url.searchParams.append('client_secret', this.apiSecret);
-            url.searchParams.append('redirect_uri', this.redirectUri || 'http://localhost:8182/callback');
+            url.searchParams.append('redirect_uri', this.redirectUri || '/callback');
 
             const r = await fetch(url);
             const data = await r.json();
@@ -136,7 +136,7 @@ const SchwabIntegration = {
                     code,
                     client_id: this.apiKey,
                     client_secret: this.apiSecret,
-                    redirect_uri: this.redirectUri || 'http://localhost:8182/callback'
+                    redirect_uri: this.redirectUri || '/callback'
                 })
             });
             const data = await r.json();
