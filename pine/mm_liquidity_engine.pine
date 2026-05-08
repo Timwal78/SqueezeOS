@@ -49,6 +49,15 @@ grpExec = "Execution gate"
 require_lit_align = input.bool(true,  "Require lit-bid imbalance ≥ 0 to fire (ride flow)", group=grpExec)
 fire_on_state     = input.string("TNT_LONG", "Fire on state", options=["TNT_LONG","TNT_SHORT","BOTH"], group=grpExec)
 
+grpAlert = "Alert routing"
+alert_mode  = input.string("DISCORD_EMBED",
+                           "Webhook payload format",
+                           options=["DISCORD_EMBED","DISCORD_TEXT","BEAST_WEBHOOK","GENERIC_JSON"],
+                           tooltip="DISCORD_EMBED → paste your Discord webhook URL into the alert's Webhook URL field; rich card with title/fields/color. DISCORD_TEXT → plain {\"content\":\"...\"}. BEAST_WEBHOOK → routes through beast_webhook.py for HMAC-signed forwarding. GENERIC_JSON → simple {engine,action,...} for custom servers.",
+                           group=grpAlert)
+discord_username = input.string("MMLE", "Discord username override (DISCORD_* modes)", group=grpAlert)
+beast_secret_tag = input.string("",     "Beast tag (BEAST_WEBHOOK mode only)", group=grpAlert)
+
 // ═══════════════════════════════════════════════════════════════
 // VPIN PROXY — tick-rule classification on lower TF
 // ═══════════════════════════════════════════════════════════════
@@ -193,7 +202,72 @@ if barstate.islast
     table.cell(dash, 0, 7, "VCCW open");   table.cell(dash, 1, 7, vccw_open ? "YES" : "no")
 
 // ═══════════════════════════════════════════════════════════════
-// ALERTS — payload consumed by beast_webhook.py / execution_engine.py
+// ALERTS — Discord-webhook compatible
+//
+// HOW TO USE:
+//   1. Add this indicator to your chart.
+//   2. Right-click chart → Add Alert (or Alt+A).
+//   3. Condition: "MMLE — MM Liquidity Engine" → "Any alert() function call"
+//   4. Notifications tab: paste your Discord webhook URL into "Webhook URL"
+//      (Discord channel → Integrations → Webhooks → Copy URL).
+//   5. Leave Message empty — the alert() call below builds the payload.
+//
+// MODES:
+//   • DISCORD_EMBED   — rich card (title, color bar, magnet, composite)
+//   • DISCORD_TEXT    — plain message body, useful in mobile previews
+//   • BEAST_WEBHOOK   — routes through beast_webhook.py for HMAC + dedup
+//   • GENERIC_JSON    — for custom servers / n8n / Zapier
 // ═══════════════════════════════════════════════════════════════
-alertcondition(fireLong,  title="MMLE FIRE LONG",  message='{"engine":"MMLE","action":"FIRE_LONG","symbol":"{{ticker}}","price":{{close}},"target":' + str.tostring(in_target_magnet) + ',"composite":' + str.tostring(in_composite) + '}')
-alertcondition(fireShort, title="MMLE FIRE SHORT", message='{"engine":"MMLE","action":"FIRE_SHORT","symbol":"{{ticker}}","price":{{close}},"target":' + str.tostring(in_target_magnet) + ',"composite":' + str.tostring(in_composite) + '}')
+TNT_GREEN  = 3066993     // Discord #2ECC71-ish — green for TNT_LONG
+TNT_RED    = 15158332    // Discord #E74C3C-ish — red   for TNT_SHORT
+
+// Pine str.format escapes {} via {{}}; double quotes escaped with \"
+// Build JSON via str.format then dispatch via alert().
+mkDiscordEmbed(_action, _color, _emoji) =>
+    str.format(
+      '{{"username":"{0}","embeds":[{{"title":"{1} MMLE {2} — {3}","color":{4},"fields":[' +
+      '{{"name":"Price","value":"${5,number,#.##}","inline":true}},' +
+      '{{"name":"Target Magnet","value":"${6,number,#.##}","inline":true}},' +
+      '{{"name":"Composite","value":"{7,number,#.##}","inline":true}},' +
+      '{{"name":"Active Axes","value":"{8}","inline":true}},' +
+      '{{"name":"Call Wall","value":"${9,number,#.##}","inline":true}},' +
+      '{{"name":"Put Wall","value":"${10,number,#.##}","inline":true}}' +
+      '],"footer":{{"text":"VCCW open · DTE {11} · TF {12}"}}}}]}}',
+      discord_username, _emoji, _action, syminfo.ticker, _color,
+      close, in_target_magnet, in_composite, in_active_axes,
+      in_call_wall, in_put_wall, in_nearest_dte, timeframe.period)
+
+mkDiscordText(_action, _emoji) =>
+    str.format(
+      '{{"username":"{0}","content":"{1} **MMLE {2}** {3} @ ${4,number,#.##} → magnet ${5,number,#.##} · composite {6,number,#.##}"}}',
+      discord_username, _emoji, _action, syminfo.ticker,
+      close, in_target_magnet, in_composite)
+
+mkBeastWebhook(_action) =>
+    str.format(
+      '{{"engine":"MMLE","tag":"{0}","action":"{1}","symbol":"{2}","price":{3,number,#.####},"target":{4,number,#.####},"composite":{5,number,#.####},"call_wall":{6,number,#.####},"put_wall":{7,number,#.####},"active_axes":{8},"dte":{9}}}',
+      beast_secret_tag, _action, syminfo.ticker,
+      close, in_target_magnet, in_composite,
+      in_call_wall, in_put_wall, in_active_axes, in_nearest_dte)
+
+mkGenericJson(_action) =>
+    str.format(
+      '{{"engine":"MMLE","action":"{0}","symbol":"{1}","price":{2,number,#.####},"target":{3,number,#.####},"composite":{4,number,#.####},"timeframe":"{5}"}}',
+      _action, syminfo.ticker, close, in_target_magnet, in_composite, timeframe.period)
+
+buildPayload(_action, _color, _emoji) =>
+    alert_mode == "DISCORD_EMBED"  ? mkDiscordEmbed(_action, _color, _emoji)  :
+      alert_mode == "DISCORD_TEXT" ? mkDiscordText(_action, _emoji)            :
+      alert_mode == "BEAST_WEBHOOK"? mkBeastWebhook(_action)                   :
+                                     mkGenericJson(_action)
+
+if fireLong
+    alert(buildPayload("FIRE_LONG",  TNT_GREEN, "🟢"), alert.freq_once_per_bar_close)
+
+if fireShort
+    alert(buildPayload("FIRE_SHORT", TNT_RED,   "🔴"), alert.freq_once_per_bar_close)
+
+// Keep a static alertcondition for users who prefer the legacy template
+// system (TradingView's "Alert on Indicator" with constant-string message).
+alertcondition(fireLong,  title="MMLE FIRE LONG  (template)",  message='{"engine":"MMLE","action":"FIRE_LONG","symbol":"{{ticker}}","price":{{close}},"tf":"{{interval}}"}')
+alertcondition(fireShort, title="MMLE FIRE SHORT (template)",  message='{"engine":"MMLE","action":"FIRE_SHORT","symbol":"{{ticker}}","price":{{close}},"tf":"{{interval}}"}')
