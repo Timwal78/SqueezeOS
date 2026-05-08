@@ -6,9 +6,9 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-# BuildKit cache mount keeps pip downloads between rebuilds (much faster)
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --prefer-binary -r requirements.txt
+# Plain pip install — no BuildKit cache mount, so this builds on any
+# Docker engine including Railway's Metal builder (no BuildKit support).
+RUN pip install --prefer-binary --no-cache-dir -r requirements.txt
 
 COPY . .
 EXPOSE 8182
