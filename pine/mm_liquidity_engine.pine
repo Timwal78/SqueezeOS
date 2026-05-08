@@ -1,79 +1,64 @@
 //@version=6
 // ════════════════════════════════════════════════════════════════════
-//   MM LIQUIDITY ENGINE — Pine V6 Companion
-//   Vanna/Charm Convergence + Liquidity-Void + VPIN proxy
+//   MM LIQUIDITY ENGINE — BEAST MODE  (standalone)
+//   Vanna/Charm convergence + VPIN + auto walls + VWAP magnet + fires
 //
-//   Role in the closed-loop architecture:
-//     • Pine cannot fetch the option chain. The Python module
-//       (mm_liquidity_engine.py) computes VEX/CEX/VCSC_Γ from the real
-//       Schwab chain and POSTs the regime tag to a webhook.
-//     • This script is the EXECUTION GATE + visualization layer:
-//       it accepts the Python-derived signals (via input.bool / input.float
-//       fields wired through TradingView's "External" indicator system or
-//       refreshed by webhook automation), computes a synthetic VPIN/void
-//       confirmation on bar data, and emits MMLE_FIRE alerts.
-//
-//   Stealth (Full Shield Protocol):
-//     • Iceberg child-size and cadence-jitter live in execution_engine.py.
-//     • This script never prints intent — alert payloads are HMAC-signed
-//       outside Pine and only fire on regime-confirmed bars.
-//
-//   Reference: MM_LIQUIDITY_ENGINE_MANIFEST.md
+//   • Works standalone: when no Python regime is fed in, the script
+//     computes its own state from VPIN + axis_collapse + EMA stack.
+//   • Works upgraded: when Python feeds in_state / walls / magnet,
+//     those override the local computation.
 // ════════════════════════════════════════════════════════════════════
-
-indicator(title="MMLE — MM Liquidity Engine", shorttitle="MMLE", overlay=true,
+indicator(title="MMLE — Beast Mode", shorttitle="MMLE-BEAST", overlay=true,
           max_lines_count=200, max_labels_count=200)
 
 // ═══════════════════════════════════════════════════════════════
-// INPUTS — every coefficient parameterized (AGENT_LAW §2)
+// INPUTS — Python regime (optional override)
 // ═══════════════════════════════════════════════════════════════
-grpReg = "Regime (from Python engine)"
-in_state          = input.string("NEUTRAL", "TNT State", options=["NEUTRAL","COMPRESSED","TNT_LONG","TNT_SHORT","AWAITING_STREAM"], group=grpReg)
-in_target_magnet  = input.float(0.0,  "Target Magnet Strike", group=grpReg)
-in_call_wall      = input.float(0.0,  "Call Wall",  group=grpReg)
-in_put_wall       = input.float(0.0,  "Put Wall",   group=grpReg)
-in_composite      = input.float(0.0,  "Composite Score", group=grpReg)
-in_active_axes    = input.int(0,      "Active Axes", group=grpReg)
+grpReg = "Python override (leave defaults for STANDALONE)"
+in_state          = input.string("AUTO", "TNT State (Python override)", options=["AUTO","NEUTRAL","COMPRESSED","TNT_LONG","TNT_SHORT"], group=grpReg)
+in_target_magnet  = input.float(0.0, "Target Magnet Strike (0 = use VWAP)", group=grpReg)
+in_call_wall      = input.float(0.0, "Call Wall (0 = use auto-pivot)", group=grpReg)
+in_put_wall       = input.float(0.0, "Put Wall (0 = use auto-pivot)", group=grpReg)
+in_composite      = input.float(0.0, "Composite Score (Python)", group=grpReg)
+in_active_axes    = input.int(0,     "Active Axes (Python)", group=grpReg)
+in_nearest_dte    = input.int(99,    "Nearest DTE (Python)", group=grpReg)
 
 grpVPIN = "VPIN proxy (bar-derived)"
 vpin_buckets      = input.int(50, "VPIN window (buckets)", minval=10, group=grpVPIN)
 vpin_bucket_pct   = input.float(0.005, "Bucket vol fraction of avg", step=0.001, group=grpVPIN)
 
-grpVCCW = "VCCW intraday gate"
-vccw_open_min     = input.int(585, "Window open (min from midnight ET)", group=grpVCCW)   // 09:45
-vccw_close_min    = input.int(930, "Window close (min from midnight ET)", group=grpVCCW)  // 15:30
-vccw_dte_max      = input.int(3,   "Front-month DTE max", group=grpVCCW)
-in_nearest_dte    = input.int(99,  "Nearest DTE (from Python)", group=grpVCCW)
+grpAuto = "Auto-walls (when Python doesn't feed walls)"
+pivot_lookback    = input.int(20, "Pivot left/right bars", minval=5, group=grpAuto)
+ema_fast_len      = input.int(20, "Fast EMA", group=grpAuto)
+ema_slow_len      = input.int(50, "Slow EMA", group=grpAuto)
+
+grpVCCW = "Fire-window gate"
+vccw_open_min     = input.int(585, "Window open (min ET, 585=09:45)", group=grpVCCW)
+vccw_close_min    = input.int(930, "Window close (min ET, 930=15:30)", group=grpVCCW)
+strict_window     = input.bool(false, "Require fire window for FIRE markers (uncheck for 24/7 fires)", group=grpVCCW)
 
 grpExec = "Execution gate"
-require_lit_align = input.bool(true,  "Require lit-bid imbalance ≥ 0 to fire (ride flow)", group=grpExec)
-fire_on_state     = input.string("TNT_LONG", "Fire on state", options=["TNT_LONG","TNT_SHORT","BOTH"], group=grpExec)
+require_lit_align = input.bool(true,  "Require lit-bid imbalance to fire (ride flow)", group=grpExec)
+fire_on_state     = input.string("BOTH", "Fire on state", options=["TNT_LONG","TNT_SHORT","BOTH"], group=grpExec)
+fire_vpin_z_min   = input.float(1.0, "Min VPIN z to fire", step=0.1, group=grpExec)
 
 grpAlert = "Alert routing"
-alert_mode  = input.string("DISCORD_EMBED",
-                           "Webhook payload format",
-                           options=["DISCORD_EMBED","DISCORD_TEXT","BEAST_WEBHOOK","GENERIC_JSON"],
-                           tooltip="DISCORD_EMBED → paste your Discord webhook URL into the alert's Webhook URL field; rich card with title/fields/color. DISCORD_TEXT → plain {\"content\":\"...\"}. BEAST_WEBHOOK → routes through beast_webhook.py for HMAC-signed forwarding. GENERIC_JSON → simple {engine,action,...} for custom servers.",
-                           group=grpAlert)
-discord_username = input.string("MMLE", "Discord username override (DISCORD_* modes)", group=grpAlert)
+alert_mode  = input.string("DISCORD_EMBED", "Webhook payload format", options=["DISCORD_EMBED","DISCORD_TEXT","BEAST_WEBHOOK","GENERIC_JSON"], group=grpAlert)
+discord_username = input.string("MMLE-BEAST", "Discord username override", group=grpAlert)
 beast_secret_tag = input.string("",     "Beast tag (BEAST_WEBHOOK mode only)", group=grpAlert)
 
 // ═══════════════════════════════════════════════════════════════
-// VPIN PROXY — tick-rule classification on lower TF
+// VPIN PROXY
 // ═══════════════════════════════════════════════════════════════
-// Lee-Ready tick rule on the *bar* level: classify the bar as buyer- or
-// seller-initiated by close-vs-prior-close. Bucket by cumulative volume.
 prevClose = close[1]
 barSide   = close > prevClose ? 1 : close < prevClose ? -1 : 0
 
-// Streaming bucket aggregation
 var float cum_buy = 0.0
 var float cum_sell = 0.0
 var float cum_total = 0.0
 var float[] buy_buckets  = array.new_float()
 var float[] sell_buckets = array.new_float()
 
-// Bucket size: rolling mean volume × fraction
 avgVol = ta.sma(volume, 200)
 bucket_volume = math.max(1.0, avgVol * vpin_bucket_pct)
 
@@ -111,7 +96,6 @@ if array.size(buy_buckets) >= vpin_buckets
     if den > 0
         vpin := num / den
 
-// VPIN z-score over a long window
 var float[] vpin_hist = array.new_float()
 if not na(vpin)
     array.push(vpin_hist, vpin)
@@ -125,11 +109,7 @@ if array.size(vpin_hist) >= 30 and not na(vpin)
     vpin_z := sd > 0 ? (vpin - mu) / sd : float(na)
 
 // ═══════════════════════════════════════════════════════════════
-// SYNTHETIC VANNA/CHARM PROXIES (transparent — labeled below)
-// Pine has no chain access. The Python engine is authoritative; these
-// are diagnostic-only proxies for chart visualization.
-//   • Vanna proxy: VVIX/VIX divergence z-score
-//   • Charm proxy: VIX9D/VIX term-structure slope
+// VANNA / CHARM PROXIES (VVIX/VIX & VIX9D/VIX)
 // ═══════════════════════════════════════════════════════════════
 vix    = request.security("CBOE:VIX",   timeframe.period, close, ignore_invalid_symbol=true)
 vix9d  = request.security("CBOE:VIX9D", timeframe.period, close, ignore_invalid_symbol=true)
@@ -138,65 +118,120 @@ vvix   = request.security("CBOE:VVIX",  timeframe.period, close, ignore_invalid_
 vanna_proxy = not na(vvix) and not na(vix) and vix > 0 ? (vvix / vix - ta.sma(vvix / vix, 50)) : float(na)
 charm_proxy = not na(vix9d) and not na(vix) and vix > 0 ? (vix9d - vix) / vix : float(na)
 
-// Axis-collapse proxy: signs of vanna_proxy and charm_proxy aligned with
-// recent return drift => single-direction force.
 ret20 = ta.change(close, 20) / nz(close[20], close)
-axis_collapse = not na(vanna_proxy) and not na(charm_proxy) and
-                math.sign(vanna_proxy) == math.sign(charm_proxy) and
-                math.sign(vanna_proxy) == math.sign(ret20)
+axis_collapse = not na(vanna_proxy) and not na(charm_proxy) and math.sign(vanna_proxy) == math.sign(charm_proxy) and math.sign(vanna_proxy) == math.sign(ret20)
 
 // ═══════════════════════════════════════════════════════════════
-// VCCW — intraday window gate
+// AUTO WALLS — pivot-based (used when Python doesn't supply walls)
+// ═══════════════════════════════════════════════════════════════
+ph = ta.pivothigh(high, pivot_lookback, pivot_lookback)
+pl = ta.pivotlow(low,  pivot_lookback, pivot_lookback)
+var float autoCallWall = float(na)
+var float autoPutWall  = float(na)
+if not na(ph)
+    autoCallWall := ph
+if not na(pl)
+    autoPutWall := pl
+
+callWall = in_call_wall > 0 ? in_call_wall : autoCallWall
+putWall  = in_put_wall  > 0 ? in_put_wall  : autoPutWall
+
+// ═══════════════════════════════════════════════════════════════
+// MAGNET — VWAP fallback
+// ═══════════════════════════════════════════════════════════════
+vwapLine = ta.vwap(hlc3)
+magnet = in_target_magnet > 0 ? in_target_magnet : vwapLine
+
+// ═══════════════════════════════════════════════════════════════
+// VCCW GATE — restrictive (when strict) or permissive
 // ═══════════════════════════════════════════════════════════════
 nyc_minute = (hour(time, "America/New_York") * 60) + minute(time, "America/New_York")
-vccw_open  = nyc_minute >= vccw_open_min and nyc_minute <= vccw_close_min
-              and in_nearest_dte >= 0 and in_nearest_dte <= vccw_dte_max
+vccw_window = nyc_minute >= vccw_open_min and nyc_minute <= vccw_close_min
+vccw_open  = strict_window ? vccw_window : true
 
 // ═══════════════════════════════════════════════════════════════
-// REGIME RESOLUTION
-// Pine receives the authoritative state from Python via in_state input.
-// It only adds a *confirmation gate* before emitting fires:
-//   • VCCW open
-//   • axis_collapse (or in_active_axes ≥ 3)
-//   • VPIN z elevated OR Python composite ≥ 3
-//   • If require_lit_align: current bar's volume-direction must match
-//     the magnetization direction (i.e., we ride existing flow rather
-//     than initiating it — Full Shield Protocol)
+// LOCAL REGIME (when in_state == "AUTO")
+//   • TNT_LONG : trend up + VPIN spike + axis collapse aligned with up
+//   • TNT_SHORT: trend down + VPIN spike + axis collapse aligned with down
+//   • COMPRESSED: VPIN elevated but no clear trend alignment
 // ═══════════════════════════════════════════════════════════════
-trapLong  = in_state == "TNT_LONG"
-trapShort = in_state == "TNT_SHORT"
+emaFast = ta.ema(close, ema_fast_len)
+emaSlow = ta.ema(close, ema_slow_len)
 
-vpinReady = not na(vpin_z) and vpin_z >= 1.0
-axisReady = axis_collapse or in_active_axes >= 3
-compReady = in_composite >= 3.0 or vpinReady
+vpinReady = not na(vpin_z) and vpin_z >= fire_vpin_z_min
+trendUp   = close > emaFast and emaFast > emaSlow
+trendDn   = close < emaFast and emaFast < emaSlow
+
+localLong  = trendUp and vpinReady and (axis_collapse and ret20 > 0 or in_active_axes >= 3)
+localShort = trendDn and vpinReady and (axis_collapse and ret20 < 0 or in_active_axes >= 3)
+localComp  = vpinReady and not localLong and not localShort
+
+usePython = in_state != "AUTO"
+resolvedState = usePython ? in_state :
+                localLong ? "TNT_LONG" :
+                localShort ? "TNT_SHORT" :
+                localComp ? "COMPRESSED" : "NEUTRAL"
+
+trapLong  = resolvedState == "TNT_LONG"
+trapShort = resolvedState == "TNT_SHORT"
 
 litAlignedLong  = not require_lit_align or barSide >= 0
 litAlignedShort = not require_lit_align or barSide <= 0
 
-fireLong  = vccw_open and trapLong  and axisReady and compReady and litAlignedLong  and (fire_on_state == "TNT_LONG"  or fire_on_state == "BOTH")
-fireShort = vccw_open and trapShort and axisReady and compReady and litAlignedShort and (fire_on_state == "TNT_SHORT" or fire_on_state == "BOTH")
+// FIRE conditions — fully populated from local data when in AUTO mode
+fireLong  = vccw_open and trapLong  and litAlignedLong  and (fire_on_state == "TNT_LONG"  or fire_on_state == "BOTH")
+fireShort = vccw_open and trapShort and litAlignedShort and (fire_on_state == "TNT_SHORT" or fire_on_state == "BOTH")
+
+// WATCH markers — smaller, fire even outside vccw_window
+watchLong  = trapLong  and not fireLong
+watchShort = trapShort and not fireShort
 
 // ═══════════════════════════════════════════════════════════════
-// VISUALIZATION — walls, magnet, void shading
+// VISUALIZATION — always-on Beast Mode
 // ═══════════════════════════════════════════════════════════════
-plot(in_call_wall    > 0 ? in_call_wall    : na, "Call Wall",  color=color.new(color.red,   0),  linewidth=2, style=plot.style_linebr)
-plot(in_put_wall     > 0 ? in_put_wall     : na, "Put Wall",   color=color.new(color.green, 0),  linewidth=2, style=plot.style_linebr)
-plot(in_target_magnet> 0 ? in_target_magnet: na, "Magnet",     color=color.new(color.fuchsia, 0), linewidth=3, style=plot.style_circles)
+plot(callWall, "🟥 Call Wall",  color=color.new(color.red,   20), linewidth=2, style=plot.style_linebr)
+plot(putWall,  "🟩 Put Wall",   color=color.new(color.green, 20), linewidth=2, style=plot.style_linebr)
+plot(magnet,   "🟪 Magnet/VWAP", color=color.new(color.fuchsia, 0), linewidth=2)
+plot(emaFast,  "EMA fast",       color=color.new(color.aqua,   60), linewidth=1)
+plot(emaSlow,  "EMA slow",       color=color.new(color.orange, 60), linewidth=1)
 
-bgcolor(in_state == "TNT_LONG"  ? color.new(color.green, 88) : in_state == "TNT_SHORT" ? color.new(color.red, 88) : in_state == "AWAITING_STREAM" ? color.new(color.gray, 92) : na)
+// Regime background — louder shading
+bgcolor(resolvedState == "TNT_LONG"      ? color.new(color.green,   80) :
+        resolvedState == "TNT_SHORT"     ? color.new(color.red,     80) :
+        resolvedState == "COMPRESSED"    ? color.new(color.yellow,  90) :
+        na)
 
-plotshape(fireLong,  title="MMLE FIRE LONG",  location=location.belowbar, style=shape.triangleup,   color=color.new(color.lime,   0), size=size.small)
-plotshape(fireShort, title="MMLE FIRE SHORT", location=location.abovebar, style=shape.triangledown, color=color.new(color.orange, 0), size=size.small)
+// FIRE markers — large, can't miss
+plotshape(fireLong,  title="🔥 FIRE LONG",  location=location.belowbar, style=shape.triangleup,   size=size.normal, color=color.new(color.lime,   0), text="LONG",  textcolor=color.white)
+plotshape(fireShort, title="🔥 FIRE SHORT", location=location.abovebar, style=shape.triangledown, size=size.normal, color=color.new(color.orange, 0), text="SHORT", textcolor=color.white)
 
-// Diagnostic table (collapsible)
-var table dash = table.new(position.top_right, 2, 8, border_width=1)
+// WATCH markers — smaller, intra-window or pre-window
+plotshape(watchLong,  title="👁️ WATCH LONG",  location=location.belowbar, style=shape.circle, size=size.tiny, color=color.new(color.green, 30))
+plotshape(watchShort, title="👁️ WATCH SHORT", location=location.abovebar, style=shape.circle, size=size.tiny, color=color.new(color.red,   30))
+
+// Axis collapse independent marker
+plotshape(axis_collapse, title="⚛︎ Axis collapse", location=location.bottom, style=shape.diamond, size=size.tiny, color=color.new(color.aqua, 0))
+
+// VPIN spike marker
+vpinSpike = not na(vpin_z) and vpin_z >= 2.0
+plotshape(vpinSpike, title="⚡ VPIN spike", location=location.bottom, style=shape.xcross, size=size.tiny, color=color.new(color.fuchsia, 0))
+
+// ═══════════════════════════════════════════════════════════════
+// BEAST MODE PANEL
+// ═══════════════════════════════════════════════════════════════
+beastColor = resolvedState == "TNT_LONG" ? color.new(color.green, 20) :
+             resolvedState == "TNT_SHORT" ? color.new(color.red, 20) :
+             resolvedState == "COMPRESSED" ? color.new(color.yellow, 30) :
+             color.new(color.gray, 50)
+
+var table dash = table.new(position.top_right, 2, 11, border_width=1, border_color=color.new(color.aqua, 50))
 if barstate.islast
-    table.cell(dash, 0, 0, "MMLE", bgcolor=color.new(color.black, 50), text_color=color.white)
-    table.cell(dash, 1, 0, in_state)
-    table.cell(dash, 0, 1, "Composite")
-    table.cell(dash, 1, 1, str.tostring(in_composite, "#.##"))
-    table.cell(dash, 0, 2, "Active axes")
-    table.cell(dash, 1, 2, str.tostring(in_active_axes))
+    table.cell(dash, 0, 0, "🦾 BEAST MODE", bgcolor=beastColor, text_color=color.white)
+    table.cell(dash, 1, 0, resolvedState, bgcolor=beastColor, text_color=color.white)
+    table.cell(dash, 0, 1, "Source")
+    table.cell(dash, 1, 1, usePython ? "Python" : "Local")
+    table.cell(dash, 0, 2, "Composite")
+    table.cell(dash, 1, 2, str.tostring(in_composite, "#.##"))
     table.cell(dash, 0, 3, "VPIN")
     table.cell(dash, 1, 3, na(vpin) ? "n/a" : str.tostring(vpin, "#.###"))
     table.cell(dash, 0, 4, "VPIN z")
@@ -205,68 +240,35 @@ if barstate.islast
     table.cell(dash, 1, 5, na(vanna_proxy) ? "n/a" : str.tostring(vanna_proxy, "#.###"))
     table.cell(dash, 0, 6, "Charm prox")
     table.cell(dash, 1, 6, na(charm_proxy) ? "n/a" : str.tostring(charm_proxy, "#.###"))
-    table.cell(dash, 0, 7, "VCCW open")
-    table.cell(dash, 1, 7, vccw_open ? "YES" : "no")
+    table.cell(dash, 0, 7, "Axis collapse")
+    table.cell(dash, 1, 7, axis_collapse ? "✓" : "—")
+    table.cell(dash, 0, 8, "Call wall")
+    table.cell(dash, 1, 8, na(callWall) ? "—" : "$" + str.tostring(callWall, "#.##"))
+    table.cell(dash, 0, 9, "Put wall")
+    table.cell(dash, 1, 9, na(putWall)  ? "—" : "$" + str.tostring(putWall,  "#.##"))
+    table.cell(dash, 0, 10, "VCCW window")
+    table.cell(dash, 1, 10, vccw_window ? "OPEN" : "closed")
 
 // ═══════════════════════════════════════════════════════════════
 // ALERTS — Discord-webhook compatible
-//
-// HOW TO USE:
-//   1. Add this indicator to your chart.
-//   2. Right-click chart → Add Alert (or Alt+A).
-//   3. Condition: "MMLE — MM Liquidity Engine" → "Any alert() function call"
-//   4. Notifications tab: paste your Discord webhook URL into "Webhook URL"
-//      (Discord channel → Integrations → Webhooks → Copy URL).
-//   5. Leave Message empty — the alert() call below builds the payload.
-//
-// MODES:
-//   • DISCORD_EMBED   — rich card (title, color bar, magnet, composite)
-//   • DISCORD_TEXT    — plain message body, useful in mobile previews
-//   • BEAST_WEBHOOK   — routes through beast_webhook.py for HMAC + dedup
-//   • GENERIC_JSON    — for custom servers / n8n / Zapier
 // ═══════════════════════════════════════════════════════════════
-TNT_GREEN  = 3066993     // Discord #2ECC71-ish — green for TNT_LONG
-TNT_RED    = 15158332    // Discord #E74C3C-ish — red   for TNT_SHORT
+TNT_GREEN  = 3066993
+TNT_RED    = 15158332
 
-// Pine str.format escapes {} via {{}}; double quotes escaped with \"
-// Build JSON via str.format then dispatch via alert().
 mkDiscordEmbed(_action, _color, _emoji) =>
-    str.format(
-      '{{"username":"{0}","embeds":[{{"title":"{1} MMLE {2} — {3}","color":{4},"fields":[' +
-      '{{"name":"Price","value":"${5,number,#.##}","inline":true}},' +
-      '{{"name":"Target Magnet","value":"${6,number,#.##}","inline":true}},' +
-      '{{"name":"Composite","value":"{7,number,#.##}","inline":true}},' +
-      '{{"name":"Active Axes","value":"{8}","inline":true}},' +
-      '{{"name":"Call Wall","value":"${9,number,#.##}","inline":true}},' +
-      '{{"name":"Put Wall","value":"${10,number,#.##}","inline":true}}' +
-      '],"footer":{{"text":"VCCW open · DTE {11} · TF {12}"}}}}]}}',
-      discord_username, _emoji, _action, syminfo.ticker, _color,
-      close, in_target_magnet, in_composite, in_active_axes,
-      in_call_wall, in_put_wall, in_nearest_dte, timeframe.period)
+    str.format('{{"username":"{0}","embeds":[{{"title":"{1} MMLE-BEAST {2} — {3}","color":{4},"fields":[{{"name":"Price","value":"${5,number,#.##}","inline":true}},{{"name":"Magnet","value":"${6,number,#.##}","inline":true}},{{"name":"VPIN z","value":"{7,number,#.##}","inline":true}},{{"name":"State","value":"{8}","inline":true}},{{"name":"Call Wall","value":"${9,number,#.##}","inline":true}},{{"name":"Put Wall","value":"${10,number,#.##}","inline":true}}],"footer":{{"text":"Source: {11} · TF {12}"}}}}]}}', discord_username, _emoji, _action, syminfo.ticker, _color, close, magnet, nz(vpin_z, 0.0), resolvedState, nz(callWall, 0.0), nz(putWall, 0.0), usePython ? "Python" : "Local", timeframe.period)
 
 mkDiscordText(_action, _emoji) =>
-    str.format(
-      '{{"username":"{0}","content":"{1} **MMLE {2}** {3} @ ${4,number,#.##} → magnet ${5,number,#.##} · composite {6,number,#.##}"}}',
-      discord_username, _emoji, _action, syminfo.ticker,
-      close, in_target_magnet, in_composite)
+    str.format('{{"username":"{0}","content":"{1} **MMLE-BEAST {2}** {3} @ ${4,number,#.##} → magnet ${5,number,#.##} · VPIN z {6,number,#.##}"}}', discord_username, _emoji, _action, syminfo.ticker, close, magnet, nz(vpin_z, 0.0))
 
 mkBeastWebhook(_action) =>
-    str.format(
-      '{{"engine":"MMLE","tag":"{0}","action":"{1}","symbol":"{2}","price":{3,number,#.####},"target":{4,number,#.####},"composite":{5,number,#.####},"call_wall":{6,number,#.####},"put_wall":{7,number,#.####},"active_axes":{8},"dte":{9}}}',
-      beast_secret_tag, _action, syminfo.ticker,
-      close, in_target_magnet, in_composite,
-      in_call_wall, in_put_wall, in_active_axes, in_nearest_dte)
+    str.format('{{"engine":"MMLE-BEAST","tag":"{0}","action":"{1}","symbol":"{2}","price":{3,number,#.####},"magnet":{4,number,#.####},"vpin_z":{5,number,#.####},"state":"{6}","call_wall":{7,number,#.####},"put_wall":{8,number,#.####}}}', beast_secret_tag, _action, syminfo.ticker, close, magnet, nz(vpin_z, 0.0), resolvedState, nz(callWall, 0.0), nz(putWall, 0.0))
 
 mkGenericJson(_action) =>
-    str.format(
-      '{{"engine":"MMLE","action":"{0}","symbol":"{1}","price":{2,number,#.####},"target":{3,number,#.####},"composite":{4,number,#.####},"timeframe":"{5}"}}',
-      _action, syminfo.ticker, close, in_target_magnet, in_composite, timeframe.period)
+    str.format('{{"engine":"MMLE-BEAST","action":"{0}","symbol":"{1}","price":{2,number,#.####},"magnet":{3,number,#.####},"state":"{4}","timeframe":"{5}"}}', _action, syminfo.ticker, close, magnet, resolvedState, timeframe.period)
 
 buildPayload(_action, _color, _emoji) =>
-    alert_mode == "DISCORD_EMBED"  ? mkDiscordEmbed(_action, _color, _emoji)  :
-      alert_mode == "DISCORD_TEXT" ? mkDiscordText(_action, _emoji)            :
-      alert_mode == "BEAST_WEBHOOK"? mkBeastWebhook(_action)                   :
-                                     mkGenericJson(_action)
+    alert_mode == "DISCORD_EMBED" ? mkDiscordEmbed(_action, _color, _emoji) : alert_mode == "DISCORD_TEXT" ? mkDiscordText(_action, _emoji) : alert_mode == "BEAST_WEBHOOK" ? mkBeastWebhook(_action) : mkGenericJson(_action)
 
 if fireLong
     alert(buildPayload("FIRE_LONG",  TNT_GREEN, "🟢"), alert.freq_once_per_bar_close)
@@ -274,7 +276,5 @@ if fireLong
 if fireShort
     alert(buildPayload("FIRE_SHORT", TNT_RED,   "🔴"), alert.freq_once_per_bar_close)
 
-// Keep a static alertcondition for users who prefer the legacy template
-// system (TradingView's "Alert on Indicator" with constant-string message).
-alertcondition(fireLong,  title="MMLE FIRE LONG  (template)",  message='{"engine":"MMLE","action":"FIRE_LONG","symbol":"{{ticker}}","price":{{close}},"tf":"{{interval}}"}')
-alertcondition(fireShort, title="MMLE FIRE SHORT (template)",  message='{"engine":"MMLE","action":"FIRE_SHORT","symbol":"{{ticker}}","price":{{close}},"tf":"{{interval}}"}')
+alertcondition(fireLong,  title="MMLE FIRE LONG  (template)",  message='{"engine":"MMLE-BEAST","action":"FIRE_LONG","symbol":"{{ticker}}","price":{{close}},"tf":"{{interval}}"}')
+alertcondition(fireShort, title="MMLE FIRE SHORT (template)", message='{"engine":"MMLE-BEAST","action":"FIRE_SHORT","symbol":"{{ticker}}","price":{{close}},"tf":"{{interval}}"}')
