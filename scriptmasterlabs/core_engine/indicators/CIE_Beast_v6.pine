@@ -1,0 +1,177 @@
+// @version=6
+// ═══════════════════════════════════════════════════════════
+//  CYCLE INTELLIGENCE ENGINE — BEAST MODE  (CIE-BEAST v6)
+//  ScriptMasterLabs™  |  SqueezeOS Institutional Layer
+//  Walls: auto GEX-pivot + volume-cluster  |  No manual inputs
+//  VPIN: bar-derived streaming             |  Dark-cycle: DLMD
+//  Meme phase: 6-phase DORMANT→PARABOLIC   |  Fire: ≥3 axes
+//  Build: v6.1 — alertcondition const-fix, single-line norm
+// ═══════════════════════════════════════════════════════════
+indicator(title="CIE — Beast Mode", shorttitle="CIE-BEAST", overlay=true, max_lines_count=500, max_labels_count=500)
+
+// ── INPUTS ──────────────────────────────────────────────────
+grpWalls = "Walls (auto — pivot + volume cluster)"
+wall_pivot_lb   = input.int(20,    "Pivot lookback bars",          minval=5,  group=grpWalls)
+wall_vol_len    = input.int(50,    "Volume-cluster lookback bars", minval=20, group=grpWalls)
+wall_vol_thresh = input.float(1.8, "Block-bar threshold (× avg)",  step=0.1,  group=grpWalls)
+
+grpVPIN = "VPIN"
+vpin_win     = input.int(50,      "Window (buckets)", minval=10, group=grpVPIN)
+vpin_spike_z = input.float(1.5,   "Spike z-score",    step=0.1,  group=grpVPIN)
+
+grpDark = "Dark Pool / OFI"
+dlmd_len    = input.int(14,    "DLMD length",              minval=5,  group=grpDark)
+dlmd_thresh = input.float(0.6, "OFI conviction threshold", step=0.05, group=grpDark)
+
+grpCycle = "Cycle Phase"
+atr_len      = input.int(14, "ATR length",       minval=5, group=grpCycle)
+vol_ma_len   = input.int(20, "Vol MA length",    minval=5, group=grpCycle)
+phase_smooth = input.int(3,  "Phase EMA smooth", minval=1, group=grpCycle)
+
+grpFire = "Fire Logic"
+fire_axes   = input.int(3,  "Axes needed for CIE_FIRE",  minval=2, maxval=4, group=grpFire)
+settle_bars = input.int(35, "Settlement countdown bars", minval=10, group=grpFire)
+
+grpVis = "Visuals"
+show_walls = input.bool(true, "Show Walls",        group=grpVis)
+show_panel = input.bool(true, "Show Beast Panel",  group=grpVis)
+col_call   = input.color(color.new(#00e5ff,0), "Call Wall color", group=grpVis)
+col_put    = input.color(color.new(#ff1744,0), "Put Wall color",  group=grpVis)
+
+// ── WALL ENGINE (autonomous pivot + volume cluster) ─────────
+ph = ta.pivothigh(high, wall_pivot_lb, wall_pivot_lb)
+pl = ta.pivotlow(low,   wall_pivot_lb, wall_pivot_lb)
+
+var float call_wall = na
+var float put_wall  = na
+var float call_vol  = 0.0
+var float put_vol   = 0.0
+
+if not na(ph)
+    if na(call_wall) or volume[wall_pivot_lb] > call_vol
+        call_wall := ph
+        call_vol  := volume[wall_pivot_lb]
+if not na(pl)
+    if na(put_wall) or volume[wall_pivot_lb] > put_vol
+        put_wall := pl
+        put_vol  := volume[wall_pivot_lb]
+
+// ── VWAP ────────────────────────────────────────────────────
+vwap_val = ta.vwap(hlc3)
+
+// ── VPIN (streaming bucket approximation) ───────────────────
+buy_vol    = (close > open) ? volume : 0.0
+sell_vol   = (close <= open) ? volume : 0.0
+vpin_raw   = math.abs(ta.sma(buy_vol, vpin_win) - ta.sma(sell_vol, vpin_win)) / math.max(ta.sma(volume, vpin_win), 1)
+vpin_mean  = ta.sma(vpin_raw, vpin_win * 2)
+vpin_std   = ta.stdev(vpin_raw, vpin_win * 2)
+vpin_z     = vpin_std > 0 ? (vpin_raw - vpin_mean) / vpin_std : 0.0
+vpin_spike = vpin_z >= vpin_spike_z
+
+// ── DARK POOL OFI PROXY (DLMD) ──────────────────────────────
+signed_vol = (close - open) / math.max(high - low, 0.0001) * volume
+dlmd_raw   = ta.ema(signed_vol, dlmd_len)
+dlmd_norm  = dlmd_raw / math.max(math.abs(ta.sma(dlmd_raw, dlmd_len * 3)), 1)
+dlmd_bull  = dlmd_norm >  dlmd_thresh
+dlmd_bear  = dlmd_norm < -dlmd_thresh
+
+// ── CYCLE PHASE (6-phase) ───────────────────────────────────
+atr_val   = ta.atr(atr_len)
+atr_rank  = ta.percentrank(atr_val, 100) / 100.0
+vol_ratio = volume / math.max(ta.sma(volume, vol_ma_len), 1)
+phase_raw = vol_ratio * (1 + atr_rank)
+phase_ema = ta.ema(phase_raw, phase_smooth)
+phase     = phase_ema < 0.6 ? 0 : phase_ema < 0.9 ? 1 : phase_ema < 1.2 ? 2 : phase_ema < 1.6 ? 3 : phase_ema < 2.2 ? 4 : 5
+phase_lbl = phase == 0 ? "DORMANT" : phase == 1 ? "ACCUMULATE" : phase == 2 ? "MARKUP" : phase == 3 ? "DISTRIBUTION" : phase == 4 ? "SQUEEZE" : "PARABOLIC"
+
+// ── EMAs (trend reference) ──────────────────────────────────
+ema8  = ta.ema(close, 8)
+ema21 = ta.ema(close, 21)
+
+// ── FRACTAL AXIS ────────────────────────────────────────────
+frac_bull = not na(ta.pivotlow(low,  3, 3)) and close > ema21
+frac_bear = not na(ta.pivothigh(high, 3, 3)) and close < ema21
+
+// ── SETTLEMENT AXIS (T+35 bar countdown) ────────────────────
+var int settle_count = na
+if frac_bull or frac_bear
+    settle_count := settle_bars
+else if not na(settle_count) and settle_count > 0
+    settle_count := settle_count - 1
+settle_active = not na(settle_count) and settle_count > 0 and settle_count <= 10
+
+// ── CONSENSUS / FIRE LOGIC ──────────────────────────────────
+axes_bull     = (dlmd_bull ? 1 : 0) + (vpin_spike and dlmd_bull ? 1 : 0) + (frac_bull ? 1 : 0) + (settle_active and dlmd_bull ? 1 : 0)
+axes_bear     = (dlmd_bear ? 1 : 0) + (vpin_spike and dlmd_bear ? 1 : 0) + (frac_bear ? 1 : 0) + (settle_active and dlmd_bear ? 1 : 0)
+cie_fire_bull = axes_bull >= fire_axes
+cie_fire_bear = axes_bear >= fire_axes
+cie_primed    = (axes_bull == fire_axes - 1) or (axes_bear == fire_axes - 1)
+signal_state  = cie_fire_bull ? "CIE_FIRE \U0001f525 LONG" : cie_fire_bear ? "CIE_FIRE \U0001f525 SHORT" : cie_primed ? "PRIMED" : "BUILDING"
+
+// ═══════════════════════════════════════════════════════════
+//  VISUALS
+// ═══════════════════════════════════════════════════════════
+
+// ── Wall Lines ──────────────────────────────────────────────
+plot(show_walls ? call_wall : na, "Call Wall", col_call, 2, plot.style_stepline_diamond)
+plot(show_walls ? put_wall  : na, "Put Wall",  col_put,  2, plot.style_stepline_diamond)
+
+// ── VWAP & EMAs ─────────────────────────────────────────────
+plot(vwap_val, "VWAP",   color.new(#ffeb3b, 0),  1)
+plot(ema8,     "EMA 8",  color.new(#29b6f6, 60), 1)
+plot(ema21,    "EMA 21", color.new(#ab47bc, 60), 1)
+
+// ── DLMD ribbon (bgcolor) — transparency 85 for readability ─
+bgcolor(dlmd_bull ? color.new(#00e676, 85) : dlmd_bear ? color.new(#ff1744, 85) : na, title="DLMD OFI Ribbon")
+
+// ── CIE FIRE shapes ─────────────────────────────────────────
+plotshape(cie_fire_bull, "CIE FIRE LONG",  shape.triangleup,   location.belowbar, color.new(#1eff00, 0), size=size.tiny, text="\U0001f525")
+plotshape(cie_fire_bear, "CIE FIRE SHORT", shape.triangledown, location.abovebar, color.new(#ff1744, 0), size=size.tiny, text="\U0001f525")
+
+// ── PRIMED & VPIN spike shapes ──────────────────────────────
+plotshape(cie_primed and not cie_fire_bull and not cie_fire_bear, "PRIMED", shape.circle, location.belowbar, color.new(#ff9100, 0), size=size.tiny, text="\U0001f5d1")
+plotshape(vpin_spike, "VPIN Spike", shape.cross, location.abovebar, color.new(#ff6d00, 0), size=size.tiny)
+
+// ── Settlement countdown bar color ──────────────────────────
+barcolor(settle_active ? color.new(#7c4dff, 60) : na, title="Settlement Window")
+
+// ── BEAST PANEL (table dashboard) ───────────────────────────
+var table beast_panel = table.new(position.bottom_right, 2, 8, border_width=1, border_color=color.new(#424242, 0), frame_color=color.new(#212121, 0), frame_width=2)
+
+if show_panel and barstate.islast
+    hdr_bg  = color.new(#212121, 0)
+    hdr_fg  = color.new(#e0e0e0, 0)
+    val_bg  = color.new(#1a1a2e, 0)
+    fire_bg = cie_fire_bull ? color.new(#51ff00, 0) : cie_fire_bear ? color.new(#b71c1c, 0) : cie_primed ? color.new(#f57f17, 0) : color.new(#263238, 0)
+    fire_fg = color.new(#ffffff, 0)
+    settle_str = not na(settle_count) and settle_count > 0 ? "T-" + str.tostring(settle_count) : "\U00002014"
+    table.cell(beast_panel, 0, 0, "CIE-BEAST",                                              text_color=hdr_fg,  bgcolor=hdr_bg, text_size=size.normal)
+    table.cell(beast_panel, 1, 0, "v6 — SML\U002122",                                              text_color=hdr_fg,  bgcolor=hdr_bg, text_size=size.normal)
+    table.cell(beast_panel, 0, 1, "SIGNAL",                                                 text_color=hdr_fg,  bgcolor=hdr_bg, text_size=size.normal)
+    table.cell(beast_panel, 1, 1, signal_state,                                             text_color=fire_fg, bgcolor=fire_bg, text_size=size.normal)
+    table.cell(beast_panel, 0, 2, "PHASE",                                                  text_color=hdr_fg,  bgcolor=hdr_bg, text_size=size.normal)
+    table.cell(beast_panel, 1, 2, phase_lbl,                                                text_color=color.new(#80cbc4,0), bgcolor=val_bg, text_size=size.normal)
+    table.cell(beast_panel, 0, 3, "VPIN-Z",                                                 text_color=hdr_fg,  bgcolor=hdr_bg, text_size=size.normal)
+    table.cell(beast_panel, 1, 3, str.tostring(vpin_z, "#.##"),                             text_color=vpin_spike ? color.new(#ff6d00,0) : hdr_fg, bgcolor=val_bg, text_size=size.normal)
+    table.cell(beast_panel, 0, 4, "OFI (DLMD)",                                             text_color=hdr_fg,  bgcolor=hdr_bg, text_size=size.normal)
+    table.cell(beast_panel, 1, 4, str.tostring(dlmd_norm, "#.##"),                          text_color=dlmd_bull ? color.new(#00e676,0) : dlmd_bear ? color.new(#ff1744,0) : hdr_fg, bgcolor=val_bg, text_size=size.normal)
+    table.cell(beast_panel, 0, 5, "CALL WALL",                                              text_color=hdr_fg,  bgcolor=hdr_bg, text_size=size.normal)
+    table.cell(beast_panel, 1, 5, not na(call_wall) ? str.tostring(call_wall, "#.00") : "\U00002014",text_color=col_call, bgcolor=val_bg, text_size=size.normal)
+    table.cell(beast_panel, 0, 6, "PUT WALL",                                               text_color=hdr_fg,  bgcolor=hdr_bg, text_size=size.normal)
+    table.cell(beast_panel, 1, 6, not na(put_wall) ? str.tostring(put_wall, "#.00") : "\U00002014",  text_color=col_put,  bgcolor=val_bg, text_size=size.normal)
+    table.cell(beast_panel, 0, 7, "SETTLE",                                                 text_color=hdr_fg,  bgcolor=hdr_bg, text_size=size.normal)
+    table.cell(beast_panel, 1, 7, settle_str,                                               text_color=settle_active ? color.new(#7c4dff,0) : hdr_fg, bgcolor=val_bg, text_size=size.normal)
+
+// ── ALERTS (const messages — v6 compliant) ─────────────────
+alertcondition(cie_fire_bull, "CIE FIRE LONG",  "CIE-BEAST: FIRE LONG signal triggered")
+alertcondition(cie_fire_bear, "CIE FIRE SHORT", "CIE-BEAST: FIRE SHORT signal triggered")
+alertcondition(cie_primed,    "CIE PRIMED",     "CIE-BEAST: PRIMED — watch next candle")
+alertcondition(vpin_spike,    "VPIN Spike",     "CIE-BEAST: VPIN spike detected")
+
+// ── DYNAMIC ALERT JSON (for webhook automation) ─────────────
+if cie_fire_bull and barstate.isconfirmed
+    alert('{"signal":"FIRE_LONG","phase":"' + phase_lbl + '","ofi":' + str.tostring(dlmd_norm,"#.##") + ',"vpin_z":' + str.tostring(vpin_z,"#.##") + ',"price":' + str.tostring(close,"#.##") + '}', alert.freq_once_per_bar_close)
+if cie_fire_bear and barstate.isconfirmed
+    alert('{"signal":"FIRE_SHORT","phase":"' + phase_lbl + '","ofi":' + str.tostring(dlmd_norm,"#.##") + ',"vpin_z":' + str.tostring(vpin_z,"#.##") + ',"price":' + str.tostring(close,"#.##") + '}', alert.freq_once_per_bar_close)
+if vpin_spike and barstate.isconfirmed
+    alert('{"signal":"VPIN_SPIKE","z":' + str.tostring(vpin_z,"#.##") + ',"price":' + str.tostring(close,"#.##") + '}', alert.freq_once_per_bar_close)
