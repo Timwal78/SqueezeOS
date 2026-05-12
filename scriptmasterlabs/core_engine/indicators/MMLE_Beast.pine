@@ -1,0 +1,243 @@
+//@version=6
+indicator(title="SML MMLE \U002014 Beast Mode", shorttitle="SML MMLE-BEAST", overlay=true, max_lines_count=200, max_labels_count=200)
+
+grpReg = "Python override (leave defaults for STANDALONE)"
+in_state          = input.string("AUTO", "TNT State", options=["AUTO","NEUTRAL","COMPRESSED","TNT_LONG","TNT_SHORT"], group=grpReg)
+in_target_magnet  = input.float(0.0, "Magnet Strike (0=use VWAP)", group=grpReg)
+in_call_wall      = input.float(0.0, "Call Wall (0=auto-pivot)", group=grpReg)
+in_put_wall       = input.float(0.0, "Put Wall (0=auto-pivot)", group=grpReg)
+in_composite      = input.float(0.0, "Composite Score", group=grpReg)
+in_active_axes    = input.int(0,     "Active Axes", group=grpReg)
+in_nearest_dte    = input.int(99,    "Nearest DTE", group=grpReg)
+
+grpVPIN = "VPIN proxy"
+vpin_buckets      = input.int(50, "VPIN window (buckets)", minval=10, group=grpVPIN)
+vpin_bucket_pct   = input.float(0.005, "Bucket vol fraction of avg", step=0.001, group=grpVPIN)
+
+grpAuto = "Auto-walls"
+pivot_lookback    = input.int(20, "Pivot left/right bars", minval=5, group=grpAuto)
+ema_fast_len      = input.int(20, "Fast EMA", group=grpAuto)
+ema_slow_len      = input.int(50, "Slow EMA", group=grpAuto)
+
+grpVCCW = "Fire-window gate"
+vccw_open_min     = input.int(585, "Window open (min ET, 585=09:45)", group=grpVCCW)
+vccw_close_min    = input.int(930, "Window close (min ET, 930=15:30)", group=grpVCCW)
+strict_window     = input.bool(false, "Require fire window for FIRE markers", group=grpVCCW)
+
+grpExec = "Execution gate"
+require_lit_align = input.bool(true,  "Require lit-bid imbalance", group=grpExec)
+fire_on_state     = input.string("BOTH", "Fire on state", options=["TNT_LONG","TNT_SHORT","BOTH"], group=grpExec)
+fire_vpin_z_min   = input.float(1.0, "Min VPIN z to fire", step=0.1, group=grpExec)
+
+grpAlert = "Alert routing"
+alert_mode  = input.string("DISCORD_EMBED", "Webhook payload format", options=["DISCORD_EMBED","DISCORD_TEXT","BEAST_WEBHOOK","GENERIC_JSON"], group=grpAlert)
+discord_username = input.string("MMLE-BEAST", "Discord username", group=grpAlert)
+beast_secret_tag = input.string("",     "Beast tag", group=grpAlert)
+
+prevClose = close[1]
+barSide   = close > prevClose ? 1 : close < prevClose ? -1 : 0
+
+var float cum_buy = 0.0
+var float cum_sell = 0.0
+var float cum_total = 0.0
+var float[] buy_buckets  = array.new_float()
+var float[] sell_buckets = array.new_float()
+
+avgVol = ta.sma(volume, 200)
+bucket_volume = math.max(1.0, avgVol * vpin_bucket_pct)
+
+if barSide == 1
+    cum_buy := cum_buy + volume
+else if barSide == -1
+    cum_sell := cum_sell + volume
+else
+    cum_buy := cum_buy + volume / 2.0
+    cum_sell := cum_sell + volume / 2.0
+cum_total := cum_total + volume
+
+while cum_total >= bucket_volume
+    scale = bucket_volume / cum_total
+    b = cum_buy * scale
+    s = cum_sell * scale
+    array.push(buy_buckets, b)
+    array.push(sell_buckets, s)
+    if array.size(buy_buckets) > vpin_buckets
+        array.shift(buy_buckets)
+        array.shift(sell_buckets)
+    cum_buy := cum_buy - b
+    cum_sell := cum_sell - s
+    cum_total := cum_total - bucket_volume
+
+vpin = float(na)
+if array.size(buy_buckets) >= vpin_buckets
+    num = 0.0
+    den = 0.0
+    for i = 0 to array.size(buy_buckets) - 1
+        b = array.get(buy_buckets, i)
+        s = array.get(sell_buckets, i)
+        num += math.abs(b - s)
+        den += b + s
+    if den > 0
+        vpin := num / den
+
+var float[] vpin_hist = array.new_float()
+if not na(vpin)
+    array.push(vpin_hist, vpin)
+    if array.size(vpin_hist) > 400
+        array.shift(vpin_hist)
+
+vpin_z = float(na)
+if array.size(vpin_hist) >= 30 and not na(vpin)
+    mu = array.avg(vpin_hist)
+    sd = array.stdev(vpin_hist)
+    vpin_z := sd > 0 ? (vpin - mu) / sd : float(na)
+
+vix    = request.security("CBOE:VIX",   timeframe.period, close, ignore_invalid_symbol=true)
+vix9d  = request.security("CBOE:VIX9D", timeframe.period, close, ignore_invalid_symbol=true)
+vvix   = request.security("CBOE:VVIX",  timeframe.period, close, ignore_invalid_symbol=true)
+
+vvix_vix     = vvix / vix
+vvix_vix_sma = ta.sma(vvix_vix, 50)
+
+vanna_proxy = not na(vvix) and not na(vix) and vix > 0 ? vvix_vix - vvix_vix_sma : float(na)
+charm_proxy = not na(vix9d) and not na(vix) and vix > 0 ? (vix9d - vix) / vix : float(na)
+
+ret20 = ta.change(close, 20) / nz(close[20], close)
+axis_collapse = not na(vanna_proxy) and not na(charm_proxy) and math.sign(vanna_proxy) == math.sign(charm_proxy) and math.sign(vanna_proxy) == math.sign(ret20)
+
+ph = ta.pivothigh(high, pivot_lookback, pivot_lookback)
+pl = ta.pivotlow(low,  pivot_lookback, pivot_lookback)
+var float autoCallWall = float(na)
+var float autoPutWall  = float(na)
+if not na(ph)
+    autoCallWall := ph
+if not na(pl)
+    autoPutWall := pl
+
+callWall = in_call_wall > 0 ? in_call_wall : autoCallWall
+putWall  = in_put_wall  > 0 ? in_put_wall  : autoPutWall
+
+vwapLine = ta.vwap(hlc3)
+magnet = in_target_magnet > 0 ? in_target_magnet : vwapLine
+
+nyc_minute = (hour(time, "America/New_York") * 60) + minute(time, "America/New_York")
+vccw_window = nyc_minute >= vccw_open_min and nyc_minute <= vccw_close_min
+vccw_open  = strict_window ? vccw_window : true
+
+emaFast = ta.ema(close, ema_fast_len)
+emaSlow = ta.ema(close, ema_slow_len)
+
+vpinReady = not na(vpin_z) and vpin_z >= fire_vpin_z_min
+trendUp   = close > emaFast and emaFast > emaSlow
+trendDn   = close < emaFast and emaFast < emaSlow
+
+localLong  = trendUp and vpinReady and (axis_collapse and ret20 > 0 or in_active_axes >= 3)
+localShort = trendDn and vpinReady and (axis_collapse and ret20 < 0 or in_active_axes >= 3)
+localComp  = vpinReady and not localLong and not localShort
+
+usePython = in_state != "AUTO"
+resolvedState = "NEUTRAL"
+if usePython
+    resolvedState := in_state
+else if localLong
+    resolvedState := "TNT_LONG"
+else if localShort
+    resolvedState := "TNT_SHORT"
+else if localComp
+    resolvedState := "COMPRESSED"
+
+trapLong  = resolvedState == "TNT_LONG"
+trapShort = resolvedState == "TNT_SHORT"
+
+litAlignedLong  = not require_lit_align or barSide >= 0
+litAlignedShort = not require_lit_align or barSide <= 0
+
+fireLong  = vccw_open and trapLong  and litAlignedLong  and (fire_on_state == "TNT_LONG"  or fire_on_state == "BOTH")
+fireShort = vccw_open and trapShort and litAlignedShort and (fire_on_state == "TNT_SHORT" or fire_on_state == "BOTH")
+
+watchLong  = trapLong  and not fireLong
+watchShort = trapShort and not fireShort
+
+plot(callWall, "Call Wall",  color=color.new(#ff0000, 0), linewidth=2, style=plot.style_linebr)
+plot(putWall,  "Put Wall",   color=color.new(#00ff08, 0), linewidth=2, style=plot.style_linebr)
+plot(magnet,   "Magnet/VWAP", color=color.new(#ffd900, 0), linewidth=2)
+plot(emaFast,  "EMA fast",   color=color.new(#ffffff, 0), linewidth=1)
+plot(emaSlow,  "EMA slow",   color=color.new(#ff0000, 0), linewidth=1)
+
+bgClr = color.new(color.gray, 100)
+if resolvedState == "TNT_LONG"
+    bgClr := color.new(color.green, 80)
+else if resolvedState == "TNT_SHORT"
+    bgClr := color.new(color.red, 80)
+else if resolvedState == "COMPRESSED"
+    bgClr := color.new(color.yellow, 90)
+bgcolor(resolvedState == "NEUTRAL" ? na : bgClr)
+
+plotshape(fireLong,  title="FIRE LONG",  location=location.belowbar, style=shape.triangleup,   size=size.normal, color=color.new(color.lime,   0), text="LONG",  textcolor=color.white)
+plotshape(fireShort, title="FIRE SHORT", location=location.abovebar, style=shape.triangledown, size=size.normal, color=color.new(color.orange, 0), text="SHORT", textcolor=color.white)
+plotshape(watchLong,  title="Watch LONG",  location=location.belowbar, style=shape.circle, size=size.tiny, color=color.new(color.green, 30))
+plotshape(watchShort, title="Watch SHORT", location=location.abovebar, style=shape.circle, size=size.tiny, color=color.new(color.red,   30))
+plotshape(axis_collapse, title="Axis collapse", location=location.bottom, style=shape.diamond, size=size.tiny, color=color.new(color.aqua, 0))
+
+vpinSpike = not na(vpin_z) and vpin_z >= 1.5
+plotshape(vpinSpike, title="VPIN spike", location=location.bottom, style=shape.xcross, size=size.tiny, color=color.new(color.fuchsia, 0))
+
+beastColor = color.new(#6d6666, 0)
+if resolvedState == "TNT_LONG"
+    beastColor := color.new(color.green, 20)
+else if resolvedState == "TNT_SHORT"
+    beastColor := color.new(color.red, 20)
+else if resolvedState == "COMPRESSED"
+    beastColor := color.new(color.yellow, 30)
+
+var table dash = table.new(position.top_right, 2, 11, border_width=1, border_color=color.new(color.aqua, 50))
+if barstate.islast
+    table.cell(dash, 0, 0, "BEAST MODE", bgcolor=beastColor, text_color=color.white)
+    table.cell(dash, 1, 0, resolvedState, bgcolor=beastColor, text_color=color.white)
+    table.cell(dash, 0, 1, "Source", text_color=color.white)
+    table.cell(dash, 1, 1, usePython ? "Python" : "Local", text_color=color.white)
+    table.cell(dash, 0, 2, "Composite", text_color=color.white)
+    table.cell(dash, 1, 2, str.tostring(in_composite, "#.##"), text_color=color.white)
+    table.cell(dash, 0, 3, "VPIN", text_color=color.white)
+    table.cell(dash, 1, 3, na(vpin) ? "n/a" : str.tostring(vpin, "#.###"), text_color=color.white)
+    table.cell(dash, 0, 4, "VPIN z", text_color=color.white)
+    table.cell(dash, 1, 4, na(vpin_z) ? "n/a" : str.tostring(vpin_z, "#.##"), text_color=color.white)
+    table.cell(dash, 0, 5, "Vanna prox", text_color=color.white)
+    table.cell(dash, 1, 5, na(vanna_proxy) ? "n/a" : str.tostring(vanna_proxy, "#.###"), text_color=color.white)
+    table.cell(dash, 0, 6, "Charm prox", text_color=color.white)
+    table.cell(dash, 1, 6, na(charm_proxy) ? "n/a" : str.tostring(charm_proxy, "#.###"), text_color=color.white)
+    table.cell(dash, 0, 7, "Axis collapse", text_color=color.white)
+    table.cell(dash, 1, 7, axis_collapse ? "YES" : "no", text_color=color.white)
+    table.cell(dash, 0, 8, "Call wall", text_color=color.white)
+    table.cell(dash, 1, 8, na(callWall) ? "\U00002014" : "$" + str.tostring(callWall, "#.##"), text_color=color.white)
+    table.cell(dash, 0, 9, "Put wall", text_color=color.white)
+    table.cell(dash, 1, 9, na(putWall)  ? "\U00002014" : "$" + str.tostring(putWall,  "#.##"), text_color=color.white)
+    table.cell(dash, 0, 10, "VCCW window", text_color=color.white)
+    table.cell(dash, 1, 10, vccw_window ? "OPEN" : "closed", text_color=color.white)
+
+TNT_GREEN  = 3066993
+TNT_RED    = 15158332
+
+mkDiscordEmbed(_action, _color, _emoji) =>
+    str.format('{{"username":"{0}","embeds":[{{"title":"{1} MMLE-BEAST {2} \U002014 {3}","color":{4},"fields":[{{"name":"Price","value":"${5,number,#.##}","inline":true}},{{"name":"Magnet","value":"${6,number,#.##}","inline":true}},{{"name":"VPIN z","value":"{7,number,#.##}","inline":true}},{{"name":"State","value":"{8}","inline":true}},{{"name":"Call Wall","value":"${9,number,#.##}","inline":true}},{{"name":"Put Wall","value":"${10,number,#.##}","inline":true}}],"footer":{{"text":"Source: {11} \U000000b7 TF {12}"}}}}]}}', discord_username, _emoji, _action, syminfo.ticker, _color, close, magnet, nz(vpin_z, 0.0), resolvedState, nz(callWall, 0.0), nz(putWall, 0.0), usePython ? "Python" : "Local", timeframe.period)
+
+mkDiscordText(_action, _emoji) =>
+    str.format('{{"username":"{0}","content":"{1} **MMLE-BEAST {2}** {3} @ ${4,number,#.##} \U002192 magnet ${5,number,#.##} \U000000b7 VPIN z {6,number,#.##}"}}', discord_username, _emoji, _action, syminfo.ticker, close, magnet, nz(vpin_z, 0.0))
+
+mkBeastWebhook(_action) =>
+    str.format('{{"engine":"MMLE-BEAST","tag":"{0}","action":"{1}","symbol":"{2}","price":{3,number,#.####},"magnet":{4,number,#.####},"vpin_z":{5,number,#.####},"state":"{6}","call_wall":{7,number,#.####},"put_wall":{8,number,#.####}}}', beast_secret_tag, _action, syminfo.ticker, close, magnet, nz(vpin_z, 0.0), resolvedState, nz(callWall, 0.0), nz(putWall, 0.0))
+
+mkGenericJson(_action) =>
+    str.format('{{"engine":"MMLE-BEAST","action":"{0}","symbol":"{1}","price":{2,number,#.####},"magnet":{3,number,#.####},"state":"{4}","timeframe":"{5}"}}', _action, syminfo.ticker, close, magnet, resolvedState, timeframe.period)
+
+buildPayload(_action, _color, _emoji) =>
+    alert_mode == "DISCORD_EMBED" ? mkDiscordEmbed(_action, _color, _emoji) : alert_mode == "DISCORD_TEXT" ? mkDiscordText(_action, _emoji) : alert_mode == "BEAST_WEBHOOK" ? mkBeastWebhook(_action) : mkGenericJson(_action)
+
+if fireLong
+    alert(buildPayload("FIRE_LONG",  TNT_GREEN, "\U0001f7e2"), alert.freq_once_per_bar_close)
+
+if fireShort
+    alert(buildPayload("FIRE_SHORT", TNT_RED,   "\U0001f534"), alert.freq_once_per_bar_close)
+
+alertcondition(fireLong,  title="MMLE FIRE LONG  (template)",  message='{"engine":"MMLE-BEAST","action":"FIRE_LONG","symbol":"{{ticker}}","price":{{close}},"tf":"{{interval}}"}')
+alertcondition(fireShort, title="MMLE FIRE SHORT (template)", message='{"engine":"MMLE-BEAST","action":"FIRE_SHORT","symbol":"{{ticker}}","price":{{close}},"tf":"{{interval}}"}')

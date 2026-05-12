@@ -1,0 +1,241 @@
+//@version=6
+indicator("SML Leviathan Liquidity Matrix\U002122", shorttitle="SML-LEVIATHAN", overlay=true, max_labels_count=500, max_lines_count=500, max_boxes_count=500)
+//══════════════════════════════════════════════════════════════════════════════
+// SML Leviathan Liquidity Matrix\U002122  \U002014  BEASTMODE v2 (2027-Ready)
+// Institutional Order Block, Resting Liquidity Sweep \U00026 Phantom Delta Engine
+// Hunts the Stop-Hunts. Sits alongside Apex (structure) \U00026 MMLE (dealer hedging).
+//══════════════════════════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────────────
+// 01 \U002014 INPUTS
+// ─────────────────────────────────────────────────────────────────────────────
+string gCore = "01 \U002014 Matrix Settings"
+pivotLookback  = input.int(15,  "Pivot Lookback (Liquidity Pools)", minval=5,   maxval=50, group=gCore)
+sweepTolerance = input.float(0.5,"Sweep Pierce Tolerance (%)",     minval=0.05, step=0.05, group=gCore)
+volMultiplier  = input.float(1.5,"Institutional Volume Spike (xAvg)",minval=1.0, step=0.1,  group=gCore)
+poolStaleBars  = input.int(500, "Prune Untapped Pools After N Bars", minval=50,            group=gCore)
+string gOB = "02 \U002014 Order Blocks"
+showOBs        = input.bool(true,"Show Institutional Order Blocks", group=gOB)
+obVolThreshold = input.float(1.3,"OB Volume Requirement",          minval=1.0, step=0.1, group=gOB)
+maxOBs         = input.int(15,  "Max Active OBs",                  minval=1, maxval=50,  group=gOB)
+obExtendBars   = input.int(30,  "OB Forward Extension (bars)",     minval=5,             group=gOB)
+string gFlow = "03 \U002014 Phantom Delta Flow"
+enableDarkFlow = input.bool(true,"Calculate Hidden Volume Delta",  group=gFlow)
+deltaLength    = input.int(50,  "CVD Rolling Length",              minval=10,            group=gFlow)
+string gHTF = "04 \U002014 HTF Bias (Institution Grade)"
+useHTF         = input.bool(true,"Enable Higher-Timeframe Trend Filter", group=gHTF)
+htfRes         = input.timeframe("240", "HTF Resolution",                 group=gHTF)
+htfEmaLen      = input.int(50,  "HTF EMA Length",                  minval=10,           group=gHTF)
+string gScore = "05 \U002014 Conviction Score (toggles, no forced gates)"
+useScoreGate   = input.bool(false, "Toggle: Require Min Conviction To Alert", group=gScore)
+scoreMinAlert  = input.int(0,  "Min Conviction Score (0-100, only if toggled)", minval=0, maxval=100, group=gScore)
+useCooldown    = input.bool(false, "Toggle: Use Sweep Alert Cooldown",     group=gScore)
+cooldownBars   = input.int(1,  "Cooldown Bars (only if toggled)",      minval=0,                  group=gScore)
+string gVisual = "06 \U002014 Visuals"
+showPools      = input.bool(true,"Show Resting Liquidity Pools",   group=gVisual)
+showSweeps     = input.bool(true,"Show Confirmed Sweeps",          group=gVisual)
+showDash       = input.bool(true,"Show SML Dashboard",             group=gVisual)
+tintBackground = input.bool(true,"Tint Background On Sweep",       group=gVisual)
+string gAlerts = "07 \U002014 Alerts"
+discordTag     = input.string("SML_LEVIATHAN","Webhook Tag",       group=gAlerts)
+// ─────────────────────────────────────────────────────────────────────────────
+// 02 \U002014 CORE CALCULATIONS
+// ─────────────────────────────────────────────────────────────────────────────
+volAvg     = ta.sma(volume, 20)
+isVolSpike = volume > (volAvg * volMultiplier)
+atr        = ta.atr(14)
+barRange     = math.max(high - low, syminfo.mintick)
+buyPressure  = volume * ((close - low) + (high - open)) / (2 * barRange)
+buyPressure := math.max(0.0, math.min(volume, buyPressure))
+sellPressure = volume - buyPressure
+barDelta     = buyPressure - sellPressure
+rollingCVD   = math.sum(barDelta, deltaLength)
+avgCVD       = ta.sma(rollingCVD, 20)
+cvdBullish = rollingCVD > avgCVD and rollingCVD > 0
+cvdBearish = rollingCVD < avgCVD and rollingCVD < 0
+htfClose = request.security(syminfo.tickerid, htfRes, close, lookahead=barmerge.lookahead_off)
+htfEma   = request.security(syminfo.tickerid, htfRes, ta.ema(close, htfEmaLen), lookahead=barmerge.lookahead_off)
+htfBull  = not useHTF or htfClose > htfEma
+htfBear  = not useHTF or htfClose < htfEma
+// ─────────────────────────────────────────────────────────────────────────────
+// 03 \U002014 TYPES
+// ─────────────────────────────────────────────────────────────────────────────
+type LiquidityPool
+    float priceLevel
+    int   startBar
+    bool  isActive
+    string side
+type OrderBlock
+    box   b
+    float top
+    float bot
+    int   createdBar
+    bool  bullish
+// ─────────────────────────────────────────────────────────────────────────────
+// 04 \U002014 RESTING LIQUIDITY POOLS
+// ─────────────────────────────────────────────────────────────────────────────
+ph = ta.pivothigh(high, pivotLookback, pivotLookback)
+pl = ta.pivotlow(low,  pivotLookback, pivotLookback)
+var poolArray = array.new<LiquidityPool>()
+if not na(ph)
+    array.push(poolArray, LiquidityPool.new(ph, bar_index[pivotLookback], true, "SELL_STOPS"))
+if not na(pl)
+    array.push(poolArray, LiquidityPool.new(pl, bar_index[pivotLookback], true, "BUY_STOPS"))
+if array.size(poolArray) > 0
+    for i = array.size(poolArray) - 1 to 0
+        p = array.get(poolArray, i)
+        stale = (bar_index - p.startBar) > poolStaleBars
+        if (not p.isActive) or stale
+            array.remove(poolArray, i)
+while array.size(poolArray) > 50
+    array.shift(poolArray)
+// ─────────────────────────────────────────────────────────────────────────────
+// 05 \U002014 INSTITUTIONAL ORDER BLOCKS
+// ─────────────────────────────────────────────────────────────────────────────
+bullEngulfing = close > open and close[1] < open[1] and close > high[1] and volume > (volAvg * obVolThreshold)
+bearEngulfing = close < open and close[1] > open[1] and close < low[1]  and volume > (volAvg * obVolThreshold)
+var obArr = array.new<OrderBlock>()
+if showOBs
+    if bullEngulfing
+        nb = box.new(left=bar_index[1], top=high[1], right=bar_index + obExtendBars, bottom=low[1], border_color=color.new(color.lime, 40), bgcolor=color.new(color.lime, 90), extend=extend.none)
+        array.push(obArr, OrderBlock.new(nb, high[1], low[1], bar_index[1], true))
+    if bearEngulfing
+        nb = box.new(left=bar_index[1], top=high[1], right=bar_index + obExtendBars, bottom=low[1], border_color=color.new(color.red, 40), bgcolor=color.new(color.red, 90), extend=extend.none)
+        array.push(obArr, OrderBlock.new(nb, high[1], low[1], bar_index[1], false))
+    if array.size(obArr) > 0
+        for i = array.size(obArr) - 1 to 0
+            ob = array.get(obArr, i)
+            mitigated = ob.bullish ? close < ob.bot : close > ob.top
+            if mitigated
+                box.delete(ob.b)
+                array.remove(obArr, i)
+    while array.size(obArr) > maxOBs
+        ob = array.shift(obArr)
+        box.delete(ob.b)
+obTapBull = false
+obTapBear = false
+if array.size(obArr) > 0
+    for i = 0 to array.size(obArr) - 1
+        ob = array.get(obArr, i)
+        if ob.bullish and low <= ob.top and low >= ob.bot
+            obTapBull := true
+        if (not ob.bullish) and high >= ob.bot and high <= ob.top
+            obTapBear := true
+// ─────────────────────────────────────────────────────────────────────────────
+// 06 \U002014 LEVIATHAN SWEEP DETECTION
+// ─────────────────────────────────────────────────────────────────────────────
+var bool  bullSweepTrigger = false
+var bool  bearSweepTrigger = false
+var float sweptLevel       = na
+var int   lastSweepBar     = -10000
+bullSweepTrigger := false
+bearSweepTrigger := false
+if array.size(poolArray) > 0
+    for i = array.size(poolArray) - 1 to 0
+        pool = array.get(poolArray, i)
+        if pool.isActive
+            if pool.side == "BUY_STOPS"
+                pierceFloor = pool.priceLevel * (1 - (sweepTolerance / 100))
+                if low < pool.priceLevel and low >= pierceFloor and close > pool.priceLevel and isVolSpike
+                    bullSweepTrigger := true
+                    sweptLevel := pool.priceLevel
+                    pool.isActive := false
+            if pool.side == "SELL_STOPS"
+                pierceCeil = pool.priceLevel * (1 + (sweepTolerance / 100))
+                if high > pool.priceLevel and high <= pierceCeil and close < pool.priceLevel and isVolSpike
+                    bearSweepTrigger := true
+                    sweptLevel := pool.priceLevel
+                    pool.isActive := false
+// ─────────────────────────────────────────────────────────────────────────────
+// 07 \U002014 CONVICTION SCORE (0-100)
+// ─────────────────────────────────────────────────────────────────────────────
+f_score(_isBull) =>
+    s = 0
+    s += (_isBull ? bullSweepTrigger : bearSweepTrigger) ? 40 : 0
+    volRatio = volume / math.max(volAvg, 1e-9)
+    s += int(math.min(20.0, (volRatio - 1.0) * 10.0))
+    s += (_isBull ? cvdBullish : cvdBearish) ? 15 : 0
+    s += (_isBull ? htfBull : htfBear) ? 15 : 0
+    s += (_isBull ? obTapBull : obTapBear) ? 10 : 0
+    math.max(0, math.min(100, s))
+bullScore = f_score(true)
+bearScore = f_score(false)
+canFire     = (not useCooldown)  or ((bar_index - lastSweepBar) >= cooldownBars)
+passesScoreB = (not useScoreGate) or (bullScore >= scoreMinAlert)
+passesScoreS = (not useScoreGate) or (bearScore >= scoreMinAlert)
+bullValid   = bullSweepTrigger and passesScoreB and canFire
+bearValid   = bearSweepTrigger and passesScoreS and canFire
+if bullValid or bearValid
+    lastSweepBar := bar_index
+// ─────────────────────────────────────────────────────────────────────────────
+// 08 \U002014 VISUALS
+// ─────────────────────────────────────────────────────────────────────────────
+var line[] poolLines = array.new_line()
+if showPools and barstate.islast
+    for l in poolLines
+        line.delete(l)
+    array.clear(poolLines)
+    for pool in poolArray
+        if pool.isActive
+            c = pool.side == "SELL_STOPS" ? color.new(color.red, 50) : color.new(color.lime, 50)
+            l = line.new(pool.startBar, pool.priceLevel, bar_index + 5, pool.priceLevel, color=c, style=line.style_dashed, width=1)
+            array.push(poolLines, l)
+plotshape(showSweeps and bullValid ? low - (atr * 0.2) : na,  title="Bull Sweep", style=shape.triangleup,   location=location.absolute, color=color.rgb(1, 18, 255),    size=size.small, text="LIQ SWEEP", textcolor=color.white)
+plotshape(showSweeps and bearValid ? high + (atr * 0.2) : na, title="Bear Sweep", style=shape.triangledown, location=location.absolute, color=color.rgb(37, 0, 247), size=size.small, text="LIQ SWEEP", textcolor=color.white)
+hiddenAccumulation = low < low[1]  and barDelta > 0 and isVolSpike
+hiddenDistribution = high > high[1] and barDelta < 0 and isVolSpike
+plotshape(enableDarkFlow and hiddenAccumulation ? low  - (atr * 0.5) : na, title="Phantom Accumulation", style=shape.triangleup, location=location.absolute, color=color.rgb(0, 255, 0), size=size.tiny)
+plotshape(enableDarkFlow and hiddenDistribution ? high + (atr * 0.5) : na, title="Phantom Distribution", style=shape.triangledown, location=location.absolute, color=color.rgb(255, 0, 0), size=size.tiny)
+bgcolor(tintBackground and bullValid ? color.new(color.aqua, 85)    : na)
+bgcolor(tintBackground and bearValid ? color.new(color.fuchsia, 85) : na)
+// ─────────────────────────────────────────────────────────────────────────────
+// 09 \U002014 JET BLACK SML DASHBOARD
+// ─────────────────────────────────────────────────────────────────────────────
+var table dash = table.new(position.top_center, 2, 8, bgcolor=color.new(#000000, 0), border_color=color.new(#000000, 0), border_width=1)
+if showDash and barstate.islast
+    table.cell(dash, 0, 0, "SML LEVIATHAN", text_color=color.white, text_size=size.normal)
+    table.cell(dash, 1, 0, "MATRIX v2",     text_color=color.white, text_size=size.normal)
+    table.cell(dash, 0, 1, "STATE", text_color=color.gray, text_size=size.small)
+    stateText  = bullValid ? "TRAPPING SHORTS" : bearValid ? "TRAPPING LONGS" : "HUNTING"
+    stateColor = bullValid ? color.aqua : bearValid ? color.fuchsia : color.white
+    table.cell(dash, 1, 1, stateText, text_color=stateColor, text_size=size.small)
+    table.cell(dash, 0, 2, "CUMULATIVE DELTA", text_color=color.gray, text_size=size.small)
+    cvdText  = cvdBullish ? "ACCUMULATING" : cvdBearish ? "DISTRIBUTING" : "NEUTRAL"
+    cvdColor = cvdBullish ? color.lime : cvdBearish ? color.red : color.yellow
+    table.cell(dash, 1, 2, cvdText, text_color=cvdColor, text_size=size.small)
+    table.cell(dash, 0, 3, "HTF BIAS", text_color=color.gray, text_size=size.small)
+    htfText  = htfBull and not htfBear ? "BULL" : htfBear and not htfBull ? "BEAR" : "FLAT"
+    htfColor = htfBull and not htfBear ? color.lime : htfBear and not htfBull ? color.red : color.yellow
+    table.cell(dash, 1, 3, htfText, text_color=htfColor, text_size=size.small)
+    table.cell(dash, 0, 4, "ACTIVE O.B.s", text_color=color.gray, text_size=size.small)
+    table.cell(dash, 1, 4, str.tostring(array.size(obArr)), text_color=color.white, text_size=size.small)
+    activePools = 0
+    for pool in poolArray
+        if pool.isActive
+            activePools += 1
+    table.cell(dash, 0, 5, "UNTAPPED LIQUIDITY", text_color=color.gray, text_size=size.small)
+    table.cell(dash, 1, 5, str.tostring(activePools) + " POOLS", text_color=color.white, text_size=size.small)
+    table.cell(dash, 0, 6, "LAST SWEEP", text_color=color.gray, text_size=size.small)
+    table.cell(dash, 1, 6, na(sweptLevel) ? "NONE" : "$" + str.tostring(sweptLevel, "#.##"), text_color=color.white, text_size=size.small)
+    table.cell(dash, 0, 7, "CONVICTION", text_color=color.gray, text_size=size.small)
+    convText  = bullValid ? str.tostring(bullScore) + " BULL" : bearValid ? str.tostring(bearScore) + " BEAR" : str.tostring(math.max(bullScore, bearScore))
+    convColor = bullValid ? color.aqua : bearValid ? color.fuchsia : color.white
+    table.cell(dash, 1, 7, convText, text_color=convColor, text_size=size.small)
+// ─────────────────────────────────────────────────────────────────────────────
+// 10 \U002014 ALERTS  (2027-grade JSON payload)
+// ─────────────────────────────────────────────────────────────────────────────
+f_payload(_action, _score) =>
+    '{"tag":"' + discordTag + '",' +
+      '"ticker":"' + syminfo.ticker + '",' +
+      '"exchange":"' + syminfo.prefix + '",' +
+      '"tf":"' + timeframe.period + '",' +
+      '"action":"' + _action + '",' +
+      '"price":' + str.tostring(close) + ',' +
+      '"level":' + str.tostring(sweptLevel) + ',' +
+      '"score":' + str.tostring(_score) + ',' +
+      '"cvd":' + str.tostring(rollingCVD, "#.##") + ',' +
+      '"htf_bull":' + (htfBull ? "true" : "false") + ',' +
+      '"time":' + str.tostring(time) + '}'
+if bullValid
+    alert(f_payload("BULL_LIQUIDITY_SWEEP", bullScore), alert.freq_once_per_bar_close)
+if bearValid
+    alert(f_payload("BEAR_LIQUIDITY_SWEEP", bearScore), alert.freq_once_per_bar_close)
