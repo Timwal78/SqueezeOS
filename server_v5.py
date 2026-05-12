@@ -27,6 +27,7 @@ from beast_webhook import register_beast_routes
 from iwm_odte_engine import IwmOdteEngine
 from kdp_sentinel_engine import KdpSentinelEngine
 from mm_liquidity_engine import MMLiquidityEngine, MMLE_CONFIG
+from cycle_intelligence_engine import CycleIntelligenceEngine, CIE_CONFIG
 from free_llm import get_llm
 
 # --- INITIALIZATION ---
@@ -69,6 +70,7 @@ class GlobalState:
         self.last_discovery_ts: float = 0.0
         self.kdp_results: dict = {}
         self.mmle_results: dict = {}  # ticker -> latest TNTSignal dict
+        self.cie_results: dict = {}   # ticker -> latest CycleSignal dict
         self.audit = {
             "universe_size": 0,
             "mega_caps_filtered": 0,
@@ -221,6 +223,7 @@ def init_services():
         iwm_engine = IwmOdteEngine(dm)
         kdp_engine = KdpSentinelEngine(dm)
         mmle_engine = MMLiquidityEngine(MMLE_CONFIG)
+        cie_engine  = CycleIntelligenceEngine(CIE_CONFIG)
 
         with state.lock:
             _services.update({
@@ -230,6 +233,7 @@ def init_services():
                 "signals": signals, "options_intel": options_intel, "forced_move": forced_move,
                 "iwm_engine": iwm_engine, "kdp_engine": kdp_engine,
                 "mmle": mmle_engine,
+                "cie": cie_engine,
                 "mre": MeanReversionEngine(bb_period=20, bb_std=2.0, rsi_period=14, max_price=500.0),
                 "sr_patterns": SRPatternsEngine(),
                 "mythos_arch": _architect_cls()
@@ -956,6 +960,152 @@ def worker_mmle():
             time.sleep(60)
 
 
+# ═══════════════════════════════════════════════════════════════
+# CIE — Cycle Intelligence Engine worker (5-min cadence, AGENT_LAW §4)
+# Runs after MMLE so it can consume the current TNT state.
+# ═══════════════════════════════════════════════════════════════
+def worker_cie():
+    """5-min cadence CIE evaluation across watchlist + FAVORITES."""
+    logger.info("🔵 [CIE] Cycle Intelligence Engine worker starting...")
+    time.sleep(45)  # let MMLE warm up first
+
+    while True:
+        try:
+            cie_engine = get_service("cie")
+            dm = get_service("dm")
+            if not cie_engine or not dm:
+                time.sleep(10)
+                continue
+
+            watchlist = []
+            try:
+                if os.path.exists('watchlist.json'):
+                    with open('watchlist.json', 'r') as f:
+                        raw = json.load(f)
+                        watchlist = raw if isinstance(raw, list) else raw.get('symbols', [])
+            except Exception:
+                pass
+            universe = list(dict.fromkeys(MMLE_UNIVERSE + watchlist + FAVORITES))
+
+            for sym in universe:
+                if sym in ("VIX",):
+                    continue
+                try:
+                    # Fetch 5-min bars (same cadence as MMLE)
+                    bars_5m = sorted(
+                        dm.polygon.get_aggregates(sym, 5, 'minute', limit=40, days_back=2),
+                        key=lambda b: b.get('timestamp', 0)
+                    )
+                    if not bars_5m:
+                        continue
+
+                    # Derive ADV from daily bars (reuse MMLE helper)
+                    daily_bars = sorted(
+                        dm.polygon.get_aggregates(sym, 1, 'day', limit=25, days_back=35),
+                        key=lambda b: b.get('timestamp', 0)
+                    )
+                    adv = _mmle_compute_adv(daily_bars, days=20)
+
+                    # Ingest price bars into CIE
+                    for bar in bars_5m[-25:]:
+                        c = bar.get('c') or bar.get('close', 0)
+                        v = bar.get('v') or bar.get('volume', 0)
+                        if c > 0:
+                            cie_engine.ingest_price_bar(
+                                sym, close=float(c), volume=float(v),
+                                iv_atm=0.0,           # IV fed via options chain if available
+                                adv=adv if adv > 0 else None,
+                            )
+
+                    # Dark bar: use empty list (transparent — dark feed not yet wired)
+                    spot = float(bars_5m[-1].get('c') or bars_5m[-1].get('close', 1))
+                    cie_engine.ingest_dark_bar(
+                        sym,
+                        dark_prints=[],    # [ESTIMATED_PROXY: dark_feed_not_wired]
+                        lit_volume=float(bars_5m[-1].get('v') or bars_5m[-1].get('volume', 0)),
+                        spot=spot,
+                    )
+
+                    # Pull current MMLE TNT state to use as confirmatory input
+                    with state.lock:
+                        mmle_payload = state.mmle_results.get(sym, {})
+                    tnt_state = mmle_payload.get('state', 'NEUTRAL')
+                    if tnt_state not in ('NEUTRAL', 'COMPRESSED', 'TNT_LONG', 'TNT_SHORT'):
+                        tnt_state = 'NEUTRAL'
+
+                    sig = cie_engine.evaluate(sym, tnt_state=tnt_state)
+
+                    payload = {
+                        "ticker":                  sig.ticker,
+                        "state":                   sig.state,
+                        "composite_z":             sig.composite_z,
+                        "components":              sig.components,
+                        "tnt_state_used":          tnt_state,
+                        "ts":                      sig.timestamp,
+                        "notes":                   sig.notes,
+                        "settlement": (
+                            {
+                                "ftd_velocity":        sig.settlement.ftd_velocity,
+                                "t35_days_remaining":  sig.settlement.t35_days_remaining,
+                                "ctb_rate":            sig.settlement.ctb_rate,
+                                "pressure_score":      sig.settlement.pressure_score,
+                                "notes":               sig.settlement.notes,
+                            } if sig.settlement else None
+                        ),
+                        "dark_pool": (
+                            {
+                                "oer":            sig.dark_pool.oer,
+                                "hoi":            sig.dark_pool.hoi,
+                                "dlmd":           sig.dark_pool.dlmd,
+                                "cluster_active": sig.dark_pool.cluster_active,
+                                "cluster_bars":   sig.dark_pool.cluster_bars,
+                                "pressure_score": sig.dark_pool.pressure_score,
+                            } if sig.dark_pool else None
+                        ),
+                        "meme_cycle": (
+                            {
+                                "phase":          sig.meme_cycle.phase,
+                                "volume_ratio":   sig.meme_cycle.volume_ratio,
+                                "iv_percentile":  sig.meme_cycle.iv_percentile,
+                                "pressure_score": sig.meme_cycle.pressure_score,
+                            } if sig.meme_cycle else None
+                        ),
+                        "fractal": (
+                            {
+                                "best_similarity":        sig.fractal.best_similarity,
+                                "median_forward_return":  sig.fractal.median_forward_return,
+                                "top_matches":            [
+                                    {"label": m.period_label, "similarity": m.similarity,
+                                     "forward_return": m.forward_return}
+                                    for m in sig.fractal.top_matches
+                                ],
+                                "pressure_score":         sig.fractal.pressure_score,
+                            } if sig.fractal else None
+                        ),
+                    }
+                    with state.lock:
+                        state.cie_results[sym] = payload
+
+                    if sig.state == "CIE_FIRE":
+                        if state.can_alert(f"cie_{sym}_fire", category='CIE', cooldown=900):
+                            msg = (f"⚡ [CIE] {sym} CIE_FIRE  comp={sig.composite_z:.2f}  "
+                                   f"phase={sig.components.get('meme_phase')}  "
+                                   f"TNT={tnt_state}")
+                            state.push_terminal('CIE', msg, symbol=sym,
+                                                score=sig.composite_z * 16)
+                            logger.info(msg)
+                    elif sig.state == "PRIMED":
+                        logger.debug(f"[CIE] {sym} PRIMED comp={sig.composite_z:.2f}")
+
+                except Exception as inner:
+                    logger.warning(f"[CIE] {sym}: {inner}")
+
+            time.sleep(300)  # 5-min institutional cadence (AGENT_LAW §4)
+        except Exception as e:
+            logger.error(f"[CIE FAIL] {e}")
+            time.sleep(60)
+
+
 TRADE_DESK_URL = os.environ.get('TRADE_DESK_URL', 'https://sml-ai-trade-desk.onrender.com')
 TRADE_DESK_SECRET = os.environ.get('TRADE_DESK_SECRET', 'SML_TRADEDESK_2026')
 
@@ -1542,6 +1692,38 @@ def api_beast_gex(symbol):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/cie')
+def api_cie_all():
+    """Snapshot of latest CIE evaluations across the universe."""
+    with state.lock:
+        return jsonify({
+            "results": dict(state.cie_results),
+            "config": CIE_CONFIG,
+            "ts": time.time(),
+        })
+
+
+@app.route('/api/cie/<symbol>')
+def api_cie_symbol(symbol):
+    """Return the cached CIE result for a symbol (max 10-min stale)."""
+    sym = symbol.upper()
+    with state.lock:
+        cached = state.cie_results.get(sym)
+    if cached and (time.time() - cached.get('ts', 0)) < 600:
+        return jsonify(cached)
+    return jsonify({
+        "ticker": sym,
+        "state": "AWAITING_STREAM",
+        "notes": ["no CIE evaluation yet — worker cadence is 5 min"],
+    }), 200
+
+
+@app.route('/api/cie/config')
+def api_cie_config():
+    """Return the full CIE_CONFIG for auditability (AGENT_LAW §2)."""
+    return jsonify(CIE_CONFIG)
+
+
 @app.route('/api/beast/architect', methods=['POST'])
 def api_beast_architect():
     try:
@@ -1979,6 +2161,7 @@ if __name__ == "__main__":
     threading.Thread(target=worker_iwm_odte, daemon=True).start()
     threading.Thread(target=worker_kdp_sentinel, daemon=True).start()
     threading.Thread(target=worker_mmle, daemon=True).start()
+    threading.Thread(target=worker_cie,  daemon=True).start()
     threading.Thread(target=worker_trade_desk_bridge, daemon=True).start()
     port = int(os.environ.get("PORT", 8182))
     
