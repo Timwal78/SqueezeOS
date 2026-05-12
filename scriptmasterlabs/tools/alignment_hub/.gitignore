@@ -1,0 +1,5 @@
+# Runtime output from ftd_monitor.py — never commit live state
+ftd_state.json
+
+# If you store a real config locally, use config.local.json instead
+config.local.json

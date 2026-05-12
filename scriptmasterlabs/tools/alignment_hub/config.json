@@ -1,0 +1,12 @@
+{
+  "fmp_api_key": "YOUR_FMP_KEY_HERE",
+  "schwab_api_key": "",
+  "render_service_url": "",
+  "tickers": ["GME", "AMC"],
+  "anchor_date": "2020-10-14",
+  "cycle_length_days": 666,
+  "t35_window_days": 3,
+  "poll_interval_seconds": 300,
+  "premarket_start_et": "04:00",
+  "premarket_end_et": "05:30"
+}
