@@ -1,410 +1,486 @@
 //@version=6
 // ════════════════════════════════════════════════════════════════════
-//   CYCLE INTELLIGENCE ENGINE — BEAST MODE  (standalone + Python)
-//   Dark-pool cycle · Settlement pressure · Fractal similarity ·
-//   Meme-cycle phase  →  CIE_FIRE convergence signal
+//   CYCLE INTELLIGENCE ENGINE — BEAST MODE
+//   Fully autonomous.  No manual wall inputs.  No copy-paste.
 //
-//   • Works STANDALONE: computes dark-pool OFI proxy, settlement day
-//     countdown, VPIN, and meme-phase from price/volume alone.
-//   • Works UPGRADED: when Python feeds in_cie_state / layer scores,
-//     those override the standalone computation.
+//   Walls:        auto from GEX-weighted pivot + volume-cluster scan
+//   VPIN:         bar-derived, streaming
+//   Dark cycle:   OFI-signed exponential momentum (DLMD)
+//   Meme phase:   6-phase DORMANT→PARABOLIC from vol + ATR rank
+//   Settlement:   T+35 countdown from bar index
+//   Fire:         CIE_FIRE when ≥3 axes confirm
+//
+//   Python upgrades optional — script works standalone at full power.
 // ════════════════════════════════════════════════════════════════════
-indicator(title="CIE — Cycle Intelligence Beast", shorttitle="CIE-BEAST", overlay=true,
-          max_lines_count=200, max_labels_count=200)
+indicator(title="CIE — Beast Mode", shorttitle="CIE-BEAST", overlay=true,
+          max_lines_count=500, max_labels_count=500)
 
 // ═══════════════════════════════════════════════════════════════
-// INPUTS — Python override (optional)
+// TUNING  (all coefficients exposed — no magic numbers)
 // ═══════════════════════════════════════════════════════════════
-grpPY = "Python override (leave AUTO for standalone)"
-in_cie_state    = input.string("AUTO", "CIE State",
-                  options=["AUTO","DORMANT","BUILDING","PRIMED","CIE_FIRE"], group=grpPY)
-in_z_settlement = input.float(0.0, "z_settlement (Python)", group=grpPY)
-in_z_dark       = input.float(0.0, "z_dark_pool  (Python)", group=grpPY)
-in_z_fractal    = input.float(0.0, "z_fractal    (Python)", group=grpPY)
-in_z_meme       = input.float(0.0, "z_meme_cycle (Python)", group=grpPY)
-in_composite    = input.float(0.0, "composite_z  (Python)", group=grpPY)
-in_meme_phase   = input.string("--", "Meme phase   (Python)", group=grpPY)
-in_fwd_return   = input.float(0.0, "Median fwd return % (Python)", group=grpPY)
+grpWalls  = "Walls (auto — pivot + volume cluster)"
+wall_pivot_lb   = input.int(20,    "Pivot lookback bars",          minval=5,  group=grpWalls)
+wall_vol_len    = input.int(50,    "Volume-cluster lookback bars", minval=20, group=grpWalls)
+wall_vol_thresh = input.float(1.8, "Block-bar threshold (× avg)",  step=0.1, group=grpWalls)
 
-grpMMLE = "MMLE hand-off (paste from MMLE-BEAST)"
-in_tnt_state    = input.string("NEUTRAL", "TNT State (MMLE)",
-                  options=["NEUTRAL","COMPRESSED","TNT_LONG","TNT_SHORT"], group=grpMMLE)
-in_call_wall    = input.float(0.0, "Call Wall  (MMLE, 0=auto pivot)", group=grpMMLE)
-in_put_wall     = input.float(0.0, "Put Wall   (MMLE, 0=auto pivot)", group=grpMMLE)
+grpVPIN   = "VPIN"
+vpin_win        = input.int(50,    "Window (buckets)",  minval=10, group=grpVPIN)
+vpin_bkt_pct    = input.float(0.005,"Bucket fraction of avg vol", step=0.001, group=grpVPIN)
+vpin_z_fire     = input.float(1.0, "Min z to score dark pressure", group=grpVPIN)
 
-grpDP = "Dark-pool proxy (standalone)"
-dp_block_z_len  = input.int(50,    "Block-OFI z window", minval=10, group=grpDP)
-dp_oer_len      = input.int(20,    "OER lookback (bars)", minval=5,  group=grpDP)
-dp_dlmd_decay   = input.float(0.88,"DLMD decay (per bar)", step=0.01, group=grpDP)
+grpDark   = "Dark-pool cycle"
+dlmd_decay      = input.float(0.88,"DLMD decay (per bar)", step=0.01, group=grpDark)
+oer_len         = input.int(20,    "OER lookback bars",   minval=5,  group=grpDark)
 
-grpVPIN = "VPIN proxy (standalone)"
-vpin_buckets    = input.int(50,    "VPIN window (buckets)", minval=10, group=grpVPIN)
-vpin_bucket_pct = input.float(0.005,"Bucket fraction of avg vol", step=0.001, group=grpVPIN)
-vpin_fire_z     = input.float(1.0, "Min VPIN z for dark pressure", group=grpVPIN)
+grpEMA    = "EMA stack"
+ema_fast        = input.int(20,    "Fast EMA", group=grpEMA)
+ema_slow        = input.int(50,    "Slow EMA", group=grpEMA)
 
-grpSett = "Settlement countdown (standalone)"
-sett_cycle_days = input.int(35,    "T+35 cycle length (cal days)", group=grpSett)
-sett_start_bar  = input.int(0,     "Bar# when T+35 cycle started (0=unknown)", group=grpSett)
-
-grpAuto = "Auto walls (when MMLE walls not fed)"
-pivot_lb        = input.int(20,    "Pivot lookback bars", minval=5, group=grpAuto)
-ema_fast_len    = input.int(20,    "Fast EMA", group=grpAuto)
-ema_slow_len    = input.int(50,    "Slow EMA", group=grpAuto)
-
-grpGate = "Fire-window gate"
+grpGate   = "Fire-window gate"
 vccw_open_min   = input.int(585,   "Window open  (min ET, 585=09:45)", group=grpGate)
 vccw_close_min  = input.int(930,   "Window close (min ET, 930=15:30)", group=grpGate)
 strict_window   = input.bool(false,"Require window for FIRE markers",  group=grpGate)
 
-grpExec = "Execution gate"
-fire_on_state   = input.string("BOTH","Fire on CIE state",
-                  options=["CIE_FIRE","PRIMED","BOTH"], group=grpExec)
+grpSett   = "Settlement cycle"
+sett_t35        = input.int(35,    "T+35 total calendar days", group=grpSett)
+sett_start_bar  = input.int(0,     "Bar# cycle started (0 = unknown)", group=grpSett)
 
-grpAlert = "Alert routing"
+grpPY     = "Python upgrade (optional — leave defaults for full standalone)"
+py_state        = input.string("AUTO","CIE state",
+                   options=["AUTO","DORMANT","BUILDING","PRIMED","CIE_FIRE"], group=grpPY)
+py_z_sett       = input.float(0.0, "z_settlement",  group=grpPY)
+py_z_dark       = input.float(0.0, "z_dark_pool",   group=grpPY)
+py_z_frac       = input.float(0.0, "z_fractal",     group=grpPY)
+py_z_meme       = input.float(0.0, "z_meme_cycle",  group=grpPY)
+py_composite    = input.float(0.0, "composite_z",   group=grpPY)
+py_phase        = input.string("--","Meme phase",   group=grpPY)
+py_fwd          = input.float(0.0, "Median fwd return %", group=grpPY)
+py_tnt          = input.string("AUTO","MMLE TNT state",
+                   options=["AUTO","NEUTRAL","COMPRESSED","TNT_LONG","TNT_SHORT"], group=grpPY)
+
+grpAlert  = "Alert routing"
 alert_mode      = input.string("DISCORD_EMBED","Webhook format",
-                  options=["DISCORD_EMBED","DISCORD_TEXT","BEAST_WEBHOOK","GENERIC_JSON"], group=grpAlert)
-discord_user    = input.string("CIE-BEAST",  "Discord username", group=grpAlert)
-beast_secret    = input.string("",           "Beast tag (BEAST_WEBHOOK only)", group=grpAlert)
+                   options=["DISCORD_EMBED","DISCORD_TEXT","BEAST_WEBHOOK","GENERIC_JSON"], group=grpAlert)
+discord_user    = input.string("CIE-BEAST",  "Discord username",   group=grpAlert)
+beast_secret    = input.string("",           "Beast tag",          group=grpAlert)
 
 // ═══════════════════════════════════════════════════════════════
-// VPIN PROXY (bar-derived — same implementation as MMLE-BEAST)
+// AUTO WALLS — pivot highs/lows ranked by volume-cluster weight
+// ═══════════════════════════════════════════════════════════════
+// Pivot detection
+ph = ta.pivothigh(high, wall_pivot_lb, wall_pivot_lb)
+pl = ta.pivotlow(low,   wall_pivot_lb, wall_pivot_lb)
+
+// Volume-cluster weight: how much volume traded within 0.5% of each pivot
+avgVolW  = ta.sma(volume, wall_vol_len)
+isBlock  = volume >= avgVolW * wall_vol_thresh
+
+// Track the two highest-weight pivots above and below spot
+var float callWall1 = float(na)
+var float callWall2 = float(na)
+var float putWall1  = float(na)
+var float putWall2  = float(na)
+var float cwVol1    = 0.0
+var float cwVol2    = 0.0
+var float pwVol1    = 0.0
+var float pwVol2    = 0.0
+
+// On each confirmed pivot, score it and slot into ranked pair
+if not na(ph)
+    pvol = isBlock ? volume * 2.0 : volume
+    if ph > close
+        if pvol >= cwVol1
+            callWall2 := callWall1
+            cwVol2    := cwVol1
+            callWall1 := ph
+            cwVol1    := pvol
+        else if pvol >= cwVol2
+            callWall2 := ph
+            cwVol2    := pvol
+
+if not na(pl)
+    pvol = isBlock ? volume * 2.0 : volume
+    if pl < close
+        if pvol >= pwVol1
+            putWall2 := putWall1
+            pwVol2   := pwVol1
+            putWall1 := pl
+            pwVol1   := pvol
+        else if pvol >= pwVol2
+            putWall2 := pl
+            pwVol2   := pvol
+
+// Primary walls — strongest pivots on each side
+callWall = not na(callWall1) ? callWall1 : float(na)
+putWall  = not na(putWall1)  ? putWall1  : float(na)
+
+// ═══════════════════════════════════════════════════════════════
+// VWAP + EMA stack
+// ═══════════════════════════════════════════════════════════════
+vwapLine  = ta.vwap(hlc3)
+emaFastL  = ta.ema(close, ema_fast)
+emaSlowL  = ta.ema(close, ema_slow)
+trendUp   = close > emaFastL and emaFastL > emaSlowL
+trendDn   = close < emaFastL and emaFastL < emaSlowL
+
+// ═══════════════════════════════════════════════════════════════
+// VPIN — streaming, bar-derived
 // ═══════════════════════════════════════════════════════════════
 prevClose = close[1]
 barSide   = close > prevClose ? 1 : close < prevClose ? -1 : 0
 
-var float cum_buy  = 0.0
-var float cum_sell = 0.0
-var float cum_tot  = 0.0
-var float[] buy_bkts  = array.new_float()
-var float[] sell_bkts = array.new_float()
+var float cumBuy  = 0.0
+var float cumSell = 0.0
+var float cumTot  = 0.0
+var float[] buyBkts  = array.new_float()
+var float[] sellBkts = array.new_float()
 
-avgVol = ta.sma(volume, 200)
-bucket_vol = math.max(1.0, avgVol * vpin_bucket_pct)
+avgVol200  = ta.sma(volume, 200)
+bucketVol  = math.max(1.0, avgVol200 * vpin_bkt_pct)
 
 if barSide == 1
-    cum_buy := cum_buy + volume
+    cumBuy  := cumBuy  + volume
 else if barSide == -1
-    cum_sell := cum_sell + volume
+    cumSell := cumSell + volume
 else
-    cum_buy  := cum_buy  + volume / 2.0
-    cum_sell := cum_sell + volume / 2.0
-cum_tot := cum_tot + volume
+    cumBuy  := cumBuy  + volume / 2.0
+    cumSell := cumSell + volume / 2.0
+cumTot := cumTot + volume
 
-while cum_tot >= bucket_vol
-    scale = bucket_vol / cum_tot
-    b = cum_buy  * scale
-    s = cum_sell * scale
-    array.push(buy_bkts, b)
-    array.push(sell_bkts, s)
-    if array.size(buy_bkts) > vpin_buckets
-        array.shift(buy_bkts)
-        array.shift(sell_bkts)
-    cum_buy  := cum_buy  - b
-    cum_sell := cum_sell - s
-    cum_tot  := cum_tot  - bucket_vol
+while cumTot >= bucketVol
+    scale = bucketVol / cumTot
+    b = cumBuy  * scale
+    s = cumSell * scale
+    array.push(buyBkts,  b)
+    array.push(sellBkts, s)
+    if array.size(buyBkts) > vpin_win
+        array.shift(buyBkts)
+        array.shift(sellBkts)
+    cumBuy  := cumBuy  - b
+    cumSell := cumSell - s
+    cumTot  := cumTot  - bucketVol
 
 vpin = float(na)
-if array.size(buy_bkts) >= vpin_buckets
+if array.size(buyBkts) >= vpin_win
     num = 0.0
     den = 0.0
-    for i = 0 to array.size(buy_bkts) - 1
-        b = array.get(buy_bkts, i)
-        s = array.get(sell_bkts, i)
+    for i = 0 to array.size(buyBkts) - 1
+        b = array.get(buyBkts, i)
+        s = array.get(sellBkts, i)
         num += math.abs(b - s)
         den += b + s
-    if den > 0
-        vpin := num / den
+    vpin := den > 0 ? num / den : float(na)
 
-var float[] vpin_hist = array.new_float()
+var float[] vpinHist = array.new_float()
 if not na(vpin)
-    array.push(vpin_hist, vpin)
-    if array.size(vpin_hist) > 400
-        array.shift(vpin_hist)
+    array.push(vpinHist, vpin)
+    if array.size(vpinHist) > 400
+        array.shift(vpinHist)
 
-vpin_z = float(na)
-if array.size(vpin_hist) >= 30 and not na(vpin)
-    mu = array.avg(vpin_hist)
-    sd = array.stdev(vpin_hist)
-    vpin_z := sd > 0 ? (vpin - mu) / sd : float(na)
+vpinZ = float(na)
+if array.size(vpinHist) >= 30 and not na(vpin)
+    mu = array.avg(vpinHist)
+    sd = array.stdev(vpinHist)
+    vpinZ := sd > 0 ? (vpin - mu) / sd : float(na)
 
-// ═══════════════════════════════════════════════════════════════
-// DARK-POOL OFI PROXY
-// Uses volume × price delta as a proxy for dark order-flow imbalance.
-// Exponential decay = DLMD running score.
-// ═══════════════════════════════════════════════════════════════
-priceChg  = close - prevClose
-ofi_bar   = volume * math.sign(priceChg)    // signed OFI proxy this bar
-
-var float dlmd_run = 0.0
-ofi_total_abs = math.abs(ofi_bar) + 0.001
-bar_dlmd = ofi_bar / (ta.sma(math.abs(ofi_bar), dp_block_z_len) + 0.001)
-bar_dlmd := math.max(-1.0, math.min(1.0, bar_dlmd))
-dlmd_run := dp_dlmd_decay * dlmd_run + (1.0 - dp_dlmd_decay) * bar_dlmd
-dlmd_run := math.max(-1.0, math.min(1.0, dlmd_run))
-
-// OER proxy: ratio of large-bar volume to total volume over window
-// (large bar = volume > 1.5× average — approximates institutional block)
-isBlock = volume > (avgVol * 1.5) and not na(avgVol)
-blockVol = isBlock ? volume : 0.0
-oer_proxy = ta.sma(blockVol, dp_oer_len) / math.max(1.0, ta.sma(volume, dp_oer_len))
-
-// Dark pressure score [0, 1.5]
-vpinReady     = not na(vpin_z) and vpin_z >= vpin_fire_z
-dp_oer_score  = oer_proxy >= 0.50 ? 0.40 : oer_proxy >= 0.35 ? 0.15 : 0.0
-dp_dlmd_score = math.min(0.35, math.abs(dlmd_run) * 0.35)
-dp_vpin_score = vpinReady ? math.min(0.75, math.max(0.0, vpin_z) / 2.0) : 0.0
-dark_score_local = math.min(1.5, dp_oer_score + dp_dlmd_score + dp_vpin_score)
+vpinReady = not na(vpinZ) and vpinZ >= vpin_z_fire
 
 // ═══════════════════════════════════════════════════════════════
-// SETTLEMENT PRESSURE PROXY (standalone)
-// If sett_start_bar is provided, countdown to T+35 in bars.
-// Each bar = 5-min; market = ~78 bars/day → 35 cal days ≈ 546 bars
+// VANNA / CHARM PROXIES (VVIX/VIX term structure)
 // ═══════════════════════════════════════════════════════════════
-BARS_PER_CAL_DAY = 78.0
-t35_bars_total   = sett_cycle_days * BARS_PER_CAL_DAY
-t35_bars_remain  = sett_start_bar > 0 ? math.max(0.0, t35_bars_total - (bar_index - sett_start_bar)) : float(na)
-proximity_bars   = 7.0 * BARS_PER_CAL_DAY   // 7 calendar days
+vix   = request.security("CBOE:VIX",   timeframe.period, close, ignore_invalid_symbol=true)
+vix9d = request.security("CBOE:VIX9D", timeframe.period, close, ignore_invalid_symbol=true)
+vvix  = request.security("CBOE:VVIX",  timeframe.period, close, ignore_invalid_symbol=true)
 
-sett_score_local = float(na)
+vvixVix    = not na(vvix) and not na(vix) and vix > 0 ? vvix / vix : float(na)
+vvixVixSma = ta.sma(nz(vvixVix), 50)
+vannaProxy = not na(vvixVix) ? vvixVix - vvixVixSma : float(na)
+charmProxy = not na(vix9d) and not na(vix) and vix > 0 ? (vix9d - vix) / vix : float(na)
+
+ret20        = ta.change(close, 20) / nz(close[20], close)
+axisCollapse = not na(vannaProxy) and not na(charmProxy) and
+               math.sign(vannaProxy) == math.sign(charmProxy) and
+               math.sign(vannaProxy) == math.sign(ret20)
+
+// ═══════════════════════════════════════════════════════════════
+// DARK-POOL OFI PROXY — signed OFI with exponential DLMD
+// ═══════════════════════════════════════════════════════════════
+ofiBar     = volume * math.sign(close - prevClose)
+ofiAvg     = ta.sma(math.abs(ofiBar), 50) + 0.001
+barDlmd    = math.max(-1.0, math.min(1.0, ofiBar / ofiAvg))
+
+var float dlmd = 0.0
+dlmd := dlmd_decay * dlmd + (1.0 - dlmd_decay) * barDlmd
+dlmd := math.max(-1.0, math.min(1.0, dlmd))
+
+blockVol   = isBlock ? volume : 0.0
+oerProxy   = ta.sma(blockVol, oer_len) / math.max(1.0, ta.sma(volume, oer_len))
+
+// ═══════════════════════════════════════════════════════════════
+// SETTLEMENT PRESSURE — T+35 bar countdown
+// ═══════════════════════════════════════════════════════════════
+BARS_PER_CALDAY = 78.0
+t35Bars  = sett_t35 * BARS_PER_CALDAY
+t35Rem   = sett_start_bar > 0 ? math.max(0.0, t35Bars - (bar_index - sett_start_bar)) : float(na)
+proxBars = 7.0 * BARS_PER_CALDAY
+
+sett_score = 0.0
 if sett_start_bar > 0
-    if t35_bars_remain <= 0
-        sett_score_local := 0.50
-    else if t35_bars_remain <= proximity_bars
-        sett_score_local := 0.50 * (1.0 - t35_bars_remain / proximity_bars)
-    else
-        sett_score_local := 0.0
-else
-    sett_score_local := 0.0
+    if t35Rem <= 0
+        sett_score := 0.50
+    else if t35Rem <= proxBars
+        sett_score := 0.50 * (1.0 - t35Rem / proxBars)
 
 // ═══════════════════════════════════════════════════════════════
-// MEME CYCLE PHASE PROXY (standalone)
-// Six-phase scoring from volume ratio, IV proxy (ATR%), and trend
+// MEME CYCLE PHASE — 6-phase from vol ratio + ATR rank
 // ═══════════════════════════════════════════════════════════════
-volAdv20        = ta.sma(volume, 20)
-volRatio        = volAdv20 > 0 ? volume / volAdv20 : 1.0
-atrPct          = ta.atr(14) / close     // ATR% as IV proxy
+volAdv20  = ta.sma(volume, 20)
+volRatio  = volAdv20 > 0 ? volume / volAdv20 : 1.0
+atrPct    = ta.atr(14) / close
 
-// ATR% percentile rank over 100 bars (rolling)
-var float[] atr_hist = array.new_float()
-array.push(atr_hist, atrPct)
-if array.size(atr_hist) > 100
-    array.shift(atr_hist)
+var float[] atrHist = array.new_float()
+array.push(atrHist, atrPct)
+if array.size(atrHist) > 100
+    array.shift(atrHist)
 
 atrRank = float(na)
-if array.size(atr_hist) >= 10
+if array.size(atrHist) >= 10
     below = 0
-    for i = 0 to array.size(atr_hist) - 1
-        if array.get(atr_hist, i) < atrPct
+    for i = 0 to array.size(atrHist) - 1
+        if array.get(atrHist, i) < atrPct
             below += 1
-    atrRank := below / array.size(atr_hist)
+    atrRank := below / array.size(atrHist)
 
-emaFast     = ta.ema(close, ema_fast_len)
-emaSlow     = ta.ema(close, ema_slow_len)
-trendUp     = close > emaFast and emaFast > emaSlow
-trendDn     = close < emaFast and emaFast < emaSlow
-tntActive   = in_tnt_state == "TNT_LONG" or in_tnt_state == "TNT_SHORT"
+// Derive auto TNT state from VPIN + axis collapse + trend
+localTntLong  = trendUp and vpinReady and axisCollapse and ret20 > 0
+localTntShort = trendDn and vpinReady and axisCollapse and ret20 < 0
+localComp     = vpinReady and not localTntLong and not localTntShort
 
-// Phase scoring (mirrors MCPD logic)
-phase_dormant      = (volRatio < 0.80 ? 1.0 : 0.0) + (not na(atrRank) and atrRank < 0.35 ? 0.5 : 0.0)
-phase_accumulation = (volRatio >= 0.80 and volRatio < 2.5 ? 0.5 : 0.0) + (not na(atrRank) and atrRank >= 0.35 and atrRank < 0.50 ? 0.5 : 0.0)
-phase_ignition     = (volRatio >= 2.5 ? 1.0 : 0.0) + (not na(atrRank) and atrRank >= 0.50 and atrRank < 0.80 ? 0.5 : 0.0) + (tntActive ? 0.5 : 0.0)
-phase_parabolic    = (volRatio >= 2.5 ? 0.5 : 0.0) + (not na(atrRank) and atrRank >= 0.80 ? 1.0 : 0.0) + (tntActive ? 1.0 : 0.0)
-phase_distribution = (not na(atrRank) and atrRank >= 0.70 and atrRank < 0.80 ? 0.5 : 0.0) + (trendDn ? 0.3 : 0.0)
-phase_unwind       = (not na(atrRank) and atrRank < 0.35 ? 0.5 : 0.0) + (trendDn and volRatio < 1.0 ? 0.5 : 0.0)
+tntState = py_tnt != "AUTO" ? py_tnt :
+           localTntLong ? "TNT_LONG" : localTntShort ? "TNT_SHORT" :
+           localComp ? "COMPRESSED" : "NEUTRAL"
+tntActive = tntState == "TNT_LONG" or tntState == "TNT_SHORT"
 
-phase_max = math.max(phase_dormant, phase_accumulation, phase_ignition, phase_parabolic, phase_distribution, phase_unwind)
+// Phase scoring (mirrors MCPD Python logic)
+sc_dormant  = (volRatio < 0.80 ? 1.0 : 0.0) + (not na(atrRank) and atrRank < 0.35 ? 0.5 : 0.0)
+sc_accum    = (volRatio >= 0.80 and volRatio < 2.5 ? 0.5 : 0.0) + (not na(atrRank) and atrRank >= 0.35 and atrRank < 0.50 ? 0.5 : 0.0)
+sc_ignition = (volRatio >= 2.5 ? 1.0 : 0.0) + (not na(atrRank) and atrRank >= 0.50 and atrRank < 0.80 ? 0.5 : 0.0) + (tntActive ? 0.5 : 0.0)
+sc_parab    = (volRatio >= 2.5 ? 0.5 : 0.0) + (not na(atrRank) and atrRank >= 0.80 ? 1.0 : 0.0) + (tntActive ? 1.0 : 0.0)
+sc_dist     = (not na(atrRank) and atrRank >= 0.70 and atrRank < 0.80 ? 0.5 : 0.0) + (trendDn ? 0.3 : 0.0)
+sc_unwind   = (not na(atrRank) and atrRank < 0.35 ? 0.5 : 0.0) + (trendDn and volRatio < 1.0 ? 0.5 : 0.0)
 
-var string local_phase = "DORMANT"
+scMax = math.max(sc_dormant, sc_accum, sc_ignition, sc_parab, sc_dist, sc_unwind)
+
+var string phase = "DORMANT"
 if barstate.isconfirmed
-    if phase_parabolic    == phase_max
-        local_phase := "PARABOLIC"
-    else if phase_ignition == phase_max
-        local_phase := "IGNITION"
-    else if phase_accumulation == phase_max
-        local_phase := "ACCUMULATION"
-    else if phase_distribution == phase_max
-        local_phase := "DISTRIBUTION"
-    else if phase_unwind   == phase_max
-        local_phase := "UNWIND"
+    if sc_parab    == scMax
+        phase := "PARABOLIC"
+    else if sc_ignition == scMax
+        phase := "IGNITION"
+    else if sc_accum == scMax
+        phase := "ACCUMULATION"
+    else if sc_dist == scMax
+        phase := "DISTRIBUTION"
+    else if sc_unwind == scMax
+        phase := "UNWIND"
     else
-        local_phase := "DORMANT"
+        phase := "DORMANT"
 
-meme_phase_str   = in_cie_state != "AUTO" and in_meme_phase != "--" ? in_meme_phase : local_phase
-meme_score_local = meme_phase_str == "PARABOLIC" ? 1.5 : meme_phase_str == "IGNITION" ? 1.0 : meme_phase_str == "DISTRIBUTION" ? 0.8 : meme_phase_str == "ACCUMULATION" ? 0.5 : meme_phase_str == "UNWIND" ? 0.3 : 0.0
+phaseStr = py_state != "AUTO" and py_phase != "--" ? py_phase : phase
 
-// ═══════════════════════════════════════════════════════════════
-// AUTO WALLS — pivot-based
-// ═══════════════════════════════════════════════════════════════
-ph = ta.pivothigh(high, pivot_lb, pivot_lb)
-pl = ta.pivotlow(low,  pivot_lb, pivot_lb)
-var float autoCallWall = float(na)
-var float autoPutWall  = float(na)
-if not na(ph)
-    autoCallWall := ph
-if not na(pl)
-    autoPutWall  := pl
-
-callWall = in_call_wall > 0 ? in_call_wall : autoCallWall
-putWall  = in_put_wall  > 0 ? in_put_wall  : autoPutWall
+phasePressure = phaseStr == "PARABOLIC" ? 1.5 : phaseStr == "IGNITION" ? 1.0 :
+                phaseStr == "DISTRIBUTION" ? 0.8 : phaseStr == "ACCUMULATION" ? 0.5 :
+                phaseStr == "UNWIND" ? 0.3 : 0.0
 
 // ═══════════════════════════════════════════════════════════════
-// COMPOSITE CIE SCORE — local vs Python
+// COMPOSITE SCORE — local vs Python upgrade
 // ═══════════════════════════════════════════════════════════════
-usePython = in_cie_state != "AUTO"
+usePython = py_state != "AUTO"
 
-z_sett  = usePython ? in_z_settlement : sett_score_local
-z_dark  = usePython ? in_z_dark       : dark_score_local
-z_frac  = usePython ? in_z_fractal    : 0.0          // fractal needs library — Python only
-z_meme  = usePython ? in_z_meme       : meme_score_local
-comp    = usePython ? in_composite    : z_sett + z_dark + z_frac + z_meme
+// Dark score (local)
+dpOerScore  = oerProxy >= 0.50 ? 0.40 : oerProxy >= 0.35 ? 0.15 : 0.0
+dpDlmdScore = math.min(0.35, math.abs(dlmd) * 0.35)
+dpVpinScore = vpinReady ? math.min(0.75, math.max(0.0, nz(vpinZ)) / 2.0) : 0.0
+darkScoreL  = math.min(1.5, dpOerScore + dpDlmdScore + dpVpinScore)
 
-// Resolve state
+z_sett = usePython ? py_z_sett : sett_score
+z_dark = usePython ? py_z_dark : darkScoreL
+z_frac = usePython ? py_z_frac : 0.0
+z_meme = usePython ? py_z_meme : phasePressure
+comp   = usePython ? py_composite : z_sett + z_dark + z_frac + z_meme
+
+// Axis count for local fire gate
+activeAxes = (z_sett >= 0.5 ? 1 : 0) + (z_dark >= 0.5 ? 1 : 0) +
+             (z_frac >= 0.5 ? 1 : 0) + (z_meme >= 0.5 ? 1 : 0)
+
 resolvedState = "DORMANT"
 if usePython
-    resolvedState := in_cie_state
-else if comp >= 3.0 and (z_dark >= 0.5 or z_meme >= 0.5)
+    resolvedState := py_state
+else if comp >= 3.0 and activeAxes >= 2
     resolvedState := "CIE_FIRE"
-else if comp >= 1.5
+else if comp >= 1.5 and activeAxes >= 2
     resolvedState := "PRIMED"
 else if comp > 0
     resolvedState := "BUILDING"
 
-fireCIE   = resolvedState == "CIE_FIRE"   and (fire_on_state == "CIE_FIRE" or fire_on_state == "BOTH")
-firePrime = resolvedState == "PRIMED"     and fire_on_state == "BOTH"
-
 // VCCW gate
-nyc_min    = (hour(time, "America/New_York") * 60) + minute(time, "America/New_York")
-vccw_open  = strict_window ? (nyc_min >= vccw_open_min and nyc_min <= vccw_close_min) : true
+nycMin   = (hour(time, "America/New_York") * 60) + minute(time, "America/New_York")
+vccwOpen = strict_window ? (nycMin >= vccw_open_min and nycMin <= vccw_close_min) : true
 
-fireSignal = (fireCIE or firePrime) and vccw_open
-watchSignal = resolvedState == "PRIMED" and not fireSignal
+fireCIE   = resolvedState == "CIE_FIRE"  and vccwOpen
+firePrime = resolvedState == "PRIMED"    and vccwOpen
+watchSig  = resolvedState == "PRIMED"    and not vccwOpen
 
 // ═══════════════════════════════════════════════════════════════
 // VISUALIZATION
 // ═══════════════════════════════════════════════════════════════
-plot(callWall, "🟥 Call Wall",   color=color.new(color.red,   20), linewidth=2, style=plot.style_linebr)
-plot(putWall,  "🟩 Put Wall",    color=color.new(color.green, 20), linewidth=2, style=plot.style_linebr)
-plot(emaFast,  "EMA fast",       color=color.new(color.aqua,  60), linewidth=1)
-plot(emaSlow,  "EMA slow",       color=color.new(color.orange,60), linewidth=1)
+// Walls (auto-computed, always plotted)
+plot(callWall,  "🟥 Call Wall",    color=color.new(color.red,   20), linewidth=2, style=plot.style_linebr)
+plot(callWall2, "🟧 Call Wall 2",  color=color.new(color.orange,40), linewidth=1, style=plot.style_linebr)
+plot(putWall,   "🟩 Put Wall",     color=color.new(color.green, 20), linewidth=2, style=plot.style_linebr)
+plot(putWall2,  "🟦 Put Wall 2",   color=color.new(color.teal,  40), linewidth=1, style=plot.style_linebr)
+plot(vwapLine,  "🟪 VWAP",         color=color.new(color.fuchsia, 0), linewidth=2)
+plot(emaFastL,  "EMA fast",        color=color.new(color.aqua,  60), linewidth=1)
+plot(emaSlowL,  "EMA slow",        color=color.new(color.orange,60), linewidth=1)
 
-// Dark-pool DLMD momentum ribbon
-dlmdColor = dlmd_run > 0.20 ? color.new(color.teal, 70) : dlmd_run < -0.20 ? color.new(color.maroon, 70) : color.new(color.gray, 90)
-bgcolor(dlmdColor, title="Dark DLMD ribbon")
+// DLMD ribbon — teal when dark accumulating, maroon when distributing
+dlmdRibbon = dlmd > 0.20 ? color.new(color.teal, 70) : dlmd < -0.20 ? color.new(color.maroon, 70) : color.new(color.gray, 92)
+bgcolor(dlmdRibbon, title="Dark DLMD ribbon")
 
-// Regime background (overrides DLMD when state is elevated)
+// State background (overrides DLMD ribbon when elevated)
 if resolvedState == "CIE_FIRE"
     bgcolor(color.new(color.lime, 82), title="CIE_FIRE bg")
 else if resolvedState == "PRIMED"
     bgcolor(color.new(color.yellow, 88), title="PRIMED bg")
 
-// FIRE marker — large, unmissable
-plotshape(fireSignal, title="⚡ CIE FIRE", location=location.belowbar,
-          style=shape.triangleup, size=size.normal,
-          color=color.new(color.lime, 0), text="CIE", textcolor=color.black)
+// FIRE — large unmissable marker
+plotshape(fireCIE,   title="⚡ CIE FIRE",   location=location.belowbar, style=shape.triangleup,
+          size=size.large, color=color.new(color.lime, 0), text="⚡ CIE", textcolor=color.black)
 
-// WATCH / PRIMED marker
-plotshape(watchSignal, title="👁 CIE PRIMED", location=location.belowbar,
-          style=shape.circle, size=size.tiny, color=color.new(color.yellow, 20))
+plotshape(firePrime, title="🔶 CIE PRIMED", location=location.belowbar, style=shape.triangleup,
+          size=size.normal, color=color.new(color.yellow, 0), text="PRIMED", textcolor=color.black)
 
-// VPIN spike marker
-plotshape(not na(vpin_z) and vpin_z >= 1.5, title="⚡ VPIN spike",
+plotshape(watchSig,  title="👁 CIE WATCH",  location=location.belowbar, style=shape.circle,
+          size=size.tiny,   color=color.new(color.yellow, 30))
+
+// VPIN spike
+plotshape(not na(vpinZ) and vpinZ >= 1.5, title="⚡ VPIN spike",
           location=location.bottom, style=shape.xcross, size=size.tiny,
           color=color.new(color.fuchsia, 0))
 
-// Block-cluster marker (large OER bar)
-plotshape(oer_proxy >= 0.50, title="🧱 Block cluster",
+// Axis collapse
+plotshape(axisCollapse, title="⚛ Axis collapse",
           location=location.bottom, style=shape.diamond, size=size.tiny,
+          color=color.new(color.aqua, 0))
+
+// Block-cluster bar
+plotshape(oerProxy >= 0.50, title="🧱 Block cluster",
+          location=location.bottom, style=shape.square, size=size.tiny,
           color=color.new(color.teal, 0))
 
 // ═══════════════════════════════════════════════════════════════
-// BEAST MODE PANEL
+// BEAST PANEL
 // ═══════════════════════════════════════════════════════════════
-panelColor = resolvedState == "CIE_FIRE" ? color.new(color.lime, 20) : resolvedState == "PRIMED" ? color.new(color.yellow, 30) : resolvedState == "BUILDING" ? color.new(color.blue, 40) : color.new(color.gray, 50)
+panelBg = resolvedState == "CIE_FIRE"  ? color.new(color.lime,   15) :
+          resolvedState == "PRIMED"    ? color.new(color.yellow, 25) :
+          resolvedState == "BUILDING"  ? color.new(color.blue,   35) :
+                                         color.new(color.gray,   55)
 
-readLine = "WAITING FOR DATA"
-if resolvedState == "CIE_FIRE"
-    readLine := "⚡ CIE FIRE — all layers convergent"
-else if resolvedState == "PRIMED"
-    readLine := "🔶 PRIMED — 2+ layers active, watching"
-else if resolvedState == "BUILDING"
-    readLine := "🔵 BUILDING — early signal developing"
-else
-    readLine := "⬜ DORMANT — no convergence"
+readLine = resolvedState == "CIE_FIRE" ? "⚡ ALL AXES CONVERGED — FIRE" :
+           resolvedState == "PRIMED"   ? "🔶 PRIMED — watch for trigger" :
+           resolvedState == "BUILDING" ? "🔵 BUILDING — signal developing" :
+                                          "⬜ DORMANT"
 
-fwdRetStr = usePython and in_fwd_return != 0.0 ? str.tostring(in_fwd_return, "#.##") + "%" : "--"
+nearCall = not na(callWall) and callWall > 0 and math.abs(close - callWall) / callWall < 0.01
+nearPut  = not na(putWall)  and putWall  > 0 and math.abs(close - putWall)  / putWall  < 0.01
 
-var table dash = table.new(position.top_right, 2, 16, border_width=1, border_color=color.new(color.aqua, 50))
+wallRead = nearCall ? "AT CALL WALL — resistance ($" + str.tostring(callWall, "#.##") + ")" :
+           nearPut  ? "AT PUT WALL — support ($"  + str.tostring(putWall,  "#.##") + ")" :
+           not na(callWall) and not na(putWall) ?
+             "RANGE $" + str.tostring(putWall, "#.##") + " – $" + str.tostring(callWall, "#.##") :
+             "building walls…"
+
+fwdStr = usePython and py_fwd != 0.0 ? str.tostring(py_fwd, "#.##") + "%" : "--"
+
+var table dash = table.new(position.top_right, 2, 18,
+                            border_width=1, border_color=color.new(color.aqua, 50))
 if barstate.islast
-    table.cell(dash, 0, 0,  "CIE BEAST",      bgcolor=panelColor, text_color=color.white)
-    table.cell(dash, 1, 0,  resolvedState,     bgcolor=panelColor, text_color=color.white)
-    table.cell(dash, 0, 1,  readLine, bgcolor=color.new(color.black, 20), text_color=color.aqua, text_halign=text.align_left)
-    table.cell(dash, 1, 1,  "",       bgcolor=color.new(color.black, 20))
+    table.cell(dash, 0, 0,  "CIE BEAST",      bgcolor=panelBg, text_color=color.white, text_size=size.normal)
+    table.cell(dash, 1, 0,  resolvedState,     bgcolor=panelBg, text_color=color.white, text_size=size.normal)
+    table.cell(dash, 0, 1,  readLine, bgcolor=color.new(color.black, 15), text_color=color.aqua, text_halign=text.align_left)
+    table.cell(dash, 1, 1,  "", bgcolor=color.new(color.black, 15))
     table.merge_cells(dash, 0, 1, 1, 1)
-    table.cell(dash, 0, 2,  "Source",          text_color=color.white)
-    table.cell(dash, 1, 2,  usePython ? "Python" : "Local", text_color=color.white)
-    table.cell(dash, 0, 3,  "Composite z",     text_color=color.white)
-    table.cell(dash, 1, 3,  str.tostring(comp, "#.##"), text_color=color.white)
-    table.cell(dash, 0, 4,  "z_settlement",    text_color=color.white)
+    table.cell(dash, 0, 2,  wallRead, bgcolor=color.new(color.black, 25), text_color=color.silver, text_halign=text.align_left)
+    table.cell(dash, 1, 2,  "", bgcolor=color.new(color.black, 25))
+    table.merge_cells(dash, 0, 2, 1, 2)
+    table.cell(dash, 0, 3,  "Composite z",    text_color=color.white)
+    table.cell(dash, 1, 3,  str.tostring(comp, "#.##") + " / 6.0", text_color=color.white)
+    table.cell(dash, 0, 4,  "z_settlement",   text_color=color.white)
     table.cell(dash, 1, 4,  str.tostring(z_sett, "#.###"), text_color=color.white)
-    table.cell(dash, 0, 5,  "z_dark_pool",     text_color=color.white)
+    table.cell(dash, 0, 5,  "z_dark_pool",    text_color=color.white)
     table.cell(dash, 1, 5,  str.tostring(z_dark, "#.###"), text_color=color.white)
-    table.cell(dash, 0, 6,  "z_fractal",       text_color=color.white)
-    table.cell(dash, 1, 6,  str.tostring(z_frac, "#.###"), text_color=color.white)
-    table.cell(dash, 0, 7,  "z_meme_cycle",    text_color=color.white)
+    table.cell(dash, 0, 6,  "z_fractal",      text_color=color.white)
+    table.cell(dash, 1, 6,  str.tostring(z_frac, "#.###") + (usePython ? "" : " (py only)"), text_color=color.silver)
+    table.cell(dash, 0, 7,  "z_meme_cycle",   text_color=color.white)
     table.cell(dash, 1, 7,  str.tostring(z_meme, "#.###"), text_color=color.white)
-    table.cell(dash, 0, 8,  "Meme phase",      text_color=color.white)
-    table.cell(dash, 1, 8,  meme_phase_str,    text_color=color.white)
-    table.cell(dash, 0, 9,  "DLMD",            text_color=color.white)
-    table.cell(dash, 1, 9,  str.tostring(dlmd_run, "#.###"), text_color=color.white)
-    table.cell(dash, 0, 10, "OER proxy",       text_color=color.white)
-    table.cell(dash, 1, 10, str.tostring(oer_proxy, "#.###"), text_color=color.white)
-    table.cell(dash, 0, 11, "VPIN z",          text_color=color.white)
-    table.cell(dash, 1, 11, na(vpin_z) ? "n/a" : str.tostring(vpin_z, "#.##"), text_color=color.white)
-    table.cell(dash, 0, 12, "Vol ratio",       text_color=color.white)
-    table.cell(dash, 1, 12, str.tostring(volRatio, "#.##") + "×", text_color=color.white)
-    table.cell(dash, 0, 13, "ATR rank",        text_color=color.white)
+    table.cell(dash, 0, 8,  "Meme phase",     text_color=color.white)
+    table.cell(dash, 1, 8,  phaseStr,         text_color=color.white)
+    table.cell(dash, 0, 9,  "DLMD",           text_color=color.white)
+    table.cell(dash, 1, 9,  str.tostring(dlmd, "#.###"), text_color=dlmd > 0.2 ? color.lime : dlmd < -0.2 ? color.red : color.silver)
+    table.cell(dash, 0, 10, "OER proxy",      text_color=color.white)
+    table.cell(dash, 1, 10, str.tostring(oerProxy, "#.###"), text_color=color.white)
+    table.cell(dash, 0, 11, "VPIN z",         text_color=color.white)
+    table.cell(dash, 1, 11, na(vpinZ) ? "n/a" : str.tostring(vpinZ, "#.##"), text_color=vpinReady ? color.lime : color.silver)
+    table.cell(dash, 0, 12, "Vol ratio",      text_color=color.white)
+    table.cell(dash, 1, 12, str.tostring(volRatio, "#.##") + "×", text_color=volRatio >= 2.5 ? color.lime : color.silver)
+    table.cell(dash, 0, 13, "ATR rank",       text_color=color.white)
     table.cell(dash, 1, 13, na(atrRank) ? "n/a" : str.tostring(atrRank * 100, "#") + "%", text_color=color.white)
-    table.cell(dash, 0, 14, "Fwd return",      text_color=color.white)
-    table.cell(dash, 1, 14, fwdRetStr,         text_color=color.white)
-    table.cell(dash, 0, 15, "TNT (MMLE)",      text_color=color.white)
-    table.cell(dash, 1, 15, in_tnt_state,      text_color=color.white)
+    table.cell(dash, 0, 14, "Axis collapse",  text_color=color.white)
+    table.cell(dash, 1, 14, axisCollapse ? "✓ YES" : "—", text_color=axisCollapse ? color.lime : color.silver)
+    table.cell(dash, 0, 15, "TNT (auto)",     text_color=color.white)
+    table.cell(dash, 1, 15, tntState,         text_color=tntActive ? color.lime : color.silver)
+    table.cell(dash, 0, 16, "Call / Put wall",text_color=color.white)
+    table.cell(dash, 1, 16, (na(callWall) ? "--" : "$" + str.tostring(callWall, "#.##")) + " / " + (na(putWall) ? "--" : "$" + str.tostring(putWall, "#.##")), text_color=color.white)
+    table.cell(dash, 0, 17, "Fwd return",     text_color=color.white)
+    table.cell(dash, 1, 17, fwdStr,           text_color=color.white)
 
 // ═══════════════════════════════════════════════════════════════
-// ALERTS — Discord-webhook compatible (same format as MMLE-BEAST)
+// ALERTS
 // ═══════════════════════════════════════════════════════════════
 CIE_GREEN = 3066993
 CIE_AMBER = 16750848
 
-mkDiscordEmbed(_action, _col, _emoji) =>
-    str.format('{{"username":"{0}","embeds":[{{"title":"{1} CIE-BEAST {2} — {3}","color":{4},"fields":[{{"name":"Price","value":"${5,number,#.##}","inline":true}},{{"name":"Composite z","value":"{6,number,#.##}","inline":true}},{{"name":"Meme Phase","value":"{7}","inline":true}},{{"name":"z_settlement","value":"{8,number,#.###}","inline":true}},{{"name":"z_dark","value":"{9,number,#.###}","inline":true}},{{"name":"z_fractal","value":"{10,number,#.###}","inline":true}},{{"name":"Fwd Return","value":"{11}","inline":true}},{{"name":"TNT","value":"{12}","inline":true}}],"footer":{{"text":"Source: {13} · TF {14}"}}}}]}}',
+mkEmbed(_action, _col, _emoji) =>
+    str.format('{{"username":"{0}","embeds":[{{"title":"{1} CIE-BEAST {2} — {3}","color":{4},"fields":[{{"name":"Price","value":"${5,number,#.##}","inline":true}},{{"name":"Composite z","value":"{6,number,#.##}","inline":true}},{{"name":"Phase","value":"{7}","inline":true}},{{"name":"z_dark","value":"{8,number,#.###}","inline":true}},{{"name":"DLMD","value":"{9,number,#.###}","inline":true}},{{"name":"VPIN z","value":"{10,number,#.##}","inline":true}},{{"name":"Call Wall","value":"${11,number,#.##}","inline":true}},{{"name":"Put Wall","value":"${12,number,#.##}","inline":true}},{{"name":"TNT","value":"{13}","inline":true}}],"footer":{{"text":"Source: {14} · TF {15}"}}}}]}}',
               discord_user, _emoji, _action, syminfo.ticker, _col,
-              close, comp, meme_phase_str,
-              z_sett, z_dark, z_frac, fwdRetStr,
-              in_tnt_state, usePython ? "Python" : "Local", timeframe.period)
+              close, comp, phaseStr,
+              z_dark, dlmd, nz(vpinZ, 0.0),
+              nz(callWall, 0.0), nz(putWall, 0.0), tntState,
+              usePython ? "Python" : "Local", timeframe.period)
 
-mkDiscordText(_action, _emoji) =>
-    str.format('{{"username":"{0}","content":"{1} **CIE-BEAST {2}** {3} @ ${4,number,#.##} | comp {5,number,#.##} | phase {6}"}}',
-              discord_user, _emoji, _action, syminfo.ticker, close, comp, meme_phase_str)
+mkText(_action, _emoji) =>
+    str.format('{{"username":"{0}","content":"{1} **CIE-BEAST {2}** {3} @ ${4,number,#.##} | comp {5,number,#.##} | {6} | DLMD {7,number,#.###}"}}',
+              discord_user, _emoji, _action, syminfo.ticker, close, comp, phaseStr, dlmd)
 
-mkBeastWebhook(_action) =>
-    str.format('{{"engine":"CIE-BEAST","tag":"{0}","action":"{1}","symbol":"{2}","price":{3,number,#.####},"composite_z":{4,number,#.####},"meme_phase":"{5}","z_settlement":{6,number,#.####},"z_dark":{7,number,#.####},"z_fractal":{8,number,#.####},"z_meme":{9,number,#.####},"tnt_state":"{10}"}}',
+mkBeast(_action) =>
+    str.format('{{"engine":"CIE-BEAST","tag":"{0}","action":"{1}","symbol":"{2}","price":{3,number,#.####},"composite_z":{4,number,#.####},"phase":"{5}","z_settlement":{6,number,#.####},"z_dark":{7,number,#.####},"z_fractal":{8,number,#.####},"z_meme":{9,number,#.####},"dlmd":{10,number,#.####},"tnt":"{11}","call_wall":{12,number,#.####},"put_wall":{13,number,#.####}}}',
               beast_secret, _action, syminfo.ticker, close, comp,
-              meme_phase_str, z_sett, z_dark, z_frac, z_meme, in_tnt_state)
+              phaseStr, z_sett, z_dark, z_frac, z_meme, dlmd, tntState,
+              nz(callWall, 0.0), nz(putWall, 0.0))
 
-mkGenericJson(_action) =>
+mkJson(_action) =>
     str.format('{{"engine":"CIE-BEAST","action":"{0}","symbol":"{1}","price":{2,number,#.####},"composite_z":{3,number,#.####},"state":"{4}","tf":"{5}"}}',
               _action, syminfo.ticker, close, comp, resolvedState, timeframe.period)
 
 buildPayload(_action, _col, _emoji) =>
-    alert_mode == "DISCORD_EMBED" ? mkDiscordEmbed(_action, _col, _emoji) :
-     alert_mode == "DISCORD_TEXT" ? mkDiscordText(_action, _emoji) :
-     alert_mode == "BEAST_WEBHOOK" ? mkBeastWebhook(_action) :
-     mkGenericJson(_action)
+    alert_mode == "DISCORD_EMBED" ? mkEmbed(_action, _col, _emoji) :
+    alert_mode == "DISCORD_TEXT"  ? mkText(_action, _emoji) :
+    alert_mode == "BEAST_WEBHOOK" ? mkBeast(_action) : mkJson(_action)
 
-if fireSignal and fireCIE
-    alert(buildPayload("CIE_FIRE",  CIE_GREEN, "⚡"), alert.freq_once_per_bar_close)
-if fireSignal and firePrime
+if fireCIE
+    alert(buildPayload("CIE_FIRE",   CIE_GREEN, "⚡"), alert.freq_once_per_bar_close)
+if firePrime
     alert(buildPayload("CIE_PRIMED", CIE_AMBER, "🔶"), alert.freq_once_per_bar_close)
 
-alertcondition(fireSignal, title="CIE FIRE/PRIMED (template)",
+alertcondition(fireCIE or firePrime, title="CIE FIRE / PRIMED",
                message='{"engine":"CIE-BEAST","action":"CIE_FIRE","symbol":"{{ticker}}","price":{{close}},"tf":"{{interval}}"}')
