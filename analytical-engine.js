@@ -65,6 +65,7 @@ const AnalyticalEngine = {
         heartbeat(async () => {
             await this.updateAlarms();
             await this.updateFlow();
+            await this.updateWhales();
             await this.updateReversal();
             await this.updateTradingStatus();
             this.renderTopMovers();
@@ -84,11 +85,13 @@ const AnalyticalEngine = {
             await this.updatePerformance();
             await this.updateDiscovery();
             await this.updateBalances();
+            await this.updateTelemetry();
+            await this.updateRecommendations();
         }, 20000);
 
         // AUTO-ROTATE: Cycle top tickers SLOWER if idle (12s interval, 25s idle threshold)
         setInterval(() => {
-            if (Date.now() - this.lastInteraction > 25000) {
+            if (Date.now() - this.lastInteraction > 28182) {
                 this.autoRotate();
             }
         }, 12000);
@@ -106,12 +109,12 @@ const AnalyticalEngine = {
     autoRotate() {
         if (!this.scanData || this.scanData.length < 2) return;
         // Law 3: Avoid Mega caps for rotation unless they are top score
-        // Sweet spot: prefer $2-$60 stocks
+        // Sweet spot: prefer $2-$50 stocks
         const pool = this.scanData.filter(s => {
             if (s.is_mega && s.squeeze_score <= 60) return false;
             const price = s.price || 0;
             // Prefer sweet spot but include anything with high squeeze
-            if (price >= 2 && price <= 60) return true;
+            if (price >= 2 && price <= 50) return true;
             if (s.squeeze_score > 70) return true;
             return false;
         });
@@ -140,7 +143,9 @@ const AnalyticalEngine = {
             this.updateFirehose(),
             this.updateDiscovery(),
             this.updateTradingStatus(),
-            this.updateBalances()
+            this.updateBalances(),
+            this.updateTelemetry(),
+            this.updateRecommendations()
         ]);
         this.renderTopMovers();
     },
@@ -247,6 +252,44 @@ const AnalyticalEngine = {
         this.lastAlarmStr = '';
     },
 
+    // ── WHALE STALKER: Institutional Footprint ──────────────
+    async updateWhales() {
+        try {
+            const r = await fetch('/api/whale-stalker');
+            const data = await r.json();
+            this.whaleData = data;
+            this.renderWhales();
+        } catch (e) {
+            console.warn('Whale Stalker sync failure:', e.message);
+        }
+    },
+
+    renderWhales() {
+        const container = document.getElementById('whale-ticker-container');
+        if (!container) return;
+
+        if (!this.whaleData || this.whaleData.length === 0) {
+            return;
+        }
+
+        // Horizontal Ticker Style
+        container.innerHTML = this.whaleData.map(w => {
+            const time = new Date(w.timestamp * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+            let badgeClass = 'badge-scanning';
+            if (w.type.includes('MEGALODON')) badgeClass = 'badge-live';
+            if (w.type.includes('ABSORPTION')) badgeClass = 'badge-live';
+
+            return `
+                <div class="whale-alert-item" style="flex-shrink:0; background:rgba(255,255,255,0.05); padding:8px 12px; border-radius:4px; border-left:3px solid var(--neon-green); display:flex; align-items:center; gap:10px;">
+                    <span class="badge ${badgeClass}" style="font-size:9px;">${w.type}</span>
+                    <span style="font-weight:900; color:#fff;">${w.symbol}</span>
+                    <span style="font-size:11px; color:var(--text-muted);">${w.msg}</span>
+                    <span style="font-size:9px; opacity:0.5; font-family:var(--font-mono);">${time}</span>
+                </div>
+            `;
+        }).join('');
+    },
+
     // ── GRIMOIRE: Detailed Active View ────────────────────────
     async updateGrimoire() {
         if (!this.activeSymbol) return;
@@ -325,11 +368,9 @@ const AnalyticalEngine = {
             bonus += 10;
         }
 
-        // 4. GEX Regime Bonus (+15 for short gamma = squeeze fuel)
         const gexProfile = this.gex_cache?.[quote.symbol];
         if (gexProfile && gexProfile.profile_shape === 'short_gamma') bonus += 15;
 
-        // 5. MM Intel - HJB Hedge Pressure Bonus (+10 for aggressive hedging)
         const hjb = gexProfile?.hjb_hedge_rate || 0;
         if (Math.abs(hjb) > 5.0) bonus += 10;
 
@@ -338,77 +379,35 @@ const AnalyticalEngine = {
         const changeColor = quote.changePct >= 0 ? 'neon-green' : 'neon-red';
         const volRatio = quote.volRatio || (quote.avgVolume > 0 ? (quote.volume / quote.avgVolume) : 0);
 
-        // GEX regime badge
         const gexBadge = gexProfile 
-            ? `<span class="badge ${gexProfile.profile_shape === 'short_gamma' ? 'badge-extreme' : 'badge-high'}" style="font-size:8px; margin-left:5px;">${gexProfile.profile_shape === 'short_gamma' ? '⚡SHORT Γ' : '🛡️LONG Γ'}</span>` 
+            ? `<span class="badge ${gexProfile.profile_shape === 'short_gamma' ? 'badge-extreme' : 'badge-high'}">${gexProfile.profile_shape === 'short_gamma' ? '⚡ SHORT Γ' : '🛡️ LONG Γ'}</span>` 
             : '';
 
         details.innerHTML = `
-            <div style="display:grid; grid-template-columns: 1.2fr 1fr; gap:20px; padding:15px; background:rgba(255,255,255,0.01)">
+            <div class="grimoire-hero">
                 <div class="stat-block">
-                    <label style="font-size:9px; color:var(--text-dim); letter-spacing:2px;">PRICE ACTION / LIVE</label>
-                    <div style="font-size:42px; font-weight:950; font-family:var(--font-mono); color:white; line-height:1; letter-spacing:-1px;">$${quote.price.toFixed(2)}</div>
-                    <div class="${changeColor}" style="font-size:16px; font-weight:800; margin-top:8px; display:flex; align-items:center; gap:5px;">
+                    <label class="hud-label">PRICE ACTION / LIVE</label>
+                    <div class="hero-price">$${quote.price.toFixed(2)}</div>
+                    <div class="price-delta ${changeColor}">
                         <span>${quote.changePct >= 0 ? '▲' : '▼'} ${Math.abs(quote.changePct).toFixed(2)}%</span>
-                        <span style="font-size:9px; color:var(--text-dim); font-weight:400;">(${quote.change >= 0 ? '+' : ''}${quote.change.toFixed(2)})</span>
+                        <span class="delta-raw">(${quote.change >= 0 ? '+' : ''}${quote.change.toFixed(2)})</span>
                         ${gexBadge}
                     </div>
-                    <div style="margin-top:12px; font-size:9px; color:var(--text-dim); letter-spacing:1px;">
-                        SWEET SPOT: $2-$60 | LIVE SCANNING
-                    </div>
+                    <div class="market-tag">SWEET SPOT: $2-$50 | LIVE SCANNING</div>
                 </div>
-                <div class="stat-block" style="text-align:right; border-left:1px solid var(--glass-border); padding-left:20px;">
-                    <label style="font-size:9px; color:var(--text-dim); letter-spacing:2px;">BEAST SCORE</label>
-                    <div style="font-size:54px; font-weight:950; color:${beastScore >= 80 ? 'var(--neon-red)' : 'var(--neon-green)'}; line-height:0.8; text-shadow:0 0 20px ${beastScore >= 80 ? 'rgba(255,71,87,0.4)' : 'rgba(0,255,136,0.4)'}">${beastScore}</div>
-                    <div style="font-size:9px; color:${beastScore >= 80 ? 'var(--neon-red)' : 'var(--neon-green)'}; font-weight:800; letter-spacing:1px; margin-top:5px;">
+                <div class="stat-block score-block">
+                    <label class="hud-label">BEAST SCORE</label>
+                    <div class="hero-score ${beastScore >= 80 ? 'hot' : 'cool'}">${beastScore}</div>
+                    <div class="convergence-tag ${beastScore >= 80 ? 'hot' : 'cool'}">
                         CONVERGENCE: ${hasBeast ? 'ELITE' : isPick ? 'HIGH' : gexProfile ? 'GEX FUSED' : 'UNIFIED'}
                     </div>
-                    
-                    <!-- Flow Bias removed: was not populating usefully -->
-                    <button onclick="AnalyticalEngine.addToWatchlist('${quote.symbol}')" style="margin-top:8px; background:rgba(0,212,255,0.1); border:1px solid var(--neon-blue); color:var(--neon-blue); padding:3px 10px; border-radius:3px; cursor:pointer; font-size:8px; font-weight:800; letter-spacing:1px; font-family:var(--font-mono);">
+                    <button class="tactical-btn" onclick="AnalyticalEngine.addToWatchlist('${quote.symbol}')">
                         📡 TRACK GEX
                     </button>
                 </div>
             </div>
 
-            <div style="margin-top:10px; border-top:1px solid var(--glass-border); padding:20px 15px; display:grid; grid-template-columns: repeat(3, 1fr); gap:20px; background:rgba(0,0,0,0.2)">
-                <div>
-                    <label style="font-size:11px; color:var(--text-dim); letter-spacing:1px; font-weight:700;">SQUEEZE LEVEL</label>
-                    <div style="font-size:20px; font-weight:900; color:${sqz.squeeze_level !== 'AWAITING DATA' ? 'var(--neon-blue)' : 'var(--text-muted)'}; margin-top:4px;">${sqz.squeeze_level}${sqz.tier ? ` <span style="font-size:11px; color:var(--text-dim); font-weight:400;">[${sqz.tier}]</span>` : ''}</div>
-                    <div style="font-size:12px; color:var(--text-dim); margin-top:4px;">SIGNAL: ${sqz.squeeze_score !== null ? sqz.squeeze_score : '--'} / 100</div>
-                    ${sqz.analysis_components ? `<div style="margin-top:8px; display:flex; gap:4px; flex-wrap:wrap;">
-                        ${['volume_profile', 'compression', 'momentum', 'vwap_position', 'rsi_engine', 'money_flow', 'price_structure', 'trend_alignment'].map(k => {
-            const v = sqz.analysis_components[k] || 0;
-            const maxMap = {
-                'volume_profile': 20,
-                'compression': 15,
-                'momentum': 15,
-                'vwap_position': 10,
-                'rsi_engine': 10,
-                'money_flow': 10,
-                'price_structure': 10,
-                'trend_alignment': 10
-            };
-            const max = maxMap[k] || 10;
-            const pct = Math.min(v / max * 100, 100);
-            const label = k.split('_').map(w => w[0].toUpperCase()).join('');
-            const clr = pct > 70 ? 'var(--neon-green)' : pct > 40 ? 'var(--neon-blue)' : 'var(--text-dim)';
-            return `<div style="text-align:center;" title="${k}: ${v}/${max}"><div style="width:32px;height:14px;background:rgba(255,255,255,0.05);border-radius:2px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:${clr};"></div></div><div style="font-size:8px;color:var(--text-dim);margin-top:1px;">${label}</div></div>`;
-        }).join('')}
-                    </div>` : ''}</div>
-                <div style="text-align:center;">
-                    <label style="font-size:9px; color:var(--text-dim); letter-spacing:1px;">RELATIVE VOLUME</label>
-                    <div style="font-size:16px; font-weight:900; color:var(--neon-purple); margin-top:4px;">${volRatio.toFixed(1)}x</div>
-                    <div style="font-size:11px; color:var(--text-dim); margin-top:2px;">DAILY: ${(quote.volume / 1000000).toFixed(1)}M</div>
-                </div>
-                <div style="text-align:right;">
-                    <label style="font-size:9px; color:var(--text-dim); letter-spacing:1px;">BID / ASK SPREAD</label>
-                    <div style="font-size:16px; font-weight:900; color:white; margin-top:4px;">
-                        <span style="color:${quote.bid ? 'var(--neon-blue)' : 'var(--text-muted)'}">$${quote.bid ? quote.bid.toFixed(2) : '--'}</span>
-                        <span style="color:var(--text-dim); opacity:0.3; margin:0 5px;">|</span>
-                        <span style="color:${quote.ask ? 'var(--neon-orange)' : 'var(--text-muted)'}">$${quote.ask ? quote.ask.toFixed(2) : '--'}</span>
                     </div>
-                    <div style="font-size:11px; color:var(--text-dim); margin-top:2px;">INSTITUTIONAL FEED</div>
                 </div>
             </div>
 
@@ -644,10 +643,10 @@ const AnalyticalEngine = {
     async fetchCascade(symbol) {
         try {
             const r = await fetch(`${this.apiBase || '/api'}/cascade/${symbol}`);
-            if (r.ok) {
-                const data = await r.json();
-                this.cascadeData[symbol] = data;
-                return data;
+            const data = await r.json();
+            if (data.status === 'success') {
+                this.cascadeData[symbol] = data.data;
+                return data.data;
             }
         } catch (e) { console.warn('[CASCADE] Fetch failed:', e); }
         return null;
@@ -921,6 +920,49 @@ const AnalyticalEngine = {
         if (!el) return;
         el.style.display = (el.style.display === 'block') ? 'none' : 'block';
         if (el.style.display === 'block') this.updateAudit();
+    },
+
+    toggleSettings() {
+        const el = document.getElementById('settings-overlay');
+        if (!el) return;
+        const isOpen = el.style.display === 'block';
+        // Close all overlays first
+        document.querySelectorAll('.mdi-window').forEach(w => w.style.display = 'none');
+        if (!isOpen) {
+            el.style.display = 'block';
+            // Initialize the Settings panel if not already done
+            const content = document.getElementById('content-settings');
+            if (content && content.innerHTML.trim() === '') {
+                if (window.SettingsPanel) {
+                    window.SettingsPanel.init('settings');
+                }
+            }
+        }
+    },
+
+    toggleBeast() {
+        // Beast panel toggle — open settings on beast section, or just open settings
+        this.toggleSettings();
+    },
+
+    toggleSpotlight() {
+        this._spotlightActive = !this._spotlightActive;
+        const btn = document.getElementById('spotlight-btn');
+        if (btn) btn.style.opacity = this._spotlightActive ? '1' : '0.5';
+        if (this._spotlightActive) {
+            this._spotlightInterval = setInterval(() => this.autoRotate(), 8182);
+        } else {
+            clearInterval(this._spotlightInterval);
+        }
+    },
+
+    toggleStreamMode() {
+        const ind = document.getElementById('stream-indicator');
+        const btn = document.getElementById('stream-mode-btn');
+        if (!ind) return;
+        const isOn = ind.style.display !== 'none';
+        ind.style.display = isOn ? 'none' : 'inline-flex';
+        if (btn) btn.style.opacity = isOn ? '0.5' : '1';
     },
 
     async updateAudit() {
@@ -1317,6 +1359,7 @@ const AnalyticalEngine = {
 
     // ── INTEL TAB SWITCHER ──────────────────────────
     switchIntelTab(tab) {
+        this._activeIntelTab = tab;
         const tabs = ['options', 'fme', 'mm', 'cascade'];
         tabs.forEach(t => {
             const content = document.getElementById(`intel-${t}-content`);
@@ -1355,7 +1398,19 @@ const AnalyticalEngine = {
         html += `<div style="margin-bottom:8px;font-weight:900;color:var(--neon-orange);">FRACTAL CASCADE</div>`;
         html += `<div style="text-align:center;margin:8px 0;">`;
         html += `<div style="font-size:20px;font-weight:900;color:${biasCol};">${bias}</div>`;
+        
+        const anchor = data.institutional_anchor || '';
+        if (anchor) {
+            html += `<div style="font-size:10px;font-weight:700;color:var(--neon-blue);text-transform:uppercase;margin-top:-2px;letter-spacing:1px;">${anchor} REGIME</div>`;
+        }
+        
         html += `<div style="font-size:11px;color:var(--text-muted);">Alignment: ${alignment.toFixed(1)}%</div>`;
+        
+        const meaning = data.cascade_meaning || '';
+        if (meaning) {
+            html += `<div style="font-size:9px;color:var(--text-muted);font-style:italic;margin-top:2px;">${meaning}</div>`;
+        }
+        
         html += `</div>`;
 
         // Alignment bar
@@ -1391,14 +1446,21 @@ const AnalyticalEngine = {
         this.activeSymbol = symbol;
         this.updateGrimoire();
         this.renderWhales();
-        this.fetchOptionsIntel(symbol);
-        this.fetchForcedMove(symbol);
-        this.fetchMMIntel(symbol);
-        this.fetchCascade(symbol);
-        // Render intel panels after fetch calls
-        setTimeout(() => {
-            this.switchIntelTab('options');
-        }, 500);
+        
+        // Parallel fetch for detail panels
+        Promise.all([
+            this.fetchOptionsIntel(symbol),
+            this.fetchForcedMove(symbol),
+            this.fetchMMIntel(symbol),
+            this.fetchCascade(symbol)
+        ]).then(() => {
+            // Update currently active tab immediately when data arrives
+            this.switchIntelTab(this._activeIntelTab || 'options');
+        });
+
+        // Set default tab if none active
+        if (!this._activeIntelTab) this._activeIntelTab = 'options';
+        this.switchIntelTab(this._activeIntelTab);
     },
 
     getSqueezeLevel(volRatio, change) {
@@ -1408,6 +1470,7 @@ const AnalyticalEngine = {
         return "STABLE CHANNEL";
     },
 
+<<<<<<< HEAD
     async updateAudit() {
         try {
             const r = await fetch('/api/status/audit');
@@ -1441,6 +1504,8 @@ const AnalyticalEngine = {
             </div>
         `;
     },
+=======
+>>>>>>> 338757b (SqueezeOS Institutional Hardening - Production Ready)
 
     toggleAudit() {
         const overlay = document.getElementById('audit-overlay');
@@ -1448,6 +1513,17 @@ const AnalyticalEngine = {
             const isShown = overlay.style.display === 'block';
             overlay.style.display = isShown ? 'none' : 'block';
             if (!isShown) this.updateAudit();
+        }
+    },
+
+    toggleSettings() {
+        const overlay = document.getElementById('settings-overlay');
+        if (overlay) {
+            const isShown = overlay.style.display === 'block';
+            overlay.style.display = isShown ? 'none' : 'block';
+            if (!isShown && window.SettingsPanel) {
+                window.SettingsPanel.init('settings');
+            }
         }
     },
 
@@ -1482,7 +1558,7 @@ const AnalyticalEngine = {
 
     rotateSpotlight() {
         const hotSymbols = (this.scanData || [])
-            .filter(s => (s.squeeze_score || 0) >= 30 && s.price >= 2 && s.price <= 60)
+            .filter(s => (s.squeeze_score || 0) >= 30 && s.price >= 2 && s.price <= 50)
             .sort((a, b) => (b.squeeze_score || 0) - (a.squeeze_score || 0));
 
         if (hotSymbols.length === 0) return;
@@ -1492,7 +1568,7 @@ const AnalyticalEngine = {
 
     renderSpotlight() {
         const hotSymbols = (this.scanData || [])
-            .filter(s => (s.squeeze_score || 0) >= 30 && s.price >= 2 && s.price <= 60)
+            .filter(s => (s.squeeze_score || 0) >= 30 && s.price >= 2 && s.price <= 50)
             .sort((a, b) => (b.squeeze_score || 0) - (a.squeeze_score || 0));
 
         if (hotSymbols.length === 0) {
@@ -2184,7 +2260,11 @@ const AnalyticalEngine = {
         const board = document.getElementById('action-board-content');
         if (!board) return;
         if (!this.scanData || this.scanData.length === 0) {
-            board.innerHTML = '<div class="loading-msg">SCANNING FOR TOP SETUPS...</div>';
+            if (this.alpacaBlocker === 'OPRA_UNSIGNED') {
+                board.innerHTML = '<div class="loading-msg" style="color:var(--neon-red); font-weight:900;">🚨 OPRA AGREEMENT REQUIRED<br><span style="font-size:9px; color:var(--text-dim);">SIGN AT ALPACA.MARKETS TO ENABLE DATA</span></div>';
+            } else {
+                board.innerHTML = '<div class="loading-msg">SCANNING FOR TOP SETUPS...</div>';
+            }
             return;
         }
 
@@ -2218,32 +2298,40 @@ const AnalyticalEngine = {
         }
 
         board.innerHTML = candidates.map((c, i) => {
-            const scoreClr = c.score >= 70 ? 'var(--neon-green)' : c.score >= 45 ? 'var(--neon-blue)' : 'var(--text-dim)';
+            const scoreClass = c.score >= 70 ? 'high' : c.score >= 45 ? 'mid' : 'low';
             const flowIcon = c.bullFlow > c.bearFlow ? '🟢' : c.bearFlow > c.bullFlow ? '🔴' : '⚪';
             
-            // Flash logic: Check if score changed
+            const raw = this.scanData.find(s => s.symbol === c.sym) || {};
+            const z = raw.z_score !== undefined ? raw.z_score.toFixed(1) : '--';
+            const rv = raw.volRatio !== undefined ? raw.volRatio.toFixed(1) : '--';
+
             const prevScore = this.scoreCache[c.sym];
             const hasChanged = prevScore !== undefined && prevScore !== c.score;
             this.scoreCache[c.sym] = c.score;
             const flashClass = hasChanged ? 'action-row-update' : '';
 
             const badges = [];
-            if (c.hasBeast) badges.push('<span style="color:var(--neon-purple);font-size:9px;font-weight:800;">BEAST</span>');
-            if (c.isShortGamma) badges.push('<span style="color:var(--neon-orange);font-size:9px;font-weight:800;">⚡Γ</span>');
-            if (c.topHeat >= 70) badges.push('<span style="color:var(--neon-red);font-size:9px;font-weight:800;">🔥HOT</span>');
+            if (c.hasBeast) badges.push('<span class="action-badge beast">BEAST</span>');
+            if (c.isShortGamma) badges.push('<span class="action-badge gamma">Γ</span>');
+            if (c.topHeat >= 70) badges.push('<span class="action-badge hot">HOT</span>');
 
-            return `<div class="data-row ${flashClass}" style="cursor:pointer; padding:6px 8px; font-size:11px;" onclick="AnalyticalEngine.selectSymbol('${c.sym}')">
-                <div style="display:flex; align-items:center; gap:6px; flex:1;">
-                    <span style="color:var(--text-dim); font-size:9px; min-width:14px;">${i+1}.</span>
-                    <span style="color:white; font-weight:900; min-width:48px; font-size:12px;">${c.sym}</span>
-                    <span style="color:${scoreClr}; font-weight:900; font-size:13px; min-width:28px;">${c.score}</span>
-                    <span style="color:var(--text-dim); font-size:10px;">${c.level || ''}${c.tier ? ' ['+c.tier+']' : ''}</span>
+            return `
+                <div class="action-board-row ${flashClass}" onclick="AnalyticalEngine.selectSymbol('${c.sym}')">
+                    <div style="display:flex; align-items:center; gap:12px;">
+                        <span class="action-rank">${i+1}</span>
+                        <span class="action-sym">${c.sym}</span>
+                        <span class="action-score ${scoreClass}">${c.score}</span>
+                        <div class="action-metrics">
+                            <span>Z: <span class="action-metric-val">${z}</span></span>
+                            <span>RV: <span class="action-metric-val">${rv}x</span></span>
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <div class="action-badges">${badges.join('')}</div>
+                        <div style="font-family:var(--font-mono); font-size:10px;">${flowIcon} ${c.flowCount > 0 ? c.flowCount+'F' : ''}</div>
+                    </div>
                 </div>
-                <div style="display:flex; align-items:center; gap:6px;">
-                    ${badges.join(' ')}
-                    <span style="font-size:10px;">${flowIcon} ${c.flowCount > 0 ? c.flowCount+'f' : ''}</span>
-                </div>
-            </div>`;
+            `;
         }).join('');
     },
 
@@ -2388,14 +2476,13 @@ const AnalyticalEngine = {
             const data = await r.json();
             if (data.status === 'success') {
                 const b = data.balances;
-                const alpacaEq = parseFloat(b.alpaca?.equity || 0);
-                const schwabEq = parseFloat(b.schwab?.equity || 0);
-                const total = alpacaEq + schwabEq;
+                const tradierEq = parseFloat(b.tradier?.equity || 0);
+                const total = tradierEq;
 
                 const equityDisplay = document.getElementById('total-equity');
                 if (equityDisplay) {
                     equityDisplay.textContent = `$${total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-                    equityDisplay.title = `Alpaca: $${alpacaEq.toFixed(2)} | Schwab: $${schwabEq.toFixed(2)}`;
+                    equityDisplay.title = `Tradier: $${tradierEq.toFixed(2)}`;
                 }
             }
         } catch (e) {
@@ -2432,6 +2519,99 @@ const AnalyticalEngine = {
             }
         } catch (e) {
             alert('Failsafe Triggered: Could not update trading mode.');
+        }
+    },
+
+    toggleSettings() {
+        // Open Settings panel in a draggable window
+        if (window.WindowManager && typeof window.WindowManager.createWindow === 'function') {
+            const wId = window.WindowManager.createWindow('⚙️ Settings & Auth', 500, 600);
+            if (window.SettingsPanel) window.SettingsPanel.init(wId);
+        } else {
+            // Fallback: create a simple modal overlay
+            let overlay = document.getElementById('settings-overlay');
+            if (overlay) { overlay.remove(); return; }
+            overlay = document.createElement('div');
+            overlay.id = 'settings-overlay';
+            overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;';
+            const box = document.createElement('div');
+            box.style.cssText = 'width:520px;max-height:85vh;overflow-y:auto;background:var(--bg-dark,#0a0a1a);border:1px solid var(--neon-blue,#00d4ff);border-radius:12px;padding:24px;position:relative;';
+            const closeBtn = document.createElement('button');
+            closeBtn.textContent = '✕ CLOSE';
+            closeBtn.style.cssText = 'position:absolute;top:10px;right:10px;background:transparent;border:1px solid #f87171;color:#f87171;padding:4px 12px;cursor:pointer;font-weight:900;font-size:10px;border-radius:4px;z-index:10;';
+            closeBtn.onclick = () => overlay.remove();
+            box.appendChild(closeBtn);
+            const content = document.createElement('div');
+            content.id = 'content-settings-modal';
+            box.appendChild(content);
+            overlay.appendChild(box);
+            overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+            document.body.appendChild(overlay);
+            if (window.SettingsPanel) window.SettingsPanel.init('settings-modal');
+        }
+    },
+
+    async updateTelemetry() {
+        try {
+            const [mR, tR] = await Promise.all([
+                fetch('/api/market/telemetry'),
+                fetch('/api/trade/telemetry')
+            ]);
+            const mData = await mR.json();
+            const tData = await tR.json();
+            
+            if (mData.status === 'success') {
+                const bStat = document.getElementById('backend-status');
+                this.alpacaBlocker = mData.telemetry.alpaca_blocker;
+                if (bStat) {
+                    const online = mData.telemetry.heartbeat;
+                    bStat.textContent = online ? 'VERIFIED' : 'OFFLINE';
+                    bStat.className = `status-indicator ${online ? 'online' : 'offline'}`;
+                }
+            }
+            if (tData.status === 'success') {
+                const tStat = document.getElementById('tradier-status');
+                const authBtn = document.getElementById('auth-warning-btn');
+                if (tStat) {
+                    const connected = tData.telemetry.broker_connected || tData.telemetry.tradier_live;
+                    tStat.textContent = connected ? 'CONNECTED' : 'OFFLINE';
+                    tStat.className = `status-indicator ${connected ? 'online' : 'offline'}`;
+                    
+                    if (authBtn) {
+                        authBtn.style.display = connected ? 'none' : 'inline-block';
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('Telemetry sync error:', e);
+            const bStat = document.getElementById('backend-status');
+            if (bStat) {
+                bStat.textContent = 'OFFLINE';
+                bStat.className = 'status-indicator offline';
+            }
+        }
+        // Always try to sync Ghost Layer stats
+        await this.updateGhostAudit();
+    },
+
+    async updateGhostAudit() {
+        try {
+            const r = await fetch('/api/ghost/audit');
+            const res = await r.json();
+            if (res.status === 'success') {
+                const data = res.data;
+                const mevEl = document.getElementById('ghost-mev-status');
+                const taxEl = document.getElementById('ghost-tax-accrued');
+                if (mevEl) {
+                    mevEl.textContent = `${data.mev_shield} (${data.active_audit_keys} KEYS)`;
+                    mevEl.style.color = data.mev_shield === 'ACTIVE' ? 'var(--neon-green)' : 'var(--neon-red)';
+                }
+                if (taxEl) {
+                    taxEl.textContent = `${data.tax_accrued.toFixed(2)} XAH`;
+                }
+            }
+        } catch (e) {
+            console.warn('Ghost Audit sync error:', e);
         }
     }
 };

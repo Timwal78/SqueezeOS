@@ -22,7 +22,10 @@ from datetime import datetime
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 from collections import deque
-from schwab_api import schwab_api
+try:
+    from schwab_api import schwab_api
+except ImportError:
+    schwab_api = None
 from data_providers import PolygonProvider
 
 logger = logging.getLogger(__name__)
@@ -340,6 +343,8 @@ class GammaFlowEngine:
             return
 
         # 2. Get GEX Profile
+        if not self.schwab:
+            return
         raw_chain = self.schwab.get_option_chains(ticker)
         if not raw_chain or 'error' in raw_chain:
             return

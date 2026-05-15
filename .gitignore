@@ -14,3 +14,15 @@ node_modules/
 
 # explicit override — never commit live secrets
 .env
+.env.*
+schwab_tokens.json
+schwab_debug.json
+performance_log.json
+trade_log.json
+simulation_report.json
+upgrade_temp/
+logs/
+node_modules/
+*.log
+*.pyc
+__pycache__/

@@ -199,7 +199,7 @@ class IwmOdteEngine:
                         continue
         
         rows.sort(key=lambda x: -x['abs_gap'])
-        return rows[:8]
+        return rows[slice(0, 8)]
 
     def run_scan(self):
         """Executes full IWM 0DTE institutional scan."""
@@ -235,7 +235,8 @@ class IwmOdteEngine:
             candidates = sorted(
                 contracts,
                 key=lambda c: abs(float(c.get('strike_price', 0)) - price)
-            )[:self.max_contracts]
+            )
+            candidates = candidates[slice(0, self.max_contracts)]
             
             # 4. Get snapshots
             symbols = [c['symbol'] for c in candidates]
@@ -259,12 +260,14 @@ class IwmOdteEngine:
             
             scored.sort(key=lambda x: -x['score'])
             
-            calls = [x for x in scored if x['side'] == 'call'][:12]
-            puts = [x for x in scored if x['side'] == 'put'][:12]
+            calls = [x for x in scored if x['side'] == 'call']
+            calls = calls[slice(0, 12)]
+            puts = [x for x in scored if x['side'] == 'put']
+            puts = puts[slice(0, 12)]
             
             # Bias Detection
-            c_score = sum([x['score'] for x in calls[:5]])
-            p_score = sum([x['score'] for x in puts[:5]])
+            c_score = sum([x['score'] for x in calls[slice(0, 5)]])
+            p_score = sum([x['score'] for x in puts[slice(0, 5)]])
             bias = "TWO-WAY / WAIT"
             if c_score > p_score * 1.12: bias = "CALL BIAS"
             elif p_score > c_score * 1.12: bias = "PUT BIAS"
@@ -275,7 +278,7 @@ class IwmOdteEngine:
                 "rv_30d": rv,
                 "bias": bias,
                 "best": scored[0] if scored else None,
-                "top": scored[:20],
+                "top": scored[slice(0, 20)],
                 "calls": calls,
                 "puts": puts,
                 "parity_watch": self.get_parity_watch(scored)

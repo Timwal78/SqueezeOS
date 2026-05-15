@@ -11,13 +11,8 @@ from scipy import stats
 
 logger = logging.getLogger(__name__)
 
-# Fallback Beta Estimates (used only when live calculation unavailable)
-FALLBACK_BETAS = {
-    "AMC": 2.45, "GME": 2.15, "XRT": 1.45, "IWM": 1.15, "QQQ": 1.25,
-    "SPY": 1.00, "XRP": 1.80, "NVDA": 1.65, "TSLA": 1.75, "AAPL": 0.95,
-    "TLT": -0.45, "GLD": 0.15, "DXY": -0.65, "KRE": 1.55, "HYG": 0.85,
-    "IJR": 1.10 # Small-cap proxy
-}
+# MANIFESTO §1 / LAW 1: ZERO hardcoded fallback betas.
+# If live beta calculation fails, the engine reports unavailable — never invents values.
 
 class DeltaNeutralityEngine:
     def __init__(self, execution_engine, rmre_bridge=None):
@@ -91,7 +86,7 @@ class DeltaNeutralityEngine:
         """
         Regime-Aware Beta Adjustment.
         Attempts to compute live beta from historical data.
-        Falls back to hardcoded estimates with warning if data unavailable.
+        Returns 1.0 with [ESTIMATED_PROXY] warning if live calculation unavailable (Law 3).
         In VOLATILE or CONFLICT regimes, we stress-test by increasing beta by 20%.
         """
         base_beta = None
@@ -107,11 +102,11 @@ class DeltaNeutralityEngine:
             except Exception as e:
                 logger.debug(f"Could not fetch history for live beta calculation on {symbol}: {str(e)}")
 
-        # Fall back to hardcoded values if live calculation failed or unavailable
+        # LAW 3: If live calculation unavailable, use neutral beta with explicit proxy labeling
         if base_beta is None:
-            base_beta = FALLBACK_BETAS.get(symbol, 1.0)
+            base_beta = 1.0
             logger.warning(
-                f"Using estimated beta for {symbol} - live calculation unavailable (beta={base_beta})"
+                f"[ESTIMATED_PROXY] Using neutral beta=1.0 for {symbol} — live calculation unavailable"
             )
 
         # Apply regime-aware stress adjustment
@@ -178,10 +173,18 @@ class DeltaNeutralityEngine:
             spy_price = quotes["SPY"].get('price')
 
         if spy_price is None:
-            spy_price = 500.0  # Default fallback only if unavailable
             logger.warning(
-                f"SPY price not available in quotes - using estimated fallback price: ${spy_price}"
+                f"[AWAITING_DATA] SPY price not available in quotes — hedge calculation skipped"
             )
+            return {
+                "total_delta_stress": float(round(total_delta_stress, 2)),
+                "hedge_shares_spy": 0.0,
+                "status": "AWAITING_DATA",
+                "rec_status": "PAUSED",
+                "spy_price": None,
+                "hjb_metrics": hjb_result,
+                "positions": details
+            }
             
         hedge_shares = hjb_result['suggested_immediate_hedge'] / spy_price
         

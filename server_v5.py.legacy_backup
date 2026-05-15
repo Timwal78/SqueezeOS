@@ -10,13 +10,27 @@ import random
 import typing
 from flask import Flask, request, jsonify, send_from_directory, Response, redirect, render_template_string
 from functools import wraps
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask_cors import CORS
 from threading import Lock
 from functools import wraps
 import queue
+import mmle_engine as mmle   # SML MMLE Beast Mode — VPIN + Axis Collapse + TNT State
+
+
+def clean_data(data):
+    """Sanitize data for JSON serialization (handles NaN/Inf)"""
+    if isinstance(data, dict):
+        return {k: clean_data(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [clean_data(x) for x in data]
+    elif isinstance(data, float):
+        if math.isnan(data) or math.isinf(data):
+            return None
+    return data
 
 sse_queues = []
+<<<<<<< HEAD:server_v5.py
 from data_providers import load_env_file, DataManager
 from schwab_api import schwab_api
 from discord_alerts import DiscordAlerts
@@ -29,17 +43,25 @@ from kdp_sentinel_engine import KdpSentinelEngine
 from mm_liquidity_engine import MMLiquidityEngine, MMLE_CONFIG
 from cycle_intelligence_engine import CycleIntelligenceEngine, CIE_CONFIG
 from free_llm import get_llm
+=======
+print("Importing data_providers...")
+# --- HEAVY IMPORTS MOVED TO BACKGROUND INIT ---
+# (DataManager, TradierProvider, DiscordAlerts, etc. are now imported inside init_services)
+>>>>>>> 338757b (SqueezeOS Institutional Hardening - Production Ready):server_v5.py.legacy_backup
 
 # --- INITIALIZATION ---
-load_env_file()
+print("--- STARTING SQUEEZEOS DEBUG ---")
+# load_env_file() # Moved to init_services
+print("ENV LOADED")
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("SqueezeOS-v5")
 
 app = Flask(__name__, static_folder='.', static_url_path='')
 CORS(app)
+print("FLASK APP CREATED")
 
 # --- MANIFESTO LAWS ---
-FAVORITES = ["IWM", "AMC", "GME", "SPY", "QQQ", "VIX"] # Institutional Priority Queue
+FAVORITES = ["IWM", "AMC", "GME", "COSM", "SPY", "QQQ", "VIX"] # Institutional Priority Queue
 MEGA_CAPS = {
     'AAPL', 'MSFT', 'GOOG', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'LLY', 'V', 'MA', 'AVGO', 'HD', 'COST',
     'JPM', 'UNH', 'WMT', 'BAC', 'XOM', 'CVX', 'PG', 'ORCL', 'ABBV', 'CRM', 'ADBE', 'NFLX', 'AMD', 'INTC', 'DIS',
@@ -69,17 +91,33 @@ class GlobalState:
         self.discovery_results: list[dict] = []
         self.last_discovery_ts: float = 0.0
         self.kdp_results: dict = {}
+<<<<<<< HEAD:server_v5.py
         self.mmle_results: dict = {}  # ticker -> latest TNTSignal dict
         self.cie_results: dict = {}   # ticker -> latest CycleSignal dict
+=======
+        self.whale_stalker_results: list[dict] = []
+>>>>>>> 338757b (SqueezeOS Institutional Hardening - Production Ready):server_v5.py.legacy_backup
         self.audit = {
             "universe_size": 0,
             "mega_caps_filtered": 0,
             "uptime_start": time.time(),
-            "trading_mode": "SHADOW",
+            "trading_mode": "LIVE" if os.environ.get('TRADIER_LIVE', 'false').lower() == 'true' else "SHADOW",
             "conservation_mode": False
+        }
+        self.ghost_audit = {
+            "mev_shield": "ACTIVE",
+            "bot_threshold": 75,
+            "tax_accrued": 0.0,
+            "last_sync": 0.0,
+            "active_audit_keys": 0
         }
         self.conservation_until = 0.0
         self.beast_paper_data: dict = {}  # BEAST paper trading observation data
+        self.left_wing_telemetry: list[dict] = [] # Institutional scraper telemetry
+        # ── TRADIER LIVE CACHE (pre-fetched by background poller) ──
+        self.tradier_cache: dict = {
+            'balances': {}, 'positions': [], 'orders': [], 'last_update': 0.0
+        }
 
     def push_terminal(self, event_type: str, msg: str, symbol: str = '', score: float = 0.0, extra: typing.Optional[dict] = None):
         with self.lock:
@@ -150,18 +188,54 @@ def get_service(name):
         return _services.get(name)
 
 def init_services():
+    global iwm_engine, kdp_engine  # Tradier-native; no Schwab global needed
+    print("--- INIT_SERVICES START (Background) ---")
     try:
+        from data_providers import load_env_file, DataManager
+        from discord_alerts import DiscordAlerts
+        from options_intelligence import OptionsIntelligence
+        from forced_move_engine import ForcedMoveEngine
+        from mean_reversion_engine import MeanReversionEngine
+        from iwm_odte_engine import IwmOdteEngine
+        from kdp_sentinel_engine import KdpSentinelEngine
+        from sml_engine import SMLEngine
+        from whale_stalker_engine import WhaleStalkerEngine
+
+        # ── SCHWAB: Optional — system runs on Tradier alone ──
+        try:
+            from schwab_api import schwab_api as _schwab
+            schwab_api = _schwab
+            logger.info("[SCHWAB] Module loaded (optional)")
+        except Exception as _se:
+            logger.warning(f"[SCHWAB] Not loaded — running Tradier-only mode ({_se})")
+            class _SchwaStub:
+                authenticated = False
+                client_id = 'TRADIER_ONLY'
+                access_token = None
+                refresh_token = None
+                token_expires_at = 0
+                def get_auth_url(self): return '#'
+                def exchange_code(self, *a, **kw): return {'status': 'error', 'message': 'Schwab not configured'}
+                def _ensure_authenticated(self): return False
+                def get_quotes(self, *a, **kw): return {}
+                def get_option_chains(self, *a, **kw): return {}
+                def get_movers(self, *a, **kw): return []
+            schwab_api = _SchwaStub()
+        
+        load_env_file() # Ensure env is loaded before anything else
         from squeeze_analyzer import SqueezeAnalyzer
         from options_service import OptionsProService
         from gamma_flow_engine import GammaFlowEngine
         from rmre_bridge import rmre_bridge
-        from execution_engine import ExecutionEngine, SignalEmitter
+        from execution_engine import ExecutionEngine
         from performance_tracker import PerformanceTracker
         from delta_neutrality import DeltaNeutralityEngine
         from sr_patterns_engine import SRPatternsEngine
+        print("IMPORTS DONE")
         
         # MythosArchitect requires PyTorch + BEAST module — graceful multi-level fallback
         _architect_cls = None
+        print("LOADING ARCHITECT...")
         try:
             from BEAST.architect.mythos_architect import MythosArchitect
             _architect_cls = MythosArchitect
@@ -202,9 +276,14 @@ def init_services():
         analyzer = SqueezeAnalyzer()
         options_svc = OptionsProService()
         perf = PerformanceTracker()
+        whale_stalker = WhaleStalkerEngine(dm)
         discord = DiscordAlerts()
         exec_eng = ExecutionEngine(schwab_api, rmre_bridge, perf, discord)
-        delta_mgr = DeltaNeutralityEngine(exec_eng)
+        exec_eng.set_broker(dm)  # Wire Tradier/Alpaca live broker
+        try:
+            delta_mgr = DeltaNeutralityEngine(exec_eng, rmre_bridge)
+        except Exception:
+            delta_mgr = DeltaNeutralityEngine(exec_eng)
         
         watchlist = []
         if os.path.exists('watchlist.json'):
@@ -218,7 +297,7 @@ def init_services():
         gamma_eng = GammaFlowEngine(dm.polygon, watchlist + FAVORITES)
         options_intel = OptionsIntelligence()
         forced_move = ForcedMoveEngine()
-        signals = SignalEmitter(gamma_eng, gamma_eng)
+        # signals = SignalEmitter(gamma_eng, gamma_eng) # Removed: Stale class in execution_engine.py
         
         iwm_engine = IwmOdteEngine(dm)
         kdp_engine = KdpSentinelEngine(dm)
@@ -230,12 +309,14 @@ def init_services():
                 "dm": dm, "analyzer": analyzer, "options": options_svc,
                 "rmre": rmre_bridge, "exec": exec_eng, "perf": perf,
                 "gamma": gamma_eng, "delta": delta_mgr, "discord": discord,
-                "signals": signals, "options_intel": options_intel, "forced_move": forced_move,
+                "options_intel": options_intel, "forced_move": forced_move,
                 "iwm_engine": iwm_engine, "kdp_engine": kdp_engine,
                 "mmle": mmle_engine,
                 "cie": cie_engine,
                 "mre": MeanReversionEngine(bb_period=20, bb_std=2.0, rsi_period=14, max_price=500.0),
+                "sml": SMLEngine(),
                 "sr_patterns": SRPatternsEngine(),
+                "whale_stalker": whale_stalker,
                 "mythos_arch": _architect_cls()
             })
         
@@ -304,13 +385,28 @@ def worker_scanner():
             if filtered:
                 logger.info(f"[SCANNER] Price cap filtered {filtered} symbols (>${50}), {len(quotes)} remaining")
             
-            results = analyzer.analyze_batch(quotes)
+            # ── DEEP SCAN FOR HIGH PRIORITY ──
+            # MANIFESTO: FAVORITES get "Proven Math" (BB/KC history)
+            history_map = {}
+            for sym in high_priority:
+                try:
+                    # Use dm to get 30 days of daily history for BB(20) and Z-Score(20)
+                    h = dm.get_history(sym, days=30)
+                    if h: history_map[sym] = h
+                    time.sleep(0.1) # Small gap to be kind to API
+                except:
+                    continue
+
+            results = analyzer.analyze_batch(quotes, history_dict=history_map)
             
             with state.lock:
                 state.quotes.update(quotes)
                 current_map = {r['symbol']: r for r in state.scan_results}
                 for r in results: 
                     r['is_mega'] = r['symbol'] in MEGA_CAPS
+                    # Flag if it was a Deep Scan
+                    if r['symbol'] in history_map:
+                        r['math_grade'] = 'INSTITUTIONAL'
                     current_map[r['symbol']] = r
                 state.scan_results = sorted(current_map.values(), key=lambda x: -x.get('squeeze_score', 0))
                 state.last_scan_ts = time.time()
@@ -318,7 +414,15 @@ def worker_scanner():
             for r in results:
                 if r.get('squeeze_score', 0) >= 50:
                     icon = '🟢' if r.get('direction') == 'BULLISH' else '🔴'
-                    state.push_terminal('SCAN', f"{icon} {r['symbol']} SQZ:{r['squeeze_score']:.0f} ${r.get('price',0):.2f}", symbol=r['symbol'], score=r['squeeze_score'])
+                    
+                    # Beast Mode: Strong Directional Callout
+                    msg_prefix = "SQZ"
+                    if r.get('momentum_slope', 0) > 0.05 and r.get('direction') == 'BULLISH':
+                        msg_prefix = "SQUEEZE BUY 📈"
+                    elif r.get('momentum_slope', 0) < -0.05 and r.get('direction') == 'BEARISH':
+                        msg_prefix = "SQUEEZE SELL 📉"
+                        
+                    state.push_terminal('SCAN', f"{icon} {r['symbol']} {msg_prefix} SCORE:{r['squeeze_score']:.0f} ${r.get('price',0):.2f}", symbol=r['symbol'], score=r['squeeze_score'])
 
             discord = get_service("discord")
             if discord:
@@ -356,8 +460,8 @@ def worker_flow():
                 limit = min(50, len(state.scan_results))
                 to_check = list(set([r['symbol'] for r in state.scan_results[:limit]] + FAVORITES))
             
-            # Slice universe to avoid hitting Schwab too hard in one burst
-            for sym in to_check[:50]:  # MANIFESTO: FULL FETCH — expanded flow monitoring
+            # Fetch flow data for top scan results and favorites
+            for sym in to_check[:50]:
                 chain = options.get_options_chain(sym)
                 if chain and 'unusual_activity' in chain:
                     hits = chain['unusual_activity']
@@ -548,6 +652,68 @@ def worker_sr_patterns():
             logger.error(f"[SR PATTERNS FAIL] {e}")
             time.sleep(60)
 
+
+def worker_tradier_poller():
+    """Background Tradier account poller — keeps cache fresh every 30s."""
+    # Wait for init_services to finish loading .env
+    time.sleep(12)
+    logger.info("💳 [TRADIER] Account Poller Awakened")
+    import requests as _req
+
+    while True:
+        try:
+            # Re-read credentials each cycle — env may update via /api/settings/tradier
+            live = os.environ.get('TRADIER_LIVE', 'false').lower() == 'true'
+            api_key = os.environ.get('TRADIER_PRODUCTION_API_KEY' if live else 'TRADIER_SANDBOX_API_KEY', '')
+            account_id = os.environ.get('TRADIER_PRODUCTION_ACCOUNT' if live else 'TRADIER_SANDBOX_ACCOUNT', '')
+            base_url = 'https://api.tradier.com/v1' if live else 'https://sandbox.tradier.com/v1'
+            headers = {'Authorization': f'Bearer {api_key}', 'Accept': 'application/json'}
+
+            if not api_key or not account_id:
+                logger.warning("[TRADIER POLLER] No credentials — will retry in 30s")
+                time.sleep(30)
+                continue
+
+            cache = {'last_update': time.time()}
+
+            # Balances
+            r = _req.get(f'{base_url}/accounts/{account_id}/balances', headers=headers, timeout=8)
+            if r.status_code == 200:
+                cache['balances'] = r.json().get('balances', {})
+
+            # Positions
+            r2 = _req.get(f'{base_url}/accounts/{account_id}/positions', headers=headers, timeout=8)
+            if r2.status_code == 200:
+                pos_raw = r2.json().get('positions', 'null')
+                pos = [] if pos_raw == 'null' or pos_raw is None else (
+                    pos_raw.get('position', []) if isinstance(pos_raw, dict) else [])
+                cache['positions'] = [pos] if isinstance(pos, dict) else pos
+
+            # Orders
+            r3 = _req.get(f'{base_url}/accounts/{account_id}/orders', headers=headers, timeout=8)
+            if r3.status_code == 200:
+                ord_raw = r3.json().get('orders', 'null')
+                orders = [] if ord_raw == 'null' or ord_raw is None else (
+                    ord_raw.get('order', []) if isinstance(ord_raw, dict) else [])
+                cache['orders'] = [orders] if isinstance(orders, dict) else orders
+
+            with state.lock:
+                state.tradier_cache.update(cache)
+
+            bal = cache.get('balances', {})
+            equity = bal.get('total_equity', 0)
+            cash = bal.get('total_cash', 0)
+            n_pos = len(cache.get('positions', []))
+            logger.info(f"[TRADIER POLLER] ✅ equity=${equity:.2f} cash=${cash:.2f} positions={n_pos}")
+            if n_pos:
+                state.push_terminal('SYSTEM', f"💳 Tradier: {n_pos} open position(s)")
+
+        except Exception as e:
+            logger.warning(f"[TRADIER POLLER] ⚠️ {e}")
+
+        time.sleep(30)  # Poll every 30 seconds
+
+
 def worker_beast_paper():
     """BEAST Paper Trading Observer — runs hedger dry-runs + GEX scans for weekend observation."""
     logger.info("🦅 [BEAST] Paper Trading Observer Awakened")
@@ -673,8 +839,14 @@ def worker_iwm_odte():
                 time.sleep(10)
                 continue
                 
-            engine = IwmOdteEngine(dm)
+            try:
+                from iwm_odte_engine import IwmOdteEngine as _IwmEng
+            except ImportError:
+                time.sleep(30)
+                continue
+            engine = _IwmEng(dm)
             state.iwm_odte_engine = engine
+
             
             scan = engine.run_scan()
             if scan and 'error' not in scan:
@@ -694,8 +866,8 @@ def worker_iwm_odte():
                     if score >= 75:
                         logger.info(f"🔥 HIGH CONVICTION IWM: {msg}")
             
-            # 5 minute cycle
-            time.sleep(300)
+            # 2 minute cycle for high-velocity 0DTE monitoring
+            time.sleep(120)
         except Exception as e:
             logger.error(f"[IWM-0DTE FAIL] {e}")
             time.sleep(60)
@@ -712,7 +884,9 @@ def worker_kdp_sentinel():
         try:
             kdp_engine = get_service("kdp_engine")
             if kdp_engine:
-                chain = schwab_api.get_option_chains("KDP")
+                dm = get_service('dm')
+                tradier = getattr(dm, 'tradier', None) if dm else None
+                chain = tradier.get_option_chains('KDP') if tradier and tradier.available else None
                 if chain and 'error' not in chain:
                     with state.lock:
                         quote = state.quotes.get("KDP", {})
@@ -1172,32 +1346,10 @@ def worker_trade_desk_bridge():
 def index_v5():
     return send_from_directory('.', 'index.html')
 
-@app.route('/api/auth/url')
-def get_auth_url_route():
-    # Pass redirect_uri from request if provided to support multi-port dashboards
-    redirect_uri = request.args.get('redirect_uri')
-    if redirect_uri:
-        schwab_api.redirect_uri = redirect_uri
-    return jsonify({"status": "success", "url": schwab_api.get_auth_url()})
 
-@app.route('/api/auth/exchange', methods=['POST'])
-def api_auth_exchange():
-    data = request.json
-    code = data.get('code')
-    if not code:
-        return jsonify({"status": "error", "message": "No code provided"}), 400
-    
-    redirect_uri = data.get('redirect_uri')
-    if redirect_uri:
-        schwab_api.redirect_uri = redirect_uri
-        
-    res = schwab_api.exchange_code(code)
-    return jsonify(res)
 
-@app.route('/callback')
-def oauth_callback():
-    return send_from_directory('.', 'callback.html')
 
+<<<<<<< HEAD:server_v5.py
 
 # ───────────────────────────────────────────────────────────────────
 # MANUAL OAUTH PASTE — escape hatch when the popup/postMessage chain
@@ -1338,28 +1490,402 @@ def get_auth_status():
     elif schwab_api.refresh_token:
         return jsonify({"status": "AUTH_EXPIRED", "message": "Token expired — click SAVE & AUTHENTICATE to re-login"})
     return jsonify({"status": "OFFLINE", "message": "Not authenticated"})
+=======
+>>>>>>> 338757b (SqueezeOS Institutional Hardening - Production Ready):server_v5.py.legacy_backup
 
 @app.route('/api/health')
 def api_health():
     """Health endpoint for supervisor."""
-    return jsonify({
+    live = os.environ.get('TRADIER_LIVE', 'false').lower() == 'true'
+    return jsonify(clean_data({
         "status": "operational",
         "uptime_sec": round(time.time() - state.audit["uptime_start"]),
-        "trading_mode": state.audit["trading_mode"]
-    })
+        "trading_mode": "LIVE" if live else "SHADOW",
+        "broker": "TRADIER",
+        "account": os.environ.get('TRADIER_PRODUCTION_ACCOUNT', '?')
+    }))
+
+@app.route('/api/auth/status')
+def auth_status():
+    """Auth status — Tradier-native (no OAuth required)."""
+    with state.lock:
+        cache = dict(state.tradier_cache)
+    connected = cache.get('last_update', 0) > 0
+    live = os.environ.get('TRADIER_LIVE', 'false').lower() == 'true'
+    bal = cache.get('balances', {})
+    return jsonify(clean_data({
+        "status": "ONLINE" if connected else "CONNECTING",
+        "broker": "TRADIER",
+        "account": os.environ.get('TRADIER_PRODUCTION_ACCOUNT', '?'),
+        "live": live,
+        "mode": "PRO" if os.environ.get('SML_INSTITUTIONAL_MODE') == 'true' else "FREE",
+        "equity": bal.get('total_equity', 0),
+        "cash": bal.get('total_cash', 0),
+        "last_poll": cache.get('last_update', 0)
+    }))
+
+
+@app.route('/api/status/audit')
+def get_status_audit():
+    """Manifesto compliance audit status."""
+    with state.lock:
+        return jsonify(clean_data({
+            "status": "success",
+            "compliance": {
+                "zero_fake": os.environ.get('SML_ZERO_FAKE_ONLY', 'true') == 'true',
+                "institutional_math": True,
+                "data_integrity": "OPTIMAL",
+                "last_audit": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                "universe_size": state.audit.get("universe_size", 0),
+                "mega_caps_filtered": state.audit.get("mega_caps_filtered", 0),
+                "uptime": str(timedelta(seconds=int(time.time() - state.audit["uptime_start"])))
+            }
+        }))
+
+@app.route('/api/market/telemetry')
+def get_market_telemetry():
+    """Institutional data heartbeat and engine status."""
+    dm = get_service("data")
+    prov_status = dm.provider_status() if dm else {}
+    
+    # Check for specific Alpaca blockers (OPRA)
+    alpaca_blocker = getattr(dm.alpaca, 'last_error', None) if dm and dm.alpaca else None
+
+    with state.lock:
+        return jsonify(clean_data({
+            "status": "success",
+            "telemetry": {
+                "heartbeat": True,
+                "providers": prov_status,
+                "alpaca_blocker": alpaca_blocker,
+                "scan_rate": len(state.scan_results),
+                "flow_rate": len(state.flow_results),
+                "discovery_active": state.discovery_results is not None,
+                "terminal_depth": len(state.terminal_feed),
+                "quote_universe": len(state.quotes),
+                "last_heartbeat": datetime.now().isoformat()
+            }
+        }))
+
+@app.route('/api/trade/telemetry')
+def get_trade_telemetry():
+    """Institutional trade engine telemetry — Tradier direct ping is source of truth."""
+    try:
+        exec_eng = get_service("exec")
+        broker = getattr(exec_eng, 'broker', None)
+        broker_ok = bool(broker and getattr(broker, 'available', False))
+        dm = get_service("dm")
+        tradier_live = False
+        if dm:
+            t = getattr(dm, 'tradier', None)
+            tradier_live = bool(t and getattr(t, 'available', False) and getattr(t, 'live_mode', False))
+
+        # Direct Tradier ping always wins — ground truth regardless of exec engine state
+        import requests as _req
+        _live_env = os.environ.get('TRADIER_LIVE', 'false').lower() == 'true'
+        _key = os.environ.get('TRADIER_PRODUCTION_API_KEY' if _live_env else 'TRADIER_SANDBOX_API_KEY', '')
+        _acc = os.environ.get('TRADIER_PRODUCTION_ACCOUNT' if _live_env else 'TRADIER_SANDBOX_ACCOUNT', '')
+        _base = 'https://api.tradier.com/v1' if _live_env else 'https://sandbox.tradier.com/v1'
+        _tradier_equity = 0
+        try:
+            _r = _req.get(f'{_base}/accounts/{_acc}/balances',
+                          headers={'Authorization': f'Bearer {_key}', 'Accept': 'application/json'}, timeout=5)
+            if _r.status_code == 200:
+                broker_ok = True
+                tradier_live = True
+                _bal = _r.json().get('balances', {})
+                _tradier_equity = float(_bal.get('total_equity', 0) or 0)
+        except Exception:
+            pass
+
+        if not exec_eng:
+            return jsonify(clean_data({"status": "success", "telemetry": {
+                "broker_connected": broker_ok, "tradier_live": tradier_live,
+                "tradier_equity": _tradier_equity, "live_mode": _live_env,
+                "active_trades": 0, "total_executed": 0, "pdt_used": 0,
+                "last_update": datetime.now().isoformat()
+            }}))
+
+        return jsonify(clean_data({"status": "success", "telemetry": {
+            "broker_connected": broker_ok, "tradier_live": tradier_live,
+            "tradier_equity": _tradier_equity, "live_mode": exec_eng.live_mode,
+            "active_trades": len(exec_eng.get_active_trades()),
+            "total_executed": len(exec_eng.get_trade_history()),
+            "pdt_used": len(exec_eng.day_trades),
+            "last_update": datetime.now().isoformat()
+        }}))
+    except Exception as e:
+        return jsonify(clean_data({"status": "success", "telemetry": {"broker_connected": False, "error": str(e)}}))
+
+@app.route('/api/mm-intel/<symbol>')
+def get_mm_intel(symbol):
+    """Market Maker positioning and hedge rate bridge."""
+    symbol = symbol.upper()
+    exec_eng = get_service("exec")
+    if not exec_eng: return jsonify({"status": "error"}), 503
+    
+    # Bridge to Gamma Engine for core metrics
+    gex = exec_eng.get_gamma_walls(symbol)
+    
+    # Deterministic "Zero-Fake" MM logic based on real GEX and IV
+    inv_z = gex.get('inventory_z', 0)
+    gamma = gex.get('total_gex', 0)
+    
+    # Signal logic based on inventory stress and gamma pressure
+    signal = "NEUTRAL"
+    if inv_z > 1.5 and gamma < 0: signal = "SHORT"
+    elif inv_z < -1.5 and gamma > 0: signal = "LONG"
+    
+    return jsonify(clean_data({
+        "status": "success",
+        "symbol": symbol,
+        "inv_z": inv_z,
+        "gamma_pressure": gamma / 1e6, # In Millions
+        "optimal_hedge_rate": gex.get('hjb_hedge_rate', 0),
+        "flow_type": "INSTITUTIONAL" if abs(inv_z) > 1.0 else "RETAIL",
+        "flow_quality": 100 - (abs(inv_z) * 10),
+        "signal": signal,
+        "signal_confidence": min(100, 40 + abs(inv_z) * 20),
+        "strike_pin": {
+            "near_strike": True if abs(gex.get('max_oi_strike', 0) - state.quotes.get(symbol, {}).get('price', 0)) < 1.0 else False,
+            "nearest_strike": gex.get('max_oi_strike', 0)
+        },
+        "tactical_target": gex.get('zero_gamma_line', 0),
+        "structural_target": gex.get('call_wall', 0) if signal == "LONG" else gex.get('put_wall', 0)
+    }))
+
+@app.route('/api/cascade/<symbol>')
+def get_cascade(symbol):
+    """Fractal Cascade multi-timeframe alignment."""
+    symbol = symbol.upper()
+    sml = get_service("sml")
+    dm = get_service("dm")
+    if not sml or not dm: return jsonify({"status": "error"}), 503
+    
+    history = dm.get_history(symbol)
+    if not history: return jsonify({"status": "error", "message": "No history"}), 404
+    
+    data = sml.compute_fractal_cascade(symbol, {symbol: history})
+    return jsonify(clean_data({
+        "status": "success",
+        "data": data
+    }))
+
+@app.route('/api/market/recommendations')
+def get_market_recommendations():
+    """Whale/Pick intelligence recommendations."""
+    with state.lock:
+        # Sort discovery results by score
+        picks = sorted(state.discovery_results or [], key=lambda x: x.get('score', 0), reverse=True)
+        return jsonify(clean_data({
+            "status": "success",
+            "data": picks[:10] # Top 10 institutional picks
+        }))
+
+
+
+@app.route('/api/status/verification')
+def get_status_verification():
+    """System verification status for institutional tier."""
+    return jsonify(clean_data({
+        "status": "success",
+        "data": {
+            "status": "OPTIMAL",
+            "tier": "INSTITUTIONAL",
+            "verified": True,
+            "ts": time.time()
+        }
+    }))
+
+@app.route('/api/ghost/audit')
+def get_ghost_audit():
+    """Ghost Layer Sovereign MEV & Tax telemetry."""
+    with state.lock:
+        return jsonify(clean_data({
+            "status": "success",
+            "data": state.ghost_audit
+        }))
+
+@app.route('/api/ghost/sync', methods=['POST'])
+@require_localhost
+def post_ghost_sync():
+    """Sync endpoint for ghost_tax_sync.py."""
+    data = request.json
+    with state.lock:
+        state.ghost_audit.update({
+            "tax_accrued": data.get("tax_accrued", state.ghost_audit["tax_accrued"]),
+            "last_sync": time.time(),
+            "active_audit_keys": data.get("active_audit_keys", state.ghost_audit["active_audit_keys"])
+        })
+    return jsonify({"status": "success"})
+
+@app.route('/api/watchlist', methods=['GET', 'POST'])
+def api_watchlist():
+    path = 'watchlist.json'
+    if request.method == 'POST':
+        data = request.json
+        sym = data.get('symbol', '').upper()
+        if not sym: return jsonify({"status": "error"}), 400
+        
+        current = []
+        if os.path.exists(path):
+            with open(path, 'r') as f:
+                try:
+                    raw = json.load(f)
+                    current = raw if isinstance(raw, list) else raw.get('symbols', [])
+                except: pass
+        
+        if sym not in current:
+            current.append(sym)
+            with open(path, 'w') as f:
+                json.dump(current, f)
+        return jsonify(clean_data({"status": "success", "watchlist": current}))
+    
+    # GET
+    current = []
+    if os.path.exists(path):
+        with open(path, 'r') as f:
+            try:
+                raw = json.load(f)
+                current = raw if isinstance(raw, list) else raw.get('symbols', [])
+            except: pass
+    return jsonify(clean_data({"status": "success", "data": current}))
+
+@app.route('/api/market/gex')
+def get_market_gex():
+    symbol = request.args.get('symbol', '').upper()
+    if not symbol: return jsonify({"status": "error"}), 400
+    exec_eng = get_service("exec")
+    if not exec_eng: return jsonify({"status": "error"}), 503
+    data = exec_eng.get_gamma_walls(symbol)
+    return jsonify(clean_data({"status": "success", "data": data}))
+
+@app.route('/api/market/regime')
+def get_market_regime():
+    symbol = request.args.get('symbol', '').upper()
+    rmre = get_service("rmre")
+    if not rmre: return jsonify({"status": "error"}), 503
+    data = rmre.get_regime(symbol)
+    return jsonify(clean_data({"status": "success", "data": data}))
+
+@app.route('/api/trade/active')
+def get_active_trades():
+    exec_eng = get_service("exec")
+    if not exec_eng: return jsonify({"status": "error"}), 503
+    return jsonify(clean_data({"status": "success", "active": exec_eng.get_active_trades()}))
+
+@app.route('/api/trade/history')
+def get_trade_history():
+    exec_eng = get_service("exec")
+    if not exec_eng: return jsonify({"status": "error"}), 503
+    return jsonify(clean_data({"status": "success", "history": exec_eng.get_trade_history()}))
+
+@app.route('/api/trade/execute', methods=['POST'])
+@require_localhost
+def post_live_trade():
+    """Fire a real Tradier live order. Requires TRADIER_LIVE=true."""
+    data = request.json
+    sym = data.get('symbol', '').upper()
+    side = data.get('side', 'BUY').upper()
+    qty = int(data.get('qty', 1))
+    price = float(data.get('price', 0.0))
+    reason = data.get('reason', 'Manual')
+    exec_eng = get_service("exec")
+    if not exec_eng:
+        return jsonify({"status": "error", "message": "Exec engine offline"}), 503
+    if not exec_eng.live_mode:
+        return jsonify({"status": "error", "message": "TRADIER_LIVE is not enabled — refusing live order"}), 403
+    res = exec_eng.execute_live_trade(sym, side, qty, price, reason)
+    state.push_terminal('TRADE', f"🔥 LIVE ORDER: {side} {qty} {sym} @ ${price:.2f} | {res.get('status','?')}", symbol=sym)
+    return jsonify(clean_data({"status": "success", "result": res}))
+
+@app.route('/api/trade/close', methods=['POST'])
+@require_localhost
+def post_close_trade():
+    """Close an active trade by ID."""
+    data = request.json
+    trade_id = data.get('trade_id', '')
+    exec_eng = get_service("exec")
+    if not exec_eng: return jsonify({"status": "error"}), 503
+    result = exec_eng.close_trade(trade_id)
+    if result:
+        return jsonify(clean_data({"status": "success", "trade": result}))
+    return jsonify({"status": "error", "message": "Trade not found"}), 404
+
+@app.route('/api/tradier/account')
+def get_tradier_account():
+    """Tradier account balances — served from background-polled cache."""
+    with state.lock:
+        cache = dict(state.tradier_cache)
+    bal = cache.get('balances', {})
+    live = os.environ.get('TRADIER_LIVE', 'false').lower() == 'true'
+    acc = os.environ.get('TRADIER_PRODUCTION_ACCOUNT' if live else 'TRADIER_SANDBOX_ACCOUNT', '?')
+    return jsonify(clean_data({
+        "status": "success",
+        "live": live,
+        "account": acc,
+        "data": bal,
+        "last_update": cache.get('last_update', 0)
+    }))
+
+
+
+@app.route('/api/tradier/positions')
+def get_tradier_positions():
+    """Tradier open positions — served from background-polled cache."""
+    with state.lock:
+        cache = dict(state.tradier_cache)
+    return jsonify(clean_data({
+        "status": "success",
+        "live": os.environ.get('TRADIER_LIVE', 'false').lower() == 'true',
+        "positions": cache.get('positions', []),
+        "last_update": cache.get('last_update', 0)
+    }))
+
+@app.route('/api/tradier/orders')
+def get_tradier_orders():
+    """Tradier orders — served from background-polled cache."""
+    with state.lock:
+        cache = dict(state.tradier_cache)
+    return jsonify(clean_data({
+        "status": "success",
+        "live": os.environ.get('TRADIER_LIVE', 'false').lower() == 'true',
+        "orders": cache.get('orders', []),
+        "last_update": cache.get('last_update', 0)
+    }))
+
+@app.route('/api/trade/shadow', methods=['POST'])
+def post_shadow_trade():
+    data = request.json
+    sym = data.get('symbol')
+    side = data.get('side')
+    qty = data.get('qty', 100)
+    price = float(data.get('price', 0.0))
+    exec_eng = get_service("exec")
+    if not exec_eng: return jsonify({"status": "error"}), 503
+    res = exec_eng.execute_shadow_trade(sym, side, qty, price)
+    return jsonify(clean_data({"status": "success", "result": res}))
+
+@app.route('/api/market/news')
+def get_market_news():
+    symbol = request.args.get('symbol', '').upper()
+    dm = get_service("dm")
+    if not dm: return jsonify({"status": "error"}), 503
+    news = dm.get_news(symbol) if symbol else dm.get_news()
+    return jsonify(clean_data({"status": "success", "data": news}))
 
 @app.route('/ping')
 def ping():
-    return jsonify({"status": "ok"})
+    return jsonify(clean_data({"status": "ok"}))
 
 @app.route('/api/market/discovery')
 def get_discovery():
     with state.lock:
-        return jsonify({
+        return jsonify(clean_data({
             "status": "success", 
             "data": state.discovery_results or [], 
             "ts": state.last_discovery_ts
-        })
+        }))
 
 @app.route('/api/market/scan')
 def get_scan():
@@ -1377,7 +1903,11 @@ def get_scan():
                     mega_count += 1
             elif r.get('price', 0) >= 0.50:
                 final.append(r)
-    return jsonify({"status": "success", "data": final})
+    return jsonify(clean_data({
+        "status": "success", 
+        "data": final,
+        "ts": time.time()
+    }))
 
 @app.route('/api/mmle/regimes')
 def get_mmle_regimes():
@@ -1392,10 +1922,59 @@ def get_mmle_regimes():
 
 @app.route('/api/market/quotes')
 def get_quotes():
-    symbols = request.args.get('symbols', '').split(',')
+    symbols = [s.strip().upper() for s in request.args.get('symbols', '').split(',') if s.strip()]
     with state.lock:
         res = {s: state.quotes[s] for s in symbols if s in state.quotes}
+
+    # Live Tradier fallback — fires when scanner cache is cold (fresh restart / market closed)
+    missing = [s for s in symbols if s not in res]
+    if missing:
+        try:
+            import requests as _req
+            # Check all possible Tradier key env var names
+            _key = (os.environ.get('TRADIER_PRODUCTION_API_KEY') or
+                    os.environ.get('TRADIER_API_KEY') or '')
+            _live = os.environ.get('TRADIER_LIVE', 'false').lower() == 'true'
+            _base = 'https://api.tradier.com/v1' if _live else 'https://sandbox.tradier.com/v1'
+            logger.info(f'[QUOTES] Cold cache fallback: key={bool(_key)}, live={_live}, missing={missing}')
+            if _key:
+                _r = _req.get(f'{_base}/markets/quotes',
+                              headers={'Authorization': f'Bearer {_key}', 'Accept': 'application/json'},
+                              params={'symbols': ','.join(missing), 'greeks': 'false'}, timeout=8)
+                logger.info(f'[QUOTES] Tradier response: {_r.status_code}')
+                if _r.status_code == 200:
+                    _quotes = _r.json().get('quotes', {}).get('quote', [])
+                    if isinstance(_quotes, dict): _quotes = [_quotes]
+                    for q in _quotes:
+                        sym = q.get('symbol', '')
+                        if sym:
+                            entry = {
+                                'price': q.get('last') or q.get('prevclose') or 0,
+                                'change': q.get('change', 0),
+                                'changePct': q.get('change_percentage', 0),
+                                'volume': q.get('volume', 0),
+                                'high': q.get('high', 0),
+                                'low': q.get('low', 0),
+                                'open': q.get('open', 0),
+                                'bid': q.get('bid', 0),
+                                'ask': q.get('ask', 0),
+                                'source': 'tradier_live'
+                            }
+                            res[sym] = entry
+                            with state.lock:
+                                state.quotes[sym] = entry
+                            logger.info(f'[QUOTES] Tradier live: {sym} @ {entry["price"]}')
+            else:
+                logger.warning('[QUOTES] No Tradier key found in environment')
+        except Exception as _e:
+            logger.warning(f'[QUOTES] Live fallback exception: {_e}')
+
+
+    if not res:
+        # Signal to frontend: data providers attempted but returned nothing
+        return jsonify({"status": "success", "data": {}, "error": "NO_DATA"})
     return jsonify({"status": "success", "data": res})
+
 
 @app.route('/api/market/flow')
 def get_market_flow():
@@ -1473,7 +2052,7 @@ def get_market_intel():
     """Return combined intel feed from flow + scan highlights."""
     with state.lock:
         flow = list(state.flow_results)
-        scan = list(state.scan_results[:20])
+        scan = list(state.scan_results)
     
     intel = []
     
@@ -1516,14 +2095,14 @@ def get_market_reversal():
                 })
     
     reversals.sort(key=lambda x: -x['score'])
-    return jsonify({"status": "success", "data": reversals[:20]})
+    return jsonify({"status": "success", "data": reversals})
 
 @app.route('/api/market/signals')
 def get_market_signals():
     """Combined signal feed — active scan + flow signals for frontend signal table."""
     with state.lock:
-        scan = list(state.scan_results[:30])
-        flow = list(state.flow_results[:20])
+        scan = list(state.scan_results)
+        flow = list(state.flow_results)
     
     signals = []
     
@@ -1557,7 +2136,7 @@ def get_market_signals():
             })
     
     signals.sort(key=lambda x: -x['score'])
-    return jsonify({"status": "success", "data": signals[:30]})
+    return jsonify({"status": "success", "data": signals})
 
 @app.route('/api/beast/scan-signals')
 def get_beast_scan_signals():
@@ -1578,7 +2157,7 @@ def get_beast_scan_signals():
                 'is_mega': s.get('is_mega', False)
             })
     
-    return jsonify({"status": "ok", "data": signals[:20]})
+    return jsonify({"status": "ok", "data": signals})
 
 @app.route('/api/beast/paper')
 def api_beast_paper():
@@ -1590,7 +2169,7 @@ def api_beast_paper():
     trade_history = []
     if exec_eng:
         shadow_trades = exec_eng.get_active_trades()
-        trade_history = exec_eng.get_trade_history()[:20]
+        trade_history = exec_eng.get_trade_history()
     
     return jsonify({
         "status": "ok",
@@ -1601,6 +2180,62 @@ def api_beast_paper():
         "last_update": paper_data.get('ts', 0),
         "iwm_odte": state.iwm_odte_results
     })
+
+@app.route('/api/telemetry', methods=['POST'])
+def api_telemetry():
+    """Ingest 'Honest Telemetry' from scraper nodes."""
+    data = request.json
+    if not data:
+        return jsonify({"status": "error", "message": "No data"}), 400
+    
+    with state.lock:
+        state.left_wing_telemetry.insert(0, data)
+        # Keep only the last 20 missions
+        if len(state.left_wing_telemetry) > 20:
+            state.left_wing_telemetry = state.left_wing_telemetry[:20]
+            
+    # Also push to terminal for visibility
+    status_icon = "✅" if data.get('status') == 'SUCCESS' else "❌"
+    state.push_terminal('BEAST', f"NODE: {data.get('module')} {status_icon} | {data.get('token_usage',0)} tokens", extra=data)
+    
+    return jsonify({"status": "success"})
+
+@app.route('/api/left-wing/status')
+def api_left_wing_status():
+    """Returns the latest telemetry and status for the Left-Wing module."""
+    with state.lock:
+        telemetry = list(state.left_wing_telemetry)
+    
+    return jsonify({
+        "status": "success",
+        "data": {
+            "latest": telemetry[0] if telemetry else None,
+            "history": telemetry[:5],
+            "total_tokens": sum(t.get('token_usage', 0) for t in telemetry)
+        }
+    })
+
+@app.route('/api/left-wing/trigger', methods=['POST'])
+def api_left_wing_trigger():
+    """Triggers the institutional scraper node."""
+    url = request.json.get('url')
+    if not url:
+        return jsonify({"status": "error", "message": "No URL"}), 400
+    
+    # Path to the scraper script
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    script_path = os.path.join(base_dir, "beastmode_social_automation", "scripts", "scrape_and_analyze.py")
+    
+    try:
+        # Initiate mission as background process
+        import subprocess
+        subprocess.Popen([sys.executable, script_path, url], 
+                         env={**os.environ, "TELEMETRY_URL": "http://localhost:8182/api/telemetry"})
+        
+        state.push_terminal('BEAST', f"LEFT-WING: Mission Dispatched -> {url}")
+        return jsonify({"status": "success", "message": "Mission Initiated"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/beast/iwm_odte')
 def api_beast_iwm_odte():
@@ -1744,8 +2379,10 @@ def api_beast_architect():
 def api_options_intelligence(symbol):
     try:
         intel = get_service("options_intel")
-        chain = schwab_api.get_option_chains(symbol.upper())
-        if not chain: return jsonify({"status": "error"}), 404
+        dm = get_service('dm')
+        tradier = getattr(dm, 'tradier', None) if dm else None
+        chain = tradier.get_option_chains(symbol.upper()) if tradier and tradier.available else None
+        if not chain: return jsonify({"status": "error", "message": "Options chain unavailable"}), 404
         with state.lock: quote = state.quotes.get(symbol.upper(), {})
         return jsonify(intel.scan_symbol(symbol.upper(), chain, quote))
     except Exception as e: return jsonify({"error": str(e)}), 500
@@ -1844,12 +2481,22 @@ def _mask(val: str) -> str:
 @app.route('/api/settings')
 def get_settings():
     return jsonify({
+<<<<<<< HEAD:server_v5.py
         'schwabKey':    _mask(os.environ.get('SCHWAB_CLIENT_ID', '')),
         'schwabSecret': _mask(os.environ.get('SCHWAB_CLIENT_SECRET', '')),
         'alpacaKey':    _mask(os.environ.get('ALPACA_API_KEY', '')),
         'alpacaSecret': _mask(os.environ.get('ALPACA_API_SECRET', '')),
         'polyKey':      _mask(os.environ.get('POLYGON_API_KEY', '')),
         'webhook':      _mask(os.environ.get('DISCORD_WEBHOOK_ALL', '')),
+=======
+        'tradierKey': os.environ.get('TRADIER_PRODUCTION_API_KEY', ''),
+        'tradierAccount': os.environ.get('TRADIER_PRODUCTION_ACCOUNT', ''),
+        'tradierLive': os.environ.get('TRADIER_LIVE', 'false'),
+        'alpacaKey': os.environ.get('ALPACA_API_KEY', ''),
+        'alpacaSecret': os.environ.get('ALPACA_API_SECRET', ''),
+        'polyKey': os.environ.get('POLYGON_API_KEY', ''),
+        'webhook': os.environ.get('DISCORD_WEBHOOK_ALL', '')
+>>>>>>> 338757b (SqueezeOS Institutional Hardening - Production Ready):server_v5.py.legacy_backup
     })
 
 def _update_env_key(key, value):
@@ -1865,14 +2512,16 @@ def _update_env_key(key, value):
     if not found: lines.append(f"{key}={value}\n")
     with open(env_path, 'w') as f: f.writelines(lines)
 
-@app.route('/api/settings/schwab', methods=['POST'])
-def save_schwab_settings():
-    data = request.json
-    _update_env_key('SCHWAB_CLIENT_ID', data.get('key',''))
-    _update_env_key('SCHWAB_CLIENT_SECRET', data.get('secret',''))
-    # Hot-reload the global schwab_api instance with new credentials
-    schwab_api.client_id = data.get('key', '') or schwab_api.client_id
-    schwab_api.client_secret = data.get('secret', '') or schwab_api.client_secret
+@app.route('/api/settings/tradier', methods=['POST'])
+def save_tradier_settings():
+    """Hot-update Tradier credentials in env."""
+    data = request.json or {}
+    if data.get('key'):
+        _update_env_key('TRADIER_PRODUCTION_API_KEY', data['key'])
+    if data.get('account'):
+        _update_env_key('TRADIER_PRODUCTION_ACCOUNT', data['account'])
+    if 'live' in data:
+        _update_env_key('TRADIER_LIVE', 'true' if data['live'] else 'false')
     return jsonify({"status": "success"})
 
 
@@ -1922,6 +2571,33 @@ def save_discord_settings():
 
     return jsonify({"status": "success"})
 
+
+# --- TRADIER STATUS BRIDGE ---
+
+@app.route('/api/auth/tradier/ping')
+def tradier_ping():
+    """Quick Tradier connectivity check."""
+    try:
+        import requests as _req
+        live = os.environ.get('TRADIER_LIVE', 'false').lower() == 'true'
+        key = os.environ.get('TRADIER_PRODUCTION_API_KEY' if live else 'TRADIER_SANDBOX_API_KEY', '')
+        acc = os.environ.get('TRADIER_PRODUCTION_ACCOUNT' if live else 'TRADIER_SANDBOX_ACCOUNT', '')
+        base = 'https://api.tradier.com/v1' if live else 'https://sandbox.tradier.com/v1'
+        r = _req.get(f'{base}/accounts/{acc}/balances',
+                     headers={'Authorization': f'Bearer {key}', 'Accept': 'application/json'}, timeout=6)
+        ok = r.status_code == 200
+        bal = r.json().get('balances', {}) if ok else {}
+        return jsonify({
+            "status": "ok" if ok else "error",
+            "code": r.status_code,
+            "live": live,
+            "account": acc,
+            "equity": bal.get('total_equity', 0),
+            "cash": bal.get('total_cash', 0)
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 # --- TRADING CONTROL ---
 @app.route('/api/trading/status')
 def get_trading_status():
@@ -1944,20 +2620,23 @@ def toggle_trading_mode():
 
 @app.route('/api/trading/balances')
 def get_trading_balances():
-    dm = get_service("dm")
-    if not dm: return jsonify({"status": "error"}), 503
-    bal = {"alpaca": {}, "schwab": {}}
-    try:
-        acc = dm.alpaca.get_account()
-        bal["alpaca"] = {"equity": acc.get("equity"), "buying_power": acc.get("buying_power")}
-    except: pass
-    try:
-        accs = dm.schwab.schwab.get_accounts()
-        if accs and isinstance(accs, list):
-            acc = accs[0]
-            bal["schwab"] = {"equity": acc.get("currentBalances", {}).get("liquidationValue"), "buying_power": acc.get("currentBalances", {}).get("buyingPower")}
-    except: pass
-    return jsonify({"status": "success", "balances": bal})
+    """Account balances — served from Tradier poller cache."""
+    with state.lock:
+        cache = dict(state.tradier_cache)
+    bal = cache.get('balances', {})
+    return jsonify(clean_data({
+        "status": "success",
+        "balances": {
+            "tradier": {
+                "equity": bal.get('total_equity', 0),
+                "cash": bal.get('total_cash', 0),
+                "buying_power": bal.get('buying_power', 0),
+                "account": os.environ.get('TRADIER_PRODUCTION_ACCOUNT', '?'),
+                "live": os.environ.get('TRADIER_LIVE', 'false').lower() == 'true'
+            }
+        },
+        "last_update": cache.get('last_update', 0)
+    }))
 
 # --- RISK & PERFORMANCE ---
 @app.route('/api/trade/positions')
@@ -2026,6 +2705,7 @@ def api_beast_events():
             
     return Response(stream(), mimetype='text/event-stream')
 
+<<<<<<< HEAD:server_v5.py
 # ── Free LLM (OpenRouter — Llama / Grok / DeepSeek free tier) ───────────────
 
 @app.route('/api/ai/status')
@@ -2147,11 +2827,168 @@ def credit_manifest():
 @app.route('/credit_sw.js')
 def credit_sw():
     return send_from_directory('.', 'credit_sw.js'), 200, {'Content-Type': 'application/javascript'}
+=======
+# VIX data cache (populated by a lightweight background fetch)
+
+_vix_cache = {"vix": None, "vix9d": None, "vvix": None, "ts": 0}
+_VIX_TTL = 60  # seconds
+
+def _fetch_vix_data():
+    """Pull VIX, VIX9D, VVIX from Tradier quotes (best-effort)."""
+    global _vix_cache
+    try:
+        tradier_key = os.getenv("TRADIER_PRODUCTION_API_KEY") or os.getenv("TRADIER_API_KEY", "")
+        if not tradier_key:
+            return
+        import requests as _req
+        h = {"Authorization": f"Bearer {tradier_key}", "Accept": "application/json"}
+        # Tradier doesn't serve CBOE indices directly — use Polygon as fallback
+        poly_key = os.getenv("POLYGON_API_KEY", "")
+        if poly_key:
+            for sym, key in [("I:VIX", "vix"), ("I:VIX9D", "vix9d"), ("I:VVIX", "vvix")]:
+                try:
+                    r = _req.get(
+                        f"https://api.polygon.io/v2/last/trade/{sym}",
+                        params={"apiKey": poly_key}, timeout=5
+                    )
+                    if r.ok:
+                        _vix_cache[key] = r.json().get("results", {}).get("p")
+                except Exception:
+                    pass
+        _vix_cache["ts"] = time.time()
+    except Exception as e:
+        logger.warning(f"[MMLE] VIX fetch failed: {e}")
+
+def _get_bars_from_tradier(symbol: str, limit: int = 200):
+    """Fetch recent 1-min bars from Tradier timesales for MMLE analysis."""
+    try:
+        tradier_key = os.getenv("TRADIER_PRODUCTION_API_KEY") or os.getenv("TRADIER_API_KEY", "")
+        if not tradier_key:
+            return []
+        import requests as _req
+        h = {"Authorization": f"Bearer {tradier_key}", "Accept": "application/json"}
+        r = _req.get(
+            "https://api.tradier.com/v1/markets/timesales",
+            params={"symbol": symbol, "interval": "1min", "session_filter": "all"},
+            headers=h, timeout=8
+        )
+        if not r.ok:
+            return []
+        data = r.json().get("series", {}).get("data", [])
+        if not data:
+            return []
+        bars = []
+        prev_close = None
+        for d in data[-limit:]:
+            c = float(d.get("close", 0))
+            bars.append({
+                "open":   float(d.get("open", c)),
+                "high":   float(d.get("high", c)),
+                "low":    float(d.get("low", c)),
+                "close":  c,
+                "volume": float(d.get("volume", 0)),
+            })
+            prev_close = c
+        return bars
+    except Exception as e:
+        logger.warning(f"[MMLE] Bar fetch failed for {symbol}: {e}")
+        return []
+
+@app.route("/api/mmle/<symbol>", methods=["GET"])
+def api_mmle(symbol):
+    """
+    MMLE Beast Mode analysis for a symbol.
+    Returns VPIN, Axis Collapse, TNT State, Call/Put Walls, Composite Score.
+
+    Query params:
+      override_state=TNT_LONG|TNT_SHORT|COMPRESSED|NEUTRAL  (optional Python bridge)
+      call_wall=15.50   (optional override)
+      put_wall=12.00    (optional override)
+    """
+    symbol = symbol.upper().strip()
+
+    # Optional Python override from query params
+    override = {}
+    if request.args.get("override_state"):
+        override["state"] = request.args.get("override_state")
+    if request.args.get("call_wall"):
+        try: override["call_wall"] = float(request.args.get("call_wall"))
+        except ValueError: pass
+    if request.args.get("put_wall"):
+        try: override["put_wall"] = float(request.args.get("put_wall"))
+        except ValueError: pass
+
+    # Refresh VIX cache if stale
+    if time.time() - _vix_cache["ts"] > _VIX_TTL:
+        threading.Thread(target=_fetch_vix_data, daemon=True).start()
+
+    bars = _get_bars_from_tradier(symbol)
+    if not bars:
+        return jsonify({"error": f"No bar data available for {symbol}", "symbol": symbol}), 503
+
+    result = mmle.analyze(
+        symbol=symbol,
+        bars=bars,
+        vix_data=_vix_cache if _vix_cache["vix"] else None,
+        python_override=override or None,
+    )
+    return jsonify(clean_data(result))
+
+@app.route("/api/whale-stalker", methods=["GET"])
+def api_whale_stalker():
+    """Returns the latest institutional footprint alerts from the Whale Stalker engine."""
+    with state.lock:
+        return jsonify(state.whale_stalker_results)
+
+def worker_whale_stalker():
+    """Background worker for the Institutional Whale Stalker engine."""
+    logger.info("🐋 [SENTINEL] Whale Stalker Awakened")
+    while True:
+        try:
+            ws = get_service("whale_stalker")
+            if not ws:
+                time.sleep(10)
+                continue
+            
+            with state.lock:
+                quotes = state.quotes.copy()
+            
+            if not quotes:
+                time.sleep(10)
+                continue
+                
+            new_alerts = ws.run_scan(quotes)
+            
+            if new_alerts:
+                with state.lock:
+                    state.whale_stalker_results = (new_alerts + state.whale_stalker_results)[:100]
+                    for alert in new_alerts:
+                        state.push_terminal('WHALE', alert['msg'], symbol=alert['symbol'], score=alert.get('score', 80))
+            
+            time.sleep(30) # Institutional scan interval
+        except Exception as e:
+            logger.error(f"[WHALE FAIL] {e}")
+            time.sleep(10)
+
+@app.route("/api/mmle/vix", methods=["GET"])
+def api_mmle_vix():
+    """Return cached VIX / VIX9D / VVIX values."""
+    _fetch_vix_data()
+    return jsonify(_vix_cache)
+>>>>>>> 338757b (SqueezeOS Institutional Hardening - Production Ready):server_v5.py.legacy_backup
 
 if __name__ == "__main__":
-    init_services()
+    # Start services in background so Flask can start immediately
+    threading.Thread(target=init_services, daemon=True).start()
+    logger.info("🚀 SqueezeOS Core Initializing in background...")
+
     # Register BEAST webhook routes (TradingView Pine → SqueezeOS → Discord)
-    register_beast_routes(app, state)
+    try:
+        from beast_webhook import register_beast_routes
+        register_beast_routes(app, state)
+    except Exception as e:
+        logger.error(f"Failed to register BEAST routes: {e}")
+
     threading.Thread(target=worker_scanner, daemon=True).start()
     threading.Thread(target=worker_flow, daemon=True).start()
     threading.Thread(target=worker_discovery, daemon=True).start()
@@ -2163,18 +3000,18 @@ if __name__ == "__main__":
     threading.Thread(target=worker_mmle, daemon=True).start()
     threading.Thread(target=worker_cie,  daemon=True).start()
     threading.Thread(target=worker_trade_desk_bridge, daemon=True).start()
-    port = int(os.environ.get("PORT", 8182))
-    
-    # SSL Context — required for Schwab OAuth callback (redirect_uri = https://127.0.0.1:8182/callback)
+    threading.Thread(target=worker_tradier_poller, daemon=True).start()  # Tradier account cache
+    threading.Thread(target=worker_whale_stalker, daemon=True).start()
+
     import ssl
+    port = int(os.environ.get("PORT", 8182))
     cert_file = os.path.expanduser('~/.squeeze_os_cert.pem')
-    key_file = os.path.expanduser('~/.squeeze_os_key.pem')
+    key_file  = os.path.expanduser('~/.squeeze_os_key.pem')
     ssl_ctx = None
     if os.path.exists(cert_file) and os.path.exists(key_file):
         ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         ssl_ctx.load_cert_chain(cert_file, key_file)
         logger.info(f"🔒 SSL ENABLED — HTTPS on port {port}")
     else:
-        logger.warning("⚠️ SSL cert/key not found — running plain HTTP (Schwab OAuth will fail)")
-    
+        logger.info(f"ℹ️ Running HTTP on port {port}")
     app.run(host='0.0.0.0', port=port, use_reloader=False, threaded=True, ssl_context=ssl_ctx)

@@ -119,13 +119,13 @@ const SettingsPanel = {
             const r = await fetch(`${SETTINGS_API_BASE}/settings`);
             const data = await r.json();
 
-            // Schwab Keys (Hardcoded fallbacks already set, but server overrides if present)
+            // Schwab Keys (populated from server .env only — ZERO hardcoded keys per Manifesto §1)
             if (data.schwabKey) document.getElementById(`sk-key-${windowId}`).value = data.schwabKey;
             if (data.schwabSecret) document.getElementById(`sk-sec-${windowId}`).value = data.schwabSecret;
 
             // Backup Keys
-            document.getElementById(`sk-alpaca-key-${windowId}`).value = data.alpacaKey || '';
-            document.getElementById(`sk-alpaca-sec-${windowId}`).value = data.alpacaSecret || '';
+            if (data.alpacaKey) document.getElementById(`sk-alpaca-key-${windowId}`).value = data.alpacaKey;
+            if (data.alpacaSecret) document.getElementById(`sk-alpaca-sec-${windowId}`).value = data.alpacaSecret;
             if (data.polyKey) document.getElementById(`sk-poly-key-${windowId}`).value = data.polyKey;
             if (data.avKey) document.getElementById(`sk-av-key-${windowId}`).value = data.avKey;
 
@@ -169,8 +169,14 @@ const SettingsPanel = {
         btn.textContent = '⏳ SAVING...';
         btn.disabled = true;
 
-        const key = document.getElementById(`sk-key-${windowId}`).value.trim() || '';
-        const secret = document.getElementById(`sk-sec-${windowId}`).value.trim() || '';
+        const key = document.getElementById(`sk-key-${windowId}`).value.trim();
+        const secret = document.getElementById(`sk-sec-${windowId}`).value.trim();
+        if (!key || !secret) {
+            this.showMsg(windowId, '❌ Schwab App Key and Secret are required. Check Settings or backend .env', 'error');
+            btn.textContent = oldText;
+            btn.disabled = false;
+            return;
+        }
         const redir = document.getElementById(`sk-redirect-${windowId}`).value.trim() || 'https://127.0.0.1:8182/callback';
 
         localStorage.setItem('schwab_keys', JSON.stringify({ apiKey: key, apiSecret: secret, redirectUri: redir }));

@@ -319,7 +319,7 @@ class SMLEngine:
 
         # 1M: group by calendar month
         if len(df) >= 20:
-            grouped_1m = df.resample('M').agg({
+            grouped_1m = df.resample('ME').agg({
                 'open': 'first',
                 'high': 'max',
                 'low': 'min',
@@ -340,7 +340,7 @@ class SMLEngine:
 
         # 3M: group by calendar quarter
         if len(df) >= 60:
-            grouped_3m = df.resample('Q').agg({
+            grouped_3m = df.resample('QE').agg({
                 'open': 'first',
                 'high': 'max',
                 'low': 'min',
@@ -361,7 +361,7 @@ class SMLEngine:
 
         # 6M: group by half-year (Jan-Jun, Jul-Dec)
         if len(df) >= 120:
-            grouped_6m = df.resample('6M').agg({
+            grouped_6m = df.resample('6ME').agg({
                 'open': 'first',
                 'high': 'max',
                 'low': 'min',
@@ -415,15 +415,17 @@ class SMLEngine:
 
         # Timeframe weights (Pine v2 Cascade)
         weights = {
-            '6M': 0.15,
-            '3M': 0.14,
-            '1M': 0.13,
-            '2W': 0.12,
-            '1W': 0.12,
-            '4D': 0.11,
-            '2D': 0.11,
-            '1D': 0.12
+            '6M': 0.15, '3M': 0.14, '1M': 0.13, '2W': 0.12,
+            '1W': 0.12, '4D': 0.11, '2D': 0.11, '1D': 0.12
         }
+
+        # GME-specific temporal bias (Institutional Anchor: Sep 2020)
+        # Prioritizes long-term structural alignment over legacy 2021 noise
+        is_gme_sep20 = False
+        if symbol == "GME":
+            weights['6M'] += 0.05
+            weights['3M'] += 0.05
+            is_gme_sep20 = True
 
         # Result structure
         result = {
@@ -521,6 +523,10 @@ class SMLEngine:
         else:
             result['cascade_bias'] = 'NEUTRAL'
             result['cascade_meaning'] = 'Timeframes are mixed — no clear direction. WAIT.'
+
+        if is_gme_sep20:
+            result['institutional_anchor'] = 'SEP 2020'
+            result['cascade_meaning'] = f"[ANCHOR: SEP 2020] {result['cascade_meaning']}"
 
         return result
 

@@ -12,4 +12,4 @@ RUN pip install --prefer-binary --no-cache-dir -r requirements.txt
 
 COPY . .
 EXPOSE 8182
-CMD ["python", "server_v5.py"]
+CMD ["python", "core/app.py"]

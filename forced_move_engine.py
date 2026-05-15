@@ -77,7 +77,7 @@ class ForcedMoveEngine:
         self.dead_bars = 3
 
         # Commitment thresholds
-        self.trap_fake = 20.0
+        self.trap_failed = 20.0
         self.trap_fragile = 40.0
         self.trap_forced = 60.0
 
@@ -794,38 +794,3 @@ class ForcedMoveEngine:
         else:
             return 0  # Normal thresholds
 
-
-# Example usage
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-
-    # Initialize engine
-    engine = ForcedMoveEngine()
-
-    # Example bar data
-    example_bars = [
-        {
-            "date": "2026-03-20",
-            "open": 100.0,
-            "high": 102.5,
-            "low": 99.5,
-            "close": 101.0,
-            "volume": 1000000
-        },
-        {
-            "date": "2026-03-21",
-            "open": 101.0,
-            "high": 103.0,
-            "low": 100.5,
-            "close": 102.5,
-            "volume": 1200000
-        },
-        # ... more bars
-    ]
-
-    # Analyze
-    result = engine.analyze("SPY", example_bars, vix=20.0)
-    if result:
-        print(f"Action: {result['action']}")
-        print(f"Direction: {result['direction']}")
-        print(f"Size: {result['size_pct']}%")

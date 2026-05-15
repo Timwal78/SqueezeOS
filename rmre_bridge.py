@@ -48,7 +48,8 @@ class RMREBridge:
         self._market_history: List[Dict] = []
         self._max_history_bars = 220
         self._data_mgr: Optional[Any] = None
-        self._mtf_cache: Dict[str, Dict[str, Any]] = {}  # symbol -> {data, timestamp}
+        self._mtf_cache: Dict[str, Dict[str, Any]] = {}  # symbol -> {data, timestamp, vol_ref}
+        self._vol_threshold = 2.5  # 2.5x standard deviation spike triggers invalidation
 
         # ── Regime history: last 10 regime states ──
         self._regime_history: deque = deque(maxlen=10)
@@ -184,9 +185,27 @@ class RMREBridge:
         mtf_data = {}
         now_ts = time.time()
         
-        # Free Tier Optimization: Cache MTF data for 60 minutes
+        # ── 2. VOLATILITY SPIKE DETECTION (Beast Mode) ──
+        # Law: If volatility spikes > threshold, invalidate cache immediately.
         cache_key = target_symbol.upper()
-        if cache_key in self._mtf_cache:
+        force_refresh = False
+        
+        target_df = market_history.get(cache_key)
+        if target_df is not None and len(target_df) >= 20:
+            recent_prices = target_df['close'].tail(20).values
+            current_vol = np.std(recent_prices)
+            
+            if cache_key in self._mtf_cache:
+                prev_vol = self._mtf_cache[cache_key].get('vol_ref', current_vol)
+                # Check for relative spike (avoiding zero division)
+                if prev_vol > 0 and (current_vol / prev_vol) > self._vol_threshold:
+                    logger.warning(f"[RMRE] VOLATILITY SPIKE DETECTED ({current_vol/prev_vol:.2f}x). Invalidating MTF cache.")
+                    force_refresh = True
+        else:
+            current_vol = 0
+
+        # Free Tier Optimization: Cache MTF data for 60 minutes UNLESS force_refresh
+        if cache_key in self._mtf_cache and not force_refresh:
             entry = self._mtf_cache[cache_key]
             if now_ts - entry['ts'] < 3600: # 1 hour
                 mtf_data = entry['data']
@@ -198,6 +217,7 @@ class RMREBridge:
                     # Fetch daily data for the last 500 bars
                     df_daily = dm.polygon.get_aggregates(target_symbol, 1, 'day', limit=500)
                     if not df_daily.empty:
+                        # ... existing resampling logic ...
                         df_daily['timestamp'] = pd.to_datetime(df_daily['timestamp'], unit='ms')
                         df_daily.set_index('timestamp', inplace=True)
                         
@@ -227,8 +247,8 @@ class RMREBridge:
                             else:
                                 mtf_data[label] = {"classify": 0, "sweep": 0, "state": "INSIDE", "meaning": "No clear move yet", "pos_pct": 50.0}
                         
-                        # Save to cache
-                        self._mtf_cache[cache_key] = {'data': mtf_data, 'ts': now_ts}
+                        # Save to cache with volatility reference
+                        self._mtf_cache[cache_key] = {'data': mtf_data, 'ts': now_ts, 'vol_ref': current_vol}
                     else:
                         logger.warning(f"[RMRE] No daily data for {target_symbol} HTF Cascade")
                 except Exception as e:

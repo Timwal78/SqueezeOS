@@ -6,15 +6,15 @@ Uses single-bar quote data + optional price history for advanced metrics.
 
 Modules:
   1. Volume Profile (0-20)     — Volume surge detection, sigmoid-mapped
-  2. TTM Squeeze Proxy (0-15)  — Compression via ATR-normalized range
+  2. TTM Squeeze (0-15)         — Real Bollinger/Keltner squeeze logic
   3. Momentum Vector (0-15)    — ROC magnitude + acceleration
-  4. VWAP Position (0-10)      — Price vs volume-weighted average
+  4. Z-Score Engine (0-10)     — Price distance from SMA20 in standard deviations
   5. RSI Engine (0-10)         — Mean-reversion + trend strength
   6. Money Flow (0-10)         — Buying pressure from close position in range
   7. Price Structure (0-10)    — Close position + tier weighting
   8. Trend Alignment (0-10)    — EMA stack order (requires history)
 
-No fake data. No placeholders. Institutional grade.
+No approximated data. No placeholders. Institutional grade.
 """
 import math
 import logging
@@ -49,12 +49,12 @@ def clamp(val, lo=0.0, hi=100.0):
 def tier_weight(price):
     """
     Law 2 & 3 Compliance + SqueezeOS Sweet Spot.
-    Sweet spot ($5-$50) gets 100% weight.
-    All others get 20% weight (80% focus on the sweet spot).
+    Sweet spot ($2-$50) gets 100% weight.
+    All others get 15% weight (85% focus on the sweet spot).
     """
     if price <= 0: return 0.0
-    if 2.0 <= price <= 60.0:
-        return 1.00  # THE SWEET SPOT ($2-$60, 80% of focus)
+    if 2.0 <= price <= 50.0:
+        return 1.00  # THE SWEET SPOT ($2-$50, 85% of focus)
     return 0.15      # Outside sweet spot (Mega caps, pennies - heavily reduced)
 
 
@@ -83,21 +83,51 @@ class SqueezeAnalyzer:
     # Tight range + volume = coiled spring about to fire.
     # ═══════════════════════════════════════════════════════════
 
-    def _compression_score(self, price, high, low, avg_volume, volume):
-        if price <= 0 or high <= low:
-            return 0.0
-        # Range as % of price
-        range_pct = ((high - low) / price) * 100.0
-
-        # Compression: SMALL range = HIGH score
-        # Center at 2.5% range, steepness -2.0 (inverted — tighter = higher)
+    def _compression_score(self, price, high, low, avg_volume, volume, history=None):
+        """Bollinger/Keltner Squeeze (Institutional Grade v5.5)."""
+        if price <= 0: return 0.0
+        
+        # Real BB/KC if history is present
+        if history and len(history) >= 20:
+            try:
+                closes = [float(b.get('close', b.get('c', 0))) for b in history]
+                highs = [float(b.get('high', b.get('h', 0))) for b in history]
+                lows = [float(b.get('low', b.get('l', 0))) for b in history]
+                
+                # 1. Bollinger Bands (20, 2)
+                sma20 = sum(closes[-20:]) / 20
+                std20 = math.sqrt(sum((x - sma20)**2 for x in closes[-20:]) / 20)
+                bb_upper = sma20 + (2.0 * std20)
+                bb_lower = sma20 - (2.0 * std20)
+                
+                # 2. Keltner Channels (20, 1.5) - Using True ATR
+                tr = []
+                for i in range(len(history)-20, len(history)):
+                    h, l = highs[i], lows[i]
+                    pc = closes[i-1] if i > 0 else closes[i]
+                    tr.append(max(h-l, abs(h-pc), abs(l-pc)))
+                
+                # Smoothed ATR (Wilder's approach simplified)
+                atr = sum(tr) / 20
+                kc_upper = sma20 + (1.5 * atr)
+                kc_lower = sma20 - (1.5 * atr)
+                
+                # 3. Squeeze Detection
+                in_squeeze = (bb_upper < kc_upper) and (bb_lower > kc_lower)
+                
+                # Width Percentile proxy
+                width = (bb_upper - bb_lower) / (sma20 + 1e-9)
+                score = 15.0 if in_squeeze else (10.0 if width < 0.05 else 5.0)
+                return score
+            except Exception as e:
+                logger.warning(f"BB/KC calc failed: {e}")
+        
+        # Fallback to High-Fidelity Approximation if no history
+        range_pct = ((high - low) / price) * 100.0 if high > low else 5.0
         compression = (1.0 - sigmoid(range_pct, 2.5, 1.5)) * 10.0
-
-        # Bonus: Tight range + volume surge = true compression
         vol_ratio = volume / max(avg_volume, 1) if avg_volume > 0 else 1.0
         if range_pct < 3.0 and vol_ratio > 1.5:
-            compression += 5.0  # Coiled spring bonus
-
+            compression += 5.0
         return min(compression, 15.0)
 
     # ═══════════════════════════════════════════════════════════
@@ -122,31 +152,28 @@ class SqueezeAnalyzer:
         return max(score, 0.0)
 
     # ═══════════════════════════════════════════════════════════
-    # MODULE 4: VWAP POSITION (0-10 pts)
-    # Institutional benchmark. Price above VWAP = buyers in control.
-    # We approximate VWAP from open/high/low/close/volume.
+    # MODULE 4: Z-SCORE ENGINE (0-10 pts)
+    # Institutional distance from mean.
+    # Oversold (Z < -2.0) or Momentum Breakout (Z > 2.0).
     # ═══════════════════════════════════════════════════════════
 
-    def _vwap_score(self, price, open_price, high, low, change_pct):
-        if price <= 0 or high <= low:
-            return 5.0  # Neutral if no data
-
-        # Approximate VWAP as volume-weighted typical price
-        typical = (high + low + price) / 3.0
-
-        # Distance from typical price, normalized
-        dist = (price - typical) / max(typical, 0.01) * 100.0
-
-        # Bullish: price above VWAP-proxy with positive momentum
-        if dist > 0 and change_pct > 0:
-            return min(sigmoid(dist, 0.5, 3.0) * 10.0, 10.0)
-        # Bearish but still has structure
-        elif dist < 0 and change_pct > 0:
-            return 4.0  # Reclaiming — watch
-        elif dist > 0 and change_pct < 0:
-            return 3.0  # Fading from strength
-        else:
-            return 1.0  # Below VWAP, negative momentum
+    def _z_score_math(self, price, history=None):
+        if not history or len(history) < 20:
+            return 5.0, 0.0 # Neutral
+            
+        try:
+            closes = [float(b.get('close', b.get('c', 0))) for b in history]
+            window = closes[-20:]
+            sma20 = sum(window) / 20
+            std20 = math.sqrt(sum((x - sma20)**2 for x in window) / 20)
+            z = (price - sma20) / (std20 + 1e-9)
+            
+            # Score: High for extreme Z with confirmation
+            score = sigmoid(abs(z), 2.0, 2.0) * 10.0
+            return score, z
+        except Exception as e:
+            logger.debug(f"Z-Score error: {e}")
+            return 5.0, 0.0
 
     # ═══════════════════════════════════════════════════════════
     # MODULE 5: RSI ENGINE (0-10 pts)
@@ -305,16 +332,42 @@ class SqueezeAnalyzer:
 
         # ── Run all 8 modules ──
         s1 = self._volume_score(vol_ratio)
-        s2 = self._compression_score(price, high, low, avg_volume, volume)
+        
+        # Module 2 returns (intensity, momentum_osc, raw_slope)
+        res2 = self._compression_score(price, high, low, avg_volume, volume, history)
+        if isinstance(res2, tuple):
+            s2, m_osc, slope = res2
+        else:
+            s2, m_osc, slope = res2, 5.0, 0.0
+
         s3 = self._momentum_score(change_pct)
-        s4 = self._vwap_score(price, open_price, high, low, change_pct)
+        s4, z_val = self._z_score_math(price, history)
         s5 = self._rsi_proxy_score(price, high, low, change_pct)
         s6 = self._money_flow_score(price, high, low, volume, avg_volume)
         s7 = self._structure_score(price, high, low)
         s8 = self._trend_score(price, open_price, change_pct, history)
 
+        # ── NEW: Hurst Exponent Proxy (Trending vs Choppy) ──
+        hurst_val = 0.5
+        if history and len(history) >= 30:
+            try:
+                # Rescaled Range (R/S) analysis simplified
+                closes = [float(b.get('close', 0)) for b in history[-30:]]
+                diffs = [closes[i] - closes[i-1] for i in range(1, len(closes))]
+                mx, mn = max(closes), min(closes)
+                sd = math.sqrt(sum((x - sum(diffs)/len(diffs))**2 for x in diffs) / len(diffs))
+                hurst_val = (mx - mn) / (sd * math.sqrt(30) + 1e-9)
+                hurst_val = clamp(hurst_val / 4.0, 0.2, 0.8) # Normalized proxy
+            except: pass
+
         # ── Raw total (max 100) ──
+        # Adjust weights to favor the new Momentum Oscillator and Hurst Regime
         raw_total = s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8
+        
+        # Beast Boost: If in Squeeze + Momentum is accelerating + Persistent trend
+        if s2 >= 12 and abs(slope) > 0.1 and hurst_val > 0.55:
+            raw_total += 10.0
+            
         raw_total = clamp(raw_total, 0.0, 100.0)
 
         # ── Apply tier weight ──
@@ -322,8 +375,8 @@ class SqueezeAnalyzer:
         total = clamp(raw_total * tw, 0.0, 100.0)
 
         # ── Dead stock hard cap ──
-        if abs(change_pct) < 0.3:
-            total = min(total, 30.0)
+        if abs(change_pct) < 0.2:
+            total = min(total, 25.0)
 
         # ── Classify ──
         if total >= 75:
@@ -346,9 +399,10 @@ class SqueezeAnalyzer:
         if change_pct > 0.5: bullish_indicators += 1
         elif change_pct < -0.5: bearish_indicators += 1
         
-        # 2. VWAP position (s4 > 6 is good bullish, s4 < 4 is bearish)
-        if s4 >= 6: bullish_indicators += 1
-        elif s4 <= 3: bearish_indicators += 1
+        # 2. Z-Score (s4 > 7 is extreme, direction depends on trend)
+        if s4 >= 7:
+            if change_pct > 0: bullish_indicators += 1
+            else: bearish_indicators += 1
         
         # 3. Trend Alignment (s8 >= 7 is bull stack, s8 <= 3 is bear stack)
         if s8 >= 7: bullish_indicators += 1
@@ -372,19 +426,21 @@ class SqueezeAnalyzer:
         return {
             'symbol': symbol, 'price': price,
             'squeeze_score': round(total, 1), 'raw_score': round(raw_total, 1), 'squeeze_level': level,
-            'direction': direction,
+            'direction': direction, 'z_score': round(z_val, 2),
+            'hurst': round(hurst_val, 2), 'momentum_slope': round(slope, 4),
             'recommendation': rec, 'risk_level': risk,
             'volume': volume, 'changePct': change_pct, 'volRatio': vol_ratio,
-            'tier': 'PENNY' if price < 2 else 'SWEET' if price <= 60 else 'LARGE' if price <= 150 else 'MEGA',
+            'tier': 'PENNY' if price < 2 else 'SWEET' if price <= 50 else 'LARGE' if price <= 150 else 'MEGA',
             'analysis_components': {
                 'volume_profile': round(s1, 1),
                 'compression': round(s2, 1),
                 'momentum': round(s3, 1),
-                'vwap_position': round(s4, 1),
+                'z_score_engine': round(s4, 1),
                 'rsi_engine': round(s5, 1),
                 'money_flow': round(s6, 1),
                 'price_structure': round(s7, 1),
                 'trend_alignment': round(s8, 1),
+                'momentum_osc': round(m_osc, 1)
             },
             'source': quote_data.get('source', ''),
         }

@@ -77,6 +77,7 @@ class AlpacaProvider:
         
         self.last_call = 0
         self.min_interval = 0.1  # RELAXED: 100ms (was 350ms) — Alpaca allows high frequency
+        self.last_error = None
         if self.available:
             logger.info(f"[ALPACA] Ready ({self.api_key[:6]}...)")
         else:
@@ -240,6 +241,21 @@ class AlpacaProvider:
         except Exception as e:
             logger.error(f"[ALPACA] Order error: {e}")
             return {"status": "error", "message": str(e)}
+
+    def get_news(self, limit: int = 10) -> List[Dict]:
+        """Fetch latest breaking market news."""
+        if not self.available:
+            return []
+        self._rate_limit()
+        try:
+            url = f"{self.data_base}/v1beta1/news"
+            r = requests.get(url, headers=self._headers(), params={'limit': limit}, timeout=15)
+            if r.status_code == 200:
+                return r.json().get('news', [])
+        except Exception as e:
+            logger.error(f"[ALPACA] News error: {e}")
+        return []
+
     def get_option_contracts(self, symbol: str, max_dte: int = 10) -> List[dict]:
         """Fetch option contracts for a symbol."""
         if not self.available:
@@ -282,9 +298,18 @@ class AlpacaProvider:
                     # Standardize format: Alpaca snapshots can be a dict or {snapshots: {...}}
                     snaps = data.get('snapshots', data if isinstance(data, dict) else {})
                     results.update(snaps)
+                    self.last_error = None
+                elif r.status_code == 403:
+                    if "OPRA agreement" in r.text:
+                        self.last_error = "OPRA_UNSIGNED"
+                    else:
+                        self.last_error = "AUTH_ERROR"
+                    logger.warning(f"[ALPACA] Option snap {r.status_code}: {r.text[:200]}")
                 else:
+                    self.last_error = f"HTTP_{r.status_code}"
                     logger.warning(f"[ALPACA] Option snap {r.status_code}: {r.text[:200]}")
             except Exception as e:
+                self.last_error = "EXCEPTION"
                 logger.error(f"[ALPACA] Option snap error: {e}")
         return results
 
@@ -592,110 +617,211 @@ class AlphaVantageProvider:
 
 
 # ============================================================
-# SCHWAB WRAPPER
+# TRADIER PROVIDER — live execution + options quotes
 # ============================================================
-class SchwabProvider:
-    def __init__(self, schwab_state):
-        self.schwab = schwab_state
+class TradierProvider:
+    def __init__(self):
+        self.live_mode = os.environ.get('TRADIER_LIVE', 'false').lower() == 'true'
+        if self.live_mode:
+            self.api_key = os.environ.get('TRADIER_PRODUCTION_API_KEY', '')
+            self.account_id = os.environ.get('TRADIER_PRODUCTION_ACCOUNT', '') # Need to find this ID if not provided
+            self.base_url = 'https://api.tradier.com/v1'
+        else:
+            self.api_key = os.environ.get('TRADIER_SANDBOX_API_KEY', '')
+            self.account_id = os.environ.get('TRADIER_SANDBOX_ACCOUNT', '')
+            self.base_url = 'https://sandbox.tradier.com/v1'
+            
+        self.last_call = 0
+        self.min_interval = 0.5
+        if self.available:
+            logger.info(f"[TRADIER] Ready ({'LIVE' if self.live_mode else 'SANDBOX'} | {self.api_key[:6]}...)")
+        else:
+            logger.warning("[TRADIER] Not configured")
 
     @property
     def available(self):
-        if not self.schwab: return False
-        try: return self.schwab._ensure_authenticated()
-        except Exception as e:
-            logging.getLogger(__name__).warning(f"[SCHWAB] Auth check failed: {e}")
-            return False
+        return bool(self.api_key and self.account_id)
 
-    def get_quotes_batch(self, symbols: List[str], progress_cb=None) -> Dict[str, dict]:
-        if not self.available: return {}
-        try:
-            raw = self.schwab.get_quotes(symbols, progress_cb=progress_cb)
-            if 'error' in raw: return {}
-            
-            # FINAL DIAGNOSTIC
-            import json
-            try:
-                with open('schwab_debug.json', 'w') as f_out:
-                    json.dump(raw, f_out, indent=2)
-            except Exception as e:
-                    logging.getLogger(__name__).warning(f"[SCHWAB] Failed to write debug JSON: {e}")
+    def _headers(self):
+        return {
+            'Authorization': f'Bearer {self.api_key}',
+            'Accept': 'application/json'
+        }
 
-            results = {}
-            for sym, data in raw.items():
-                if not isinstance(data, dict): continue
-                
-                # Schwab v1 can return {quote:{}, fundamental:{}, reference:{}}
-                q = data.get('quote') or {}
-                f = data.get('fundamental') or {}
-                r = data.get('reference') or {}
-                
-                # IRONCLAD PRICE: Aggressive prioritization
-                last_price = q.get('lastPrice')
-                mark = q.get('mark')
-                close = q.get('closePrice')
-                bid = q.get('bidPrice')
-                
-                # Use the first one that exists and is > 0
-                price = last_price or mark or close or bid or 0
-                
-                # REPAIR: Plural vs Singular Average Volume
-                # ETFs like IBIT often use plural 'avg10DaysVolume'
-                avg_vol = float(f.get('avg10DaysVolume') or f.get('avg10DayVolume') or 
-                              f.get('avg30DaysVolume') or f.get('avg30DayVolume') or 
-                              f.get('averageVolume') or f.get('average10DayVolume') or 0.0)
-                
-                # TOTAL VOLUME
-                vol = float(q.get('totalVolume') or q.get('volume') or 0.0)
-                
-                # PERCENT CHANGE 
-                chg_pct = (q.get('netPercentChange') or q.get('markPercentChange') or 
-                           q.get('netChangePercent') or q.get('percentChange', 0.0))
-                
-                results[sym] = {
-                    'symbol': sym,
-                    'price': round(float(price), 4),
-                    'change': round(float(q.get('netChange') or q.get('change', 0)), 4),
-                    'changePct': round(float(chg_pct), 2),
-                    'volume': int(vol), 
-                    'avgVolume': int(avg_vol),
-                    'volRatio': round(vol / avg_vol, 2) if avg_vol > 0 else (1.0 if vol > 0 else 0.0),
-                    'bid': round(float(q.get('bidPrice') or 0), 4),
-                    'ask': round(float(q.get('askPrice') or 0), 4),
-                    'open': round(float(q.get('openPrice') or q.get('open', 0)), 4),
-                    'high': round(float(q.get('highPrice') or q.get('high', 0)), 4),
-                    'low': round(float(q.get('lowPrice') or q.get('low', 0)), 4),
-                    'description': r.get('description', ''),
-                    'source': 'schwab',
-                }
-            return results
-        except Exception as e:
-            logger.error(f"[SCHWAB] Error: {e}")
+    def _rate_limit(self):
+        elapsed = time.time() - self.last_call
+        if elapsed < self.min_interval:
+            time.sleep(self.min_interval - elapsed)
+        self.last_call = time.time()
+
+    def get_quotes(self, symbols: List[str]) -> Dict[str, dict]:
+        if not self.available or not symbols:
             return {}
+        self._rate_limit()
+        try:
+            url = f"{self.base_url}/markets/quotes"
+            params = {'symbols': ','.join(symbols)}
+            r = requests.get(url, headers=self._headers(), params=params, timeout=15)
+            if r.status_code == 200:
+                data = r.json()
+                quotes = data.get('quotes', {}).get('quote', [])
+                if isinstance(quotes, dict): quotes = [quotes]
+                
+                results = {}
+                for q in quotes:
+                    sym = q.get('symbol')
+                    if sym:
+                        vol = int(q.get('volume', 0) or 0)
+                        avg_vol = int(q.get('average_volume', 0) or 0)
+                        vol_ratio = round(vol / avg_vol, 2) if avg_vol > 0 else 0
+                        results[sym] = {
+                            'symbol': sym,
+                            'price': round(float(q.get('last', 0) or 0), 4),
+                            'change': round(float(q.get('change', 0) or 0), 4),
+                            'changePct': round(float(q.get('change_percentage', '0').replace('%','') if isinstance(q.get('change_percentage'), str) else q.get('change_percentage', 0) or 0), 2),
+                            'volume': vol,
+                            'avgVolume': avg_vol,
+                            'volRatio': vol_ratio,
+                            'open': round(float(q.get('open', 0) or 0), 4),
+                            'high': round(float(q.get('high', 0) or 0), 4),
+                            'low': round(float(q.get('low', 0) or 0), 4),
+                            'bid': round(float(q.get('bid', 0) or 0), 4),
+                            'ask': round(float(q.get('ask', 0) or 0), 4),
+                            'prevClose': round(float(q.get('prevclose', 0) or 0), 4),
+                            'week52High': round(float(q.get('week_52_high', 0) or 0), 4),
+                            'week52Low': round(float(q.get('week_52_low', 0) or 0), 4),
+                            'source': 'tradier',
+                        }
+                return results
+        except Exception as e:
+            logger.error(f"[TRADIER] Quotes error: {e}")
+        return {}
 
-    def get_movers(self, index='$SPX', direction='up', change_type='percent'):
-        """Get top movers from Schwab. Safe wrapper — returns [] on failure."""
+    def place_order(self, symbol: str, qty: int, side: str, order_type: str = 'market') -> Dict:
+        if not self.available:
+            return {"status": "error", "message": "Tradier not configured"}
+        self._rate_limit()
+        try:
+            url = f"{self.base_url}/accounts/{self.account_id}/orders"
+            payload = {
+                'class': 'equity',
+                'symbol': symbol,
+                'side': side.lower(),
+                'quantity': qty,
+                'type': order_type,
+                'duration': 'day'
+            }
+            r = requests.post(url, headers=self._headers(), data=payload, timeout=15)
+            if r.status_code == 200:
+                order = r.json().get('order', {})
+                logger.info(f"✅ Tradier Order Placed: {order.get('id')}")
+                return {"status": "success", "order_id": order.get('id')}
+            else:
+                err = r.text
+                logger.error(f"🛑 Tradier Order Failed [{r.status_code}]: {err}")
+                return {"status": "error", "message": err}
+        except Exception as e:
+            logger.error(f"[TRADIER] Order error: {e}")
+            return {"status": "error", "message": str(e)}
+    def get_option_expirations(self, symbol: str) -> list:
+        """Fetch available option expiration dates for symbol."""
         if not self.available:
             return []
+        self._rate_limit()
         try:
-            # schwab_state.get_movers() if it exists
-            if hasattr(self.schwab, 'get_movers'):
-                raw = self.schwab.get_movers(index=index, direction=direction, change_type=change_type)
-                if raw and isinstance(raw, list):
-                    results = []
-                    for m in raw:
-                        sym = m.get('symbol', '')
-                        if sym:
-                            results.append({
-                                'symbol': sym,
-                                'price': float(m.get('lastPrice', m.get('last', 0))),
-                                'changePct': float(m.get('netPercentChange', m.get('changePct', 0))),
-                                'volume': int(m.get('totalVolume', m.get('volume', 0))),
-                            })
-                    return results
-            return []
+            url = f"{self.base_url}/markets/options/expirations"
+            params = {'symbol': symbol, 'includeAllRoots': 'true', 'strikes': 'false'}
+            r = requests.get(url, headers=self._headers(), params=params, timeout=10)
+            if r.status_code == 200:
+                data = r.json()
+                exps = data.get('expirations', {}) or {}
+                dates = exps.get('date', []) or []
+                if isinstance(dates, str): dates = [dates]
+                return dates
         except Exception as e:
-            logger.debug(f"[SCHWAB] Movers unavailable: {e}")
-            return []
+            logger.error(f"[TRADIER] Expirations error {symbol}: {e}")
+        return []
+
+    def get_option_chains(self, symbol: str) -> dict:
+        """Fetch option chain for symbol via Tradier options API (0DTE to 14 days)."""
+        if not self.available:
+            return None
+        from datetime import datetime, timedelta
+        try:
+            # Get expirations first
+            exps = self.get_option_expirations(symbol)
+            if not exps:
+                return None
+
+            now = datetime.now()
+            max_exp = now + timedelta(days=14)
+            # Filter to 0-14 day expirations
+            valid_exps = []
+            for d in exps:
+                try:
+                    dt = datetime.strptime(d, '%Y-%m-%d')
+                    if dt.date() >= now.date() and dt <= max_exp:
+                        valid_exps.append(d)
+                except:
+                    continue
+            if not valid_exps:
+                return None
+
+            # Fetch chain for nearest expiration (minimize API calls)
+            # Get up to 3 expirations to cover 0DTE + weekly
+            all_options = []
+            for exp_date in valid_exps[:3]:
+                self._rate_limit()
+                url = f"{self.base_url}/markets/options/chains"
+                params = {'symbol': symbol, 'expiration': exp_date, 'greeks': 'true'}
+                r = requests.get(url, headers=self._headers(), params=params, timeout=12)
+                if r.status_code == 200:
+                    data = r.json()
+                    options = data.get('options', {}) or {}
+                    chain = options.get('option', []) or []
+                    if isinstance(chain, dict): chain = [chain]
+                    all_options.extend(chain)
+
+            if all_options:
+                return {'symbol': symbol, 'options': all_options, 'source': 'tradier'}
+            return None
+        except Exception as e:
+            logger.error(f"[TRADIER] Option chain error {symbol}: {e}")
+            return None
+
+    def get_price_history(self, symbol: str, period_type: str = 'month', period: int = 1) -> dict:
+        """Fetch OHLCV history via Tradier timesales."""
+        if not self.available:
+            return {}
+        self._rate_limit()
+        try:
+            url = f"{self.base_url}/markets/history"
+            params = {'symbol': symbol, 'interval': 'daily'}
+            r = requests.get(url, headers=self._headers(), params=params, timeout=12)
+            if r.status_code == 200:
+                hist = r.json().get('history', {}) or {}
+                days = hist.get('day', []) or []
+                if isinstance(days, dict): days = [days]
+                candles = [{'datetime': d.get('date'), 'open': d.get('open', 0),
+                            'high': d.get('high', 0), 'low': d.get('low', 0),
+                            'close': d.get('close', 0), 'volume': d.get('volume', 0)} for d in days]
+                return {'candles': candles, 'symbol': symbol}
+            return {}
+        except Exception as e:
+            logger.error(f"[TRADIER] History error {symbol}: {e}")
+            return {}
+
+
+# ============================================================
+# SCHWAB PROVIDER — STUBBED (Tradier-native system)
+# ============================================================
+class SchwabProvider:
+    """Silent no-op stub. Schwab has been removed."""
+    available = False
+    def __init__(self, *a, **kw): pass
+    def get_quotes_batch(self, *a, **kw): return {}
+    def get_movers(self, *a, **kw): return []
+    def get_option_chains(self, *a, **kw): return None
 
 
 # ============================================================
@@ -710,11 +836,12 @@ class DataManager:
         self.alpaca = AlpacaProvider()
         self.polygon = PolygonProvider()
         self.alphav = AlphaVantageProvider()
+        self.tradier = TradierProvider()
         logger.info("[DATA] Ready")
 
     def provider_status(self) -> dict:
         return {
-            'schwab': self.schwab.available if self.schwab else False,
+            'tradier': self.tradier.available,
             'alpaca': self.alpaca.available,
             'polygon': self.polygon.available,
             'alphavantage': self.alphav.available,
@@ -733,7 +860,23 @@ class DataManager:
             return False
 
         # ════════════════════════════════════════════════════════════
-        # TIER 1: ALPACA MOVERS — Top gainers/losers
+        # TIER 1: TRADIER QUOTES — Primary execution-grade source
+        # ════════════════════════════════════════════════════════════
+        # Tradier doesn’t have a movers endpoint, so seed with a curated
+        # watchlist of high-liquidity names for baseline discovery.
+        _TRADIER_SEED = ['SPY','QQQ','IWM','AAPL','TSLA','NVDA','AMZN','MSFT',
+                         'META','GOOGL','AMD','PLTR','SOFI','MARA','RIOT','COIN',
+                         'GME','AMC','SNDL','BBBY','NIO','LCID','RIVN','SPCE']
+        if self.tradier.available:
+            if progress_cb: progress_cb('Discovering: Tradier seed universe...')
+            quotes = self.tradier.get_quotes(_TRADIER_SEED)
+            for sym, q in quotes.items():
+                if sym and not is_junk(sym):
+                    universe[sym] = {**q, 'symbol': sym, 'discovery': 'tradier_seed'}
+            logger.info(f"[DISCOVERY] Tradier seed: {len(universe)} tickers")
+
+        # ════════════════════════════════════════════════════════════
+        # TIER 2: ALPACA MOVERS — Supplemental gainers/losers
         # ════════════════════════════════════════════════════════════
         if self.alpaca.available:
             if progress_cb: progress_cb('Discovering: Alpaca movers...')
@@ -742,23 +885,20 @@ class DataManager:
                 sym = item.get('symbol', '')
                 if sym and not is_junk(sym):
                     chg = item.get('percent_change', 0)
-                    if abs(chg) >= 1.0:  # Lowered from 2.5% → 1.0%
-                        universe[sym] = {'symbol': sym, 'discovery': 'alpaca_gainer', 'changePct': chg}
+                    if abs(chg) >= 1.0:
+                        universe.setdefault(sym, {'symbol': sym, 'discovery': 'alpaca_gainer', 'changePct': chg})
             for item in movers.get('losers', []):
                 sym = item.get('symbol', '')
                 if sym and not is_junk(sym):
                     chg = item.get('percent_change', 0)
                     if abs(chg) >= 1.0:
-                        universe[sym] = {'symbol': sym, 'discovery': 'alpaca_loser', 'changePct': chg}
-            
-            # UNLEASHED: Add Most Active (High volume liquidity)
+                        universe.setdefault(sym, {'symbol': sym, 'discovery': 'alpaca_loser', 'changePct': chg})
             actives = self.alpaca.get_most_actives(top=100)
             for item in actives:
                 sym = item.get('symbol', '')
                 if sym and not is_junk(sym) and sym not in universe:
                     universe[sym] = {'symbol': sym, 'discovery': 'alpaca_active', 'volume': item.get('volume', 0)}
-            
-            logger.info(f"[DISCOVERY] Alpaca: {len(universe)} movers/actives")
+            logger.info(f"[DISCOVERY] Alpaca: {len(universe)} total after movers")
 
         # ════════════════════════════════════════════════════════════
         # TIER 2: POLYGON GROUPED DAILY — Full market scan
@@ -840,19 +980,25 @@ class DataManager:
         results = {}
         remaining = list(symbols)
 
-        # 1. Schwab (High Speed Batch)
-        if self.schwab and self.schwab.available and remaining:
-            data = self.schwab.get_quotes_batch(remaining, progress_cb=progress_cb)
+        # 1. Tradier (PRIMARY — Execution-grade, live data)
+        if self.tradier.available and remaining:
+            data = self.tradier.get_quotes(remaining)
             results.update(data)
             remaining = [s for s in remaining if s not in results]
 
-        # 2. Alpaca (High Speed Batch)
+        # 2. Alpaca (BACKUP — High speed batch)
         if self.alpaca.available and remaining:
             data = self.alpaca.get_snapshots(remaining)
             results.update(data)
             remaining = [s for s in remaining if s not in results]
 
-        # 3. Polygon (SLOW - Skip if fast_only is requested)
+        # 3. Schwab (STUB — Always no-op, kept for interface compatibility)
+        if self.schwab and self.schwab.available and remaining:
+            data = self.schwab.get_quotes_batch(remaining, progress_cb=progress_cb)
+            results.update(data)
+            remaining = [s for s in remaining if s not in results]
+
+        # 4. Polygon (SLOW - Skip if fast_only is requested)
         if not fast_only and self.polygon.available and remaining:
             # Only do this for small batches (e.g. Grimoire), NOT for scanner (remaining > 50)
             if len(remaining) <= 10:
