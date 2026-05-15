@@ -17,66 +17,64 @@
 }
 html,body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh}
 
-/* ── Header ── */
 .hdr{background:linear-gradient(135deg,#0d0d18,#1a0a2e);padding:14px 16px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
 .logo{font-size:20px;font-weight:900;background:linear-gradient(135deg,var(--green),var(--blue));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.setup-btn{background:rgba(168,85,247,.15);border:1px solid var(--purple);color:var(--purple);padding:5px 12px;border-radius:20px;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:.4px}
-.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:5px;flex-shrink:0}
-.status-dot.ready{background:var(--green);box-shadow:0 0 6px var(--green)}
-.status-dot.none{background:var(--red)}
+.hdr-right{display:flex;align-items:center;gap:10px}
+.status{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.dot.on{background:var(--green);box-shadow:0 0 6px var(--green)}
+.dot.off{background:var(--red)}
+.setup-btn{background:rgba(168,85,247,.15);border:1px solid var(--purple);color:var(--purple);padding:5px 12px;border-radius:20px;font-size:11px;font-weight:800;cursor:pointer}
 
 /* ── Setup modal ── */
-.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:200;display:none;align-items:flex-end}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:200;display:none;align-items:flex-end}
 .modal-bg.open{display:flex}
-.modal{background:var(--card);border:1px solid var(--border);border-radius:20px 20px 0 0;padding:24px 20px 40px;width:100%;max-height:90vh;overflow-y:auto}
-.modal-title{font-size:16px;font-weight:800;margin-bottom:4px}
-.modal-sub{font-size:12px;color:var(--muted);margin-bottom:20px;line-height:1.5}
+.modal{background:var(--card);border:1px solid var(--border);border-top:2px solid var(--purple);border-radius:20px 20px 0 0;padding:24px 20px 48px;width:100%;max-height:90vh;overflow-y:auto}
+.modal-ttl{font-size:17px;font-weight:900;margin-bottom:4px}
+.modal-sub{font-size:12px;color:var(--muted);margin-bottom:20px;line-height:1.6}
 
-/* ── Page ── */
 .page{padding:16px 16px 100px;max-width:600px;margin:0 auto}
 
-/* ── Cards ── */
 .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:12px}
 .card-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:6px}
 
-/* ── Fields ── */
 .field{margin-bottom:12px}
 .field:last-child{margin-bottom:0}
 label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:5px}
-select,textarea,input[type=text],input[type=password]{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:11px 13px;color:var(--text);font-size:15px;outline:none;-webkit-appearance:none;appearance:none;font-family:inherit;transition:border-color .15s}
+select,textarea,input[type=text],input[type=url],input[type=password]{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;color:var(--text);font-size:15px;outline:none;-webkit-appearance:none;appearance:none;font-family:inherit;transition:border-color .15s}
 select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b6b80' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:36px;cursor:pointer}
 select option{background:#1a1a24}
 select:focus,textarea:focus,input:focus{border-color:var(--blue)}
-textarea{resize:none;line-height:1.6;min-height:100px}
-.hint{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.5}
+textarea{resize:none;line-height:1.6;min-height:110px}
+.hint{font-size:11px;color:var(--muted);margin-top:5px;line-height:1.5}
 
-/* ── Provider pills ── */
-.pill-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
-.pill{padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:var(--surface);color:var(--muted);font-size:12px;font-weight:700;cursor:pointer;transition:.15s}
-.pill.active{border-color:var(--purple);background:rgba(168,85,247,.15);color:var(--purple)}
+/* mode tabs */
+.tabs{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px}
+.tab{padding:10px;text-align:center;font-size:13px;font-weight:700;cursor:pointer;background:var(--surface);color:var(--muted);transition:.15s}
+.tab.active{background:rgba(168,85,247,.2);color:var(--purple)}
 
-/* ── Image zone ── */
-.img-zone{border:2px dashed var(--border);border-radius:12px;padding:18px;text-align:center;cursor:pointer;position:relative;background:var(--surface);transition:.2s}
-.img-zone:hover,.img-zone.drag-over{border-color:var(--blue)}
+.section{display:none}
+.section.show{display:block}
+
+/* image zone */
+.img-zone{border:2px dashed var(--border);border-radius:12px;padding:20px;text-align:center;cursor:pointer;position:relative;background:var(--surface)}
 .img-zone input[type=file]{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
-.img-zone-icon{font-size:26px;margin-bottom:5px}
-.img-zone-text{font-size:13px;color:var(--muted);line-height:1.5}
-.img-preview-wrap{position:relative;margin-top:10px;display:none}
-.img-preview-wrap.show{display:block}
-.img-preview-wrap img{width:100%;max-height:180px;object-fit:cover;border-radius:10px;border:1px solid var(--border)}
-.img-rm{position:absolute;top:6px;right:6px;background:rgba(0,0,0,.75);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:3px 9px;font-size:12px;font-weight:700;cursor:pointer}
+.img-zone-icon{font-size:28px;margin-bottom:6px}
+.img-zone-text{font-size:13px;color:var(--muted);line-height:1.6}
+.img-wrap{display:none;margin-top:10px;position:relative}
+.img-wrap.show{display:block}
+.img-wrap img{width:100%;max-height:180px;object-fit:cover;border-radius:10px;border:1px solid var(--border)}
+.img-rm{position:absolute;top:6px;right:6px;background:rgba(0,0,0,.8);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:3px 10px;font-size:12px;font-weight:700;cursor:pointer}
 
-/* ── Generate button ── */
-.btn-gen{width:100%;padding:15px;border:none;border-radius:12px;font-size:17px;font-weight:800;cursor:pointer;background:linear-gradient(135deg,#00c853,#00ff88);color:#000;transition:.15s;margin-top:2px;letter-spacing:.2px}
-.btn-gen:active{opacity:.88;transform:scale(.98)}
-.btn-gen:disabled{opacity:.4;cursor:not-allowed}
-.spin{display:inline-block;width:16px;height:16px;border:2px solid rgba(0,0,0,.3);border-top-color:#000;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px}
-@keyframes spin{to{transform:rotate(360deg)}}
+/* buttons */
+.btn-gen{width:100%;padding:15px;border:none;border-radius:12px;font-size:17px;font-weight:800;cursor:pointer;background:linear-gradient(135deg,#00c853,#00ff88);color:#000;transition:.12s;margin-top:2px}
+.btn-gen:active{opacity:.85;transform:scale(.98)}
+.btn-gen:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.spin{display:inline-block;width:16px;height:16px;border:2px solid rgba(0,0,0,.3);border-top-color:#000;border-radius:50%;animation:sp .7s linear infinite;vertical-align:middle;margin-right:6px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.btn-save{width:100%;padding:13px;border:1px solid var(--green);border-radius:10px;background:rgba(0,255,136,.1);color:var(--green);font-size:15px;font-weight:800;cursor:pointer;margin-top:4px}
 
-/* ── Save button ── */
-.btn-save{width:100%;padding:12px;border:1px solid var(--green);border-radius:10px;background:rgba(0,255,136,.1);color:var(--green);font-size:14px;font-weight:700;cursor:pointer;margin-top:8px}
-
-/* ── Output ── */
+/* output */
 .out-card{display:none}
 .out-card.show{display:block}
 .info-bar{background:rgba(0,255,136,.08);border:1px solid rgba(0,255,136,.2);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--green);margin-bottom:10px;font-weight:600}
@@ -85,11 +83,10 @@ textarea{resize:none;line-height:1.6;min-height:100px}
 .out-meta{display:flex;align-items:center;justify-content:space-between;margin-top:10px;gap:8px}
 .char-ct{font-size:12px;color:var(--muted)}
 .char-ct b{color:var(--text)}
-.char-ct.warn b{color:var(--gold)}
-.btn-copy{padding:10px 20px;border-radius:8px;border:1px solid var(--green);background:rgba(0,255,136,.1);color:var(--green);font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0;transition:.15s}
+.btn-copy{padding:11px 22px;border-radius:8px;border:1px solid var(--green);background:rgba(0,255,136,.1);color:var(--green);font-size:14px;font-weight:700;cursor:pointer}
 .btn-copy.ok{border-color:var(--blue);background:rgba(0,191,255,.1);color:var(--blue)}
 
-/* ── Checklist ── */
+/* checklist */
 .chk-list{list-style:none;display:flex;flex-direction:column;gap:9px}
 .chk-item{display:flex;align-items:center;gap:10px}
 .chk-icon{width:22px;height:22px;border-radius:50%;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;transition:.25s}
@@ -97,82 +94,91 @@ textarea{resize:none;line-height:1.6;min-height:100px}
 .chk-icon.fail{background:rgba(255,68,68,.12);border-color:var(--red);color:var(--red)}
 .chk-icon.warn{background:rgba(255,215,0,.12);border-color:var(--gold);color:var(--gold)}
 .chk-icon.idle{color:var(--muted)}
-.chk-label{font-size:13px;font-weight:600;color:var(--text)}
+.chk-label{font-size:13px;font-weight:600}
 .chk-sub{font-size:11px;color:var(--muted);margin-top:1px}
 
-/* ── Timing ── */
+/* timing */
 .t-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .t-info{font-size:13px;color:var(--muted)}
 .t-info b{font-weight:800;font-size:15px}
-.b-green{color:var(--green)}.b-red{color:var(--red)}.b-gold{color:var(--gold)}
+.bg{color:var(--green)}.br{color:var(--red)}.bo{color:var(--gold)}
 .btn-mark{padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0}
 .t-bar{margin-top:10px;height:4px;background:var(--surface);border-radius:2px;overflow:hidden}
 .t-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--red),var(--gold),var(--green));transition:width .5s}
 
-/* ── Error ── */
 .err{background:rgba(255,68,68,.1);border:1px solid var(--red);border-radius:10px;padding:10px 13px;font-size:13px;color:var(--red);margin-bottom:12px;display:none}
 .err.show{display:block}
-
-/* ── No-key banner ── */
-.nokey{background:rgba(255,215,0,.08);border:1px solid var(--gold);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--gold);margin-bottom:12px;display:none;line-height:1.6}
+.nokey{background:rgba(255,215,0,.07);border:1px solid var(--gold);border-radius:12px;padding:14px;font-size:13px;color:var(--gold);margin-bottom:12px;line-height:1.7;display:none}
 .nokey.show{display:block}
-.nokey b{font-weight:800}
+.nokey b{font-weight:900;font-size:15px;display:block;margin-bottom:4px}
 </style>
 </head>
 <body>
 
 <!-- ── Setup Modal ── -->
 <div class="modal-bg" id="modal-bg" onclick="if(event.target===this)closeModal()">
-  <div class="modal">
-    <div class="modal-title">⚡ API Setup — One Time</div>
-    <div class="modal-sub">Your key is saved on this device only (localStorage). Never sent anywhere except the AI provider you choose.</div>
+<div class="modal">
+  <div class="modal-ttl">⚙️ Setup — One Time</div>
+  <div class="modal-sub">Choose how to connect. Option 1 (your server) needs no API key — it already has everything.</div>
 
+  <div class="tabs">
+    <div class="tab active" id="tab-server" onclick="switchTab('server')">🖥️ My SqueezeOS Server</div>
+    <div class="tab" id="tab-direct" onclick="switchTab('direct')">🔑 Direct API Key</div>
+  </div>
+
+  <!-- Server tab -->
+  <div class="section show" id="sec-server">
+    <div class="field">
+      <label>Your SqueezeOS Server URL</label>
+      <input type="url" id="server-url" placeholder="https://your-app.railway.app" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
+      <div class="hint">This is the URL you already open for your dashboard. The server has all the API keys — nothing extra needed.</div>
+    </div>
+  </div>
+
+  <!-- Direct API tab -->
+  <div class="section" id="sec-direct">
     <div class="field">
       <label>Provider</label>
-      <div class="pill-row">
-        <div class="pill active" id="mp-anthropic" onclick="setModalProvider('anthropic')">Claude (Anthropic)</div>
-        <div class="pill" id="mp-openrouter" onclick="setModalProvider('openrouter')">OpenRouter</div>
-      </div>
+      <select id="direct-provider" onchange="updateProviderUI()">
+        <option value="anthropic">Claude (Anthropic) — vision ✓</option>
+        <option value="openrouter">OpenRouter — free tier available</option>
+      </select>
     </div>
-
-    <div class="field" id="modal-key-field">
-      <label id="modal-key-label">Anthropic API Key</label>
-      <input type="password" id="modal-key" placeholder="sk-ant-…" autocomplete="off">
-      <div class="hint" id="modal-key-hint">Get yours at console.anthropic.com → API Keys</div>
+    <div class="field">
+      <label id="key-label">API Key</label>
+      <input type="password" id="direct-key" placeholder="sk-ant-…" autocomplete="off">
+      <div class="hint" id="key-hint">console.anthropic.com → API Keys</div>
     </div>
-
-    <div class="field" id="modal-model-field" style="display:none">
-      <label>OpenRouter Model <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">(optional)</span></label>
-      <input type="text" id="modal-model" placeholder="meta-llama/llama-3.2-3b-instruct:free">
-      <div class="hint">Leave blank for the free default. Browse openrouter.ai/models for options.</div>
+    <div class="field" id="model-field" style="display:none">
+      <label>Model <span style="font-weight:400;text-transform:none;color:var(--muted)">(optional)</span></label>
+      <input type="text" id="direct-model" placeholder="meta-llama/llama-3.2-3b-instruct:free">
     </div>
-
-    <button class="btn-save" onclick="saveSetup()">Save &amp; Close</button>
-    <div style="font-size:11px;color:var(--muted);margin-top:10px;text-align:center">Key is stored locally on your device and never shared</div>
   </div>
+
+  <button class="btn-save" onclick="saveSetup()">Save &amp; Start Using</button>
+</div>
 </div>
 
 <!-- ── Header ── -->
 <div class="hdr">
   <div class="logo">𝕏 Post Creator</div>
-  <div style="display:flex;align-items:center;gap:10px">
-    <span style="font-size:12px;color:var(--muted);display:flex;align-items:center">
-      <span class="status-dot none" id="status-dot"></span>
-      <span id="status-txt">No key</span>
-    </span>
-    <button class="setup-btn" onclick="openModal()">⚙️ Setup</button>
+  <div class="hdr-right">
+    <div class="status">
+      <span class="dot off" id="st-dot"></span>
+      <span id="st-txt">Not set up</span>
+    </div>
+    <button class="setup-btn" onclick="openModal()">⚙️</button>
   </div>
 </div>
 
 <!-- ── Page ── -->
 <div class="page">
 
-  <!-- No key warning -->
-  <div class="nokey" id="nokey">
-    <b>API key not set yet.</b> Tap ⚙️ Setup in the top right, paste your key, and save. Takes 10 seconds.
+  <div class="nokey show" id="nokey">
+    <b>👆 Tap ⚙️ to set up — takes 10 seconds</b>
+    Choose "My SqueezeOS Server" and paste your Railway URL. That's it — your server already has all the API keys.
   </div>
 
-  <!-- Input -->
   <div class="card">
     <div class="card-title"><span>✍️</span> Your Raw Idea</div>
 
@@ -192,42 +198,38 @@ textarea{resize:none;line-height:1.6;min-height:100px}
         <option value="custom">Custom…</option>
       </select>
     </div>
-
     <div class="field" id="custom-field" style="display:none">
       <label>Custom Niche</label>
-      <input type="text" id="custom-niche" placeholder="e.g. Biotech investing, Real estate…">
+      <input type="text" id="custom-niche" placeholder="e.g. Biotech investing…">
     </div>
 
     <div class="field">
       <label>Your Sentences</label>
-      <textarea id="sentences" rows="5" placeholder="Type your idea in 1–4 sentences. Don't worry about wording.&#10;&#10;Example: options flow on SPY today was extremely one-sided, way more puts especially the 0DTE range. gamma wall sitting at 540. looks like a squeeze setup brewing."></textarea>
-      <div class="hint">The AI rewrites this into a full optimized post. Rough is fine.</div>
+      <textarea id="sentences" rows="5" placeholder="1–4 sentences, rough is fine. Just your idea.&#10;&#10;Example: options flow on SPY today was super lopsided, way more puts especially 0DTE. gamma wall at 540. looks like a squeeze brewing."></textarea>
+      <div class="hint">The AI rewrites this into a complete SOP-compliant post.</div>
     </div>
 
     <div class="field">
-      <label>Photo / Screenshot <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">(optional)</span></label>
-      <div class="img-zone" id="img-zone">
+      <label>Photo / Screenshot <span style="font-weight:400;text-transform:none;color:var(--muted)">(optional)</span></label>
+      <div class="img-zone">
         <input type="file" id="file-in" accept="image/*" onchange="handleFile(this.files[0])">
         <div class="img-zone-icon">📸</div>
-        <div class="img-zone-text">Tap to choose a photo or screenshot from your camera roll</div>
+        <div class="img-zone-text">Tap to pick from camera roll or take a photo</div>
       </div>
-      <div class="img-preview-wrap" id="img-wrap">
+      <div class="img-wrap" id="img-wrap">
         <img id="img-thumb" src="" alt="">
         <button class="img-rm" onclick="clearImg()">✕ Remove</button>
       </div>
     </div>
 
     <div class="err" id="err"></div>
-
-    <button class="btn-gen" id="gen-btn" onclick="generate()">
-      ✨ Build My Optimized Post
-    </button>
+    <button class="btn-gen" id="gen-btn" onclick="generate()">✨ Build My Post</button>
   </div>
 
   <!-- Output -->
   <div class="card out-card" id="out-card">
-    <div class="card-title"><span>📋</span> Your Post — Ready to Copy</div>
-    <div class="info-bar">✓ Written by AI following all 4 SOP rules — edit any line you want below</div>
+    <div class="card-title"><span>📋</span> Your Optimized Post</div>
+    <div class="info-bar">✓ Full post written by AI following all 4 SOP rules — edit freely below</div>
     <div class="post-box" id="post-box" contenteditable="true" spellcheck="true"></div>
     <div class="out-meta">
       <div class="char-ct" id="char-ct"><b>0</b> chars</div>
@@ -236,7 +238,7 @@ textarea{resize:none;line-height:1.6;min-height:100px}
     <div style="font-size:10px;color:var(--muted);margin-top:6px" id="via-lbl"></div>
   </div>
 
-  <!-- SOP Compliance -->
+  <!-- SOP Check -->
   <div class="card">
     <div class="card-title"><span>✅</span> SOP Check</div>
     <ul class="chk-list">
@@ -250,7 +252,7 @@ textarea{resize:none;line-height:1.6;min-height:100px}
       </li>
       <li class="chk-item">
         <div class="chk-icon idle" id="c3">—</div>
-        <div><div class="chk-label">No outbound links</div><div class="chk-sub">All value native to the platform</div></div>
+        <div><div class="chk-label">No outbound links</div><div class="chk-sub">All value native to platform</div></div>
       </li>
       <li class="chk-item">
         <div class="chk-icon idle" id="c4">—</div>
@@ -267,363 +269,295 @@ textarea{resize:none;line-height:1.6;min-height:100px}
       <button class="btn-mark" onclick="markPosted()">Mark Posted</button>
     </div>
     <div class="t-bar"><div class="t-fill" id="t-fill" style="width:0%"></div></div>
-    <div class="hint" style="margin-top:8px">Space posts 4+ hours apart to avoid author decay penalty (Rule 4).</div>
+    <div class="hint" style="margin-top:8px">Space posts 4+ hours apart — Rule 4 author decay penalty.</div>
   </div>
 
 </div>
 
 <script>
-// ── SOP system prompt ───────────────────────────────────────
 const SOP = `You are an X.com post optimization engine.
 Your ONLY job: transform rough input into a high-performing, algorithm-optimized X post.
 
 RULE 1 — FRONT-LOAD: Heavy-hitting domain-specific keywords MUST appear in the first 15–30 words. NEVER open with "Hey guys", "I wanted to", "Just wanted to share", "Thoughts on", "Today I", or any vague opener. Lead with substance.
 
-RULE 2 — CLEAN SYNTAX: Short, direct Subject-Verb-Object sentences. Use bullet points or numbered lists where possible. High density of domain terms. Zero filler. One idea per sentence.
+RULE 2 — CLEAN SYNTAX: Short, direct Subject-Verb-Object sentences. Bullet points or numbered lists where possible. High density of domain terms. Zero filler. One idea per sentence.
 
 RULE 3 — NO LINKS: Zero URLs. Zero outbound destinations. All value lives natively in the post.
 
-RULE 4 — NATIVE MEDIA: If the user attaches an image, write as if it IS already attached. Reference it naturally: "Chart above shows…", "Screenshot above captures…". Never say "I will attach" or "see below".
+RULE 4 — NATIVE MEDIA: If an image is attached, write as if it IS already there. Reference it naturally: "Chart above shows…", "Screenshot above captures…". Never say "I will attach".
 
-OUTPUT: Return ONLY the finished post text. No preamble. No "Here is your post:". Start with the first word immediately.`;
+OUTPUT: Return ONLY the finished post text. No preamble. Start immediately.`;
 
-// ── Storage ─────────────────────────────────────────────────
-const K = {
-  provider: 'xp_provider',
-  key:      'xp_key',
-  model:    'xp_model',
-  ts:       'xp_ts',
-};
+// ── Storage ──────────────────────────────────────────────────
+const K = { mode:'xp_mode', serverUrl:'xp_server', provider:'xp_prov', key:'xp_key', model:'xp_model', ts:'xp_ts' };
+function ls(k,v){try{if(v===undefined)return localStorage.getItem(k);v===null?localStorage.removeItem(k):localStorage.setItem(k,v)}catch(e){}}
 
-let imgB64 = '', imgMime = 'image/jpeg';
-let modalProvider = 'anthropic';
+let imgB64='', imgMime='image/jpeg', setupTab='server';
 
-// ── Init ────────────────────────────────────────────────────
-(function init() {
-  const saved = ls(K.provider) || 'anthropic';
-  modalProvider = saved;
+// ── Init ─────────────────────────────────────────────────────
+(function(){
   refreshStatus();
   updateTiming();
   setInterval(updateTiming, 60000);
-  if (!ls(K.key)) showNoKey();
-  document.getElementById('niche').addEventListener('change', function() {
-    document.getElementById('custom-field').style.display = this.value === 'custom' ? 'block' : 'none';
+  document.getElementById('niche').addEventListener('change',function(){
+    document.getElementById('custom-field').style.display=this.value==='custom'?'block':'none';
   });
-  document.getElementById('post-box').addEventListener('input', () => {
+  document.getElementById('post-box').addEventListener('input',()=>{
     updateCharCount();
     runCompliance(document.getElementById('post-box').textContent);
   });
 })();
 
-function ls(k, v) {
-  try {
-    if (v === undefined) return localStorage.getItem(k);
-    if (v === null) localStorage.removeItem(k);
-    else localStorage.setItem(k, v);
-  } catch(e) {}
-}
-
-function showNoKey() {
-  document.getElementById('nokey').classList.add('show');
-}
-
-function refreshStatus() {
-  const key = ls(K.key);
-  const dot = document.getElementById('status-dot');
-  const txt = document.getElementById('status-txt');
-  const prov = ls(K.provider) || 'anthropic';
-  if (key) {
-    dot.className = 'status-dot ready';
-    txt.textContent = prov === 'anthropic' ? 'Claude ready' : 'OpenRouter ready';
+function refreshStatus(){
+  const mode=ls(K.mode)||'server';
+  const ready=(mode==='server'&&ls(K.serverUrl))||(mode==='direct'&&ls(K.key));
+  const dot=document.getElementById('st-dot');
+  const txt=document.getElementById('st-txt');
+  if(ready){
+    dot.className='dot on';
+    txt.textContent=mode==='server'?'Server connected':'API ready';
     document.getElementById('nokey').classList.remove('show');
   } else {
-    dot.className = 'status-dot none';
-    txt.textContent = 'No key';
+    dot.className='dot off';
+    txt.textContent='Not set up';
+    document.getElementById('nokey').classList.add('show');
   }
 }
 
-// ── Modal ────────────────────────────────────────────────────
-function openModal() {
-  const saved = ls(K.provider) || 'anthropic';
-  modalProvider = saved;
-  setModalProvider(saved, false);
-  document.getElementById('modal-key').value = ls(K.key) || '';
-  document.getElementById('modal-model').value = ls(K.model) || '';
+// ── Modal ─────────────────────────────────────────────────────
+function openModal(){
+  const mode=ls(K.mode)||'server';
+  switchTab(mode,false);
+  document.getElementById('server-url').value=ls(K.serverUrl)||'';
+  document.getElementById('direct-key').value=ls(K.key)||'';
+  document.getElementById('direct-model').value=ls(K.model)||'';
+  const prov=ls(K.provider)||'anthropic';
+  document.getElementById('direct-provider').value=prov;
+  updateProviderUI();
   document.getElementById('modal-bg').classList.add('open');
 }
+function closeModal(){document.getElementById('modal-bg').classList.remove('open');}
 
-function closeModal() {
-  document.getElementById('modal-bg').classList.remove('open');
+function switchTab(t, save=true){
+  setupTab=t;
+  ['server','direct'].forEach(n=>{
+    document.getElementById('tab-'+n).classList.toggle('active',n===t);
+    document.getElementById('sec-'+n).classList.toggle('show',n===t);
+  });
 }
 
-function setModalProvider(p, save = true) {
-  modalProvider = p;
-  document.querySelectorAll('[id^="mp-"]').forEach(el => el.classList.remove('active'));
-  const el = document.getElementById('mp-' + p);
-  if (el) el.classList.add('active');
-  const isOR = p === 'openrouter';
-  document.getElementById('modal-key-label').textContent = isOR ? 'OpenRouter API Key' : 'Anthropic API Key';
-  document.getElementById('modal-key').placeholder = isOR ? 'sk-or-…' : 'sk-ant-…';
-  document.getElementById('modal-key-hint').textContent = isOR
-    ? 'Get yours at openrouter.ai → Keys  (free tier available)'
-    : 'Get yours at console.anthropic.com → API Keys';
-  document.getElementById('modal-model-field').style.display = isOR ? 'block' : 'none';
+function updateProviderUI(){
+  const p=document.getElementById('direct-provider').value;
+  const isOR=p==='openrouter';
+  document.getElementById('key-label').textContent=isOR?'OpenRouter API Key':'Anthropic API Key';
+  document.getElementById('direct-key').placeholder=isOR?'sk-or-…':'sk-ant-…';
+  document.getElementById('key-hint').textContent=isOR?'openrouter.ai → Keys (free tier available)':'console.anthropic.com → API Keys';
+  document.getElementById('model-field').style.display=isOR?'block':'none';
 }
 
-function saveSetup() {
-  const key = document.getElementById('modal-key').value.trim();
-  if (!key) { alert('Paste your API key first.'); return; }
-  ls(K.provider, modalProvider);
-  ls(K.key, key);
-  const model = document.getElementById('modal-model').value.trim();
-  if (model) ls(K.model, model);
+function saveSetup(){
+  if(setupTab==='server'){
+    const url=document.getElementById('server-url').value.trim().replace(/\/+$/,'');
+    if(!url){alert('Paste your Railway/server URL first.');return;}
+    ls(K.mode,'server'); ls(K.serverUrl,url);
+  } else {
+    const key=document.getElementById('direct-key').value.trim();
+    if(!key){alert('Paste your API key first.');return;}
+    const prov=document.getElementById('direct-provider').value;
+    const model=document.getElementById('direct-model').value.trim();
+    ls(K.mode,'direct'); ls(K.provider,prov); ls(K.key,key);
+    if(model) ls(K.model,model);
+  }
   closeModal();
   refreshStatus();
 }
 
-// ── Image handling ───────────────────────────────────────────
-function handleFile(file) {
-  if (!file || !file.type.startsWith('image/')) return;
-  imgMime = file.type;
-  const reader = new FileReader();
-  reader.onload = e => {
-    imgB64 = e.target.result.split(',')[1];
-    document.getElementById('img-thumb').src = e.target.result;
+// ── Image ─────────────────────────────────────────────────────
+function handleFile(file){
+  if(!file||!file.type.startsWith('image/'))return;
+  imgMime=file.type;
+  const r=new FileReader();
+  r.onload=e=>{
+    imgB64=e.target.result.split(',')[1];
+    document.getElementById('img-thumb').src=e.target.result;
     document.getElementById('img-wrap').classList.add('show');
   };
-  reader.readAsDataURL(file);
+  r.readAsDataURL(file);
 }
-
-function clearImg() {
-  imgB64 = ''; imgMime = 'image/jpeg';
+function clearImg(){
+  imgB64='';imgMime='image/jpeg';
   document.getElementById('img-wrap').classList.remove('show');
-  document.getElementById('img-thumb').src = '';
-  document.getElementById('file-in').value = '';
+  document.getElementById('img-thumb').src='';
+  document.getElementById('file-in').value='';
 }
 
-// ── Generate ────────────────────────────────────────────────
-async function generate() {
-  const key      = ls(K.key);
-  const provider = ls(K.provider) || 'anthropic';
-  const sentences = document.getElementById('sentences').value.trim();
-  const niche     = getNiche();
-  const btn       = document.getElementById('gen-btn');
-  const errEl     = document.getElementById('err');
-
+// ── Generate ──────────────────────────────────────────────────
+async function generate(){
+  const mode=ls(K.mode)||'server';
+  const sentences=document.getElementById('sentences').value.trim();
+  const niche=getNiche();
+  const btn=document.getElementById('gen-btn');
+  const errEl=document.getElementById('err');
   errEl.classList.remove('show');
 
-  if (!key) { openModal(); return; }
-  if (!sentences && !imgB64) {
-    errEl.textContent = 'Add at least one sentence or a photo first.';
-    errEl.classList.add('show');
-    return;
-  }
+  const ready=(mode==='server'&&ls(K.serverUrl))||(mode==='direct'&&ls(K.key));
+  if(!ready){openModal();return;}
+  if(!sentences&&!imgB64){errEl.textContent='Add at least one sentence or a photo.';errEl.classList.add('show');return;}
 
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spin"></span>Writing your post…';
+  btn.disabled=true;
+  btn.innerHTML='<span class="spin"></span>Writing your post…';
 
-  try {
-    let post;
-    if (provider === 'anthropic') {
-      post = await callAnthropic(key, sentences, niche);
+  try{
+    let post, via;
+    if(mode==='server'){
+      ({post,via}=await callServer(sentences,niche));
     } else {
-      post = await callOpenRouter(key, ls(K.model) || '', sentences, niche);
+      const prov=ls(K.provider)||'anthropic';
+      const key=ls(K.key);
+      post=prov==='anthropic'
+        ? await callAnthropic(key,sentences,niche)
+        : await callOpenRouter(key,ls(K.model)||'',sentences,niche);
+      via=prov==='anthropic'?'Claude Haiku':'OpenRouter';
     }
-    showOutput(post, provider);
-  } catch(e) {
-    errEl.textContent = 'Error: ' + e.message;
+    showOutput(post, via||'AI');
+  } catch(e){
+    errEl.textContent='Error: '+e.message;
     errEl.classList.add('show');
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = '✨ Build My Optimized Post';
+  } finally{
+    btn.disabled=false;
+    btn.innerHTML='✨ Build My Post';
   }
 }
 
-function getNiche() {
-  const s = document.getElementById('niche');
-  return s.value === 'custom' ? document.getElementById('custom-niche').value.trim() : s.value;
+function getNiche(){
+  const s=document.getElementById('niche');
+  return s.value==='custom'?document.getElementById('custom-niche').value.trim():s.value;
 }
 
-function buildPrompt(sentences, niche) {
-  const parts = [];
-  if (niche) parts.push('NICHE / TOPIC: ' + niche);
-  if (sentences) parts.push('RAW INPUT:\n' + sentences);
-  return parts.join('\n\n');
+function buildPrompt(sentences,niche){
+  const p=[];
+  if(niche)p.push('NICHE / TOPIC: '+niche);
+  if(sentences)p.push('RAW INPUT:\n'+sentences);
+  return p.join('\n\n');
 }
 
-// ── Anthropic API (direct browser call) ─────────────────────
-async function callAnthropic(key, sentences, niche) {
-  const prompt = buildPrompt(sentences, niche);
-  const userContent = [];
-
-  if (imgB64) {
-    userContent.push({
-      type: 'image',
-      source: { type: 'base64', media_type: imgMime, data: imgB64 }
-    });
-    userContent.push({
-      type: 'text',
-      text: 'The image above is attached to the post. Use what you see in it when writing the post.\n\n' + prompt
-    });
-  } else {
-    userContent.push({ type: 'text', text: prompt });
-  }
-
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'x-api-key': key,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
-      system: SOP,
-      messages: [{ role: 'user', content: userContent }]
-    })
+// ── Call SqueezeOS server ─────────────────────────────────────
+async function callServer(sentences,niche){
+  const base=ls(K.serverUrl);
+  const body={sentences,niche};
+  if(imgB64){body.image_b64=imgB64;body.image_mime=imgMime;}
+  const r=await fetch(base+'/api/xpost/generate',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(body),
   });
+  const d=await r.json();
+  if(!r.ok||d.error)throw new Error(d.error||'Server error '+r.status);
+  return {post:d.post, via:'SqueezeOS ('+d.provider+')'};
+}
 
-  const d = await r.json();
-  if (!r.ok) throw new Error(d.error?.message || ('API error ' + r.status));
+// ── Call Anthropic direct ─────────────────────────────────────
+async function callAnthropic(key,sentences,niche){
+  const prompt=buildPrompt(sentences,niche);
+  const content=[];
+  if(imgB64){
+    content.push({type:'image',source:{type:'base64',media_type:imgMime,data:imgB64}});
+    content.push({type:'text',text:'Image is attached. Use it in the post.\n\n'+prompt});
+  } else {
+    content.push({type:'text',text:prompt});
+  }
+  const r=await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{'x-api-key':key,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1024,system:SOP,messages:[{role:'user',content}]})
+  });
+  const d=await r.json();
+  if(!r.ok)throw new Error(d.error?.message||'Anthropic error '+r.status);
   return d.content[0].text.trim();
 }
 
-// ── OpenRouter API ───────────────────────────────────────────
-async function callOpenRouter(key, model, sentences, niche) {
-  const prompt = buildPrompt(sentences, niche);
-  const m = model || 'meta-llama/llama-3.2-3b-instruct:free';
-
-  let userContent;
-  if (imgB64) {
-    // Only works with vision-capable OR models (e.g. gpt-4o-mini, claude-3-haiku via OR)
-    userContent = [
-      { type: 'text', text: 'The image below is attached. Use it in the post.\n\n' + prompt },
-      { type: 'image_url', image_url: { url: `data:${imgMime};base64,${imgB64}` } }
-    ];
-  } else {
-    userContent = prompt;
-  }
-
-  const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': 'Bearer ' + key,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'file://xpost',
-      'X-Title': 'X Post Creator',
-    },
-    body: JSON.stringify({
-      model: m,
-      messages: [
-        { role: 'system', content: SOP },
-        { role: 'user', content: userContent }
-      ]
-    })
+// ── Call OpenRouter direct ────────────────────────────────────
+async function callOpenRouter(key,model,sentences,niche){
+  const prompt=buildPrompt(sentences,niche);
+  const m=model||'meta-llama/llama-3.2-3b-instruct:free';
+  let userContent=imgB64
+    ?[{type:'text',text:'Image attached. Use it.\n\n'+prompt},{type:'image_url',image_url:{url:`data:${imgMime};base64,${imgB64}`}}]
+    :prompt;
+  const r=await fetch('https://openrouter.ai/api/v1/chat/completions',{
+    method:'POST',
+    headers:{'Authorization':'Bearer '+key,'Content-Type':'application/json','HTTP-Referer':'file://xpost','X-Title':'X Post Creator'},
+    body:JSON.stringify({model:m,messages:[{role:'system',content:SOP},{role:'user',content:userContent}]})
   });
-
-  const d = await r.json();
-  if (!r.ok) throw new Error(d.error?.message || ('API error ' + r.status));
+  const d=await r.json();
+  if(!r.ok)throw new Error(d.error?.message||'OpenRouter error '+r.status);
   return d.choices[0].message.content.trim();
 }
 
-// ── Output ───────────────────────────────────────────────────
-function showOutput(post, provider) {
-  const labels = { anthropic: 'Claude Haiku', openrouter: 'OpenRouter' };
-  document.getElementById('post-box').textContent = post;
-  document.getElementById('via-lbl').textContent = 'Written by ' + (labels[provider] || provider);
+// ── Output ────────────────────────────────────────────────────
+function showOutput(post,via){
+  document.getElementById('post-box').textContent=post;
+  document.getElementById('via-lbl').textContent='Written by '+via;
   document.getElementById('out-card').classList.add('show');
-  document.getElementById('out-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  updateCharCount();
-  runCompliance(post);
+  document.getElementById('out-card').scrollIntoView({behavior:'smooth',block:'start'});
+  updateCharCount();runCompliance(post);
 }
 
-function updateCharCount() {
-  const len = document.getElementById('post-box').textContent.length;
-  const el  = document.getElementById('char-ct');
-  el.innerHTML = `<b>${len.toLocaleString()}</b> chars`;
-  el.className = 'char-ct' + (len > 25000 ? ' warn' : len > 280 ? ' warn' : '');
+function updateCharCount(){
+  const len=document.getElementById('post-box').textContent.length;
+  const el=document.getElementById('char-ct');
+  el.innerHTML=`<b>${len.toLocaleString()}</b> chars`;
 }
 
-function copyPost() {
-  const text = document.getElementById('post-box').textContent;
-  if (navigator.clipboard?.writeText) {
+function copyPost(){
+  const text=document.getElementById('post-box').textContent;
+  if(navigator.clipboard?.writeText){
     navigator.clipboard.writeText(text).then(flashCopy);
   } else {
-    // Fallback for older mobile browsers
-    const el = document.createElement('textarea');
-    el.value = text;
-    el.style.position = 'fixed'; el.style.opacity = '0';
-    document.body.appendChild(el);
-    el.select(); el.setSelectionRange(0, 99999);
-    document.execCommand('copy');
-    document.body.removeChild(el);
-    flashCopy();
+    const el=document.createElement('textarea');
+    el.value=text;el.style.cssText='position:fixed;opacity:0';
+    document.body.appendChild(el);el.select();el.setSelectionRange(0,99999);
+    document.execCommand('copy');document.body.removeChild(el);flashCopy();
   }
 }
-
-function flashCopy() {
-  const btn = document.getElementById('copy-btn');
-  btn.textContent = '✓ Copied!'; btn.classList.add('ok');
-  setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('ok'); }, 2000);
+function flashCopy(){
+  const b=document.getElementById('copy-btn');
+  b.textContent='✓ Copied!';b.classList.add('ok');
+  setTimeout(()=>{b.textContent='Copy';b.classList.remove('ok');},2000);
 }
 
-// ── SOP Compliance ───────────────────────────────────────────
-function chk(id, state) {
-  const el = document.getElementById(id);
-  el.className = 'chk-icon ' + state;
-  el.textContent = state === 'pass' ? '✓' : state === 'fail' ? '✕' : state === 'warn' ? '!' : '—';
+// ── SOP ───────────────────────────────────────────────────────
+function chk(id,state){
+  const el=document.getElementById(id);
+  el.className='chk-icon '+state;
+  el.textContent=state==='pass'?'✓':state==='fail'?'✕':state==='warn'?'!':'—';
 }
-
-function runCompliance(post) {
-  const w30 = post.split(/\s+/).slice(0, 30).join(' ').toLowerCase();
-  const vague = ['hey guys','i wanted to','just wanted','thoughts on','today i','so i\'ve been','wanted to share'];
-  chk('c1', vague.some(v => w30.startsWith(v)) ? 'fail' : 'pass');
-  const sents = post.split(/[.!?]+/).filter(s => s.trim().length > 3);
-  chk('c2', sents.some(s => s.trim().split(/\s+/).length > 25) ? 'warn' : 'pass');
-  chk('c3', /https?:\/\/|www\./i.test(post) ? 'fail' : 'pass');
+function runCompliance(post){
+  const w30=post.split(/\s+/).slice(0,30).join(' ').toLowerCase();
+  const vague=['hey guys','i wanted to','just wanted','thoughts on','today i',"so i've been",'wanted to share'];
+  chk('c1',vague.some(v=>w30.startsWith(v))?'fail':'pass');
+  chk('c2',post.split(/[.!?]+/).filter(s=>s.trim().length>3).some(s=>s.trim().split(/\s+/).length>25)?'warn':'pass');
+  chk('c3',/https?:\/\/|www\./i.test(post)?'fail':'pass');
   updateTiming();
 }
 
-// ── Timing ───────────────────────────────────────────────────
-const SAFE = 4 * 3600000;
-
-function markPosted() {
-  ls(K.ts, Date.now().toString());
-  updateTiming();
-}
-
-function updateTiming() {
-  const ts   = parseInt(ls(K.ts) || '0', 10);
-  const val  = document.getElementById('t-val');
-  const fill = document.getElementById('t-fill');
-  const sub  = document.getElementById('c4-sub');
-  const icon = document.getElementById('c4');
-
-  if (!ts) {
-    val.innerHTML = '—'; fill.style.width = '0%';
-    icon.className = 'chk-icon idle'; icon.textContent = '—';
-    sub.textContent = 'Tap "Mark Posted" after you post to track spacing';
-    return;
-  }
-
-  const elapsed = Date.now() - ts;
-  const h = elapsed / 3600000;
-  const pct = Math.min(100, (elapsed / SAFE) * 100);
-  const fmt = h < 1 ? `${Math.floor(elapsed / 60000)}m` : `${h.toFixed(1)}h`;
-  fill.style.width = pct + '%';
-
-  if (elapsed >= SAFE) {
-    val.innerHTML = `<b class="b-green">${fmt}</b>`;
-    icon.className = 'chk-icon pass'; icon.textContent = '✓';
-    sub.textContent = `Clear to post — ${fmt} since last post`;
+// ── Timing ────────────────────────────────────────────────────
+const SAFE=4*3600000;
+function markPosted(){ls(K.ts,Date.now().toString());updateTiming();}
+function updateTiming(){
+  const ts=parseInt(ls(K.ts)||'0',10);
+  const val=document.getElementById('t-val'),fill=document.getElementById('t-fill');
+  const sub=document.getElementById('c4-sub'),icon=document.getElementById('c4');
+  if(!ts){val.innerHTML='—';fill.style.width='0%';icon.className='chk-icon idle';icon.textContent='—';sub.textContent='Tap "Mark Posted" after you post';return;}
+  const el=Date.now()-ts,h=el/3600000,pct=Math.min(100,(el/SAFE)*100);
+  const fmt=h<1?`${Math.floor(el/60000)}m`:`${h.toFixed(1)}h`;
+  fill.style.width=pct+'%';
+  if(el>=SAFE){
+    val.innerHTML=`<b class="bg">${fmt}</b>`;icon.className='chk-icon pass';icon.textContent='✓';sub.textContent=`Clear to post — ${fmt} since last post`;
   } else {
-    const left = ((SAFE - elapsed) / 3600000).toFixed(1);
-    val.innerHTML = `<b class="${h < 1 ? 'b-red' : 'b-gold'}">${fmt}</b>`;
-    icon.className = `chk-icon ${h < 1 ? 'fail' : 'warn'}`;
-    icon.textContent = h < 1 ? '✕' : '!';
-    sub.textContent = `Wait ~${left}h more to avoid author decay penalty`;
+    const left=((SAFE-el)/3600000).toFixed(1);
+    val.innerHTML=`<b class="${h<1?'br':'bo'}">${fmt}</b>`;
+    icon.className=`chk-icon ${h<1?'fail':'warn'}`;icon.textContent=h<1?'✕':'!';
+    sub.textContent=`Wait ~${left}h more to avoid author decay penalty`;
   }
 }
 </script>
