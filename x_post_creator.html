@@ -14,22 +14,20 @@
 }
 body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;overflow-x:hidden}
 
-/* ── Header ── */
 .header{background:linear-gradient(135deg,#0d0d18,#1a0a2e);padding:16px 20px 14px;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100}
 .header-row{display:flex;align-items:center;justify-content:space-between}
 .logo{font-size:22px;font-weight:900;background:linear-gradient(135deg,var(--green),var(--blue));-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:-0.5px}
 .badge{background:rgba(0,255,136,.12);border:1px solid var(--green);border-radius:20px;padding:3px 12px;font-size:11px;font-weight:800;color:var(--green);letter-spacing:.6px;text-transform:uppercase}
 .header-sub{font-size:12px;color:var(--muted);margin-top:4px;letter-spacing:.3px}
 
-/* ── Layout ── */
 .page{max-width:680px;margin:0 auto;padding:20px 16px 80px}
 
-/* ── Cards ── */
 .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px;margin-bottom:14px}
+.card.ai-card{border-color:rgba(168,85,247,.3);background:rgba(168,85,247,.04)}
 .card-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.9px;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:6px}
 .card-title span{font-size:14px}
+.card-title .provider-badge{margin-left:auto;font-size:10px;font-weight:700;letter-spacing:.4px;padding:2px 8px;border-radius:10px;border:1px solid var(--purple);color:var(--purple);background:rgba(168,85,247,.1);text-transform:uppercase}
 
-/* ── Form elements ── */
 .field{margin-bottom:14px}
 .field:last-child{margin-bottom:0}
 label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:6px}
@@ -41,15 +39,30 @@ textarea{resize:vertical;min-height:120px;line-height:1.6}
 textarea.tall{min-height:90px}
 .hint{font-size:11px;color:var(--muted);margin-top:5px;line-height:1.5}
 
-/* ── Generate button ── */
+.provider-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.provider-btn{padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--muted);font-size:12px;font-weight:700;cursor:pointer;text-align:center;transition:.15s;letter-spacing:.3px}
+.provider-btn:hover{border-color:var(--purple);color:var(--purple)}
+.provider-btn.active{border-color:var(--purple);background:rgba(168,85,247,.15);color:var(--purple)}
+.provider-btn .pname{font-size:13px;font-weight:800;color:inherit;display:block;margin-bottom:2px}
+.provider-btn .pdesc{font-size:10px;color:var(--muted);font-weight:400}
+.provider-btn.active .pdesc{color:rgba(168,85,247,.7)}
+
+.ollama-fields{display:none;margin-top:10px}
+.ollama-fields.visible{display:block}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.test-btn{padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--muted);font-size:12px;font-weight:700;cursor:pointer;transition:.15s;width:100%;margin-top:8px}
+.test-btn:hover{border-color:var(--blue);color:var(--blue)}
+.test-result{font-size:11px;margin-top:6px;padding:6px 10px;border-radius:6px;display:none}
+.test-result.ok{background:rgba(0,255,136,.1);color:var(--green);display:block}
+.test-result.err{background:rgba(255,68,68,.1);color:var(--red);display:block}
+
 .btn-generate{width:100%;padding:14px;border:none;border-radius:12px;font-size:16px;font-weight:800;cursor:pointer;letter-spacing:.3px;background:linear-gradient(135deg,#00c853,#00ff88);color:#000;transition:opacity .15s,transform .1s;margin-top:4px}
 .btn-generate:hover{opacity:.9}
 .btn-generate:active{transform:scale(.98)}
 .btn-generate:disabled{opacity:.4;cursor:not-allowed;transform:none}
-.btn-generate .spinner-inline{display:inline-block;width:16px;height:16px;border:2px solid rgba(0,0,0,.3);border-top-color:#000;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:8px}
+.spinner-inline{display:inline-block;width:16px;height:16px;border:2px solid rgba(0,0,0,.3);border-top-color:#000;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:8px}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-/* ── Output ── */
 .output-card{display:none}
 .output-card.visible{display:block}
 .post-box{background:#0d0d14;border:1px solid var(--border);border-radius:12px;padding:16px;font-size:14px;line-height:1.75;white-space:pre-wrap;word-break:break-word;color:var(--text);min-height:80px;cursor:text;transition:border-color .15s}
@@ -62,8 +75,8 @@ textarea.tall{min-height:90px}
 .btn-copy{padding:8px 18px;border-radius:8px;border:1px solid var(--green);background:rgba(0,255,136,.1);color:var(--green);font-size:12px;font-weight:700;cursor:pointer;transition:.15s;letter-spacing:.3px}
 .btn-copy:hover{background:rgba(0,255,136,.2)}
 .btn-copy.copied{border-color:var(--blue);background:rgba(0,191,255,.1);color:var(--blue)}
+.via-tag{font-size:10px;color:var(--muted);margin-top:6px}
 
-/* ── Checklist ── */
 .checklist{list-style:none;display:flex;flex-direction:column;gap:8px}
 .check-item{display:flex;align-items:center;gap:10px;font-size:13px}
 .check-icon{width:22px;height:22px;border-radius:50%;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;transition:.3s}
@@ -74,7 +87,6 @@ textarea.tall{min-height:90px}
 .check-label{color:var(--text);font-weight:600}
 .check-sub{font-size:11px;color:var(--muted);margin-top:1px}
 
-/* ── Timing section ── */
 .timing-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
 .timing-info{font-size:13px;color:var(--muted)}
 .timing-info b{font-size:15px;font-weight:800}
@@ -86,12 +98,12 @@ textarea.tall{min-height:90px}
 .timing-bar{margin-top:10px;height:4px;background:var(--surface);border-radius:2px;overflow:hidden}
 .timing-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--red),var(--gold),var(--green));transition:width .5s}
 
-/* ── Error ── */
 .error-banner{background:rgba(255,68,68,.1);border:1px solid var(--red);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--red);margin-bottom:14px;display:none}
 .error-banner.visible{display:block}
 
-/* ── Responsive ── */
 @media(max-width:480px){
+  .provider-row{grid-template-columns:1fr 1fr}
+  .two-col{grid-template-columns:1fr}
   .output-meta{flex-direction:column;align-items:flex-start}
   .btn-copy{width:100%}
 }
@@ -108,6 +120,48 @@ textarea.tall{min-height:90px}
 </div>
 
 <div class="page">
+
+  <!-- AI Provider -->
+  <div class="card ai-card">
+    <div class="card-title">
+      <span>⚡</span> AI Provider
+      <span class="provider-badge" id="provider-badge">Detecting…</span>
+    </div>
+
+    <div class="provider-row">
+      <button class="provider-btn" id="p-anthropic" onclick="selectProvider('anthropic')">
+        <span class="pname">Claude</span>
+        <span class="pdesc">Anthropic · Haiku</span>
+      </button>
+      <button class="provider-btn" id="p-openai" onclick="selectProvider('openai')">
+        <span class="pname">OpenAI</span>
+        <span class="pdesc">GPT-4o mini</span>
+      </button>
+      <button class="provider-btn" id="p-openrouter" onclick="selectProvider('openrouter')">
+        <span class="pname">OpenRouter</span>
+        <span class="pdesc">Free / paid models</span>
+      </button>
+      <button class="provider-btn" id="p-ollama" onclick="selectProvider('ollama')">
+        <span class="pname">Ollama</span>
+        <span class="pdesc">Local / on-device</span>
+      </button>
+    </div>
+
+    <div class="ollama-fields" id="ollama-fields">
+      <div class="two-col" style="margin-top:10px">
+        <div>
+          <label>Ollama URL</label>
+          <input type="text" id="ollama-url" value="http://localhost:11434">
+        </div>
+        <div>
+          <label>Model</label>
+          <input type="text" id="ollama-model" value="llama3">
+        </div>
+      </div>
+      <button class="test-btn" onclick="testOllama()">Test Connection</button>
+      <div class="test-result" id="test-result"></div>
+    </div>
+  </div>
 
   <!-- Input -->
   <div class="card">
@@ -162,6 +216,7 @@ textarea.tall{min-height:90px}
       <div class="char-count" id="char-count"><b>0</b> characters</div>
       <button class="btn-copy" id="copy-btn" onclick="copyPost()">Copy to Clipboard</button>
     </div>
+    <div class="via-tag" id="via-tag"></div>
   </div>
 
   <!-- SOP Checklist -->
@@ -215,26 +270,81 @@ textarea.tall{min-height:90px}
 </div>
 
 <script>
-// ── Niche toggle ────────────────────────────────────────────
-document.getElementById('niche').addEventListener('change', function() {
-  const customField = document.getElementById('custom-niche-field');
-  customField.style.display = this.value === 'custom' ? 'block' : 'none';
-});
+// ── Provider state ──────────────────────────────────────────
+const PROV_KEY = 'xpost_provider';
+let currentProvider = localStorage.getItem(PROV_KEY) || 'anthropic';
 
-// ── Resolve niche value ─────────────────────────────────────
-function getNiche() {
-  const sel = document.getElementById('niche');
-  if (sel.value === 'custom') return document.getElementById('custom-niche').value.trim();
-  return sel.value;
+function selectProvider(p) {
+  currentProvider = p;
+  localStorage.setItem(PROV_KEY, p);
+  document.querySelectorAll('.provider-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('p-' + p);
+  if (btn) btn.classList.add('active');
+  document.getElementById('ollama-fields').classList.toggle('visible', p === 'ollama');
+  const badge = document.getElementById('provider-badge');
+  const labels = {anthropic:'Claude / Haiku', openai:'GPT-4o mini', openrouter:'OpenRouter', ollama:'Ollama (local)'};
+  badge.textContent = labels[p] || p;
 }
 
-// ── Generate post ───────────────────────────────────────────
+async function testOllama() {
+  const url   = document.getElementById('ollama-url').value.trim();
+  const model = document.getElementById('ollama-model').value.trim();
+  const res   = document.getElementById('test-result');
+  res.className = 'test-result';
+  res.textContent = 'Testing…';
+  res.style.display = 'block';
+  try {
+    const r = await fetch('/api/xpost/generate', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({sentences:'test', provider:'ollama', ollama_url: url, ollama_model: model})
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    res.className = 'test-result ok';
+    res.textContent = '✓ Connected — ' + model + ' responding';
+  } catch(e) {
+    res.className = 'test-result err';
+    res.textContent = '✕ ' + e.message;
+  }
+}
+
+// ── Init: load provider defaults from server ────────────────
+async function initProviders() {
+  try {
+    const r = await fetch('/api/xpost/providers');
+    const d = await r.json();
+    // Pre-fill Ollama fields from server env
+    if (d.ollama_url) document.getElementById('ollama-url').value = d.ollama_url;
+    if (d.ollama_model) document.getElementById('ollama-model').value = d.ollama_model;
+    // If stored provider isn't available, fall back to server default
+    if (!d.available.includes(currentProvider) && currentProvider !== 'ollama') {
+      currentProvider = d.default;
+    }
+  } catch(_) {}
+  selectProvider(currentProvider);
+}
+initProviders();
+
+// ── Niche toggle ────────────────────────────────────────────
+document.getElementById('niche').addEventListener('change', function() {
+  document.getElementById('custom-niche-field').style.display = this.value === 'custom' ? 'block' : 'none';
+});
+
+function getNiche() {
+  const sel = document.getElementById('niche');
+  return sel.value === 'custom' ? document.getElementById('custom-niche').value.trim() : sel.value;
+}
+
+// ── Generate ────────────────────────────────────────────────
 async function generate() {
-  const sentences = document.getElementById('sentences').value.trim();
-  const media     = document.getElementById('media').value.trim();
-  const niche     = getNiche();
-  const btn       = document.getElementById('gen-btn');
-  const errBanner = document.getElementById('error-banner');
+  const sentences    = document.getElementById('sentences').value.trim();
+  const media        = document.getElementById('media').value.trim();
+  const niche        = getNiche();
+  const ollama_url   = document.getElementById('ollama-url').value.trim();
+  const ollama_model = document.getElementById('ollama-model').value.trim();
+  const btn          = document.getElementById('gen-btn');
+  const errBanner    = document.getElementById('error-banner');
 
   errBanner.classList.remove('visible');
 
@@ -251,13 +361,11 @@ async function generate() {
     const res = await fetch('/api/xpost/generate', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ sentences, media, niche })
+      body: JSON.stringify({ sentences, media, niche, provider: currentProvider, ollama_url, ollama_model })
     });
     const data = await res.json();
-
     if (!res.ok || data.error) throw new Error(data.error || 'Generation failed');
-
-    showOutput(data.post);
+    showOutput(data.post, data.provider);
   } catch (err) {
     errBanner.textContent = 'Error: ' + err.message;
     errBanner.classList.add('visible');
@@ -268,36 +376,36 @@ async function generate() {
 }
 
 // ── Show output ─────────────────────────────────────────────
-function showOutput(post) {
+function showOutput(post, provider) {
   const box  = document.getElementById('post-box');
   const card = document.getElementById('output-card');
-
+  const tag  = document.getElementById('via-tag');
+  const labels = {anthropic:'Claude Haiku', openai:'GPT-4o mini', openrouter:'OpenRouter', ollama:'Ollama'};
   box.textContent = post;
+  tag.textContent = 'Generated via ' + (labels[provider] || provider);
   card.classList.add('visible');
   card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
   updateCharCount();
   runCompliance(post);
 }
 
-// ── Live char count on edits ────────────────────────────────
+// ── Live char count ─────────────────────────────────────────
 document.getElementById('post-box').addEventListener('input', () => {
   updateCharCount();
   runCompliance(document.getElementById('post-box').textContent);
 });
 
 function updateCharCount() {
-  const box  = document.getElementById('post-box');
-  const el   = document.getElementById('char-count');
-  const len  = box.textContent.length;
+  const box = document.getElementById('post-box');
+  const el  = document.getElementById('char-count');
+  const len = box.textContent.length;
   el.innerHTML = `<b>${len.toLocaleString()}</b> characters`;
   el.className = 'char-count' + (len > 25000 ? ' over' : len > 280 ? ' warn' : '');
 }
 
 // ── Copy ────────────────────────────────────────────────────
 function copyPost() {
-  const text = document.getElementById('post-box').textContent;
-  navigator.clipboard.writeText(text).then(() => {
+  navigator.clipboard.writeText(document.getElementById('post-box').textContent).then(() => {
     const btn = document.getElementById('copy-btn');
     btn.textContent = '✓ Copied!';
     btn.classList.add('copied');
@@ -306,37 +414,27 @@ function copyPost() {
 }
 
 // ── SOP Compliance ──────────────────────────────────────────
-function setCheck(id, state, tooltip) {
+function setCheck(id, state) {
   const el = document.getElementById(id);
   el.className = 'check-icon ' + state;
   el.textContent = state === 'pass' ? '✓' : state === 'fail' ? '✕' : state === 'warn' ? '!' : '—';
-  if (tooltip && id === 'chk4-sub') return; // timing handled separately
 }
 
 function runCompliance(post) {
-  // Rule 1 — front-load: check first 30 words aren't vague openers
   const words30 = post.split(/\s+/).slice(0, 30).join(' ').toLowerCase();
-  const vagueOpeners = ['hey guys', 'i wanted to', 'just wanted', 'thoughts on', 'today i', 'so i\'ve been', 'wanted to share'];
-  const hasVague = vagueOpeners.some(v => words30.startsWith(v));
-  setCheck('chk1', hasVague ? 'fail' : 'pass');
+  const vagueOpeners = ['hey guys','i wanted to','just wanted','thoughts on','today i','so i\'ve been','wanted to share'];
+  setCheck('chk1', vagueOpeners.some(v => words30.startsWith(v)) ? 'fail' : 'pass');
 
-  // Rule 2 — clean syntax: warn if any sentence > 25 words
-  const sentences = post.split(/[.!?]+/).filter(s => s.trim().length > 3);
-  const longSentence = sentences.some(s => s.trim().split(/\s+/).length > 25);
-  setCheck('chk2', longSentence ? 'warn' : 'pass');
+  const sents = post.split(/[.!?]+/).filter(s => s.trim().length > 3);
+  setCheck('chk2', sents.some(s => s.trim().split(/\s+/).length > 25) ? 'warn' : 'pass');
 
-  // Rule 3 — no links
-  const hasLink = /https?:\/\/|www\./i.test(post);
-  setCheck('chk3', hasLink ? 'fail' : 'pass');
-
-  // Rule 4 — timing (handled by timer, just refresh)
+  setCheck('chk3', /https?:\/\/|www\./i.test(post) ? 'fail' : 'pass');
   updateTiming();
 }
 
 // ── Timing tracker ──────────────────────────────────────────
-const TIMING_KEY   = 'xpost_last_ts';
-const SAFE_HOURS   = 4;
-const SAFE_MS      = SAFE_HOURS * 60 * 60 * 1000;
+const TIMING_KEY = 'xpost_last_ts';
+const SAFE_MS    = 4 * 60 * 60 * 1000;
 
 function markPosted() {
   localStorage.setItem(TIMING_KEY, Date.now().toString());
@@ -352,7 +450,6 @@ function updateTiming() {
 
   if (!ts) {
     el.innerHTML = '—';
-    el.className = '';
     fill.style.width = '0%';
     chk.className = 'check-icon idle';
     chk.textContent = '—';
@@ -363,10 +460,7 @@ function updateTiming() {
   const elapsed = Date.now() - ts;
   const hours   = elapsed / 3600000;
   const pct     = Math.min(100, (elapsed / SAFE_MS) * 100);
-
-  const fmt = hours < 1
-    ? `${Math.floor(elapsed / 60000)}m`
-    : `${hours.toFixed(1)}h`;
+  const fmt     = hours < 1 ? `${Math.floor(elapsed / 60000)}m` : `${hours.toFixed(1)}h`;
 
   fill.style.width = pct + '%';
 
@@ -384,7 +478,6 @@ function updateTiming() {
   }
 }
 
-// Update timer every minute
 updateTiming();
 setInterval(updateTiming, 60000);
 </script>
