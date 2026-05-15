@@ -16,6 +16,7 @@ from core.api.scriptmaster_bp import scriptmaster_bp
 from core.api.ceo import ceo_bp
 from core.api.market_scanner import market_bp, start_market_scanner
 from core.api.v2_bridge import v2_bp
+from core.api.xpost import xpost_bp
 from core.legacy import start_whale_stalker, init_services, get_service, clean_data
 from core.market_graph import get_graph
 from core.rdt_engine import RecurrentDepthTransformer
@@ -48,6 +49,7 @@ def create_app():
     app.register_blueprint(market_bp, url_prefix='/api/market')
     app.register_blueprint(v2_bp, url_prefix='/api')
     app.register_blueprint(v2_bp, url_prefix='/api/v1', name='v2_bridge_v1')
+    app.register_blueprint(xpost_bp, url_prefix='/api/xpost')
     
     # Start background market scanner
     start_market_scanner()
@@ -66,6 +68,10 @@ def create_app():
     @app.route('/')
     def serve_index():
         return send_from_directory(app.static_folder, 'SML_Command_Center_ORACLE.html')
+
+    @app.route('/xpost')
+    def serve_xpost():
+        return send_from_directory(app.static_folder, 'x_post_creator.html')
 
     @app.route('/legacy')
     def serve_legacy():

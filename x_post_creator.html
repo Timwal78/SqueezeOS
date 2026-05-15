@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0a0a0f">
+<title>𝕏 Post Creator — SOP Engine</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#0a0a0f;--surface:#13131a;--card:#1a1a24;--border:#2a2a3a;
+  --green:#00ff88;--blue:#00bfff;--gold:#ffd700;--red:#ff4444;--purple:#a855f7;
+  --text:#e8e8f0;--muted:#6b6b80;
+}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;overflow-x:hidden}
+
+/* ── Header ── */
+.header{background:linear-gradient(135deg,#0d0d18,#1a0a2e);padding:16px 20px 14px;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100}
+.header-row{display:flex;align-items:center;justify-content:space-between}
+.logo{font-size:22px;font-weight:900;background:linear-gradient(135deg,var(--green),var(--blue));-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:-0.5px}
+.badge{background:rgba(0,255,136,.12);border:1px solid var(--green);border-radius:20px;padding:3px 12px;font-size:11px;font-weight:800;color:var(--green);letter-spacing:.6px;text-transform:uppercase}
+.header-sub{font-size:12px;color:var(--muted);margin-top:4px;letter-spacing:.3px}
+
+/* ── Layout ── */
+.page{max-width:680px;margin:0 auto;padding:20px 16px 80px}
+
+/* ── Cards ── */
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px;margin-bottom:14px}
+.card-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.9px;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:6px}
+.card-title span{font-size:14px}
+
+/* ── Form elements ── */
+.field{margin-bottom:14px}
+.field:last-child{margin-bottom:0}
+label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:6px}
+select,textarea,input[type=text]{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:11px 14px;color:var(--text);font-size:14px;outline:none;-webkit-appearance:none;appearance:none;font-family:inherit;transition:border-color .15s}
+select{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b6b80' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:36px}
+select option{background:#1a1a24}
+select:focus,textarea:focus,input[type=text]:focus{border-color:var(--blue)}
+textarea{resize:vertical;min-height:120px;line-height:1.6}
+textarea.tall{min-height:90px}
+.hint{font-size:11px;color:var(--muted);margin-top:5px;line-height:1.5}
+
+/* ── Generate button ── */
+.btn-generate{width:100%;padding:14px;border:none;border-radius:12px;font-size:16px;font-weight:800;cursor:pointer;letter-spacing:.3px;background:linear-gradient(135deg,#00c853,#00ff88);color:#000;transition:opacity .15s,transform .1s;margin-top:4px}
+.btn-generate:hover{opacity:.9}
+.btn-generate:active{transform:scale(.98)}
+.btn-generate:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.btn-generate .spinner-inline{display:inline-block;width:16px;height:16px;border:2px solid rgba(0,0,0,.3);border-top-color:#000;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:8px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Output ── */
+.output-card{display:none}
+.output-card.visible{display:block}
+.post-box{background:#0d0d14;border:1px solid var(--border);border-radius:12px;padding:16px;font-size:14px;line-height:1.75;white-space:pre-wrap;word-break:break-word;color:var(--text);min-height:80px;cursor:text;transition:border-color .15s}
+.post-box:focus{outline:none;border-color:var(--blue)}
+.output-meta{display:flex;align-items:center;justify-content:space-between;margin-top:10px;flex-wrap:wrap;gap:8px}
+.char-count{font-size:12px;color:var(--muted)}
+.char-count b{color:var(--text)}
+.char-count.warn b{color:var(--gold)}
+.char-count.over b{color:var(--red)}
+.btn-copy{padding:8px 18px;border-radius:8px;border:1px solid var(--green);background:rgba(0,255,136,.1);color:var(--green);font-size:12px;font-weight:700;cursor:pointer;transition:.15s;letter-spacing:.3px}
+.btn-copy:hover{background:rgba(0,255,136,.2)}
+.btn-copy.copied{border-color:var(--blue);background:rgba(0,191,255,.1);color:var(--blue)}
+
+/* ── Checklist ── */
+.checklist{list-style:none;display:flex;flex-direction:column;gap:8px}
+.check-item{display:flex;align-items:center;gap:10px;font-size:13px}
+.check-icon{width:22px;height:22px;border-radius:50%;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;transition:.3s}
+.check-icon.pass{background:rgba(0,255,136,.15);border-color:var(--green);color:var(--green)}
+.check-icon.fail{background:rgba(255,68,68,.12);border-color:var(--red);color:var(--red)}
+.check-icon.warn{background:rgba(255,215,0,.12);border-color:var(--gold);color:var(--gold)}
+.check-icon.idle{color:var(--muted)}
+.check-label{color:var(--text);font-weight:600}
+.check-sub{font-size:11px;color:var(--muted);margin-top:1px}
+
+/* ── Timing section ── */
+.timing-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.timing-info{font-size:13px;color:var(--muted)}
+.timing-info b{font-size:15px;font-weight:800}
+.timing-info b.green{color:var(--green)}
+.timing-info b.red{color:var(--red)}
+.timing-info b.gold{color:var(--gold)}
+.btn-mark{padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:12px;font-weight:700;cursor:pointer;transition:.15s}
+.btn-mark:hover{border-color:var(--green);color:var(--green)}
+.timing-bar{margin-top:10px;height:4px;background:var(--surface);border-radius:2px;overflow:hidden}
+.timing-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--red),var(--gold),var(--green));transition:width .5s}
+
+/* ── Error ── */
+.error-banner{background:rgba(255,68,68,.1);border:1px solid var(--red);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--red);margin-bottom:14px;display:none}
+.error-banner.visible{display:block}
+
+/* ── Responsive ── */
+@media(max-width:480px){
+  .output-meta{flex-direction:column;align-items:flex-start}
+  .btn-copy{width:100%}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-row">
+    <div class="logo">𝕏 Post Creator</div>
+    <div class="badge">SOP Engine</div>
+  </div>
+  <div class="header-sub">4-Step Cheat Code · Algorithm-Optimized Output</div>
+</div>
+
+<div class="page">
+
+  <!-- Input -->
+  <div class="card">
+    <div class="card-title"><span>✍️</span> Your Raw Input</div>
+
+    <div class="field">
+      <label>Niche / Topic Area</label>
+      <select id="niche">
+        <option value="">— Select or type below —</option>
+        <option value="Options Trading &amp; Market Structure">Options Trading &amp; Market Structure</option>
+        <option value="Quantitative Finance &amp; Algo Trading">Quantitative Finance &amp; Algo Trading</option>
+        <option value="AI &amp; Machine Learning">AI &amp; Machine Learning</option>
+        <option value="Crypto &amp; DeFi">Crypto &amp; DeFi</option>
+        <option value="Startups &amp; Venture Capital">Startups &amp; Venture Capital</option>
+        <option value="Software Engineering">Software Engineering</option>
+        <option value="Data Science &amp; Analytics">Data Science &amp; Analytics</option>
+        <option value="Macro Economics &amp; Fed Policy">Macro Economics &amp; Fed Policy</option>
+        <option value="Personal Finance &amp; Wealth Building">Personal Finance &amp; Wealth Building</option>
+        <option value="custom">Custom (type below)</option>
+      </select>
+    </div>
+
+    <div class="field" id="custom-niche-field" style="display:none">
+      <label>Custom Niche</label>
+      <input type="text" id="custom-niche" placeholder="e.g. High-frequency trading, Biotech investing…">
+    </div>
+
+    <div class="field">
+      <label>Your Raw Thoughts</label>
+      <textarea id="sentences" placeholder="Type 1–4 sentences, stream of consciousness. Don't worry about wording — just the idea.&#10;&#10;Example: been testing a two-tower model for recommendations, hit 94% precision on the holdout. the trick was adding temporal decay to the user embeddings. sharing the architecture breakdown." rows="6"></textarea>
+      <div class="hint">Rough notes are fine. The engine rewrites everything following the SOP.</div>
+    </div>
+
+    <div class="field">
+      <label>Media Description <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
+      <textarea class="tall" id="media" placeholder="Describe what's in your pic/video/chart if you're attaching one.&#10;&#10;Example: screenshot of a Python script showing the model architecture with accuracy metrics visible" rows="3"></textarea>
+      <div class="hint">The post will reference the media as if it's already attached.</div>
+    </div>
+
+    <div class="error-banner" id="error-banner"></div>
+
+    <button class="btn-generate" id="gen-btn" onclick="generate()">
+      Generate Optimized Post
+    </button>
+  </div>
+
+  <!-- Output -->
+  <div class="card output-card" id="output-card">
+    <div class="card-title"><span>📋</span> Your Optimized Post</div>
+    <div class="post-box" id="post-box" contenteditable="true" spellcheck="false"></div>
+    <div class="output-meta">
+      <div class="char-count" id="char-count"><b>0</b> characters</div>
+      <button class="btn-copy" id="copy-btn" onclick="copyPost()">Copy to Clipboard</button>
+    </div>
+  </div>
+
+  <!-- SOP Checklist -->
+  <div class="card">
+    <div class="card-title"><span>✅</span> SOP Compliance</div>
+    <ul class="checklist">
+      <li class="check-item">
+        <div class="check-icon idle" id="chk1">—</div>
+        <div>
+          <div class="check-label">Front-loaded keywords</div>
+          <div class="check-sub">Domain terms in first 15–30 words</div>
+        </div>
+      </li>
+      <li class="check-item">
+        <div class="check-icon idle" id="chk2">—</div>
+        <div>
+          <div class="check-label">Clean syntax</div>
+          <div class="check-sub">Short SVO sentences, no filler phrases</div>
+        </div>
+      </li>
+      <li class="check-item">
+        <div class="check-icon idle" id="chk3">—</div>
+        <div>
+          <div class="check-label">No outbound links</div>
+          <div class="check-sub">All value native to the platform</div>
+        </div>
+      </li>
+      <li class="check-item">
+        <div class="check-icon idle" id="chk4">—</div>
+        <div>
+          <div class="check-label">Post timing</div>
+          <div class="check-sub" id="chk4-sub">Mark your last post to track spacing</div>
+        </div>
+      </li>
+    </ul>
+  </div>
+
+  <!-- Timing Tracker -->
+  <div class="card">
+    <div class="card-title"><span>⏱️</span> Post Timing Tracker</div>
+    <div class="timing-row">
+      <div class="timing-info">
+        Time since last post: <b id="time-since">—</b>
+      </div>
+      <button class="btn-mark" onclick="markPosted()">Mark as Posted Now</button>
+    </div>
+    <div class="timing-bar"><div class="timing-fill" id="timing-fill" style="width:0%"></div></div>
+    <div class="hint" style="margin-top:8px">Rule 4: Space posts by at least 4 hours to avoid author decay penalties.</div>
+  </div>
+
+</div>
+
+<script>
+// ── Niche toggle ────────────────────────────────────────────
+document.getElementById('niche').addEventListener('change', function() {
+  const customField = document.getElementById('custom-niche-field');
+  customField.style.display = this.value === 'custom' ? 'block' : 'none';
+});
+
+// ── Resolve niche value ─────────────────────────────────────
+function getNiche() {
+  const sel = document.getElementById('niche');
+  if (sel.value === 'custom') return document.getElementById('custom-niche').value.trim();
+  return sel.value;
+}
+
+// ── Generate post ───────────────────────────────────────────
+async function generate() {
+  const sentences = document.getElementById('sentences').value.trim();
+  const media     = document.getElementById('media').value.trim();
+  const niche     = getNiche();
+  const btn       = document.getElementById('gen-btn');
+  const errBanner = document.getElementById('error-banner');
+
+  errBanner.classList.remove('visible');
+
+  if (!sentences) {
+    errBanner.textContent = 'Please enter your raw thoughts before generating.';
+    errBanner.classList.add('visible');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-inline"></span>Optimizing…';
+
+  try {
+    const res = await fetch('/api/xpost/generate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ sentences, media, niche })
+    });
+    const data = await res.json();
+
+    if (!res.ok || data.error) throw new Error(data.error || 'Generation failed');
+
+    showOutput(data.post);
+  } catch (err) {
+    errBanner.textContent = 'Error: ' + err.message;
+    errBanner.classList.add('visible');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = 'Generate Optimized Post';
+  }
+}
+
+// ── Show output ─────────────────────────────────────────────
+function showOutput(post) {
+  const box  = document.getElementById('post-box');
+  const card = document.getElementById('output-card');
+
+  box.textContent = post;
+  card.classList.add('visible');
+  card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  updateCharCount();
+  runCompliance(post);
+}
+
+// ── Live char count on edits ────────────────────────────────
+document.getElementById('post-box').addEventListener('input', () => {
+  updateCharCount();
+  runCompliance(document.getElementById('post-box').textContent);
+});
+
+function updateCharCount() {
+  const box  = document.getElementById('post-box');
+  const el   = document.getElementById('char-count');
+  const len  = box.textContent.length;
+  el.innerHTML = `<b>${len.toLocaleString()}</b> characters`;
+  el.className = 'char-count' + (len > 25000 ? ' over' : len > 280 ? ' warn' : '');
+}
+
+// ── Copy ────────────────────────────────────────────────────
+function copyPost() {
+  const text = document.getElementById('post-box').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('copy-btn');
+    btn.textContent = '✓ Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy to Clipboard'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+// ── SOP Compliance ──────────────────────────────────────────
+function setCheck(id, state, tooltip) {
+  const el = document.getElementById(id);
+  el.className = 'check-icon ' + state;
+  el.textContent = state === 'pass' ? '✓' : state === 'fail' ? '✕' : state === 'warn' ? '!' : '—';
+  if (tooltip && id === 'chk4-sub') return; // timing handled separately
+}
+
+function runCompliance(post) {
+  // Rule 1 — front-load: check first 30 words aren't vague openers
+  const words30 = post.split(/\s+/).slice(0, 30).join(' ').toLowerCase();
+  const vagueOpeners = ['hey guys', 'i wanted to', 'just wanted', 'thoughts on', 'today i', 'so i\'ve been', 'wanted to share'];
+  const hasVague = vagueOpeners.some(v => words30.startsWith(v));
+  setCheck('chk1', hasVague ? 'fail' : 'pass');
+
+  // Rule 2 — clean syntax: warn if any sentence > 25 words
+  const sentences = post.split(/[.!?]+/).filter(s => s.trim().length > 3);
+  const longSentence = sentences.some(s => s.trim().split(/\s+/).length > 25);
+  setCheck('chk2', longSentence ? 'warn' : 'pass');
+
+  // Rule 3 — no links
+  const hasLink = /https?:\/\/|www\./i.test(post);
+  setCheck('chk3', hasLink ? 'fail' : 'pass');
+
+  // Rule 4 — timing (handled by timer, just refresh)
+  updateTiming();
+}
+
+// ── Timing tracker ──────────────────────────────────────────
+const TIMING_KEY   = 'xpost_last_ts';
+const SAFE_HOURS   = 4;
+const SAFE_MS      = SAFE_HOURS * 60 * 60 * 1000;
+
+function markPosted() {
+  localStorage.setItem(TIMING_KEY, Date.now().toString());
+  updateTiming();
+}
+
+function updateTiming() {
+  const ts   = parseInt(localStorage.getItem(TIMING_KEY) || '0', 10);
+  const el   = document.getElementById('time-since');
+  const fill = document.getElementById('timing-fill');
+  const sub  = document.getElementById('chk4-sub');
+  const chk  = document.getElementById('chk4');
+
+  if (!ts) {
+    el.innerHTML = '—';
+    el.className = '';
+    fill.style.width = '0%';
+    chk.className = 'check-icon idle';
+    chk.textContent = '—';
+    sub.textContent = 'Mark your last post to track spacing';
+    return;
+  }
+
+  const elapsed = Date.now() - ts;
+  const hours   = elapsed / 3600000;
+  const pct     = Math.min(100, (elapsed / SAFE_MS) * 100);
+
+  const fmt = hours < 1
+    ? `${Math.floor(elapsed / 60000)}m`
+    : `${hours.toFixed(1)}h`;
+
+  fill.style.width = pct + '%';
+
+  if (elapsed >= SAFE_MS) {
+    el.innerHTML = `<b class="green">${fmt}</b>`;
+    chk.className = 'check-icon pass';
+    chk.textContent = '✓';
+    sub.textContent = `Clear to post — ${fmt} since last post`;
+  } else {
+    const remaining = ((SAFE_MS - elapsed) / 3600000).toFixed(1);
+    el.innerHTML = `<b class="${hours < 1 ? 'red' : 'gold'}">${fmt}</b>`;
+    chk.className = `check-icon ${hours < 1 ? 'fail' : 'warn'}`;
+    chk.textContent = hours < 1 ? '✕' : '!';
+    sub.textContent = `Wait ~${remaining}h more to avoid author decay penalty`;
+  }
+}
+
+// Update timer every minute
+updateTiming();
+setInterval(updateTiming, 60000);
+</script>
+</body>
+</html>
