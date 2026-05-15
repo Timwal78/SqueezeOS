@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { createChart, ColorType, type IChartApi, type ISeriesApi, type UTCTimestamp } from "lightweight-charts";
+import { createChart, ColorType, CandlestickSeries, HistogramSeries, type IChartApi, type ISeriesApi, type UTCTimestamp } from "lightweight-charts";
 import { useQuery } from "@tanstack/react-query";
 import { fetchHistorical } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -40,12 +40,12 @@ export function GP({ symbol }: { symbol: string }) {
       },
       autoSize: true,
     });
-    const candle = chart.addCandlestickSeries({
+    const candle = chart.addSeries(CandlestickSeries, {
       upColor: "#22ee22", downColor: "#ff3b3b",
       wickUpColor: "#22ee22", wickDownColor: "#ff3b3b",
       borderVisible: false,
     });
-    const vol = chart.addHistogramSeries({ color: "rgba(255,140,0,0.3)", priceFormat: { type: "volume" }, priceScaleId: "" });
+    const vol = chart.addSeries(HistogramSeries, { color: "rgba(255,140,0,0.3)", priceFormat: { type: "volume" }, priceScaleId: "" });
     vol.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
     candle.priceScale().applyOptions({ scaleMargins: { top: 0.05, bottom: 0.22 } });
     chartRef.current = chart;

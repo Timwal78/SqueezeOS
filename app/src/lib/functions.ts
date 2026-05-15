@@ -1,5 +1,5 @@
 export type FunctionCode =
-  | "CC" | "INTEL" | "HELP"
+  | "SML" | "CC" | "INTEL" | "HELP"
   | "DES" | "GP" | "QR" | "HP"
   | "FA" | "KEY" | "DVD" | "EE" | "NI"
   | "WEI" | "MOV" | "OMON"
@@ -14,6 +14,7 @@ export interface FunctionDef {
 }
 
 export const FUNCTIONS: FunctionDef[] = [
+  { code: "SML",  name: "War Room Beast",        needsSymbol: false, group: "System", summary: "Master scorecard — signals across Apex, Leviathan, and MMLE" },
   { code: "CC",   name: "Command Center",        needsSymbol: false, group: "System", summary: "Morning briefing · markets, curve, FX, movers, news" },
   { code: "HELP", name: "Function Directory",    needsSymbol: false, group: "System", summary: "List of all terminal functions" },
 

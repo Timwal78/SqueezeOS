@@ -23,9 +23,9 @@ const tabId = (code: string, symbol?: string) => `${code}:${symbol ?? "_"}`;
 export const useWorkspace = create<WorkspaceState>()(
   persist(
     (set, get) => ({
-      tabs: [{ id: "CC:_", code: "CC" }],
-      activeTabId: "CC:_",
-      activeSymbol: "AAPL",
+      tabs: [{ id: "SML:_", code: "SML" }],
+      activeTabId: "SML:_",
+      activeSymbol: "GME",
       openTab: (code, symbol) => {
         const s = symbol?.toUpperCase();
         const id = tabId(code, s);

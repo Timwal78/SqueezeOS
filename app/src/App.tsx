@@ -25,8 +25,10 @@ import { OMON } from "@/functions/OMON";
 import { CURV } from "@/functions/CURV";
 import { FXC } from "@/functions/FXC";
 import { CRYPTO } from "@/functions/CRYPTO";
+import { SML } from "@/functions/SML";
 
 const SCREENS: Record<string, (symbol?: string) => JSX.Element> = {
+  SML: () => <SML />,
   CC: () => <CC />,
   INTEL: (s) => <INTEL symbol={s!} />,
   HELP: () => <HELP />,
@@ -50,7 +52,18 @@ const SCREENS: Record<string, (symbol?: string) => JSX.Element> = {
 export default function App() {
   const { tabs, activeTabId } = useWorkspace();
   const active = useMemo(() => tabs.find((t) => t.id === activeTabId) ?? tabs[0], [tabs, activeTabId]);
-  const screen = active && SCREENS[active.code]?.(active.symbol);
+  
+  let screen: JSX.Element;
+  try {
+    screen = (active && SCREENS[active.code]?.(active.symbol)) ?? SCREENS.SML();
+  } catch (e) {
+    screen = (
+      <div className="p-8 text-term-red bg-term-red/5 border border-term-red/20 m-4 rounded">
+        <h2 className="text-xl font-bold mb-2 uppercase tracking-widest">Runtime Exception Detected</h2>
+        <pre className="text-[10px] opacity-70 overflow-auto">{(e as Error).stack}</pre>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen flex flex-col">
