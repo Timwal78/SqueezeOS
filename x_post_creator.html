@@ -18,9 +18,15 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .header-row{display:flex;align-items:center;justify-content:space-between}
 .logo{font-size:22px;font-weight:900;background:linear-gradient(135deg,var(--green),var(--blue));-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:-0.5px}
 .badge{background:rgba(0,255,136,.12);border:1px solid var(--green);border-radius:20px;padding:3px 12px;font-size:11px;font-weight:800;color:var(--green);letter-spacing:.6px;text-transform:uppercase}
-.header-sub{font-size:12px;color:var(--muted);margin-top:4px;letter-spacing:.3px}
+.header-sub{font-size:12px;color:var(--muted);margin-top:4px}
 
 .page{max-width:680px;margin:0 auto;padding:20px 16px 80px}
+
+/* ── How it works banner ── */
+.how-it-works{background:rgba(0,191,255,.06);border:1px solid rgba(0,191,255,.2);border-radius:12px;padding:12px 16px;margin-bottom:14px;display:flex;gap:10px;align-items:flex-start}
+.how-it-works .icon{font-size:20px;flex-shrink:0;margin-top:1px}
+.how-it-works p{font-size:13px;color:var(--text);line-height:1.6}
+.how-it-works b{color:var(--blue)}
 
 .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px;margin-bottom:14px}
 .card.ai-card{border-color:rgba(168,85,247,.3);background:rgba(168,85,247,.04)}
@@ -36,9 +42,9 @@ select{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='htt
 select option{background:#1a1a24}
 select:focus,textarea:focus,input[type=text]:focus{border-color:var(--blue)}
 textarea{resize:vertical;min-height:120px;line-height:1.6}
-textarea.tall{min-height:90px}
 .hint{font-size:11px;color:var(--muted);margin-top:5px;line-height:1.5}
 
+/* ── Provider buttons ── */
 .provider-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .provider-btn{padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--muted);font-size:12px;font-weight:700;cursor:pointer;text-align:center;transition:.15s;letter-spacing:.3px}
 .provider-btn:hover{border-color:var(--purple);color:var(--purple)}
@@ -46,7 +52,6 @@ textarea.tall{min-height:90px}
 .provider-btn .pname{font-size:13px;font-weight:800;color:inherit;display:block;margin-bottom:2px}
 .provider-btn .pdesc{font-size:10px;color:var(--muted);font-weight:400}
 .provider-btn.active .pdesc{color:rgba(168,85,247,.7)}
-
 .ollama-fields{display:none;margin-top:10px}
 .ollama-fields.visible{display:block}
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -56,6 +61,25 @@ textarea.tall{min-height:90px}
 .test-result.ok{background:rgba(0,255,136,.1);color:var(--green);display:block}
 .test-result.err{background:rgba(255,68,68,.1);color:var(--red);display:block}
 
+/* ── Image drop zone ── */
+.drop-zone{border:2px dashed var(--border);border-radius:12px;padding:20px;text-align:center;cursor:pointer;transition:.2s;position:relative;background:var(--surface)}
+.drop-zone:hover,.drop-zone.drag-over{border-color:var(--blue);background:rgba(0,191,255,.05)}
+.drop-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.drop-zone .dz-icon{font-size:28px;margin-bottom:6px}
+.drop-zone .dz-text{font-size:13px;color:var(--muted);line-height:1.6}
+.drop-zone .dz-text b{color:var(--text);font-weight:700}
+.drop-zone .dz-hint{font-size:11px;color:var(--muted);margin-top:4px}
+
+/* image preview */
+.img-preview{display:none;margin-top:10px;position:relative}
+.img-preview.visible{display:block}
+.img-preview img{width:100%;max-height:220px;object-fit:cover;border-radius:10px;border:1px solid var(--border)}
+.img-remove{position:absolute;top:6px;right:6px;background:rgba(0,0,0,.7);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer;transition:.15s}
+.img-remove:hover{border-color:var(--red);color:var(--red)}
+.img-analyzing{font-size:11px;color:var(--blue);margin-top:6px;display:none}
+.img-analyzing.visible{display:block}
+
+/* ── Generate button ── */
 .btn-generate{width:100%;padding:14px;border:none;border-radius:12px;font-size:16px;font-weight:800;cursor:pointer;letter-spacing:.3px;background:linear-gradient(135deg,#00c853,#00ff88);color:#000;transition:opacity .15s,transform .1s;margin-top:4px}
 .btn-generate:hover{opacity:.9}
 .btn-generate:active{transform:scale(.98)}
@@ -63,20 +87,25 @@ textarea.tall{min-height:90px}
 .spinner-inline{display:inline-block;width:16px;height:16px;border:2px solid rgba(0,0,0,.3);border-top-color:#000;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:8px}
 @keyframes spin{to{transform:rotate(360deg)}}
 
+/* ── Output ── */
 .output-card{display:none}
 .output-card.visible{display:block}
-.post-box{background:#0d0d14;border:1px solid var(--border);border-radius:12px;padding:16px;font-size:14px;line-height:1.75;white-space:pre-wrap;word-break:break-word;color:var(--text);min-height:80px;cursor:text;transition:border-color .15s}
+.output-label{font-size:13px;color:var(--muted);margin-bottom:8px;font-weight:600}
+.output-label b{color:var(--green)}
+.post-box{background:#0d0d14;border:1px solid var(--green);border-radius:12px;padding:16px;font-size:14px;line-height:1.75;white-space:pre-wrap;word-break:break-word;color:var(--text);min-height:80px;cursor:text;transition:border-color .15s}
 .post-box:focus{outline:none;border-color:var(--blue)}
 .output-meta{display:flex;align-items:center;justify-content:space-between;margin-top:10px;flex-wrap:wrap;gap:8px}
 .char-count{font-size:12px;color:var(--muted)}
 .char-count b{color:var(--text)}
 .char-count.warn b{color:var(--gold)}
 .char-count.over b{color:var(--red)}
-.btn-copy{padding:8px 18px;border-radius:8px;border:1px solid var(--green);background:rgba(0,255,136,.1);color:var(--green);font-size:12px;font-weight:700;cursor:pointer;transition:.15s;letter-spacing:.3px}
+.btn-copy{padding:9px 20px;border-radius:8px;border:1px solid var(--green);background:rgba(0,255,136,.1);color:var(--green);font-size:13px;font-weight:700;cursor:pointer;transition:.15s;letter-spacing:.3px}
 .btn-copy:hover{background:rgba(0,255,136,.2)}
 .btn-copy.copied{border-color:var(--blue);background:rgba(0,191,255,.1);color:var(--blue)}
 .via-tag{font-size:10px;color:var(--muted);margin-top:6px}
 
+/* ── Checklist ── */
+.checklist-header{font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.5}
 .checklist{list-style:none;display:flex;flex-direction:column;gap:8px}
 .check-item{display:flex;align-items:center;gap:10px;font-size:13px}
 .check-icon{width:22px;height:22px;border-radius:50%;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;transition:.3s}
@@ -87,6 +116,7 @@ textarea.tall{min-height:90px}
 .check-label{color:var(--text);font-weight:600}
 .check-sub{font-size:11px;color:var(--muted);margin-top:1px}
 
+/* ── Timing ── */
 .timing-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
 .timing-info{font-size:13px;color:var(--muted)}
 .timing-info b{font-size:15px;font-weight:800}
@@ -116,10 +146,16 @@ textarea.tall{min-height:90px}
     <div class="logo">𝕏 Post Creator</div>
     <div class="badge">SOP Engine</div>
   </div>
-  <div class="header-sub">4-Step Cheat Code · Algorithm-Optimized Output</div>
+  <div class="header-sub">Type 1–4 sentences → AI writes your full optimized post</div>
 </div>
 
 <div class="page">
+
+  <!-- How it works -->
+  <div class="how-it-works">
+    <div class="icon">💡</div>
+    <p>Type your raw idea in 1–4 sentences (don't worry about wording). Optionally paste or drop a screenshot or photo. Hit <b>Generate</b> — the AI writes a complete, algorithm-optimized post following all 4 SOP rules. Edit freely, then copy and paste to X.</p>
+  </div>
 
   <!-- AI Provider -->
   <div class="card ai-card">
@@ -127,15 +163,14 @@ textarea.tall{min-height:90px}
       <span>⚡</span> AI Provider
       <span class="provider-badge" id="provider-badge">Detecting…</span>
     </div>
-
     <div class="provider-row">
       <button class="provider-btn" id="p-anthropic" onclick="selectProvider('anthropic')">
         <span class="pname">Claude</span>
-        <span class="pdesc">Anthropic · Haiku</span>
+        <span class="pdesc">Anthropic · vision ✓</span>
       </button>
       <button class="provider-btn" id="p-openai" onclick="selectProvider('openai')">
         <span class="pname">OpenAI</span>
-        <span class="pdesc">GPT-4o mini</span>
+        <span class="pdesc">GPT-4o mini · vision ✓</span>
       </button>
       <button class="provider-btn" id="p-openrouter" onclick="selectProvider('openrouter')">
         <span class="pname">OpenRouter</span>
@@ -143,20 +178,13 @@ textarea.tall{min-height:90px}
       </button>
       <button class="provider-btn" id="p-ollama" onclick="selectProvider('ollama')">
         <span class="pname">Ollama</span>
-        <span class="pdesc">Local / on-device</span>
+        <span class="pdesc">Local · on-device</span>
       </button>
     </div>
-
     <div class="ollama-fields" id="ollama-fields">
       <div class="two-col" style="margin-top:10px">
-        <div>
-          <label>Ollama URL</label>
-          <input type="text" id="ollama-url" value="http://localhost:11434">
-        </div>
-        <div>
-          <label>Model</label>
-          <input type="text" id="ollama-model" value="llama3">
-        </div>
+        <div><label>Ollama URL</label><input type="text" id="ollama-url" value="http://localhost:11434"></div>
+        <div><label>Model</label><input type="text" id="ollama-model" value="llama3"></div>
       </div>
       <button class="test-btn" onclick="testOllama()">Test Connection</button>
       <div class="test-result" id="test-result"></div>
@@ -165,7 +193,7 @@ textarea.tall{min-height:90px}
 
   <!-- Input -->
   <div class="card">
-    <div class="card-title"><span>✍️</span> Your Raw Input</div>
+    <div class="card-title"><span>✍️</span> Your Raw Idea</div>
 
     <div class="field">
       <label>Niche / Topic Area</label>
@@ -190,27 +218,37 @@ textarea.tall{min-height:90px}
     </div>
 
     <div class="field">
-      <label>Your Raw Thoughts</label>
-      <textarea id="sentences" placeholder="Type 1–4 sentences, stream of consciousness. Don't worry about wording — just the idea.&#10;&#10;Example: been testing a two-tower model for recommendations, hit 94% precision on the holdout. the trick was adding temporal decay to the user embeddings. sharing the architecture breakdown." rows="6"></textarea>
-      <div class="hint">Rough notes are fine. The engine rewrites everything following the SOP.</div>
+      <label>Your Raw Sentences</label>
+      <textarea id="sentences" placeholder="Don't overthink it — just your idea in plain words.&#10;&#10;Example: options flow on SPY was super lopsided today, way more puts than calls especially the 0DTE strikes. gamma wall is sitting right at 540. could be setting up for a squeeze." rows="5"></textarea>
+      <div class="hint">1–4 sentences is plenty. The AI rewrites everything to follow the 4-step SOP.</div>
     </div>
 
     <div class="field">
-      <label>Media Description <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
-      <textarea class="tall" id="media" placeholder="Describe what's in your pic/video/chart if you're attaching one.&#10;&#10;Example: screenshot of a Python script showing the model architecture with accuracy metrics visible" rows="3"></textarea>
-      <div class="hint">The post will reference the media as if it's already attached.</div>
+      <label>Image / Screenshot <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(optional — paste, drag, or tap to upload)</span></label>
+      <div class="drop-zone" id="drop-zone">
+        <input type="file" id="file-input" accept="image/*" onchange="handleFile(this.files[0])">
+        <div class="dz-icon">🖼️</div>
+        <div class="dz-text"><b>Paste (Ctrl+V)</b>, drag &amp; drop, or tap here to add a screenshot or photo</div>
+        <div class="dz-hint">The AI sees your image and references it naturally in the post</div>
+      </div>
+      <div class="img-preview" id="img-preview">
+        <img id="img-thumb" src="" alt="Preview">
+        <button class="img-remove" onclick="clearImage()">✕ Remove</button>
+      </div>
+      <div class="img-analyzing" id="img-analyzing">👁️ AI will analyze this image when you generate…</div>
     </div>
 
     <div class="error-banner" id="error-banner"></div>
 
     <button class="btn-generate" id="gen-btn" onclick="generate()">
-      Generate Optimized Post
+      ✨ Build My Optimized Post
     </button>
   </div>
 
   <!-- Output -->
   <div class="card output-card" id="output-card">
-    <div class="card-title"><span>📋</span> Your Optimized Post</div>
+    <div class="card-title"><span>📋</span> Your Optimized Post — Ready to Copy</div>
+    <div class="output-label">The AI wrote this following all 4 SOP rules. <b>Edit any line you like below.</b></div>
     <div class="post-box" id="post-box" contenteditable="true" spellcheck="false"></div>
     <div class="output-meta">
       <div class="char-count" id="char-count"><b>0</b> characters</div>
@@ -221,34 +259,35 @@ textarea.tall{min-height:90px}
 
   <!-- SOP Checklist -->
   <div class="card">
-    <div class="card-title"><span>✅</span> SOP Compliance</div>
+    <div class="card-title"><span>✅</span> SOP Compliance Check</div>
+    <div class="checklist-header">These update automatically as you generate or edit your post.</div>
     <ul class="checklist">
       <li class="check-item">
         <div class="check-icon idle" id="chk1">—</div>
         <div>
           <div class="check-label">Front-loaded keywords</div>
-          <div class="check-sub">Domain terms in first 15–30 words</div>
+          <div class="check-sub">Domain terms in first 15–30 words (not vague openers)</div>
         </div>
       </li>
       <li class="check-item">
         <div class="check-icon idle" id="chk2">—</div>
         <div>
           <div class="check-label">Clean syntax</div>
-          <div class="check-sub">Short SVO sentences, no filler phrases</div>
+          <div class="check-sub">Short direct sentences — no sentence over 25 words</div>
         </div>
       </li>
       <li class="check-item">
         <div class="check-icon idle" id="chk3">—</div>
         <div>
           <div class="check-label">No outbound links</div>
-          <div class="check-sub">All value native to the platform</div>
+          <div class="check-sub">Zero URLs — all value native to the platform</div>
         </div>
       </li>
       <li class="check-item">
         <div class="check-icon idle" id="chk4">—</div>
         <div>
           <div class="check-label">Post timing</div>
-          <div class="check-sub" id="chk4-sub">Mark your last post to track spacing</div>
+          <div class="check-sub" id="chk4-sub">Hit "Mark as Posted" after you post to track spacing</div>
         </div>
       </li>
     </ul>
@@ -258,9 +297,7 @@ textarea.tall{min-height:90px}
   <div class="card">
     <div class="card-title"><span>⏱️</span> Post Timing Tracker</div>
     <div class="timing-row">
-      <div class="timing-info">
-        Time since last post: <b id="time-since">—</b>
-      </div>
+      <div class="timing-info">Time since last post: <b id="time-since">—</b></div>
       <button class="btn-mark" onclick="markPosted()">Mark as Posted Now</button>
     </div>
     <div class="timing-bar"><div class="timing-fill" id="timing-fill" style="width:0%"></div></div>
@@ -270,6 +307,58 @@ textarea.tall{min-height:90px}
 </div>
 
 <script>
+// ── Image state ─────────────────────────────────────────────
+let imageB64 = '';
+let imageMime = 'image/jpeg';
+
+function handleFile(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  imageMime = file.type;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const dataUrl = e.target.result;
+    // strip the data:mime;base64, prefix
+    imageB64 = dataUrl.split(',')[1];
+    document.getElementById('img-thumb').src = dataUrl;
+    document.getElementById('img-preview').classList.add('visible');
+    document.getElementById('img-analyzing').classList.add('visible');
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearImage() {
+  imageB64 = '';
+  imageMime = 'image/jpeg';
+  document.getElementById('img-preview').classList.remove('visible');
+  document.getElementById('img-analyzing').classList.remove('visible');
+  document.getElementById('img-thumb').src = '';
+  document.getElementById('file-input').value = '';
+}
+
+// Global paste listener (Ctrl+V anywhere on page)
+document.addEventListener('paste', e => {
+  const items = e.clipboardData?.items;
+  if (!items) return;
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      e.preventDefault();
+      handleFile(item.getAsFile());
+      break;
+    }
+  }
+});
+
+// Drag & drop on the drop zone
+const dz = document.getElementById('drop-zone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault();
+  dz.classList.remove('drag-over');
+  const file = e.dataTransfer?.files?.[0];
+  if (file) handleFile(file);
+});
+
 // ── Provider state ──────────────────────────────────────────
 const PROV_KEY = 'xpost_provider';
 let currentProvider = localStorage.getItem(PROV_KEY) || 'anthropic';
@@ -281,9 +370,8 @@ function selectProvider(p) {
   const btn = document.getElementById('p-' + p);
   if (btn) btn.classList.add('active');
   document.getElementById('ollama-fields').classList.toggle('visible', p === 'ollama');
-  const badge = document.getElementById('provider-badge');
-  const labels = {anthropic:'Claude / Haiku', openai:'GPT-4o mini', openrouter:'OpenRouter', ollama:'Ollama (local)'};
-  badge.textContent = labels[p] || p;
+  const labels = {anthropic:'Claude Haiku', openai:'GPT-4o mini', openrouter:'OpenRouter', ollama:'Ollama (local)'};
+  document.getElementById('provider-badge').textContent = labels[p] || p;
 }
 
 async function testOllama() {
@@ -295,9 +383,8 @@ async function testOllama() {
   res.style.display = 'block';
   try {
     const r = await fetch('/api/xpost/generate', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({sentences:'test', provider:'ollama', ollama_url: url, ollama_model: model})
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({sentences:'ping test', provider:'ollama', ollama_url:url, ollama_model:model})
     });
     const d = await r.json();
     if (d.error) throw new Error(d.error);
@@ -309,15 +396,12 @@ async function testOllama() {
   }
 }
 
-// ── Init: load provider defaults from server ────────────────
 async function initProviders() {
   try {
     const r = await fetch('/api/xpost/providers');
     const d = await r.json();
-    // Pre-fill Ollama fields from server env
     if (d.ollama_url) document.getElementById('ollama-url').value = d.ollama_url;
     if (d.ollama_model) document.getElementById('ollama-model').value = d.ollama_model;
-    // If stored provider isn't available, fall back to server default
     if (!d.available.includes(currentProvider) && currentProvider !== 'ollama') {
       currentProvider = d.default;
     }
@@ -339,7 +423,6 @@ function getNiche() {
 // ── Generate ────────────────────────────────────────────────
 async function generate() {
   const sentences    = document.getElementById('sentences').value.trim();
-  const media        = document.getElementById('media').value.trim();
   const niche        = getNiche();
   const ollama_url   = document.getElementById('ollama-url').value.trim();
   const ollama_model = document.getElementById('ollama-model').value.trim();
@@ -348,20 +431,22 @@ async function generate() {
 
   errBanner.classList.remove('visible');
 
-  if (!sentences) {
-    errBanner.textContent = 'Please enter your raw thoughts before generating.';
+  if (!sentences && !imageB64) {
+    errBanner.textContent = 'Add at least one sentence or an image before generating.';
     errBanner.classList.add('visible');
     return;
   }
 
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner-inline"></span>Optimizing…';
+  btn.innerHTML = '<span class="spinner-inline"></span>Writing your post…';
 
   try {
-    const res = await fetch('/api/xpost/generate', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ sentences, media, niche, provider: currentProvider, ollama_url, ollama_model })
+    const body = { sentences, niche, provider: currentProvider, ollama_url, ollama_model };
+    if (imageB64) { body.image_b64 = imageB64; body.image_mime = imageMime; }
+
+    const res  = await fetch('/api/xpost/generate', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body)
     });
     const data = await res.json();
     if (!res.ok || data.error) throw new Error(data.error || 'Generation failed');
@@ -371,39 +456,33 @@ async function generate() {
     errBanner.classList.add('visible');
   } finally {
     btn.disabled = false;
-    btn.innerHTML = 'Generate Optimized Post';
+    btn.innerHTML = '✨ Build My Optimized Post';
   }
 }
 
 // ── Show output ─────────────────────────────────────────────
 function showOutput(post, provider) {
-  const box  = document.getElementById('post-box');
-  const card = document.getElementById('output-card');
-  const tag  = document.getElementById('via-tag');
   const labels = {anthropic:'Claude Haiku', openai:'GPT-4o mini', openrouter:'OpenRouter', ollama:'Ollama'};
-  box.textContent = post;
-  tag.textContent = 'Generated via ' + (labels[provider] || provider);
-  card.classList.add('visible');
-  card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  document.getElementById('post-box').textContent = post;
+  document.getElementById('via-tag').textContent = 'Written by ' + (labels[provider] || provider);
+  document.getElementById('output-card').classList.add('visible');
+  document.getElementById('output-card').scrollIntoView({behavior:'smooth', block:'start'});
   updateCharCount();
   runCompliance(post);
 }
 
-// ── Live char count ─────────────────────────────────────────
 document.getElementById('post-box').addEventListener('input', () => {
   updateCharCount();
   runCompliance(document.getElementById('post-box').textContent);
 });
 
 function updateCharCount() {
-  const box = document.getElementById('post-box');
+  const len = document.getElementById('post-box').textContent.length;
   const el  = document.getElementById('char-count');
-  const len = box.textContent.length;
   el.innerHTML = `<b>${len.toLocaleString()}</b> characters`;
   el.className = 'char-count' + (len > 25000 ? ' over' : len > 280 ? ' warn' : '');
 }
 
-// ── Copy ────────────────────────────────────────────────────
 function copyPost() {
   navigator.clipboard.writeText(document.getElementById('post-box').textContent).then(() => {
     const btn = document.getElementById('copy-btn');
@@ -422,12 +501,10 @@ function setCheck(id, state) {
 
 function runCompliance(post) {
   const words30 = post.split(/\s+/).slice(0, 30).join(' ').toLowerCase();
-  const vagueOpeners = ['hey guys','i wanted to','just wanted','thoughts on','today i','so i\'ve been','wanted to share'];
-  setCheck('chk1', vagueOpeners.some(v => words30.startsWith(v)) ? 'fail' : 'pass');
-
+  const vague = ['hey guys','i wanted to','just wanted','thoughts on','today i','so i\'ve been','wanted to share'];
+  setCheck('chk1', vague.some(v => words30.startsWith(v)) ? 'fail' : 'pass');
   const sents = post.split(/[.!?]+/).filter(s => s.trim().length > 3);
   setCheck('chk2', sents.some(s => s.trim().split(/\s+/).length > 25) ? 'warn' : 'pass');
-
   setCheck('chk3', /https?:\/\/|www\./i.test(post) ? 'fail' : 'pass');
   updateTiming();
 }
@@ -449,11 +526,9 @@ function updateTiming() {
   const chk  = document.getElementById('chk4');
 
   if (!ts) {
-    el.innerHTML = '—';
-    fill.style.width = '0%';
-    chk.className = 'check-icon idle';
-    chk.textContent = '—';
-    sub.textContent = 'Mark your last post to track spacing';
+    el.innerHTML = '—'; fill.style.width = '0%';
+    chk.className = 'check-icon idle'; chk.textContent = '—';
+    sub.textContent = 'Hit "Mark as Posted" after you post to track spacing';
     return;
   }
 
@@ -461,13 +536,11 @@ function updateTiming() {
   const hours   = elapsed / 3600000;
   const pct     = Math.min(100, (elapsed / SAFE_MS) * 100);
   const fmt     = hours < 1 ? `${Math.floor(elapsed / 60000)}m` : `${hours.toFixed(1)}h`;
-
   fill.style.width = pct + '%';
 
   if (elapsed >= SAFE_MS) {
     el.innerHTML = `<b class="green">${fmt}</b>`;
-    chk.className = 'check-icon pass';
-    chk.textContent = '✓';
+    chk.className = 'check-icon pass'; chk.textContent = '✓';
     sub.textContent = `Clear to post — ${fmt} since last post`;
   } else {
     const remaining = ((SAFE_MS - elapsed) / 3600000).toFixed(1);
