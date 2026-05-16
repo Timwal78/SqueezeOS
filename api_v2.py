@@ -49,10 +49,7 @@ DELTA_MAX  = float(os.environ.get("OPTIONS_DELTA_MAX",   "0.45"))
 MAX_SPREAD = float(os.environ.get("OPTIONS_MAX_SPREAD",  "0.30"))  # max bid/ask spread %
 
 # ── discord alerts ───────────────────────────────────────────────────────────
-DISCORD_WEBHOOK = os.environ.get(
-    "DISCORD_WEBHOOK",
-    "https://discord.com/api/webhooks/1499223272871432302/aV3Hxj18Oqnoc0Q2Mdi1MNFd9sZdtDTqrL82MIYwyrMhbdpvGHZ1AL7ehN0VrO66h9h6"
-)
+DISCORD_WEBHOOK = os.environ.get("DISCORD_WEBHOOK", "")
 
 _ACTION_COLOR = {"BUY": 0x00FFCC, "SELL": 0xFF2D2D, "HOLD": 0xFFB800, "WATCH": 0x8B00FF, "ERROR": 0x888888}
 
@@ -162,8 +159,8 @@ async def startup():
     loop = asyncio.get_event_loop()
     loop.run_in_executor(None, _init_providers)
     asyncio.create_task(_background_loop())
-    loop.run_in_executor(None, _discord_system,
-        "🟢 **SqueezeOS V2 ONLINE** — IWM 0DTE desk active | Council standing by | $1–$50 discovery armed")
+    loop.run_in_executor(None, lambda: _discord_system(
+        "🟢 **SqueezeOS V2 ONLINE** — IWM 0DTE desk active | Council standing by | $1–$50 discovery armed"))
 
 async def _background_loop():
     """Refresh quotes, discovery, and options every 30 s."""
@@ -441,11 +438,14 @@ async def get_terminal_data():
     bull            = 50
 
     if _council_cache:
-        last = _council_cache[next(reversed(_council_cache))]
-        if last.get("action") not in ("ANALYZING", "ERROR", None):
-            master_decision = last.get("action", "SCANNING")
-            master_grade    = last.get("grade", "—")
-            bull            = last.get("bull", 50)
+        try:
+            last = _council_cache[next(reversed(_council_cache))]
+            if last.get("action") not in ("ANALYZING", "ERROR", None):
+                master_decision = last.get("action", "SCANNING")
+                master_grade    = last.get("grade", "—")
+                bull            = last.get("bull", 50)
+        except (StopIteration, KeyError):
+            pass
 
     bear = 100 - bull
     edge = bull - bear

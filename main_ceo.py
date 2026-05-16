@@ -19,9 +19,11 @@ def _load_dotenv(path: str):
 
 _load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 
-# Add internal modules to path
-sys.path.append(os.path.join(os.getcwd(), 'core'))
-sys.path.append(os.path.join(os.getcwd(), 'tradingagents'))
+# Add internal modules to path — use __file__ so it works from any cwd
+_here = os.path.dirname(os.path.abspath(__file__))
+for _p in (os.path.join(_here, 'core'), os.path.join(_here, 'tradingagents')):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 from gamma_flow_engine import GammaFlowEngine
 from data_providers import PolygonProvider, AlpacaProvider
@@ -84,10 +86,10 @@ class SqueezeOS_CEO:
                     continue
                 
                 # EXECUTION PROTOCOL
-                spot = profile['spot_price']
-                call_wall = profile['call_wall']
-                put_wall = profile['put_wall']
-                z_score = profile['inventory_z']
+                spot      = float(profile.get('spot_price',  0) or 0)
+                call_wall = float(profile.get('call_wall',   0) or 0)
+                put_wall  = float(profile.get('put_wall',    0) or 0)
+                z_score   = float(profile.get('inventory_z', 0) or 0)
                 
                 # Zero-Fake check: if spot is 0, it's fake data or missing
                 if spot <= 0:
@@ -99,12 +101,6 @@ class SqueezeOS_CEO:
                     logger.info(f"🔥 FIRE SIGNAL: {ticker} breaking Call Wall with high stress!")
                     
                     try:
-                        import sys
-                        import os
-                        ta_path = os.path.join(os.path.dirname(__file__), 'tradingagents')
-                        if ta_path not in sys.path:
-                            sys.path.append(ta_path)
-                            
                         from tradingagents.graph.trading_graph import TradingAgentsGraph
                         from tradingagents.default_config import DEFAULT_CONFIG
                         
@@ -127,8 +123,12 @@ class SqueezeOS_CEO:
                             logger.info(f"🚀 [CEO] EXECUTION APPROVED: Buying {ticker}")
                             
                             # Calculate Position Sizing (Institutional: 5% of equity)
-                            account = self.alpaca.get_account()
-                            equity = float(account.get('equity', 0))
+                            try:
+                                account = self.alpaca.get_account()
+                            except Exception as _ae:
+                                logger.error(f"[CEO] Alpaca account fetch failed: {_ae}")
+                                continue
+                            equity = float(account.get('equity', 0) or 0)
                             price = spot if spot > 0 else 100 # Fallback price
                             
                             if equity > 0:
