@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: ghost-layer-facilitator
+    env: docker
+    plan: starter
+    region: oregon
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: ENVIRONMENT
+        value: production
+      - key: TREASURY_ADDRESS
+        value: "rNduuviQ3CCvHqWUTjJDD82Ko2tjqFGs3q"
+      - key: BASE_RPC_URL
+        value: "https://mainnet.base.org"

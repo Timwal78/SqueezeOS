@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>GHOST LAYER TERMINAL</title>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; font-family: monospace; }
+        #terminal-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #00FFCC;
+            z-index: 10;
+            pointer-events: none;
+        }
+        #terminal-overlay h1 { margin: 0 0 4px; font-size: 1.4rem; letter-spacing: 0.1em; }
+        #terminal-overlay p  { margin: 0; font-size: 0.75rem; opacity: 0.7; }
+    </style>
+    <script type="importmap">
+      { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+    </script>
+</head>
+<body>
+    <div id="terminal-overlay">
+        <h1>GHOST LAYER V2</h1>
+        <p>STATUS: OPERATIONAL // TRANSPARENT TOLL GATEWAY</p>
+    </div>
+    <script type="module" src="js/cube.js"></script>
+</body>
+</html>
