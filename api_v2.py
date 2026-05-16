@@ -3,6 +3,8 @@ import logging
 import sys
 import os
 import time
+import json
+import urllib.request
 from datetime import datetime, date
 from typing import Any, Dict, List, Optional
 
@@ -46,6 +48,84 @@ DELTA_MIN  = float(os.environ.get("OPTIONS_DELTA_MIN",   "0.35"))
 DELTA_MAX  = float(os.environ.get("OPTIONS_DELTA_MAX",   "0.45"))
 MAX_SPREAD = float(os.environ.get("OPTIONS_MAX_SPREAD",  "0.30"))  # max bid/ask spread %
 
+# ── discord alerts ───────────────────────────────────────────────────────────
+DISCORD_WEBHOOK = os.environ.get(
+    "DISCORD_WEBHOOK",
+    "https://discord.com/api/webhooks/1499223272871432302/aV3Hxj18Oqnoc0Q2Mdi1MNFd9sZdtDTqrL82MIYwyrMhbdpvGHZ1AL7ehN0VrO66h9h6"
+)
+
+_ACTION_COLOR = {"BUY": 0x00FFCC, "SELL": 0xFF2D2D, "HOLD": 0xFFB800, "WATCH": 0x8B00FF, "ERROR": 0x888888}
+
+def _discord(embeds: list):
+    """Fire-and-forget Discord webhook post."""
+    if not DISCORD_WEBHOOK:
+        return
+    try:
+        payload = json.dumps({"embeds": embeds}).encode()
+        req = urllib.request.Request(
+            DISCORD_WEBHOOK,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        urllib.request.urlopen(req, timeout=5)
+    except Exception as e:
+        logger.warning("[DISCORD] %s", e)
+
+def _discord_council(decision: Dict):
+    action     = decision.get("action", "HOLD")
+    ticker     = decision.get("ticker", "?")
+    confidence = decision.get("confidence", 0)
+    reasoning  = (decision.get("reasoning") or "No reasoning returned.")[:800]
+    grade      = decision.get("grade", "—")
+    color      = _ACTION_COLOR.get(action, 0x888888)
+
+    emoji = {"BUY": "🟢", "SELL": "🔴", "HOLD": "🟡", "WATCH": "🟣", "ERROR": "⚠️"}.get(action, "◈")
+
+    _discord([{
+        "title":       f"{emoji} COUNCIL VERDICT — {ticker}",
+        "description": f"**{action}** | Grade: **{grade}** | Confidence: **{confidence:.0%}**",
+        "color":       color,
+        "fields": [
+            {"name": "Reasoning", "value": reasoning, "inline": False},
+            {"name": "Ticker",    "value": ticker,               "inline": True},
+            {"name": "Time",      "value": datetime.now().strftime("%H:%M:%S ET"), "inline": True},
+        ],
+        "footer": {"text": "SML Council of Agents • SqueezeOS V2"},
+    }])
+
+def _discord_option(opt: Dict):
+    action  = opt.get("action", "WATCH")
+    symbol  = opt.get("symbol", "?")
+    strike  = opt.get("strike", 0)
+    otype   = opt.get("type", "").upper()
+    mid     = opt.get("mid", 0)
+    delta   = opt.get("delta", 0)
+    grade   = opt.get("grade", "—")
+    instr   = opt.get("instruction", "")
+    color   = _ACTION_COLOR.get(action, 0x888888)
+    exp     = opt.get("expiration", "0DTE")
+
+    _discord([{
+        "title":       f"⚡ {grade}-GRADE {action} — {symbol} ${strike} {otype} ({exp})",
+        "description": instr,
+        "color":       color,
+        "fields": [
+            {"name": "Mid",   "value": f"${mid:.2f}",     "inline": True},
+            {"name": "Delta", "value": str(delta),         "inline": True},
+            {"name": "Grade", "value": grade,              "inline": True},
+        ],
+        "footer": {"text": "SML Options Desk • Delta 0.35–0.45 Focus"},
+    }])
+
+def _discord_system(msg: str, color: int = 0x00FFCC):
+    _discord([{
+        "title":       "⚙️ SqueezeOS System",
+        "description": msg,
+        "color":       color,
+        "footer":      {"text": datetime.now().strftime("%Y-%m-%d %H:%M ET")},
+    }])
+
 # ── shared state ──────────────────────────────────────────────────────────────
 _tradier       = None
 _polygon       = None
@@ -82,6 +162,8 @@ async def startup():
     loop = asyncio.get_event_loop()
     loop.run_in_executor(None, _init_providers)
     asyncio.create_task(_background_loop())
+    loop.run_in_executor(None, _discord_system,
+        "🟢 **SqueezeOS V2 ONLINE** — IWM 0DTE desk active | Council standing by | $1–$50 discovery armed")
 
 async def _background_loop():
     """Refresh quotes, discovery, and options every 30 s."""
@@ -104,8 +186,14 @@ def _refresh_all():
         _last_quotes   = now
 
     if now - _last_options > 120:           # every 2 min
+        prev_keys    = {(o["symbol"], o["strike"], o["type"]) for o in _options_cache}
         _options_cache = _build_recommendations()
         _last_options  = now
+        # Alert Discord on new A-grade BUY setups not seen in prior cycle
+        for opt in _options_cache:
+            key = (opt["symbol"], opt["strike"], opt["type"])
+            if opt["grade"] == "A" and opt["action"] == "BUY" and key not in prev_keys:
+                _discord_option(opt)
 
 # ── ticker discovery ──────────────────────────────────────────────────────────
 def _discover_tickers() -> List[str]:
@@ -400,7 +488,7 @@ def _run_council(ticker: str):
         reasoning  = decision.get("reasoning", "")
         bull       = int(min(100, max(0, 50 + confidence * 50 if action == "BUY" else 50 - confidence * 50)))
 
-        _council_cache[ticker] = {
+        result = {
             "ticker":     ticker,
             "action":     action,
             "confidence": confidence,
@@ -409,16 +497,20 @@ def _run_council(ticker: str):
             "bull":       bull,
             "timestamp":  datetime.now().isoformat(),
         }
+        _council_cache[ticker] = result
         logger.info("[COUNCIL] %s → %s (%.0f%%)", ticker, action, confidence * 100)
+        _discord_council(result)
 
     except Exception as e:
         logger.error("[COUNCIL] %s failed: %s", ticker, e)
-        _council_cache[ticker] = {
+        result = {
             "ticker":    ticker,
             "action":    "ERROR",
             "error":     str(e),
             "timestamp": datetime.now().isoformat(),
         }
+        _council_cache[ticker] = result
+        _discord_council(result)
 
 @app.post("/api/council")
 async def trigger_council(body: CouncilRequest):
@@ -439,6 +531,11 @@ async def get_council_decision(ticker: str):
 @app.get("/api/council")
 async def list_council_decisions():
     return {"decisions": list(_council_cache.values())}
+
+@app.post("/api/discord/test")
+async def discord_test():
+    _discord_system("🧪 **Test ping from SqueezeOS** — Discord webhook confirmed ✅")
+    return {"status": "sent"}
 
 @app.get("/api/health")
 async def health():
