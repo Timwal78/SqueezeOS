@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
+	"log"
 	"math/big"
 	"strings"
 
@@ -69,6 +70,10 @@ func NewBaseClient(rpcURL, privateKeyHex, usdcAddr string) (*BaseClient, error) 
 	if err != nil {
 		return nil, fmt.Errorf("invalid ETH private key: %w", err)
 	}
+	usdcParsed, err := validateAddress(usdcAddr)
+	if err != nil {
+		return nil, fmt.Errorf("USDC contract address: %w", err)
+	}
 	parsedABI, err := abi.JSON(strings.NewReader(usdcABIJSON))
 	if err != nil {
 		return nil, fmt.Errorf("parse ABI: %w", err)
@@ -77,14 +82,39 @@ func NewBaseClient(rpcURL, privateKeyHex, usdcAddr string) (*BaseClient, error) 
 		client:         client,
 		privKey:        privKey,
 		gatewayAddress: crypto.PubkeyToAddress(privKey.PublicKey),
-		usdcAddress:    common.HexToAddress(usdcAddr),
+		usdcAddress:    usdcParsed,
 		parsedABI:      parsedABI,
 	}, nil
 }
 
+// validateAddress verifies the address string is a well-formed 0x+40 hex string
+// and that HexToAddress round-trips it exactly. Prevents silent truncation/padding.
+func validateAddress(addr string) (common.Address, error) {
+	if !strings.HasPrefix(addr, "0x") || len(addr) != 42 {
+		return common.Address{}, fmt.Errorf("address %q must be 0x-prefixed and 42 chars", addr)
+	}
+	hex40 := strings.TrimPrefix(addr, "0x")
+	parsed := common.HexToAddress(addr)
+	if !strings.EqualFold(parsed.Hex()[2:], hex40) {
+		return common.Address{}, fmt.Errorf("address %q normalises differently after HexToAddress", addr)
+	}
+	return parsed, nil
+}
+
 // PullAndRoute executes an EIP-3009 pull from source to gateway, then transfers
 // netAmount to destination. The fee (gross − net) remains in the gateway wallet.
+// If the net transfer (Step 2) fails, a best-effort refund of gross is sent back
+// to source. Manual recovery is logged if the refund also fails.
 func (b *BaseClient) PullAndRoute(ctx context.Context, source, destination string, grossAmount, netAmount *big.Int, auth EIP3009Auth) (string, error) {
+	srcAddr, err := validateAddress(source)
+	if err != nil {
+		return "", fmt.Errorf("source address: %w", err)
+	}
+	dstAddr, err := validateAddress(destination)
+	if err != nil {
+		return "", fmt.Errorf("destination address: %w", err)
+	}
+
 	chainID, err := b.client.ChainID(ctx)
 	if err != nil {
 		return "", fmt.Errorf("get chain ID: %w", err)
@@ -92,7 +122,7 @@ func (b *BaseClient) PullAndRoute(ctx context.Context, source, destination strin
 
 	// Step 1 — pull gross from source → gateway via EIP-3009 authorization
 	pullData, err := b.parsedABI.Pack("transferWithAuthorization",
-		common.HexToAddress(source),
+		srcAddr,
 		b.gatewayAddress,
 		grossAmount,
 		auth.ValidAfter,
@@ -110,12 +140,21 @@ func (b *BaseClient) PullAndRoute(ctx context.Context, source, destination strin
 	}
 
 	// Step 2 — send net to destination
-	sendData, err := b.parsedABI.Pack("transfer", common.HexToAddress(destination), netAmount)
+	sendData, err := b.parsedABI.Pack("transfer", dstAddr, netAmount)
 	if err != nil {
 		return "", fmt.Errorf("pack transfer: %w", err)
 	}
 	txHash, err := b.sendTx(ctx, chainID, sendData)
 	if err != nil {
+		// Best-effort refund: return gross to source so user isn't left out-of-pocket.
+		refundData, packErr := b.parsedABI.Pack("transfer", srcAddr, grossAmount)
+		if packErr == nil {
+			if _, refundErr := b.sendTx(context.Background(), chainID, refundData); refundErr != nil {
+				log.Printf("[REFUND] CRITICAL: refund tx also failed: %v — manual recovery required for source=%s gross=%s", refundErr, source, grossAmount)
+			} else {
+				log.Printf("[REFUND] Step 2 failed; refunded gross %s to source %s", grossAmount, source)
+			}
+		}
 		return "", fmt.Errorf("send tx: %w", err)
 	}
 	return txHash, nil
@@ -146,6 +185,10 @@ func (b *BaseClient) USDCBalance(ctx context.Context) (*big.Int, error) {
 // SweepUSDCToTreasury transfers all USDC from the gateway wallet to treasuryAddr.
 // Returns the tx hash, or "" if the balance is zero.
 func (b *BaseClient) SweepUSDCToTreasury(ctx context.Context, treasuryAddr string) (string, error) {
+	tAddr, err := validateAddress(treasuryAddr)
+	if err != nil {
+		return "", fmt.Errorf("treasury address: %w", err)
+	}
 	bal, err := b.USDCBalance(ctx)
 	if err != nil {
 		return "", fmt.Errorf("balance check: %w", err)
@@ -157,7 +200,7 @@ func (b *BaseClient) SweepUSDCToTreasury(ctx context.Context, treasuryAddr strin
 	if err != nil {
 		return "", err
 	}
-	data, err := b.parsedABI.Pack("transfer", common.HexToAddress(treasuryAddr), bal)
+	data, err := b.parsedABI.Pack("transfer", tAddr, bal)
 	if err != nil {
 		return "", fmt.Errorf("pack sweep transfer: %w", err)
 	}

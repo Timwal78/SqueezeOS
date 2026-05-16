@@ -7,10 +7,12 @@ import (
 	"errors"
 	"log"
 	"math/big"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -21,6 +23,73 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
+
+// ── Nonce replay cache ───────────────────────────────────────────────────────
+// Tracks EIP-3009 nonces that have already been consumed. Prevents replays
+// where a captured authorization is re-submitted to pull funds a second time.
+var (
+	usedNonces   = make(map[[32]byte]struct{})
+	usedNoncesMu sync.Mutex
+)
+
+// markNonce returns true if nonce is fresh and records it; false if already seen.
+func markNonce(nonce [32]byte) bool {
+	usedNoncesMu.Lock()
+	defer usedNoncesMu.Unlock()
+	if _, seen := usedNonces[nonce]; seen {
+		return false
+	}
+	usedNonces[nonce] = struct{}{}
+	return true
+}
+
+// ── Per-IP token bucket rate limiter ────────────────────────────────────────
+// /v1/bridge/execute: 20 tokens/min, burst 5
+// /api/council:       5 tokens/min,  burst 3  (handled in squeezeos api_v2.py)
+
+const (
+	bridgeRatePerSec = 20.0 / 60.0
+	bridgeBurst      = 5
+)
+
+type bucket struct {
+	tokens   float64
+	lastSeen time.Time
+}
+
+var (
+	ipBuckets   = make(map[string]*bucket)
+	ipBucketsMu sync.Mutex
+)
+
+func allowIP(ip string) bool {
+	ipBucketsMu.Lock()
+	defer ipBucketsMu.Unlock()
+
+	now := time.Now()
+	b, ok := ipBuckets[ip]
+	if !ok {
+		b = &bucket{tokens: float64(bridgeBurst), lastSeen: now}
+		ipBuckets[ip] = b
+	}
+
+	elapsed := now.Sub(b.lastSeen).Seconds()
+	b.lastSeen = now
+	b.tokens += elapsed * bridgeRatePerSec
+	if b.tokens > float64(bridgeBurst) {
+		b.tokens = float64(bridgeBurst)
+	}
+	if b.tokens < 1 {
+		return false
+	}
+	b.tokens--
+	return true
+}
+
+// sweepWg tracks pending async sweep goroutines so graceful shutdown can drain them.
+var sweepWg sync.WaitGroup
+
+// ── Payload types ─────────────────────────────────────────────────────────────
 
 type eip3009Payload struct {
 	ValidAfter  string `json:"valid_after"`
@@ -46,6 +115,8 @@ type bridgePayload struct {
 	IsDustTest bool `json:"is_dust_test"`
 }
 
+// ── Main ─────────────────────────────────────────────────────────────────────
+
 func main() {
 	port := env("PORT", "8080")
 	treasuryXRPL := env("TREASURY_ADDRESS", "rNduuviQ3CCvHqWUTjJDD82Ko2tjqFGs3q")
@@ -54,9 +125,17 @@ func main() {
 	xrplRPC := env("XRPL_RPC_URL", "https://xrplcluster.com")
 	usdcAddr := env("USDC_CONTRACT_ADDRESS", "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913")
 
+	xrplKey := os.Getenv("GATEWAY_XRPL_PRIVATE_KEY")
+	ethKey := os.Getenv("GATEWAY_ETH_PRIVATE_KEY")
+
+	// Startup validation: at least one execution key must be configured.
+	if xrplKey == "" && ethKey == "" {
+		log.Fatalf("[FATAL] No gateway keys configured — set GATEWAY_XRPL_PRIVATE_KEY and/or GATEWAY_ETH_PRIVATE_KEY in Render secrets")
+	}
+
 	var xrplClient *chain.XRPLClient
-	if key := os.Getenv("GATEWAY_XRPL_PRIVATE_KEY"); key != "" {
-		c, err := chain.NewXRPLClient(xrplRPC, key)
+	if xrplKey != "" {
+		c, err := chain.NewXRPLClient(xrplRPC, xrplKey)
 		if err != nil {
 			log.Fatalf("[FATAL] XRPL client: %v", err)
 		}
@@ -67,8 +146,8 @@ func main() {
 	}
 
 	var baseClient *chain.BaseClient
-	if key := os.Getenv("GATEWAY_ETH_PRIVATE_KEY"); key != "" {
-		c, err := chain.NewBaseClient(baseRPC, key, usdcAddr)
+	if ethKey != "" {
+		c, err := chain.NewBaseClient(baseRPC, ethKey, usdcAddr)
 		if err != nil {
 			log.Printf("[WARN] Base client init failed: %v", err)
 		} else {
@@ -92,9 +171,9 @@ func main() {
 		status := engine.ClientStatus()
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":       "ok",
-			"xrpl_client":  status["xrpl"],
-			"base_client":  status["base"],
+			"status":        "ok",
+			"xrpl_client":   status["xrpl"],
+			"base_client":   status["base"],
 			"xrpl_treasury": treasuryXRPL,
 		})
 	})
@@ -102,6 +181,13 @@ func main() {
 	// ── INSTITUTIONAL EXECUTION PATH ─────────────────────────────────────────
 	r.Post("/v1/bridge/execute", func(w http.ResponseWriter, req *http.Request) {
 		req.Body = http.MaxBytesReader(w, req.Body, 1<<20) // 1 MB
+
+		// Per-IP rate limit
+		ip, _, _ := net.SplitHostPort(req.RemoteAddr)
+		if !allowIP(ip) {
+			http.Error(w, "rate limit exceeded — slow down", http.StatusTooManyRequests)
+			return
+		}
 
 		var p bridgePayload
 		if err := json.NewDecoder(req.Body).Decode(&p); err != nil {
@@ -143,17 +229,26 @@ func main() {
 				http.Error(w, "invalid eip3009: "+err.Error(), http.StatusBadRequest)
 				return
 			}
+			// Replay protection: reject nonces we've already accepted.
+			if !markNonce(a.Nonce) {
+				http.Error(w, "eip3009 nonce already consumed — replay rejected", http.StatusUnauthorized)
+				return
+			}
 			auth = &a
 		}
 
+		sweepWg.Add(1)
 		txHash, fee, net, err := engine.RouteTransactionWithDisclosure(
 			req.Context(),
 			p.SourceWallet, p.DestinationWallet,
 			p.GrossAmount, p.FeeBasisPoints,
 			auth,
 		)
+		sweepWg.Done()
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			// Sanitize: don't leak internal details to the client.
+			log.Printf("[ERROR] route failed source=%s destination=%s: %v", p.SourceWallet, p.DestinationWallet, err)
+			http.Error(w, "routing failed", http.StatusInternalServerError)
 			return
 		}
 
@@ -177,7 +272,8 @@ func main() {
 			log.Println("[FORCE SWEEP] Manual override triggered")
 			results, err := engine.ForceManualSweep(context.Background())
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				log.Printf("[ERROR] force sweep: %v", err)
+				http.Error(w, "sweep failed", http.StatusInternalServerError)
 				return
 			}
 			results["status"] = "GATEWAYS_VACATED"
@@ -216,7 +312,8 @@ func main() {
 				return
 			}
 			if err != nil {
-				http.Error(w, "dust-test failed: "+err.Error(), http.StatusInternalServerError)
+				log.Printf("[ERROR] dust-test failed: %v", err)
+				http.Error(w, "dust-test failed", http.StatusInternalServerError)
 				return
 			}
 			w.Header().Set("Content-Type", "application/json")
@@ -248,6 +345,9 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	log.Println("[SERVER] Shutdown signal received — draining in-flight requests (30s)...")
+
+	// Wait for any in-flight sweep goroutines before closing the server.
+	sweepWg.Wait()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

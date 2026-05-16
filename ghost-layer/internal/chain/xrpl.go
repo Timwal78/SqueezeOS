@@ -26,6 +26,8 @@ const xrplAlphabet = "rpshnaf39wBUDNEGHJKLM4PQRST7VWXYZ2bcdeCg65jkm8oFqi1tuvAxyz
 const (
 	XRPLBaseReserveDrops uint64 = 10_000_000
 	XRPLSweepBufferDrops uint64 = 500_000
+	xrplDefaultFeeDrops  uint64 = 12
+	xrplMaxFeeDrops      uint64 = 1_000
 )
 
 // XRPLClient signs and submits payments from the gateway XRPL wallet.
@@ -225,6 +227,33 @@ func (c *XRPLClient) submit(txHex string) (string, error) {
 
 // ---- transaction building ----
 
+// fetchFeeDrops queries server_info for the current base fee in drops.
+// Returns 0 if the fee exceeds xrplMaxFeeDrops (signals caller to abort).
+func (c *XRPLClient) fetchFeeDrops() uint64 {
+	result, err := c.call("server_info", map[string]interface{}{})
+	if err != nil {
+		return xrplDefaultFeeDrops
+	}
+	var info struct {
+		Info struct {
+			ValidatedLedger struct {
+				BaseFeeXRP float64 `json:"base_fee_xrp"`
+			} `json:"validated_ledger"`
+		} `json:"info"`
+	}
+	if err := json.Unmarshal(result, &info); err != nil {
+		return xrplDefaultFeeDrops
+	}
+	drops := uint64(info.Info.ValidatedLedger.BaseFeeXRP * 1_000_000)
+	if drops == 0 {
+		drops = xrplDefaultFeeDrops
+	}
+	if drops > xrplMaxFeeDrops {
+		return 0
+	}
+	return drops
+}
+
 func (c *XRPLClient) buildSignSubmit(destAddr string, amountDrops uint64, seq uint32) (string, error) {
 	srcAcct, err := decodeXRPLAddress(c.GatewayAddress)
 	if err != nil {
@@ -235,7 +264,10 @@ func (c *XRPLClient) buildSignSubmit(destAddr string, amountDrops uint64, seq ui
 		return "", fmt.Errorf("decode destination address: %w", err)
 	}
 
-	const networkFeeDrops uint64 = 12
+	networkFeeDrops := c.fetchFeeDrops()
+	if networkFeeDrops == 0 {
+		return "", fmt.Errorf("XRPL network fee exceeds safety ceiling (%d drops) — aborting", xrplMaxFeeDrops)
+	}
 
 	signingBytes := buildPaymentTx(seq, amountDrops, networkFeeDrops, c.pubKey, nil, srcAcct, dstAcct, true)
 	hash := sha512Half(signingBytes)
