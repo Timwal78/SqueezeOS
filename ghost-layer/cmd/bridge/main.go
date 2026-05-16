@@ -79,6 +79,68 @@ func main() {
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
 
+	// Manual sweep: drain accumulated gateway fees to cold treasury right now.
+	// POST /v1/admin/sweep  body: {"chain":"xrpl"} or {"chain":"evm"}
+	r.Post("/v1/admin/sweep", func(w http.ResponseWriter, req *http.Request) {
+		var body struct {
+			Chain string `json:"chain"`
+		}
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil || body.Chain == "" {
+			http.Error(w, `{"error":"body must be {\"chain\":\"xrpl\"} or {\"chain\":\"evm\"}"}`, http.StatusBadRequest)
+			return
+		}
+		txHash, err := engine.Sweep(context.Background(), body.Chain)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		msg := "nothing to sweep"
+		if txHash != "" {
+			msg = "swept"
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": msg, "tx": txHash})
+	})
+
+	// Dust-test: send 1 drop (XRPL) or 1 unit (Base) to verify live signing works
+	// before committing real volume. POST /v1/admin/dust-test  body: {"chain":"xrpl","destination":"rXxx..."}
+	r.Post("/v1/admin/dust-test", func(w http.ResponseWriter, req *http.Request) {
+		var body struct {
+			Chain       string `json:"chain"`
+			Destination string `json:"destination"`
+		}
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			http.Error(w, "invalid body", http.StatusBadRequest)
+			return
+		}
+		var txHash string
+		var err error
+		switch body.Chain {
+		case "xrpl":
+			if xrplClient == nil {
+				http.Error(w, "XRPL client not initialised", http.StatusServiceUnavailable)
+				return
+			}
+			txHash, err = xrplClient.SendPayment(body.Destination, 1) // 1 drop
+		case "evm", "base":
+			if baseClient == nil {
+				http.Error(w, "Base client not initialised", http.StatusServiceUnavailable)
+				return
+			}
+			// 1 wei-equivalent of USDC (smallest unit)
+			txHash, err = baseClient.SweepUSDCToTreasury(context.Background(), body.Destination)
+		default:
+			http.Error(w, "chain must be 'xrpl' or 'evm'", http.StatusBadRequest)
+			return
+		}
+		if err != nil {
+			http.Error(w, "dust-test failed: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "dust sent", "tx": txHash})
+	})
+
 	r.Post("/v1/bridge/execute", func(w http.ResponseWriter, req *http.Request) {
 		var p bridgePayload
 		if err := json.NewDecoder(req.Body).Decode(&p); err != nil {

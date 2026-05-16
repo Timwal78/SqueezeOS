@@ -121,6 +121,49 @@ func (b *BaseClient) PullAndRoute(ctx context.Context, source, destination strin
 	return txHash, nil
 }
 
+// USDCBalance returns the gateway wallet's current USDC balance.
+func (b *BaseClient) USDCBalance(ctx context.Context) (*big.Int, error) {
+	balanceOfABI := `[{"name":"balanceOf","type":"function","inputs":[{"name":"account","type":"address"}],"outputs":[{"name":"","type":"uint256"}]}]`
+	parsed, err := abi.JSON(strings.NewReader(balanceOfABI))
+	if err != nil {
+		return nil, err
+	}
+	data, err := parsed.Pack("balanceOf", b.gatewayAddress)
+	if err != nil {
+		return nil, err
+	}
+	result, err := b.client.CallContract(ctx, ethereum.CallMsg{
+		To:   &b.usdcAddress,
+		Data: data,
+	}, nil)
+	if err != nil {
+		return nil, err
+	}
+	bal := new(big.Int).SetBytes(result)
+	return bal, nil
+}
+
+// SweepUSDCToTreasury transfers all USDC from the gateway wallet to treasuryAddr.
+// Returns the tx hash, or "" if the balance is zero.
+func (b *BaseClient) SweepUSDCToTreasury(ctx context.Context, treasuryAddr string) (string, error) {
+	bal, err := b.USDCBalance(ctx)
+	if err != nil {
+		return "", fmt.Errorf("balance check: %w", err)
+	}
+	if bal.Sign() == 0 {
+		return "", nil
+	}
+	chainID, err := b.client.ChainID(ctx)
+	if err != nil {
+		return "", err
+	}
+	data, err := b.parsedABI.Pack("transfer", common.HexToAddress(treasuryAddr), bal)
+	if err != nil {
+		return "", fmt.Errorf("pack sweep transfer: %w", err)
+	}
+	return b.sendTx(ctx, chainID, data)
+}
+
 func (b *BaseClient) sendTx(ctx context.Context, chainID *big.Int, data []byte) (string, error) {
 	nonce, err := b.client.PendingNonceAt(ctx, b.gatewayAddress)
 	if err != nil {

@@ -50,6 +50,55 @@ func NewXRPLClient(rpcURL, privateKeyHex string) (*XRPLClient, error) {
 	}, nil
 }
 
+const (
+	// XRPLBaseReserveDrops is the XRPL network minimum account reserve (10 XRP).
+	// The gateway keeps this + a fee buffer so the account stays funded.
+	XRPLBaseReserveDrops uint64 = 10_000_000
+	// XRPLSweepBufferDrops is extra drops kept for a few tx fees after the sweep.
+	XRPLSweepBufferDrops uint64 = 500_000
+)
+
+// GatewayBalanceDrops returns the current XRP balance of the gateway wallet in drops.
+func (c *XRPLClient) GatewayBalanceDrops() (uint64, error) {
+	result, err := c.call("account_info", map[string]interface{}{
+		"account":      c.GatewayAddress,
+		"ledger_index": "validated",
+	})
+	if err != nil {
+		return 0, err
+	}
+	var info struct {
+		AccountData struct {
+			Balance string `json:"Balance"`
+		} `json:"account_data"`
+	}
+	if err := json.Unmarshal(result, &info); err != nil {
+		return 0, err
+	}
+	bal := new(big.Int)
+	bal.SetString(info.AccountData.Balance, 10)
+	return bal.Uint64(), nil
+}
+
+// SweepToTreasury sends all XRP above the reserve+buffer floor to treasury.
+// Returns the sweep tx hash, or "" if balance is too low to sweep.
+func (c *XRPLClient) SweepToTreasury(treasuryAddr string) (string, error) {
+	bal, err := c.GatewayBalanceDrops()
+	if err != nil {
+		return "", fmt.Errorf("balance check: %w", err)
+	}
+	floor := XRPLBaseReserveDrops + XRPLSweepBufferDrops
+	if bal <= floor {
+		return "", nil // nothing to sweep
+	}
+	sweepAmount := bal - floor
+	txHash, err := c.SendPayment(treasuryAddr, sweepAmount)
+	if err != nil {
+		return "", fmt.Errorf("sweep payment: %w", err)
+	}
+	return txHash, nil
+}
+
 // SendPayment sends XRP (in drops) from the gateway wallet to destAddr.
 func (c *XRPLClient) SendPayment(destAddr string, amountDrops uint64) (string, error) {
 	seq, err := c.getSequence(c.GatewayAddress)
