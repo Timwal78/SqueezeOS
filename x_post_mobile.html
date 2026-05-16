@@ -6,75 +6,65 @@
 <meta name="theme-color" content="#0a0a0f">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>𝕏 Post Creator</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-:root{
-  --bg:#0a0a0f;--surface:#13131a;--card:#1a1a24;--border:#2a2a3a;
-  --green:#00ff88;--blue:#00bfff;--gold:#ffd700;--red:#ff4444;--purple:#a855f7;
-  --text:#e8e8f0;--muted:#6b6b80;
-}
-html,body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh}
+:root{--bg:#0a0a0f;--surface:#13131a;--card:#1a1a24;--border:#2a2a3a;--green:#00ff88;--blue:#00bfff;--gold:#ffd700;--red:#ff4444;--purple:#a855f7;--text:#e8e8f0;--muted:#6b6b80}
+html,body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,sans-serif;min-height:100vh}
+
+/* ─── First-run screen ─── */
+#setup-screen{position:fixed;inset:0;background:var(--bg);z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px 24px}
+#setup-screen.done{display:none}
+.setup-logo{font-size:32px;font-weight:900;background:linear-gradient(135deg,var(--green),var(--blue));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px}
+.setup-sub{font-size:14px;color:var(--muted);margin-bottom:32px;text-align:center;line-height:1.6}
+.setup-box{width:100%;max-width:400px}
+.setup-label{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:8px;display:block}
+.setup-input{width:100%;background:var(--surface);border:2px solid var(--purple);border-radius:12px;padding:14px 16px;color:var(--text);font-size:15px;outline:none;font-family:inherit;margin-bottom:6px}
+.setup-input:focus{border-color:var(--blue)}
+.setup-hint{font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:20px}
+.setup-hint a{color:var(--blue);text-decoration:none}
+.setup-go{width:100%;padding:16px;border:none;border-radius:12px;background:linear-gradient(135deg,#00c853,#00ff88);color:#000;font-size:17px;font-weight:900;cursor:pointer}
+.setup-go:active{opacity:.85}
+.setup-err{color:var(--red);font-size:12px;margin-top:8px;display:none}
+.setup-err.show{display:block}
+
+/* ─── Main app ─── */
+#app{display:none}
+#app.show{display:block}
 
 .hdr{background:linear-gradient(135deg,#0d0d18,#1a0a2e);padding:14px 16px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
 .logo{font-size:20px;font-weight:900;background:linear-gradient(135deg,var(--green),var(--blue));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.hdr-right{display:flex;align-items:center;gap:10px}
-.status{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px}
-.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.dot.on{background:var(--green);box-shadow:0 0 6px var(--green)}
-.dot.off{background:var(--red)}
-.setup-btn{background:rgba(168,85,247,.15);border:1px solid var(--purple);color:var(--purple);padding:5px 12px;border-radius:20px;font-size:11px;font-weight:800;cursor:pointer}
-
-/* ── Setup modal ── */
-.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:200;display:none;align-items:flex-end}
-.modal-bg.open{display:flex}
-.modal{background:var(--card);border:1px solid var(--border);border-top:2px solid var(--purple);border-radius:20px 20px 0 0;padding:24px 20px 48px;width:100%;max-height:90vh;overflow-y:auto}
-.modal-ttl{font-size:17px;font-weight:900;margin-bottom:4px}
-.modal-sub{font-size:12px;color:var(--muted);margin-bottom:20px;line-height:1.6}
+.reset-btn{font-size:11px;color:var(--muted);background:none;border:1px solid var(--border);border-radius:20px;padding:4px 12px;cursor:pointer}
 
 .page{padding:16px 16px 100px;max-width:600px;margin:0 auto}
-
 .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:12px}
 .card-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:6px}
 
 .field{margin-bottom:12px}
 .field:last-child{margin-bottom:0}
 label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:5px}
-select,textarea,input[type=text],input[type=url],input[type=password]{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;color:var(--text);font-size:15px;outline:none;-webkit-appearance:none;appearance:none;font-family:inherit;transition:border-color .15s}
+select,textarea,input[type=text]{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;color:var(--text);font-size:15px;outline:none;-webkit-appearance:none;appearance:none;font-family:inherit;transition:border-color .15s}
 select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b6b80' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:36px;cursor:pointer}
 select option{background:#1a1a24}
 select:focus,textarea:focus,input:focus{border-color:var(--blue)}
 textarea{resize:none;line-height:1.6;min-height:110px}
-.hint{font-size:11px;color:var(--muted);margin-top:5px;line-height:1.5}
+.hint{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.5}
 
-/* mode tabs */
-.tabs{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px}
-.tab{padding:10px;text-align:center;font-size:13px;font-weight:700;cursor:pointer;background:var(--surface);color:var(--muted);transition:.15s}
-.tab.active{background:rgba(168,85,247,.2);color:var(--purple)}
-
-.section{display:none}
-.section.show{display:block}
-
-/* image zone */
 .img-zone{border:2px dashed var(--border);border-radius:12px;padding:20px;text-align:center;cursor:pointer;position:relative;background:var(--surface)}
 .img-zone input[type=file]{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
-.img-zone-icon{font-size:28px;margin-bottom:6px}
-.img-zone-text{font-size:13px;color:var(--muted);line-height:1.6}
+.img-zone-icon{font-size:26px;margin-bottom:5px}
+.img-zone-text{font-size:13px;color:var(--muted)}
 .img-wrap{display:none;margin-top:10px;position:relative}
 .img-wrap.show{display:block}
 .img-wrap img{width:100%;max-height:180px;object-fit:cover;border-radius:10px;border:1px solid var(--border)}
 .img-rm{position:absolute;top:6px;right:6px;background:rgba(0,0,0,.8);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:3px 10px;font-size:12px;font-weight:700;cursor:pointer}
 
-/* buttons */
-.btn-gen{width:100%;padding:15px;border:none;border-radius:12px;font-size:17px;font-weight:800;cursor:pointer;background:linear-gradient(135deg,#00c853,#00ff88);color:#000;transition:.12s;margin-top:2px}
+.btn-gen{width:100%;padding:15px;border:none;border-radius:12px;font-size:17px;font-weight:800;cursor:pointer;background:linear-gradient(135deg,#00c853,#00ff88);color:#000;margin-top:2px}
 .btn-gen:active{opacity:.85;transform:scale(.98)}
 .btn-gen:disabled{opacity:.4;cursor:not-allowed;transform:none}
 .spin{display:inline-block;width:16px;height:16px;border:2px solid rgba(0,0,0,.3);border-top-color:#000;border-radius:50%;animation:sp .7s linear infinite;vertical-align:middle;margin-right:6px}
 @keyframes sp{to{transform:rotate(360deg)}}
-.btn-save{width:100%;padding:13px;border:1px solid var(--green);border-radius:10px;background:rgba(0,255,136,.1);color:var(--green);font-size:15px;font-weight:800;cursor:pointer;margin-top:4px}
 
-/* output */
 .out-card{display:none}
 .out-card.show{display:block}
 .info-bar{background:rgba(0,255,136,.08);border:1px solid rgba(0,255,136,.2);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--green);margin-bottom:10px;font-weight:600}
@@ -86,10 +76,9 @@ textarea{resize:none;line-height:1.6;min-height:110px}
 .btn-copy{padding:11px 22px;border-radius:8px;border:1px solid var(--green);background:rgba(0,255,136,.1);color:var(--green);font-size:14px;font-weight:700;cursor:pointer}
 .btn-copy.ok{border-color:var(--blue);background:rgba(0,191,255,.1);color:var(--blue)}
 
-/* checklist */
 .chk-list{list-style:none;display:flex;flex-direction:column;gap:9px}
 .chk-item{display:flex;align-items:center;gap:10px}
-.chk-icon{width:22px;height:22px;border-radius:50%;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;transition:.25s}
+.chk-icon{width:22px;height:22px;border-radius:50%;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;transition:.2s}
 .chk-icon.pass{background:rgba(0,255,136,.15);border-color:var(--green);color:var(--green)}
 .chk-icon.fail{background:rgba(255,68,68,.12);border-color:var(--red);color:var(--red)}
 .chk-icon.warn{background:rgba(255,215,0,.12);border-color:var(--gold);color:var(--gold)}
@@ -97,7 +86,6 @@ textarea{resize:none;line-height:1.6;min-height:110px}
 .chk-label{font-size:13px;font-weight:600}
 .chk-sub{font-size:11px;color:var(--muted);margin-top:1px}
 
-/* timing */
 .t-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .t-info{font-size:13px;color:var(--muted)}
 .t-info b{font-weight:800;font-size:15px}
@@ -105,460 +93,257 @@ textarea{resize:none;line-height:1.6;min-height:110px}
 .btn-mark{padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0}
 .t-bar{margin-top:10px;height:4px;background:var(--surface);border-radius:2px;overflow:hidden}
 .t-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--red),var(--gold),var(--green));transition:width .5s}
-
 .err{background:rgba(255,68,68,.1);border:1px solid var(--red);border-radius:10px;padding:10px 13px;font-size:13px;color:var(--red);margin-bottom:12px;display:none}
 .err.show{display:block}
-.nokey{background:rgba(255,215,0,.07);border:1px solid var(--gold);border-radius:12px;padding:14px;font-size:13px;color:var(--gold);margin-bottom:12px;line-height:1.7;display:none}
-.nokey.show{display:block}
-.nokey b{font-weight:900;font-size:15px;display:block;margin-bottom:4px}
 </style>
 </head>
 <body>
 
-<!-- ── Setup Modal ── -->
-<div class="modal-bg" id="modal-bg" onclick="if(event.target===this)closeModal()">
-<div class="modal">
-  <div class="modal-ttl">⚙️ Setup — One Time</div>
-  <div class="modal-sub">Choose how to connect. Option 1 (your server) needs no API key — it already has everything.</div>
+<!-- ─── ONE-TIME SETUP SCREEN ─── -->
+<div id="setup-screen">
+  <div class="setup-logo">𝕏 Post Creator</div>
+  <div class="setup-sub">One API key — saved forever on your phone.<br>Never asked again.</div>
 
-  <div class="tabs">
-    <div class="tab active" id="tab-server" onclick="switchTab('server')">🖥️ My SqueezeOS Server</div>
-    <div class="tab" id="tab-direct" onclick="switchTab('direct')">🔑 Direct API Key</div>
-  </div>
-
-  <!-- Server tab -->
-  <div class="section show" id="sec-server">
-    <div class="field">
-      <label>Your SqueezeOS Server URL</label>
-      <input type="url" id="server-url" placeholder="https://your-app.railway.app" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
-      <div class="hint">This is the URL you already open for your dashboard. The server has all the API keys — nothing extra needed.</div>
+  <div class="setup-box">
+    <span class="setup-label">Paste your API key</span>
+    <input class="setup-input" id="setup-key" type="password"
+      placeholder="sk-or-… or sk-ant-…"
+      autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
+    <div class="setup-hint">
+      <strong style="color:var(--text)">Fastest free option:</strong> go to
+      <strong style="color:var(--blue)">openrouter.ai</strong> → sign in with Google → Keys → Create key.
+      Takes 60 seconds. Free forever for basic use.<br><br>
+      Have an Anthropic key? Paste that instead — works too.
     </div>
-  </div>
-
-  <!-- Direct API tab -->
-  <div class="section" id="sec-direct">
-    <div class="field">
-      <label>Provider</label>
-      <select id="direct-provider" onchange="updateProviderUI()">
-        <option value="anthropic">Claude (Anthropic) — vision ✓</option>
-        <option value="openrouter">OpenRouter — free tier available</option>
-      </select>
-    </div>
-    <div class="field">
-      <label id="key-label">API Key</label>
-      <input type="password" id="direct-key" placeholder="sk-ant-…" autocomplete="off">
-      <div class="hint" id="key-hint">console.anthropic.com → API Keys</div>
-    </div>
-    <div class="field" id="model-field" style="display:none">
-      <label>Model <span style="font-weight:400;text-transform:none;color:var(--muted)">(optional)</span></label>
-      <input type="text" id="direct-model" placeholder="meta-llama/llama-3.2-3b-instruct:free">
-    </div>
-  </div>
-
-  <button class="btn-save" onclick="saveSetup()">Save &amp; Start Using</button>
-</div>
-</div>
-
-<!-- ── Header ── -->
-<div class="hdr">
-  <div class="logo">𝕏 Post Creator</div>
-  <div class="hdr-right">
-    <div class="status">
-      <span class="dot off" id="st-dot"></span>
-      <span id="st-txt">Not set up</span>
-    </div>
-    <button class="setup-btn" onclick="openModal()">⚙️</button>
+    <button class="setup-go" onclick="saveKey()">Start Using →</button>
+    <div class="setup-err" id="setup-err">Paste a key first.</div>
   </div>
 </div>
 
-<!-- ── Page ── -->
-<div class="page">
-
-  <div class="nokey show" id="nokey">
-    <b>👆 Tap ⚙️ to set up — takes 10 seconds</b>
-    Choose "My SqueezeOS Server" and paste your Railway URL. That's it — your server already has all the API keys.
+<!-- ─── MAIN APP ─── -->
+<div id="app">
+  <div class="hdr">
+    <div class="logo">𝕏 Post Creator</div>
+    <button class="reset-btn" onclick="resetKey()">Change key</button>
   </div>
 
-  <div class="card">
-    <div class="card-title"><span>✍️</span> Your Raw Idea</div>
+  <div class="page">
+    <div class="card">
+      <div class="card-title"><span>✍️</span> Your Raw Idea</div>
 
-    <div class="field">
-      <label>Niche / Topic</label>
-      <select id="niche">
-        <option value="">— pick one —</option>
-        <option value="Options Trading &amp; Market Structure">Options Trading &amp; Market Structure</option>
-        <option value="Quantitative Finance &amp; Algo Trading">Quant Finance &amp; Algo Trading</option>
-        <option value="AI &amp; Machine Learning">AI &amp; Machine Learning</option>
-        <option value="Crypto &amp; DeFi">Crypto &amp; DeFi</option>
-        <option value="Startups &amp; Venture Capital">Startups &amp; Venture Capital</option>
-        <option value="Software Engineering">Software Engineering</option>
-        <option value="Data Science &amp; Analytics">Data Science &amp; Analytics</option>
-        <option value="Macro Economics &amp; Fed Policy">Macro &amp; Fed Policy</option>
-        <option value="Personal Finance &amp; Wealth Building">Personal Finance</option>
-        <option value="custom">Custom…</option>
-      </select>
-    </div>
-    <div class="field" id="custom-field" style="display:none">
-      <label>Custom Niche</label>
-      <input type="text" id="custom-niche" placeholder="e.g. Biotech investing…">
-    </div>
-
-    <div class="field">
-      <label>Your Sentences</label>
-      <textarea id="sentences" rows="5" placeholder="1–4 sentences, rough is fine. Just your idea.&#10;&#10;Example: options flow on SPY today was super lopsided, way more puts especially 0DTE. gamma wall at 540. looks like a squeeze brewing."></textarea>
-      <div class="hint">The AI rewrites this into a complete SOP-compliant post.</div>
-    </div>
-
-    <div class="field">
-      <label>Photo / Screenshot <span style="font-weight:400;text-transform:none;color:var(--muted)">(optional)</span></label>
-      <div class="img-zone">
-        <input type="file" id="file-in" accept="image/*" onchange="handleFile(this.files[0])">
-        <div class="img-zone-icon">📸</div>
-        <div class="img-zone-text">Tap to pick from camera roll or take a photo</div>
+      <div class="field">
+        <label>Niche / Topic</label>
+        <select id="niche">
+          <option value="">— pick one —</option>
+          <option value="Options Trading &amp; Market Structure">Options Trading &amp; Market Structure</option>
+          <option value="Quantitative Finance &amp; Algo Trading">Quant Finance &amp; Algo Trading</option>
+          <option value="AI &amp; Machine Learning">AI &amp; Machine Learning</option>
+          <option value="Crypto &amp; DeFi">Crypto &amp; DeFi</option>
+          <option value="Startups &amp; Venture Capital">Startups &amp; VC</option>
+          <option value="Software Engineering">Software Engineering</option>
+          <option value="Data Science &amp; Analytics">Data Science</option>
+          <option value="Macro Economics &amp; Fed Policy">Macro &amp; Fed Policy</option>
+          <option value="Personal Finance &amp; Wealth Building">Personal Finance</option>
+          <option value="custom">Custom…</option>
+        </select>
       </div>
-      <div class="img-wrap" id="img-wrap">
-        <img id="img-thumb" src="" alt="">
-        <button class="img-rm" onclick="clearImg()">✕ Remove</button>
+      <div class="field" id="custom-field" style="display:none">
+        <label>Custom Niche</label>
+        <input type="text" id="custom-niche" placeholder="e.g. Biotech, Real estate…">
+      </div>
+
+      <div class="field">
+        <label>Your Sentences</label>
+        <textarea id="sentences" rows="5"
+          placeholder="1–4 sentences, rough is fine. Just dump your idea.&#10;&#10;e.g. SPY options flow super lopsided today, mostly puts on 0DTE. gamma wall at 540. looks like a squeeze could be setting up."></textarea>
+        <div class="hint">AI rewrites this into a complete SOP-compliant post.</div>
+      </div>
+
+      <div class="field">
+        <label>Photo / Screenshot <span style="font-weight:400;text-transform:none;color:var(--muted)">(optional)</span></label>
+        <div class="img-zone">
+          <input type="file" id="file-in" accept="image/*" onchange="handleFile(this.files[0])">
+          <div class="img-zone-icon">📸</div>
+          <div class="img-zone-text">Tap to pick from camera roll</div>
+        </div>
+        <div class="img-wrap" id="img-wrap">
+          <img id="img-thumb" src="" alt="">
+          <button class="img-rm" onclick="clearImg()">✕ Remove</button>
+        </div>
+      </div>
+
+      <div class="err" id="err"></div>
+      <button class="btn-gen" id="gen-btn" onclick="generate()">✨ Build My Post</button>
+    </div>
+
+    <div class="card out-card" id="out-card">
+      <div class="card-title"><span>📋</span> Your Post — Edit &amp; Copy</div>
+      <div class="info-bar">✓ AI wrote this following all 4 SOP rules</div>
+      <div class="post-box" id="post-box" contenteditable="true" spellcheck="true"></div>
+      <div class="out-meta">
+        <div class="char-ct" id="char-ct"><b>0</b> chars</div>
+        <button class="btn-copy" id="copy-btn" onclick="copyPost()">Copy</button>
       </div>
     </div>
 
-    <div class="err" id="err"></div>
-    <button class="btn-gen" id="gen-btn" onclick="generate()">✨ Build My Post</button>
-  </div>
-
-  <!-- Output -->
-  <div class="card out-card" id="out-card">
-    <div class="card-title"><span>📋</span> Your Optimized Post</div>
-    <div class="info-bar">✓ Full post written by AI following all 4 SOP rules — edit freely below</div>
-    <div class="post-box" id="post-box" contenteditable="true" spellcheck="true"></div>
-    <div class="out-meta">
-      <div class="char-ct" id="char-ct"><b>0</b> chars</div>
-      <button class="btn-copy" id="copy-btn" onclick="copyPost()">Copy</button>
+    <div class="card">
+      <div class="card-title"><span>✅</span> SOP Check</div>
+      <ul class="chk-list">
+        <li class="chk-item"><div class="chk-icon idle" id="c1">—</div><div><div class="chk-label">Front-loaded keywords</div><div class="chk-sub">Domain terms in first 15–30 words</div></div></li>
+        <li class="chk-item"><div class="chk-icon idle" id="c2">—</div><div><div class="chk-label">Clean syntax</div><div class="chk-sub">Short sentences, no filler</div></div></li>
+        <li class="chk-item"><div class="chk-icon idle" id="c3">—</div><div><div class="chk-label">No outbound links</div><div class="chk-sub">All value native to platform</div></div></li>
+        <li class="chk-item"><div class="chk-icon idle" id="c4">—</div><div><div class="chk-label">Post timing</div><div class="chk-sub" id="c4-sub">Tap Mark Posted after you post</div></div></li>
+      </ul>
     </div>
-    <div style="font-size:10px;color:var(--muted);margin-top:6px" id="via-lbl"></div>
-  </div>
 
-  <!-- SOP Check -->
-  <div class="card">
-    <div class="card-title"><span>✅</span> SOP Check</div>
-    <ul class="chk-list">
-      <li class="chk-item">
-        <div class="chk-icon idle" id="c1">—</div>
-        <div><div class="chk-label">Front-loaded keywords</div><div class="chk-sub">Domain terms in first 15–30 words</div></div>
-      </li>
-      <li class="chk-item">
-        <div class="chk-icon idle" id="c2">—</div>
-        <div><div class="chk-label">Clean syntax</div><div class="chk-sub">Short sentences, no filler</div></div>
-      </li>
-      <li class="chk-item">
-        <div class="chk-icon idle" id="c3">—</div>
-        <div><div class="chk-label">No outbound links</div><div class="chk-sub">All value native to platform</div></div>
-      </li>
-      <li class="chk-item">
-        <div class="chk-icon idle" id="c4">—</div>
-        <div><div class="chk-label">Post timing</div><div class="chk-sub" id="c4-sub">Tap "Mark Posted" after you post</div></div>
-      </li>
-    </ul>
-  </div>
-
-  <!-- Timing -->
-  <div class="card">
-    <div class="card-title"><span>⏱️</span> Timing Tracker</div>
-    <div class="t-row">
-      <div class="t-info">Since last post: <b id="t-val">—</b></div>
-      <button class="btn-mark" onclick="markPosted()">Mark Posted</button>
+    <div class="card">
+      <div class="card-title"><span>⏱️</span> Timing Tracker</div>
+      <div class="t-row">
+        <div class="t-info">Since last post: <b id="t-val">—</b></div>
+        <button class="btn-mark" onclick="markPosted()">Mark Posted</button>
+      </div>
+      <div class="t-bar"><div class="t-fill" id="t-fill" style="width:0%"></div></div>
+      <div class="hint" style="margin-top:8px">Space posts 4+ hours apart — Rule 4.</div>
     </div>
-    <div class="t-bar"><div class="t-fill" id="t-fill" style="width:0%"></div></div>
-    <div class="hint" style="margin-top:8px">Space posts 4+ hours apart — Rule 4 author decay penalty.</div>
   </div>
-
 </div>
 
 <script>
-const SOP = `You are an X.com post optimization engine.
-Your ONLY job: transform rough input into a high-performing, algorithm-optimized X post.
+const SOP=`You are an X.com post optimization engine. Transform rough input into a high-performing, algorithm-optimized X post.
 
-RULE 1 — FRONT-LOAD: Heavy-hitting domain-specific keywords MUST appear in the first 15–30 words. NEVER open with "Hey guys", "I wanted to", "Just wanted to share", "Thoughts on", "Today I", or any vague opener. Lead with substance.
+RULE 1 — FRONT-LOAD: Heavy-hitting domain keywords MUST appear in the first 15–30 words. NEVER open with "Hey guys", "I wanted to", "Just wanted to", "Thoughts on", "Today I". Lead with substance.
+RULE 2 — CLEAN SYNTAX: Short Subject-Verb-Object sentences. Bullet points where possible. High domain term density. Zero filler. One idea per sentence.
+RULE 3 — NO LINKS: Zero URLs in the post body. All value native to the platform.
+RULE 4 — NATIVE MEDIA: If image attached, reference it naturally ("Chart above shows…"). Never say "I will attach".
 
-RULE 2 — CLEAN SYNTAX: Short, direct Subject-Verb-Object sentences. Bullet points or numbered lists where possible. High density of domain terms. Zero filler. One idea per sentence.
+OUTPUT: Return ONLY the finished post. No preamble. Start immediately.`;
 
-RULE 3 — NO LINKS: Zero URLs. Zero outbound destinations. All value lives natively in the post.
-
-RULE 4 — NATIVE MEDIA: If an image is attached, write as if it IS already there. Reference it naturally: "Chart above shows…", "Screenshot above captures…". Never say "I will attach".
-
-OUTPUT: Return ONLY the finished post text. No preamble. Start immediately.`;
-
-// ── Storage ──────────────────────────────────────────────────
-const K = { mode:'xp_mode', serverUrl:'xp_server', provider:'xp_prov', key:'xp_key', model:'xp_model', ts:'xp_ts' };
+const K={key:'xp_key',ts:'xp_ts'};
 function ls(k,v){try{if(v===undefined)return localStorage.getItem(k);v===null?localStorage.removeItem(k):localStorage.setItem(k,v)}catch(e){}}
 
-let imgB64='', imgMime='image/jpeg', setupTab='server';
+let imgB64='',imgMime='image/jpeg';
 
-// ── Init ─────────────────────────────────────────────────────
+// ─── Init ─────────────────────────────────────────────────
 (function(){
-  refreshStatus();
-  updateTiming();
-  setInterval(updateTiming, 60000);
+  if(ls(K.key)){showApp();}
+  updateTiming();setInterval(updateTiming,60000);
   document.getElementById('niche').addEventListener('change',function(){
     document.getElementById('custom-field').style.display=this.value==='custom'?'block':'none';
   });
   document.getElementById('post-box').addEventListener('input',()=>{
-    updateCharCount();
-    runCompliance(document.getElementById('post-box').textContent);
+    updateCharCount();runCompliance(document.getElementById('post-box').textContent);
   });
 })();
 
-function refreshStatus(){
-  const mode=ls(K.mode)||'server';
-  const ready=(mode==='server'&&ls(K.serverUrl))||(mode==='direct'&&ls(K.key));
-  const dot=document.getElementById('st-dot');
-  const txt=document.getElementById('st-txt');
-  if(ready){
-    dot.className='dot on';
-    txt.textContent=mode==='server'?'Server connected':'API ready';
-    document.getElementById('nokey').classList.remove('show');
-  } else {
-    dot.className='dot off';
-    txt.textContent='Not set up';
-    document.getElementById('nokey').classList.add('show');
-  }
+function saveKey(){
+  const k=document.getElementById('setup-key').value.trim();
+  if(!k){document.getElementById('setup-err').classList.add('show');return;}
+  ls(K.key,k);showApp();
+}
+function showApp(){
+  document.getElementById('setup-screen').classList.add('done');
+  document.getElementById('app').classList.add('show');
+}
+function resetKey(){
+  ls(K.key,null);
+  document.getElementById('setup-screen').classList.remove('done');
+  document.getElementById('app').classList.remove('show');
+  document.getElementById('setup-key').value='';
 }
 
-// ── Modal ─────────────────────────────────────────────────────
-function openModal(){
-  const mode=ls(K.mode)||'server';
-  switchTab(mode,false);
-  document.getElementById('server-url').value=ls(K.serverUrl)||'';
-  document.getElementById('direct-key').value=ls(K.key)||'';
-  document.getElementById('direct-model').value=ls(K.model)||'';
-  const prov=ls(K.provider)||'anthropic';
-  document.getElementById('direct-provider').value=prov;
-  updateProviderUI();
-  document.getElementById('modal-bg').classList.add('open');
-}
-function closeModal(){document.getElementById('modal-bg').classList.remove('open');}
-
-function switchTab(t, save=true){
-  setupTab=t;
-  ['server','direct'].forEach(n=>{
-    document.getElementById('tab-'+n).classList.toggle('active',n===t);
-    document.getElementById('sec-'+n).classList.toggle('show',n===t);
-  });
-}
-
-function updateProviderUI(){
-  const p=document.getElementById('direct-provider').value;
-  const isOR=p==='openrouter';
-  document.getElementById('key-label').textContent=isOR?'OpenRouter API Key':'Anthropic API Key';
-  document.getElementById('direct-key').placeholder=isOR?'sk-or-…':'sk-ant-…';
-  document.getElementById('key-hint').textContent=isOR?'openrouter.ai → Keys (free tier available)':'console.anthropic.com → API Keys';
-  document.getElementById('model-field').style.display=isOR?'block':'none';
-}
-
-function saveSetup(){
-  if(setupTab==='server'){
-    const url=document.getElementById('server-url').value.trim().replace(/\/+$/,'');
-    if(!url){alert('Paste your Railway/server URL first.');return;}
-    ls(K.mode,'server'); ls(K.serverUrl,url);
-  } else {
-    const key=document.getElementById('direct-key').value.trim();
-    if(!key){alert('Paste your API key first.');return;}
-    const prov=document.getElementById('direct-provider').value;
-    const model=document.getElementById('direct-model').value.trim();
-    ls(K.mode,'direct'); ls(K.provider,prov); ls(K.key,key);
-    if(model) ls(K.model,model);
-  }
-  closeModal();
-  refreshStatus();
-}
-
-// ── Image ─────────────────────────────────────────────────────
-function handleFile(file){
-  if(!file||!file.type.startsWith('image/'))return;
-  imgMime=file.type;
+// ─── Image ────────────────────────────────────────────────
+function handleFile(f){
+  if(!f||!f.type.startsWith('image/'))return;
+  imgMime=f.type;
   const r=new FileReader();
-  r.onload=e=>{
-    imgB64=e.target.result.split(',')[1];
-    document.getElementById('img-thumb').src=e.target.result;
-    document.getElementById('img-wrap').classList.add('show');
-  };
-  r.readAsDataURL(file);
+  r.onload=e=>{imgB64=e.target.result.split(',')[1];document.getElementById('img-thumb').src=e.target.result;document.getElementById('img-wrap').classList.add('show');};
+  r.readAsDataURL(f);
 }
-function clearImg(){
-  imgB64='';imgMime='image/jpeg';
-  document.getElementById('img-wrap').classList.remove('show');
-  document.getElementById('img-thumb').src='';
-  document.getElementById('file-in').value='';
-}
+function clearImg(){imgB64='';imgMime='image/jpeg';document.getElementById('img-wrap').classList.remove('show');document.getElementById('img-thumb').src='';document.getElementById('file-in').value='';}
 
-// ── Generate ──────────────────────────────────────────────────
+// ─── Generate ─────────────────────────────────────────────
 async function generate(){
-  const mode=ls(K.mode)||'server';
+  const key=ls(K.key);
   const sentences=document.getElementById('sentences').value.trim();
   const niche=getNiche();
   const btn=document.getElementById('gen-btn');
   const errEl=document.getElementById('err');
   errEl.classList.remove('show');
-
-  const ready=(mode==='server'&&ls(K.serverUrl))||(mode==='direct'&&ls(K.key));
-  if(!ready){openModal();return;}
   if(!sentences&&!imgB64){errEl.textContent='Add at least one sentence or a photo.';errEl.classList.add('show');return;}
-
-  btn.disabled=true;
-  btn.innerHTML='<span class="spin"></span>Writing your post…';
-
+  btn.disabled=true;btn.innerHTML='<span class="spin"></span>Writing…';
   try{
-    let post, via;
-    if(mode==='server'){
-      ({post,via}=await callServer(sentences,niche));
-    } else {
-      const prov=ls(K.provider)||'anthropic';
-      const key=ls(K.key);
-      post=prov==='anthropic'
-        ? await callAnthropic(key,sentences,niche)
-        : await callOpenRouter(key,ls(K.model)||'',sentences,niche);
-      via=prov==='anthropic'?'Claude Haiku':'OpenRouter';
-    }
-    showOutput(post, via||'AI');
-  } catch(e){
-    errEl.textContent='Error: '+e.message;
+    const post=key.startsWith('sk-ant')?await callAnthropic(key,sentences,niche):await callOpenRouter(key,sentences,niche);
+    showOutput(post);
+  }catch(e){
+    errEl.textContent='Error: '+e.message+' — tap "Change key" to re-enter your key.';
     errEl.classList.add('show');
-  } finally{
-    btn.disabled=false;
-    btn.innerHTML='✨ Build My Post';
-  }
+  }finally{btn.disabled=false;btn.innerHTML='✨ Build My Post';}
 }
 
-function getNiche(){
-  const s=document.getElementById('niche');
-  return s.value==='custom'?document.getElementById('custom-niche').value.trim():s.value;
-}
+function getNiche(){const s=document.getElementById('niche');return s.value==='custom'?document.getElementById('custom-niche').value.trim():s.value;}
+function buildPrompt(s,n){const p=[];if(n)p.push('NICHE: '+n);if(s)p.push('RAW INPUT:\n'+s);return p.join('\n\n');}
 
-function buildPrompt(sentences,niche){
-  const p=[];
-  if(niche)p.push('NICHE / TOPIC: '+niche);
-  if(sentences)p.push('RAW INPUT:\n'+sentences);
-  return p.join('\n\n');
-}
-
-// ── Call SqueezeOS server ─────────────────────────────────────
-async function callServer(sentences,niche){
-  const base=ls(K.serverUrl);
-  const body={sentences,niche};
-  if(imgB64){body.image_b64=imgB64;body.image_mime=imgMime;}
-  const r=await fetch(base+'/api/xpost/generate',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify(body),
-  });
-  const d=await r.json();
-  if(!r.ok||d.error)throw new Error(d.error||'Server error '+r.status);
-  return {post:d.post, via:'SqueezeOS ('+d.provider+')'};
-}
-
-// ── Call Anthropic direct ─────────────────────────────────────
-async function callAnthropic(key,sentences,niche){
-  const prompt=buildPrompt(sentences,niche);
-  const content=[];
-  if(imgB64){
-    content.push({type:'image',source:{type:'base64',media_type:imgMime,data:imgB64}});
-    content.push({type:'text',text:'Image is attached. Use it in the post.\n\n'+prompt});
-  } else {
-    content.push({type:'text',text:prompt});
-  }
-  const r=await fetch('https://api.anthropic.com/v1/messages',{
-    method:'POST',
+async function callAnthropic(key,s,n){
+  const prompt=buildPrompt(s,n);
+  const content=imgB64
+    ?[{type:'image',source:{type:'base64',media_type:imgMime,data:imgB64}},{type:'text',text:'Image attached — use it in the post.\n\n'+prompt}]
+    :[{type:'text',text:prompt}];
+  const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',
     headers:{'x-api-key':key,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
-    body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1024,system:SOP,messages:[{role:'user',content}]})
-  });
+    body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1024,system:SOP,messages:[{role:'user',content}]})});
   const d=await r.json();
   if(!r.ok)throw new Error(d.error?.message||'Anthropic error '+r.status);
   return d.content[0].text.trim();
 }
 
-// ── Call OpenRouter direct ────────────────────────────────────
-async function callOpenRouter(key,model,sentences,niche){
-  const prompt=buildPrompt(sentences,niche);
-  const m=model||'meta-llama/llama-3.2-3b-instruct:free';
-  let userContent=imgB64
-    ?[{type:'text',text:'Image attached. Use it.\n\n'+prompt},{type:'image_url',image_url:{url:`data:${imgMime};base64,${imgB64}`}}]
+async function callOpenRouter(key,s,n){
+  const prompt=buildPrompt(s,n);
+  const userContent=imgB64
+    ?[{type:'text',text:'Image attached.\n\n'+prompt},{type:'image_url',image_url:{url:`data:${imgMime};base64,${imgB64}`}}]
     :prompt;
-  const r=await fetch('https://openrouter.ai/api/v1/chat/completions',{
-    method:'POST',
-    headers:{'Authorization':'Bearer '+key,'Content-Type':'application/json','HTTP-Referer':'file://xpost','X-Title':'X Post Creator'},
-    body:JSON.stringify({model:m,messages:[{role:'system',content:SOP},{role:'user',content:userContent}]})
-  });
+  const r=await fetch('https://openrouter.ai/api/v1/chat/completions',{method:'POST',
+    headers:{'Authorization':'Bearer '+key,'Content-Type':'application/json','HTTP-Referer':'xpost','X-Title':'X Post Creator'},
+    body:JSON.stringify({model:'meta-llama/llama-3.2-3b-instruct:free',messages:[{role:'system',content:SOP},{role:'user',content:userContent}]})});
   const d=await r.json();
   if(!r.ok)throw new Error(d.error?.message||'OpenRouter error '+r.status);
   return d.choices[0].message.content.trim();
 }
 
-// ── Output ────────────────────────────────────────────────────
-function showOutput(post,via){
+function showOutput(post){
   document.getElementById('post-box').textContent=post;
-  document.getElementById('via-lbl').textContent='Written by '+via;
   document.getElementById('out-card').classList.add('show');
   document.getElementById('out-card').scrollIntoView({behavior:'smooth',block:'start'});
   updateCharCount();runCompliance(post);
 }
-
 function updateCharCount(){
   const len=document.getElementById('post-box').textContent.length;
-  const el=document.getElementById('char-ct');
-  el.innerHTML=`<b>${len.toLocaleString()}</b> chars`;
+  document.getElementById('char-ct').innerHTML=`<b>${len}</b> chars`;
 }
-
 function copyPost(){
   const text=document.getElementById('post-box').textContent;
-  if(navigator.clipboard?.writeText){
-    navigator.clipboard.writeText(text).then(flashCopy);
-  } else {
-    const el=document.createElement('textarea');
-    el.value=text;el.style.cssText='position:fixed;opacity:0';
-    document.body.appendChild(el);el.select();el.setSelectionRange(0,99999);
-    document.execCommand('copy');document.body.removeChild(el);flashCopy();
-  }
+  if(navigator.clipboard?.writeText){navigator.clipboard.writeText(text).then(flashCopy);}
+  else{const el=document.createElement('textarea');el.value=text;el.style.cssText='position:fixed;opacity:0';document.body.appendChild(el);el.select();el.setSelectionRange(0,99999);document.execCommand('copy');document.body.removeChild(el);flashCopy();}
 }
-function flashCopy(){
-  const b=document.getElementById('copy-btn');
-  b.textContent='✓ Copied!';b.classList.add('ok');
-  setTimeout(()=>{b.textContent='Copy';b.classList.remove('ok');},2000);
-}
+function flashCopy(){const b=document.getElementById('copy-btn');b.textContent='✓ Copied!';b.classList.add('ok');setTimeout(()=>{b.textContent='Copy';b.classList.remove('ok');},2000);}
 
-// ── SOP ───────────────────────────────────────────────────────
-function chk(id,state){
-  const el=document.getElementById(id);
-  el.className='chk-icon '+state;
-  el.textContent=state==='pass'?'✓':state==='fail'?'✕':state==='warn'?'!':'—';
-}
+function chk(id,st){const el=document.getElementById(id);el.className='chk-icon '+st;el.textContent=st==='pass'?'✓':st==='fail'?'✕':st==='warn'?'!':'—';}
 function runCompliance(post){
   const w30=post.split(/\s+/).slice(0,30).join(' ').toLowerCase();
-  const vague=['hey guys','i wanted to','just wanted','thoughts on','today i',"so i've been",'wanted to share'];
-  chk('c1',vague.some(v=>w30.startsWith(v))?'fail':'pass');
+  chk('c1',['hey guys','i wanted to','just wanted','thoughts on','today i',"so i've been"].some(v=>w30.startsWith(v))?'fail':'pass');
   chk('c2',post.split(/[.!?]+/).filter(s=>s.trim().length>3).some(s=>s.trim().split(/\s+/).length>25)?'warn':'pass');
   chk('c3',/https?:\/\/|www\./i.test(post)?'fail':'pass');
   updateTiming();
 }
 
-// ── Timing ────────────────────────────────────────────────────
 const SAFE=4*3600000;
 function markPosted(){ls(K.ts,Date.now().toString());updateTiming();}
 function updateTiming(){
-  const ts=parseInt(ls(K.ts)||'0',10);
-  const val=document.getElementById('t-val'),fill=document.getElementById('t-fill');
-  const sub=document.getElementById('c4-sub'),icon=document.getElementById('c4');
-  if(!ts){val.innerHTML='—';fill.style.width='0%';icon.className='chk-icon idle';icon.textContent='—';sub.textContent='Tap "Mark Posted" after you post';return;}
-  const el=Date.now()-ts,h=el/3600000,pct=Math.min(100,(el/SAFE)*100);
-  const fmt=h<1?`${Math.floor(el/60000)}m`:`${h.toFixed(1)}h`;
+  const ts=parseInt(ls(K.ts)||'0',10),val=document.getElementById('t-val'),fill=document.getElementById('t-fill'),sub=document.getElementById('c4-sub'),icon=document.getElementById('c4');
+  if(!ts){val.innerHTML='—';fill.style.width='0%';icon.className='chk-icon idle';icon.textContent='—';sub.textContent='Tap Mark Posted after you post';return;}
+  const el=Date.now()-ts,h=el/3600000,pct=Math.min(100,(el/SAFE)*100),fmt=h<1?`${Math.floor(el/60000)}m`:`${h.toFixed(1)}h`;
   fill.style.width=pct+'%';
-  if(el>=SAFE){
-    val.innerHTML=`<b class="bg">${fmt}</b>`;icon.className='chk-icon pass';icon.textContent='✓';sub.textContent=`Clear to post — ${fmt} since last post`;
-  } else {
-    const left=((SAFE-el)/3600000).toFixed(1);
-    val.innerHTML=`<b class="${h<1?'br':'bo'}">${fmt}</b>`;
-    icon.className=`chk-icon ${h<1?'fail':'warn'}`;icon.textContent=h<1?'✕':'!';
-    sub.textContent=`Wait ~${left}h more to avoid author decay penalty`;
-  }
+  if(el>=SAFE){val.innerHTML=`<b class="bg">${fmt}</b>`;icon.className='chk-icon pass';icon.textContent='✓';sub.textContent=`Clear to post — ${fmt} since last post`;}
+  else{const left=((SAFE-el)/3600000).toFixed(1);val.innerHTML=`<b class="${h<1?'br':'bo'}">${fmt}</b>`;icon.className=`chk-icon ${h<1?'fail':'warn'}`;icon.textContent=h<1?'✕':'!';sub.textContent=`Wait ~${left}h more`;}
 }
 </script>
 </body>
