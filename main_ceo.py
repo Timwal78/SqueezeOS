@@ -5,6 +5,20 @@ import os
 import time
 from datetime import datetime
 
+# ── load .env ────────────────────────────────────────────────────────────────
+def _load_dotenv(path: str):
+    if not os.path.exists(path):
+        return
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k.strip(), v.strip())
+
+_load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+
 # Add internal modules to path
 sys.path.append(os.path.join(os.getcwd(), 'core'))
 sys.path.append(os.path.join(os.getcwd(), 'tradingagents'))
@@ -95,6 +109,10 @@ class SqueezeOS_CEO:
                         from tradingagents.default_config import DEFAULT_CONFIG
                         
                         ta_config = DEFAULT_CONFIG.copy()
+                        ta_config["llm_provider"]    = os.environ.get("TRADINGAGENTS_LLM_PROVIDER",    "openai")
+                        ta_config["backend_url"]     = os.environ.get("TRADINGAGENTS_LLM_BACKEND_URL",  "https://openrouter.ai/api/v1")
+                        ta_config["deep_think_llm"]  = os.environ.get("TRADINGAGENTS_DEEP_THINK_LLM",   "google/gemini-2.5-flash-preview-05-20")
+                        ta_config["quick_think_llm"] = os.environ.get("TRADINGAGENTS_QUICK_THINK_LLM",  "meta-llama/llama-4-scout")
                         ta = TradingAgentsGraph(debug=True, config=ta_config)
                         
                         today = datetime.now().strftime('%Y-%m-%d')

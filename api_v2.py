@@ -10,6 +10,20 @@ from fastapi import FastAPI, BackgroundTasks, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+# ── load .env before anything else ───────────────────────────────────────────
+def _load_dotenv(path: str):
+    if not os.path.exists(path):
+        return
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k.strip(), v.strip())
+
+_load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+
 # ── engine path ──────────────────────────────────────────────────────────────
 _core_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "core")
 _ta_path   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tradingagents")
@@ -141,6 +155,11 @@ def _run_council(ticker: str):
         from tradingagents.default_config import DEFAULT_CONFIG
 
         cfg = DEFAULT_CONFIG.copy()
+        # OpenRouter → Gemini-2.5-flash for deep thinking, Llama-4-Scout for speed
+        cfg["llm_provider"]   = os.environ.get("TRADINGAGENTS_LLM_PROVIDER",   "openai")
+        cfg["backend_url"]    = os.environ.get("TRADINGAGENTS_LLM_BACKEND_URL", "https://openrouter.ai/api/v1")
+        cfg["deep_think_llm"] = os.environ.get("TRADINGAGENTS_DEEP_THINK_LLM",  "google/gemini-2.5-flash-preview-05-20")
+        cfg["quick_think_llm"]= os.environ.get("TRADINGAGENTS_QUICK_THINK_LLM", "meta-llama/llama-4-scout")
         ta  = TradingAgentsGraph(debug=False, config=cfg)
         today = datetime.now().strftime("%Y-%m-%d")
         logger.info(f"[COUNCIL] Convening for {ticker} ({today})")
