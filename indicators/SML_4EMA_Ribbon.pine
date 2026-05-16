@@ -1,0 +1,113 @@
+//@version=6
+indicator("SML 4-EMA Ribbon™ (1 · 24 · 578 · 963)", shorttitle="SML-4EMA", overlay=true)
+
+//══════════════════════════════════════════════════════════════════════════════
+// SML 4-EMA Ribbon™  —  Institutional Velocity Stack
+// Lengths: 1 (Price Echo) · 24 (Session Flow) · 578 (Dealer Cycle) · 963 (Macro Tide)
+//══════════════════════════════════════════════════════════════════════════════
+
+string g1 = "══ EMA Settings ══"
+len1 = input.int(1,   "EMA 1 — Price Echo",    minval=1, group=g1)
+len2 = input.int(24,  "EMA 2 — Session Flow",  minval=1, group=g1)
+len3 = input.int(578, "EMA 3 — Dealer Cycle",  minval=1, group=g1)
+len4 = input.int(963, "EMA 4 — Macro Tide",    minval=1, group=g1)
+
+string g2 = "══ Display ══"
+showCloud   = input.bool(true,  "Show Ribbon Cloud",      group=g2)
+showSignals = input.bool(true,  "Show Stack Signals",     group=g2)
+showLabels  = input.bool(true,  "Show EMA Labels",        group=g2)
+barColor    = input.bool(true,  "Color Bars by Regime",   group=g2)
+src         = input.source(close, "Source",               group=g2)
+
+//── EMAs ──────────────────────────────────────────────────────────────────────
+e1 = ta.ema(src, len1)   // Price Echo    — teal   (fastest, essentially price)
+e2 = ta.ema(src, len2)   // Session Flow  — amber  (intraday/swing bias)
+e3 = ta.ema(src, len3)   // Dealer Cycle  — orange (intermediate dealer positioning)
+e4 = ta.ema(src, len4)   // Macro Tide    — red    (institutional macro bias)
+
+//── Regime ────────────────────────────────────────────────────────────────────
+bullStack  = e1 > e2 and e2 > e3 and e3 > e4   // Full bull alignment
+bearStack  = e1 < e2 and e2 < e3 and e3 < e4   // Full bear alignment
+bullBias   = e1 > e4                             // Above macro tide
+bearBias   = e1 < e4
+
+// Compression: all EMAs within 0.5% of each other → coil
+span   = math.max(e1, e2, e3, e4) - math.min(e1, e2, e3, e4)
+coiled = span / e4 < 0.005
+
+// Crossovers — Session vs Dealer (24 x 578) — institutional signal
+bullCross = ta.crossover(e2, e3)
+bearCross = ta.crossunder(e2, e3)
+
+//── Plot EMAs ─────────────────────────────────────────────────────────────────
+p1 = plot(e1, "Price Echo (1)",    color=color.new(#00FFCC, 0),  linewidth=1)
+p2 = plot(e2, "Session Flow (24)", color=color.new(#FFB800, 0),  linewidth=2)
+p3 = plot(e3, "Dealer Cycle (578)",color=color.new(#FF6B00, 0),  linewidth=2)
+p4 = plot(e4, "Macro Tide (963)",  color=color.new(#FF2D2D, 0),  linewidth=3)
+
+//── Ribbon Cloud ──────────────────────────────────────────────────────────────
+cloudBull = color.new(#00FFCC, 88)
+cloudBear = color.new(#FF2D2D, 88)
+cloudNeut = color.new(#888888, 92)
+
+if showCloud
+    fill(p2, p3, color = bullStack ? cloudBull : bearStack ? cloudBear : cloudNeut)
+    fill(p3, p4, color = bullBias  ? color.new(#FFB800, 93) : color.new(#FF2D2D, 93))
+
+//── Signals ───────────────────────────────────────────────────────────────────
+if showSignals
+    if bullCross and bullBias
+        label.new(bar_index, low * 0.999, "▲ STACK",
+          color=color.new(#00FFCC, 10), textcolor=color.black,
+          style=label.style_label_up, size=size.small)
+    if bearCross and bearBias
+        label.new(bar_index, high * 1.001, "▼ STACK",
+          color=color.new(#FF2D2D, 10), textcolor=color.white,
+          style=label.style_label_down, size=size.small)
+    if coiled and not coiled[1]
+        label.new(bar_index, high * 1.001, "◈ COIL",
+          color=color.new(#FFB800, 10), textcolor=color.black,
+          style=label.style_label_down, size=size.small)
+
+//── Bar Color ─────────────────────────────────────────────────────────────────
+barCol = bullStack ? color.new(#00FFCC, 30) :
+         bearStack ? color.new(#FF2D2D, 30) :
+         bullBias  ? color.new(#FFB800, 50) :
+                     color.new(#888888, 60)
+barcolor(barColor ? barCol : na)
+
+//── Labels ────────────────────────────────────────────────────────────────────
+if showLabels and barstate.islast
+    label.new(bar_index + 1, e1, "1",   color=color.new(#00FFCC,0), textcolor=#00FFCC, style=label.style_label_left, size=size.tiny)
+    label.new(bar_index + 1, e2, "24",  color=color.new(#FFB800,0), textcolor=#FFB800, style=label.style_label_left, size=size.tiny)
+    label.new(bar_index + 1, e3, "578", color=color.new(#FF6B00,0), textcolor=#FF6B00, style=label.style_label_left, size=size.tiny)
+    label.new(bar_index + 1, e4, "963", color=color.new(#FF2D2D,0), textcolor=#FF2D2D, style=label.style_label_left, size=size.tiny)
+
+//── Dashboard ─────────────────────────────────────────────────────────────────
+var table dash = table.new(position.top_left, 2, 6,
+  bgcolor=color.new(#0A0A0F, 5), border_color=color.new(#FFB800, 60), border_width=1)
+
+if barstate.islast
+    regime = bullStack ? "FULL BULL ▲▲▲▲" : bearStack ? "FULL BEAR ▼▼▼▼" :
+             bullBias  ? "BULL BIAS ▲" : bearBias ? "BEAR BIAS ▼" : "NEUTRAL ◈"
+    rCol   = bullStack ? color.new(#00FFCC,0) : bearStack ? color.new(#FF2D2D,0) : color.new(#FFB800,0)
+
+    table.cell(dash, 0, 0, "SML 4-EMA™",  text_color=#FFB800, bgcolor=color.new(#1A1A2E,0), text_size=size.small)
+    table.cell(dash, 1, 0, regime,         text_color=rCol,    bgcolor=color.new(#1A1A2E,0), text_size=size.small)
+    table.cell(dash, 0, 1, "1 · Price",    text_color=#888888, text_size=size.tiny)
+    table.cell(dash, 1, 1, str.tostring(e1, "#.##"), text_color=#00FFCC, text_size=size.tiny)
+    table.cell(dash, 0, 2, "24 · Session", text_color=#888888, text_size=size.tiny)
+    table.cell(dash, 1, 2, str.tostring(e2, "#.##"), text_color=#FFB800, text_size=size.tiny)
+    table.cell(dash, 0, 3, "578 · Dealer", text_color=#888888, text_size=size.tiny)
+    table.cell(dash, 1, 3, str.tostring(e3, "#.##"), text_color=#FF6B00, text_size=size.tiny)
+    table.cell(dash, 0, 4, "963 · Macro",  text_color=#888888, text_size=size.tiny)
+    table.cell(dash, 1, 4, str.tostring(e4, "#.##"), text_color=#FF2D2D, text_size=size.tiny)
+    table.cell(dash, 0, 5, "COIL",         text_color=#888888, text_size=size.tiny)
+    table.cell(dash, 1, 5, coiled ? "YES ◈" : "no", text_color=coiled ? #FFB800 : #444444, text_size=size.tiny)
+
+//── Alerts ────────────────────────────────────────────────────────────────────
+alertcondition(bullCross and bullBias, "4EMA Bull Stack", "SML 4-EMA: Session crossed above Dealer — BULL STACK confirmed")
+alertcondition(bearCross and bearBias, "4EMA Bear Stack", "SML 4-EMA: Session crossed below Dealer — BEAR STACK confirmed")
+alertcondition(coiled and not coiled[1], "4EMA Coil",    "SML 4-EMA: Ribbon compressed — COIL forming, breakout imminent")
+alertcondition(bullStack, "4EMA Full Bull", "SML 4-EMA: Full bull alignment 1·24·578·963")
+alertcondition(bearStack, "4EMA Full Bear", "SML 4-EMA: Full bear alignment 1·24·578·963")

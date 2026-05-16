@@ -1,0 +1,227 @@
+//@version=6
+indicator("SML MM Intel™ V3 — Dealer Stress & TNT Engine", shorttitle="SML-MMIV3", overlay=false,
+  max_labels_count=400, max_lines_count=200)
+
+//══════════════════════════════════════════════════════════════════════════════
+// SML MM Intel™ V3  —  Market Maker Liquidity Intelligence
+// Closed-loop dealer-stress capture system. Five-axis TNT detection:
+//   Axis 1 — Vanna/Charm Convergence (Vol surface cross-derivative proxy)
+//   Axis 2 — VPIN Flow Toxicity (Volume-Synced Probability of Informed Trading)
+//   Axis 3 — Gamma Exposure (Dealer GEX proxy via ATR·OI surrogate)
+//   Axis 4 — Liquidity Void Detection (gap + volume collapse)
+//   Axis 5 — Dark/Lit Divergence (off-exchange accumulation signal)
+//
+// TNT Regime (Triple Negative Trap): when axes 1-5 align, price magnetizes
+// to the nearest large-OI wall with mechanical inevitability.
+//══════════════════════════════════════════════════════════════════════════════
+
+string g1 = "══ Axis 1 — Vanna/Charm Convergence ══"
+vcLen    = input.int(20, "Vol Surface Window",      minval=5, group=g1)
+vcGate   = input.float(0.70,"VCSC Gate (0–1)",      minval=0.1, maxval=1.0, step=0.05, group=g1)
+
+string g2 = "══ Axis 2 — VPIN Flow Toxicity ══"
+vpinLen  = input.int(50, "VPIN Bucket Window",      minval=10, group=g2)
+vpinGate = input.float(0.70,"VPIN Toxicity Gate",   minval=0.1, maxval=1.0, step=0.05, group=g2)
+
+string g3 = "══ Axis 3 — GEX Dealer Stress ══"
+gexLen   = input.int(14, "GEX ATR Window",          minval=5, group=g3)
+gexGate  = input.float(0.003,"GEX/Notional Gate",   minval=0.0001, step=0.0001, group=g3)
+
+string g4 = "══ Axis 4 — Liquidity Void ══"
+voidMult = input.float(1.5, "Void Gap ATR Multiplier", minval=0.5, step=0.1, group=g4)
+voidLen  = input.int(5,  "Void Confirmation Bars",  minval=1, group=g4)
+
+string g5 = "══ Axis 5 — Dark/Lit Divergence ══"
+dlLen    = input.int(20, "Dark/Lit MA Window",       minval=5, group=g5)
+
+string g6 = "══ TNT Engine ══"
+tntEnter = input.float(3.0,"TNT Entry Score (max 7.5)",minval=1.0,step=0.5,group=g6)
+tntExit  = input.float(1.5,"TNT Exit Score",           minval=0.5,step=0.5,group=g6)
+minAxes  = input.int(3, "Min Active Axes (of 5)",     minval=1, maxval=5, group=g6)
+
+string g7 = "══ Display ══"
+showComp = input.bool(true, "Show Component Lines",  group=g7)
+showBg   = input.bool(true, "Background TNT Color",  group=g7)
+showVoid = input.bool(true, "Mark Liquidity Voids",  group=g7)
+
+//══════════════════════════════════════════════════════════════════════════════
+// AXIS 1 — VANNA / CHARM CONVERGENCE (VC Proxy)
+// Vanna ≈ delta sensitivity to IV (dΔ/dσ) — proxy: price-vol correlation change
+// Charm ≈ delta time decay (dΔ/dt) — proxy: intrabar close-to-high ratio vs vol
+// VCSC = |corr(priceRet, ivProxy)| above gate → both pulling same direction
+//══════════════════════════════════════════════════════════════════════════════
+priceRet  = ta.roc(close, 1)
+// IV proxy: normalized range / ATR — expanding range = rising IV
+rangeNorm = (high - low) / math.max(ta.atr(gexLen), 0.001)
+ivProxy   = ta.ema(rangeNorm, vcLen)
+
+// Vanna proxy: rolling correlation of returns with IV
+vcsc = ta.correlation(priceRet, rangeNorm, vcLen)
+vcscAbs = math.abs(vcsc)
+
+// Charm proxy: close position within bar (how much of range captured at close)
+charmProxy = (close - low) / math.max(high - low, 0.001)
+charmMa    = ta.ema(charmProxy, vcLen)
+
+axis1_raw  = (vcscAbs + math.abs(charmMa - 0.5) * 2.0) / 2.0   // 0–1
+axis1      = math.min(1.5, axis1_raw * 1.5)   // scale to 0–1.5 (max per axis)
+axis1_hot  = axis1 >= vcGate
+
+//══════════════════════════════════════════════════════════════════════════════
+// AXIS 2 — VPIN (Volume-Synchronized Probability of Informed Trading)
+// Bucket volume into equal-sized chunks; estimate buy/sell split; P(informed)
+//══════════════════════════════════════════════════════════════════════════════
+buyVol   = volume * (close >= open ? 1.0 : 0.5)
+sellVol  = volume - buyVol
+// OFI: Order Flow Imbalance per bucket
+ofi      = math.abs(buyVol - sellVol)
+totalVol = buyVol + sellVol
+vpinRaw  = ta.sma(ofi, vpinLen) / math.max(ta.sma(totalVol, vpinLen), 1)
+vpinNorm = math.min(1.0, vpinRaw * 2.0)   // normalize to 0–1
+axis2    = vpinNorm * 1.5
+axis2_hot = vpinNorm >= vpinGate
+
+//══════════════════════════════════════════════════════════════════════════════
+// AXIS 3 — GAMMA EXPOSURE (Dealer GEX Proxy)
+// GEX ≈ |price_velocity_stress / notional| — when GEX flips negative,
+// dealer forced to buy accelerating moves (short gamma = destabilizing)
+// Proxy: ATR expansion / (close × ADV) — scale-invariant
+//══════════════════════════════════════════════════════════════════════════════
+atrVal   = ta.atr(gexLen)
+atrChg   = ta.roc(atrVal, gexLen)          // expanding ATR = GEX stress
+adv      = ta.sma(volume * close, gexLen)
+gexProxy = atrVal / math.max(close, 0.01)  // vol-to-price ratio
+gexStress = gexProxy / math.max(adv / 1e6, 0.001)  // per $1M notional
+
+// Negative GEX analog: atrChg > 0 (expanding vol) while price moves fast
+gexNeg   = atrChg > 0 and math.abs(priceRet) > ta.sma(math.abs(priceRet), gexLen) * 1.3
+axis3_raw = math.min(1.0, gexStress / math.max(gexGate, 0.0001) * 0.5)
+axis3     = (gexNeg ? 1.0 : 0.5) * axis3_raw * 1.5
+axis3_hot = gexNeg and axis3_raw >= 0.5
+
+//══════════════════════════════════════════════════════════════════════════════
+// AXIS 4 — LIQUIDITY VOID DETECTION
+// A void is a price gap (open vs prior close) > ATR * multiplier with
+// accompanying volume collapse — price will magnetize to refill
+//══════════════════════════════════════════════════════════════════════════════
+gapUp    = open - close[1]
+gapDown  = close[1] - open
+gapSize  = math.max(gapUp, gapDown, 0.0)
+voidGap  = gapSize > atrVal * voidMult
+
+// Volume collapse: current bar volume < 60% of average
+volCollapse = volume < ta.sma(volume, dlLen) * 0.60
+
+voidActive  = ta.barssince(voidGap and volCollapse) <= voidLen
+axis4       = voidActive ? 1.5 : 0.0
+axis4_hot   = voidActive
+
+if showVoid and voidGap and volCollapse
+    label.new(bar_index, 90, "VOID",
+      color=color.new(#8B00FF, 10), textcolor=color.white,
+      style=label.style_label_down, size=size.tiny)
+
+//══════════════════════════════════════════════════════════════════════════════
+// AXIS 5 — DARK / LIT DIVERGENCE (DLMD)
+// When OBV accelerates faster than price, dark accumulation is occurring
+// Multi-bar window; divergence sustained over N bars = institutional cycle
+//══════════════════════════════════════════════════════════════════════════════
+obvVal   = ta.obv
+obvRoc5  = ta.roc(obvVal, dlLen)
+prRoc5   = ta.roc(close, dlLen)
+dlmd     = obvRoc5 - prRoc5   // positive = dark buying, negative = dark selling
+
+dlmdZ    = (dlmd - ta.sma(dlmd, dlLen * 2)) / math.max(ta.stdev(dlmd, dlLen * 2), 0.001)
+axis5    = math.min(1.5, math.max(0.0, math.abs(dlmdZ) * 0.5))
+axis5_hot = math.abs(dlmdZ) > 1.5
+
+//══════════════════════════════════════════════════════════════════════════════
+// TNT COMPOSITE SCORE (max 7.5 = all axes maxed)
+//══════════════════════════════════════════════════════════════════════════════
+tntScore   = axis1 + axis2 + axis3 + axis4 + axis5
+activeAxes = (axis1_hot ? 1 : 0) + (axis2_hot ? 1 : 0) + (axis3_hot ? 1 : 0) +
+             (axis4_hot ? 1 : 0) + (axis5_hot ? 1 : 0)
+
+// TNT regime state
+var bool tntRegime = false
+if tntScore >= tntEnter and activeAxes >= minAxes
+    tntRegime := true
+if tntScore <= tntExit
+    tntRegime := false
+
+// Dealer direction: dark buying = bullish squeeze, dark selling = bear trap
+dealerDir = dlmdZ > 0 ? 1 : -1   // +1 = bullish TNT, -1 = bearish
+
+// Normalize TNT score to 0–100 for display
+displayScore = math.min(100.0, tntScore / 7.5 * 100.0)
+
+//══════════════════════════════════════════════════════════════════════════════
+// PLOTS
+//══════════════════════════════════════════════════════════════════════════════
+tntCol = tntRegime ?
+         (dealerDir > 0 ? color.new(#FF2D2D, 0) : color.new(#8B00FF, 0)) :
+         displayScore >= 50 ? color.new(#FFB800, 0) : color.new(#00FFCC, 0)
+
+hline(tntEnter / 7.5 * 100, "TNT Entry", color.new(#FF2D2D, 50), linestyle=hline.style_dashed)
+hline(tntExit  / 7.5 * 100, "TNT Exit",  color.new(#888888, 50), linestyle=hline.style_dotted)
+hline(0, "", color.new(#333333, 80))
+
+plot(displayScore, "MM Intel Score", color=tntCol, linewidth=2)
+
+if showComp
+    plot(axis1 / 1.5 * 100, "Axis1 VCSC",  color=color.new(#00FFCC, 60), linewidth=1)
+    plot(axis2 / 1.5 * 100, "Axis2 VPIN",  color=color.new(#FFB800, 60), linewidth=1)
+    plot(axis3 / 1.5 * 100, "Axis3 GEX",   color=color.new(#FF6B00, 60), linewidth=1)
+    plot(axis5 / 1.5 * 100, "Axis5 DLMD",  color=color.new(#8B00FF, 60), linewidth=1)
+
+bgcolor(showBg and tntRegime ?
+        (dealerDir > 0 ? color.new(#FF2D2D, 93) : color.new(#8B00FF, 93)) : na,
+        title="TNT Background")
+
+// TNT entry label
+tntTrigger = tntRegime and not tntRegime[1]
+if tntTrigger
+    label.new(bar_index, 95,
+      dealerDir > 0 ? "⚡ TNT BULL TRAP" : "⚡ TNT BEAR TRAP",
+      color=color.new(dealerDir > 0 ? #FF2D2D : #8B00FF, 0),
+      textcolor=color.white, style=label.style_label_down, size=size.normal)
+
+tntExit_sig = not tntRegime and tntRegime[1]
+if tntExit_sig
+    label.new(bar_index, 85, "✓ TNT RELEASED",
+      color=color.new(#00FFCC, 10), textcolor=color.black,
+      style=label.style_label_down, size=size.small)
+
+//── Dashboard ─────────────────────────────────────────────────────────────────
+var table dash = table.new(position.top_right, 2, 9,
+  bgcolor=color.new(#0A0A0F,5), border_color=color.new(#FFB800,50), border_width=1)
+
+if barstate.islast
+    tntStr = tntRegime ? (dealerDir>0 ? "🔴 BULL TRAP" : "🟣 BEAR TRAP") : "STANDBY"
+    tntTC  = tntRegime ? (dealerDir>0 ? #FF2D2D : #8B00FF) : #888888
+
+    table.cell(dash,0,0,"MM INTEL™ V3",  text_color=#FFB800, bgcolor=color.new(#1A1A2E,0),text_size=size.small)
+    table.cell(dash,1,0,str.tostring(math.round(displayScore,1)),text_color=tntCol,bgcolor=color.new(#1A1A2E,0),text_size=size.small)
+    table.cell(dash,0,1,"TNT",           text_color=#888888,text_size=size.tiny)
+    table.cell(dash,1,1,tntStr,          text_color=tntTC,  text_size=size.tiny)
+    table.cell(dash,0,2,"Active Axes",   text_color=#888888,text_size=size.tiny)
+    table.cell(dash,1,2,str.tostring(activeAxes)+"/5",text_color=activeAxes>=minAxes?#FF2D2D:#FFB800,text_size=size.tiny)
+    table.cell(dash,0,3,"VCSC (A1)",     text_color=#888888,text_size=size.tiny)
+    table.cell(dash,1,3,str.tostring(math.round(vcscAbs,3)),text_color=axis1_hot?#00FFCC:#444444,text_size=size.tiny)
+    table.cell(dash,0,4,"VPIN (A2)",     text_color=#888888,text_size=size.tiny)
+    table.cell(dash,1,4,str.tostring(math.round(vpinNorm,3)),text_color=axis2_hot?#FFB800:#444444,text_size=size.tiny)
+    table.cell(dash,0,5,"GEX Neg (A3)",  text_color=#888888,text_size=size.tiny)
+    table.cell(dash,1,5,gexNeg?"YES":"no",text_color=axis3_hot?#FF6B00:#444444,text_size=size.tiny)
+    table.cell(dash,0,6,"LiqVoid (A4)",  text_color=#888888,text_size=size.tiny)
+    table.cell(dash,1,6,voidActive?"ACTIVE":"clear",text_color=axis4_hot?#8B00FF:#444444,text_size=size.tiny)
+    table.cell(dash,0,7,"DLMD Z (A5)",   text_color=#888888,text_size=size.tiny)
+    table.cell(dash,1,7,str.tostring(math.round(dlmdZ,2)),text_color=axis5_hot?#8B00FF:#444444,text_size=size.tiny)
+    table.cell(dash,0,8,"Dealer",        text_color=#888888,text_size=size.tiny)
+    table.cell(dash,1,8,dealerDir>0?"LONG BIAS":"SHORT BIAS",text_color=dealerDir>0?#00FFCC:#FF2D2D,text_size=size.tiny)
+
+//── Alerts ────────────────────────────────────────────────────────────────────
+alertcondition(tntTrigger and dealerDir > 0, "TNT Bull Trap",    "SML MM Intel V3: ⚡ TNT BULL TRAP — Dealer forced long, squeeze incoming")
+alertcondition(tntTrigger and dealerDir < 0, "TNT Bear Trap",    "SML MM Intel V3: ⚡ TNT BEAR TRAP — Dealer forced short, crash incoming")
+alertcondition(tntExit_sig,                  "TNT Released",     "SML MM Intel V3: TNT regime released — return to normal flow")
+alertcondition(voidGap and volCollapse,      "Liquidity Void",   "SML MM Intel V3: Liquidity void detected — price magnetizing to fill")
+alertcondition(displayScore >= 80,           "MM High Stress",   "SML MM Intel V3: Dealer stress ≥ 80 — institutional pressure building")

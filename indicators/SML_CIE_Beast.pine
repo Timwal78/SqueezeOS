@@ -1,0 +1,228 @@
+//@version=6
+indicator("SML CIE-Beast™ — Cycle Intelligence Engine", shorttitle="SML-CIE", overlay=false,
+  max_labels_count=400, max_lines_count=200, max_boxes_count=100)
+
+//══════════════════════════════════════════════════════════════════════════════
+// SML CIE-Beast™  —  Cycle Intelligence Engine
+// Four-Layer Architecture:
+//   L1 — Settlement Cycle (T+21/T+35 FTD pressure proxy)
+//   L2 — Dark Pool Cycle  (off-exchange volume accumulation)
+//   L3 — Fractal Analog   (simplified pattern-match convergence)
+//   L4 — Meme Phase       (DORMANT→ACCUM→IGNITION→PARABOLIC→DISTRIB→UNWIND)
+// Fused into single CIE Convergence Score (0–100)
+//══════════════════════════════════════════════════════════════════════════════
+
+string g1 = "══ L1 — Settlement Cycle ══"
+settleLookback = input.int(21,  "T+21 Cycle Window (bars)",       minval=5,  group=g1)
+ftdThresh      = input.float(2.0,"FTD Pressure: Volume Spike x",  minval=1.0,step=0.1, group=g1)
+settleWeight   = input.float(1.5,"Settlement Layer Weight",        minval=0.5,step=0.1, group=g1)
+
+string g2 = "══ L2 — Dark Pool Cycle ══"
+dpWindow    = input.int(20,   "Dark Pool Rolling Window",    minval=5,  group=g2)
+dpOERthresh = input.float(0.45,"Off-Exchange Ratio Gate",   minval=0.1,step=0.05, group=g2)
+dpWeight    = input.float(1.5, "Dark Pool Layer Weight",    minval=0.5,step=0.1,  group=g2)
+
+string g3 = "══ L3 — Fractal Analog ══"
+fractalLen  = input.int(14, "Fractal Lookback (bars)",     minval=5,  group=g3)
+fractalWt   = input.float(1.0,"Fractal Layer Weight",      minval=0.5,step=0.1, group=g3)
+
+string g4 = "══ L4 — Meme Phase ══"
+phaseVolLen = input.int(20, "Phase Volume MA Length",       minval=5, group=g4)
+phaseMomLen = input.int(10, "Phase Momentum Length",        minval=3, group=g4)
+phaseRsiLen = input.int(14, "Phase RSI Length",             minval=5, group=g4)
+phaseWeight = input.float(1.5,"Meme Phase Layer Weight",   minval=0.5,step=0.1, group=g4)
+
+string g5 = "══ Display ══"
+scoreThresh  = input.int(60, "Signal Gate (CIE Score ≥)",   minval=30, maxval=100, group=g5)
+showPhase    = input.bool(true, "Show Meme Phase Label",    group=g5)
+showBg       = input.bool(true, "Background Phase Color",   group=g5)
+showHist     = input.bool(true, "Show Score Histogram",     group=g5)
+
+//══════════════════════════════════════════════════════════════════════════════
+// L1 — SETTLEMENT CYCLE ENGINE
+// Proxy: T+21 & T+35 windows of abnormal volume vs average
+// When volume spikes in multiples during T+21/T+35 alignment → FTD pressure
+//══════════════════════════════════════════════════════════════════════════════
+volAvg    = ta.sma(volume, settleLookback)
+volSpike  = volume / math.max(volAvg, 1)
+priceVel  = ta.roc(close, 5)   // 5-bar price velocity
+
+// T+21 cycle alignment — bar index modulo 21 near settlement window
+t21Window = bar_index % 21
+t21Near   = t21Window >= 18 or t21Window <= 2   // within 2 bars of T+21
+
+// FTD pressure: high volume + price decline (forced buy-in proxy)
+ftdPressure   = volSpike >= ftdThresh and priceVel < 0
+buyInPressure = volSpike >= ftdThresh and priceVel > 0 and t21Near
+
+settleRaw   = math.min(100.0,
+                (buyInPressure ? 50.0 : 0.0) +
+                (ftdPressure   ? 30.0 : 0.0) +
+                (t21Near       ? 20.0 : 0.0) +
+                math.min(40.0, (volSpike - 1.0) * 20.0))
+settleScore = settleRaw * settleWeight / 2.0   // normalize to 0–75 contribution
+
+//══════════════════════════════════════════════════════════════════════════════
+// L2 — DARK POOL CYCLE ANALYZER
+// Proxy: volume cluster detection + on-balance/off-exchange flow imbalance
+// Off-exchange ratio estimated from intrabar price vs close patterns
+//══════════════════════════════════════════════════════════════════════════════
+// Cluster: high volume but small price move = dark block execution
+blockProxy    = volume / math.max(math.abs(close - open) / close * 100.0, 0.001)
+blockAvg      = ta.sma(blockProxy, dpWindow)
+blockZscore   = (blockProxy - blockAvg) / math.max(ta.stdev(blockProxy, dpWindow), 0.001)
+
+// OBV momentum vs price momentum divergence → dark accumulation
+obvRoc  = ta.roc(ta.obv, dpWindow)
+prRoc   = ta.roc(close, dpWindow)
+dlmd    = obvRoc - prRoc    // Dark/Lit Momentum Divergence
+
+// Hidden order imbalance — CVD proxy (close > open = buy, else sell)
+buyVol  = volume * (close > open ? 1.0 : close == open ? 0.5 : 0.0)
+sellVol = volume - buyVol
+cvd     = ta.sum(buyVol - sellVol, dpWindow)
+cvdZ    = (cvd - ta.sma(cvd, dpWindow)) / math.max(ta.stdev(cvd, dpWindow), 1)
+
+dpRaw = math.min(100.0,
+          math.max(0.0, blockZscore * 20.0) +
+          math.max(0.0, dlmd * 10.0)        +
+          math.max(0.0, cvdZ * 20.0))
+dpScore = dpRaw * dpWeight / 2.0
+
+//══════════════════════════════════════════════════════════════════════════════
+// L3 — FRACTAL ANALOG (Simplified)
+// Rolling price·volume normalized return similarity to current window
+// High score = current price·vol signature resembles past ignition patterns
+//══════════════════════════════════════════════════════════════════════════════
+normRet = ta.roc(close, 1) / math.max(ta.stdev(ta.roc(close, 1), fractalLen), 0.001)
+normVol = (volume - ta.sma(volume, fractalLen)) / math.max(ta.stdev(volume, fractalLen), 1)
+// Pearson-like: product of normalized returns + volumes
+fractalSignal = normRet * normVol
+fractalMa     = ta.sma(fractalSignal, fractalLen)
+fractalZsc    = (fractalSignal - fractalMa) / math.max(ta.stdev(fractalSignal, fractalLen), 0.001)
+fractalScore  = math.min(75.0, math.max(0.0, fractalZsc * 15.0)) * fractalWt
+
+//══════════════════════════════════════════════════════════════════════════════
+// L4 — MEME CYCLE PHASE DETECTOR
+// Phases: DORMANT → ACCUM → IGNITION → PARABOLIC → DISTRIB → UNWIND
+// Multi-axis Z-score fusion
+//══════════════════════════════════════════════════════════════════════════════
+rsiVal    = ta.rsi(close, phaseRsiLen)
+volMaLong = ta.sma(volume, phaseVolLen * 3)
+volRatio  = ta.sma(volume, phaseVolLen) / math.max(volMaLong, 1)
+momVal    = ta.roc(close, phaseMomLen)
+momAvg    = ta.sma(momVal, phaseVolLen)
+momStd    = ta.stdev(momVal, phaseVolLen)
+momZ      = (momVal - momAvg) / math.max(momStd, 0.001)
+
+// Phase classification
+DORMANT   = 0
+ACCUM     = 1
+IGNITION  = 2
+PARABOLIC = 3
+DISTRIB   = 4
+UNWIND    = 5
+
+phase = rsiVal < 35 and volRatio < 1.0 and momZ < 0   ? DORMANT   :
+        rsiVal < 50 and volRatio > 1.2 and momZ > 0   ? ACCUM     :
+        rsiVal > 50 and volRatio > 1.5 and momZ > 1.0 ? IGNITION  :
+        rsiVal > 70 and volRatio > 2.0 and momZ > 2.0 ? PARABOLIC :
+        rsiVal > 65 and volRatio > 1.8 and momZ < 0   ? DISTRIB   :
+        rsiVal < 50 and momZ < -1.0                   ? UNWIND    :
+                                                         ACCUM
+
+// Phase scoring — IGNITION and PARABOLIC are high CIE periods
+phaseBonus = phase == IGNITION  ? 80.0 :
+             phase == PARABOLIC ? 100.0 :
+             phase == ACCUM     ? 50.0  :
+             phase == DISTRIB   ? 30.0  :
+             phase == UNWIND    ? 10.0  :
+                                  5.0    // DORMANT
+phaseScore = phaseBonus * phaseWeight / 2.0
+
+//══════════════════════════════════════════════════════════════════════════════
+// FUSION — CIE Convergence Score (0–100)
+//══════════════════════════════════════════════════════════════════════════════
+rawFusion = settleScore + dpScore + fractalScore + phaseScore
+totalWeight = settleWeight + dpWeight + fractalWt + phaseWeight
+cieScore  = math.min(100.0, math.max(0.0, rawFusion / (totalWeight * 0.5) * 25.0))
+
+// Smooth for display
+cieSm     = ta.ema(cieScore, 3)
+
+//══════════════════════════════════════════════════════════════════════════════
+// PLOTS
+//══════════════════════════════════════════════════════════════════════════════
+phaseStr  = phase == DORMANT   ? "DORMANT"   :
+            phase == ACCUM     ? "ACCUM"     :
+            phase == IGNITION  ? "IGNITION"  :
+            phase == PARABOLIC ? "PARABOLIC" :
+            phase == DISTRIB   ? "DISTRIB"   :
+                                 "UNWIND"
+
+phaseCol  = phase == DORMANT   ? color.new(#444444, 0) :
+            phase == ACCUM     ? color.new(#00FFCC, 0) :
+            phase == IGNITION  ? color.new(#FFB800, 0) :
+            phase == PARABOLIC ? color.new(#FF2D2D, 0) :
+            phase == DISTRIB   ? color.new(#FF6B00, 0) :
+                                 color.new(#8B00FF, 0)
+
+scoreCol  = cieSm >= 80 ? color.new(#FF2D2D, 0) :
+            cieSm >= 60 ? color.new(#FFB800, 0) :
+            cieSm >= 40 ? color.new(#00FFCC, 0) :
+                          color.new(#444444, 0)
+
+hline(scoreThresh, "Signal Gate", color.new(#FFB800, 60), linestyle=hline.style_dashed)
+hline(80, "High Conviction", color.new(#FF2D2D, 60), linestyle=hline.style_dotted)
+hline(0, "Zero", color.new(#333333, 80))
+
+plot(cieSm, "CIE Score", color=scoreCol, linewidth=2)
+
+// Component plots
+plot(showHist ? settleScore : na, "L1 Settlement", color=color.new(#4488FF, 70), linewidth=1, style=plot.style_area)
+plot(showHist ? dpScore     : na, "L2 Dark Pool",  color=color.new(#00FFCC, 70), linewidth=1, style=plot.style_area)
+plot(showHist ? phaseScore  : na, "L4 Phase",      color=color.new(#FF6B00, 70), linewidth=1, style=plot.style_area)
+
+// Background phase color
+bgcolor(showBg ? color.new(phaseCol, 94) : na, title="Phase Background")
+
+// Phase labels
+if showPhase and (phase != phase[1] or barstate.islast)
+    label.new(bar_index, cieSm + 5, phaseStr,
+      color=color.new(phaseCol, 10), textcolor=color.white,
+      style=label.style_label_down, size=size.small)
+
+// Signal label
+signal = cieSm >= scoreThresh and cieSm > cieSm[1] and phase == IGNITION
+if signal
+    label.new(bar_index, 95, "🔥 CIE FIRE",
+      color=color.new(#FF2D2D, 0), textcolor=color.white,
+      style=label.style_label_down, size=size.normal)
+
+//── Dashboard ─────────────────────────────────────────────────────────────────
+var table dash = table.new(position.top_right, 2, 8,
+  bgcolor=color.new(#0A0A0F,5), border_color=color.new(#FFB800,50), border_width=1)
+
+if barstate.islast
+    table.cell(dash,0,0,"CIE-BEAST™",    text_color=#FFB800, bgcolor=color.new(#1A1A2E,0), text_size=size.small)
+    table.cell(dash,1,0,str.tostring(math.round(cieSm,1)),text_color=scoreCol,bgcolor=color.new(#1A1A2E,0),text_size=size.small)
+    table.cell(dash,0,1,"Phase",          text_color=#888888, text_size=size.tiny)
+    table.cell(dash,1,1,phaseStr,         text_color=phaseCol, text_size=size.tiny)
+    table.cell(dash,0,2,"L1 Settle",      text_color=#888888, text_size=size.tiny)
+    table.cell(dash,1,2,str.tostring(math.round(settleScore,1)),text_color=#4488FF,text_size=size.tiny)
+    table.cell(dash,0,3,"L2 Dark Pool",   text_color=#888888, text_size=size.tiny)
+    table.cell(dash,1,3,str.tostring(math.round(dpScore,1)),text_color=#00FFCC,text_size=size.tiny)
+    table.cell(dash,0,4,"L3 Fractal",     text_color=#888888, text_size=size.tiny)
+    table.cell(dash,1,4,str.tostring(math.round(fractalScore,1)),text_color=#AA88FF,text_size=size.tiny)
+    table.cell(dash,0,5,"L4 Phase Sc",    text_color=#888888, text_size=size.tiny)
+    table.cell(dash,1,5,str.tostring(math.round(phaseScore,1)),text_color=#FF6B00,text_size=size.tiny)
+    table.cell(dash,0,6,"CVD Z",          text_color=#888888, text_size=size.tiny)
+    table.cell(dash,1,6,str.tostring(math.round(cvdZ,2)),text_color=cvdZ>0?#00FFCC:#FF2D2D,text_size=size.tiny)
+    table.cell(dash,0,7,"SIGNAL",         text_color=#888888, text_size=size.tiny)
+    table.cell(dash,1,7,cieSm>=scoreThresh?"FIRE 🔥":"WATCH",text_color=cieSm>=scoreThresh?#FF2D2D:#FFB800,text_size=size.tiny)
+
+//── Alerts ────────────────────────────────────────────────────────────────────
+alertcondition(signal,                             "CIE FIRE Signal",    "SML CIE-Beast: FIRE — Cycle convergence above gate in IGNITION phase")
+alertcondition(phase == PARABOLIC,                 "CIE Parabolic",      "SML CIE-Beast: PARABOLIC phase — manage risk, trail stops")
+alertcondition(phase == DISTRIB and phase[1] != DISTRIB, "CIE Distribution",  "SML CIE-Beast: DISTRIBUTION phase beginning — reduce longs")
+alertcondition(cieSm >= 80,                        "CIE High Conviction","SML CIE-Beast: Score ≥ 80 — institutional cycle convergence")
