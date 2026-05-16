@@ -1,32 +1,32 @@
 package crypto
 
 import (
-	"crypto/ecdsa"
 	"errors"
+	"strings"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto"
+	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 )
 
-func VerifyEIP3009Signature(signer string, messageHash string, signature string) (bool, error) {
+func VerifyEIP3009Signature(signer, messageHash, signature string) (bool, error) {
 	sigBytes, err := hexutil.Decode(signature)
 	if err != nil {
 		return false, err
 	}
-	if sigBytes[64] == 27 || sigBytes[64] == 28 {
+	if len(sigBytes) != 65 {
+		return false, errors.New("signature must be 65 bytes")
+	}
+	if sigBytes[64] >= 27 {
 		sigBytes[64] -= 27
 	}
-	msgHashBytes := crypto.Keccak256([]byte(messageHash))
-	pubKey, err := crypto.SigToPub(msgHashBytes, sigBytes)
+	msgHash := ethcrypto.Keccak256([]byte(messageHash))
+	pubKey, err := ethcrypto.SigToPub(msgHash, sigBytes)
 	if err != nil {
 		return false, err
 	}
-	recoveredAddress := crypto.PubkeyToAddress(*pubKey).Hex()
-	if recoveredAddress != signer {
+	recovered := ethcrypto.PubkeyToAddress(*pubKey).Hex()
+	if !strings.EqualFold(recovered, signer) {
 		return false, errors.New("unauthorized signer")
 	}
-	_ = pubKey.(*crypto.PublicKey)
 	return true, nil
 }
-
-// suppress unused import
-var _ = (*ecdsa.PublicKey)(nil)

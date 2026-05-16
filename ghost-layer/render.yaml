@@ -12,5 +12,15 @@ services:
         value: production
       - key: TREASURY_ADDRESS
         value: "rNduuviQ3CCvHqWUTjJDD82Ko2tjqFGs3q"
+      - key: TREASURY_ETH_ADDRESS
+        value: ""
       - key: BASE_RPC_URL
         value: "https://mainnet.base.org"
+      - key: XRPL_RPC_URL
+        value: "https://xrplcluster.com"
+      - key: USDC_CONTRACT_ADDRESS
+        value: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+      - key: GATEWAY_XRPL_PRIVATE_KEY
+        sync: false
+      - key: GATEWAY_ETH_PRIVATE_KEY
+        sync: false

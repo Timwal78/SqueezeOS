@@ -1,9 +1,12 @@
 FROM golang:1.22-alpine AS builder
 WORKDIR /app
-COPY go.mod ./
-RUN go mod download
+
+# Install git (needed for go mod to fetch from GitHub)
+RUN apk add --no-cache git ca-certificates
+
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o bridge ./cmd/bridge/main.go
+RUN go mod tidy && \
+    CGO_ENABLED=0 GOOS=linux go build -o bridge ./cmd/bridge/main.go
 
 FROM alpine:latest
 RUN apk --no-cache add ca-certificates
