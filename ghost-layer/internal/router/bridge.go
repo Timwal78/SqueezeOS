@@ -75,6 +75,39 @@ func (e *TransparentBridgeEngine) RouteTransactionWithDisclosure(
 	return txHash, fee, net, nil
 }
 
+// RouteWithAutoSweep is a convenience wrapper used by the execution endpoint.
+// It routes the transaction and triggers the async sweep, returning only the tx hash.
+func (e *TransparentBridgeEngine) RouteWithAutoSweep(ctx context.Context, source, destination, amount string, bps int64, auth *chain.EIP3009Auth) (string, error) {
+	txHash, _, _, err := e.RouteTransactionWithDisclosure(ctx, source, destination, amount, bps, auth)
+	return txHash, err
+}
+
+// ForceManualSweep drains both the XRPL and Base gateway wallets to cold treasury.
+// Returns a summary of what was swept.
+func (e *TransparentBridgeEngine) ForceManualSweep(ctx context.Context) (map[string]string, error) {
+	results := map[string]string{}
+
+	if xrplHash, err := e.sweepXRPL(); err != nil {
+		results["xrpl_error"] = err.Error()
+	} else if xrplHash != "" {
+		results["xrpl_tx"] = xrplHash
+		log.Printf("[FORCE SWEEP] XRPL → treasury: %s", xrplHash)
+	} else {
+		results["xrpl"] = "nothing to sweep"
+	}
+
+	if baseHash, err := e.sweepBase(ctx); err != nil {
+		results["base_error"] = err.Error()
+	} else if baseHash != "" {
+		results["base_tx"] = baseHash
+		log.Printf("[FORCE SWEEP] Base USDC → treasury: %s", baseHash)
+	} else {
+		results["base"] = "nothing to sweep"
+	}
+
+	return results, nil
+}
+
 // Sweep manually triggers a fee sweep for the given chain type ("xrpl" or "evm").
 // Returns the sweep tx hash, or "" if nothing was swept.
 func (e *TransparentBridgeEngine) Sweep(ctx context.Context, chainType string) (string, error) {

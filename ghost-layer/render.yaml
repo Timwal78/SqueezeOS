@@ -24,3 +24,5 @@ services:
         sync: false
       - key: GATEWAY_ETH_PRIVATE_KEY
         sync: false
+      - key: ADMIN_TOKEN
+        sync: false

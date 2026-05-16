@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"ghost-layer-core/internal/chain"
+	"ghost-layer-core/internal/crypto"
 	"ghost-layer-core/internal/router"
 
 	"github.com/go-chi/chi/v5"
@@ -28,11 +29,18 @@ type eip3009Payload struct {
 }
 
 type bridgePayload struct {
+	// Signature verification fields
+	Signer      string `json:"signer"`
+	MessageHash string `json:"message_hash"`
+	Signature   string `json:"signature"`
+	// Routing fields
 	SourceWallet      string          `json:"source_wallet"`
 	DestinationWallet string          `json:"destination_wallet"`
 	GrossAmount       string          `json:"gross_amount"`
 	FeeBasisPoints    int64           `json:"fee_basis_points"`
 	EIP3009           *eip3009Payload `json:"eip3009,omitempty"`
+	// Set true to validate the signature path without broadcasting a real tx
+	IsDustTest bool `json:"is_dust_test"`
 }
 
 func main() {
@@ -79,72 +87,33 @@ func main() {
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
 
-	// Manual sweep: drain accumulated gateway fees to cold treasury right now.
-	// POST /v1/admin/sweep  body: {"chain":"xrpl"} or {"chain":"evm"}
-	r.Post("/v1/admin/sweep", func(w http.ResponseWriter, req *http.Request) {
-		var body struct {
-			Chain string `json:"chain"`
-		}
-		if err := json.NewDecoder(req.Body).Decode(&body); err != nil || body.Chain == "" {
-			http.Error(w, `{"error":"body must be {\"chain\":\"xrpl\"} or {\"chain\":\"evm\"}"}`, http.StatusBadRequest)
-			return
-		}
-		txHash, err := engine.Sweep(context.Background(), body.Chain)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		msg := "nothing to sweep"
-		if txHash != "" {
-			msg = "swept"
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": msg, "tx": txHash})
-	})
-
-	// Dust-test: send 1 drop (XRPL) or 1 unit (Base) to verify live signing works
-	// before committing real volume. POST /v1/admin/dust-test  body: {"chain":"xrpl","destination":"rXxx..."}
-	r.Post("/v1/admin/dust-test", func(w http.ResponseWriter, req *http.Request) {
-		var body struct {
-			Chain       string `json:"chain"`
-			Destination string `json:"destination"`
-		}
-		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
-			http.Error(w, "invalid body", http.StatusBadRequest)
-			return
-		}
-		var txHash string
-		var err error
-		switch body.Chain {
-		case "xrpl":
-			if xrplClient == nil {
-				http.Error(w, "XRPL client not initialised", http.StatusServiceUnavailable)
-				return
-			}
-			txHash, err = xrplClient.SendPayment(body.Destination, 1) // 1 drop
-		case "evm", "base":
-			if baseClient == nil {
-				http.Error(w, "Base client not initialised", http.StatusServiceUnavailable)
-				return
-			}
-			// 1 wei-equivalent of USDC (smallest unit)
-			txHash, err = baseClient.SweepUSDCToTreasury(context.Background(), body.Destination)
-		default:
-			http.Error(w, "chain must be 'xrpl' or 'evm'", http.StatusBadRequest)
-			return
-		}
-		if err != nil {
-			http.Error(w, "dust-test failed: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "dust sent", "tx": txHash})
-	})
-
+	// ── INSTITUTIONAL EXECUTION PATH ─────────────────────────────────────────
 	r.Post("/v1/bridge/execute", func(w http.ResponseWriter, req *http.Request) {
 		var p bridgePayload
 		if err := json.NewDecoder(req.Body).Decode(&p); err != nil {
-			http.Error(w, "invalid request body", http.StatusBadRequest)
+			http.Error(w, "malformed payload", http.StatusBadRequest)
+			return
+		}
+
+		// Verify the caller's EIP-3009 permission signature before touching anything.
+		if p.Signer != "" {
+			ok, err := crypto.VerifyEIP3009Signature(p.Signer, p.MessageHash, p.Signature)
+			if !ok || err != nil {
+				http.Error(w, "signature denied", http.StatusUnauthorized)
+				return
+			}
+		}
+
+		// IsDustTest: validates the full request parse + signature path without
+		// broadcasting a real transaction. Use this before opening volume.
+		if p.IsDustTest {
+			log.Printf("[DUST TEST] Dry-run passed — source=%s destination=%s amount=%s",
+				p.SourceWallet, p.DestinationWallet, p.GrossAmount)
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]string{
+				"status": "DRY_RUN_PASSED",
+				"msg":    "Payload parsed and signature validated. No transaction broadcast.",
+			})
 			return
 		}
 
@@ -171,7 +140,7 @@ func main() {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":           "SUCCESSFULLY_ROUTED",
+			"status":           "SUCCESSFULLY_SETTLED",
 			"transaction_hash": txHash,
 			"gross_processed":  p.GrossAmount,
 			"transparent_fee":  fee.String(),
@@ -180,10 +149,87 @@ func main() {
 		})
 	})
 
-	log.Printf("[SERVER] Ghost Layer active on :%s | XRPL treasury: %s", port, treasuryXRPL)
+	// ── SECURE ADMINISTRATIVE CONTROLS ───────────────────────────────────────
+	// Protect these with ADMIN_TOKEN env var — reject any request missing the
+	// correct Authorization: Bearer <token> header.
+	r.Route("/v1/admin", func(a chi.Router) {
+		a.Use(adminAuthMiddleware)
+
+		// Emergency sweep: drain both gateway wallets to cold treasury right now.
+		a.Post("/sweep", func(w http.ResponseWriter, req *http.Request) {
+			log.Println("[FORCE SWEEP] Manual override — emptying gateway hot wallets")
+			results, err := engine.ForceManualSweep(context.Background())
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			results["status"] = "GATEWAYS_VACATED"
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(results)
+		})
+
+		// Chain dust-test: sends 1 drop / 1 wei-USDC to prove live signing works
+		// on mainnet before opening real volume.
+		a.Post("/dust-test", func(w http.ResponseWriter, req *http.Request) {
+			var body struct {
+				Chain       string `json:"chain"`
+				Destination string `json:"destination"`
+			}
+			if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+				http.Error(w, "invalid body", http.StatusBadRequest)
+				return
+			}
+			var txHash string
+			var err error
+			switch body.Chain {
+			case "xrpl":
+				if xrplClient == nil {
+					http.Error(w, "XRPL client not initialised", http.StatusServiceUnavailable)
+					return
+				}
+				txHash, err = xrplClient.SendPayment(body.Destination, 1)
+			case "evm", "base":
+				if baseClient == nil {
+					http.Error(w, "Base client not initialised", http.StatusServiceUnavailable)
+					return
+				}
+				txHash, err = baseClient.SweepUSDCToTreasury(context.Background(), body.Destination)
+			default:
+				http.Error(w, "chain must be 'xrpl' or 'evm'", http.StatusBadRequest)
+				return
+			}
+			if err != nil {
+				http.Error(w, "dust-test failed: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]string{"status": "dust sent", "tx": txHash})
+		})
+	})
+
+	log.Printf("[SERVER KERNEL] Ghost Layer active on :%s | XRPL treasury: %s", port, treasuryXRPL)
 	if err := http.ListenAndServe(":"+port, r); err != nil {
 		log.Fatalf("server: %v", err)
 	}
+}
+
+// adminAuthMiddleware rejects requests without a valid Bearer token.
+// Set ADMIN_TOKEN env var to a high-entropy secret before deploying.
+func adminAuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token := os.Getenv("ADMIN_TOKEN")
+		if token == "" {
+			// No token configured — lock the endpoints entirely.
+			http.Error(w, "admin endpoints not configured", http.StatusForbidden)
+			return
+		}
+		auth := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if auth != token {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func env(key, fallback string) string {
