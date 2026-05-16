@@ -1,0 +1,841 @@
+//@version=6
+indicator("SML War Room Beast™ v2.0", shorttitle="SML-War Room Beast", overlay=true, max_labels_count=400, max_lines_count=400, max_boxes_count=250)
+
+//══════════════════════════════════════════════════════════════════════════════
+// ██  INPUTS
+//══════════════════════════════════════════════════════════════════════════════
+string gCore      = "═══ Core ═══"
+string gTrend     = "═══ Trend ═══"
+string gMom       = "═══ Momentum ═══"
+string gVol       = "═══ Volatility ═══"
+string gLvl       = "═══ Levels ═══"
+string gStruct    = "═══ Structure ═══"
+string gVwap      = "═══ VWAP ═══"
+string gMTF       = "═══ Multi-TimeFrame ═══"
+string gStyle     = "═══ Style ═══"
+string gOpt       = "═══ Options Layer ═══"
+string gAlerts    = "═══ Alerts ═══"
+
+string benchSym     = input.symbol("SPY", "Benchmark Symbol", group=gCore)
+string specialMode  = input.string("Auto", "Mode", options=["Auto", "Universal", "AMC/GME"], group=gCore)
+bool showDash       = input.bool(true, "Show Dashboard", group=gCore)
+bool showBarColor   = input.bool(true, "Color Bars", group=gStyle)
+bool showSignals    = input.bool(true, "Show Trigger Markers", group=gStyle)
+bool showLevels     = input.bool(true, "Show Key Levels", group=gStyle)
+bool showEmaCloud   = input.bool(true, "Show EMA Cloud", group=gStyle)
+bool showFvg        = input.bool(true, "Show Fair Value Gaps", group=gStyle)
+bool showStructure  = input.bool(true, "Show Structure Labels", group=gStyle)
+bool showDivLabels  = input.bool(true, "Show Divergence Labels", group=gStyle)
+bool compactMode    = input.bool(false, "Compact Dashboard", group=gStyle)
+string dashPos      = input.string("Top Right", "Dashboard Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group=gStyle)
+string dashSize     = input.string("Large", "Dashboard Text Size", options=["Auto", "Tiny", "Small", "Normal", "Large", "Huge"], group=gStyle)
+
+int fastLen   = input.int(9, "Fast EMA", minval=2, group=gTrend)
+int slowLen   = input.int(21, "Slow EMA", minval=3, group=gTrend)
+int baseLen   = input.int(50, "Base EMA", minval=5, group=gTrend)
+int anchorLen = input.int(200, "Anchor EMA", minval=20, group=gTrend)
+
+int rsiLen = input.int(14, "RSI Length", minval=2, group=gMom)
+int adxLen = input.int(14, "ADX Length", minval=2, group=gMom)
+int rocLen = input.int(10, "ROC Length", minval=2, group=gMom)
+int accelLen = input.int(5, "Acceleration Lookback", minval=2, group=gMom)
+
+int atrLen  = input.int(14, "ATR Length", minval=2, group=gVol)
+int bbLen   = input.int(20, "BB Length", minval=5, group=gVol)
+float bbMul = input.float(2.0, "BB Mult", minval=0.1, step=0.1, group=gVol)
+int kcLen   = input.int(20, "KC Length", minval=5, group=gVol)
+float kcMul = input.float(1.5, "KC Mult", minval=0.1, step=0.1, group=gVol)
+int volLen  = input.int(20, "Volume SMA Length", minval=2, group=gVol)
+
+int srLen         = input.int(20, "S/R Lookback", minval=5, group=gLvl)
+int trapLookback  = input.int(12, "Trap Lookback", minval=3, group=gLvl)
+int sweepLookback = input.int(8, "Sweep Lookback", minval=3, group=gLvl)
+
+int pivotLen  = input.int(5, "Pivot Lookback", minval=2, group=gStruct)
+int fvgMaxAge = input.int(50, "FVG Max Age (bars)", minval=5, maxval=200, group=gStruct)
+
+bool showVwap      = input.bool(true, "Show VWAP", group=gVwap)
+bool showVwapBands = input.bool(true, "Show VWAP Bands", group=gVwap)
+int vwapBandLen    = input.int(20, "VWAP Band Lookback", minval=5, group=gVwap)
+
+string htf1 = input.timeframe("60", "HTF 1", group=gMTF)
+string htf2 = input.timeframe("240", "HTF 2", group=gMTF)
+
+bool useOptLayer = input.bool(true, "Enable Manual Options Layer", group=gOpt)
+float callWall   = input.float(0.0, "Call Wall", step=0.01, group=gOpt)
+float putWall   = input.float(0.0, "Put Wall", step=0.01, group=gOpt)
+float pinZone    = input.float(0.0, "Pin Zone", step=0.01, group=gOpt)
+float gammaUp    = input.float(0.0, "Gamma Trigger Up", step=0.01, group=gOpt)
+float gammaDn    = input.float(0.0, "Gamma Trigger Down", step=0.01, group=gOpt)
+
+bool alertsOn = input.bool(true, "Enable Rich Alerts", group=gAlerts)
+
+//══════════════════════════════════════════════════════════════════════════════
+// ██  HELPERS
+//══════════════════════════════════════════════════════════════════════════════
+f_clamp(float v, float lo, float hi) =>
+    math.max(lo, math.min(hi, v))
+
+f_grade(float conf) =>
+    conf >= 82.0 ? "A+" : conf >= 70.0 ? "A" : conf >= 58.0 ? "B" : conf >= 42.0 ? "C" : conf >= 28.0 ? "D" : "F"
+
+f_bias_text(float edge) =>
+    edge >= 18.0 ? "STRONG LONG" : edge >= 8.0 ? "LONG BIAS" : edge <= -18.0 ? "STRONG SHORT" : edge <= -8.0 ? "SHORT BIAS" : "NEUTRAL"
+
+f_pos(string p) =>
+    p == "Top Right" ? position.top_right : p == "Top Left" ? position.top_left : p == "Bottom Right" ? position.bottom_right : position.bottom_left
+
+f_meme(string sym, string modeName) =>
+    bool isMeme = str.contains(str.upper(sym), "AMC") or str.contains(str.upper(sym), "GME")
+    modeName == "AMC/GME" ? 1 : modeName == "Auto" and isMeme ? 1 : 0
+
+f_sz(string s) =>
+    s == "Huge" ? size.huge : s == "Large" ? size.large : s == "Normal" ? size.normal : s == "Small" ? size.small : s == "Tiny" ? size.tiny : size.auto
+
+f_szUp(string s) =>
+    s == "Huge" ? size.huge : s == "Large" ? size.huge : s == "Normal" ? size.large : s == "Small" ? size.normal : s == "Tiny" ? size.small : size.large
+
+string dSz = f_sz(dashSize)
+string dSzHdr = f_szUp(dashSize)
+
+//══════════════════════════════════════════════════════════════════════════════
+// ██  CORE SERIES
+//══════════════════════════════════════════════════════════════════════════════
+float emaF = ta.ema(close, fastLen)
+float emaS = ta.ema(close, slowLen)
+float emaB = ta.ema(close, baseLen)
+float emaA = ta.ema(close, anchorLen)
+
+float rsiVal = ta.rsi(close, rsiLen)
+[pDi, mDi, adxVal] = ta.dmi(adxLen, adxLen)
+float rocVal = ta.roc(close, rocLen)
+
+float atrVal = ta.atr(atrLen)
+float atrPct = close != 0.0 ? atrVal / close * 100.0 : 0.0
+float atrPctSma = ta.sma(atrPct, 20)
+
+float volSma = ta.sma(volume, volLen)
+float rv = volSma > 0.0 ? volume / volSma : 0.0
+
+float bbBasis = ta.sma(close, bbLen)
+float bbDev = ta.stdev(close, bbLen) * bbMul
+float bbUp = bbBasis + bbDev
+float bbLo = bbBasis - bbDev
+
+float kcMid = ta.ema(close, kcLen)
+float kcRng = ta.ema(high - low, kcLen) * kcMul
+float kcUp = kcMid + kcRng
+float kcLo = kcMid - kcRng
+
+bool sqzOn = bbUp < kcUp and bbLo > kcLo
+bool sqzOff = bbUp > kcUp and bbLo < kcLo
+float bbW = bbBasis != 0.0 ? (bbUp - bbLo) / bbBasis * 100.0 : 0.0
+
+float hiSR = ta.highest(high, srLen)
+float loSR = ta.lowest(low, srLen)
+float breakLvl = hiSR[1]
+float failLvl = loSR[1]
+float supLvl = loSR
+float resLvl = hiSR
+
+float swHi = ta.highest(high, trapLookback)
+float swLo = ta.lowest(low, trapLookback)
+float sweepHi = ta.highest(high, sweepLookback)
+float sweepLo = ta.lowest(low, sweepLookback)
+
+float bodyS = math.abs(close - open)
+float rngS = high - low
+float upWick = high - math.max(open, close)
+float loWick = math.min(open, close) - low
+bool validR = rngS > 0.0
+
+bool bullTrap = validR and high > swHi[1] and close < swHi[1] and upWick > bodyS
+bool bearTrap = validR and low < swLo[1] and close > swLo[1] and loWick > bodyS
+bool liqSweepHi = validR and high > sweepHi[1] and close < high and upWick / rngS > 0.35
+bool liqSweepLo = validR and low < sweepLo[1] and close > low and loWick / rngS > 0.35
+
+float benchCl = request.security(benchSym, timeframe.period, close)
+float relPerf = benchCl != 0.0 and benchCl[10] != 0.0 and close[10] != 0.0 ? ((close / close[10]) / (benchCl / benchCl[10]) - 1.0) * 100.0 : 0.0
+
+//══════════════════════════════════════════════════════════════════════════════
+// ██  VWAP ENGINE
+//══════════════════════════════════════════════════════════════════════════════
+float vwapVal = ta.vwap(close)
+float vwapDev = ta.stdev(close - vwapVal, vwapBandLen)
+float vwapU1 = vwapVal + vwapDev
+float vwapL1 = vwapVal - vwapDev
+float vwapU2 = vwapVal + vwapDev * 2.0
+float vwapL2 = vwapVal - vwapDev * 2.0
+
+string vwapZone = close > vwapU2 ? "Extended Above" : close > vwapU1 ? "Above +1σ" : close > vwapVal ? "Above VWAP" : close > vwapL1 ? "Below VWAP" : close > vwapL2 ? "Below -1σ" : "Extended Below"
+bool vwapBull = close > vwapVal
+bool vwapBear = close < vwapVal
+
+//══════════════════════════════════════════════════════════════════════════════
+// ██  MARKET STRUCTURE ENGINE
+//══════════════════════════════════════════════════════════════════════════════
+float pivHi = ta.pivothigh(high, pivotLen, pivotLen)
+float pivLo = ta.pivotlow(low, pivotLen, pivotLen)
+
+var float lastPivHi1 = na
+var float lastPivHi2 = na
+var int lastPivHiBar1 = na
+var float lastPivLo1 = na
+var float lastPivLo2 = na
+var int lastPivLoBar1 = na
+var string structState = "Undefined"
+
+if not na(pivHi)
+    lastPivHi2 := lastPivHi1
+    lastPivHi1 := pivHi
+    lastPivHiBar1 := bar_index - pivotLen
+
+if not na(pivLo)
+    lastPivLo2 := lastPivLo1
+    lastPivLo1 := pivLo
+    lastPivLoBar1 := bar_index - pivotLen
+
+bool isHH = not na(lastPivHi1) and not na(lastPivHi2) and lastPivHi1 > lastPivHi2
+bool isLH = not na(lastPivHi1) and not na(lastPivHi2) and lastPivHi1 < lastPivHi2
+bool isHL = not na(lastPivLo1) and not na(lastPivLo2) and lastPivLo1 > lastPivLo2
+bool isLL = not na(lastPivLo1) and not na(lastPivLo2) and lastPivLo1 < lastPivLo2
+
+structState := isHH and isHL ? "Bullish Structure" : isLH and isLL ? "Bearish Structure" : isHH and isLL ? "Expanding" : isLH and isHL ? "Contracting" : "Undefined"
+
+// Structure labels
+if showStructure and not na(pivHi)
+    string hiLabel = isHH ? "HH" : isLH ? "LH" : "PH"
+    color hiCol = isHH ? color.lime : isLH ? color.red : color.yellow
+    label.new(bar_index - pivotLen, pivHi, hiLabel, style=label.style_label_down, color=hiCol, textcolor=color.black, size=size.tiny)
+
+if showStructure and not na(pivLo)
+    string loLabel = isHL ? "HL" : isLL ? "LL" : "PL"
+    color loCol = isHL ? color.lime : isLL ? color.red : color.yellow
+    label.new(bar_index - pivotLen, pivLo, loLabel, style=label.style_label_up, color=loCol, textcolor=color.black, size=size.tiny)
+
+//══════════════════════════════════════════════════════════════════════════════
+// ██  DIVERGENCE ENGINE
+//══════════════════════════════════════════════════════════════════════════════
+float rsiAtPivHi = rsiVal[pivotLen]
+float rsiAtPivLo = rsiVal[pivotLen]
+
+var float prevDivPivHi = na
+var float prevDivPivHiRsi = na
+var float prevDivPivLo = na
+var float prevDivPivLoRsi = na
+var bool bearDivFlag = false
+var bool bullDivFlag = false
+
+bearDivFlag := false
+bullDivFlag := false
+
+if not na(pivHi)
+    if not na(prevDivPivHi) and not na(prevDivPivHiRsi)
+        if pivHi > prevDivPivHi and rsiAtPivHi < prevDivPivHiRsi
+            bearDivFlag := true
+    prevDivPivHi := pivHi
+    prevDivPivHiRsi := rsiAtPivHi
+
+if not na(pivLo)
+    if not na(prevDivPivLo) and not na(prevDivPivLoRsi)
+        if pivLo < prevDivPivLo and rsiAtPivLo > prevDivPivLoRsi
+            bullDivFlag := true
+    prevDivPivLo := pivLo
+    prevDivPivLoRsi := rsiAtPivLo
+
+string divState = bearDivFlag ? "Bearish Divergence" : bullDivFlag ? "Bullish Divergence" : "No Divergence"
+
+if showDivLabels and bearDivFlag
+    label.new(bar_index - pivotLen, high[pivotLen], "BEAR\nDIV", style=label.style_label_down, color=color.new(color.red, 20), textcolor=color.white, size=size.small)
+
+if showDivLabels and bullDivFlag
+    label.new(bar_index - pivotLen, low[pivotLen], "BULL\nDIV", style=label.style_label_up, color=color.new(color.lime, 20), textcolor=color.black, size=size.small)
+
+//══════════════════════════════════════════════════════════════════════════════
+// ██  FVG ENGINE (Fair Value Gaps)
+//══════════════════════════════════════════════════════════════════════════════
+bool bullFvg = low > high[2] and close[1] > open[1]
+bool bearFvg = high < low[2] and close[1] < open[1]
+
+var array<box> fvgBoxes = array.new<box>()
+var array<int> fvgBars = array.new<int>()
+var array<bool> fvgBull = array.new<bool>()
+var array<float> fvgTop = array.new<float>()
+var array<float> fvgBot = array.new<float>()
+
+if showFvg and bullFvg
+    box b = box.new(bar_index - 2, low, bar_index, high[2], bgcolor=color.new(color.lime, 85), border_color=color.new(color.lime, 50), border_width=1)
+    array.push(fvgBoxes, b)
+    array.push(fvgBars, bar_index)
+    array.push(fvgBull, true)
+    array.push(fvgTop, low)
+    array.push(fvgBot, high[2])
+
+if showFvg and bearFvg
+    box b = box.new(bar_index - 2, low[2], bar_index, high, bgcolor=color.new(color.red, 85), border_color=color.new(color.red, 50), border_width=1)
+    array.push(fvgBoxes, b)
+    array.push(fvgBars, bar_index)
+    array.push(fvgBull, false)
+    array.push(fvgTop, low[2])
+    array.push(fvgBot, high)
+
+// Clean old FVGs
+if array.size(fvgBars) > 0
+    for i = array.size(fvgBars) - 1 to 0
+        if bar_index - array.get(fvgBars, i) > fvgMaxAge
+            box.delete(array.get(fvgBoxes, i))
+            array.remove(fvgBoxes, i)
+            array.remove(fvgBars, i)
+            array.remove(fvgBull, i)
+            array.remove(fvgTop, i)
+            array.remove(fvgBot, i)
+
+// Extend active FVGs
+if array.size(fvgBoxes) > 0
+    for i = 0 to array.size(fvgBoxes) - 1
+        box.set_right(array.get(fvgBoxes, i), bar_index)
+
+int activeBullFvgs = 0
+int activeBearFvgs = 0
+if array.size(fvgBull) > 0
+    for i = 0 to array.size(fvgBull) - 1
+        if array.get(fvgBull, i)
+            activeBullFvgs += 1
+        else
+            activeBearFvgs += 1
+
+string fvgState = activeBullFvgs > activeBearFvgs ? "Bull FVGs Dominant" : activeBearFvgs > activeBullFvgs ? "Bear FVGs Dominant" : activeBullFvgs > 0 ? "Mixed FVGs" : "No Active FVGs"
+
+//══════════════════════════════════════════════════════════════════════════════
+// ██  MOMENTUM ACCELERATION ENGINE
+//══════════════════════════════════════════════════════════════════════════════
+float momRaw = ta.mom(close, accelLen)
+float momPrev = ta.mom(close, accelLen)[accelLen]
+float accel = momRaw - momPrev
+float accelSma = ta.sma(accel, accelLen)
+
+string accelState = accel > 0.0 and accel > accelSma ? "Accelerating Up" : accel < 0.0 and accel < accelSma ? "Accelerating Down" : accel > 0.0 ? "Decelerating Up" : accel < 0.0 ? "Decelerating Down" : "Flat"
+
+//══════════════════════════════════════════════════════════════════════════════
+// ██  MTF ENGINE
+//══════════════════════════════════════════════════════════════════════════════
+float htf1Cl = request.security(syminfo.tickerid, htf1, close)
+float htf1F  = request.security(syminfo.tickerid, htf1, ta.ema(close, fastLen))
+float htf1S  = request.security(syminfo.tickerid, htf1, ta.ema(close, slowLen))
+float htf1B  = request.security(syminfo.tickerid, htf1, ta.ema(close, baseLen))
+float htf1R  = request.security(syminfo.tickerid, htf1, ta.rsi(close, rsiLen))
+
+float htf2Cl = request.security(syminfo.tickerid, htf2, close)
+float htf2F  = request.security(syminfo.tickerid, htf2, ta.ema(close, fastLen))
+float htf2S  = request.security(syminfo.tickerid, htf2, ta.ema(close, slowLen))
+float htf2B  = request.security(syminfo.tickerid, htf2, ta.ema(close, baseLen))
+float htf2R  = request.security(syminfo.tickerid, htf2, ta.rsi(close, rsiLen))
+
+bool ltfBull = emaF > emaS and close > emaB
+bool ltfBear = emaF < emaS and close < emaB
+bool h1Bull  = htf1F > htf1S and htf1Cl > htf1B
+bool h1Bear  = htf1F < htf1S and htf1Cl < htf1B
+bool h2Bull  = htf2F > htf2S and htf2Cl > htf2B
+bool h2Bear  = htf2F < htf2S and htf2Cl < htf2B
+
+int mtfBullN = (ltfBull ? 1 : 0) + (h1Bull ? 1 : 0) + (h2Bull ? 1 : 0)
+int mtfBearN = (ltfBear ? 1 : 0) + (h1Bear ? 1 : 0) + (h2Bear ? 1 : 0)
+int memeMode = f_meme(syminfo.ticker, specialMode)
+
+//══════════════════════════════════════════════════════════════════════════════
+// ██  STATE ENGINE
+//══════════════════════════════════════════════════════════════════════════════
+string trendSt = emaF > emaS and close > emaB and emaB > emaA ? "Bull Trend" : emaF < emaS and close < emaB and emaB < emaA ? "Bear Trend" : "Range / Transition"
+string regimeSt = adxVal >= 25.0 ? "Directional" : sqzOn ? "Compressed" : "Rotational"
+string momSt = rsiVal >= 60.0 and pDi > mDi and rocVal > 0.0 ? "Bull Momentum" : rsiVal <= 40.0 and mDi > pDi and rocVal < 0.0 ? "Bear Momentum" : "Mixed Momentum"
+string volSt = atrPctSma > 0.0 and atrPct >= atrPctSma * 1.20 ? "Expansion" : atrPctSma > 0.0 and atrPct <= atrPctSma * 0.85 ? "Compression" : "Normal"
+string sqzSt = sqzOn ? "Squeeze On" : sqzOff ? "Release Active" : "Neutral"
+string relSt = relPerf >= 1.5 ? "Outperforming" : relPerf <= -1.5 ? "Underperforming" : "In-Line"
+string trapSt = bullTrap ? "Bull Trap Risk" : bearTrap ? "Bear Trap Risk" : liqSweepHi ? "Upper Sweep" : liqSweepLo ? "Lower Sweep" : "Normal"
+string partSt = rv >= 1.50 ? "Heavy" : rv >= 1.05 ? "Good" : rv <= 0.80 ? "Weak" : "Average"
+
+//══════════════════════════════════════════════════════════════════════════════
+// ██  SCORE ENGINE (5-ENGINE COMPOSITE)
+//══════════════════════════════════════════════════════════════════════════════
+// Engine 1: Trend & Structure
+float tsBull = 0.0
+float tsBear = 0.0
+tsBull += emaF > emaS ? 3.0 : 0.0
+tsBull += close > emaB ? 3.0 : 0.0
+tsBull += emaB > emaA ? 2.0 : 0.0
+tsBull += structState == "Bullish Structure" ? 4.0 : 0.0
+tsBull += isHH ? 2.0 : 0.0
+tsBull += isHL ? 2.0 : 0.0
+tsBull += vwapBull ? 2.0 : 0.0
+tsBull += close > vwapU1 ? 2.0 : 0.0
+tsBear += emaF < emaS ? 3.0 : 0.0
+tsBear += close < emaB ? 3.0 : 0.0
+tsBear += emaB < emaA ? 2.0 : 0.0
+tsBear += structState == "Bearish Structure" ? 4.0 : 0.0
+tsBear += isLH ? 2.0 : 0.0
+tsBear += isLL ? 2.0 : 0.0
+tsBear += vwapBear ? 2.0 : 0.0
+tsBear += close < vwapL1 ? 2.0 : 0.0
+
+// Engine 2: Momentum & Acceleration
+float maBull = 0.0
+float maBear = 0.0
+maBull += rsiVal > 55.0 ? 3.0 : 0.0
+maBull += rsiVal > 65.0 ? 2.0 : 0.0
+maBull += pDi > mDi ? 2.0 : 0.0
+maBull += adxVal > 20.0 and pDi > mDi ? 3.0 : 0.0
+maBull += rocVal > 0.0 ? 2.0 : 0.0
+maBull += accelState == "Accelerating Up" ? 3.0 : 0.0
+maBull += accelState == "Decelerating Down" ? 1.0 : 0.0
+maBull += bullDivFlag ? 4.0 : 0.0
+maBear += rsiVal < 45.0 ? 3.0 : 0.0
+maBear += rsiVal < 35.0 ? 2.0 : 0.0
+maBear += mDi > pDi ? 2.0 : 0.0
+maBear += adxVal > 20.0 and mDi > pDi ? 3.0 : 0.0
+maBear += rocVal < 0.0 ? 2.0 : 0.0
+maBear += accelState == "Accelerating Down" ? 3.0 : 0.0
+maBear += accelState == "Decelerating Up" ? 1.0 : 0.0
+maBear += bearDivFlag ? 4.0 : 0.0
+
+// Engine 3: Volume & Participation
+float vpBull = 0.0
+float vpBear = 0.0
+vpBull += rv > 1.10 ? 2.0 : 0.0
+vpBull += rv > 1.50 ? 2.0 : 0.0
+vpBull += rv > 1.10 and close > open ? 3.0 : 0.0
+vpBull += relPerf > 0.0 ? 2.0 : 0.0
+vpBull += relPerf > 1.5 ? 1.0 : 0.0
+vpBear += rv > 1.10 ? 2.0 : 0.0
+vpBear += rv > 1.50 ? 2.0 : 0.0
+vpBear += rv > 1.10 and close < open ? 3.0 : 0.0
+vpBear += relPerf < 0.0 ? 2.0 : 0.0
+vpBear += relPerf < -1.5 ? 1.0 : 0.0
+
+// Engine 4: Multi-TimeFrame Alignment
+float mtBull = 0.0
+float mtBear = 0.0
+mtBull += mtfBullN == 3 ? 8.0 : mtfBullN == 2 ? 4.0 : 0.0
+mtBull += htf1R > 50.0 ? 1.0 : 0.0
+mtBull += htf2R > 50.0 ? 1.0 : 0.0
+mtBear += mtfBearN == 3 ? 8.0 : mtfBearN == 2 ? 4.0 : 0.0
+mtBear += htf1R < 50.0 ? 1.0 : 0.0
+mtBear += htf2R < 50.0 ? 1.0 : 0.0
+
+// Engine 5: Price Action & Traps
+float paBull = 0.0
+float paBear = 0.0
+paBull += close > breakLvl ? 3.0 : 0.0
+paBull += sqzOff and close > emaF ? 2.0 : 0.0
+paBull += bearTrap ? 3.0 : 0.0
+paBull += liqSweepLo ? 2.0 : 0.0
+paBull += close > open and close > high[1] ? 2.0 : 0.0
+paBull += activeBullFvgs > activeBearFvgs ? 2.0 : 0.0
+paBear += close < failLvl ? 3.0 : 0.0
+paBear += sqzOff and close < emaF ? 2.0 : 0.0
+paBear += bullTrap ? 3.0 : 0.0
+paBear += liqSweepHi ? 2.0 : 0.0
+paBear += close < open and close < low[1] ? 2.0 : 0.0
+paBear += activeBearFvgs > activeBullFvgs ? 2.0 : 0.0
+
+// Mode bonus
+float modeBullAdj = 0.0
+float modeBearAdj = 0.0
+modeBullAdj += memeMode == 1 and liqSweepLo ? 2.0 : 0.0
+modeBullAdj += memeMode == 1 and rv > 1.25 ? 2.0 : 0.0
+modeBearAdj += memeMode == 1 and liqSweepHi ? 2.0 : 0.0
+modeBearAdj += memeMode == 1 and rv > 1.25 ? 2.0 : 0.0
+
+// Options bonus
+float optBull = 0.0
+float optBear = 0.0
+optBull += useOptLayer and gammaUp > 0.0 and close > gammaUp ? 8.0 : 0.0
+optBull += useOptLayer and callWall > 0.0 and close > callWall ? 5.0 : 0.0
+optBull += useOptLayer and pinZone > 0.0 and close > pinZone ? 2.0 : 0.0
+optBull += useOptLayer and putWall > 0.0 and close > putWall ? 1.0 : 0.0
+optBear += useOptLayer and gammaDn > 0.0 and close < gammaDn ? 8.0 : 0.0
+optBear += useOptLayer and putWall > 0.0 and close < putWall ? 5.0 : 0.0
+optBear += useOptLayer and pinZone > 0.0 and close < pinZone ? 2.0 : 0.0
+optBear += useOptLayer and callWall > 0.0 and close < callWall ? 1.0 : 0.0
+
+// Composite
+float bullScore = f_clamp(tsBull + maBull + vpBull + mtBull + paBull + modeBullAdj + optBull, 0.0, 100.0)
+float bearScore = f_clamp(tsBear + maBear + vpBear + mtBear + paBear + modeBearAdj + optBear, 0.0, 100.0)
+
+float edgeScore = bullScore - bearScore
+string bias = f_bias_text(edgeScore)
+float confidence = f_clamp(math.abs(edgeScore) * 2.5, 0.0, 100.0)
+string grade = f_grade(confidence)
+
+float longQ = bullScore - (bullTrap ? 8.0 : 0.0) - (rv < 0.85 ? 6.0 : 0.0) - (bearDivFlag ? 5.0 : 0.0)
+float shortQ = bearScore - (bearTrap ? 8.0 : 0.0) - (rv < 0.85 ? 6.0 : 0.0) - (bullDivFlag ? 5.0 : 0.0)
+
+string riskSt = sqzOn ? "Compression Risk" : bullTrap or bearTrap ? "Trap Risk Elevated" : bearDivFlag or bullDivFlag ? "Divergence Risk" : rv < 0.8 ? "Low Participation" : adxVal < 16.0 ? "Chop Risk" : "Manageable"
+
+//══════════════════════════════════════════════════════════════════════════════
+// ██  LEVEL ENGINE
+//══════════════════════════════════════════════════════════════════════════════
+float longTrig = breakLvl + atrVal * 0.12
+float shortTrig = failLvl - atrVal * 0.12
+float longInv = emaS
+float shortInv = emaS
+float lT1 = close + atrVal * 1.0
+float lT2 = close + atrVal * 2.0
+float lT3 = close + atrVal * 3.0
+float sT1 = close - atrVal * 1.0
+float sT2 = close - atrVal * 2.0
+float sT3 = close - atrVal * 3.0
+
+bool longArmed = close > breakLvl and bullScore >= bearScore
+bool shortArmed = close < failLvl and bearScore >= bullScore
+
+//══════════════════════════════════════════════════════════════════════════════
+// ██  SIGNAL ENGINE (Enhanced)
+//══════════════════════════════════════════════════════════════════════════════
+bool buyRaw = close > longTrig and bullScore > bearScore and rv >= 1.0
+bool sellRaw = close < shortTrig and bearScore > bullScore and rv >= 1.0
+
+// Confluence filter: require structure + momentum alignment
+bool buyConf = buyRaw and (structState == "Bullish Structure" or isHL) and (accelState == "Accelerating Up" or momSt == "Bull Momentum")
+bool sellConf = sellRaw and (structState == "Bearish Structure" or isLH) and (accelState == "Accelerating Down" or momSt == "Bear Momentum")
+
+// Fallback: standard signal if confluence not met but score edge is strong
+bool buySignal = showSignals and bias != "SHORT BIAS" and bias != "STRONG SHORT" and (buyConf or (buyRaw and edgeScore >= 15.0))
+bool sellSignal = showSignals and bias != "LONG BIAS" and bias != "STRONG LONG" and (sellConf or (sellRaw and edgeScore <= -15.0))
+
+// Signal quality rating
+string buySigQ = buyConf ? "HIGH" : buyRaw ? "STANDARD" : "NONE"
+string sellSigQ = sellConf ? "HIGH" : sellRaw ? "STANDARD" : "NONE"
+
+//══════════════════════════════════════════════════════════════════════════════
+// ██  VERDICT ENGINE (Narrative Intelligence)
+//══════════════════════════════════════════════════════════════════════════════
+string verdict = "Neutral environment. Wait for better alignment."
+verdict := bias == "STRONG LONG" and grade == "A+" ? "Elite bullish setup. All five engines aligned. Trend, structure, momentum, participation, and MTF all favor continuation. This is as clean as it gets." : verdict
+verdict := bias == "STRONG LONG" and grade == "A" ? "Strong bullish continuation favored. Pullbacks are more likely buyable than breakable. Structure supports upside." : verdict
+verdict := bias == "LONG BIAS" and grade == "B" ? "Bullish lean. Structure constructive, but full alignment not yet achieved. Confirmation through follow-through preferred." : verdict
+verdict := bias == "LONG BIAS" and grade == "C" ? "Early bullish setup. Not trash, but needs confirmation. Structure or momentum still lagging." : verdict
+verdict := bias == "STRONG SHORT" and grade == "A+" ? "Elite bearish setup. All five engines aligned for downside. Trend pressure, structure breakdown, and participation favor sellers." : verdict
+verdict := bias == "STRONG SHORT" and grade == "A" ? "Strong bearish continuation. Rips are more likely sold than sustained. Structure is breaking." : verdict
+verdict := bias == "SHORT BIAS" and grade == "B" ? "Bearish lean. Breakdown pressure present but requires confirmation. Watch for failed bounces." : verdict
+verdict := bias == "SHORT BIAS" and grade == "C" ? "Early bearish setup. Weakness exists, but cleaner failure is preferred before committing." : verdict
+verdict := sqzOn and bias == "NEUTRAL" ? "Compression detected. Bigger move likely after release. Do not force entries in dead chop." : verdict
+verdict := bullTrap ? "Bull trap risk. Breakout failed with heavy wick rejection. Do not chase strength." : verdict
+verdict := bearTrap ? "Bear trap risk. Breakdown failed. Snapback risk elevated." : verdict
+verdict := bearDivFlag and edgeScore > 0.0 ? "Bearish RSI divergence detected despite bullish price. Caution warranted on longs." : verdict
+verdict := bullDivFlag and edgeScore < 0.0 ? "Bullish RSI divergence detected despite bearish price. Watch for reversal potential." : verdict
+verdict := liqSweepHi and edgeScore < 0.0 ? "Upper liquidity sweep. Rejection favors downside unless reclaimed fast." : verdict
+verdict := liqSweepLo and edgeScore > 0.0 ? "Lower liquidity sweep. Reclaim favors upside if participation holds." : verdict
+
+string optText = useOptLayer ? "Bridge On" : "Bridge Off"
+optText := useOptLayer and callWall > 0.0 ? "CW " + str.tostring(callWall, format.mintick) : optText
+optText := useOptLayer and putWall > 0.0 ? optText + " | PW " + str.tostring(putWall, format.mintick) : optText
+optText := useOptLayer and pinZone > 0.0 ? optText + " | PIN " + str.tostring(pinZone, format.mintick) : optText
+optText := useOptLayer and gammaUp > 0.0 ? optText + " | G+ " + str.tostring(gammaUp, format.mintick) : optText
+optText := useOptLayer and gammaDn > 0.0 ? optText + " | G- " + str.tostring(gammaDn, format.mintick) : optText
+
+//══════════════════════════════════════════════════════════════════════════════
+// ██  COLORS — JET BLACK + NEON
+//══════════════════════════════════════════════════════════════════════════════
+color cBull    = #00FF00
+color cBear    = #FF0000
+color cNeut    = #FFD700
+color cInfo    = #FF1493
+color cWarn    = #FF6600
+color cAccent  = #FF00FF
+color cBG      = #000000
+color cBGalt   = color.new(#111111, 0)
+color cBGhdr   = color.new(#1A0033, 0)
+
+color biasCol = bias == "STRONG LONG" or bias == "LONG BIAS" ? cBull : bias == "STRONG SHORT" or bias == "SHORT BIAS" ? cBear : cNeut
+color gradeCol = grade == "A+" or grade == "A" ? cBull : grade == "B" ? cNeut : grade == "C" ? cWarn : cBear
+color regimeCol = regimeSt == "Directional" ? cInfo : regimeSt == "Compressed" ? cWarn : cNeut
+color structCol = structState == "Bullish Structure" ? cBull : structState == "Bearish Structure" ? cBear : structState == "Expanding" ? cWarn : structState == "Contracting" ? cInfo : cNeut
+color accelCol = accelState == "Accelerating Up" ? cBull : accelState == "Accelerating Down" ? cBear : cNeut
+color divCol = divState == "Bullish Divergence" ? cBull : divState == "Bearish Divergence" ? cBear : color.new(color.white, 50)
+color fvgCol = fvgState == "Bull FVGs Dominant" ? cBull : fvgState == "Bear FVGs Dominant" ? cBear : cNeut
+color vwapCol = vwapZone == "Extended Above" or vwapZone == "Above +1σ" ? cBull : vwapZone == "Extended Below" or vwapZone == "Below -1σ" ? cBear : cNeut
+
+color barCol = bias == "STRONG LONG" ? color.new(#00FF00, 0) : bias == "LONG BIAS" ? color.new(#00FF00, 35) : bias == "STRONG SHORT" ? color.new(#FF0000, 0) : bias == "SHORT BIAS" ? color.new(#FF0000, 35) : color.new(#FFD700, 25)
+
+//══════════════════════════════════════════════════════════════════════════════
+// ██  PLOTS + FILLS
+//══════════════════════════════════════════════════════════════════════════════
+pF = plot(emaF, "Fast EMA", color=cAccent, linewidth=2)
+pS = plot(emaS, "Slow EMA", color=color.new(#FF6600, 0), linewidth=2)
+pB = plot(emaB, "Base EMA", color=cInfo, linewidth=2)
+plot(emaA, "Anchor EMA", color=color.new(#555555, 0), linewidth=2)
+
+fill(pF, pS, color=showEmaCloud and emaF > emaS ? color.new(#00FF00, 88) : showEmaCloud and emaF < emaS ? color.new(#FF0000, 88) : na, title="EMA Cloud")
+
+plot(showVwap ? vwapVal : na, "VWAP", color=color.new(#FFD700, 0), linewidth=2, style=plot.style_linebr)
+pVU1 = plot(showVwapBands ? vwapU1 : na, "VWAP +1σ", color=color.new(#FFD700, 70), linewidth=1, style=plot.style_linebr)
+pVL1 = plot(showVwapBands ? vwapL1 : na, "VWAP -1σ", color=color.new(#FFD700, 70), linewidth=1, style=plot.style_linebr)
+pVU2 = plot(showVwapBands ? vwapU2 : na, "VWAP +2σ", color=color.new(#FFD700, 85), linewidth=1, style=plot.style_linebr)
+pVL2 = plot(showVwapBands ? vwapL2 : na, "VWAP -2σ", color=color.new(#FFD700, 85), linewidth=1, style=plot.style_linebr)
+fill(pVU1, pVL1, color=showVwapBands ? color.new(#FFD700, 93) : na, title="VWAP Band Fill")
+
+plot(showLevels ? supLvl : na, "Support", color=color.new(#00FF00, 20), linewidth=1, style=plot.style_linebr)
+plot(showLevels ? resLvl : na, "Resistance", color=color.new(#FF0000, 20), linewidth=1, style=plot.style_linebr)
+plot(showLevels ? longTrig : na, "Long Trigger", color=color.new(#00FF00, 0), linewidth=2, style=plot.style_linebr)
+plot(showLevels ? shortTrig : na, "Short Trigger", color=color.new(#FF0000, 0), linewidth=2, style=plot.style_linebr)
+
+plot(useOptLayer and callWall > 0.0 ? callWall : na, "Call Wall", color=color.new(#0088FF, 0), linewidth=2, style=plot.style_linebr)
+plot(useOptLayer and putWall > 0.0 ? putWall : na, "Put Wall", color=color.new(#AA00FF, 0), linewidth=2, style=plot.style_linebr)
+plot(useOptLayer and pinZone > 0.0 ? pinZone : na, "Pin Zone", color=color.new(#888888, 0), linewidth=2, style=plot.style_linebr)
+plot(useOptLayer and gammaUp > 0.0 ? gammaUp : na, "Gamma Up", color=color.new(#00CCCC, 0), linewidth=1, style=plot.style_linebr)
+plot(useOptLayer and gammaDn > 0.0 ? gammaDn : na, "Gamma Down", color=color.new(#CC0044, 0), linewidth=1, style=plot.style_linebr)
+
+barcolor(showBarColor ? barCol : na)
+
+plotshape(showSignals and buySignal, title="Buy Trigger", style=shape.labelup, location=location.belowbar, color=#00FF00, text="BUY", textcolor=color.black, size=size.tiny)
+plotshape(showSignals and sellSignal, title="Sell Trigger", style=shape.labeldown, location=location.abovebar, color=#FF0000, text="SELL", textcolor=color.white, size=size.tiny)
+plotshape(showSignals and buyConf and not buySignal[1], title="High Conf Buy", style=shape.diamond, location=location.belowbar, color=#00FF00, text="◆", textcolor=#00FF00, size=size.small)
+plotshape(showSignals and sellConf and not sellSignal[1], title="High Conf Sell", style=shape.diamond, location=location.abovebar, color=#FF0000, text="◆", textcolor=#FF0000, size=size.small)
+plotshape(showSignals and bullTrap, title="Bull Trap", style=shape.triangledown, location=location.abovebar, color=#FF6600, text="TRAP", textcolor=color.black, size=size.tiny)
+plotshape(showSignals and bearTrap, title="Bear Trap", style=shape.triangleup, location=location.belowbar, color=#FF6600, text="TRAP", textcolor=color.black, size=size.tiny)
+plotshape(showSignals and liqSweepHi, title="Upper Sweep", style=shape.circle, location=location.abovebar, color=#FF6600, size=size.tiny)
+plotshape(showSignals and liqSweepLo, title="Lower Sweep", style=shape.circle, location=location.belowbar, color=#FF6600, size=size.tiny)
+
+//══════════════════════════════════════════════════════════════════════════════
+// ██  DASHBOARD — JET BLACK NEON INTELLIGENCE PANEL
+//══════════════════════════════════════════════════════════════════════════════
+int dCols = compactMode ? 2 : 3
+int dRows = compactMode ? 16 : 27
+
+var table dash = na
+if barstate.isfirst
+    dash := table.new(f_pos(dashPos), dCols, dRows, border_width=1, border_color=color.new(#333333, 0))
+
+if barstate.islast and showDash
+    table.clear(dash, 0, 0, dCols - 1, dRows - 1)
+    int r = 0
+
+    // Row 0: Header
+    table.cell(dash, 0, r, "SML WAR ROOM BEAST™ v2.0", text_color=#FF00FF, bgcolor=cBGhdr, text_size=dSzHdr)
+    table.cell(dash, 1, r, syminfo.ticker + " | " + timeframe.period, text_color=color.white, bgcolor=cBGhdr, text_size=dSzHdr)
+    if not compactMode
+        table.cell(dash, 2, r, grade + " | " + bias, text_color=gradeCol, bgcolor=cBGhdr, text_size=dSzHdr)
+    r += 1
+
+    // Row 1: Trend
+    table.cell(dash, 0, r, "TREND", text_color=#FF00FF, bgcolor=cBG, text_size=dSz)
+    table.cell(dash, 1, r, trendSt, text_color=trendSt == "Bull Trend" ? cBull : trendSt == "Bear Trend" ? cBear : cNeut, bgcolor=cBGalt, text_size=dSz)
+    if not compactMode
+        table.cell(dash, 2, r, "Anchor " + str.tostring(emaA, format.mintick), text_color=color.white, bgcolor=cBG, text_size=dSz)
+    r += 1
+
+    // Row 2: Structure
+    table.cell(dash, 0, r, "STRUCTURE", text_color=#FF00FF, bgcolor=cBG, text_size=dSz)
+    table.cell(dash, 1, r, structState, text_color=structCol, bgcolor=cBGalt, text_size=dSz)
+    if not compactMode
+        string lastSwTxt = (isHH ? "HH " : isLH ? "LH " : "") + (isHL ? "HL" : isLL ? "LL" : "")
+        table.cell(dash, 2, r, lastSwTxt, text_color=structCol, bgcolor=cBG, text_size=dSz)
+    r += 1
+
+    // Row 3: Regime
+    table.cell(dash, 0, r, "REGIME", text_color=#FF00FF, bgcolor=cBG, text_size=dSz)
+    table.cell(dash, 1, r, regimeSt, text_color=regimeCol, bgcolor=cBGalt, text_size=dSz)
+    if not compactMode
+        table.cell(dash, 2, r, volSt, text_color=volSt == "Expansion" ? cWarn : volSt == "Compression" ? cInfo : color.white, bgcolor=cBG, text_size=dSz)
+    r += 1
+
+    // Row 4: Momentum
+    table.cell(dash, 0, r, "MOMENTUM", text_color=#FF00FF, bgcolor=cBG, text_size=dSz)
+    table.cell(dash, 1, r, momSt, text_color=momSt == "Bull Momentum" ? cBull : momSt == "Bear Momentum" ? cBear : cNeut, bgcolor=cBGalt, text_size=dSz)
+    if not compactMode
+        table.cell(dash, 2, r, "RSI " + str.tostring(rsiVal, "#.0") + " | ROC " + str.tostring(rocVal, "#.0"), text_color=color.white, bgcolor=cBG, text_size=dSz)
+    r += 1
+
+    // Row 5: Acceleration
+    table.cell(dash, 0, r, "ACCEL", text_color=#FF00FF, bgcolor=cBG, text_size=dSz)
+    table.cell(dash, 1, r, accelState, text_color=accelCol, bgcolor=cBGalt, text_size=dSz)
+    if not compactMode
+        table.cell(dash, 2, r, "Δ " + str.tostring(accel, "#.000"), text_color=accelCol, bgcolor=cBG, text_size=dSz)
+    r += 1
+
+    // Row 6: Trend Strength
+    table.cell(dash, 0, r, "ADX", text_color=#FF00FF, bgcolor=cBG, text_size=dSz)
+    table.cell(dash, 1, r, "ADX " + str.tostring(adxVal, "#.0"), text_color=adxVal >= 25.0 ? cBull : adxVal >= 18.0 ? cNeut : color.new(color.white, 40), bgcolor=cBGalt, text_size=dSz)
+    if not compactMode
+        table.cell(dash, 2, r, "+DI " + str.tostring(pDi, "#.0") + " / -DI " + str.tostring(mDi, "#.0"), text_color=color.white, bgcolor=cBG, text_size=dSz)
+    r += 1
+
+    // Row 7: Volatility
+    table.cell(dash, 0, r, "VOLATILITY", text_color=#FF00FF, bgcolor=cBG, text_size=dSz)
+    table.cell(dash, 1, r, "ATR% " + str.tostring(atrPct, "#.00"), text_color=color.white, bgcolor=cBGalt, text_size=dSz)
+    if not compactMode
+        table.cell(dash, 2, r, sqzSt + " | BBW " + str.tostring(bbW, "#.00"), text_color=sqzOn ? cInfo : sqzOff ? cWarn : color.white, bgcolor=cBG, text_size=dSz)
+    r += 1
+
+    // Row 8: Volume
+    table.cell(dash, 0, r, "VOLUME", text_color=#FF00FF, bgcolor=cBG, text_size=dSz)
+    table.cell(dash, 1, r, "RVOL " + str.tostring(rv, "#.00"), text_color=rv >= 1.2 ? cBull : rv <= 0.8 ? cBear : color.white, bgcolor=cBGalt, text_size=dSz)
+    if not compactMode
+        table.cell(dash, 2, r, partSt + " Participation", text_color=color.white, bgcolor=cBG, text_size=dSz)
+    r += 1
+
+    // Row 9: VWAP
+    table.cell(dash, 0, r, "VWAP", text_color=#FF00FF, bgcolor=cBG, text_size=dSz)
+    table.cell(dash, 1, r, vwapZone, text_color=vwapCol, bgcolor=cBGalt, text_size=dSz)
+    if not compactMode
+        table.cell(dash, 2, r, "VWAP " + str.tostring(vwapVal, format.mintick), text_color=cNeut, bgcolor=cBG, text_size=dSz)
+    r += 1
+
+    // Row 10: Relative
+    table.cell(dash, 0, r, "RELATIVE", text_color=#FF00FF, bgcolor=cBG, text_size=dSz)
+    table.cell(dash, 1, r, relSt, text_color=relPerf >= 0.0 ? cBull : cBear, bgcolor=cBGalt, text_size=dSz)
+    if not compactMode
+        table.cell(dash, 2, r, "vs " + benchSym + " " + str.tostring(relPerf, "#.00") + "%", text_color=relPerf >= 0.0 ? cBull : cBear, bgcolor=cBG, text_size=dSz)
+    r += 1
+
+    // Row 11: MTF
+    table.cell(dash, 0, r, "MTF", text_color=#FF00FF, bgcolor=cBG, text_size=dSz)
+    table.cell(dash, 1, r, "Bull " + str.tostring(mtfBullN) + " / Bear " + str.tostring(mtfBearN), text_color=mtfBullN > mtfBearN ? cBull : mtfBearN > mtfBullN ? cBear : cNeut, bgcolor=cBGalt, text_size=dSz)
+    if not compactMode
+        table.cell(dash, 2, r, htf1 + " RSI " + str.tostring(htf1R, "#.0") + " | " + htf2 + " RSI " + str.tostring(htf2R, "#.0"), text_color=color.white, bgcolor=cBG, text_size=dSz)
+    r += 1
+
+    // Row 12: Divergence
+    table.cell(dash, 0, r, "DIVERGENCE", text_color=#FF00FF, bgcolor=cBG, text_size=dSz)
+    table.cell(dash, 1, r, divState, text_color=divCol, bgcolor=cBGalt, text_size=dSz)
+    if not compactMode
+        table.cell(dash, 2, r, bearDivFlag ? "Price HH / RSI LH" : bullDivFlag ? "Price LL / RSI HL" : "—", text_color=divCol, bgcolor=cBG, text_size=dSz)
+    r += 1
+
+    // Row 13: FVG
+    table.cell(dash, 0, r, "FVG", text_color=#FF00FF, bgcolor=cBG, text_size=dSz)
+    table.cell(dash, 1, r, fvgState, text_color=fvgCol, bgcolor=cBGalt, text_size=dSz)
+    if not compactMode
+        table.cell(dash, 2, r, "Bull " + str.tostring(activeBullFvgs) + " / Bear " + str.tostring(activeBearFvgs), text_color=fvgCol, bgcolor=cBG, text_size=dSz)
+    r += 1
+
+    // Row 14: Trap/Sweep
+    table.cell(dash, 0, r, "TRAP/SWEEP", text_color=#FF00FF, bgcolor=cBG, text_size=dSz)
+    table.cell(dash, 1, r, trapSt, text_color=bullTrap or bearTrap or liqSweepHi or liqSweepLo ? cWarn : color.white, bgcolor=cBGalt, text_size=dSz)
+    if not compactMode
+        table.cell(dash, 2, r, riskSt, text_color=riskSt == "Manageable" ? cBull : cWarn, bgcolor=cBG, text_size=dSz)
+    r += 1
+
+    // Row 15: Engine Scores
+    table.cell(dash, 0, r, "ENGINES", text_color=#FF00FF, bgcolor=cBG, text_size=dSz)
+    table.cell(dash, 1, r, "TS:" + str.tostring(tsBull - tsBear, "#.0") + " MA:" + str.tostring(maBull - maBear, "#.0") + " VP:" + str.tostring(vpBull - vpBear, "#.0"), text_color=biasCol, bgcolor=cBGalt, text_size=dSz)
+    if not compactMode
+        table.cell(dash, 2, r, "MT:" + str.tostring(mtBull - mtBear, "#.0") + " PA:" + str.tostring(paBull - paBear, "#.0"), text_color=biasCol, bgcolor=cBG, text_size=dSz)
+    r += 1
+
+    // Row 16: Composite Scores
+    table.cell(dash, 0, r, "SCORES", text_color=#FF00FF, bgcolor=cBG, text_size=dSz)
+    table.cell(dash, 1, r, "Bull " + str.tostring(bullScore, "#.0") + " | Bear " + str.tostring(bearScore, "#.0"), text_color=biasCol, bgcolor=cBGalt, text_size=dSz)
+    if not compactMode
+        table.cell(dash, 2, r, "Edge " + str.tostring(edgeScore, "#.0"), text_color=biasCol, bgcolor=cBG, text_size=dSz)
+    r += 1
+
+    // Row 17: Decision
+    table.cell(dash, 0, r, "DECISION", text_color=color.black, bgcolor=biasCol, text_size=dSzHdr)
+    table.cell(dash, 1, r, bias, text_color=biasCol, bgcolor=cBGalt, text_size=dSzHdr)
+    if not compactMode
+        table.cell(dash, 2, r, "Conf " + str.tostring(confidence, "#.0") + "% | " + grade, text_color=gradeCol, bgcolor=cBG, text_size=dSz)
+    r += 1
+
+    if compactMode
+        // Compact verdict
+        table.cell(dash, 0, r, "VERDICT", text_color=#FF00FF, bgcolor=cBG, text_size=dSzHdr)
+        table.cell(dash, 1, r, verdict, text_color=biasCol, bgcolor=cBGalt, text_size=dSzHdr)
+    else
+        // Row 18: Triggers
+        table.cell(dash, 0, r, "TRIGGERS", text_color=#FF00FF, bgcolor=cBG, text_size=dSz)
+        table.cell(dash, 1, r, "Long " + str.tostring(longTrig, format.mintick) + " | Short " + str.tostring(shortTrig, format.mintick), text_color=color.white, bgcolor=cBGalt, text_size=dSz)
+        table.cell(dash, 2, r, "Armed L:" + (longArmed ? "Y" : "N") + " S:" + (shortArmed ? "Y" : "N"), text_color=longArmed or shortArmed ? cBull : color.white, bgcolor=cBG, text_size=dSz)
+        r += 1
+
+        // Row 19: Levels
+        table.cell(dash, 0, r, "LEVELS", text_color=#FF00FF, bgcolor=cBG, text_size=dSz)
+        table.cell(dash, 1, r, "S " + str.tostring(supLvl, format.mintick) + " | R " + str.tostring(resLvl, format.mintick), text_color=color.white, bgcolor=cBGalt, text_size=dSz)
+        table.cell(dash, 2, r, "Inv " + str.tostring(longInv, format.mintick), text_color=color.white, bgcolor=cBG, text_size=dSz)
+        r += 1
+
+        // Row 20: Long Targets
+        table.cell(dash, 0, r, "LONG TGT", text_color=#FF00FF, bgcolor=cBG, text_size=dSz)
+        table.cell(dash, 1, r, str.tostring(lT1, format.mintick) + " / " + str.tostring(lT2, format.mintick) + " / " + str.tostring(lT3, format.mintick), text_color=cBull, bgcolor=cBGalt, text_size=dSz)
+        table.cell(dash, 2, r, "LQ " + str.tostring(longQ, "#.0") + " | " + buySigQ, text_color=cBull, bgcolor=cBG, text_size=dSz)
+        r += 1
+
+        // Row 21: Short Targets
+        table.cell(dash, 0, r, "SHORT TGT", text_color=#FF00FF, bgcolor=cBG, text_size=dSz)
+        table.cell(dash, 1, r, str.tostring(sT1, format.mintick) + " / " + str.tostring(sT2, format.mintick) + " / " + str.tostring(sT3, format.mintick), text_color=cBear, bgcolor=cBGalt, text_size=dSz)
+        table.cell(dash, 2, r, "SQ " + str.tostring(shortQ, "#.0") + " | " + sellSigQ, text_color=cBear, bgcolor=cBG, text_size=dSz)
+        r += 1
+
+        // Row 22: Options
+        table.cell(dash, 0, r, "OPTIONS", text_color=#FF00FF, bgcolor=cBG, text_size=dSz)
+        table.cell(dash, 1, r, optText, text_color=color.white, bgcolor=cBGalt, text_size=dSz)
+        table.cell(dash, 2, r, useOptLayer ? "Manual Bridge Ready" : "Disabled", text_color=useOptLayer ? cInfo : color.new(color.white, 50), bgcolor=cBG, text_size=dSz)
+        r += 1
+
+        // Row 23: Mode
+        table.cell(dash, 0, r, "MODE", text_color=#FF00FF, bgcolor=cBG, text_size=dSz)
+        table.cell(dash, 1, r, specialMode, text_color=color.white, bgcolor=cBGalt, text_size=dSz)
+        table.cell(dash, 2, r, memeMode == 1 ? "Meme Enhancements On" : "Universal Logic", text_color=memeMode == 1 ? cWarn : color.white, bgcolor=cBG, text_size=dSz)
+        r += 1
+
+        // Row 24: Verdict
+        table.cell(dash, 0, r, "VERDICT", text_color=color.black, bgcolor=#FF00FF, text_size=dSzHdr)
+        table.cell(dash, 1, r, verdict, text_color=biasCol, bgcolor=cBGalt, text_size=dSzHdr)
+        table.cell(dash, 2, r, "", bgcolor=cBG, text_size=dSzHdr)
+        r += 1
+
+        // Row 25: Signal Quality
+        table.cell(dash, 0, r, "SIG QUALITY", text_color=#FF00FF, bgcolor=cBG, text_size=dSz)
+        table.cell(dash, 1, r, "Buy: " + buySigQ + " | Sell: " + sellSigQ, text_color=buyConf ? cBull : sellConf ? cBear : color.white, bgcolor=cBGalt, text_size=dSz)
+        table.cell(dash, 2, r, "Confluence-filtered", text_color=color.new(color.white, 40), bgcolor=cBG, text_size=dSz)
+        r += 1
+
+        // Row 26: Footer
+        table.cell(dash, 0, r, "USE", text_color=#FF00FF, bgcolor=cBGhdr, text_size=dSzHdr)
+        table.cell(dash, 1, r, "Trade context + triggers, not blind signals", text_color=color.white, bgcolor=cBGhdr, text_size=dSzHdr)
+        table.cell(dash, 2, r, "ScriptMasterLabs.com", text_color=#FF00FF, bgcolor=cBGhdr, text_size=dSzHdr)
+
+//══════════════════════════════════════════════════════════════════════════════
+// ██  ALERT SYSTEM
+//══════════════════════════════════════════════════════════════════════════════
+// Basic alertcondition (const string messages)
+alertcondition(buySignal, title="SML WRB Buy Signal", message="SML War Room Beast: Buy signal triggered")
+alertcondition(sellSignal, title="SML WRB Sell Signal", message="SML War Room Beast: Sell signal triggered")
+alertcondition(buyConf, title="SML WRB High Conf Buy", message="SML War Room Beast: High confluence buy signal")
+alertcondition(sellConf, title="SML WRB High Conf Sell", message="SML War Room Beast: High confluence sell signal")
+alertcondition(bullTrap, title="SML WRB Bull Trap", message="SML War Room Beast: Bull trap detected")
+alertcondition(bearTrap, title="SML WRB Bear Trap", message="SML War Room Beast: Bear trap detected")
+alertcondition(sqzOn, title="SML WRB Squeeze On", message="SML War Room Beast: Squeeze compression active")
+alertcondition(sqzOff, title="SML WRB Squeeze Release", message="SML War Room Beast: Squeeze released")
+alertcondition(bullDivFlag, title="SML WRB Bull Divergence", message="SML War Room Beast: Bullish RSI divergence")
+alertcondition(bearDivFlag, title="SML WRB Bear Divergence", message="SML War Room Beast: Bearish RSI divergence")
+alertcondition(liqSweepHi, title="SML WRB Upper Sweep", message="SML War Room Beast: Upper liquidity sweep")
+alertcondition(liqSweepLo, title="SML WRB Lower Sweep", message="SML War Room Beast: Lower liquidity sweep")
+
+// Rich JSON alerts for Discord webhooks
+if alertsOn and buySignal
+    alert('{"indicator":"SML War Room Beast","signal":"BUY","ticker":"' + syminfo.tickerid + '","tf":"' + timeframe.period + '","bias":"' + bias + '","grade":"' + grade + '","conf":' + str.tostring(confidence, "#.0") + ',"edge":' + str.tostring(edgeScore, "#.0") + ',"rvol":' + str.tostring(rv, "#.00") + ',"structure":"' + structState + '","accel":"' + accelState + '","price":' + str.tostring(close) + ',"trigger":' + str.tostring(longTrig) + ',"t1":' + str.tostring(lT1) + ',"t2":' + str.tostring(lT2) + ',"t3":' + str.tostring(lT3) + ',"quality":"' + buySigQ + '"}', alert.freq_once_per_bar)
+
+if alertsOn and sellSignal
+    alert('{"indicator":"SML War Room Beast","signal":"SELL","ticker":"' + syminfo.tickerid + '","tf":"' + timeframe.period + '","bias":"' + bias + '","grade":"' + grade + '","conf":' + str.tostring(confidence, "#.0") + ',"edge":' + str.tostring(edgeScore, "#.0") + ',"rvol":' + str.tostring(rv, "#.00") + ',"structure":"' + structState + '","accel":"' + accelState + '","price":' + str.tostring(close) + ',"trigger":' + str.tostring(shortTrig) + ',"t1":' + str.tostring(sT1) + ',"t2":' + str.tostring(sT2) + ',"t3":' + str.tostring(sT3) + ',"quality":"' + sellSigQ + '"}', alert.freq_once_per_bar)
+
+if alertsOn and bullTrap
+    alert('{"indicator":"SML War Room Beast","signal":"BULL_TRAP","ticker":"' + syminfo.tickerid + '","tf":"' + timeframe.period + '","price":' + str.tostring(close) + '}', alert.freq_once_per_bar)
+
+if alertsOn and bearTrap
+    alert('{"indicator":"SML War Room Beast","signal":"BEAR_TRAP","ticker":"' + syminfo.tickerid + '","tf":"' + timeframe.period + '","price":' + str.tostring(close) + '}', alert.freq_once_per_bar)
+
+if alertsOn and bullDivFlag
+    alert('{"indicator":"SML War Room Beast","signal":"BULL_DIVERGENCE","ticker":"' + syminfo.tickerid + '","tf":"' + timeframe.period + '","rsi":' + str.tostring(rsiVal, "#.0") + ',"price":' + str.tostring(close) + '}', alert.freq_once_per_bar)
+
+if alertsOn and bearDivFlag
+    alert('{"indicator":"SML War Room Beast","signal":"BEAR_DIVERGENCE","ticker":"' + syminfo.tickerid + '","tf":"' + timeframe.period + '","rsi":' + str.tostring(rsiVal, "#.0") + ',"price":' + str.tostring(close) + '}', alert.freq_once_per_bar)
+
+if alertsOn and liqSweepHi
+    alert('{"indicator":"SML War Room Beast","signal":"UPPER_SWEEP","ticker":"' + syminfo.tickerid + '","tf":"' + timeframe.period + '","price":' + str.tostring(close) + '}', alert.freq_once_per_bar)
+
+if alertsOn and liqSweepLo
+    alert('{"indicator":"SML War Room Beast","signal":"LOWER_SWEEP","ticker":"' + syminfo.tickerid + '","tf":"' + timeframe.period + '","price":' + str.tostring(close) + '}', alert.freq_once_per_bar)
+//══════════════════════════════════════════════════════════════════════════════
+// ██  END — ScriptMasterLabs.com — BEAST MODE
+//══════════════════════════════════════════════════════════════════════════════

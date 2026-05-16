@@ -1,0 +1,326 @@
+//@version=6
+indicator("SML Apex Breakout Engine™ v2 (Fractal-Locked)", shorttitle="SML-APEX-v2", overlay=true, max_labels_count=500, max_lines_count=500, max_boxes_count=200)
+
+//══════════════════════════════════════════════════════════════════════════════
+// SML Apex Breakout Engine™ — v2 BEAST MODE / FRACTAL-LOCKED
+//══════════════════════════════════════════════════════════════════════════════
+
+string gMode = "01 — Trade Mode"
+tradeMode       = input.string("Shares + Options", "Mode", options=["Shares Only Bullish", "Options Both Directions", "Shares + Options"], group=gMode)
+showBear        = tradeMode == "Options Both Directions" or tradeMode == "Shares + Options"
+sharesBullOnly  = tradeMode == "Shares Only Bullish"
+
+string gTF = "02 — Timeframes"
+biasTF1         = input.timeframe("240", "Primary Bias TF", group=gTF)
+biasTF2         = input.timeframe("D",   "Macro Bias TF",   group=gTF)
+
+string gFract = "03 — Fractal Engine (PRIMARY BREAKOUT REFERENCE)"
+pivotLeft       = input.int(5, "Fractal Left Bars",  minval=2, group=gFract)
+pivotRight      = input.int(5, "Fractal Right Bars (Confirmation Delay)", minval=2, group=gFract)
+fractalLookback = input.int(50, "Max Bars To Reach Fractal Level", minval=5, group=gFract)
+useSweepReclaim = input.bool(true, "Allow Liquidity-Sweep + Reclaim Entries", group=gFract)
+
+string gCore = "04 — Core Engine"
+emaFastLen      = input.int(21, "Fast EMA", minval=1, group=gCore)
+emaSlowLen      = input.int(55, "Slow EMA", minval=2, group=gCore)
+atrLen          = input.int(14, "ATR Length", minval=1, group=gCore)
+volLen          = input.int(20, "Volume Average Length", minval=1, group=gCore)
+volMult         = input.float(1.35, "Volume Spike Multiplier", minval=0.1, step=0.05, group=gCore)
+strictMTF       = input.bool(false, "Strict MTF (Block counter-trend signals)", group=gCore)
+
+string gFake = "05 — Fakeout Defense (Confirmation Score)"
+useGates        = input.bool(false, "🔒 Use Confirmation Gates (OFF = pure fractal breaks)", group=gFake)
+useCloseConfirm = input.bool(true,  "Require Close Beyond Fractal Level", group=gFake)
+minConfScore    = input.int(4, "Min Confirmation Score (of 7) To Fire Signal", minval=1, maxval=7, group=gFake)
+maxWickPct      = input.float(60.0, "Max Wick % Against Breakout", minval=0.0, maxval=100.0, step=1.0, group=gFake)
+minBodyPct      = input.float(25.0, "Min Candle Body %", minval=0.0, maxval=100.0, step=1.0, group=gFake)
+avoidFarExtended= input.bool(false, "Avoid Overextended Entries", group=gFake)
+maxAtrExtension = input.float(3.0,  "Max ATR Extension From Fast EMA", minval=0.5, step=0.1, group=gFake)
+cooldownBars    = input.int(2, "Cooldown Bars After Exit", minval=0, group=gFake)
+
+string gRisk = "06 — Risk / Targets"
+stopAtrMult     = input.float(1.25, "ATR Stop Multiplier", minval=0.1, step=0.05, group=gRisk)
+trailAtrMult    = input.float(1.5,  "Trailing Stop ATR Mult", minval=0.5, step=0.1, group=gRisk)
+useFractalStop  = input.bool(true,  "Use Last Opposite Fractal As Initial Stop", group=gRisk)
+targetR1        = input.float(1.0, "Target 1 R", minval=0.25, step=0.25, group=gRisk)
+targetR2        = input.float(2.0, "Target 2 R", minval=0.25, step=0.25, group=gRisk)
+targetR3        = input.float(3.0, "Target 3 R", minval=0.25, step=0.25, group=gRisk)
+
+string gVisual = "07 — Visuals"
+showFractals    = input.bool(true, "Show Confirmed Fractals", group=gVisual)
+showFractalLines= input.bool(true, "Show Active Fractal Breakout Levels", group=gVisual)
+showEMAs        = input.bool(true, "Show EMAs", group=gVisual)
+showTargets     = input.bool(true, "Show Active Targets", group=gVisual)
+showDash        = input.bool(true, "Show Dashboard", group=gVisual)
+showWarnings    = input.bool(true, "Show Warnings", group=gVisual)
+showFVG         = input.bool(true, "Show Institutional FVG", group=gVisual)
+showApexLines   = input.bool(true, "Draw Auto Wedge Lines (Pivot-to-Pivot)", group=gVisual)
+
+string gAlerts = "08 — Alerts"
+enableDynamicAlerts = input.bool(true, "Enable Dynamic JSON Alerts", group=gAlerts)
+discordTag      = input.string("SML_APEX", "Alert Tag", group=gAlerts)
+
+emaFast  = ta.ema(close, emaFastLen)
+emaSlow  = ta.ema(close, emaSlowLen)
+atr      = ta.atr(atrLen)
+volAvg   = ta.sma(volume, volLen)
+rsiVal   = ta.rsi(close, 14)
+
+macdFast = ta.ema(close, 12)
+macdSlow = ta.ema(close, 26)
+macd     = macdFast - macdSlow
+macdSig  = ta.ema(macd, 9)
+macdHist = macd - macdSig
+
+barRange     = math.max(high - low, syminfo.mintick)
+body         = math.abs(close - open)
+bodyPct      = (body / barRange) * 100.0
+upperWickPct = ((high - math.max(open, close)) / barRange) * 100.0
+lowerWickPct = ((math.min(open, close) - low) / barRange) * 100.0
+
+volSpike     = volume > (volAvg * volMult)
+atrExpansion = barRange > atr
+bodyConfirm  = bodyPct >= minBodyPct
+bullWickOk   = upperWickPct <= maxWickPct
+bearWickOk   = lowerWickPct <= maxWickPct
+distFromFast = math.abs(close - emaFast) / atr
+notExtended  = not avoidFarExtended or distFromFast <= maxAtrExtension
+bullTrend    = emaFast > emaSlow and close > emaFast
+bearTrend    = emaFast < emaSlow and close < emaFast
+momentumBull = rsiVal > 50 and macdHist > 0 and macdHist > macdHist[1]
+momentumBear = rsiVal < 50 and macdHist < 0 and macdHist < macdHist[1]
+
+ph = ta.pivothigh(high, pivotLeft, pivotRight)
+pl = ta.pivotlow(low,   pivotLeft, pivotRight)
+
+var float lastFractHigh    = na
+var int   lastFractHighBar = na
+var float prevFractHigh    = na
+var int   prevFractHighBar = na
+var float lastFractLow     = na
+var int   lastFractLowBar  = na
+var float prevFractLow     = na
+var int   prevFractLowBar  = na
+
+if not na(ph)
+    prevFractHigh    := lastFractHigh
+    prevFractHighBar := lastFractHighBar
+    lastFractHigh    := ph
+    lastFractHighBar := bar_index - pivotRight
+
+if not na(pl)
+    prevFractLow     := lastFractLow
+    prevFractLowBar  := lastFractLowBar
+    lastFractLow     := pl
+    lastFractLowBar  := bar_index - pivotRight
+
+fractHighFresh = not na(lastFractHigh) and (bar_index - lastFractHighBar) <= fractalLookback
+fractLowFresh  = not na(lastFractLow)  and (bar_index - lastFractLowBar)  <= fractalLookback
+bullRef = lastFractHigh
+bearRef = lastFractLow
+
+bullFVG = low > high[2] and close[1] > open[1]
+bearFVG = high < low[2] and close[1] < open[1]
+var box[] fvgBoxes = array.new_box()
+if showFVG
+    if bullFVG
+        array.push(fvgBoxes, box.new(left=bar_index[2], top=low, right=bar_index, bottom=high[2], border_color=color.new(color.lime, 80), bgcolor=color.new(color.lime, 90)))
+    if bearFVG and showBear
+        array.push(fvgBoxes, box.new(left=bar_index[2], top=low[2], right=bar_index, bottom=high, border_color=color.new(color.red, 80), bgcolor=color.new(color.red, 90)))
+    if array.size(fvgBoxes) > 20
+        box.delete(array.shift(fvgBoxes))
+
+[tf1Close, tf1EmaFast, tf1EmaSlow] = request.security(syminfo.tickerid, biasTF1, [close, ta.ema(close, emaFastLen), ta.ema(close, emaSlowLen)], lookahead=barmerge.lookahead_off)
+[tf2Close, tf2EmaFast, tf2EmaSlow] = request.security(syminfo.tickerid, biasTF2, [close, ta.ema(close, emaFastLen), ta.ema(close, emaSlowLen)], lookahead=barmerge.lookahead_off)
+tf1Bull = tf1Close > tf1EmaFast and tf1EmaFast > tf1EmaSlow
+tf1Bear = tf1Close < tf1EmaFast and tf1EmaFast < tf1EmaSlow
+tf2Bull = tf2Close > tf2EmaFast and tf2EmaFast > tf2EmaSlow
+tf2Bear = tf2Close < tf2EmaFast and tf2EmaFast < tf2EmaSlow
+mtfBull = strictMTF ? (tf1Bull and tf2Bull) : (tf1Bull or tf2Bull)
+mtfBear = strictMTF ? (tf1Bear and tf2Bear) : (tf1Bear or tf2Bear)
+
+bullCross = fractHighFresh and (useCloseConfirm ? (close > bullRef and close[1] <= bullRef) : (high > bullRef and high[1] <= bullRef))
+bearCross = fractLowFresh  and (useCloseConfirm ? (close < bearRef and close[1] >= bearRef) : (low  < bearRef and low[1]  >= bearRef))
+bullSweep = useSweepReclaim and fractLowFresh  and low  < bearRef and close > bearRef and close > open
+bearSweep = useSweepReclaim and fractHighFresh and high > bullRef and close < bullRef and close < open
+bullTrigger = bullCross or bullSweep
+bearTrigger = bearCross or bearSweep
+
+bullScore = (bullTrend ? 1 : 0) + (momentumBull ? 1 : 0) + (mtfBull ? 1 : 0) + (volSpike ? 1 : 0) + (atrExpansion ? 1 : 0) + (bodyConfirm and bullWickOk ? 1 : 0) + (notExtended ? 1 : 0)
+bearScore = (bearTrend ? 1 : 0) + (momentumBear ? 1 : 0) + (mtfBear ? 1 : 0) + (volSpike ? 1 : 0) + (atrExpansion ? 1 : 0) + (bodyConfirm and bearWickOk ? 1 : 0) + (notExtended ? 1 : 0)
+
+// Gates OFF -> pure fractal break fires. Gates ON -> must also clear score threshold.
+bullBreak = bullTrigger and (not useGates or bullScore >= minConfScore)
+bearBreak = bearTrigger and (not useGates or bearScore >= minConfScore) and showBear and not sharesBullOnly
+
+showCalls = tradeMode == "Options Both Directions" or tradeMode == "Shares + Options"
+showPuts  = tradeMode == "Options Both Directions" or tradeMode == "Shares + Options"
+callSignal = bullBreak and showCalls
+putSignal  = bearBreak and showPuts
+
+bullWatch   = fractHighFresh and close < bullRef and close > (bullRef - atr*0.5) and bullTrend and mtfBull
+bearWatch   = fractLowFresh  and close > bearRef and close < (bearRef + atr*0.5) and bearTrend and mtfBear and showBear
+bullFakeout = fractHighFresh and high > bullRef and close < bullRef and upperWickPct > maxWickPct
+bearFakeout = fractLowFresh  and low  < bearRef and close > bearRef and lowerWickPct > maxWickPct and showBear
+
+var string activeSide  = "NONE"
+var float  activeEntry = na
+var float  activeStop  = na
+var float  activeTrail = na
+var float  activeT1    = na
+var float  activeT2    = na
+var float  activeT3    = na
+var int    activeBar   = na
+var int    lastExitBar = na
+
+inCooldown   = not na(lastExitBar) and (bar_index - lastExitBar) < cooldownBars
+canEnterBull = bullBreak and activeSide == "NONE" and not inCooldown
+canEnterBear = bearBreak and activeSide == "NONE" and not inCooldown
+
+if canEnterBull
+    activeSide  := "BULL"
+    activeEntry := close
+    fStop       = useFractalStop and not na(lastFractLow) ? math.min(close - atr*stopAtrMult, lastFractLow - syminfo.mintick) : close - atr*stopAtrMult
+    activeStop  := fStop
+    activeTrail := fStop
+    risk        = activeEntry - activeStop
+    activeT1    := activeEntry + risk*targetR1
+    activeT2    := activeEntry + risk*targetR2
+    activeT3    := activeEntry + risk*targetR3
+    activeBar   := bar_index
+
+if canEnterBear
+    activeSide  := "BEAR"
+    activeEntry := close
+    fStop       = useFractalStop and not na(lastFractHigh) ? math.max(close + atr*stopAtrMult, lastFractHigh + syminfo.mintick) : close + atr*stopAtrMult
+    activeStop  := fStop
+    activeTrail := fStop
+    risk        = activeStop - activeEntry
+    activeT1    := activeEntry - risk*targetR1
+    activeT2    := activeEntry - risk*targetR2
+    activeT3    := activeEntry - risk*targetR3
+    activeBar   := bar_index
+
+if activeSide == "BULL" and bar_index > activeBar
+    activeTrail := math.max(activeTrail, close - atr*trailAtrMult)
+if activeSide == "BEAR" and bar_index > activeBar
+    activeTrail := math.min(activeTrail, close + atr*trailAtrMult)
+
+bullExit = activeSide == "BULL" and close < activeTrail
+bearExit = activeSide == "BEAR" and close > activeTrail
+if bullExit or bearExit
+    activeSide  := "NONE"
+    activeEntry := na
+    activeStop  := na
+    activeTrail := na
+    activeT1    := na
+    activeT2    := na
+    activeT3    := na
+    activeBar   := na
+    lastExitBar := bar_index
+
+plot(showEMAs ? emaFast : na, title="Fast EMA", color=color.rgb(255, 255, 255),    linewidth=2)
+plot(showEMAs ? emaSlow : na, title="Slow EMA", color=color.rgb(25, 0, 255), linewidth=2)
+plot(showFractalLines and fractHighFresh ? bullRef : na, title="Bull Fractal Ref", color=color.new(color.lime,    20), style=plot.style_linebr, linewidth=2)
+plot(showFractalLines and fractLowFresh  ? bearRef : na, title="Bear Fractal Ref", color=color.new(color.fuchsia, 20), style=plot.style_linebr, linewidth=2)
+plotshape(showFractals and not na(ph) ? ph : na, title="Fractal High", style=shape.triangledown, location=location.absolute, color=color.new(#ffffff, 0),   size=size.tiny, offset=-pivotRight)
+plotshape(showFractals and not na(pl) ? pl : na, title="Fractal Low",  style=shape.triangleup,   location=location.absolute, color=color.new(#ffffff, 0), size=size.tiny, offset=-pivotRight)
+
+var line upperApex = na
+var line lowerApex = na
+if showApexLines
+    if not na(ph) and not na(prevFractHigh)
+        line.delete(upperApex)
+        upperApex := line.new(prevFractHighBar, prevFractHigh, lastFractHighBar, lastFractHigh, color=color.blue,    style=line.style_dashed, width=1, extend=extend.right)
+    if not na(pl) and not na(prevFractLow)
+        line.delete(lowerApex)
+        lowerApex := line.new(prevFractLowBar,  prevFractLow,  lastFractLowBar,  lastFractLow,  color=color.fuchsia, style=line.style_dashed, width=1, extend=extend.right)
+
+plotshape(bullBreak ? bullRef : na, title="BUY",  style=shape.triangleup,   location=location.absolute, color=color.lime, size=size.tiny, text="BUY",  textcolor=color.lime)
+plotshape(bearBreak ? bearRef : na, title="SELL", style=shape.triangledown, location=location.absolute, color=color.red,  size=size.tiny, text="SELL", textcolor=color.red)
+plotshape(callSignal ? low  - atr*0.6 : na, title="CALL", style=shape.labelup,   location=location.absolute, color=color.new(color.green, 0),  textcolor=color.white, text="CALL", size=size.tiny)
+plotshape(putSignal  ? high + atr*0.6 : na, title="PUT",  style=shape.labeldown, location=location.absolute, color=color.new(color.maroon, 0), textcolor=color.white, text="PUT",  size=size.tiny)
+plotshape(showWarnings and bullFakeout ? bullRef : na, title="Bull Fakeout", style=shape.xcross, location=location.absolute, color=color.yellow, size=size.small)
+plotshape(showWarnings and bearFakeout ? bearRef : na, title="Bear Fakeout", style=shape.xcross, location=location.absolute, color=color.yellow, size=size.small)
+
+var line lineEntry = na, var line lineT1 = na, var line lineT2 = na, var line lineT3 = na, var line lineStop = na
+if showTargets
+    if activeSide != "NONE"
+        if bar_index == activeBar
+            line.delete(lineEntry)
+            line.delete(lineT1)
+            line.delete(lineT2)
+            line.delete(lineT3)
+            line.delete(lineStop)
+            lineEntry := line.new(activeBar, activeEntry, bar_index + 5, activeEntry, color=color.white, style=line.style_solid, width=1)
+            lineT1    := line.new(activeBar, activeT1,    bar_index + 5, activeT1,    color=color.new(color.lime, 40), style=line.style_dashed, width=1)
+            lineT2    := line.new(activeBar, activeT2,    bar_index + 5, activeT2,    color=color.new(color.lime, 20), style=line.style_dashed, width=1)
+            lineT3    := line.new(activeBar, activeT3,    bar_index + 5, activeT3,    color=color.lime,                style=line.style_solid,  width=2)
+            lineStop  := line.new(activeBar, activeTrail, bar_index + 5, activeTrail, color=color.red,                 style=line.style_dotted, width=2)
+        else
+            line.set_x2(lineEntry, bar_index + 5)
+            line.set_x2(lineT1,    bar_index + 5)
+            line.set_x2(lineT2,    bar_index + 5)
+            line.set_x2(lineT3,    bar_index + 5)
+            line.set_x2(lineStop,  bar_index + 5)
+            line.set_y1(lineStop,  activeTrail)
+            line.set_y2(lineStop,  activeTrail)
+    else
+        line.delete(lineEntry)
+        line.delete(lineT1)
+        line.delete(lineT2)
+        line.delete(lineT3)
+        line.delete(lineStop)
+
+var table dash = table.new(position.bottom_right, 2, 9, bgcolor=color.new(#000000, 0), border_color=color.new(#000000, 0), border_width=1)
+if showDash and barstate.islast
+    table.cell(dash, 0, 0, "SML APEX",   text_color=color.blue, text_size=size.normal)
+    table.cell(dash, 1, 0, "v2 BEAST",   text_color=color.blue, text_size=size.normal)
+    table.cell(dash, 0, 1, "MODE",       text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 1, tradeMode,    text_color=color.white, text_size=size.small)
+    momColor = momentumBull ? color.lime : momentumBear ? color.red : color.white
+    momText  = momentumBull ? "BULL"     : momentumBear ? "BEAR"    : "FLAT"
+    table.cell(dash, 0, 2, "MOMENTUM",   text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 2, momText,      text_color=momColor,    text_size=size.small)
+    biasColor = (tf1Bull and tf2Bull) ? color.lime : (tf1Bear and tf2Bear) ? color.red : color.yellow
+    biasText  = (tf1Bull and tf2Bull) ? "ALIGNED BULL" : (tf1Bear and tf2Bear) ? "ALIGNED BEAR" : "MIXED"
+    table.cell(dash, 0, 3, "MTF BIAS",   text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 3, biasText,     text_color=biasColor,   text_size=size.small)
+    volColor = atrExpansion and volSpike ? color.lime : color.white
+    volText  = atrExpansion and volSpike ? "EXPANDING" : "CONTRACTED"
+    table.cell(dash, 0, 4, "VOLATILITY", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 4, volText,      text_color=volColor,    text_size=size.small)
+    fractText  = (fractHighFresh ? "H:" + str.tostring(bullRef, format.mintick) : "H:--") + "  " + (fractLowFresh ? "L:" + str.tostring(bearRef, format.mintick) : "L:--")
+    table.cell(dash, 0, 5, "FRACTALS",   text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 5, fractText,    text_color=color.aqua,  text_size=size.small)
+    scoreText  = "B:" + str.tostring(bullScore) + "/7  S:" + str.tostring(bearScore) + "/7"
+    scoreColor = bullScore >= minConfScore ? color.lime : bearScore >= minConfScore ? color.red : color.white
+    table.cell(dash, 0, 6, "SCORE",      text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 6, scoreText,    text_color=scoreColor,  text_size=size.small)
+    tradeColor = activeSide == "BULL" ? color.lime : activeSide == "BEAR" ? color.fuchsia : color.white
+    table.cell(dash, 0, 7, "ACTIVE POS", text_color=color.white,  text_size=size.small)
+    table.cell(dash, 1, 7, activeSide,   text_color=tradeColor,   text_size=size.small)
+    pnlText  = "NA"
+    pnlColor = color.white
+    if activeSide == "BULL"
+        pnl = ((close - activeEntry) / activeEntry) * 100
+        pnlText  := str.tostring(pnl, "#.##") + "%"
+        pnlColor := pnl > 0 ? color.lime : color.red
+    if activeSide == "BEAR"
+        pnl = ((activeEntry - close) / activeEntry) * 100
+        pnlText  := str.tostring(pnl, "#.##") + "%"
+        pnlColor := pnl > 0 ? color.lime : color.red
+    table.cell(dash, 0, 8, "OPEN PNL",   text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 8, pnlText,      text_color=pnlColor,    text_size=size.small)
+
+if enableDynamicAlerts
+    if bullBreak
+        jsonBull = '{"tag":"' + discordTag + '","ticker":"' + syminfo.ticker + '","action":"ENTRY_BULL","price":' + str.tostring(close) + ',"fractal":' + str.tostring(bullRef) + ',"stop":' + str.tostring(activeStop) + ',"t1":' + str.tostring(activeT1) + ',"t2":' + str.tostring(activeT2) + ',"t3":' + str.tostring(activeT3) + '}'
+        alert(jsonBull, alert.freq_once_per_bar_close)
+    if bearBreak
+        jsonBear = '{"tag":"' + discordTag + '","ticker":"' + syminfo.ticker + '","action":"ENTRY_BEAR","price":' + str.tostring(close) + ',"fractal":' + str.tostring(bearRef) + ',"stop":' + str.tostring(activeStop) + ',"t1":' + str.tostring(activeT1) + ',"t2":' + str.tostring(activeT2) + ',"t3":' + str.tostring(activeT3) + '}'
+        alert(jsonBear, alert.freq_once_per_bar_close)
+    if bullExit
+        alert('{"tag":"' + discordTag + '","ticker":"' + syminfo.ticker + '","action":"EXIT_BULL","price":' + str.tostring(close) + '}', alert.freq_once_per_bar_close)
+    if bearExit
+        alert('{"tag":"' + discordTag + '","ticker":"' + syminfo.ticker + '","action":"EXIT_BEAR","price":' + str.tostring(close) + '}', alert.freq_once_per_bar_close)
