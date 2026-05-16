@@ -14,6 +14,7 @@ import (
 	"math/big"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	gocrypto "github.com/ethereum/go-ethereum/crypto"
@@ -22,6 +23,11 @@ import (
 
 const xrplAlphabet = "rpshnaf39wBUDNEGHJKLM4PQRST7VWXYZ2bcdeCg65jkm8oFqi1tuvAxyz"
 
+const (
+	XRPLBaseReserveDrops uint64 = 10_000_000
+	XRPLSweepBufferDrops uint64 = 500_000
+)
+
 // XRPLClient signs and submits payments from the gateway XRPL wallet.
 type XRPLClient struct {
 	RPCURL         string
@@ -29,6 +35,11 @@ type XRPLClient struct {
 	httpClient     *http.Client
 	privKey        *ecdsa.PrivateKey
 	pubKey         []byte // 33-byte compressed secp256k1
+
+	// Sequence cache — prevents back-to-back sends from re-fetching the same seq.
+	seqMu    sync.Mutex
+	cachedSeq uint32
+	seqReady  bool
 }
 
 func NewXRPLClient(rpcURL, privateKeyHex string) (*XRPLClient, error) {
@@ -50,13 +61,29 @@ func NewXRPLClient(rpcURL, privateKeyHex string) (*XRPLClient, error) {
 	}, nil
 }
 
-const (
-	// XRPLBaseReserveDrops is the XRPL network minimum account reserve (10 XRP).
-	// The gateway keeps this + a fee buffer so the account stays funded.
-	XRPLBaseReserveDrops uint64 = 10_000_000
-	// XRPLSweepBufferDrops is extra drops kept for a few tx fees after the sweep.
-	XRPLSweepBufferDrops uint64 = 500_000
-)
+// SendPayment sends XRP (in drops) from the gateway wallet to destAddr.
+// Uses a local sequence cache so back-to-back calls within one route don't collide.
+func (c *XRPLClient) SendPayment(destAddr string, amountDrops uint64) (string, error) {
+	seq, err := c.nextSeq()
+	if err != nil {
+		return "", fmt.Errorf("get sequence: %w", err)
+	}
+
+	txHash, err := c.buildSignSubmit(destAddr, amountDrops, seq)
+	if err != nil {
+		if isSeqError(err) {
+			// Ledger moved on — invalidate cache and retry once with a fresh sequence.
+			c.invalidateSeq()
+			seq, err2 := c.nextSeq()
+			if err2 != nil {
+				return "", fmt.Errorf("sequence refresh: %w", err2)
+			}
+			return c.buildSignSubmit(destAddr, amountDrops, seq)
+		}
+		return "", err
+	}
+	return txHash, nil
+}
 
 // GatewayBalanceDrops returns the current XRP balance of the gateway wallet in drops.
 func (c *XRPLClient) GatewayBalanceDrops() (uint64, error) {
@@ -81,7 +108,6 @@ func (c *XRPLClient) GatewayBalanceDrops() (uint64, error) {
 }
 
 // SweepToTreasury sends all XRP above the reserve+buffer floor to treasury.
-// Returns the sweep tx hash, or "" if balance is too low to sweep.
 func (c *XRPLClient) SweepToTreasury(treasuryAddr string) (string, error) {
 	bal, err := c.GatewayBalanceDrops()
 	if err != nil {
@@ -89,52 +115,43 @@ func (c *XRPLClient) SweepToTreasury(treasuryAddr string) (string, error) {
 	}
 	floor := XRPLBaseReserveDrops + XRPLSweepBufferDrops
 	if bal <= floor {
-		return "", nil // nothing to sweep
+		return "", nil
 	}
-	sweepAmount := bal - floor
-	txHash, err := c.SendPayment(treasuryAddr, sweepAmount)
-	if err != nil {
-		return "", fmt.Errorf("sweep payment: %w", err)
-	}
-	return txHash, nil
+	return c.SendPayment(treasuryAddr, bal-floor)
 }
 
-// SendPayment sends XRP (in drops) from the gateway wallet to destAddr.
-func (c *XRPLClient) SendPayment(destAddr string, amountDrops uint64) (string, error) {
-	seq, err := c.getSequence(c.GatewayAddress)
-	if err != nil {
-		return "", fmt.Errorf("get sequence: %w", err)
+// ---- sequence cache ----
+
+func (c *XRPLClient) nextSeq() (uint32, error) {
+	c.seqMu.Lock()
+	defer c.seqMu.Unlock()
+	if !c.seqReady {
+		seq, err := c.fetchSequence(c.GatewayAddress)
+		if err != nil {
+			return 0, err
+		}
+		c.cachedSeq = seq
+		c.seqReady = true
 	}
-
-	srcAcct, err := decodeXRPLAddress(c.GatewayAddress)
-	if err != nil {
-		return "", fmt.Errorf("decode gateway address: %w", err)
-	}
-	dstAcct, err := decodeXRPLAddress(destAddr)
-	if err != nil {
-		return "", fmt.Errorf("decode destination address: %w", err)
-	}
-
-	const networkFeeDrops uint64 = 12
-
-	// Build signing payload (prefixed with STX\0)
-	signingBytes := buildPaymentTx(seq, amountDrops, networkFeeDrops, c.pubKey, nil, srcAcct, dstAcct, true)
-	hash := sha512Half(signingBytes)
-
-	compact, err := gocrypto.Sign(hash, c.privKey)
-	if err != nil {
-		return "", fmt.Errorf("sign: %w", err)
-	}
-	derSig := derEncodeSignature(compact[:64])
-
-	// Build final signed tx blob
-	txBlob := buildPaymentTx(seq, amountDrops, networkFeeDrops, c.pubKey, derSig, srcAcct, dstAcct, false)
-	txHex := strings.ToUpper(hex.EncodeToString(txBlob))
-
-	return c.submit(txHex)
+	seq := c.cachedSeq
+	c.cachedSeq++
+	return seq, nil
 }
 
-// ---- internal helpers ----
+func (c *XRPLClient) invalidateSeq() {
+	c.seqMu.Lock()
+	c.seqReady = false
+	c.seqMu.Unlock()
+}
+
+func isSeqError(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, "tefPAST_SEQ") ||
+		strings.Contains(msg, "terPRE_SEQ") ||
+		strings.Contains(msg, "tefALREADY")
+}
+
+// ---- RPC ----
 
 type xrplRPC struct {
 	Method string        `json:"method"`
@@ -146,21 +163,27 @@ type xrplResponse struct {
 }
 
 func (c *XRPLClient) call(method string, params interface{}) (json.RawMessage, error) {
-	body, _ := json.Marshal(xrplRPC{Method: method, Params: []interface{}{params}})
+	body, err := json.Marshal(xrplRPC{Method: method, Params: []interface{}{params}})
+	if err != nil {
+		return nil, fmt.Errorf("marshal RPC request: %w", err)
+	}
 	resp, err := c.httpClient.Post(c.RPCURL, "application/json", bytes.NewReader(body))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("XRPL RPC call %q: %w", method, err)
 	}
 	defer resp.Body.Close()
-	raw, _ := io.ReadAll(resp.Body)
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return nil, fmt.Errorf("read XRPL response: %w", err)
+	}
 	var r xrplResponse
 	if err := json.Unmarshal(raw, &r); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unmarshal XRPL response: %w", err)
 	}
 	return r.Result, nil
 }
 
-func (c *XRPLClient) getSequence(address string) (uint32, error) {
+func (c *XRPLClient) fetchSequence(address string) (uint32, error) {
 	result, err := c.call("account_info", map[string]interface{}{
 		"account":      address,
 		"ledger_index": "current",
@@ -174,7 +197,7 @@ func (c *XRPLClient) getSequence(address string) (uint32, error) {
 		} `json:"account_data"`
 	}
 	if err := json.Unmarshal(result, &info); err != nil {
-		return 0, err
+		return 0, fmt.Errorf("parse account_info: %w", err)
 	}
 	return info.AccountData.Sequence, nil
 }
@@ -192,7 +215,7 @@ func (c *XRPLClient) submit(txHex string) (string, error) {
 		} `json:"tx_json"`
 	}
 	if err := json.Unmarshal(result, &res); err != nil {
-		return "", err
+		return "", fmt.Errorf("parse submit response: %w", err)
 	}
 	if !strings.HasPrefix(res.EngineResult, "tes") {
 		return "", fmt.Errorf("XRPL rejected: %s — %s", res.EngineResult, res.EngineResultMessage)
@@ -200,53 +223,58 @@ func (c *XRPLClient) submit(txHex string) (string, error) {
 	return res.TxJSON.Hash, nil
 }
 
-// buildPaymentTx produces the XRPL canonical binary for a Payment transaction.
-// forSigning=true prepends the STX\0 signing prefix and omits TxnSignature.
+// ---- transaction building ----
+
+func (c *XRPLClient) buildSignSubmit(destAddr string, amountDrops uint64, seq uint32) (string, error) {
+	srcAcct, err := decodeXRPLAddress(c.GatewayAddress)
+	if err != nil {
+		return "", fmt.Errorf("decode gateway address: %w", err)
+	}
+	dstAcct, err := decodeXRPLAddress(destAddr)
+	if err != nil {
+		return "", fmt.Errorf("decode destination address: %w", err)
+	}
+
+	const networkFeeDrops uint64 = 12
+
+	signingBytes := buildPaymentTx(seq, amountDrops, networkFeeDrops, c.pubKey, nil, srcAcct, dstAcct, true)
+	hash := sha512Half(signingBytes)
+
+	compact, err := gocrypto.Sign(hash, c.privKey)
+	if err != nil {
+		return "", fmt.Errorf("sign: %w", err)
+	}
+	derSig := derEncodeSignature(compact[:64])
+
+	txBlob := buildPaymentTx(seq, amountDrops, networkFeeDrops, c.pubKey, derSig, srcAcct, dstAcct, false)
+	return c.submit(strings.ToUpper(hex.EncodeToString(txBlob)))
+}
+
 func buildPaymentTx(seq uint32, amountDrops, feeDrops uint64, signingPubKey, txnSig, srcAcct, dstAcct []byte, forSigning bool) []byte {
 	var buf bytes.Buffer
-
 	if forSigning {
 		buf.Write([]byte{0x53, 0x54, 0x58, 0x00})
 	}
-
-	// TransactionType=Payment(0), UInt16 header 0x12
 	buf.WriteByte(0x12)
 	binary.Write(&buf, binary.BigEndian, uint16(0))
-
-	// Flags, UInt32 header 0x22
 	buf.WriteByte(0x22)
 	binary.Write(&buf, binary.BigEndian, uint32(0))
-
-	// Sequence, UInt32 header 0x24
 	buf.WriteByte(0x24)
 	binary.Write(&buf, binary.BigEndian, seq)
-
-	// Amount (to destination), Amount header 0x61
 	buf.WriteByte(0x61)
 	buf.Write(xrpDropsBytes(amountDrops))
-
-	// Fee, Amount header 0x68
 	buf.WriteByte(0x68)
 	buf.Write(xrpDropsBytes(feeDrops))
-
-	// SigningPubKey, Blob header 0x73
 	buf.WriteByte(0x73)
 	buf.Write(vlEncode(signingPubKey))
-
-	// TxnSignature, Blob header 0x74 — final tx only
 	if !forSigning && len(txnSig) > 0 {
 		buf.WriteByte(0x74)
 		buf.Write(vlEncode(txnSig))
 	}
-
-	// Account, AccountID header 0x81
 	buf.WriteByte(0x81)
 	buf.Write(vlEncode(srcAcct))
-
-	// Destination, AccountID header 0x83
 	buf.WriteByte(0x83)
 	buf.Write(vlEncode(dstAcct))
-
 	return buf.Bytes()
 }
 
@@ -270,7 +298,6 @@ func sha512Half(data []byte) []byte {
 	return h[:32]
 }
 
-// DER-encode a 64-byte compact secp256k1 signature [R||S].
 func derEncodeSignature(compact []byte) []byte {
 	r := trimZeros(compact[:32])
 	s := trimZeros(compact[32:64])
@@ -293,7 +320,6 @@ func trimZeros(b []byte) []byte {
 	return b
 }
 
-// decodeXRPLAddress converts an XRPL base58check address to its 20-byte AccountID.
 func decodeXRPLAddress(addr string) ([]byte, error) {
 	n := new(big.Int)
 	base := big.NewInt(58)
@@ -308,7 +334,6 @@ func decodeXRPLAddress(addr string) ([]byte, error) {
 	decoded := n.Bytes()
 	padded := make([]byte, 25)
 	copy(padded[25-len(decoded):], decoded)
-
 	h1 := sha256.Sum256(padded[:21])
 	h2 := sha256.Sum256(h1[:])
 	if !bytes.Equal(h2[:4], padded[21:]) {
@@ -317,19 +342,15 @@ func decodeXRPLAddress(addr string) ([]byte, error) {
 	return padded[1:21], nil
 }
 
-// xrplAddressFromPubKey derives the XRPL address from a 33-byte compressed public key.
 func xrplAddressFromPubKey(pubKey []byte) (string, error) {
 	sha := sha256.Sum256(pubKey)
 	h := ripemd160.New()
 	h.Write(sha[:])
-	accountID := h.Sum(nil) // 20 bytes
-
+	accountID := h.Sum(nil)
 	payload := append([]byte{0x00}, accountID...)
 	h1 := sha256.Sum256(payload)
 	h2 := sha256.Sum256(h1[:])
-	full := append(payload, h2[:4]...)
-
-	return xrplBase58Encode(full), nil
+	return xrplBase58Encode(append(payload, h2[:4]...)), nil
 }
 
 func xrplBase58Encode(data []byte) string {

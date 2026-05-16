@@ -9,7 +9,10 @@ import (
 	"math/big"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
 	"ghost-layer-core/internal/chain"
 	"ghost-layer-core/internal/crypto"
@@ -29,17 +32,17 @@ type eip3009Payload struct {
 }
 
 type bridgePayload struct {
-	// Signature verification fields
+	// Application-level caller authentication (required for XRPL routes).
 	Signer      string `json:"signer"`
 	MessageHash string `json:"message_hash"`
 	Signature   string `json:"signature"`
-	// Routing fields
+	// Routing fields.
 	SourceWallet      string          `json:"source_wallet"`
 	DestinationWallet string          `json:"destination_wallet"`
 	GrossAmount       string          `json:"gross_amount"`
 	FeeBasisPoints    int64           `json:"fee_basis_points"`
 	EIP3009           *eip3009Payload `json:"eip3009,omitempty"`
-	// Set true to validate the signature path without broadcasting a real tx
+	// Dry-run: validates parse + signature without broadcasting a transaction.
 	IsDustTest bool `json:"is_dust_test"`
 }
 
@@ -79,36 +82,52 @@ func main() {
 	engine := router.NewTransparentBridgeEngine(treasuryXRPL, treasuryETH, xrplClient, baseClient)
 
 	r := chi.NewRouter()
+	r.Use(corsMiddleware)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(middleware.Timeout(60 * time.Second))
 
+	// ── HEALTH ───────────────────────────────────────────────────────────────
 	r.Get("/health", func(w http.ResponseWriter, req *http.Request) {
+		status := engine.ClientStatus()
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":       "ok",
+			"xrpl_client":  status["xrpl"],
+			"base_client":  status["base"],
+			"xrpl_treasury": treasuryXRPL,
+		})
 	})
 
 	// ── INSTITUTIONAL EXECUTION PATH ─────────────────────────────────────────
 	r.Post("/v1/bridge/execute", func(w http.ResponseWriter, req *http.Request) {
+		req.Body = http.MaxBytesReader(w, req.Body, 1<<20) // 1 MB
+
 		var p bridgePayload
 		if err := json.NewDecoder(req.Body).Decode(&p); err != nil {
 			http.Error(w, "malformed payload", http.StatusBadRequest)
 			return
 		}
 
-		// Verify the caller's EIP-3009 permission signature before touching anything.
-		if p.Signer != "" {
-			ok, err := crypto.VerifyEIP3009Signature(p.Signer, p.MessageHash, p.Signature)
-			if !ok || err != nil {
-				http.Error(w, "signature denied", http.StatusUnauthorized)
+		// XRPL routes have no on-chain EIP-3009 auth, so the application-level
+		// signature is mandatory for them. Base routes must have EIP-3009.
+		if !p.IsDustTest {
+			if p.EIP3009 == nil && p.Signer == "" {
+				http.Error(w, "authentication required: provide eip3009 (Base) or signer+signature (XRPL)", http.StatusUnauthorized)
 				return
+			}
+			if p.Signer != "" {
+				ok, err := crypto.VerifyEIP3009Signature(p.Signer, p.MessageHash, p.Signature)
+				if !ok || err != nil {
+					http.Error(w, "signature denied", http.StatusUnauthorized)
+					return
+				}
 			}
 		}
 
-		// IsDustTest: validates the full request parse + signature path without
-		// broadcasting a real transaction. Use this before opening volume.
+		// IsDustTest: validates the full parse + signature path without broadcasting.
 		if p.IsDustTest {
-			log.Printf("[DUST TEST] Dry-run passed — source=%s destination=%s amount=%s",
-				p.SourceWallet, p.DestinationWallet, p.GrossAmount)
+			log.Printf("[DRY RUN] source=%s destination=%s amount=%s", p.SourceWallet, p.DestinationWallet, p.GrossAmount)
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(map[string]string{
 				"status": "DRY_RUN_PASSED",
@@ -128,7 +147,7 @@ func main() {
 		}
 
 		txHash, fee, net, err := engine.RouteTransactionWithDisclosure(
-			context.Background(),
+			req.Context(),
 			p.SourceWallet, p.DestinationWallet,
 			p.GrossAmount, p.FeeBasisPoints,
 			auth,
@@ -149,15 +168,13 @@ func main() {
 		})
 	})
 
-	// ── SECURE ADMINISTRATIVE CONTROLS ───────────────────────────────────────
-	// Protect these with ADMIN_TOKEN env var — reject any request missing the
-	// correct Authorization: Bearer <token> header.
+	// ── SECURE ADMIN CONTROLS ─────────────────────────────────────────────────
 	r.Route("/v1/admin", func(a chi.Router) {
 		a.Use(adminAuthMiddleware)
 
-		// Emergency sweep: drain both gateway wallets to cold treasury right now.
+		// Force-drain both gateway wallets to cold treasury.
 		a.Post("/sweep", func(w http.ResponseWriter, req *http.Request) {
-			log.Println("[FORCE SWEEP] Manual override — emptying gateway hot wallets")
+			log.Println("[FORCE SWEEP] Manual override triggered")
 			results, err := engine.ForceManualSweep(context.Background())
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -168,9 +185,9 @@ func main() {
 			json.NewEncoder(w).Encode(results)
 		})
 
-		// Chain dust-test: sends 1 drop / 1 wei-USDC to prove live signing works
-		// on mainnet before opening real volume.
+		// 1-drop XRPL or 1-wei USDC send to verify live signing before opening volume.
 		a.Post("/dust-test", func(w http.ResponseWriter, req *http.Request) {
+			req.Body = http.MaxBytesReader(w, req.Body, 1<<20)
 			var body struct {
 				Chain       string `json:"chain"`
 				Destination string `json:"destination"`
@@ -207,24 +224,64 @@ func main() {
 		})
 	})
 
-	log.Printf("[SERVER KERNEL] Ghost Layer active on :%s | XRPL treasury: %s", port, treasuryXRPL)
-	if err := http.ListenAndServe(":"+port, r); err != nil {
-		log.Fatalf("server: %v", err)
+	// ── STATIC FRONTEND (Three.js terminal) ──────────────────────────────────
+	fs := http.FileServer(http.Dir("./public"))
+	r.Handle("/*", fs)
+
+	// ── GRACEFUL SHUTDOWN ─────────────────────────────────────────────────────
+	srv := &http.Server{
+		Addr:         ":" + port,
+		Handler:      r,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 60 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
+
+	go func() {
+		log.Printf("[SERVER KERNEL] Ghost Layer active on :%s | XRPL treasury: %s", port, treasuryXRPL)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("[FATAL] %v", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Println("[SERVER] Shutdown signal received — draining in-flight requests (30s)...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatalf("[FATAL] forced shutdown: %v", err)
+	}
+	log.Println("[SERVER] Stopped cleanly.")
+}
+
+// corsMiddleware allows browser clients to reach the API.
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // adminAuthMiddleware rejects requests without a valid Bearer token.
-// Set ADMIN_TOKEN env var to a high-entropy secret before deploying.
 func adminAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := os.Getenv("ADMIN_TOKEN")
 		if token == "" {
-			// No token configured — lock the endpoints entirely.
 			http.Error(w, "admin endpoints not configured", http.StatusForbidden)
 			return
 		}
-		auth := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-		if auth != token {
+		if strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ") != token {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}

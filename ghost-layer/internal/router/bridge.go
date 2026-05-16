@@ -31,7 +31,6 @@ func NewTransparentBridgeEngine(treasuryXRPL, treasuryETH string, xrpl *chain.XR
 
 // RouteTransactionWithDisclosure calculates the fee split, executes on-chain routing,
 // then auto-sweeps accumulated gateway fees to cold-storage treasury.
-// Returns the principal tx hash plus the exact fee and net amounts.
 func (e *TransparentBridgeEngine) RouteTransactionWithDisclosure(
 	ctx context.Context,
 	source, destination, amountStr string,
@@ -42,11 +41,11 @@ func (e *TransparentBridgeEngine) RouteTransactionWithDisclosure(
 		return "", nil, nil, errors.New("routing aborted: missing source or destination address")
 	}
 
-	fee, net = toll.CalculateBasisPointFee(amountStr, bps)
-	gross, ok := new(big.Int).SetString(amountStr, 10)
-	if !ok {
-		return "", nil, nil, errors.New("invalid amount string")
+	fee, net, err = toll.CalculateBasisPointFee(amountStr, bps)
+	if err != nil {
+		return "", nil, nil, err
 	}
+	gross, _ := new(big.Int).SetString(amountStr, 10) // safe: toll already validated
 
 	log.Printf("[AUDIT] Route %s → %s | gross=%s fee=%s net=%s bps=%d",
 		source, destination, gross.String(), fee.String(), net.String(), bps)
@@ -68,39 +67,41 @@ func (e *TransparentBridgeEngine) RouteTransactionWithDisclosure(
 
 	log.Printf("[AUDIT] ✓ tx=%s | fee=%s → treasury | net=%s → %s", txHash, fee.String(), net.String(), destination)
 
-	// Auto-sweep: drain accumulated fees from hot gateway into cold treasury.
-	// Runs async so it never blocks the caller's response.
-	go e.sweep(ctx, source)
+	// Auto-sweep: drain accumulated fees to cold treasury after each execution.
+	// Uses a detached context so it survives after the HTTP response is sent.
+	go func() {
+		if err := e.sweepBestEffort(source); err != nil {
+			log.Printf("[SWEEP] error: %v", err)
+		}
+	}()
 
 	return txHash, fee, net, nil
 }
 
-// RouteWithAutoSweep is a convenience wrapper used by the execution endpoint.
-// It routes the transaction and triggers the async sweep, returning only the tx hash.
+// RouteWithAutoSweep is a convenience wrapper that returns only the tx hash.
 func (e *TransparentBridgeEngine) RouteWithAutoSweep(ctx context.Context, source, destination, amount string, bps int64, auth *chain.EIP3009Auth) (string, error) {
 	txHash, _, _, err := e.RouteTransactionWithDisclosure(ctx, source, destination, amount, bps, auth)
 	return txHash, err
 }
 
-// ForceManualSweep drains both the XRPL and Base gateway wallets to cold treasury.
-// Returns a summary of what was swept.
+// ForceManualSweep drains both gateway wallets immediately. Returns per-chain results.
 func (e *TransparentBridgeEngine) ForceManualSweep(ctx context.Context) (map[string]string, error) {
 	results := map[string]string{}
 
-	if xrplHash, err := e.sweepXRPL(); err != nil {
+	if hash, err := e.sweepXRPL(); err != nil {
 		results["xrpl_error"] = err.Error()
-	} else if xrplHash != "" {
-		results["xrpl_tx"] = xrplHash
-		log.Printf("[FORCE SWEEP] XRPL → treasury: %s", xrplHash)
+	} else if hash != "" {
+		results["xrpl_tx"] = hash
+		log.Printf("[FORCE SWEEP] XRPL → treasury: %s", hash)
 	} else {
 		results["xrpl"] = "nothing to sweep"
 	}
 
-	if baseHash, err := e.sweepBase(ctx); err != nil {
+	if hash, err := e.sweepBase(ctx); err != nil {
 		results["base_error"] = err.Error()
-	} else if baseHash != "" {
-		results["base_tx"] = baseHash
-		log.Printf("[FORCE SWEEP] Base USDC → treasury: %s", baseHash)
+	} else if hash != "" {
+		results["base_tx"] = hash
+		log.Printf("[FORCE SWEEP] Base USDC → treasury: %s", hash)
 	} else {
 		results["base"] = "nothing to sweep"
 	}
@@ -108,8 +109,7 @@ func (e *TransparentBridgeEngine) ForceManualSweep(ctx context.Context) (map[str
 	return results, nil
 }
 
-// Sweep manually triggers a fee sweep for the given chain type ("xrpl" or "evm").
-// Returns the sweep tx hash, or "" if nothing was swept.
+// Sweep manually triggers a single-chain fee sweep.
 func (e *TransparentBridgeEngine) Sweep(ctx context.Context, chainType string) (string, error) {
 	switch strings.ToLower(chainType) {
 	case "xrpl":
@@ -117,44 +117,39 @@ func (e *TransparentBridgeEngine) Sweep(ctx context.Context, chainType string) (
 	case "evm", "base":
 		return e.sweepBase(ctx)
 	default:
-		return "", fmt.Errorf("unknown chain type: %s (use 'xrpl' or 'evm')", chainType)
+		return "", fmt.Errorf("unknown chain type %q (use 'xrpl' or 'evm')", chainType)
 	}
 }
 
-func (e *TransparentBridgeEngine) sweep(ctx context.Context, sourceAddr string) {
+// ClientStatus returns which chain clients are live, for the health endpoint.
+func (e *TransparentBridgeEngine) ClientStatus() map[string]bool {
+	return map[string]bool{
+		"xrpl": e.xrpl != nil,
+		"base": e.base != nil,
+	}
+}
+
+// ---- internal ----
+
+func (e *TransparentBridgeEngine) sweepBestEffort(sourceAddr string) error {
 	if isXRPL(sourceAddr) {
-		if hash, err := e.sweepXRPL(); err != nil {
-			log.Printf("[SWEEP] XRPL sweep error: %v", err)
-		} else if hash != "" {
+		hash, err := e.sweepXRPL()
+		if err != nil {
+			return err
+		}
+		if hash != "" {
 			log.Printf("[SWEEP] XRPL swept to treasury: %s", hash)
 		}
 	} else if isEVM(sourceAddr) {
-		if hash, err := e.sweepBase(ctx); err != nil {
-			log.Printf("[SWEEP] Base sweep error: %v", err)
-		} else if hash != "" {
+		hash, err := e.sweepBase(context.Background())
+		if err != nil {
+			return err
+		}
+		if hash != "" {
 			log.Printf("[SWEEP] Base USDC swept to treasury: %s", hash)
 		}
 	}
-}
-
-func (e *TransparentBridgeEngine) sweepXRPL() (string, error) {
-	if e.xrpl == nil {
-		return "", errors.New("XRPL client not initialised")
-	}
-	if e.TreasuryXRPL == "" {
-		return "", errors.New("TREASURY_ADDRESS not set")
-	}
-	return e.xrpl.SweepToTreasury(e.TreasuryXRPL)
-}
-
-func (e *TransparentBridgeEngine) sweepBase(ctx context.Context) (string, error) {
-	if e.base == nil {
-		return "", errors.New("Base client not initialised")
-	}
-	if e.TreasuryETH == "" {
-		return "", errors.New("TREASURY_ETH_ADDRESS not set")
-	}
-	return e.base.SweepUSDCToTreasury(ctx, e.TreasuryETH)
+	return nil
 }
 
 func (e *TransparentBridgeEngine) routeXRPL(destination string, fee, net *big.Int) (string, error) {
@@ -176,6 +171,20 @@ func (e *TransparentBridgeEngine) routeBase(ctx context.Context, source, destina
 		return "", errors.New("Base client not initialised — set GATEWAY_ETH_PRIVATE_KEY")
 	}
 	return e.base.PullAndRoute(ctx, source, destination, gross, net, auth)
+}
+
+func (e *TransparentBridgeEngine) sweepXRPL() (string, error) {
+	if e.xrpl == nil || e.TreasuryXRPL == "" {
+		return "", nil
+	}
+	return e.xrpl.SweepToTreasury(e.TreasuryXRPL)
+}
+
+func (e *TransparentBridgeEngine) sweepBase(ctx context.Context) (string, error) {
+	if e.base == nil || e.TreasuryETH == "" {
+		return "", nil
+	}
+	return e.base.SweepUSDCToTreasury(ctx, e.TreasuryETH)
 }
 
 func isXRPL(addr string) bool { return strings.HasPrefix(addr, "r") && len(addr) >= 25 }
