@@ -4,11 +4,13 @@ import sys
 import os
 import time
 import json
+import threading
 import urllib.request
+from collections import OrderedDict
 from datetime import datetime, date
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -123,20 +125,43 @@ def _discord_system(msg: str, color: int = 0x00FFCC):
         "footer":      {"text": datetime.now().strftime("%Y-%m-%d %H:%M ET")},
     }])
 
-# ── shared state ──────────────────────────────────────────────────────────────
+# ── shared state + thread locks ───────────────────────────────────────────────
 _tradier       = None
 _polygon       = None
 _engine        = None
 _engine_ready  = False
 
-_council_cache:  Dict[str, Dict] = {}
-_live_tickers:   List[str]       = list(PERMANENT_WATCHES)
-_ticker_quotes:  Dict[str, Dict] = {}
-_options_cache:  List[Dict]      = []
+_state_lock    = threading.Lock()   # guards all mutable shared state below
+
+_council_cache:  OrderedDict             = OrderedDict()  # pruned to 100 entries
+_live_tickers:   List[str]              = list(PERMANENT_WATCHES)
+_ticker_quotes:  Dict[str, Dict]        = {}
+_options_cache:  List[Dict]             = []
+_alert_cooldown: Dict[tuple, float]     = {}  # (symbol, strike, type) → last_alert_ts
 
 _last_discovery = 0.0
 _last_options   = 0.0
 _last_quotes    = 0.0
+
+# ── per-IP rate limiter (council endpoint) ────────────────────────────────────
+_ip_tokens:      Dict[str, float] = {}
+_ip_last:        Dict[str, float] = {}
+_ip_lock         = threading.Lock()
+_COUNCIL_BURST   = 3
+_COUNCIL_RATE    = 5.0 / 60.0   # 5 per minute
+
+def _council_allow(ip: str) -> bool:
+    with _ip_lock:
+        now  = time.time()
+        last = _ip_last.get(ip, now)
+        tok  = _ip_tokens.get(ip, float(_COUNCIL_BURST))
+        tok  = min(_COUNCIL_BURST, tok + (now - last) * _COUNCIL_RATE)
+        _ip_last[ip] = now
+        if tok < 1:
+            _ip_tokens[ip] = tok
+            return False
+        _ip_tokens[ip] = tok - 1
+        return True
 
 # ── provider init ─────────────────────────────────────────────────────────────
 def _init_providers():
@@ -174,22 +199,36 @@ def _refresh_all():
     global _last_discovery, _last_options, _last_quotes
     now = time.time()
 
-    if now - _last_discovery > 300:          # every 5 min
-        _live_tickers   = _discover_tickers()
+    if now - _last_discovery > 300:
+        new_tickers = _discover_tickers()
+        with _state_lock:
+            _live_tickers = new_tickers
         _last_discovery = now
 
-    if now - _last_quotes > 30:             # every 30 s
-        _ticker_quotes = _fetch_quotes(_live_tickers)
-        _last_quotes   = now
+    if now - _last_quotes > 30:
+        snapshot = list(_live_tickers)           # atomic read
+        new_quotes = _fetch_quotes(snapshot)
+        with _state_lock:
+            _ticker_quotes = new_quotes
+        _last_quotes = now
 
-    if now - _last_options > 120:           # every 2 min
-        prev_keys    = {(o["symbol"], o["strike"], o["type"]) for o in _options_cache}
-        _options_cache = _build_recommendations()
-        _last_options  = now
-        # Alert Discord on new A-grade BUY setups not seen in prior cycle
-        for opt in _options_cache:
-            key = (opt["symbol"], opt["strike"], opt["type"])
+    if now - _last_options > 120:
+        with _state_lock:
+            prev_keys = {(o["symbol"], o["strike"], o["type"], o.get("expiration")) for o in _options_cache}
+        new_opts = _build_recommendations()
+        with _state_lock:
+            _options_cache = new_opts
+        _last_options = now
+
+        # Alert Discord on new A-grade BUY setups — one alert per key per 5 min
+        for opt in new_opts:
+            key = (opt["symbol"], opt["strike"], opt["type"], opt.get("expiration"))
             if opt["grade"] == "A" and opt["action"] == "BUY" and key not in prev_keys:
+                with _state_lock:
+                    last_alert = _alert_cooldown.get(key, 0)
+                    if now - last_alert < 300:   # 5-min cooldown per contract
+                        continue
+                    _alert_cooldown[key] = now
                 _discord_option(opt)
 
 # ── ticker discovery ──────────────────────────────────────────────────────────
@@ -246,20 +285,29 @@ def _fetch_quotes(symbols: List[str]) -> Dict[str, Dict]:
         except Exception as e:
             logger.warning("[QUOTES] Tradier: %s", e)
 
-    # yfinance fallback for anything missing
+    # yfinance fallback for anything missing — hard 10s timeout
     missing = [s for s in symbols if s not in quotes]
     if missing:
-        try:
+        import concurrent.futures
+        def _yf_fetch():
             import yfinance as yf
-            tickers = yf.Tickers(" ".join(missing))
+            result = {}
+            tickers_obj = yf.Tickers(" ".join(missing))
             for sym in missing:
                 try:
-                    info  = tickers.tickers[sym].fast_info
-                    price = float(info.last_price or 0)
+                    price = float(tickers_obj.tickers[sym].fast_info.last_price or 0)
                     if price:
-                        quotes[sym] = {"price": price, "change_pct": 0, "volume": 0}
+                        result[sym] = {"price": price, "change_pct": 0, "volume": 0}
                 except Exception:
-                    pass
+                    logger.debug("[QUOTES] yfinance miss: %s", sym)
+            return result
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+                fut = ex.submit(_yf_fetch)
+                yf_quotes = fut.result(timeout=10)
+                quotes.update(yf_quotes)
+        except concurrent.futures.TimeoutError:
+            logger.warning("[QUOTES] yfinance timed out after 10s — using partial data")
         except Exception as e:
             logger.warning("[QUOTES] yfinance: %s", e)
 
@@ -378,10 +426,12 @@ def _build_recommendations() -> List[Dict]:
     return recs[:20]
 
 # ── terminal ticker map ───────────────────────────────────────────────────────
-def _build_tickers() -> Dict[str, Any]:
+def _build_tickers(tickers_snap: Dict = None, live_snap: List = None) -> Dict[str, Any]:
     result = {}
-    for sym in _live_tickers:
-        quote = _ticker_quotes.get(sym, {})
+    quotes = tickers_snap if tickers_snap is not None else _ticker_quotes
+    tickers_list = live_snap if live_snap is not None else _live_tickers
+    for sym in tickers_list:
+        quote = (quotes.get(sym) or {})
         price = quote.get("price", 0)
         if price <= 0:
             continue
@@ -430,20 +480,25 @@ def _council_agents() -> List[Dict]:
 # ── /api/terminal ─────────────────────────────────────────────────────────────
 @app.get("/api/terminal")
 async def get_terminal_data():
-    tickers = _build_tickers()
-    options = list(_options_cache)
+    with _state_lock:
+        options  = list(_options_cache)
+        tickers_snap = dict(_ticker_quotes)
+        council_snap = dict(_council_cache)
+        live_snap    = list(_live_tickers)
+
+    tickers = _build_tickers(tickers_snap, live_snap)
 
     master_decision = "SCANNING"
     master_grade    = "—"
     bull            = 50
 
-    if _council_cache:
+    if council_snap:
         try:
-            last = _council_cache[next(reversed(_council_cache))]
+            last = council_snap[next(reversed(council_snap))]
             if last.get("action") not in ("ANALYZING", "ERROR", None):
                 master_decision = last.get("action", "SCANNING")
                 master_grade    = last.get("grade", "—")
-                bull            = last.get("bull", 50)
+                bull            = int(last.get("bull", 50))
         except (StopIteration, KeyError):
             pass
 
@@ -497,27 +552,37 @@ def _run_council(ticker: str):
             "bull":       bull,
             "timestamp":  datetime.now().isoformat(),
         }
-        _council_cache[ticker] = result
+        with _state_lock:
+            _council_cache[ticker] = result
+            if len(_council_cache) > 100:        # prune oldest entries
+                _council_cache.popitem(last=False)
         logger.info("[COUNCIL] %s → %s (%.0f%%)", ticker, action, confidence * 100)
         _discord_council(result)
 
     except Exception as e:
-        logger.error("[COUNCIL] %s failed: %s", ticker, e)
+        logger.exception("[COUNCIL] %s failed", ticker)  # full trace to logs only
         result = {
             "ticker":    ticker,
             "action":    "ERROR",
-            "error":     str(e),
+            "error":     "Analysis failed — check server logs",  # sanitized for client
             "timestamp": datetime.now().isoformat(),
         }
-        _council_cache[ticker] = result
+        with _state_lock:
+            _council_cache[ticker] = result
+            if len(_council_cache) > 100:
+                _council_cache.popitem(last=False)
         _discord_council(result)
 
 @app.post("/api/council")
-async def trigger_council(body: CouncilRequest):
+async def trigger_council(body: CouncilRequest, request: Request):
+    ip = request.client.host if request.client else "unknown"
+    if not _council_allow(ip):
+        raise HTTPException(status_code=429, detail="Rate limit: 5 council requests per minute")
     ticker = body.ticker.upper().strip()
-    if not ticker:
-        raise HTTPException(status_code=400, detail="ticker required")
-    _council_cache[ticker] = {"ticker": ticker, "action": "ANALYZING", "timestamp": datetime.now().isoformat()}
+    if not ticker or len(ticker) > 10:
+        raise HTTPException(status_code=400, detail="ticker required (max 10 chars)")
+    with _state_lock:
+        _council_cache[ticker] = {"ticker": ticker, "action": "ANALYZING", "timestamp": datetime.now().isoformat()}
     asyncio.get_event_loop().run_in_executor(None, _run_council, ticker)
     return {"status": "COUNCIL_CONVENED", "ticker": ticker}
 
