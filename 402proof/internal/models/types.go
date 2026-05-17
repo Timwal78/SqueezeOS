@@ -38,17 +38,21 @@ type Receipt struct {
 }
 
 type Agent struct {
-	Wallet      string    `json:"wallet"`
-	Domain      string    `json:"domain"`
-	FirstSeen   time.Time `json:"first_seen"`
-	LastSeen    time.Time `json:"last_seen"`
-	TotalCalls  int64     `json:"total_calls"`
-	TotalSpend  string    `json:"total_spend"`
-	RiskScore   float64   `json:"risk_score"`
-	KYBTier     string    `json:"kyb_tier"`
-	IsBlocked   bool      `json:"is_blocked"`
-	BlockReason string    `json:"block_reason,omitempty"`
-	Tags        []string  `json:"tags"`
+	Wallet       string    `json:"wallet"`
+	Domain       string    `json:"domain"`
+	FirstSeen    time.Time `json:"first_seen"`
+	LastSeen     time.Time `json:"last_seen"`
+	TotalCalls   int64     `json:"total_calls"`
+	TotalSpend   string    `json:"total_spend"`
+	SpendFloat   float64   `json:"spend_float"`
+	RiskScore    float64   `json:"risk_score"`
+	KYBTier      string    `json:"kyb_tier"`
+	LoyaltyTier  string    `json:"loyalty_tier"`
+	FreeCredits  int64     `json:"free_credits"`
+	PaidSinceLast int64    `json:"paid_since_last_credit"`
+	IsBlocked    bool      `json:"is_blocked"`
+	BlockReason  string    `json:"block_reason,omitempty"`
+	Tags         []string  `json:"tags"`
 }
 
 type Endpoint struct {
