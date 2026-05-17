@@ -56,12 +56,20 @@ func BulkCSV(receipts []*models.Receipt) string {
 	return sb.String()
 }
 
+// BadgeScript returns the lightweight dynamic embed (live stats, auto-refreshes).
+func BadgeScript(endpointID, serverURL string) string {
+	return fmt.Sprintf(`<!-- 402Proof Dynamic Badge -->
+<script src="%s/badge.js?endpoint=%s" async></script>
+<!-- /402Proof Badge -->`, serverURL, endpointID)
+}
+
+// BadgeHTML returns a static fallback badge for environments that block scripts.
 func BadgeHTML(endpointID, path, serverURL string) string {
-	return fmt.Sprintf(`<!-- 402Proof Badge -->
+	return fmt.Sprintf(`<!-- 402Proof Static Badge -->
 <a href="%s/badge/%s" target="_blank" style="display:inline-flex;align-items:center;gap:8px;padding:8px 16px;background:#0a0a0a;border:1px solid #7c3aed;border-radius:8px;text-decoration:none;font-family:monospace;font-size:12px;color:#a78bfa;box-shadow:0 0 12px rgba(124,58,237,0.3);">
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
   <span style="color:#e2e8f0">AI Agents Can Pay Here</span>
   <span style="color:#7c3aed;font-size:10px;">· Verified by 402Proof · XRP Ledger</span>
 </a>
-<!-- /402Proof Badge -->`, serverURL, endpointID)
+<!-- /402Proof Static Badge -->`, serverURL, endpointID)
 }

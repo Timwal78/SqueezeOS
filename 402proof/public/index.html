@@ -812,19 +812,32 @@ async function savePolicy() {
 function generateBadge() {
   const id = document.getElementById('badgeEndpointId').value.trim();
   if (!id) { toast('Enter endpoint ID'); return; }
-  const html = `<!-- 402Proof Badge -->
+
+  const scriptEmbed = `<!-- 402Proof Dynamic Badge — live stats, auto-refreshes every 30s -->
+<script src="${SERVER}/badge.js?endpoint=${id}" async><\/script>
+<!-- /402Proof Badge -->`;
+
+  const staticHtml = `<!-- 402Proof Static Badge -->
 <a href="${SERVER}/badge/${id}" target="_blank" style="display:inline-flex;align-items:center;gap:8px;padding:8px 16px;background:#0a0a0a;border:1px solid #7c3aed;border-radius:8px;text-decoration:none;font-family:monospace;font-size:12px;color:#a78bfa;box-shadow:0 0 12px rgba(124,58,237,0.3);">
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
   <span style="color:#e2e8f0">AI Agents Can Pay Here</span>
   <span style="color:#7c3aed;font-size:10px;">· Verified by 402Proof · XRP Ledger</span>
 </a>
-<!-- /402Proof Badge -->`;
+<!-- /402Proof Static Badge -->`;
+
   document.getElementById('badgeOutput').innerHTML = `
+    <div class="card-title" style="margin-bottom:8px">DYNAMIC BADGE (recommended — live stats)</div>
     <div style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
-      <span class="text-muted" style="font-size:10px">COPY AND PASTE INTO YOUR WEBSITE</span>
-      <button class="btn btn-sm btn-outline" onclick="copyText(document.getElementById('badgeCode').textContent)">COPY HTML</button>
+      <span class="text-muted" style="font-size:10px">Shows last payment time + amount, updates every 30s</span>
+      <button class="btn btn-sm btn-outline" onclick="copyText(document.getElementById('badgeScript').textContent)">COPY</button>
     </div>
-    <div class="code-block" id="badgeCode">${escHtml(html)}</div>`;
+    <div class="code-block" id="badgeScript">${escHtml(scriptEmbed)}</div>
+    <div class="card-title" style="margin:14px 0 8px">STATIC BADGE (fallback)</div>
+    <div style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+      <span class="text-muted" style="font-size:10px">Plain HTML anchor, no scripts needed</span>
+      <button class="btn btn-sm btn-outline" onclick="copyText(document.getElementById('badgeStatic').textContent)">COPY</button>
+    </div>
+    <div class="code-block" id="badgeStatic">${escHtml(staticHtml)}</div>`;
 }
 
 function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }

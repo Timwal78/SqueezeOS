@@ -364,6 +364,7 @@ func main() {
 	})
 
 	// ── BADGE ─────────────────────────────────────────────────────────────────────
+	// /v1/badge/:id  — full live badge page (linked from badge anchor)
 	r.Get("/v1/badge/{endpointID}", func(w http.ResponseWriter, req *http.Request) {
 		endpointID := chi.URLParam(req, "endpointID")
 		ep, ok := db.GetEndpoint(endpointID)
@@ -372,7 +373,18 @@ func main() {
 			return
 		}
 		w.Header().Set("Content-Type", "text/html")
-		fmt.Fprint(w, receipt.BadgeHTML(endpointID, ep.Path, serverURL))
+		fmt.Fprintf(w, `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>402Proof Verified Endpoint</title>
+<style>body{background:#050508;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;font-family:monospace}</style>
+</head><body>
+<script src="%s/badge.js?endpoint=%s"></script>
+</body></html>`, serverURL, endpointID)
+	})
+
+	// /badge/:id  — shortlink for badge page
+	r.Get("/badge/{endpointID}", func(w http.ResponseWriter, req *http.Request) {
+		endpointID := chi.URLParam(req, "endpointID")
+		http.Redirect(w, req, "/v1/badge/"+endpointID, http.StatusFound)
 	})
 
 	// ── ADMIN ─────────────────────────────────────────────────────────────────────
