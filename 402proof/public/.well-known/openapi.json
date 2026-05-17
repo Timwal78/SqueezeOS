@@ -1,0 +1,148 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "402Proof — Script Master Labs Market Intelligence",
+    "description": "Premium AI-powered market intelligence APIs. All endpoints require RLUSD micropayment via x402 protocol. Pay on XRPL, receive signed access token, call endpoint.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Script Master Labs via 402Proof",
+      "url": "https://four02proof.onrender.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://lively-fascination-production-41fa.up.railway.app",
+      "description": "SqueezeOS — Live premium endpoints"
+    },
+    {
+      "url": "https://four02proof.onrender.com",
+      "description": "402Proof — Invoice and verification server"
+    }
+  ],
+  "paths": {
+    "/api/council": {
+      "post": {
+        "operationId": "council_verdict",
+        "summary": "AI Council Verdict (0.10 RLUSD)",
+        "description": "Multi-engine market signal aggregate. Returns regime, directional bias, confidence score, and actionable trading thesis. Requires X-Payment-Token header from /v1/verify.",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "symbol": { "type": "string", "example": "IWM", "description": "Ticker symbol to analyze" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Council verdict with regime, bias, confidence, and thesis" },
+          "402": { "description": "Payment required — invoice returned in body" }
+        },
+        "security": [{ "x402Payment": [] }]
+      }
+    },
+    "/api/scan": {
+      "get": {
+        "operationId": "market_scan",
+        "summary": "Full Market Scanner (0.05 RLUSD)",
+        "description": "Live $1-$50 universe squeeze scanner. Returns quotes, squeeze signals, and options picks from background scan cycle.",
+        "responses": {
+          "200": { "description": "Scan results with quotes, options picks, and universe stats" },
+          "402": { "description": "Payment required — invoice returned in body" }
+        },
+        "security": [{ "x402Payment": [] }]
+      }
+    },
+    "/api/options": {
+      "get": {
+        "operationId": "options_flow",
+        "summary": "Options Intelligence Flow (0.05 RLUSD)",
+        "description": "Institutional options flow: sweeps, whale detection, unusual volume, scored contract recommendations.",
+        "parameters": [
+          { "name": "symbol", "in": "query", "schema": { "type": "string" }, "example": "IWM" }
+        ],
+        "responses": {
+          "200": { "description": "Options flow with sweeps, whales, and recommendations" },
+          "402": { "description": "Payment required — invoice returned in body" }
+        },
+        "security": [{ "x402Payment": [] }]
+      }
+    },
+    "/api/iwm": {
+      "get": {
+        "operationId": "iwm_odte",
+        "summary": "IWM 0DTE Scanner (0.03 RLUSD)",
+        "description": "Russell 2000 zero-day-to-expiry institutional scanner. Scored contracts, parity watch, realized vol, delta/gamma.",
+        "responses": {
+          "200": { "description": "IWM 0DTE scored contracts and analytics" },
+          "402": { "description": "Payment required — invoice returned in body" }
+        },
+        "security": [{ "x402Payment": [] }]
+      }
+    },
+    "/v1/invoice": {
+      "post": {
+        "operationId": "get_invoice",
+        "summary": "Request payment invoice",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["endpoint_id"],
+                "properties": {
+                  "endpoint_id": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Invoice with pay_to, amount, asset, memo_hex" } }
+      }
+    },
+    "/v1/verify": {
+      "post": {
+        "operationId": "verify_payment",
+        "summary": "Verify XRPL payment, receive access token",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["invoice_id", "tx_hash", "agent_wallet"],
+                "properties": {
+                  "invoice_id":   { "type": "string" },
+                  "tx_hash":      { "type": "string" },
+                  "agent_wallet": { "type": "string" },
+                  "agent_domain": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "access_token, receipt_id, risk_level" } }
+      }
+    },
+    "/v1/stats": {
+      "get": {
+        "operationId": "get_stats",
+        "summary": "Live settlement statistics",
+        "responses": { "200": { "description": "Total payments, agents, volume" } }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "x402Payment": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Payment-Token",
+        "description": "HMAC-SHA256 signed token received from /v1/verify after XRPL payment"
+      }
+    }
+  }
+}
