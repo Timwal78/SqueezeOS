@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -18,6 +19,7 @@ import (
 
 	"proof402/internal/firewall"
 	"proof402/internal/invoice"
+	"proof402/internal/loyalty"
 	"proof402/internal/models"
 	"proof402/internal/notify"
 	"proof402/internal/passport"
@@ -281,6 +283,14 @@ func main() {
 
 		db.MarkInvoicePaid(inv.ID, body.TxHash, body.AgentWallet)
 		passport.UpdateAfterPayment(agent)
+
+		// Loyalty: accumulate spend, award free credits, detect tier upgrade
+		amountFloat := 0.0
+		if inv.Asset == "RLUSD" || inv.Asset == "XRP" {
+			amountFloat, _ = strconv.ParseFloat(inv.Price, 64)
+		}
+		creditsAwarded, tierChanged, newTier := loyalty.ProcessPayment(agent, amountFloat)
+
 		db.UpdateAgent(agent)
 		db.IncrDailyCall(inv.EndpointID, body.AgentWallet)
 		db.IncrEndpointCalls(inv.EndpointID)
@@ -288,6 +298,13 @@ func main() {
 		riskScore := passport.Score(agent)
 		r := receipt.New(inv, body.TxHash, body.AgentWallet, body.AgentDomain, passport.RiskLevel(riskScore), accessToken)
 		db.SaveReceipt(r)
+
+		if tierChanged {
+			log.Printf("[LOYALTY] %s upgraded to %s %s (credits=%d)", body.AgentWallet, newTier.Badge, newTier.Name, agent.FreeCredits)
+		}
+		if creditsAwarded > 0 {
+			log.Printf("[LOYALTY] %s earned %d free credit(s) — balance=%d", body.AgentWallet, creditsAwarded, agent.FreeCredits)
+		}
 
 		ep, _ := db.GetEndpoint(inv.EndpointID)
 		notify.SendReceipt(emailCfg, notify.Receipt{
@@ -305,11 +322,16 @@ func main() {
 		})
 
 		writeJSON(w, 200, map[string]interface{}{
-			"status":       "PAYMENT_VERIFIED",
-			"access_token": accessToken,
-			"receipt_id":   r.ID,
-			"risk_level":   r.RiskLevel,
-			"settled_at":   r.SettledAt,
+			"status":          "PAYMENT_VERIFIED",
+			"access_token":    accessToken,
+			"receipt_id":      r.ID,
+			"risk_level":      r.RiskLevel,
+			"settled_at":      r.SettledAt,
+			"loyalty_tier":    newTier.Name,
+			"loyalty_badge":   newTier.Badge,
+			"free_credits":    agent.FreeCredits,
+			"credits_awarded": creditsAwarded,
+			"tier_upgraded":   tierChanged,
 		})
 	})
 
@@ -372,6 +394,67 @@ func main() {
 		w.Header().Set("Content-Type", "text/csv")
 		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="receipt-%s.csv"`, id[:8]))
 		fmt.Fprint(w, receipt.ToCSV(rec))
+	})
+
+	// ── LOYALTY ───────────────────────────────────────────────────────────────────
+
+	// GET /v1/loyalty/{wallet} — tier, credits, progress to next tier
+	r.Get("/v1/loyalty/{wallet}", func(w http.ResponseWriter, req *http.Request) {
+		wallet := chi.URLParam(req, "wallet")
+		agent, ok := db.GetAgent(wallet)
+		if !ok {
+			// Return bronze for unknown wallets
+			agent = &models.Agent{Wallet: wallet}
+		}
+		writeJSON(w, 200, loyalty.Summary(agent))
+	})
+
+	// POST /v1/loyalty/redeem — burn 1 credit, receive access token (no XRPL payment needed)
+	r.Post("/v1/loyalty/redeem", func(w http.ResponseWriter, req *http.Request) {
+		req.Body = http.MaxBytesReader(w, req.Body, 8*1024)
+		var body struct {
+			AgentWallet string `json:"agent_wallet"`
+			EndpointID  string `json:"endpoint_id"`
+		}
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil || body.AgentWallet == "" || body.EndpointID == "" {
+			http.Error(w, "agent_wallet and endpoint_id required", http.StatusBadRequest)
+			return
+		}
+		agent, ok := db.GetAgent(body.AgentWallet)
+		if !ok || agent.FreeCredits <= 0 {
+			http.Error(w, "no free credits available", http.StatusPaymentRequired)
+			return
+		}
+		ep, ok := db.GetEndpoint(body.EndpointID)
+		if !ok || !ep.Active {
+			http.Error(w, "endpoint not found", http.StatusNotFound)
+			return
+		}
+		if !loyalty.RedeemCredit(agent) {
+			http.Error(w, "no free credits available", http.StatusPaymentRequired)
+			return
+		}
+		db.UpdateAgent(agent)
+
+		// Issue a synthetic invoice and token for the credit redemption
+		inv := invoice.New(ep, gatewayAddr)
+		inv.Status = "paid"
+		db.SaveInvoice(inv)
+
+		accessToken, err := invoice.IssueToken(inv, tokenSecret)
+		if err != nil {
+			http.Error(w, "token issuance failed", http.StatusInternalServerError)
+			return
+		}
+
+		log.Printf("[LOYALTY] credit redeemed: agent=%s endpoint=%s credits_remaining=%d", body.AgentWallet, body.EndpointID, agent.FreeCredits)
+
+		writeJSON(w, 200, map[string]interface{}{
+			"status":           "CREDIT_REDEEMED",
+			"access_token":     accessToken,
+			"credits_remaining": agent.FreeCredits,
+			"loyalty_tier":     agent.LoyaltyTier,
+		})
 	})
 
 	// ── AGENT PASSPORT ────────────────────────────────────────────────────────────
