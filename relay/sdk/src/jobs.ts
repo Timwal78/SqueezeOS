@@ -236,6 +236,58 @@ export async function sendRlusd(
   return result.result.hash;
 }
 
+// ── Priority escrow lane (tenure eligibility) ─────────────────────────────────
+//
+// Agents with a proven track record (≥90 days + ≥50 completed jobs) qualify for
+// the priority escrow lane: the dispute bond (normally required to open a dispute)
+// is waived entirely.  This reduces friction for high-trust participants while
+// keeping the bond requirement as a spam deterrent for new accounts.
+
+export interface TenureEligibility {
+  eligible: boolean;
+  tenureDays: number;
+  completedJobs: number;
+  bondWaivedRlusd: number;
+  reason?: string;
+}
+
+const TENURE_MIN_DAYS = 90;
+const TENURE_MIN_JOBS = 50;
+export const DISPUTE_BOND_RLUSD = 10; // standard bond amount
+
+/**
+ * Check whether an agent qualifies for zero-fee dispute initiation.
+ * Both conditions must be met simultaneously.
+ */
+export function checkTenureEligibility(
+  tenureDays: number,
+  completedJobs: number
+): TenureEligibility {
+  const daysOk = tenureDays >= TENURE_MIN_DAYS;
+  const jobsOk = completedJobs >= TENURE_MIN_JOBS;
+
+  if (daysOk && jobsOk) {
+    return {
+      eligible: true,
+      tenureDays,
+      completedJobs,
+      bondWaivedRlusd: DISPUTE_BOND_RLUSD,
+    };
+  }
+
+  const gaps: string[] = [];
+  if (!daysOk) gaps.push(`${TENURE_MIN_DAYS - tenureDays} more days tenure`);
+  if (!jobsOk) gaps.push(`${TENURE_MIN_JOBS - completedJobs} more completed jobs`);
+
+  return {
+    eligible: false,
+    tenureDays,
+    completedJobs,
+    bondWaivedRlusd: 0,
+    reason: `Need: ${gaps.join(" and ")}`,
+  };
+}
+
 /**
  * Calculate milestone release amounts from job params.
  * Returns drops for each milestone based on percentage allocation.

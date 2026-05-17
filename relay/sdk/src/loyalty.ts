@@ -65,6 +65,69 @@ export interface LoyaltyBenefits {
   bonusMultiplierBps: number;
 }
 
+// ── Volume-based fee decay (X402 decay) ─────────────────────────────────────
+//
+// Cumulative RLUSD volume → effective fee rate (BPS).
+// Decay applies on top of — and is separate from — tier discounts.
+// Both participant and agent-side fee rates use the same volume ladder.
+//
+//   < 1 000 RLUSD lifetime  →  50 BPS (0.50%)
+//   ≥ 1 000               →  40 BPS (0.40%)
+//   ≥ 10 000              →  30 BPS (0.30%)
+//   ≥ 50 000              →  20 BPS (0.20%)
+//   ≥ 100 000             →  10 BPS (0.10%)
+
+export const VOLUME_FEE_LADDER: Array<{ thresholdRlusd: number; feeBps: number }> = [
+  { thresholdRlusd: 100_000, feeBps: 10 },
+  { thresholdRlusd:  50_000, feeBps: 20 },
+  { thresholdRlusd:  10_000, feeBps: 30 },
+  { thresholdRlusd:   1_000, feeBps: 40 },
+  { thresholdRlusd:       0, feeBps: 50 },
+];
+
+/**
+ * Return the effective fee rate (BPS) for an address with the given cumulative volume.
+ * Pure function — SDK computes locally, no server round-trip required.
+ */
+export function computeVolumeFeeDecay(cumulativeVolumeRlusd: number): number {
+  for (const step of VOLUME_FEE_LADDER) {
+    if (cumulativeVolumeRlusd >= step.thresholdRlusd) return step.feeBps;
+  }
+  return 50; // unreachable but satisfies type checker
+}
+
+/**
+ * Combine volume-decay rate with tier discount into the final effective fee BPS.
+ * Tier discount is applied multiplicatively on top of the volume-decayed rate.
+ *
+ * Example: veteran (20% discount) at 15K volume (30 BPS base) → 30 × 0.80 = 24 BPS
+ */
+export function computeEffectiveFeeRate(
+  cumulativeVolumeRlusd: number,
+  tier: LoyaltyTier
+): number {
+  const baseRateBps = computeVolumeFeeDecay(cumulativeVolumeRlusd);
+  const benefits = getLoyaltyBenefits(tier);
+  const discountMultiplier = 1 - benefits.feeDiscountBps / 10000;
+  return Math.round(baseRateBps * discountMultiplier);
+}
+
+/**
+ * Compute the Relay fee amount for a transaction given the caller's volume history
+ * and loyalty tier.  Returns the fee in the same unit as `amountRlusd`.
+ */
+export function computeFeeWithDecay(
+  amountRlusd: number,
+  cumulativeVolumeRlusd: number,
+  tier: LoyaltyTier
+): { feeRlusd: number; feeBps: number; savings: number } {
+  const effectiveBps = computeEffectiveFeeRate(cumulativeVolumeRlusd, tier);
+  const baseBps = 50; // canonical starting rate
+  const feeRlusd = (amountRlusd * effectiveBps) / 10000;
+  const baseFee  = (amountRlusd * baseBps) / 10000;
+  return { feeRlusd, feeBps: effectiveBps, savings: baseFee - feeRlusd };
+}
+
 // ── Thresholds ───────────────────────────────────────────────────────────────
 
 const PARTICIPANT_THRESHOLDS: Record<ParticipantTier, { jobs: number; feeBps: number }> = {

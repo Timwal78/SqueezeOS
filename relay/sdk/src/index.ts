@@ -22,6 +22,8 @@ export * from "./settlement";
 export * from "./wallet-adapter";
 export * from "./indexer";
 export * from "./loyalty";
+export * from "./vrf";
+export * from "./vrf-internal";
 
 // Convenience re-export of xrpl Wallet for SDK consumers
 export { Wallet } from "xrpl";
