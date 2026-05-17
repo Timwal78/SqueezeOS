@@ -1,0 +1,39 @@
+User-agent: *
+Allow: /
+Allow: /sml_harmonic_scanner.html
+Allow: /SML_Command_Center_ORACLE.html
+Allow: /credit_repair.html
+Allow: /llms.txt
+Allow: /sitemap.xml
+
+# Block app routes — only Flask can serve these, not static files
+Disallow: /api/
+Disallow: /terminal
+Disallow: /legacy
+Disallow: /api/beast/
+Disallow: /api/left-wing/
+Disallow: /api/mmle/
+Disallow: /api/battle/
+Disallow: /api/ai/
+Disallow: /api/scriptmaster/
+Disallow: /api/ceo/
+Disallow: /api/market/
+
+# Block sensitive local files
+Disallow: /402proof-secrets.html
+Disallow: /402proof-register.html
+
+Sitemap: https://scriptmasterlabs.com/sitemap.xml
+
+User-agent: GPTBot
+Allow: /
+Allow: /llms.txt
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Googlebot
+Allow: /
