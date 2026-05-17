@@ -1,0 +1,104 @@
+name: CI — relay
+
+on:
+  push:
+    branches:
+      - main
+      - "claude/**"
+    paths:
+      - "relay/**"
+  pull_request:
+    branches:
+      - main
+      - "claude/**"
+    paths:
+      - "relay/**"
+
+jobs:
+  sdk:
+    name: SDK — test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: relay/node_modules
+          key: node-${{ hashFiles('relay/package-lock.json') }}
+          restore-keys: |
+            node-
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: relay
+
+      - name: Test sdk
+        run: npm --prefix relay/sdk run test
+
+  mcp-paywall:
+    name: mcp-paywall — build & test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: relay/node_modules
+          key: node-${{ hashFiles('relay/package-lock.json') }}
+          restore-keys: |
+            node-
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: relay
+
+      - name: Build mcp-paywall
+        run: npm --prefix relay/mcp-paywall run build
+
+      - name: Test mcp-paywall
+        run: npm --prefix relay/mcp-paywall run test
+
+  api:
+    name: API — typecheck
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: relay/node_modules
+          key: node-${{ hashFiles('relay/package-lock.json') }}
+          restore-keys: |
+            node-
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: relay
+
+      - name: Typecheck api
+        run: npx tsc --noEmit
+        working-directory: relay/api
