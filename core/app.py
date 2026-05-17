@@ -67,15 +67,27 @@ def create_app():
 
     @app.route('/')
     def serve_index():
-        return send_from_directory(app.static_folder, 'SML_Command_Center_ORACLE.html')
-
-    @app.route('/legacy')
-    def serve_legacy():
         return send_from_directory(app.static_folder, 'index.html')
 
     @app.route('/terminal')
     def serve_terminal():
         return send_from_directory(app.static_folder, 'SML_Command_Center_ORACLE.html')
+
+    @app.route('/legacy')
+    def serve_legacy():
+        return send_from_directory(app.static_folder, 'SML_Command_Center_ORACLE.html')
+
+    @app.route('/robots.txt')
+    def serve_robots():
+        return send_from_directory(app.static_folder, 'robots.txt', mimetype='text/plain')
+
+    @app.route('/sitemap.xml')
+    def serve_sitemap():
+        return send_from_directory(app.static_folder, 'sitemap.xml', mimetype='application/xml')
+
+    @app.route('/llms.txt')
+    def serve_llms():
+        return send_from_directory(app.static_folder, 'llms.txt', mimetype='text/plain')
 
     @app.route('/api/beast/events')
     def legacy_beast_events():
