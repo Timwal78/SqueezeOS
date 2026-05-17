@@ -367,8 +367,7 @@ func main() {
 	// /v1/badge/:id  — full live badge page (linked from badge anchor)
 	r.Get("/v1/badge/{endpointID}", func(w http.ResponseWriter, req *http.Request) {
 		endpointID := chi.URLParam(req, "endpointID")
-		ep, ok := db.GetEndpoint(endpointID)
-		if !ok {
+		if _, ok := db.GetEndpoint(endpointID); !ok {
 			http.Error(w, "endpoint not found", http.StatusNotFound)
 			return
 		}
