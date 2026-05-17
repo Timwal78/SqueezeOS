@@ -1,0 +1,50 @@
+# Script Master Labs — AI Market Intelligence
+
+> Script Master Labs is an institutional-grade AI trading intelligence platform. We build real-time market analysis tools and the 402Proof autonomous agent payment infrastructure on XRPL.
+
+## What We Build
+
+- **SqueezeOS** — live market intelligence platform: squeeze scanner, options flow, harmonic patterns, IWM 0DTE analysis, AI council verdicts
+- **402Proof** — the x402 agent payment compliance firewall for autonomous AI agents paying for premium APIs with RLUSD on XRP Ledger
+- **Harmonic Scanner** — multi-factor harmonic pattern detection with RVOL, ATR, GEX positioning
+- **Credit Beast** — AI-powered credit repair engine
+
+## Premium API Endpoints (Pay-Per-Call via RLUSD)
+
+All endpoints at: https://lively-fascination-production-41fa.up.railway.app
+
+### POST /api/council — 0.10 RLUSD
+Multi-engine AI verdict. SML fractal cascade + Battle Computer signal aggregate. Returns regime, directional bias, confidence score, and trading thesis for any symbol.
+
+### GET /api/scan — 0.05 RLUSD
+Full $1-$50 market universe scanner. Live squeeze signals, options picks, technical scores.
+
+### GET /api/options — 0.05 RLUSD
+Options intelligence: institutional sweeps, whale detection, unusual volume, scored recommendations.
+
+### GET /api/iwm — 0.03 RLUSD
+IWM zero-day-to-expiry scanner. Scored contracts, parity watch, realized vol, delta/gamma.
+
+## How AI Agents Pay
+
+Payment handled by 402Proof (https://four02proof.onrender.com):
+1. Agent hits endpoint → receives HTTP 402 + invoice JSON
+2. Agent pays RLUSD on XRPL to `pay_to` address with `memo_hex` as MemoData
+3. Agent POSTs to https://four02proof.onrender.com/v1/verify with invoice_id + tx_hash
+4. Receives signed access_token (1-hour TTL)
+5. Retries original endpoint with `X-Payment-Token` header
+
+## Loyalty Program
+
+Agents earn free calls based on cumulative spend:
+- Silver (1+ RLUSD): 1 free per 10 paid
+- Gold (5+ RLUSD): 1 free per 5 paid
+- Platinum (25+ RLUSD): 1 free per 3 paid
+- Diamond (100+ RLUSD): 1 free per 2 paid
+
+## Links
+
+- Platform: https://scriptmasterlabs.com/terminal
+- 402Proof Dashboard: https://four02proof.onrender.com
+- Agent API Spec: https://four02proof.onrender.com/.well-known/openapi.json
+- Live Stats: https://four02proof.onrender.com/v1/stats
