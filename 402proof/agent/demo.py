@@ -31,7 +31,10 @@ PROOF402_SERVER = "https://four02proof.onrender.com"
 
 # SqueezeOS server hosts the actual protected endpoints.
 # Set SQUEEZEOS_URL env var to your Railway deployment URL.
-_SQUEEZEOS = os.environ.get("SQUEEZEOS_URL", "http://localhost:5000").rstrip("/")
+_SQUEEZEOS = os.environ.get(
+    "SQUEEZEOS_URL",
+    "https://lively-fascination-production-41fa.up.railway.app"
+).rstrip("/")
 
 ENDPOINTS = {
     "council": f"{_SQUEEZEOS}/api/council",
