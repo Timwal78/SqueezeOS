@@ -1,259 +1,175 @@
 # Relay — Zero-Custody Agent Commerce Protocol
 
-A trustless, XRPL-native protocol for AI agents to hire, pay, and dispute work — without any intermediary ever touching funds.
+Relay is an open protocol for AI agents and humans to hire, pay, and dispute work on XRPL — without Relay ever touching funds or private keys.
 
 ---
 
-## Packages
+## Architecture
 
-| Package | Description |
-|---------|-------------|
-| `sdk/` | Core TypeScript SDK — jobs, escrow, evaluators, VRF, loyalty, multisig, x402 |
-| `api/` | REST coordination API — job registry, dispute lifecycle, reputation indexer |
-| `mcp-paywall/` | MCP middleware — 402 payment challenges for AI tool servers |
-| `indexer/` | XRPL ledger listener — idempotent cache reconstruction from on-chain state |
+| Package | Purpose |
+|---------|---------|
+| `sdk` | Core logic: job lifecycle, dispute resolution, evaluator selection, loyalty tiers, VRF, XRPL transaction building |
+| `api` | REST coordination layer — job registry, dispute orchestration, reputation, loyalty, settlement notifications |
+| `mcp-paywall` | Server-side MCP tool wrapper (`paywall()`) + agent-side autonomous payer (`agentWallet()`) over x402/RLUSD |
+| `indexer` | XRPL ledger listener — syncs on-chain payment channel and escrow events into Postgres |
+
+```
+┌─────────────┐   REST    ┌─────────────┐   SQL   ┌──────────────┐
+│  Agent /    │ ────────► │     api     │ ──────► │   Postgres   │
+│  Hirer app  │           │  (port 3001)│         │              │
+└─────────────┘           └─────────────┘         └──────────────┘
+       │                         ▲                        ▲
+       │ MCP                     │ reads                  │ writes
+       ▼                         │                        │
+┌─────────────┐           ┌─────────────┐         ┌──────────────┐
+│ mcp-paywall │           │   indexer   │ ──────► │    XRPL      │
+│  (server)   │           │             │ ◄────── │  (mainnet /  │
+└─────────────┘           └─────────────┘         │   testnet)   │
+                                                   └──────────────┘
+```
 
 ---
 
 ## Zero-Custody Guarantees
 
-These are non-negotiable invariants baked into every layer of the protocol:
-
-- **No escrow accounts** — Relay never holds or touches user funds
-- **No private keys stored** — Seeds exist in memory only during signing; never logged, transmitted, or persisted
-- **Client-side signing only** — The server builds unsigned transactions; users sign independently
-- **XRPL only, no EVM** — Native XRPL features (payment channels, escrow, multi-sig, RLUSD IOU)
-- **No custodial wallets** — Self-custody only: Crossmark, Xaman, GemWallet
-- **Multi-sig threshold** — Dispute resolution requires evaluator majority; Relay is never a signer
-- **No admin freeze/seize** — No functions exist to freeze accounts or redirect funds
-- **No KYC, no token launch, no yield products**
+- **No escrow.** Funds live in XRPL payment channels controlled by hirer + worker keys only.
+- **No private keys.** The Relay API never generates, stores, or signs with any wallet key. Settlement transactions are built unsigned and returned to callers.
+- **No EVM.** XRPL only — deterministic finality, native multi-sig, no gas spikes.
+- **Client-side signing only.** Agents sign payments locally via `agentWallet()`; evaluators sign dispute outcomes from their own wallets.
+- **Anti-replay.** Every `_relay_payment` proof carries a nonce; the paywall verifier rejects reused proofs.
+- **Spending caps.** `agentWallet` enforces `maxSpendPerCallRlusd` per call; no unbounded payments.
 
 ---
 
-## Quick Start (Local Dev)
+## Quick Start (local dev)
 
 ```bash
-# Install all workspace dependencies
 npm run install:all
-
-# Configure API
-cp api/.env.example api/.env
-# Edit api/.env — fill in DATABASE_URL at minimum
-
-# Configure Indexer
-cp indexer/.env.example indexer/.env
-# Edit indexer/.env — same DATABASE_URL
-
-# Run database migrations
+cp api/.env.example api/.env   # fill in DATABASE_URL
 npm run migrate
-
-# Start the API server (port 3001)
 npm run dev:api
+```
 
-# In a separate terminal — start the XRPL indexer
+In another terminal:
+
+```bash
 npm run dev:indexer
 ```
 
-**Health check:**
-```bash
-curl http://localhost:3001/health
-```
+The API listens on `http://localhost:3001` by default. Set `XRPL_NETWORK=xrpl_testnet` in `api/.env` to use the XRPL Altnet.
 
 ---
 
 ## Docker Deploy
 
 ```bash
-# 1. Copy and fill in environment files
-cp api/.env.example api/.env
-cp indexer/.env.example indexer/.env
-
-# 2. Set required secrets (or export them)
-export POSTGRES_PASSWORD=your_secure_password
-
-# 3. Run migrations (one-shot container)
-docker-compose run --rm migrate
-
-# 4. Start all services
+cp api/.env.example api/.env && cp indexer/.env.example indexer/.env
+# Fill in DATABASE_URL, XRPL_NETWORK, and any optional values
 docker-compose up -d
-
-# 5. Tail logs
-docker-compose logs -f api indexer
 ```
 
-Services started: `postgres`, `redis`, `api` (port 3001), `indexer`.
+The compose file starts Postgres, the API, and the indexer. Redis is optional — remove the `REDIS_URL` line to run without it (loyalty endpoints fall through to DB on cache miss).
 
 ---
 
 ## API Reference
 
-All endpoints are under `/api/v1/`. No authentication required — reputation is earned on-chain.
-
-### Jobs
+All endpoints are under `/api/v1/`.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/jobs` | Register a job (channel must exist on XRPL first) |
-| `GET` | `/jobs/:id` | Get job by ID |
-| `GET` | `/jobs?hirer=r...` | List jobs by hirer or worker address |
-| `PATCH` | `/jobs/:id/status` | Update job status |
-
-### Disputes
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/disputes` | Initiate a dispute |
-| `GET` | `/disputes/:id` | Get dispute status + votes |
-| `POST` | `/disputes/:id/vote` | Submit cryptographically signed evaluator vote |
-| `GET` | `/disputes?jobId=...` | List disputes for a job |
-
-### Settlement (Multi-Sig)
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/settlement/:disputeId/draft` | Get unsigned settlement tx |
-| `POST` | `/settlement/:disputeId/sign` | Submit partial signature |
-| `GET` | `/settlement/:disputeId/status` | Check signature collection progress |
-| `POST` | `/settlement/:disputeId/submit` | Submit combined multi-sig tx |
-
-### Reputation
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/reputation/:address` | Full reputation score + tier |
-| `GET` | `/reputation/:address/events` | Audit trail of reputation events |
-
-### Evaluators
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/evaluators` | Register as evaluator (after staking on-chain) |
+| `POST` | `/jobs` | Create a job (records channel + signer config) |
+| `GET` | `/jobs/:id` | Get job details |
+| `PATCH` | `/jobs/:id/status` | Update job status (accept, complete, cancel) |
+| `GET` | `/jobs` | List jobs for a hirer or worker address |
+| `POST` | `/disputes` | Open a dispute for an active job |
+| `GET` | `/disputes/:id` | Get dispute state and current votes |
+| `GET` | `/disputes` | List disputes by jobId |
+| `POST` | `/disputes/:id/vote` | Submit an evaluator vote (signature verified) |
+| `GET` | `/reputation/:address` | Reputation score, tier, attestations, stake |
+| `POST` | `/reputation/attest` | Issue a cryptographic attestation (10+ jobs required) |
+| `GET` | `/reputation/:address/events` | Paginated reputation event history |
 | `GET` | `/evaluators` | List active evaluators |
-| `GET` | `/evaluators/:address` | Get evaluator profile |
-
-### Loyalty
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/loyalty/:address/status` | Fee tier, streak multiplier, tenure eligibility |
-
-### Payments
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/payments/verify/:txHash` | Verify XRPL payment is confirmed on-chain |
-| `POST` | `/payments/verify` | Verify from raw tx_blob (decode + confirm) |
-
-### Premium (x402-gated)
-
-When `RELAY_FEE_ADDRESS` is set, analytics are available at `/api/premium/analytics` — callers pay a configurable RLUSD micropayment via the `X-PAYMENT` header.
+| `GET` | `/evaluators/:address` | Evaluator profile |
+| `POST` | `/evaluators` | Register as an evaluator (min 500 RLUSD stake) |
+| `POST` | `/settlement/:disputeId/finalize` | Record confirmed settlement tx hash |
+| `GET` | `/loyalty/:address` | Full loyalty profile (participant + evaluator tiers) |
+| `GET` | `/loyalty/:address/status` | Cached fee tier, streak multiplier, tenure (≤20 ms) |
+| `POST` | `/payments/verify` | Verify an x402 RLUSD payment proof |
 
 ---
 
 ## MCP Paywall
 
-`@relay/mcp-paywall` is the viral wedge for AI agent adoption. Any MCP tool server can add pay-per-call in ~10 lines.
-
-### Tool Server
+### Server side — gating a tool behind RLUSD payment
 
 ```typescript
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { paywall, paywallSchema } from "@relay/mcp-paywall";
 import { z } from "zod";
 
-const server = new McpServer({ name: "data-api", version: "1.0.0" });
-
-const MY_WALLET = "rYourXrplAddressHere";
+const server = new McpServer({ name: "my-data-server", version: "1.0.0" });
 
 server.tool(
-  "market-data",
-  "Get real-time market data",
+  "fetch-market-data",
+  "Returns proprietary market data for the requested symbol",
   paywallSchema({ symbol: z.string() }),
   paywall(
-    { priceRlusd: 0.05, recipient: MY_WALLET, network: "xrpl_mainnet" },
+    {
+      priceRlusd: 0.10,
+      recipient: "rYourXrplAddress",
+      network: "xrpl_testnet",
+    },
     async ({ symbol }) => ({
-      content: [{ type: "text", text: JSON.stringify(await fetchMarketData(symbol)) }],
+      content: [{ type: "text", text: JSON.stringify(getMarketData(symbol)) }],
     })
   )
 );
 ```
 
-### Agent Client
+When `_relay_payment` is absent, `paywall()` returns a structured 402 challenge. When a valid RLUSD payment proof is provided, the inner handler executes with `_relay_payment` stripped from the params object.
+
+### Agent side — auto-pay on 402
 
 ```typescript
 import { agentWallet } from "@relay/mcp-paywall";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 const wallet = agentWallet({
-  seed: process.env.AGENT_SEED!,     // held in memory only, never stored
-  network: "xrpl_mainnet",
-  maxSpendPerCallRlusd: 1.0,          // hard cap per tool call
+  seed: process.env.AGENT_SEED!,         // never leaves this process
+  network: "xrpl_testnet",
+  maxSpendPerCallRlusd: 0.50,            // hard cap per tool call
+  // Optional: refuse payment if server reputation score is too low
+  relayApiUrl: "https://api.relay.xyz",
+  minServerReputationScore: 50,
 });
 
-// Automatically handles 402 → pay → retry
-const result = await wallet.callWithPayment(callTool, "market-data", { symbol: "BTC" });
+const mcpClient = new Client({ name: "my-agent", version: "1.0.0" }, { capabilities: {} });
+// ... connect transport ...
+
+const result = await wallet.callWithPayment(
+  (name, args) => mcpClient.callTool({ name, arguments: args }),
+  "fetch-market-data",
+  { symbol: "BTC/RLUSD" }
+);
+// result is the tool response — 402 handling is transparent
 ```
 
-The handshake:
-1. Agent calls tool → server returns 402 with signed invoice
-2. Agent checks price ≤ `maxSpendPerCallRlusd`, signs XRPL Payment tx
-3. Agent retries with `_relay_payment` proof
-4. Server verifies on-chain, executes tool, returns result
+`callWithPayment` calls the tool once without payment, detects the 402 challenge, signs a RLUSD payment on XRPL, and retries automatically. The seed is never serialised or sent over the network.
 
 ---
 
 ## Examples
 
 ```bash
-# Full job lifecycle: create channel, fund, complete
+# Basic job flow: create → accept → complete
 npm run example:basic
 
-# Dispute flow: initiate, VRF evaluator selection, vote, settle
+# Full dispute: open → vote (3-of-5) → settle
 npm run example:dispute
 
-# Wallet adapters: Crossmark, Xaman, GemWallet integration
+# Wallet adapter patterns (browser extension, hardware, MPC)
 npm run example:wallets
-```
-
----
-
-## Tests
-
-```bash
-npm test                        # SDK + MCP paywall (214 tests)
-npm --prefix api run test       # API integration tests (110 tests)
-```
-
----
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                     Client / Agent                      │
-│   (Crossmark / Xaman / agentWallet — signs all txs)    │
-└──────────────────┬──────────────────────────────────────┘
-                   │ XRPL transactions (signed client-side)
-                   ▼
-┌─────────────────────────────────────────────────────────┐
-│                  XRPL Ledger (source of truth)          │
-│   Payment Channels · Escrow · Multi-sig · RLUSD IOU    │
-└──────────────────┬──────────────────────────────────────┘
-                   │ ledger stream (read-only)
-                   ▼
-┌───────────────────────────┐    ┌───────────────────────┐
-│   relay/indexer           │    │   relay/api            │
-│   XRPL stream subscriber  │───▶│   REST coordination    │
-│   Idempotent cache writer  │    │   Job / dispute state  │
-│   stateReconstructor.ts   │    │   Reputation scoring   │
-└───────────────────────────┘    └───────────────────────┘
-                                          │
-                                          ▼
-                               ┌─────────────────────┐
-                               │   PostgreSQL        │
-                               │   (indexer cache)   │
-                               │   Not source of     │
-                               │   truth — XRPL is   │
-                               └─────────────────────┘
 ```
 
 ---
