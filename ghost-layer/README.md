@@ -8,7 +8,7 @@ ghost-layer is a production Go facilitator node. It accepts EIP-3009 `transferWi
 
 ## Why This Exists
 
-The x402 protocol lets agents pay for API access using HTTP 402 micropayments. The canonical settlement asset is RLUSD on the XRP Ledger, which has on-chain finality in 3–5 seconds and first-class GENIUS Act compliance tooling. However, many agents run on Base L2 and hold USDC — not RLUSD on XRPL. ghost-layer bridges that gap:
+The x402 protocol lets agents pay for API access using HTTP 402 micropayments. The canonical settlement asset is RLUSD on the XRP Ledger, which has on-chain finality in 3-5 seconds and first-class GENIUS Act compliance tooling. However, many agents run on Base L2 and hold USDC — not RLUSD on XRPL. ghost-layer bridges that gap:
 
 - Agent signs an EIP-3009 authorization on Base (no separate approval transaction required)
 - ghost-layer verifies the signature, claims the USDC, and simultaneously delivers RLUSD on XRPL to the merchant
@@ -21,31 +21,31 @@ The x402 protocol lets agents pay for API access using HTTP 402 micropayments. T
 
 ```
   AI Agent (EVM / Base L2)
-         │
-         │  1. Sign EIP-3009 transferWithAuthorization
-         │     (USDC on Base, valid_after/valid_before window,
-         │      unique nonce, v/r/s signature)
-         │
-         ▼
-  ┌──────────────────────────────────────────────┐
-  │              ghost-layer                     │
-  │                                              │
-  │  2. Verify EIP-3009 signature                │
-  │  3. Check nonce — reject replays             │
-  │  4. Rate-limit check (20 req/min per IP)     │
-  │  5. Deduct transparent fee (basis points)    │
-  │  6. engine.RouteTransactionWithDisclosure()  │
-  │     ├─► BaseClient.SweepUSDCToTreasury()    │──► Base L2 (claim USDC)
-  │     └─► XRPLClient.SendPayment()            │──► XRPL (deliver RLUSD)
-  │                                              │
-  │  Response: tx_hash, gross, fee, net          │
-  └──────────────────────────────────────────────┘
-         │
-         ▼
+         |
+         |  1. Sign EIP-3009 transferWithAuthorization
+         |     (USDC on Base, valid_after/valid_before window,
+         |      unique 32-byte nonce, v/r/s signature)
+         |
+         v
+  +----------------------------------------------+
+  |              ghost-layer                     |
+  |                                              |
+  |  2. Verify EIP-3009 or app-level signature   |
+  |  3. Check nonce -- reject replays            |
+  |  4. Rate-limit check (20 req/min per IP)     |
+  |  5. Deduct transparent fee (basis points)    |
+  |  6. engine.RouteTransactionWithDisclosure()  |
+  |     +-> BaseClient.SweepUSDCToTreasury() ----+---> Base L2 (claim USDC)
+  |     +-> XRPLClient.SendPayment() ------------+---> XRPL (deliver RLUSD)
+  |                                              |
+  |  Response: tx_hash, gross, fee, net          |
+  +----------------------------------------------+
+         |
+         v
   402proof server sees XRPL RLUSD payment
-  → verifies on-chain → issues access token + receipt
-         │
-         ▼
+  -> verifies on-chain -> issues access token + receipt
+         |
+         v
   Agent receives access token
 ```
 
@@ -61,16 +61,16 @@ Set `"is_dust_test": true` in the bridge payload to validate the full parse and 
 |---|---|---|---|
 | `PORT` | No | `8080` | HTTP port |
 | `ENVIRONMENT` | No | `production` | Deployment environment label |
-| `TREASURY_ADDRESS` | No | `rNduuviQ3CCvHqWUTjJDD82Ko2tjqFGs3q` | XRPL cold-storage treasury address. Sweeps drain here. |
+| `TREASURY_ADDRESS` | No | `rNduuviQ3CCvHqWUTjJDD82Ko2tjqFGs3q` | XRPL cold-storage treasury address. Force sweeps drain here. |
 | `TREASURY_ETH_ADDRESS` | No | — | EVM cold-storage treasury address |
 | `BASE_RPC_URL` | No | `https://mainnet.base.org` | Base L2 JSON-RPC endpoint |
 | `XRPL_RPC_URL` | No | `https://xrplcluster.com` | XRPL full-history node RPC |
-| `USDC_CONTRACT_ADDRESS` | No | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` | Native USDC on Base |
+| `USDC_CONTRACT_ADDRESS` | No | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` | Native USDC contract on Base |
 | `GATEWAY_XRPL_PRIVATE_KEY` | **Yes** (for XRPL routing) | — | Hot wallet private key for signing XRPL payments. Set in Render secrets only. |
 | `GATEWAY_ETH_PRIVATE_KEY` | **Yes** (for Base routing) | — | Hot wallet private key for claiming EIP-3009 USDC on Base. Set in Render secrets only. |
 | `ADMIN_TOKEN` | **Yes** | — | Bearer token for `/v1/admin/*` routes. Generate: `openssl rand -hex 32` |
 
-At least one of `GATEWAY_XRPL_PRIVATE_KEY` or `GATEWAY_ETH_PRIVATE_KEY` must be set or the server will refuse to start.
+At least one of `GATEWAY_XRPL_PRIVATE_KEY` or `GATEWAY_ETH_PRIVATE_KEY` must be set or the server refuses to start.
 
 ---
 
@@ -85,18 +85,18 @@ At least one of `GATEWAY_XRPL_PRIVATE_KEY` or `GATEWAY_ETH_PRIVATE_KEY` must be 
 **Response:**
 ```json
 {
-  "status": "ok",
-  "xrpl_client": "connected",
-  "base_client": "connected",
+  "status":        "ok",
+  "xrpl_client":   "connected",
+  "base_client":   "connected",
   "xrpl_treasury": "rNduuviQ3CCvHqWUTjJDD82Ko2tjqFGs3q"
 }
 ```
 
 ### Bridge Execution
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| `POST` | `/v1/bridge/execute` | EIP-3009 sig or app-level signature | Route a cross-chain payment |
+| Method | Path | Auth | Rate Limit | Description |
+|---|---|---|---|---|
+| `POST` | `/v1/bridge/execute` | EIP-3009 sig or app-level signature | 20 req/min per IP (burst 5) | Route a cross-chain payment |
 
 **Request payload:**
 ```json
@@ -120,6 +120,8 @@ At least one of `GATEWAY_XRPL_PRIVATE_KEY` or `GATEWAY_ETH_PRIVATE_KEY` must be 
 }
 ```
 
+For XRPL-only routes (no EIP-3009), omit the `eip3009` field and provide `signer` + `message_hash` + `signature` instead.
+
 **Success response:**
 ```json
 {
@@ -132,7 +134,7 @@ At least one of `GATEWAY_XRPL_PRIVATE_KEY` or `GATEWAY_ETH_PRIVATE_KEY` must be 
 }
 ```
 
-**Rate limit:** 20 requests/minute per IP, burst of 5. Exceeding returns HTTP 429.
+Exceeding the rate limit returns HTTP 429.
 
 ### Admin (Bearer `ADMIN_TOKEN` required)
 
@@ -153,15 +155,19 @@ At least one of `GATEWAY_XRPL_PRIVATE_KEY` or `GATEWAY_ETH_PRIVATE_KEY` must be 
 
 ### Nonce Replay Protection
 
-Every EIP-3009 authorization carries a unique 32-byte `nonce`. ghost-layer maintains an in-memory set of consumed nonces. Any attempt to resubmit a captured authorization is rejected with HTTP 401 (`"eip3009 nonce already consumed — replay rejected"`). The nonce check is mutex-protected and happens before any chain interaction.
+Every EIP-3009 authorization carries a unique 32-byte `nonce`. ghost-layer maintains a mutex-protected in-memory set of consumed nonces checked before any chain interaction. Any attempt to resubmit a captured authorization is rejected with HTTP 401:
+
+```
+eip3009 nonce already consumed -- replay rejected
+```
 
 ### Application-Level Signature Verification
 
-For XRPL-routed payments where there is no on-chain EIP-3009 commitment, the caller must include a `signer` + `message_hash` + `signature` triplet. ghost-layer verifies the EIP-3009 style signature against the declared signer address before routing.
+For XRPL-routed payments where there is no on-chain EIP-3009 commitment, the caller must include a `signer` + `message_hash` + `signature` triplet. ghost-layer verifies the signature against the declared signer address before routing.
 
 ### Hot Wallet Hygiene
 
-Gateway private keys sign individual transactions only. They are never exposed via any API response. The `/v1/admin/sweep` endpoint exists specifically to vacate the hot wallets to cold treasury on demand — use it after high-volume periods or before maintenance windows.
+Gateway private keys sign individual transactions only and are never exposed in any API response. The `/v1/admin/sweep` endpoint vacates both hot wallets to cold treasury on demand — use it after high-volume periods or before maintenance windows.
 
 ### No Custody of Client Funds
 
@@ -185,12 +191,12 @@ Internal routing errors are logged server-side but never returned to the caller.
 3. Optionally update `TREASURY_ADDRESS` and `TREASURY_ETH_ADDRESS` to your cold-storage addresses.
 4. The health check at `/health` must return 200 before Render marks the deploy live.
 
-The service is configured for the `starter` plan in the `oregon` region. Upgrade the plan for higher concurrency before opening to production volume.
+The service is configured for the `starter` plan in the `oregon` region. Upgrade the plan before opening to production volume.
 
 ### Pre-production Checklist
 
 - [ ] Run `POST /v1/admin/dust-test` for both `"xrpl"` and `"evm"` chains to confirm live signing
-- [ ] Submit a `"is_dust_test": true` bridge request to validate the EIP-3009 parse path
+- [ ] Submit a `"is_dust_test": true` bridge request to validate the EIP-3009 parse path end-to-end
 - [ ] Confirm `/health` shows both `xrpl_client` and `base_client` as `connected`
 - [ ] Set cold treasury addresses; run `/v1/admin/sweep` and verify funds land correctly
 

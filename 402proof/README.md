@@ -2,7 +2,7 @@
 
 **Payment compliance gateway for x402 RLUSD micropayments on the XRP Ledger.**
 
-402proof sits between your API and the open internet. When an AI agent or client calls a protected endpoint, 402proof issues a payment invoice, verifies the XRPL RLUSD transaction on-chain, and hands back a signed access token — along with a tamper-evident compliance receipt that satisfies audit, risk-scoring, and sanctions-check requirements. You get revenue, your callers get access, and everyone gets a paper trail.
+402proof sits between your x402-gated API and the outside world. It issues payment invoices, verifies RLUSD/XRP transactions on-chain, mints signed access tokens, and generates tamper-evident compliance receipts — so every AI-agent micropayment has a complete, auditable trail.
 
 ---
 
@@ -10,32 +10,32 @@
 
 ```
   API Client / AI Agent
-         │
-         │  POST /v1/invoice  ──────────────────────────────────┐
-         │                                                       │
-         ▼                                                       ▼
-  ┌─────────────────┐                               ┌──────────────────────┐
-  │   402proof      │                               │   XRP Ledger         │
-  │   (this server) │                               │   (XRPLCLUSTER.COM)  │
-  │                 │◄──── on-chain verify ─────────│                      │
-  │  ┌───────────┐  │         tx_hash               │  RLUSD / XRP Payment │
-  │  │ Invoice   │  │                               │  (agent → gateway)   │
-  │  │ Store     │  │                               └──────────────────────┘
-  │  ├───────────┤  │
-  │  │ Receipt   │  │◄── POST /v1/verify ── agent submits tx_hash
-  │  │ Engine    │  │
-  │  ├───────────┤  │──► signed access_token + compliance receipt
-  │  │ Loyalty   │  │
-  │  │ Passport  │  │
-  │  ├───────────┤  │
-  │  │ Firewall  │  │  (policy, block, rate limits)
-  │  └───────────┘  │
-  └─────────────────┘
-         │
-         ▼
-  GET /v1/receipt/{id}/json   — downloadable JSON receipt
-  GET /v1/receipt/{id}/csv    — downloadable CSV receipt
-  GET /v1/admin/receipts      — bulk CSV export (admin)
+         |
+         |  POST /v1/invoice  (request invoice for endpoint)
+         v
+  +--------------------------------------------------------------+
+  |                        402proof                              |
+  |                                                              |
+  |  +------------+   +------------+   +--------------------+   |
+  |  |  Invoice   |   |  Verify    |   |  Receipt Engine    |   |
+  |  |  Engine    +---> Engine     +---> JSON + CSV store   |   |
+  |  +------------+   +-----+------+   +--------------------+   |
+  |                         |                                    |
+  |                   +-----v------+                             |
+  |                   | XRPL RPC   |  on-chain verify            |
+  |                   | (RLUSD/XRP)|  tx_hash lookup             |
+  |                   +------------+                             |
+  |                                                              |
+  |  +--------------------------------------------------+        |
+  |  |  Merchant Layer                                  |        |
+  |  |  Registration · Endpoints · Policies · Firewall  |        |
+  |  |  Loyalty · Passport · Admin · Email Notify       |        |
+  |  +--------------------------------------------------+        |
+  +--------------------------------------------------------------+
+         |
+         |  access_token + compliance receipt
+         v
+  Your Protected API / MCP Server
 ```
 
 ---
@@ -46,7 +46,7 @@
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/timwal78/squeezeos)
 
-After clicking deploy, set the three secrets in the Render dashboard (see Environment Variables below). The service starts on port 9090.
+After clicking deploy, set the three required secrets in the Render dashboard (see Environment Variables below). The service starts on port 9090.
 
 ### Docker Compose (local)
 
@@ -90,7 +90,7 @@ docker compose up --build
 | `SMTP_USER` | No | — | SMTP username / sender address |
 | `SMTP_PASS` | No | — | SMTP password |
 
-Secrets (`GATEWAY_XRPL_ADDRESS`, `TOKEN_SECRET`, `ADMIN_TOKEN`) must be set in the Render dashboard; never commit them to `render.yaml`.
+> Secrets (`GATEWAY_XRPL_ADDRESS`, `TOKEN_SECRET`, `ADMIN_TOKEN`) must be set in the Render dashboard. Never commit them to `render.yaml`.
 
 ---
 
@@ -122,28 +122,28 @@ Secrets (`GATEWAY_XRPL_ADDRESS`, `TOKEN_SECRET`, `ADMIN_TOKEN`) must be set in t
 
 ### Endpoint Management
 
-Requires `X-API-Key: <your_api_key>` (or `Authorization: Bearer <key>`).
+Requires `X-API-Key: <your_api_key>` header (or `Authorization: Bearer <key>`).
 
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/v1/endpoint/` | Register a paywalled endpoint (path, price, asset) |
-| `GET` | `/v1/endpoint/` | List your endpoints |
+| `GET` | `/v1/endpoint/` | List your registered endpoints |
 | `PUT` | `/v1/policy/{endpointID}` | Set access policy (rate limits, allow/block rules) |
-| `GET` | `/v1/policy/{endpointID}` | Get current policy |
+| `GET` | `/v1/policy/{endpointID}` | Get current policy for an endpoint |
 
 ### Core x402 Payment Flow
 
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/v1/invoice` | Step 1 — generate a payment invoice |
-| `POST` | `/v1/verify` | Step 2 — verify on-chain payment, receive access token + receipt |
-| `POST` | `/v1/token/verify` | Step 3 — validate an access token on each protected request |
+| Step | Method | Path | Description |
+|---|---|---|---|
+| 1 | `POST` | `/v1/invoice` | Generate a payment invoice |
+| 2 | `POST` | `/v1/verify` | Verify on-chain payment; receive access token + receipt |
+| 3 | `POST` | `/v1/token/verify` | Validate an access token on each protected request |
 
 **POST /v1/invoice — request:**
 ```json
 { "endpoint_id": "<uuid>" }
 ```
-**Response includes:** `invoice_id`, `pay_to` (gateway XRPL address), `amount`, `asset`, `network`, `memo_hex`, `expires_at`
+**Response:** `invoice_id`, `pay_to` (gateway XRPL address), `amount`, `asset`, `network`, `memo_hex`, `expires_at`
 
 **POST /v1/verify — request:**
 ```json
@@ -154,7 +154,12 @@ Requires `X-API-Key: <your_api_key>` (or `Authorization: Bearer <key>`).
   "agent_domain": "myagent.example.com"
 }
 ```
-**Response includes:** `access_token`, `receipt_id`, `risk_level`, `settled_at`, loyalty fields
+**Response:** `access_token`, `receipt_id`, `risk_level`, `settled_at`, `loyalty_tier`, `free_credits`, `credits_awarded`
+
+**POST /v1/token/verify — request:**
+```json
+{ "token": "<jwt>", "endpoint_id": "<uuid>" }
+```
 
 ### Receipts
 
@@ -175,16 +180,16 @@ Requires `X-API-Key: <your_api_key>` (or `Authorization: Bearer <key>`).
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/v1/agent/{wallet}` | Full agent record (spend history, tier, block status) |
+| `GET` | `/v1/agent/{wallet}` | Full agent record (spend history, tier, block status, risk score) |
 
-### Badge
+### Badge Embeds
 
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/v1/badge/{endpointID}` | Live HTML badge page for a verified endpoint |
 | `GET` | `/badge/{endpointID}` | Shortlink redirect to the badge page |
 
-### Admin (Bearer token required)
+### Admin (Bearer `ADMIN_TOKEN` required)
 
 | Method | Path | Description |
 |---|---|---|
@@ -197,7 +202,7 @@ Requires `X-API-Key: <your_api_key>` (or `Authorization: Bearer <key>`).
 
 ## Receipt Format
 
-Every verified payment produces a compliance receipt. Receipts are stored server-side and available as JSON or CSV.
+Every verified payment produces a compliance receipt stored server-side and available as JSON or CSV.
 
 ### Fields
 
@@ -214,8 +219,8 @@ Every verified payment produces a compliance receipt. Receipts are stored server
 | `asset` | string | `RLUSD` or `XRP` |
 | `tx_hash` | string | On-chain XRPL transaction hash |
 | `settled_at` | RFC3339 timestamp | Time the payment was verified |
-| `risk_level` | string | Passport risk score: `LOW`, `MEDIUM`, `HIGH` |
-| `sanctions_check` | string | `SKIPPED` (reserved for future OFAC integration) |
+| `risk_level` | string | Passport risk score: `LOW`, `MEDIUM`, or `HIGH` |
+| `sanctions_check` | string | `SKIPPED` (reserved for future OFAC/SDN integration) |
 
 ### CSV Header
 
@@ -245,46 +250,48 @@ receipt_id,invoice_id,agent_wallet,agent_domain,endpoint_id,merchant_id,path,amo
 
 ---
 
-## Integration Example — Pointing an MCP Server at 402proof
+## Integration Example — MCP Server or API Gateway
 
-The pattern is straightforward: your tool server calls `/v1/invoice` before serving a request, checks for payment via `/v1/verify`, then validates the token on every subsequent call using `/v1/token/verify`.
+The pattern is three steps: issue an invoice, verify the on-chain payment, then validate the access token on every subsequent request.
 
 ```python
-import httpproof, requests
+import requests
 
-PROOF_URL = "https://your-402proof.onrender.com"
-ENDPOINT_ID = "your-endpoint-uuid"
+PROOF_URL    = "https://your-402proof.onrender.com"
+ENDPOINT_ID  = "your-endpoint-uuid"
 
-def handle_tool_call(agent_wallet: str, tx_hash: str):
-    # 1. Client already holds an invoice. They submit the tx hash.
-    resp = requests.post(f"{PROOF_URL}/v1/verify", json={
-        "invoice_id":   invoice_id,   # issued earlier via /v1/invoice
-        "tx_hash":      tx_hash,
-        "agent_wallet": agent_wallet,
-        "agent_domain": "myagent.example.com",
-    })
-    data = resp.json()
-    access_token = data["access_token"]
-    receipt_id   = data["receipt_id"]
-    # 2. Token is returned to the agent. They present it on future calls.
-    return {"access_token": access_token, "receipt_id": receipt_id}
+# Step 1: issue an invoice before the agent makes its payment
+invoice = requests.post(f"{PROOF_URL}/v1/invoice", json={
+    "endpoint_id": ENDPOINT_ID,
+}).json()
+# invoice["memo_hex"] goes into MemoData on the XRPL payment transaction
 
-def verify_incoming_token(token: str):
-    # 3. Your middleware calls this before serving protected content.
-    resp = requests.post(f"{PROOF_URL}/v1/token/verify", json={
-        "token":       token,
-        "endpoint_id": ENDPOINT_ID,
-    })
-    return resp.status_code == 200
+# Step 2: after the agent pays on XRPL, verify and collect the access token
+result = requests.post(f"{PROOF_URL}/v1/verify", json={
+    "invoice_id":   invoice["invoice_id"],
+    "tx_hash":      "XRPL_TX_HASH_HERE",
+    "agent_wallet": "rMyAgentWallet",
+    "agent_domain": "myagent.example.com",
+}).json()
+
+access_token = result["access_token"]
+receipt_id   = result["receipt_id"]
+
+# Step 3: in your API middleware, validate the token before serving content
+check = requests.post(f"{PROOF_URL}/v1/token/verify", json={
+    "token":       access_token,
+    "endpoint_id": ENDPOINT_ID,
+}).json()
+assert check["status"] == "VALID"
 ```
 
-To embed the "AI Agents Can Pay Here" badge in your docs or README:
+To embed the live "AI Agents Can Pay Here" badge in your docs or README:
 
 ```html
-<!-- Dynamic (live stats, auto-refreshes) -->
+<!-- Dynamic badge (live stats, auto-refreshes) -->
 <script src="https://your-402proof.onrender.com/badge.js?endpoint=YOUR_ENDPOINT_ID" async></script>
 
-<!-- Static fallback -->
+<!-- Static fallback for environments that block scripts -->
 <a href="https://your-402proof.onrender.com/badge/YOUR_ENDPOINT_ID">
   Verified by 402proof · XRP Ledger
 </a>
@@ -294,7 +301,7 @@ To embed the "AI Agents Can Pay Here" badge in your docs or README:
 
 ## Zero-Custody Design
 
-402proof never holds private keys for your treasury. The `GATEWAY_XRPL_ADDRESS` it receives is a **public address only** — used to verify that incoming XRPL payments were sent to the right place. Access tokens are issued after on-chain verification by querying the public XRPL ledger. Your funds flow directly on-chain; 402proof only reads the ledger, it never signs transactions on your behalf.
+402proof never holds private keys for your treasury. `GATEWAY_XRPL_ADDRESS` is a **public address only** — provided so the server can verify that incoming XRPL payments landed at the right destination. Access tokens are issued after on-chain verification by querying the public XRPL ledger. Your funds flow directly on-chain; 402proof only reads the ledger, it never signs transactions or controls your wallet.
 
 ---
 
