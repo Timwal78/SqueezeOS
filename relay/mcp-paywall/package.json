@@ -1,0 +1,36 @@
+{
+  "name": "@relay/mcp-paywall",
+  "version": "0.1.0",
+  "description": "Zero-friction x402 RLUSD payment layer for Model Context Protocol tools",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/index.js",
+      "types":   "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test":  "jest --no-coverage",
+    "dev":   "tsc --watch"
+  },
+  "peerDependencies": {
+    "@modelcontextprotocol/sdk": ">=1.0.0",
+    "zod": ">=3.0.0"
+  },
+  "dependencies": {
+    "xrpl": "^4.0.0"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@types/jest": "^29.5.0",
+    "@types/node": "^22.0.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.0",
+    "typescript": "^5.4.0",
+    "zod": "^3.22.0"
+  },
+  "engines": { "node": ">=22.0.0" },
+  "license": "MIT"
+}
