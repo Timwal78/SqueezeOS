@@ -1,4 +1,4 @@
-# Discord Drop Templates — @relay/mcp-paywall
+# Discord Drop Templates — @relayos/mcp-paywall
 
 Ready-to-paste messages for MCP and Web3 developer communities.
 Keep the code blocks intact — Discord renders them correctly.
@@ -9,7 +9,7 @@ Keep the code blocks intact — Discord renders them correctly.
 
 > **Want to earn RLUSD every time an AI agent calls your MCP tool?**
 >
-> I just shipped `@relay/mcp-paywall` — it adds pay-per-call micropayments to any MCP tool server in about 3 lines:
+> I just shipped `@relayos/mcp-paywall` — it adds pay-per-call micropayments to any MCP tool server in about 3 lines:
 >
 > ```typescript
 > server.tool(
@@ -28,7 +28,7 @@ Keep the code blocks intact — Discord renders them correctly.
 > - Zero custody: your seed never leaves memory, hard spend cap enforced before signing
 >
 > ```bash
-> npm i @relay/mcp-paywall
+> npm i @relayos/mcp-paywall
 > ```
 >
 > Follows the x402 protocol adapted for XRPL + RLUSD. Drop me questions here or open an issue on GitHub.
@@ -40,7 +40,7 @@ Keep the code blocks intact — Discord renders them correctly.
 
 > **Your agent can now pay MCP tools autonomously — no human approval, hard spend cap.**
 >
-> `agentWallet()` in `@relay/mcp-paywall` intercepts 402 responses from paywall-gated tools, signs an XRPL RLUSD payment, and retries — all in one call:
+> `agentWallet()` in `@relayos/mcp-paywall` intercepts 402 responses from paywall-gated tools, signs an XRPL RLUSD payment, and retries — all in one call:
 >
 > ```typescript
 > const wallet = agentWallet({
@@ -61,7 +61,7 @@ Keep the code blocks intact — Discord renders them correctly.
 > The full loop: call → 402 challenge → verify price ≤ cap → sign XRPL tx → retry with proof → result.
 >
 > ```bash
-> npm i @relay/mcp-paywall
+> npm i @relayos/mcp-paywall
 > ```
 >
 > Repo: https://github.com/timwal78/squeezeos/tree/claude/relay-agent-commerce-BYvie/relay/mcp-paywall
@@ -72,7 +72,7 @@ Keep the code blocks intact — Discord renders them correctly.
 
 > **GENIUS Act compliance + XRPL + MCP tool monetisation — first package out the door.**
 >
-> `@relay/mcp-paywall` uses RLUSD (Ripple's regulated USD stablecoin, GENIUS Act aligned) for AI agent micropayments over the x402 protocol on XRPL.
+> `@relayos/mcp-paywall` uses RLUSD (Ripple's regulated USD stablecoin, GENIUS Act aligned) for AI agent micropayments over the x402 protocol on XRPL.
 >
 > Why this matters for XAO DAO / XRPL builders:
 >
@@ -84,7 +84,7 @@ Keep the code blocks intact — Discord renders them correctly.
 > If you're building on XRPL and want to monetise AI agent traffic, this is the missing piece. Would love to discuss XAO DAO grant eligibility — the use case fits squarely in "XRPL ecosystem tooling."
 >
 > ```bash
-> npm i @relay/mcp-paywall
+> npm i @relayos/mcp-paywall
 > ```
 >
 > Repo + full docs: https://github.com/timwal78/squeezeos/tree/claude/relay-agent-commerce-BYvie/relay/mcp-paywall
@@ -111,7 +111,7 @@ Keep the code blocks intact — Discord renders them correctly.
 > One npm package. No payment infra. RLUSD.
 >
 > ```bash
-> npm i @relay/mcp-paywall
+> npm i @relayos/mcp-paywall
 > ```
 >
 > → https://github.com/timwal78/squeezeos/tree/claude/relay-agent-commerce-BYvie/relay/mcp-paywall

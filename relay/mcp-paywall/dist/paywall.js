@@ -3,7 +3,7 @@
  * paywall() — server-side MCP tool wrapper.
  *
  * Usage:
- *   import { paywall, paywallSchema } from "@relay/mcp-paywall";
+ *   import { paywall, paywallSchema } from "@relayos/mcp-paywall";
  *   import { z } from "zod";
  *
  *   server.tool(

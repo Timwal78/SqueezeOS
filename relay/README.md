@@ -105,7 +105,7 @@ All endpoints are under `/api/v1/`.
 
 ```typescript
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { paywall, paywallSchema } from "@relay/mcp-paywall";
+import { paywall, paywallSchema } from "@relayos/mcp-paywall";
 import { z } from "zod";
 
 const server = new McpServer({ name: "my-data-server", version: "1.0.0" });
@@ -132,7 +132,7 @@ When `_relay_payment` is absent, `paywall()` returns a structured 402 challenge.
 ### Agent side — auto-pay on 402
 
 ```typescript
-import { agentWallet } from "@relay/mcp-paywall";
+import { agentWallet } from "@relayos/mcp-paywall";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 const wallet = agentWallet({

@@ -1,4 +1,4 @@
-# @relay/mcp-paywall — Go-to-Market Content
+# @relayos/mcp-paywall — Go-to-Market Content
 
 Reference copy for community outreach. Adapt tone per platform. Do not post the same message verbatim across channels.
 
@@ -6,7 +6,7 @@ Reference copy for community outreach. Adapt tone per platform. Do not post the 
 
 ## 1. awesome-mcp-servers PR Body
 
-**PR title:** `feat: add @relay/mcp-paywall — x402 RLUSD micropayments for MCP tools`
+**PR title:** `feat: add @relayos/mcp-paywall — x402 RLUSD micropayments for MCP tools`
 
 **Target section:** Add under a new `## Monetization / Payments` heading, or append to an existing payments/finance cluster if one exists.
 
@@ -15,13 +15,13 @@ Reference copy for community outreach. Adapt tone per platform. Do not post the 
 ### PR body (markdown):
 
 ```markdown
-## Add @relay/mcp-paywall
+## Add @relayos/mcp-paywall
 
 Adds a new entry under a **Monetization** section for the first x402-native payment middleware designed specifically for MCP tool servers.
 
 ### Entry
 
-- **[@relay/mcp-paywall](https://www.npmjs.com/package/@relay/mcp-paywall)** — Add pay-per-call RLUSD micropayments to any MCP tool in one line of code. Implements the x402 payment protocol over XRPL. Zero-custody: the agent wallet seed never leaves memory, spend is hard-capped per call, and anti-replay is enforced server-side. No shared payment infra required.
+- **[@relayos/mcp-paywall](https://www.npmjs.com/package/@relayos/mcp-paywall)** — Add pay-per-call RLUSD micropayments to any MCP tool in one line of code. Implements the x402 payment protocol over XRPL. Zero-custody: the agent wallet seed never leaves memory, spend is hard-capped per call, and anti-replay is enforced server-side. No shared payment infra required.
 
 ### Why it belongs here
 
@@ -31,11 +31,11 @@ MCP is becoming the standard for agentic tool invocation. As agents begin autono
 2. Works natively with AI agent wallets (auto-pay on 402)
 3. Is auditable on-chain (XRPL + RLUSD)
 
-@relay/mcp-paywall is the first npm package to fill this gap specifically for the MCP ecosystem.
+@relayos/mcp-paywall is the first npm package to fill this gap specifically for the MCP ecosystem.
 
 ### Links
 
-- npm: https://www.npmjs.com/package/@relay/mcp-paywall
+- npm: https://www.npmjs.com/package/@relayos/mcp-paywall
 - Source: https://github.com/timwal78/squeezeos/tree/main/relay/mcp-paywall
 - Protocol: x402 (https://x402.org) adapted for XRPL/RLUSD
 ```
@@ -52,7 +52,7 @@ Hey — saw you're running x402 on Base. Quick question: are you getting complia
 
 With USDC on Base you're moving money, but you're not generating anything the GENIUS Act or a bank audit would recognize as a payment record. That's going to matter when your agent is making 10k calls/day on behalf of an enterprise customer.
 
-We just shipped `@relay/mcp-paywall` — same x402 handshake you know, but settled in RLUSD on XRPL. Every payment hits the ledger with a full audit trail, GENIUS Act-aligned stablecoin, and Ripple's compliance infrastructure behind it.
+We just shipped `@relayos/mcp-paywall` — same x402 handshake you know, but settled in RLUSD on XRPL. Every payment hits the ledger with a full audit trail, GENIUS Act-aligned stablecoin, and Ripple's compliance infrastructure behind it.
 
 10-minute integration if you're already using MCP. Happy to walk you through it — want to jump on a quick call or should I just drop the code example here?
 
@@ -68,10 +68,10 @@ If you're giving away your MCP server for free, you're doing it wrong.
 
 Every time an AI agent calls your tool — data lookup, API bridge, compute task — you could be earning RLUSD. Not "set up a Stripe account" earning. On-chain, per-call, sub-cent micropayments that settle in 3 seconds on XRPL.
 
-We just shipped `@relay/mcp-paywall`:
+We just shipped `@relayos/mcp-paywall`:
 
 ```bash
-npm i @relay/mcp-paywall
+npm i @relayos/mcp-paywall
 ```
 
 Wrap your existing MCP tool handler in `paywall()`, set a price in RLUSD, and you're done. Agents auto-detect the 402, sign the payment from their XRPL wallet, and retry — no human in the loop.
@@ -96,7 +96,7 @@ You built an MCP tool server. Agents are calling it. You're earning: $0.00.
 
 There's now a fix.
 
-`@relay/mcp-paywall` — pay-per-call RLUSD micropayments for any MCP tool. x402 protocol. XRPL settlement. One wrapper function.
+`@relayos/mcp-paywall` — pay-per-call RLUSD micropayments for any MCP tool. x402 protocol. XRPL settlement. One wrapper function.
 
 Thread 🧵
 
@@ -150,10 +150,10 @@ When your agent is making 50k tool calls/month for an enterprise customer, compl
 
 **Post 5 — CTA**
 
-`@relay/mcp-paywall` is MIT, live on npm, and works with any MCP server today.
+`@relayos/mcp-paywall` is MIT, live on npm, and works with any MCP server today.
 
 ```bash
-npm i @relay/mcp-paywall
+npm i @relayos/mcp-paywall
 ```
 
 Docs + source: https://github.com/timwal78/squeezeos/tree/main/relay/mcp-paywall

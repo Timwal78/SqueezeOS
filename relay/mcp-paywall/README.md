@@ -1,17 +1,17 @@
-# @relay/mcp-paywall
+# @relayos/mcp-paywall
 
 > Add pay-per-call RLUSD micropayments to any MCP tool server in one line of code.
 
-[![npm](https://img.shields.io/npm/v/@relay/mcp-paywall)](https://www.npmjs.com/package/@relay/mcp-paywall)
-[![license](https://img.shields.io/npm/l/@relay/mcp-paywall)](./LICENSE)
-[![node](https://img.shields.io/node/v/@relay/mcp-paywall)](https://nodejs.org)
+[![npm](https://img.shields.io/npm/v/@relayos/mcp-paywall)](https://www.npmjs.com/package/@relayos/mcp-paywall)
+[![license](https://img.shields.io/npm/l/@relayos/mcp-paywall)](./LICENSE)
+[![node](https://img.shields.io/node/v/@relayos/mcp-paywall)](https://nodejs.org)
 
 ---
 
 ## Install
 
 ```bash
-npm i @relay/mcp-paywall
+npm i @relayos/mcp-paywall
 ```
 
 Requires Node >= 22. Peer deps: `@modelcontextprotocol/sdk >= 1.0.0`, `zod >= 3.0.0`.
@@ -24,7 +24,7 @@ Wrap your existing MCP tool handler with `paywall()`. That's it. No payment infr
 
 ```typescript
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { paywall, paywallSchema } from "@relay/mcp-paywall";
+import { paywall, paywallSchema } from "@relayos/mcp-paywall";
 import { z } from "zod";
 
 const server = new McpServer({ name: "my-data-server", version: "1.0.0" });
@@ -57,7 +57,7 @@ server.tool(
 On the client side, `agentWallet()` intercepts 402 responses, signs an XRPL payment, and retries — transparently.
 
 ```typescript
-import { agentWallet } from "@relay/mcp-paywall";
+import { agentWallet } from "@relayos/mcp-paywall";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 const mcp = new Client({ name: "my-agent", version: "1.0.0" });

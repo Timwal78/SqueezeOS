@@ -1,4 +1,4 @@
-# Publishing @relay/mcp-paywall to npm from Your Phone
+# Publishing @relayos/mcp-paywall to npm from Your Phone
 
 No terminal required. Three steps, all from GitHub.com.
 
@@ -19,7 +19,7 @@ Go to [github.com/timwal78/squeezeos](https://github.com/timwal78/squeezeos) →
 
 - **Tag:** `mcp-paywall/v0.1.0`
 - **Target:** `claude/relay-agent-commerce-BYvie` (the current branch)
-- **Title:** `@relay/mcp-paywall v0.1.0 — Zero-custody XRPL x402 payments for MCP`
+- **Title:** `@relayos/mcp-paywall v0.1.0 — Zero-custody XRPL x402 payments for MCP`
 - **Description:** copy the highlights from the npm README (zero-custody guarantees, one-wrapper-function setup, RLUSD micropayments, auto-pay agent side)
 - Click **Publish release**
 
@@ -31,7 +31,7 @@ You can watch it live under the **Actions** tab — look for the `publish-mcp-pa
 
 ## Step 3: Submit to awesome-mcp-servers (2 taps)
 
-After the package shows as live on [npmjs.com/package/@relay/mcp-paywall](https://www.npmjs.com/package/@relay/mcp-paywall), submit to the community directories below.
+After the package shows as live on [npmjs.com/package/@relayos/mcp-paywall](https://www.npmjs.com/package/@relayos/mcp-paywall), submit to the community directories below.
 
 ### Primary directory — punkpeye/awesome-mcp-servers
 
@@ -42,11 +42,11 @@ After the package shows as live on [npmjs.com/package/@relay/mcp-paywall](https:
 4. Add this line:
 
 ```
-- [@relay/mcp-paywall](https://www.npmjs.com/package/@relay/mcp-paywall) - Zero-custody x402 RLUSD micropayments for MCP tool servers. Agents auto-pay on 402; servers verify on XRPL. One wrapper function, no payment infra.
+- [@relayos/mcp-paywall](https://www.npmjs.com/package/@relayos/mcp-paywall) - Zero-custody x402 RLUSD micropayments for MCP tool servers. Agents auto-pay on 402; servers verify on XRPL. One wrapper function, no payment infra.
 ```
 
 5. Tap **Propose changes** → **Create pull request**
-6. Use this PR title: `feat: add @relay/mcp-paywall — x402 RLUSD micropayments for MCP`
+6. Use this PR title: `feat: add @relayos/mcp-paywall — x402 RLUSD micropayments for MCP`
 
 ---
 

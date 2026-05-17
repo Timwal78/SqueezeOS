@@ -243,7 +243,7 @@ async function main() {
   console.log(`${G}${B}✅  ${succeeded}/${DEMO_CALLS.length} tool calls succeeded${R}`);
   console.log(`${M}💸  Total spent: ${B}${totalSpent.toFixed(2)} RLUSD${R}`);
   console.log(`${BL}🔒  Zero custody: server never held funds${R}`);
-  console.log(`${C}⚡  Integration: ${B}@relay/mcp-paywall${R}${C}  npm i @relay/mcp-paywall${R}`);
+  console.log(`${C}⚡  Integration: ${B}@relayos/mcp-paywall${R}${C}  npm i @relayos/mcp-paywall${R}`);
   console.log(DIM + line() + R + "\n");
 }
 

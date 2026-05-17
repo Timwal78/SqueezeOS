@@ -1,12 +1,12 @@
 "use strict";
 /**
- * @relay/mcp-paywall — x402 RLUSD payment layer for Model Context Protocol.
+ * @relayos/mcp-paywall — x402 RLUSD payment layer for Model Context Protocol.
  *
  * Server (earning wedge):
- *   import { paywall, paywallSchema } from "@relay/mcp-paywall";
+ *   import { paywall, paywallSchema } from "@relayos/mcp-paywall";
  *
  * Client (spending wedge):
- *   import { agentWallet } from "@relay/mcp-paywall";
+ *   import { agentWallet } from "@relayos/mcp-paywall";
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createInMemoryReplayStore = exports.verifyPayment = exports.agentWallet = exports.buildInvoice = exports.extract402Invoice = exports.is402Response = exports.paywallSchema = exports.paywall = void 0;

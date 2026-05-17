@@ -1,5 +1,5 @@
 {
-  "name": "@relay/mcp-paywall",
+  "name": "@relayos/mcp-paywall",
   "version": "0.1.0",
   "description": "Zero-friction x402 RLUSD payment layer for Model Context Protocol tools",
   "main": "./dist/index.js",

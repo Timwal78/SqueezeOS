@@ -1,11 +1,11 @@
 /**
- * @relay/mcp-paywall — x402 RLUSD payment layer for Model Context Protocol.
+ * @relayos/mcp-paywall — x402 RLUSD payment layer for Model Context Protocol.
  *
  * Server (earning wedge):
- *   import { paywall, paywallSchema } from "@relay/mcp-paywall";
+ *   import { paywall, paywallSchema } from "@relayos/mcp-paywall";
  *
  * Client (spending wedge):
- *   import { agentWallet } from "@relay/mcp-paywall";
+ *   import { agentWallet } from "@relayos/mcp-paywall";
  */
 
 export { paywall, paywallSchema, is402Response, extract402Invoice, buildInvoice } from "./paywall";
