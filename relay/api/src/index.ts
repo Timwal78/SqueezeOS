@@ -8,6 +8,8 @@ import jobsRouter from "./routes/jobs";
 import disputesRouter from "./routes/disputes";
 import reputationRouter from "./routes/reputation";
 import evaluatorsRouter from "./routes/evaluators";
+import evidenceRouter from "./routes/evidence";
+import settlementRouter from "./routes/settlement";
 import { logger } from "./services/logger";
 
 const app = express();
@@ -43,6 +45,8 @@ app.use("/api/v1/jobs", jobsRouter);
 app.use("/api/v1/disputes", disputesRouter);
 app.use("/api/v1/reputation", reputationRouter);
 app.use("/api/v1/evaluators", evaluatorsRouter);
+app.use("/api/v1/evidence", evidenceRouter);
+app.use("/api/v1/settlement", settlementRouter);
 
 // 404 handler
 app.use((_, res) => {

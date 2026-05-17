@@ -5,6 +5,8 @@ import { requireFields } from "../middleware/validate";
 import { strictRateLimit } from "../middleware/rateLimit";
 import { selectEvaluatorsForDispute } from "../services/evaluatorSelector";
 import { logger } from "../services/logger";
+import { validateVote, buildVoteMessage } from "../../../sdk/src/voting";
+import { verifySignature } from "xrpl";
 
 const router = Router();
 
@@ -106,13 +108,13 @@ router.get("/:id", async (req: Request, res: Response) => {
   res.json(formatDispute(dispute));
 });
 
-// POST /api/v1/disputes/:id/vote — Submit evaluator vote
+// POST /api/v1/disputes/:id/vote — Submit evaluator vote with cryptographic verification
 router.post(
   "/:id/vote",
   strictRateLimit,
-  requireFields("evaluator", "vote", "signature"),
+  requireFields("evaluator", "vote", "signature", "publicKey", "timestamp"),
   async (req: Request, res: Response) => {
-    const { evaluator, vote, signature } = req.body;
+    const { evaluator, vote, signature, publicKey, timestamp, evidenceCids = [] } = req.body;
     const validVotes = ["hirer", "worker", "partial"];
 
     if (!validVotes.includes(vote)) {
@@ -147,7 +149,21 @@ router.post(
       return;
     }
 
-    const newVote = { evaluator, vote, signature, timestamp: Date.now() };
+    // Cryptographically verify the vote signature
+    try {
+      validateVote(
+        { payload: { disputeId: req.params.id, jobId: dispute.job_id as string, vote, evidenceCids, evaluator, timestamp }, signature, publicKey },
+        req.params.id,
+        dispute.job_id as string
+      );
+    } catch (err) {
+      const code = (err as { code?: string }).code ?? "INVALID_SIGNATURE";
+      const message = err instanceof Error ? err.message : "Signature verification failed";
+      res.status(400).json({ error: message, code });
+      return;
+    }
+
+    const newVote = { evaluator, vote, signature, timestamp };
     const updatedVotes = [...votes, newVote];
 
     // Check if threshold reached (3-of-5 default)

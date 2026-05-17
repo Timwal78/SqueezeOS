@@ -10,15 +10,32 @@ const router = Router();
 router.post(
   "/",
   strictRateLimit,
-  requireFields("address", "stakeEscrowTx", "stakeAmount", "specializations"),
+  requireFields("address", "stakeEscrowTx", "stakeAmount", "specializations", "publicKey"),
   async (req: Request, res: Response) => {
     const {
       address,
       stakeEscrowTx,
       stakeAmount,
       specializations,
+      publicKey,
       network = "xrpl_testnet",
     } = req.body;
+
+    // Verify publicKey derives to address (prevent impersonation)
+    try {
+      const { deriveAddress } = require("xrpl");
+      const derived = deriveAddress(publicKey);
+      if (derived !== address) {
+        res.status(400).json({
+          error: "publicKey does not correspond to address",
+          code: "KEY_MISMATCH",
+        });
+        return;
+      }
+    } catch {
+      res.status(400).json({ error: "Invalid publicKey", code: "INVALID_KEY" });
+      return;
+    }
 
     if (parseFloat(stakeAmount) < 500) {
       res.status(400).json({
@@ -46,10 +63,10 @@ router.post(
     }
 
     const [evaluator] = await query<Record<string, unknown>>(
-      `INSERT INTO evaluators (address, stake_amount, stake_escrow_tx, specializations, network)
-       VALUES ($1,$2,$3,$4::text[],$5)
+      `INSERT INTO evaluators (address, stake_amount, stake_escrow_tx, specializations, network, public_key)
+       VALUES ($1,$2,$3,$4::text[],$5,$6)
        RETURNING *`,
-      [address, stakeAmount, stakeEscrowTx, specializations, network]
+      [address, stakeAmount, stakeEscrowTx, specializations, network, publicKey]
     );
 
     logger.info(`Evaluator registered: ${address} stake=${stakeAmount} specs=${specializations.join(",")}`);

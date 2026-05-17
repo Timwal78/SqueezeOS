@@ -10,7 +10,8 @@
     "test": "npm --prefix sdk run test",
     "dev:api": "npm --prefix api run dev",
     "migrate": "npm --prefix api run migrate",
-    "example:basic": "npx ts-node examples/basic-job-flow.ts"
+    "example:basic": "npx ts-node examples/basic-job-flow.ts",
+    "example:dispute": "npx ts-node examples/dispute-flow.ts"
   },
   "license": "MIT"
 }

@@ -114,6 +114,18 @@ const MIGRATIONS = [
   CREATE INDEX IF NOT EXISTS idx_rep_events_created ON reputation_events(created_at DESC);
   `,
 
+  // Migration 006: Settlement signatures column
+  `
+  ALTER TABLE disputes
+    ADD COLUMN IF NOT EXISTS settlement_signatures JSONB DEFAULT '[]';
+  `,
+
+  // Migration 007: Evaluator public keys (for vote verification)
+  `
+  ALTER TABLE evaluators
+    ADD COLUMN IF NOT EXISTS public_key VARCHAR(66);
+  `,
+
   // Migration 005: Attestations (peer vouching)
   `
   CREATE TABLE IF NOT EXISTS attestations (
