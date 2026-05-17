@@ -143,7 +143,7 @@ router.post(
     }
 
     // Check for duplicate vote
-    const votes = dispute.votes as Array<{ evaluator: string }>;
+    const votes = dispute.votes as Array<{ evaluator: string; vote?: string }>;
     if (votes.some((v) => v.evaluator === evaluator)) {
       res.status(409).json({ error: "Already voted", code: "DUPLICATE_VOTE" });
       return;
@@ -164,12 +164,12 @@ router.post(
     }
 
     const newVote = { evaluator, vote, signature, timestamp };
-    const updatedVotes = [...votes, newVote];
+    const updatedVotes = [...votes, newVote] as Array<{ evaluator: string; vote: string }>;
 
     // Check if threshold reached (3-of-5 default)
     const threshold = 3;
     const voteCounts = { hirer: 0, worker: 0, partial: 0 } as Record<string, number>;
-    for (const v of updatedVotes) voteCounts[v.vote as string]++;
+    for (const v of updatedVotes) voteCounts[v.vote]++;
     const winner = Object.entries(voteCounts).find(([, count]) => count >= threshold);
 
     let newStatus = dispute.status as string;

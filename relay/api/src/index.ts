@@ -13,6 +13,7 @@ import settlementRouter from "./routes/settlement";
 import analyticsRouter from "./routes/analytics";
 import loyaltyRouter from "./routes/loyalty";
 import paymentsRouter from "./routes/payments";
+import { x402 } from "./middleware/x402";
 import { logger } from "./services/logger";
 
 const app = express();
@@ -53,6 +54,21 @@ app.use("/api/v1/settlement", settlementRouter);
 app.use("/api/v1/analytics", analyticsRouter);
 app.use("/api/v1/loyalty", loyaltyRouter);
 app.use("/api/v1/payments", paymentsRouter);
+
+// Premium endpoints gated by x402 micropayment (only when RELAY_FEE_ADDRESS configured)
+if (process.env.RELAY_FEE_ADDRESS) {
+  app.use(
+    "/api/premium/analytics",
+    x402({
+      network: (process.env.XRPL_NETWORK ?? "xrpl_testnet") as "xrpl_mainnet" | "xrpl_testnet",
+      recipientAddress: process.env.RELAY_FEE_ADDRESS,
+      priceRlusd: parseFloat(process.env.PREMIUM_PRICE_RLUSD ?? "0.05"),
+      endpointId: "premium-analytics",
+    }),
+    analyticsRouter
+  );
+  logger.info("Premium analytics endpoint enabled via x402 at /api/premium/analytics");
+}
 
 // 404 handler
 app.use((_, res) => {

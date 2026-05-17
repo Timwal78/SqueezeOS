@@ -3,6 +3,7 @@ __pycache__/
 *.log
 *.env
 .env.*
+!.env.example
 schwab_tokens.json
 schwab_debug.json
 performance_log.json
@@ -15,6 +16,7 @@ node_modules/
 # explicit override — never commit live secrets
 .env
 .env.*
+!.env.example
 schwab_tokens.json
 schwab_debug.json
 performance_log.json
