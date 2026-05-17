@@ -17,6 +17,7 @@ import { query, queryOne } from "../db/pool";
 import { logger } from "./logger";
 import { getLedgerVrfSeed, buildSettlementTx, calculateSettlementAmounts } from "../../../sdk/src/settlement";
 import { resolveVotes } from "../../../sdk/src/evaluators";
+import { updateStreakAfterVote } from "../../../sdk/src/vrf";
 import { Network, DisputeVote, DisputeOutcome } from "../../../sdk/src/types";
 import { DEFAULT_DISPUTE_THRESHOLD } from "../../../sdk/src/constants";
 
@@ -182,15 +183,43 @@ export async function updateEvaluatorStats(
 
   for (const vote of votes) {
     const isCorrect = vote.vote === winningVote;
+
+    // Fetch current streak state before updating
+    const evaluator = await queryOne<{
+      consecutive_accurate_votes: number;
+      slash_count: number;
+      stake_amount: string;
+    }>(
+      "SELECT consecutive_accurate_votes, slash_count, stake_amount FROM evaluators WHERE address = $1",
+      [vote.evaluator]
+    );
+
+    const currentStreak = evaluator?.consecutive_accurate_votes ?? 0;
+    const currentSlashes = evaluator?.slash_count ?? 0;
+
+    const { consecutiveAccurateVotes: newStreak } = updateStreakAfterVote(
+      {
+        address: vote.evaluator,
+        stakeAmount: parseFloat(evaluator?.stake_amount ?? "0"),
+        consecutiveAccurateVotes: currentStreak,
+        totalSlashes: currentSlashes,
+        streakMultiplier: 1,
+        effectiveWeight: 0,
+      },
+      isCorrect
+    );
+
+    const slashDelta = isCorrect ? 0 : 1;
     await query(
       `UPDATE evaluators SET
          total_votes = total_votes + 1,
          correct_votes = correct_votes + $1,
          accuracy = (correct_votes + $1)::decimal / (total_votes + 1),
          slash_count = slash_count + $2,
+         consecutive_accurate_votes = $3,
          last_vote_at = NOW()
-       WHERE address = $3`,
-      [isCorrect ? 1 : 0, isCorrect ? 0 : 1, vote.evaluator]
+       WHERE address = $4`,
+      [isCorrect ? 1 : 0, slashDelta, newStreak, vote.evaluator]
     );
 
     // Record reward/slash reputation event
@@ -198,7 +227,12 @@ export async function updateEvaluatorStats(
     await query(
       `INSERT INTO reputation_events (address, event_type, dispute_id, metadata)
        VALUES ($1, $2, $3, $4::jsonb)`,
-      [vote.evaluator, eventType, disputeId, JSON.stringify({ vote: vote.vote, winning: winningVote })]
+      [vote.evaluator, eventType, disputeId, JSON.stringify({
+        vote: vote.vote,
+        winning: winningVote,
+        streakBefore: currentStreak,
+        streakAfter: newStreak,
+      })]
     ).catch(() => null);
   }
 }

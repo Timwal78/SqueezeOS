@@ -169,6 +169,16 @@ const MIGRATIONS = [
   CREATE INDEX IF NOT EXISTS idx_attestations_attestee ON attestations(attestee);
   CREATE INDEX IF NOT EXISTS idx_attestations_attester ON attestations(attester);
   `,
+
+  // Migration 009: Streak counter for VRF weight calculation
+  // Separate from correct_votes (total count) — this is the running consecutive streak.
+  // Resets to 0 on any incorrect vote or slash; used by computeStreakMultiplier().
+  `
+  ALTER TABLE evaluators
+    ADD COLUMN IF NOT EXISTS consecutive_accurate_votes INTEGER NOT NULL DEFAULT 0;
+
+  CREATE INDEX IF NOT EXISTS idx_evaluators_streak ON evaluators(consecutive_accurate_votes DESC);
+  `,
 ];
 
 async function migrate(): Promise<void> {

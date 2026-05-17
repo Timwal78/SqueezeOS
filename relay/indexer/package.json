@@ -1,0 +1,25 @@
+{
+  "name": "@relay/indexer",
+  "version": "0.1.0",
+  "description": "XRPL ledger listener — indexes Relay jobs, payments, and escrows into the cache DB",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "pg": "^8.11.0",
+    "xrpl": "^4.0.0",
+    "dotenv": "^16.0.0",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/pg": "^8.11.0",
+    "ts-node": "^10.9.0",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.0.0"
+  }
+}

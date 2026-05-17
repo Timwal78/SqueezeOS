@@ -12,6 +12,7 @@ import evidenceRouter from "./routes/evidence";
 import settlementRouter from "./routes/settlement";
 import analyticsRouter from "./routes/analytics";
 import loyaltyRouter from "./routes/loyalty";
+import paymentsRouter from "./routes/payments";
 import { logger } from "./services/logger";
 
 const app = express();
@@ -51,6 +52,7 @@ app.use("/api/v1/evidence", evidenceRouter);
 app.use("/api/v1/settlement", settlementRouter);
 app.use("/api/v1/analytics", analyticsRouter);
 app.use("/api/v1/loyalty", loyaltyRouter);
+app.use("/api/v1/payments", paymentsRouter);
 
 // 404 handler
 app.use((_, res) => {
