@@ -28,3 +28,4 @@ node_modules/
 __pycache__/
 402proof-secrets.html
 402proof-register.html
+402proof-setup.html
