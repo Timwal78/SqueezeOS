@@ -30,7 +30,7 @@ async function getClient(): Promise<RedisClientType | null> {
   try {
     const client = createClient({ url }) as RedisClientType;
     client.on("error", (err: unknown) => {
-      logger.warn({ err }, "Redis error — cache disabled");
+      logger.warn("Redis error — cache disabled", { err });
       _unavailable = true;
       _client = null;
     });
@@ -38,7 +38,7 @@ async function getClient(): Promise<RedisClientType | null> {
     _client = client;
     logger.info("Redis cache connected");
   } catch (err) {
-    logger.warn({ err }, "Redis unavailable — running without cache");
+    logger.warn("Redis unavailable — running without cache", { err });
     _unavailable = true;
   } finally {
     _connecting = false;
