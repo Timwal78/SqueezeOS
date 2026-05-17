@@ -19,6 +19,7 @@ import (
 	"proof402/internal/firewall"
 	"proof402/internal/invoice"
 	"proof402/internal/models"
+	"proof402/internal/notify"
 	"proof402/internal/passport"
 	"proof402/internal/receipt"
 	"proof402/internal/store"
@@ -50,6 +51,12 @@ func main() {
 
 	db := store.NewMemory()
 	xrplClient := xrpl.NewClient(xrplRPC)
+	emailCfg := notify.LoadConfig()
+	if emailCfg.Enabled {
+		log.Printf("[NOTIFY] Email receipts → %s via %s", emailCfg.To, emailCfg.Host)
+	} else {
+		log.Printf("[NOTIFY] Email disabled — set SMTP_HOST, SMTP_USER, SMTP_PASS to enable")
+	}
 
 	r := chi.NewRouter()
 	r.Use(corsMiddleware)
@@ -281,6 +288,21 @@ func main() {
 		riskScore := passport.Score(agent)
 		r := receipt.New(inv, body.TxHash, body.AgentWallet, body.AgentDomain, passport.RiskLevel(riskScore), accessToken)
 		db.SaveReceipt(r)
+
+		ep, _ := db.GetEndpoint(inv.EndpointID)
+		notify.SendReceipt(emailCfg, notify.Receipt{
+			ID:           r.ID,
+			InvoiceID:    inv.ID,
+			EndpointID:   inv.EndpointID,
+			EndpointPath: ep.Path,
+			Amount:       inv.Price,
+			Asset:        inv.Asset,
+			TxHash:       body.TxHash,
+			AgentWallet:  body.AgentWallet,
+			AgentDomain:  body.AgentDomain,
+			RiskLevel:    r.RiskLevel,
+			SettledAt:    r.SettledAt,
+		})
 
 		writeJSON(w, 200, map[string]interface{}{
 			"status":       "PAYMENT_VERIFIED",
