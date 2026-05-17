@@ -17,6 +17,7 @@ from core.api.ceo import ceo_bp
 from core.api.market_scanner import market_bp, start_market_scanner
 from core.api.v2_bridge import v2_bp
 from core.api.premium_bp import premium_bp
+from core.api.honeypot import honeypot_bp, honeypot_before_request
 from core.legacy import start_whale_stalker, init_services, get_service, clean_data
 from core.market_graph import get_graph
 from core.rdt_engine import RecurrentDepthTransformer
@@ -38,6 +39,10 @@ def create_app():
     init_services()
     start_whale_stalker()
     
+    # Honeypot must be registered FIRST so explicit trap routes take priority
+    app.register_blueprint(honeypot_bp)
+    app.before_request(honeypot_before_request)
+
     # Register Blueprints
     app.register_blueprint(left_wing_bp, url_prefix='/api/left-wing')
     app.register_blueprint(beast_bp, url_prefix='/api/beast')
