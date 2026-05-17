@@ -16,6 +16,7 @@ from core.api.scriptmaster_bp import scriptmaster_bp
 from core.api.ceo import ceo_bp
 from core.api.market_scanner import market_bp, start_market_scanner
 from core.api.v2_bridge import v2_bp
+from core.api.premium_bp import premium_bp
 from core.legacy import start_whale_stalker, init_services, get_service, clean_data
 from core.market_graph import get_graph
 from core.rdt_engine import RecurrentDepthTransformer
@@ -46,6 +47,7 @@ def create_app():
     app.register_blueprint(scriptmaster_bp, url_prefix='/api/scriptmaster')
     app.register_blueprint(ceo_bp, url_prefix='/api/ceo')
     app.register_blueprint(market_bp, url_prefix='/api/market')
+    app.register_blueprint(premium_bp, url_prefix='/api')
     app.register_blueprint(v2_bp, url_prefix='/api')
     app.register_blueprint(v2_bp, url_prefix='/api/v1', name='v2_bridge_v1')
     
