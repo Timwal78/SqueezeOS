@@ -1,0 +1,16 @@
+{
+  "name": "relay",
+  "version": "0.1.0",
+  "description": "Zero-custody agent commerce protocol for XRPL",
+  "private": true,
+  "workspaces": ["sdk", "api"],
+  "scripts": {
+    "install:all": "npm install && npm --prefix sdk install && npm --prefix api install",
+    "build": "npm --prefix sdk run build && npm --prefix api run build",
+    "test": "npm --prefix sdk run test",
+    "dev:api": "npm --prefix api run dev",
+    "migrate": "npm --prefix api run migrate",
+    "example:basic": "npx ts-node examples/basic-job-flow.ts"
+  },
+  "license": "MIT"
+}
