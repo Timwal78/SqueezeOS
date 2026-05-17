@@ -29,12 +29,15 @@ log = logging.getLogger("proof402.demo")
 
 PROOF402_SERVER = "https://four02proof.onrender.com"
 
-# Live endpoints registered for Script Master Labs
+# SqueezeOS server hosts the actual protected endpoints.
+# Set SQUEEZEOS_URL env var to your Railway deployment URL.
+_SQUEEZEOS = os.environ.get("SQUEEZEOS_URL", "http://localhost:5000").rstrip("/")
+
 ENDPOINTS = {
-    "council": "https://four02proof.onrender.com/api/council",
-    "scan":    "https://four02proof.onrender.com/api/scan",
-    "options": "https://four02proof.onrender.com/api/options",
-    "iwm":     "https://four02proof.onrender.com/api/iwm",
+    "council": f"{_SQUEEZEOS}/api/council",
+    "scan":    f"{_SQUEEZEOS}/api/scan",
+    "options": f"{_SQUEEZEOS}/api/options",
+    "iwm":     f"{_SQUEEZEOS}/api/iwm",
 }
 
 
