@@ -18,11 +18,10 @@ PROOF402_SECRET     = os.getenv('PROOF402_TOKEN_SECRET', '')  # same as Render T
 
 # ── Endpoint IDs (registered in 402Proof dashboard) ──────────────────────────
 ENDPOINTS = {
-    '/api/council': '12a0e7a1-6812-4c3f-aa24-de6e3bc12b5a',
-    # Add more as you register them:
-    # '/api/scan':    '<endpoint-id>',
-    # '/api/options': '<endpoint-id>',
-    # '/api/iwm':     '<endpoint-id>',
+    '/api/council': '12a0e7a1-6812-4c3f-aa24-de6e3bc12b5a',  # 0.10 RLUSD
+    '/api/scan':    '160cf28d-b364-44eb-adbd-2489c5cc2cf8',  # 0.05 RLUSD
+    '/api/options': 'c951a374-2424-4064-ab80-35afe8053d29',  # 0.05 RLUSD
+    '/api/iwm':     '60f48ce0-6002-4385-9b60-03a0d2bbebab',  # 0.03 RLUSD
 }
 
 
@@ -124,16 +123,33 @@ def require_payment(f):
     return decorated
 
 
-# ── Usage example ─────────────────────────────────────────────────────────────
-# In api_v2.py, add @require_payment above any route you want to gate:
+# ── Usage — drop into api_v2.py ───────────────────────────────────────────────
 #
 # from proof402_integration import require_payment
 #
 # @app.route('/api/council', methods=['POST'])
-# @require_payment                          ← add this line
+# @require_payment
 # def council_verdict():
 #     ...
 #
-# Then add to your .env:
+# @app.route('/api/scan', methods=['GET','POST'])
+# @require_payment
+# def scan():
+#     ...
+#
+# @app.route('/api/options', methods=['GET','POST'])
+# @require_payment
+# def options():
+#     ...
+#
+# @app.route('/api/iwm', methods=['GET','POST'])
+# @require_payment
+# def iwm():
+#     ...
+#
+# Add to .env on your SqueezeOS V2 machine:
 #   PROOF402_SERVER_URL=https://four02proof.onrender.com
 #   PROOF402_TOKEN_SECRET=0d38159d1867b684d71dc65be255782839ae894bb3b43796f129365b63dbda84
+#
+# NOTE: @require_payment fails OPEN — if 402Proof is unreachable, the route
+# still serves so SqueezeOS never goes down because of the payment layer.
