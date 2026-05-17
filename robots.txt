@@ -23,7 +23,7 @@ Disallow: /api/market/
 Disallow: /402proof-secrets.html
 Disallow: /402proof-register.html
 
-Sitemap: https://scriptmasterlabs.com/sitemap.xml
+Sitemap: https://www.scriptmasterlabs.com/sitemap.xml
 
 User-agent: GPTBot
 Allow: /
