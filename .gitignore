@@ -26,3 +26,4 @@ node_modules/
 *.log
 *.pyc
 __pycache__/
+402proof-secrets.html
