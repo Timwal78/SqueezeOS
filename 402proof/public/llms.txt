@@ -1,0 +1,87 @@
+# 402Proof — AI Agent Payment Compliance Firewall
+
+> 402Proof is the x402 payment infrastructure for AI agents. It enables autonomous agents to pay for premium APIs, data feeds, and tools using XRP or RLUSD on the XRP Ledger — with full compliance receipts and identity passports.
+
+## What We Do
+
+402Proof is a tollbooth layer that sits in front of any API. When an AI agent hits a protected endpoint, it receives an HTTP 402 Payment Required response with a payment invoice. The agent pays on XRPL, submits the transaction hash, and receives a signed access token — all autonomously, no human in the loop.
+
+## Who This Is For
+
+- **AI agents** that need to pay for premium data, APIs, or tools autonomously
+- **API developers** who want to monetize their endpoints with micropayments
+- **Platforms** (MCP servers, agent frameworks, data providers) that want RLUSD/XRP-denominated access control
+
+## Live Endpoints Available (Script Master Labs)
+
+All endpoints accept RLUSD payment on XRPL mainnet.
+
+### POST /api/council — 0.10 RLUSD
+AI council verdict: multi-engine market signal aggregate (SML fractal cascade + Battle Computer). Returns regime, bias, confidence score, and actionable thesis for any symbol.
+
+### GET /api/scan — 0.05 RLUSD
+Full $1–$50 universe market scanner. Live squeeze signals, options picks, technical scores across the entire discoverable trading universe.
+
+### GET /api/options — 0.05 RLUSD
+Options intelligence flow: institutional sweeps, whale detection, unusual volume, and scored contract recommendations for any symbol.
+
+### GET /api/iwm — 0.03 RLUSD
+IWM 0DTE institutional scanner. Scored contracts, parity watch, realized volatility, and delta/gamma analytics for Russell 2000 index options.
+
+## How to Pay as an Agent
+
+1. Hit a protected endpoint — receive `HTTP 402` with invoice JSON
+2. Send RLUSD (or XRP) on XRPL to the `pay_to` address with `memo_hex` as MemoData
+3. POST `https://four02proof.onrender.com/v1/verify` with `invoice_id`, `tx_hash`, `agent_wallet`
+4. Receive a signed `access_token` (1-hour TTL, HMAC-SHA256)
+5. Retry the original endpoint with header `X-Payment-Token: <token>`
+
+## Agent SDK (Python)
+
+```python
+from proof402.agent import Proof402Client, wallet_from_seed
+
+wallet = wallet_from_seed(os.environ["AGENT_XRPL_SEED"])
+client = Proof402Client(wallet, agent_domain="your-agent.example.com")
+
+# Auto-pays any 402 invoice encountered
+response = client.get("https://lively-fascination-production-41fa.up.railway.app/api/council")
+data = response.json()
+```
+
+Install: `pip install xrpl-py requests`
+
+## API Reference
+
+Base URL: `https://four02proof.onrender.com`
+
+- `POST /v1/invoice` — request a payment invoice for an endpoint
+- `POST /v1/verify` — submit tx hash, receive access token + receipt
+- `GET  /v1/stats` — live settlement stats
+- `GET  /v1/receipt/{id}` — retrieve compliance receipt
+- `GET  /v1/agent/{wallet}` — agent passport and risk score
+- `POST /v1/merchant/register` — register as a merchant (free)
+- `POST /v1/endpoint` — register a protected endpoint
+
+## Compliance & Identity
+
+Every payment generates a tamper-evident receipt with:
+- XRPL transaction hash
+- Agent wallet address and domain
+- Risk score (0–100) via Agent Passport system
+- Timestamp and endpoint ID
+
+Receipts are exportable as JSON or CSV for compliance reporting.
+
+## Network
+
+- **Blockchain**: XRP Ledger mainnet
+- **Assets accepted**: XRP (native), RLUSD (Ripple USD, issuer: rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De)
+- **Settlement**: sub-5 second finality
+- **Token verification**: sub-millisecond local HMAC-SHA256 (zero network latency on hot path)
+
+## Contact / Merchant Onboarding
+
+Register your endpoint: `POST https://four02proof.onrender.com/v1/merchant/register`
+Dashboard: `https://four02proof.onrender.com`
+Merchant: Script Master Labs
