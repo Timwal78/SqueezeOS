@@ -114,6 +114,33 @@ const MIGRATIONS = [
   CREATE INDEX IF NOT EXISTS idx_rep_events_created ON reputation_events(created_at DESC);
   `,
 
+  // Migration 008: Governance tables
+  `
+  CREATE TABLE IF NOT EXISTS governance_proposals (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    proposal_id VARCHAR(32) UNIQUE NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    options TEXT[] NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'active'
+      CHECK (status IN ('active','closed','enacted','rejected')),
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  );
+
+  CREATE TABLE IF NOT EXISTS governance_votes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    voter VARCHAR(35) NOT NULL,
+    proposal_id VARCHAR(32) NOT NULL REFERENCES governance_proposals(proposal_id),
+    choice TEXT NOT NULL,
+    tx_hash VARCHAR(64) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(voter, proposal_id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_gov_votes_proposal ON governance_votes(proposal_id);
+  `,
+
   // Migration 006: Settlement signatures column
   `
   ALTER TABLE disputes
