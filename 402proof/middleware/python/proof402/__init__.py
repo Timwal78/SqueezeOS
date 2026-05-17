@@ -22,7 +22,11 @@ Flask/WSGI usage:
     )
 """
 
+import base64
+import hmac
+import hashlib
 import json
+import time
 import urllib.request
 import urllib.error
 from typing import Optional, List
@@ -30,6 +34,32 @@ from typing import Optional, List
 
 _VERIFY_PATH = "/v1/token/verify"
 _INVOICE_PATH = "/v1/invoice"
+
+
+def _verify_token_local(token: str, secret: str) -> dict:
+    """
+    Pure local HMAC-SHA256 token verification — zero network, sub-millisecond.
+    Mirrors Go server internal/invoice/invoice.go:VerifyToken exactly.
+    Format: base64url(json_payload).hex(hmac_sha256(encoded, secret))
+    """
+    try:
+        dot = token.rfind(".")
+        if dot < 0:
+            return {"valid": False}
+        encoded, sig = token[:dot], token[dot + 1:]
+
+        expected = hmac.new(secret.encode(), encoded.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, expected):
+            return {"valid": False}
+
+        padding = 4 - len(encoded) % 4
+        payload = json.loads(base64.urlsafe_b64decode(encoded + "=" * padding))
+        if int(time.time()) > payload["exp"]:
+            return {"valid": False}
+
+        return {"valid": True, "endpoint_id": payload.get("eid"), "invoice_id": payload.get("iid")}
+    except Exception:
+        return {"valid": False}
 
 
 def _post_json(url: str, body: dict, timeout: int = 10) -> dict:
@@ -49,16 +79,22 @@ def _post_json(url: str, body: dict, timeout: int = 10) -> dict:
 class Proof402:
     """FastAPI dependency injector for 402 payment gating."""
 
-    def __init__(self, endpoint_id: str, server_url: str):
+    def __init__(self, endpoint_id: str, server_url: str, token_secret: Optional[str] = None):
         if not endpoint_id:
             raise ValueError("endpoint_id is required")
         self.endpoint_id = endpoint_id
         self.server_url = server_url.rstrip("/")
+        self.token_secret = token_secret  # set for zero-latency local verification
 
     def get_invoice(self) -> dict:
         return _post_json(f"{self.server_url}{_INVOICE_PATH}", {"endpoint_id": self.endpoint_id})
 
     def verify_token(self, token: str) -> bool:
+        # Fast path: pure local HMAC, zero network
+        if self.token_secret:
+            r = _verify_token_local(token, self.token_secret)
+            return r.get("valid", False)
+        # Fallback: server-side verification
         try:
             result = _post_json(
                 f"{self.server_url}{_VERIFY_PATH}",
@@ -106,9 +142,10 @@ class Proof402Middleware:
         endpoint_id: str,
         server_url: str,
         protected_paths: Optional[List[str]] = None,
+        token_secret: Optional[str] = None,
     ):
         self.app = app
-        self.proof = Proof402(endpoint_id, server_url)
+        self.proof = Proof402(endpoint_id, server_url, token_secret=token_secret)
         self.protected_paths = protected_paths or ["/"]
 
     def _is_protected(self, path: str) -> bool:

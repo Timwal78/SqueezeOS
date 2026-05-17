@@ -1,32 +1,48 @@
 'use strict';
 
-const https = require('https');
-const http = require('http');
+const https  = require('https');
+const http   = require('http');
+const crypto = require('crypto');
 
 /**
  * 402Proof Express middleware — protects any route behind XRP/RLUSD payment.
  *
- * Usage (Express):
+ * Usage (Express — recommended, zero-latency local verification):
  *   const { proof402 } = require('proof402-middleware');
- *   app.use('/premium', proof402({ endpointId: 'your-endpoint-id', serverUrl: 'https://...' }));
+ *   app.use('/premium', proof402({
+ *     endpointId:  'your-endpoint-id',
+ *     serverUrl:   'https://402proof.onrender.com',
+ *     tokenSecret: process.env.PROOF402_TOKEN_SECRET, // same value as server TOKEN_SECRET
+ *   }));
  *
- * On every request the middleware checks for a valid X-Payment-Token header.
- * If missing or expired it returns HTTP 402 with full invoice + instructions.
+ * When tokenSecret is supplied, token verification is pure CPU (HMAC-SHA256) —
+ * zero network round-trip, sub-millisecond. If omitted, falls back to a
+ * server-side POST /v1/token/verify call (still works, slightly slower).
  */
-function proof402({ endpointId, serverUrl = 'https://402proof.onrender.com' }) {
+function proof402({ endpointId, serverUrl = 'https://402proof.onrender.com', tokenSecret = null }) {
   if (!endpointId) throw new Error('[402Proof] endpointId is required');
 
   return async function (req, res, next) {
     const token = req.headers['x-payment-token'];
 
     if (token) {
-      try {
-        const result = await postJSON(`${serverUrl}/v1/token/verify`, { token, endpoint_id: endpointId });
-        if (result.status === 'VALID') {
-          req.proof402 = { endpointId: result.endpoint_id, verified: true };
+      // ── FAST PATH: pure local HMAC verification (zero network) ──────────────
+      if (tokenSecret) {
+        const result = verifyTokenLocal(token, tokenSecret);
+        if (result.valid && (result.endpointId === endpointId || !result.endpointId)) {
+          req.proof402 = { endpointId: result.endpointId, verified: true, local: true };
           return next();
         }
-      } catch (_) { /* fall through to 402 */ }
+      } else {
+        // ── FALLBACK: server-side verification ───────────────────────────────
+        try {
+          const result = await postJSON(`${serverUrl}/v1/token/verify`, { token, endpoint_id: endpointId });
+          if (result.status === 'VALID') {
+            req.proof402 = { endpointId: result.endpoint_id, verified: true, local: false };
+            return next();
+          }
+        } catch (_) { /* fall through to 402 */ }
+      }
     }
 
     try {
@@ -65,10 +81,14 @@ function proof402({ endpointId, serverUrl = 'https://402proof.onrender.com' }) {
  *
  * Usage (middleware.ts):
  *   import { proof402Next } from 'proof402-middleware';
- *   export default proof402Next({ endpointId: '...', serverUrl: '...' });
+ *   export default proof402Next({
+ *     endpointId:  '...',
+ *     serverUrl:   '...',
+ *     tokenSecret: process.env.PROOF402_TOKEN_SECRET,
+ *   });
  *   export const config = { matcher: ['/premium/:path*'] };
  */
-function proof402Next({ endpointId, serverUrl = 'https://402proof.onrender.com' }) {
+function proof402Next({ endpointId, serverUrl = 'https://402proof.onrender.com', tokenSecret = null }) {
   if (!endpointId) throw new Error('[402Proof] endpointId is required');
 
   return async function (request) {
@@ -76,10 +96,15 @@ function proof402Next({ endpointId, serverUrl = 'https://402proof.onrender.com' 
     const token = request.headers.get('x-payment-token');
 
     if (token) {
-      try {
-        const result = await postJSON(`${serverUrl}/v1/token/verify`, { token, endpoint_id: endpointId });
-        if (result.status === 'VALID') return NextResponse.next();
-      } catch (_) {}
+      if (tokenSecret) {
+        const r = verifyTokenLocal(token, tokenSecret);
+        if (r.valid) return NextResponse.next();
+      } else {
+        try {
+          const result = await postJSON(`${serverUrl}/v1/token/verify`, { token, endpoint_id: endpointId });
+          if (result.status === 'VALID') return NextResponse.next();
+        } catch (_) {}
+      }
     }
 
     try {
@@ -111,22 +136,28 @@ function proof402Next({ endpointId, serverUrl = 'https://402proof.onrender.com' 
  *   import { proof402Worker } from 'proof402-middleware';
  *   export default { fetch: proof402Worker({ endpointId: '...', serverUrl: '...', handler: myHandler }) };
  */
-function proof402Worker({ endpointId, serverUrl, handler }) {
+function proof402Worker({ endpointId, serverUrl, tokenSecret = null, handler }) {
   return async function (request, env, ctx) {
     const token = request.headers.get('x-payment-token');
 
     if (token) {
-      try {
-        const r = await fetch(`${serverUrl}/v1/token/verify`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token, endpoint_id: endpointId }),
-        });
-        if (r.ok) {
-          const result = await r.json();
-          if (result.status === 'VALID') return handler(request, env, ctx);
-        }
-      } catch (_) {}
+      // Workers support WebCrypto — use local verification when tokenSecret provided
+      if (tokenSecret) {
+        const r = verifyTokenLocal(token, tokenSecret);
+        if (r.valid) return handler(request, env, ctx);
+      } else {
+        try {
+          const r = await fetch(`${serverUrl}/v1/token/verify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token, endpoint_id: endpointId }),
+          });
+          if (r.ok) {
+            const result = await r.json();
+            if (result.status === 'VALID') return handler(request, env, ctx);
+          }
+        } catch (_) {}
+      }
     }
 
     try {
@@ -152,6 +183,34 @@ function proof402Worker({ endpointId, serverUrl, handler }) {
       return new Response('Payment service unavailable', { status: 503 });
     }
   };
+}
+
+/**
+ * Pure local HMAC-SHA256 token verification.
+ * Mirrors exactly what the Go server does in internal/invoice/invoice.go:VerifyToken.
+ * Format: base64url(json_payload).hex(hmac_sha256(encoded, secret))
+ * Payload: { iid: invoiceId, eid: endpointId, iat: issuedAt, exp: expiresAt }
+ */
+function verifyTokenLocal(token, secret) {
+  try {
+    const dot = token.lastIndexOf('.');
+    if (dot < 0) return { valid: false };
+    const encoded = token.slice(0, dot);
+    const sig     = token.slice(dot + 1);
+
+    const expected = crypto.createHmac('sha256', secret).update(encoded).digest('hex');
+    // Constant-time comparison
+    if (!crypto.timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expected, 'hex'))) {
+      return { valid: false };
+    }
+
+    const payload = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
+    if (Math.floor(Date.now() / 1000) > payload.exp) return { valid: false };
+
+    return { valid: true, endpointId: payload.eid, invoiceId: payload.iid };
+  } catch {
+    return { valid: false };
+  }
 }
 
 // Zero-dependency JSON POST helper
