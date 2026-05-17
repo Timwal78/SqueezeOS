@@ -10,6 +10,7 @@ import reputationRouter from "./routes/reputation";
 import evaluatorsRouter from "./routes/evaluators";
 import evidenceRouter from "./routes/evidence";
 import settlementRouter from "./routes/settlement";
+import analyticsRouter from "./routes/analytics";
 import { logger } from "./services/logger";
 
 const app = express();
@@ -47,6 +48,7 @@ app.use("/api/v1/reputation", reputationRouter);
 app.use("/api/v1/evaluators", evaluatorsRouter);
 app.use("/api/v1/evidence", evidenceRouter);
 app.use("/api/v1/settlement", settlementRouter);
+app.use("/api/v1/analytics", analyticsRouter);
 
 // 404 handler
 app.use((_, res) => {

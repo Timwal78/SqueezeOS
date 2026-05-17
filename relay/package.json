@@ -11,7 +11,8 @@
     "dev:api": "npm --prefix api run dev",
     "migrate": "npm --prefix api run migrate",
     "example:basic": "npx ts-node examples/basic-job-flow.ts",
-    "example:dispute": "npx ts-node examples/dispute-flow.ts"
+    "example:dispute": "npx ts-node examples/dispute-flow.ts",
+    "example:wallets": "npx ts-node examples/wallet-adapters.ts"
   },
   "license": "MIT"
 }

@@ -19,6 +19,8 @@ export * from "./x402";
 export * from "./ipfs";
 export * from "./voting";
 export * from "./settlement";
+export * from "./wallet-adapter";
+export * from "./indexer";
 
 // Convenience re-export of xrpl Wallet for SDK consumers
 export { Wallet } from "xrpl";
