@@ -13,7 +13,8 @@ import (
 
 // Fixed stable IDs — never change these after first deploy
 const (
-	MerchantID = "3a5db2f8-6812-4c3f-aa24-de6e3bc12b5a"
+	MerchantID     = "3a5db2f8-6812-4c3f-aa24-de6e3bc12b5a"
+	DefaultAPIKey  = "sml-402proof-api-key-scriptmasterlabs-2026"
 )
 
 type EndpointSeed struct {
@@ -60,12 +61,7 @@ var SMLEndpoints = []EndpointSeed{
 func Run(db *store.Memory, gatewayAddr string) {
 	merchantName  := env("SEED_MERCHANT_NAME",  "Script Master Labs")
 	merchantEmail := env("SEED_MERCHANT_EMAIL", "admin@scriptmasterlabs.com")
-	apiKey        := env("SEED_MERCHANT_API_KEY", "")
-
-	if apiKey == "" {
-		log.Println("[SEED] SEED_MERCHANT_API_KEY not set — add it to Render secrets")
-		return
-	}
+	apiKey := env("SEED_MERCHANT_API_KEY", DefaultAPIKey)
 
 	// Seed merchant with fixed stable ID
 	if _, ok := db.GetMerchant(MerchantID); !ok {
