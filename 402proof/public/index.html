@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>402Proof — AI Agent Payment Compliance Firewall</title>
+<style>
+  :root {
+    --bg:       #050508;
+    --panel:    #0d0d14;
+    --border:   #1e1e2e;
+    --purple:   #7c3aed;
+    --purple-l: #a78bfa;
+    --cyan:     #06b6d4;
+    --green:    #10b981;
+    --red:      #ef4444;
+    --gold:     #f59e0b;
+    --text:     #e2e8f0;
+    --muted:    #64748b;
+    --font:     'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 13px; min-height: 100vh; }
+
+  /* ── HEADER ── */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 24px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--purple);
+    box-shadow: 0 0 24px rgba(124,58,237,0.2);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; }
+  .logo svg { filter: drop-shadow(0 0 6px var(--purple)); }
+  .logo-text { font-size: 18px; font-weight: bold; color: var(--purple-l); letter-spacing: 2px; }
+  .logo-sub { font-size: 10px; color: var(--muted); }
+  .header-stats { display: flex; gap: 24px; }
+  .hstat { text-align: center; }
+  .hstat-val { font-size: 16px; color: var(--cyan); font-weight: bold; }
+  .hstat-lbl { font-size: 9px; color: var(--muted); letter-spacing: 1px; }
+
+  /* ── NAV TABS ── */
+  nav {
+    display: flex; gap: 2px; padding: 8px 24px 0;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+  }
+  .tab {
+    padding: 8px 18px; cursor: pointer; font-family: var(--font); font-size: 12px;
+    color: var(--muted); background: none; border: none; border-bottom: 2px solid transparent;
+    transition: all .2s;
+  }
+  .tab:hover { color: var(--purple-l); }
+  .tab.active { color: var(--purple-l); border-bottom-color: var(--purple); }
+
+  /* ── MAIN LAYOUT ── */
+  main { padding: 20px 24px; max-width: 1400px; margin: 0 auto; }
+  .pane { display: none; }
+  .pane.active { display: block; }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px; margin-bottom: 16px;
+  }
+  .card-title {
+    font-size: 11px; letter-spacing: 2px; color: var(--purple); text-transform: uppercase;
+    margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 8px;
+  }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+
+  /* ── STAT BOXES ── */
+  .stat-box {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px; text-align: center;
+  }
+  .stat-val { font-size: 28px; color: var(--cyan); font-weight: bold; }
+  .stat-lbl { font-size: 10px; color: var(--muted); letter-spacing: 1px; margin-top: 4px; }
+
+  /* ── TABLES ── */
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { color: var(--muted); font-size: 10px; letter-spacing: 1px; padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+  td { padding: 8px 10px; border-bottom: 1px solid rgba(30,30,46,0.5); vertical-align: middle; }
+  tr:hover td { background: rgba(124,58,237,0.05); }
+
+  /* ── BADGES ── */
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px;
+    font-weight: bold; letter-spacing: 1px;
+  }
+  .badge-low    { background: rgba(16,185,129,0.15); color: var(--green); border: 1px solid var(--green); }
+  .badge-med    { background: rgba(245,158,11,0.15);  color: var(--gold);  border: 1px solid var(--gold); }
+  .badge-high   { background: rgba(239,68,68,0.15);   color: var(--red);   border: 1px solid var(--red); }
+  .badge-paid   { background: rgba(6,182,212,0.15);   color: var(--cyan);  border: 1px solid var(--cyan); }
+  .badge-rlusd  { background: rgba(124,58,237,0.15);  color: var(--purple-l); border: 1px solid var(--purple); }
+  .badge-xrp    { background: rgba(16,185,129,0.1);   color: var(--green); border: 1px solid var(--green); }
+
+  /* ── FORMS ── */
+  .form-row { display: flex; gap: 10px; margin-bottom: 12px; align-items: center; flex-wrap: wrap; }
+  label { color: var(--muted); font-size: 10px; letter-spacing: 1px; display: block; margin-bottom: 4px; }
+  input, select, textarea {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); font-family: var(--font); font-size: 12px; padding: 8px 12px;
+    outline: none; width: 100%;
+    transition: border-color .2s;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--purple); }
+  .field { flex: 1; min-width: 140px; }
+
+  /* ── BUTTONS ── */
+  .btn {
+    padding: 8px 18px; border-radius: 6px; font-family: var(--font); font-size: 12px;
+    font-weight: bold; cursor: pointer; border: none; letter-spacing: 1px;
+    transition: all .2s; white-space: nowrap;
+  }
+  .btn-primary { background: var(--purple); color: #fff; }
+  .btn-primary:hover { background: #6d28d9; box-shadow: 0 0 12px rgba(124,58,237,0.5); }
+  .btn-outline { background: none; border: 1px solid var(--purple); color: var(--purple-l); }
+  .btn-outline:hover { background: rgba(124,58,237,0.1); }
+  .btn-danger  { background: none; border: 1px solid var(--red); color: var(--red); }
+  .btn-danger:hover { background: rgba(239,68,68,0.1); }
+  .btn-sm { padding: 4px 10px; font-size: 10px; }
+
+  /* ── LIVE FEED ── */
+  #liveFeed {
+    height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;
+    padding: 4px;
+  }
+  .feed-item {
+    display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+    background: rgba(6,182,212,0.04); border: 1px solid var(--border); border-radius: 6px;
+    animation: fadeIn .4s ease;
+  }
+  @keyframes fadeIn { from { opacity:0; transform: translateY(-6px); } to { opacity:1; transform: none; } }
+  .feed-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .feed-dot.low  { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .feed-dot.med  { background: var(--gold);  box-shadow: 0 0 6px var(--gold); }
+  .feed-dot.high { background: var(--red);   box-shadow: 0 0 6px var(--red); }
+  .feed-main { flex: 1; }
+  .feed-wallet { color: var(--purple-l); font-size: 11px; }
+  .feed-path   { color: var(--cyan); font-size: 11px; }
+  .feed-meta   { color: var(--muted); font-size: 10px; }
+  .feed-amount { color: var(--green); font-size: 12px; font-weight: bold; white-space: nowrap; }
+
+  /* ── PASSPORT ── */
+  .passport-card {
+    border: 1px solid var(--purple); border-radius: 8px; padding: 20px;
+    background: linear-gradient(135deg, rgba(124,58,237,0.05), transparent);
+  }
+  .passport-wallet { font-size: 14px; color: var(--cyan); word-break: break-all; }
+  .passport-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+  .passport-field { }
+  .passport-field .lbl { font-size: 10px; color: var(--muted); letter-spacing: 1px; }
+  .passport-field .val { font-size: 14px; color: var(--text); margin-top: 2px; }
+
+  /* ── RISK METER ── */
+  .risk-meter { margin-top: 14px; }
+  .risk-bar-bg { background: var(--border); border-radius: 4px; height: 8px; }
+  .risk-bar-fill { height: 8px; border-radius: 4px; transition: width .4s; }
+
+  /* ── CODE BLOCK ── */
+  .code-block {
+    background: #030306; border: 1px solid var(--border); border-radius: 6px;
+    padding: 14px; font-size: 11px; color: var(--text); overflow-x: auto;
+    white-space: pre; line-height: 1.6;
+  }
+  .code-block .kw  { color: var(--purple-l); }
+  .code-block .str { color: var(--green); }
+  .code-block .cm  { color: var(--muted); }
+
+  /* ── POLICY EDITOR ── */
+  .policy-toggle { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .toggle {
+    position: relative; display: inline-block; width: 36px; height: 20px;
+  }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+    background: var(--border); border-radius: 20px; transition: .3s;
+  }
+  .slider:before {
+    content: ""; position: absolute; height: 14px; width: 14px; left: 3px; bottom: 3px;
+    background: var(--muted); border-radius: 50%; transition: .3s;
+  }
+  .toggle input:checked + .slider { background: var(--purple); }
+  .toggle input:checked + .slider:before { transform: translateX(16px); background: #fff; }
+
+  /* ── BADGE PREVIEW ── */
+  .badge-preview {
+    background: #0a0a0a; border: 1px solid var(--purple); border-radius: 8px;
+    padding: 20px; text-align: center; margin-bottom: 16px;
+  }
+  .proof-badge {
+    display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px;
+    background: #0a0a0a; border: 1px solid var(--purple); border-radius: 8px;
+    text-decoration: none; font-family: var(--font); font-size: 12px;
+    color: var(--purple-l); box-shadow: 0 0 12px rgba(124,58,237,0.3);
+    cursor: default;
+  }
+
+  /* ── TOAST ── */
+  #toast {
+    position: fixed; bottom: 24px; right: 24px; padding: 10px 20px;
+    background: var(--panel); border: 1px solid var(--purple); border-radius: 8px;
+    color: var(--purple-l); font-size: 12px; opacity: 0; pointer-events: none;
+    transition: opacity .3s; z-index: 999; box-shadow: 0 0 16px rgba(124,58,237,0.4);
+  }
+  #toast.show { opacity: 1; }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--purple); border-radius: 2px; }
+
+  /* ── MONO UTILS ── */
+  .mono { font-family: var(--font); }
+  .truncate { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; }
+  .text-cyan   { color: var(--cyan); }
+  .text-purple { color: var(--purple-l); }
+  .text-green  { color: var(--green); }
+  .text-red    { color: var(--red); }
+  .text-muted  { color: var(--muted); }
+  .mt8  { margin-top: 8px; }
+  .mt16 { margin-top: 16px; }
+  .gap8 { gap: 8px; }
+  .flex { display: flex; align-items: center; }
+
+  @media (max-width: 768px) {
+    .grid2, .grid3, .grid4 { grid-template-columns: 1fr; }
+    .header-stats { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── HEADER ─────────────────────────────────────────────────────────────── -->
+<header>
+  <div class="logo">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      <path d="M9 12l2 2 4-4" stroke="#06b6d4"/>
+    </svg>
+    <div>
+      <div class="logo-text">402PROOF</div>
+      <div class="logo-sub">AI AGENT PAYMENT COMPLIANCE FIREWALL · XRP LEDGER</div>
+    </div>
+  </div>
+  <div class="header-stats">
+    <div class="hstat"><div class="hstat-val" id="hTotalCalls">—</div><div class="hstat-lbl">TOTAL CALLS</div></div>
+    <div class="hstat"><div class="hstat-val" id="hAgents">—</div><div class="hstat-lbl">UNIQUE AGENTS</div></div>
+    <div class="hstat"><div class="hstat-val" id="hEndpoints">—</div><div class="hstat-lbl">ENDPOINTS</div></div>
+    <div class="hstat"><div class="hstat-val" id="hReceipts">—</div><div class="hstat-lbl">RECEIPTS</div></div>
+  </div>
+</header>
+
+<!-- ── NAV ────────────────────────────────────────────────────────────────── -->
+<nav>
+  <button class="tab active" onclick="showPane('dashboard')">◈ DASHBOARD</button>
+  <button class="tab" onclick="showPane('register')">⊕ REGISTER</button>
+  <button class="tab" onclick="showPane('endpoints')">⊞ ENDPOINTS</button>
+  <button class="tab" onclick="showPane('receipts')">⊟ RECEIPTS</button>
+  <button class="tab" onclick="showPane('agents')">⊛ AGENTS</button>
+  <button class="tab" onclick="showPane('firewall')">⊘ FIREWALL</button>
+  <button class="tab" onclick="showPane('badge')">⊕ GET BADGE</button>
+  <button class="tab" onclick="showPane('docs')">⊙ API DOCS</button>
+</nav>
+
+<main>
+
+<!-- ── DASHBOARD ──────────────────────────────────────────────────────────── -->
+<div class="pane active" id="pane-dashboard">
+  <div class="grid4" style="margin-bottom:16px">
+    <div class="stat-box"><div class="stat-val" id="sTotalCalls">—</div><div class="stat-lbl">TOTAL SETTLED CALLS</div></div>
+    <div class="stat-box"><div class="stat-val" id="sReceipts">—</div><div class="stat-lbl">RECEIPTS ISSUED</div></div>
+    <div class="stat-box"><div class="stat-val" id="sAgents">—</div><div class="stat-lbl">UNIQUE AGENT WALLETS</div></div>
+    <div class="stat-box"><div class="stat-val" id="sEndpoints">—</div><div class="stat-lbl">ACTIVE ENDPOINTS</div></div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-title">⬡ LIVE SETTLEMENT FEED</div>
+      <div id="liveFeed">
+        <div style="text-align:center;color:var(--muted);padding:40px">Waiting for settlements...</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">⬡ NETWORK LEADERBOARD</div>
+      <table>
+        <thead><tr><th>ENDPOINT PATH</th><th>ASSET</th><th>CALLS</th><th>EARNED</th></tr></thead>
+        <tbody id="leaderboardTbl"><tr><td colspan="4" style="color:var(--muted);text-align:center">No endpoints yet</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card" style="border-color:var(--purple)">
+    <div class="card-title">⬡ 402PROOF NETWORK · LIVE</div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span style="color:var(--muted)">What this node is processing:</span>
+      <span class="badge badge-paid">x402 PAYMENT PROTOCOL</span>
+      <span class="badge badge-rlusd">RLUSD/XRP SETTLEMENT</span>
+      <span class="badge badge-low">AGENT PASSPORT SCORING</span>
+      <span class="badge badge-med">SPEND FIREWALL ACTIVE</span>
+    </div>
+    <div class="mt8" style="color:var(--muted);font-size:11px;line-height:1.8">
+      Every AI agent that hits a 402Proof-protected endpoint gets an invoice, pays in XRP or RLUSD on the XRP Ledger,
+      and receives a cryptographically signed access token. Every payment generates an immutable compliance receipt
+      with agent identity, risk score, sanctions check, and XRPL tx hash.
+    </div>
+  </div>
+</div>
+
+<!-- ── REGISTER ───────────────────────────────────────────────────────────── -->
+<div class="pane" id="pane-register">
+  <div class="grid2">
+    <div class="card">
+      <div class="card-title">⊕ MERCHANT REGISTRATION</div>
+      <p style="color:var(--muted);font-size:11px;margin-bottom:14px">Create your account to get an API key and start registering payable endpoints.</p>
+      <div class="field" style="margin-bottom:10px"><label>BUSINESS NAME</label><input id="regName" placeholder="Script Master Labs"></div>
+      <div class="field" style="margin-bottom:14px"><label>EMAIL</label><input id="regEmail" type="email" placeholder="you@scriptmasterlabs.com"></div>
+      <button class="btn btn-primary" onclick="registerMerchant()">REGISTER → GET API KEY</button>
+      <div id="regResult" class="mt16"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">⊕ REGISTER ENDPOINT</div>
+      <p style="color:var(--muted);font-size:11px;margin-bottom:14px">Protect any API path behind XRP/RLUSD agent payment. Requires API key from registration.</p>
+      <div class="field" style="margin-bottom:10px"><label>API KEY</label><input id="epApiKey" placeholder="Your API key from registration"></div>
+      <div class="field" style="margin-bottom:10px"><label>PATH</label><input id="epPath" placeholder="/api/premium-data"></div>
+      <div class="form-row">
+        <div class="field"><label>PRICE</label><input id="epPrice" placeholder="0.05" type="text"></div>
+        <div class="field"><label>ASSET</label>
+          <select id="epAsset"><option value="RLUSD">RLUSD</option><option value="XRP">XRP</option></select>
+        </div>
+      </div>
+      <div class="field" style="margin-bottom:14px"><label>DESCRIPTION (optional)</label><input id="epDesc" placeholder="Premium AI data feed"></div>
+      <button class="btn btn-primary" onclick="registerEndpoint()">REGISTER ENDPOINT</button>
+      <div id="epResult" class="mt16"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── ENDPOINTS ──────────────────────────────────────────────────────────── -->
+<div class="pane" id="pane-endpoints">
+  <div class="card">
+    <div class="card-title">⊞ MY ENDPOINTS</div>
+    <div class="form-row" style="margin-bottom:14px">
+      <div class="field"><label>API KEY</label><input id="listApiKey" placeholder="Your API key"></div>
+      <button class="btn btn-outline" onclick="loadEndpoints()" style="margin-top:18px">LOAD</button>
+    </div>
+    <table>
+      <thead><tr><th>ID</th><th>PATH</th><th>PRICE</th><th>ASSET</th><th>CALLS</th><th>STATUS</th><th>ACTIONS</th></tr></thead>
+      <tbody id="endpointsTbl"><tr><td colspan="7" style="color:var(--muted);text-align:center">Enter API key and click LOAD</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ── RECEIPTS ───────────────────────────────────────────────────────────── -->
+<div class="pane" id="pane-receipts">
+  <div class="card">
+    <div class="card-title">⊟ RECEIPT LOOKUP</div>
+    <div class="form-row">
+      <div class="field"><label>RECEIPT ID</label><input id="receiptId" placeholder="Paste receipt UUID"></div>
+      <button class="btn btn-outline" onclick="lookupReceipt()" style="margin-top:18px">LOOKUP</button>
+    </div>
+  </div>
+  <div id="receiptDetail"></div>
+</div>
+
+<!-- ── AGENTS ─────────────────────────────────────────────────────────────── -->
+<div class="pane" id="pane-agents">
+  <div class="card">
+    <div class="card-title">⊛ AGENT PASSPORT LOOKUP</div>
+    <div class="form-row">
+      <div class="field"><label>XRPL WALLET ADDRESS</label><input id="agentWallet" placeholder="rXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"></div>
+      <button class="btn btn-outline" onclick="lookupAgent()" style="margin-top:18px">LOOKUP PASSPORT</button>
+    </div>
+  </div>
+  <div id="agentDetail"></div>
+</div>
+
+<!-- ── FIREWALL ───────────────────────────────────────────────────────────── -->
+<div class="pane" id="pane-firewall">
+  <div class="card">
+    <div class="card-title">⊘ SPEND FIREWALL POLICY EDITOR</div>
+    <div class="form-row">
+      <div class="field"><label>API KEY</label><input id="fwApiKey" placeholder="Your API key"></div>
+      <div class="field"><label>ENDPOINT ID</label><input id="fwEndpointId" placeholder="Endpoint UUID"></div>
+      <button class="btn btn-outline" onclick="loadPolicy()" style="margin-top:18px">LOAD POLICY</button>
+    </div>
+    <hr style="border-color:var(--border);margin:14px 0">
+    <div class="grid2">
+      <div>
+        <div class="policy-toggle">
+          <label class="toggle"><input type="checkbox" id="fwBlockHighRisk"><span class="slider"></span></label>
+          <span>Block HIGH risk agents (score ≥ 70)</span>
+        </div>
+        <div class="policy-toggle">
+          <label class="toggle"><input type="checkbox" id="fwRequireKYB"><span class="slider"></span></label>
+          <span>Require KYB verification</span>
+        </div>
+        <div class="policy-toggle">
+          <label class="toggle"><input type="checkbox" id="fwRequireKnown"><span class="slider"></span></label>
+          <span>Require established agent history</span>
+        </div>
+      </div>
+      <div>
+        <div class="field" style="margin-bottom:10px">
+          <label>MAX DAILY CALLS PER AGENT (0 = unlimited)</label>
+          <input id="fwMaxDaily" type="number" placeholder="100" value="0">
+        </div>
+        <div class="field" style="margin-bottom:10px">
+          <label>ALLOWED ASSETS (comma-separated, empty = all)</label>
+          <input id="fwAssets" placeholder="RLUSD,XRP">
+        </div>
+        <div class="field">
+          <label>BLOCKED COUNTRIES (comma-separated ISO codes)</label>
+          <input id="fwCountries" placeholder="KP,IR,SY">
+        </div>
+      </div>
+    </div>
+    <div class="mt16">
+      <button class="btn btn-primary" onclick="savePolicy()">SAVE POLICY</button>
+    </div>
+    <div id="fwResult" class="mt8"></div>
+  </div>
+</div>
+
+<!-- ── BADGE ──────────────────────────────────────────────────────────────── -->
+<div class="pane" id="pane-badge">
+  <div class="card">
+    <div class="card-title">⊕ GET YOUR BADGE</div>
+    <p style="color:var(--muted);font-size:11px;margin-bottom:14px">
+      Paste this on your website to show the world your endpoint accepts AI agent payments over XRP Ledger.
+    </p>
+    <div class="badge-preview">
+      <a class="proof-badge">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2.5">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+        <span style="color:#e2e8f0">AI Agents Can Pay Here</span>
+        <span style="color:#7c3aed;font-size:10px;">· Verified by 402Proof · XRP Ledger</span>
+      </a>
+    </div>
+    <div class="field" style="margin-bottom:10px"><label>ENDPOINT ID</label><input id="badgeEndpointId" placeholder="Your endpoint UUID"></div>
+    <button class="btn btn-outline" onclick="generateBadge()" style="margin-bottom:14px">GENERATE BADGE HTML</button>
+    <div id="badgeOutput"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">⊕ QUICK INTEGRATION GUIDE</div>
+    <div style="color:var(--muted);font-size:11px;line-height:2;margin-bottom:10px">STEP 1 — Register and get API key</div>
+    <div class="code-block"><span class="cm"># Register</span>
+curl -X POST https://402proof.onrender.com/v1/merchant/register \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"My Company","email":"me@company.com"}'
+
+<span class="cm"># Returns: { "api_key": "your-key" }</span></div>
+    <div style="color:var(--muted);font-size:11px;line-height:2;margin:10px 0">STEP 2 — Register an endpoint</div>
+    <div class="code-block">curl -X POST https://402proof.onrender.com/v1/endpoint/ \
+  -H 'X-API-Key: your-key' \
+  -H 'Content-Type: application/json' \
+  -d '{"path":"/api/premium","price":"0.05","asset":"RLUSD"}'
+
+<span class="cm"># Returns: { "id": "endpoint-uuid" }</span></div>
+    <div style="color:var(--muted);font-size:11px;line-height:2;margin:10px 0">STEP 3 — Add middleware to your Express server</div>
+    <div class="code-block"><span class="kw">const</span> { proof402 } = require(<span class="str">'proof402-middleware'</span>);
+app.use(<span class="str">'/api/premium'</span>, proof402({
+  endpointId: <span class="str">'endpoint-uuid'</span>,
+  serverUrl:  <span class="str">'https://402proof.onrender.com'</span>,
+}));</div>
+    <div style="color:var(--muted);font-size:11px;line-height:2;margin:10px 0">STEP 4 — Embed the badge on your site</div>
+    <div class="code-block"><span class="cm">&lt;!-- Paste your badge HTML from the generator above --&gt;</span></div>
+  </div>
+</div>
+
+<!-- ── API DOCS ───────────────────────────────────────────────────────────── -->
+<div class="pane" id="pane-docs">
+  <div class="card">
+    <div class="card-title">⊙ API REFERENCE</div>
+    <div id="apiDocs"></div>
+  </div>
+</div>
+
+</main>
+
+<div id="toast">Copied to clipboard!</div>
+
+<script>
+// ── Config ──────────────────────────────────────────────────────────────────
+const SERVER = window.location.origin;
+
+// ── Pane navigation ─────────────────────────────────────────────────────────
+function showPane(id) {
+  document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('pane-' + id).classList.add('active');
+  event.currentTarget.classList.add('active');
+  if (id === 'dashboard') refreshDashboard();
+  if (id === 'docs') renderDocs();
+}
+
+// ── API helpers ─────────────────────────────────────────────────────────────
+async function api(path, opts = {}) {
+  const res = await fetch(SERVER + path, {
+    headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
+    ...opts,
+  });
+  const text = await res.text();
+  try { return { ok: res.ok, status: res.status, data: JSON.parse(text) }; }
+  catch { return { ok: res.ok, status: res.status, data: text }; }
+}
+
+// ── Toast ────────────────────────────────────────────────────────────────────
+function toast(msg = 'Copied!') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function copyText(text) {
+  navigator.clipboard.writeText(text).then(() => toast('Copied!'));
+}
+
+// ── Stats ────────────────────────────────────────────────────────────────────
+async function refreshStats() {
+  const { data } = await api('/v1/stats');
+  if (!data || typeof data !== 'object') return;
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v ?? '—'; };
+  set('hTotalCalls', fmt(data.total_calls));
+  set('hAgents', fmt(data.unique_agents));
+  set('hEndpoints', fmt(data.active_endpoints));
+  set('hReceipts', fmt(data.total_receipts));
+  set('sTotalCalls', fmt(data.total_calls));
+  set('sReceipts', fmt(data.total_receipts));
+  set('sAgents', fmt(data.unique_agents));
+  set('sEndpoints', fmt(data.active_endpoints));
+}
+
+function fmt(n) { return n == null ? '—' : Number(n).toLocaleString(); }
+
+// ── Leaderboard ──────────────────────────────────────────────────────────────
+async function refreshLeaderboard() {
+  const { data } = await api('/v1/leaderboard');
+  const tbody = document.getElementById('leaderboardTbl');
+  const eps = data?.endpoints || [];
+  if (!eps.length) {
+    tbody.innerHTML = '<tr><td colspan="4" style="color:var(--muted);text-align:center">No endpoints registered yet</td></tr>';
+    return;
+  }
+  eps.sort((a, b) => (b.total_calls || 0) - (a.total_calls || 0));
+  tbody.innerHTML = eps.slice(0, 10).map(ep => `
+    <tr>
+      <td class="text-cyan">${ep.path}</td>
+      <td><span class="badge badge-${ep.asset.toLowerCase()}">${ep.asset}</span></td>
+      <td>${fmt(ep.total_calls)}</td>
+      <td class="text-green">${ep.price} ${ep.asset} × ${ep.total_calls || 0}</td>
+    </tr>`).join('');
+}
+
+// ── Live feed ────────────────────────────────────────────────────────────────
+const feedItems = [];
+function addFeedItem(r) {
+  const risk = (r.risk_level || 'LOW').toLowerCase();
+  const item = document.createElement('div');
+  item.className = 'feed-item';
+  item.innerHTML = `
+    <div class="feed-dot ${risk}"></div>
+    <div class="feed-main">
+      <div><span class="feed-wallet">${truncate(r.agent_wallet, 20)}</span> → <span class="feed-path">${r.path || '—'}</span></div>
+      <div class="feed-meta">${r.tx_hash ? truncate(r.tx_hash, 24) : '—'} · ${relTime(r.settled_at)} · risk: <span class="text-${risk==='low'?'green':risk==='medium'?'gold':'red'}">${r.risk_level}</span></div>
+    </div>
+    <div class="feed-amount">${r.amount} ${r.asset}</div>`;
+  const feed = document.getElementById('liveFeed');
+  if (feed.children.length === 1 && feed.children[0].textContent.includes('Waiting')) feed.innerHTML = '';
+  feed.insertBefore(item, feed.firstChild);
+  while (feed.children.length > 30) feed.removeChild(feed.lastChild);
+}
+
+function truncate(s, n) { return s && s.length > n ? s.slice(0, n) + '…' : (s || '—'); }
+function relTime(ts) {
+  if (!ts) return '—';
+  const d = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
+  if (d < 60) return `${d}s ago`;
+  if (d < 3600) return `${Math.floor(d/60)}m ago`;
+  return `${Math.floor(d/3600)}h ago`;
+}
+
+// ── Dashboard refresh ────────────────────────────────────────────────────────
+async function refreshDashboard() {
+  await Promise.all([refreshStats(), refreshLeaderboard()]);
+}
+
+// ── Registration ─────────────────────────────────────────────────────────────
+async function registerMerchant() {
+  const name = document.getElementById('regName').value.trim();
+  const email = document.getElementById('regEmail').value.trim();
+  if (!name || !email) { toast('Name and email required'); return; }
+  const { ok, data } = await api('/v1/merchant/register', {
+    method: 'POST',
+    body: JSON.stringify({ name, email }),
+  });
+  const el = document.getElementById('regResult');
+  if (ok) {
+    el.innerHTML = `
+      <div style="border:1px solid var(--green);border-radius:6px;padding:12px">
+        <div style="color:var(--green);margin-bottom:8px">✓ REGISTERED SUCCESSFULLY</div>
+        <div style="color:var(--muted);font-size:10px">MERCHANT ID</div>
+        <div class="text-cyan" style="margin-bottom:6px">${data.id}</div>
+        <div style="color:var(--muted);font-size:10px">API KEY (save this — shown once)</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <code style="color:var(--purple-l);font-size:12px;flex:1;word-break:break-all">${data.api_key}</code>
+          <button class="btn btn-sm btn-outline" onclick="copyText('${data.api_key}')">COPY</button>
+        </div>
+      </div>`;
+  } else {
+    el.innerHTML = `<div style="color:var(--red)">Error: ${JSON.stringify(data)}</div>`;
+  }
+}
+
+async function registerEndpoint() {
+  const apiKey = document.getElementById('epApiKey').value.trim();
+  const path = document.getElementById('epPath').value.trim();
+  const price = document.getElementById('epPrice').value.trim();
+  const asset = document.getElementById('epAsset').value;
+  const description = document.getElementById('epDesc').value.trim();
+  if (!apiKey || !path || !price) { toast('API key, path, and price required'); return; }
+  const { ok, data } = await api('/v1/endpoint/', {
+    method: 'POST',
+    headers: { 'X-API-Key': apiKey },
+    body: JSON.stringify({ path, price, asset, description }),
+  });
+  const el = document.getElementById('epResult');
+  if (ok) {
+    el.innerHTML = `
+      <div style="border:1px solid var(--green);border-radius:6px;padding:12px">
+        <div style="color:var(--green);margin-bottom:8px">✓ ENDPOINT REGISTERED</div>
+        <div style="color:var(--muted);font-size:10px">ENDPOINT ID (use in middleware)</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <code style="color:var(--cyan);font-size:12px;flex:1">${data.id}</code>
+          <button class="btn btn-sm btn-outline" onclick="copyText('${data.id}')">COPY</button>
+        </div>
+        <div class="mt8 text-muted" style="font-size:10px">${price} ${asset} per call · Path: ${path}</div>
+      </div>`;
+  } else {
+    el.innerHTML = `<div style="color:var(--red)">Error: ${JSON.stringify(data)}</div>`;
+  }
+}
+
+// ── Load endpoints ───────────────────────────────────────────────────────────
+async function loadEndpoints() {
+  const apiKey = document.getElementById('listApiKey').value.trim();
+  if (!apiKey) { toast('Enter API key'); return; }
+  const { ok, data } = await api('/v1/endpoint/', { headers: { 'X-API-Key': apiKey } });
+  const tbody = document.getElementById('endpointsTbl');
+  if (!ok || !Array.isArray(data)) {
+    tbody.innerHTML = '<tr><td colspan="7" style="color:var(--red)">Load failed — check API key</td></tr>';
+    return;
+  }
+  if (!data.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="color:var(--muted);text-align:center">No endpoints yet</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map(ep => `
+    <tr>
+      <td><span class="truncate text-muted">${ep.id}</span></td>
+      <td class="text-cyan">${ep.path}</td>
+      <td class="text-green">${ep.price}</td>
+      <td><span class="badge badge-${ep.asset.toLowerCase()}">${ep.asset}</span></td>
+      <td>${fmt(ep.total_calls)}</td>
+      <td><span class="badge ${ep.active ? 'badge-paid' : 'badge-high'}">${ep.active ? 'ACTIVE' : 'INACTIVE'}</span></td>
+      <td>
+        <button class="btn btn-sm btn-outline" onclick="copyText('${ep.id}')">COPY ID</button>
+        <button class="btn btn-sm btn-outline" onclick="setBadgeId('${ep.id}')" style="margin-left:4px">BADGE</button>
+      </td>
+    </tr>`).join('');
+}
+
+function setBadgeId(id) {
+  document.getElementById('badgeEndpointId').value = id;
+  document.querySelector('[onclick="showPane(\'badge\')"]').click();
+  generateBadge();
+}
+
+// ── Receipt lookup ───────────────────────────────────────────────────────────
+async function lookupReceipt() {
+  const id = document.getElementById('receiptId').value.trim();
+  if (!id) { toast('Enter receipt ID'); return; }
+  const { ok, data } = await api(`/v1/receipt/${id}`);
+  const el = document.getElementById('receiptDetail');
+  if (!ok) {
+    el.innerHTML = `<div class="card"><div style="color:var(--red)">Receipt not found</div></div>`;
+    return;
+  }
+  const risk = (data.risk_level || 'LOW').toLowerCase();
+  el.innerHTML = `
+    <div class="card" style="border-color:var(--purple)">
+      <div class="card-title">⊟ COMPLIANCE RECEIPT · ${data.id}</div>
+      <div class="grid2">
+        <div>
+          <div class="text-muted" style="font-size:10px;letter-spacing:1px">AGENT WALLET</div>
+          <div class="text-cyan" style="margin-bottom:10px;word-break:break-all">${data.agent_wallet}</div>
+          <div class="text-muted" style="font-size:10px;letter-spacing:1px">AGENT DOMAIN</div>
+          <div style="margin-bottom:10px">${data.agent_domain || '—'}</div>
+          <div class="text-muted" style="font-size:10px;letter-spacing:1px">ENDPOINT PATH</div>
+          <div class="text-cyan" style="margin-bottom:10px">${data.path}</div>
+          <div class="text-muted" style="font-size:10px;letter-spacing:1px">XRPL TX HASH</div>
+          <div style="word-break:break-all;font-size:11px;margin-bottom:10px">${data.tx_hash}</div>
+        </div>
+        <div>
+          <div class="text-muted" style="font-size:10px;letter-spacing:1px">AMOUNT</div>
+          <div class="text-green" style="font-size:20px;font-weight:bold;margin-bottom:10px">${data.amount} ${data.asset}</div>
+          <div class="text-muted" style="font-size:10px;letter-spacing:1px">SETTLED AT</div>
+          <div style="margin-bottom:10px">${new Date(data.settled_at).toLocaleString()}</div>
+          <div class="text-muted" style="font-size:10px;letter-spacing:1px">RISK LEVEL</div>
+          <div style="margin-bottom:10px"><span class="badge badge-${risk}">${data.risk_level}</span></div>
+          <div class="text-muted" style="font-size:10px;letter-spacing:1px">SANCTIONS CHECK</div>
+          <div style="margin-bottom:10px">${data.sanctions_check}</div>
+        </div>
+      </div>
+      <div class="flex gap8" style="margin-top:10px">
+        <a href="${SERVER}/v1/receipt/${id}/json" class="btn btn-outline" download>⬇ JSON</a>
+        <a href="${SERVER}/v1/receipt/${id}/csv" class="btn btn-outline" download>⬇ CSV</a>
+        <button class="btn btn-outline" onclick="copyText('${data.id}')">COPY ID</button>
+      </div>
+    </div>`;
+}
+
+// ── Agent lookup ─────────────────────────────────────────────────────────────
+async function lookupAgent() {
+  const wallet = document.getElementById('agentWallet').value.trim();
+  if (!wallet) { toast('Enter wallet address'); return; }
+  const { ok, data } = await api(`/v1/agent/${wallet}`);
+  const el = document.getElementById('agentDetail');
+  if (!ok) {
+    el.innerHTML = `<div class="card"><div style="color:var(--red)">Agent not found — no activity on this wallet yet</div></div>`;
+    return;
+  }
+  const riskColor = data.risk_score >= 70 ? 'var(--red)' : data.risk_score >= 40 ? 'var(--gold)' : 'var(--green)';
+  const riskW = Math.round(data.risk_score || 0);
+  el.innerHTML = `
+    <div class="card passport-card">
+      <div class="card-title">⊛ AGENT PASSPORT</div>
+      <div class="passport-wallet">${data.wallet}</div>
+      <div class="passport-grid">
+        <div class="passport-field"><div class="lbl">DOMAIN</div><div class="val">${data.domain || '—'}</div></div>
+        <div class="passport-field"><div class="lbl">KYB TIER</div><div class="val">${data.kyb_tier?.toUpperCase()}</div></div>
+        <div class="passport-field"><div class="lbl">TOTAL CALLS</div><div class="val text-cyan">${fmt(data.total_calls)}</div></div>
+        <div class="passport-field"><div class="lbl">FIRST SEEN</div><div class="val">${data.first_seen ? new Date(data.first_seen).toLocaleDateString() : '—'}</div></div>
+        <div class="passport-field"><div class="lbl">LAST SEEN</div><div class="val">${data.last_seen ? new Date(data.last_seen).toLocaleString() : '—'}</div></div>
+        <div class="passport-field"><div class="lbl">STATUS</div><div class="val">${data.is_blocked ? '<span class="text-red">BLOCKED</span>' : '<span class="text-green">ACTIVE</span>'}</div></div>
+      </div>
+      <div class="risk-meter mt8">
+        <div class="flex" style="justify-content:space-between;margin-bottom:4px">
+          <span class="text-muted" style="font-size:10px">RISK SCORE</span>
+          <span style="color:${riskColor};font-weight:bold">${riskW}/100 — ${data.risk_score >= 70 ? 'HIGH' : data.risk_score >= 40 ? 'MEDIUM' : 'LOW'}</span>
+        </div>
+        <div class="risk-bar-bg"><div class="risk-bar-fill" style="width:${riskW}%;background:${riskColor}"></div></div>
+      </div>
+      ${data.block_reason ? `<div class="mt8" style="color:var(--red);font-size:11px">Block reason: ${data.block_reason}</div>` : ''}
+    </div>`;
+}
+
+// ── Firewall policy ──────────────────────────────────────────────────────────
+async function loadPolicy() {
+  const apiKey = document.getElementById('fwApiKey').value.trim();
+  const endpointID = document.getElementById('fwEndpointId').value.trim();
+  if (!apiKey || !endpointID) { toast('API key and endpoint ID required'); return; }
+  const { ok, data } = await api(`/v1/policy/${endpointID}`, { headers: { 'X-API-Key': apiKey } });
+  if (!ok || data.policy === 'none') { toast('No policy set — defaults shown'); return; }
+  document.getElementById('fwBlockHighRisk').checked = !!data.block_high_risk;
+  document.getElementById('fwRequireKYB').checked = !!data.require_kyb;
+  document.getElementById('fwRequireKnown').checked = !!data.require_known_agent;
+  document.getElementById('fwMaxDaily').value = data.max_daily_calls_per_agent || 0;
+  document.getElementById('fwAssets').value = (data.allowed_assets || []).join(',');
+  document.getElementById('fwCountries').value = (data.blocked_countries || []).join(',');
+  toast('Policy loaded');
+}
+
+async function savePolicy() {
+  const apiKey = document.getElementById('fwApiKey').value.trim();
+  const endpointID = document.getElementById('fwEndpointId').value.trim();
+  if (!apiKey || !endpointID) { toast('API key and endpoint ID required'); return; }
+  const assetsRaw = document.getElementById('fwAssets').value.trim();
+  const countriesRaw = document.getElementById('fwCountries').value.trim();
+  const policy = {
+    block_high_risk: document.getElementById('fwBlockHighRisk').checked,
+    require_kyb: document.getElementById('fwRequireKYB').checked,
+    require_known_agent: document.getElementById('fwRequireKnown').checked,
+    max_daily_calls_per_agent: parseInt(document.getElementById('fwMaxDaily').value) || 0,
+    allowed_assets: assetsRaw ? assetsRaw.split(',').map(s => s.trim()).filter(Boolean) : [],
+    blocked_countries: countriesRaw ? countriesRaw.split(',').map(s => s.trim()).filter(Boolean) : [],
+  };
+  const { ok, data } = await api(`/v1/policy/${endpointID}`, {
+    method: 'PUT',
+    headers: { 'X-API-Key': apiKey },
+    body: JSON.stringify(policy),
+  });
+  const el = document.getElementById('fwResult');
+  if (ok) {
+    el.innerHTML = '<span class="text-green">✓ Policy saved</span>';
+  } else {
+    el.innerHTML = `<span class="text-red">Error: ${JSON.stringify(data)}</span>`;
+  }
+}
+
+// ── Badge generator ──────────────────────────────────────────────────────────
+function generateBadge() {
+  const id = document.getElementById('badgeEndpointId').value.trim();
+  if (!id) { toast('Enter endpoint ID'); return; }
+
+  const scriptEmbed = `<!-- 402Proof Dynamic Badge — live stats, auto-refreshes every 30s -->
+<script src="${SERVER}/badge.js?endpoint=${id}" async><\/script>
+<!-- /402Proof Badge -->`;
+
+  const staticHtml = `<!-- 402Proof Static Badge -->
+<a href="${SERVER}/badge/${id}" target="_blank" style="display:inline-flex;align-items:center;gap:8px;padding:8px 16px;background:#0a0a0a;border:1px solid #7c3aed;border-radius:8px;text-decoration:none;font-family:monospace;font-size:12px;color:#a78bfa;box-shadow:0 0 12px rgba(124,58,237,0.3);">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+  <span style="color:#e2e8f0">AI Agents Can Pay Here</span>
+  <span style="color:#7c3aed;font-size:10px;">· Verified by 402Proof · XRP Ledger</span>
+</a>
+<!-- /402Proof Static Badge -->`;
+
+  document.getElementById('badgeOutput').innerHTML = `
+    <div class="card-title" style="margin-bottom:8px">DYNAMIC BADGE (recommended — live stats)</div>
+    <div style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+      <span class="text-muted" style="font-size:10px">Shows last payment time + amount, updates every 30s</span>
+      <button class="btn btn-sm btn-outline" onclick="copyText(document.getElementById('badgeScript').textContent)">COPY</button>
+    </div>
+    <div class="code-block" id="badgeScript">${escHtml(scriptEmbed)}</div>
+    <div class="card-title" style="margin:14px 0 8px">STATIC BADGE (fallback)</div>
+    <div style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+      <span class="text-muted" style="font-size:10px">Plain HTML anchor, no scripts needed</span>
+      <button class="btn btn-sm btn-outline" onclick="copyText(document.getElementById('badgeStatic').textContent)">COPY</button>
+    </div>
+    <div class="code-block" id="badgeStatic">${escHtml(staticHtml)}</div>`;
+}
+
+function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── API docs ─────────────────────────────────────────────────────────────────
+function renderDocs() {
+  const docs = [
+    { method:'POST', path:'/v1/merchant/register', auth:'none', desc:'Create merchant account and get API key', body:'{"name":"My Co","email":"me@co.com"}' },
+    { method:'POST', path:'/v1/endpoint/',          auth:'X-API-Key', desc:'Register a new payable endpoint', body:'{"path":"/api/premium","price":"0.05","asset":"RLUSD"}' },
+    { method:'GET',  path:'/v1/endpoint/',          auth:'X-API-Key', desc:'List all endpoints for merchant', body:null },
+    { method:'POST', path:'/v1/invoice',            auth:'none', desc:'Generate payment invoice for agent (called by middleware)', body:'{"endpoint_id":"uuid"}' },
+    { method:'POST', path:'/v1/verify',             auth:'none', desc:'Verify XRPL payment + issue access token', body:'{"invoice_id":"…","tx_hash":"…","agent_wallet":"r…","agent_domain":"bot.example.com"}' },
+    { method:'POST', path:'/v1/token/verify',       auth:'none', desc:'Verify access token (called by middleware on each request)', body:'{"token":"…","endpoint_id":"uuid"}' },
+    { method:'GET',  path:'/v1/receipt/:id',        auth:'none', desc:'Get compliance receipt by ID', body:null },
+    { method:'GET',  path:'/v1/receipt/:id/json',   auth:'none', desc:'Download receipt as JSON file', body:null },
+    { method:'GET',  path:'/v1/receipt/:id/csv',    auth:'none', desc:'Download receipt as CSV', body:null },
+    { method:'GET',  path:'/v1/agent/:wallet',      auth:'none', desc:'Get agent passport by XRPL wallet address', body:null },
+    { method:'PUT',  path:'/v1/policy/:endpointID', auth:'X-API-Key', desc:'Set firewall policy for endpoint', body:'{"block_high_risk":true,"max_daily_calls_per_agent":100,"allowed_assets":["RLUSD"]}' },
+    { method:'GET',  path:'/v1/leaderboard',        auth:'none', desc:'Public endpoint leaderboard', body:null },
+    { method:'GET',  path:'/v1/stats',              auth:'none', desc:'Network statistics', body:null },
+    { method:'POST', path:'/v1/admin/agent/:wallet/block', auth:'Bearer ADMIN_TOKEN', desc:'Block an agent wallet', body:'{"reason":"spam"}' },
+    { method:'GET',  path:'/v1/admin/receipts',     auth:'Bearer ADMIN_TOKEN', desc:'Export all receipts as CSV', body:null },
+  ];
+
+  document.getElementById('apiDocs').innerHTML = docs.map(d => `
+    <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+      <div class="flex gap8" style="margin-bottom:6px">
+        <span class="badge ${d.method==='GET'?'badge-low':d.method==='POST'?'badge-paid':'badge-med'}">${d.method}</span>
+        <code style="color:var(--cyan)">${d.path}</code>
+        <span class="text-muted" style="font-size:10px">${d.auth !== 'none' ? `· Auth: ${d.auth}` : ''}</span>
+      </div>
+      <div class="text-muted" style="font-size:11px;margin-bottom:6px">${d.desc}</div>
+      ${d.body ? `<div class="code-block" style="font-size:10px">${escHtml(`curl -X ${d.method} ${SERVER}${d.path}\n  -H 'Content-Type: application/json'${d.auth!=='none'?`\n  -H '${d.auth.startsWith('Bearer')?'Authorization: '+d.auth:'X-API-Key: your-key'}'`:''}\n  -d '${d.body}'`)}</div>` : ''}
+    </div>`).join('');
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+refreshDashboard();
+setInterval(refreshStats, 10000);
+</script>
+</body>
+</html>

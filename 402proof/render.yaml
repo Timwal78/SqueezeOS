@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: 402proof
+    runtime: docker
+    dockerfilePath: ./402proof/Dockerfile
+    dockerContext: ./402proof
+    plan: free
+    envVars:
+      - key: PORT
+        value: "9090"
+      - key: XRPL_RPC_URL
+        value: https://xrplcluster.com
+      - key: RLUSD_ISSUER
+        value: rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De
+      - key: SERVER_URL
+        sync: false
+      # ── SECRETS: set in Render dashboard, never here ──────────────────────────
+      # GATEWAY_XRPL_ADDRESS  — your 402Proof hot wallet (NOT your Xaman treasury)
+      # TOKEN_SECRET          — openssl rand -hex 32
+      # ADMIN_TOKEN           — openssl rand -hex 32

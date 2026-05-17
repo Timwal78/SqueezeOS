@@ -1,0 +1,9 @@
+{
+  "name": "proof402-middleware",
+  "version": "1.0.0",
+  "description": "402Proof Express/Next.js middleware — XRP/RLUSD agent payment verification",
+  "main": "index.js",
+  "keywords": ["x402", "xrpl", "rlusd", "payment", "ai-agents", "middleware"],
+  "license": "MIT",
+  "engines": { "node": ">=18" }
+}
