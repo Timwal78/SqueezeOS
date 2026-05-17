@@ -24,6 +24,7 @@ import (
 	"proof402/internal/notify"
 	"proof402/internal/passport"
 	"proof402/internal/receipt"
+	"proof402/internal/seed"
 	"proof402/internal/store"
 	"proof402/internal/xrpl"
 )
@@ -52,6 +53,7 @@ func main() {
 	}
 
 	db := store.NewMemory()
+	seed.Run(db, gatewayAddr)
 	xrplClient := xrpl.NewClient(xrplRPC)
 	emailCfg := notify.LoadConfig()
 	if emailCfg.Enabled {
