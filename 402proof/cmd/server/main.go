@@ -956,6 +956,150 @@ func main() {
 		})
 	})
 
+	// ── MCP JSON-RPC 2.0 (Smithery / MCP client compatibility) ─────────────
+	{
+		type mcpTool struct {
+			Name        string      `json:"name"`
+			Description string      `json:"description"`
+			InputSchema interface{} `json:"inputSchema"`
+		}
+		p4Tools := []mcpTool{
+			{Name: "platform_stats", Description: "Live 402Proof platform stats: total payments, volume, active agents. Free.", InputSchema: map[string]interface{}{"type": "object", "properties": map[string]interface{}{}}},
+			{Name: "get_invoice", Description: "Request a payment invoice for any SqueezeOS endpoint. Returns XRPL destination address, RLUSD amount, and memo_hex. Pay on XRPL then call verify_payment. Free.", InputSchema: map[string]interface{}{"type": "object", "required": []string{"endpoint_id"}, "properties": map[string]interface{}{"endpoint_id": map[string]string{"type": "string", "description": "UUID of endpoint to pay for"}}}},
+			{Name: "verify_payment", Description: "Submit XRPL tx_hash after paying an invoice. Returns a signed JWT access_token (1-hour TTL). Free.", InputSchema: map[string]interface{}{"type": "object", "required": []string{"invoice_id", "tx_hash", "agent_wallet"}, "properties": map[string]interface{}{"invoice_id": map[string]string{"type": "string"}, "tx_hash": map[string]string{"type": "string", "description": "64-char hex XRPL tx hash"}, "agent_wallet": map[string]string{"type": "string"}, "agent_domain": map[string]string{"type": "string"}}}},
+			{Name: "check_loyalty", Description: "Loyalty tier and free-call balance for any XRPL wallet. Automatic — no registration. Free.", InputSchema: map[string]interface{}{"type": "object", "required": []string{"wallet"}, "properties": map[string]interface{}{"wallet": map[string]string{"type": "string"}}}},
+			{Name: "get_compliance_receipt", Description: "Retrieve a tamper-evident compliance receipt by UUID. Contains XRPL tx hash, agent wallet, endpoint, amount, and timestamp. Free.", InputSchema: map[string]interface{}{"type": "object", "required": []string{"receipt_id"}, "properties": map[string]interface{}{"receipt_id": map[string]string{"type": "string"}}}},
+			{Name: "get_agent_passport", Description: "Full Agent Passport for any XRPL wallet: payment history, risk score 0-100, loyalty tier, passport hash. Free.", InputSchema: map[string]interface{}{"type": "object", "required": []string{"wallet"}, "properties": map[string]interface{}{"wallet": map[string]string{"type": "string"}}}},
+			{Name: "bureau_public_score", Description: "FICO-style 300-850 Agent Credit Bureau score for any XRPL wallet. Includes grade and loyalty tier. Free.", InputSchema: map[string]interface{}{"type": "object", "required": []string{"wallet"}, "properties": map[string]interface{}{"wallet": map[string]string{"type": "string"}}}},
+			{Name: "bureau_full_report", Description: "Full credit bureau report: score breakdown, spend history, risk factors. Cost: 0.01 RLUSD.", InputSchema: map[string]interface{}{"type": "object", "required": []string{"wallet"}, "properties": map[string]interface{}{"wallet": map[string]string{"type": "string"}, "payment_token": map[string]string{"type": "string"}}}},
+			{Name: "bureau_verify_threshold", Description: "Boolean creditworthiness check — is this wallet above a score threshold? Cost: 0.005 RLUSD.", InputSchema: map[string]interface{}{"type": "object", "required": []string{"wallet"}, "properties": map[string]interface{}{"wallet": map[string]string{"type": "string"}, "payment_token": map[string]string{"type": "string"}}}},
+			{Name: "bureau_get_attestation", Description: "Portable attestation JWT (24h TTL) proving creditworthiness. Cost: 0.01 RLUSD.", InputSchema: map[string]interface{}{"type": "object", "required": []string{"wallet"}, "properties": map[string]interface{}{"wallet": map[string]string{"type": "string"}, "payment_token": map[string]string{"type": "string"}}}},
+			{Name: "bureau_verify_attestation", Description: "Verify a bureau attestation JWT. Free.", InputSchema: map[string]interface{}{"type": "object", "required": []string{"token"}, "properties": map[string]interface{}{"token": map[string]string{"type": "string"}}}},
+		}
+		p4Self := &http.Client{Timeout: 20 * time.Second}
+
+		r.Get("/mcp", func(w http.ResponseWriter, req *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"server":      map[string]string{"name": "402proof", "version": "1.0.0", "description": "x402 payment compliance firewall + Agent Credit Bureau. RLUSD on XRPL."},
+				"protocol":    "MCP JSON-RPC 2.0",
+				"tools_count": len(p4Tools),
+			})
+		})
+
+		r.Post("/mcp", func(w http.ResponseWriter, req *http.Request) {
+			var body struct {
+				ID     interface{}     `json:"id"`
+				Method string          `json:"method"`
+				Params json.RawMessage `json:"params"`
+			}
+			w.Header().Set("Content-Type", "application/json")
+			enc := json.NewEncoder(w)
+
+			if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+				enc.Encode(map[string]interface{}{"jsonrpc": "2.0", "id": nil, "error": map[string]interface{}{"code": -32700, "message": "Parse error"}})
+				return
+			}
+			ok := func(res interface{}) {
+				enc.Encode(map[string]interface{}{"jsonrpc": "2.0", "id": body.ID, "result": res})
+			}
+			text := func(data interface{}) map[string]interface{} {
+				b, _ := json.MarshalIndent(data, "", "  ")
+				return map[string]interface{}{"content": []interface{}{map[string]string{"type": "text", "text": string(b)}}}
+			}
+			proxy := func(method, path string, bodyBytes []byte, headers map[string]string) interface{} {
+				var pr *http.Request
+				if bodyBytes != nil {
+					pr, _ = http.NewRequestWithContext(req.Context(), method, serverURL+path, strings.NewReader(string(bodyBytes)))
+				} else {
+					pr, _ = http.NewRequestWithContext(req.Context(), method, serverURL+path, nil)
+				}
+				pr.Header.Set("Content-Type", "application/json")
+				for k, v := range headers {
+					pr.Header.Set(k, v)
+				}
+				resp, err := p4Self.Do(pr)
+				if err != nil {
+					return map[string]string{"error": err.Error()}
+				}
+				defer resp.Body.Close()
+				var out interface{}
+				json.NewDecoder(resp.Body).Decode(&out)
+				return out
+			}
+
+			switch body.Method {
+			case "initialize":
+				ok(map[string]interface{}{
+					"protocolVersion": "2024-11-05",
+					"serverInfo":      map[string]string{"name": "402proof", "version": "1.0.0"},
+					"capabilities":    map[string]interface{}{"tools": map[string]interface{}{}},
+				})
+			case "ping":
+				ok(map[string]interface{}{})
+			case "tools/list":
+				ok(map[string]interface{}{"tools": p4Tools, "nextCursor": nil})
+			case "tools/call":
+				var p struct {
+					Name      string                 `json:"name"`
+					Arguments map[string]interface{} `json:"arguments"`
+				}
+				if err := json.Unmarshal(body.Params, &p); err != nil {
+					w.WriteHeader(400)
+					enc.Encode(map[string]interface{}{"jsonrpc": "2.0", "id": body.ID, "error": map[string]interface{}{"code": -32602, "message": "Invalid params"}})
+					return
+				}
+				args := p.Arguments
+				tok, _ := args["payment_token"].(string)
+				wallet, _ := args["wallet"].(string)
+				hdrs := map[string]string{}
+				if tok != "" {
+					hdrs["X-Payment-Token"] = tok
+				}
+				switch p.Name {
+				case "platform_stats":
+					ok(text(proxy("GET", "/v1/stats", nil, hdrs)))
+				case "get_invoice":
+					b, _ := json.Marshal(args)
+					ok(text(proxy("POST", "/v1/invoice", b, hdrs)))
+				case "verify_payment":
+					b, _ := json.Marshal(args)
+					ok(text(proxy("POST", "/v1/verify", b, hdrs)))
+				case "check_loyalty":
+					ok(text(proxy("GET", "/v1/loyalty/"+wallet, nil, hdrs)))
+				case "get_compliance_receipt":
+					id, _ := args["receipt_id"].(string)
+					ok(text(proxy("GET", "/v1/receipt/"+id, nil, hdrs)))
+				case "get_agent_passport":
+					ok(text(proxy("GET", "/v1/agent/"+wallet, nil, hdrs)))
+				case "bureau_public_score":
+					ok(text(proxy("GET", "/v1/bureau/score/"+wallet, nil, hdrs)))
+				case "bureau_full_report":
+					ok(text(proxy("GET", "/v1/bureau/report/"+wallet, nil, hdrs)))
+				case "bureau_verify_threshold":
+					ok(text(proxy("GET", "/v1/bureau/verify/"+wallet, nil, hdrs)))
+				case "bureau_get_attestation":
+					ok(text(proxy("GET", "/v1/bureau/attest/"+wallet, nil, hdrs)))
+				case "bureau_verify_attestation":
+					b, _ := json.Marshal(args)
+					ok(text(proxy("POST", "/v1/bureau/verify-attest", b, hdrs)))
+				default:
+					ok(map[string]interface{}{
+						"content": []interface{}{map[string]string{"type": "text", "text": `{"error":"ERR_UNKNOWN_TOOL","tool":"` + p.Name + `"}`}},
+						"isError": true,
+					})
+				}
+			default:
+				if strings.HasPrefix(body.Method, "notifications/") {
+					w.WriteHeader(204)
+					return
+				}
+				w.WriteHeader(400)
+				enc.Encode(map[string]interface{}{"jsonrpc": "2.0", "id": body.ID, "error": map[string]interface{}{"code": -32601, "message": "Method not found: " + body.Method}})
+			}
+		})
+	}
+
 	// ── STATIC DASHBOARD ──────────────────────────────────────────────────────────
 	fs := http.FileServer(http.Dir("./public"))
 	r.Handle("/*", fs)

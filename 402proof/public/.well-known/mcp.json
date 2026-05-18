@@ -2,12 +2,17 @@
   "schema_version": "1.0",
   "name": "proof402-mcp",
   "display_name": "402Proof — x402 Payment Compliance MCP",
-  "description": "MCP server for 402Proof x402 payment infrastructure. Issue invoices, verify XRPL RLUSD transactions, retrieve compliance receipts, and check Agent Passport loyalty status. All premium SqueezeOS endpoints are gated behind this payment layer.",
-  "version": "2.0.0",
+  "description": "MCP server for 402Proof x402 payment infrastructure. Issue invoices, verify XRPL RLUSD and XAH (Xahau) transactions, retrieve compliance receipts, and check Agent Passport / Credit Bureau scores. All premium SqueezeOS endpoints gated here.",
+  "version": "2.1.0",
   "server_url": "https://four02proof.onrender.com",
+  "mcp_endpoint": "https://four02proof.onrender.com/mcp",
   "payment_required": true,
   "payment_protocol": "x402",
-  "payment_asset": "RLUSD",
+  "payment_assets": ["RLUSD/XRPL", "XAH/Xahau"],
+  "networks": {
+    "xrpl": {"rpc": "https://xrplcluster.com", "currency": "RLUSD", "issuer": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De"},
+    "xahau": {"rpc": "https://xahau.network", "currency": "XAH", "native": true, "hooks_enabled": true}
+  },
   "xrpl_issuer": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De",
   "tools": [
     {
