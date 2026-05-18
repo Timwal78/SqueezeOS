@@ -795,6 +795,167 @@ func main() {
 		})
 	})
 
+	// ── AGENT CREDIT BUREAU ───────────────────────────────────────────────────────
+	// Free public score — no payment, teaser only
+	r.Get("/v1/bureau/score/{wallet}", func(w http.ResponseWriter, req *http.Request) {
+		wallet := chi.URLParam(req, "wallet")
+		agent, ok := db.GetAgent(wallet)
+		if !ok {
+			http.Error(w, "no credit history found for wallet", http.StatusNotFound)
+			return
+		}
+		rep := bureau.Compute(agent)
+		writeJSON(w, 200, bureau.PublicScore{
+			Wallet:      rep.Wallet,
+			Score:       rep.Score,
+			Grade:       rep.Grade,
+			LoyaltyTier: rep.LoyaltyTier,
+			IsBlocked:   rep.IsBlocked,
+			GeneratedAt: rep.GeneratedAt,
+		})
+	})
+
+	// Full credit report — paid by querier (0.01 RLUSD)
+	r.Get("/v1/bureau/report/{wallet}", func(w http.ResponseWriter, req *http.Request) {
+		token := req.Header.Get("X-Payment-Token")
+		if token == "" {
+			writeJSON(w, http.StatusPaymentRequired, map[string]interface{}{
+				"error":       "payment required",
+				"endpoint_id": seed.BureauReportID,
+				"price":       "0.01",
+				"asset":       "RLUSD",
+				"description": "Full agent credit report with score breakdown",
+				"pay_via":     serverURL + "/v1/invoice",
+			})
+			return
+		}
+		if _, err := invoice.VerifyTokenForEndpoint(token, tokenSecret, seed.BureauReportID); err != nil {
+			http.Error(w, "invalid or expired payment token", http.StatusUnauthorized)
+			return
+		}
+		wallet := chi.URLParam(req, "wallet")
+		agent, ok := db.GetAgent(wallet)
+		if !ok {
+			writeJSON(w, 200, map[string]interface{}{
+				"wallet":  wallet,
+				"score":   300,
+				"grade":   "D",
+				"message": "no payment history — wallet is unscored",
+			})
+			return
+		}
+		writeJSON(w, 200, bureau.Compute(agent))
+	})
+
+	// Boolean threshold check — paid by querier (0.005 RLUSD)
+	// ?min_score=600  (default 600 if omitted; range 300–850)
+	r.Get("/v1/bureau/verify/{wallet}", func(w http.ResponseWriter, req *http.Request) {
+		token := req.Header.Get("X-Payment-Token")
+		if token == "" {
+			writeJSON(w, http.StatusPaymentRequired, map[string]interface{}{
+				"error":       "payment required",
+				"endpoint_id": seed.BureauVerifyID,
+				"price":       "0.005",
+				"asset":       "RLUSD",
+				"description": "Boolean creditworthiness check — does wallet meet minimum score threshold?",
+				"pay_via":     serverURL + "/v1/invoice",
+			})
+			return
+		}
+		if _, err := invoice.VerifyTokenForEndpoint(token, tokenSecret, seed.BureauVerifyID); err != nil {
+			http.Error(w, "invalid or expired payment token", http.StatusUnauthorized)
+			return
+		}
+		wallet := chi.URLParam(req, "wallet")
+		minScore := 600
+		if s := req.URL.Query().Get("min_score"); s != "" {
+			if n, err := strconv.Atoi(s); err == nil && n >= 300 && n <= 850 {
+				minScore = n
+			}
+		}
+		score, grade := 300, "D"
+		if agent, ok := db.GetAgent(wallet); ok {
+			rep := bureau.Compute(agent)
+			score, grade = rep.Score, rep.Grade
+		}
+		writeJSON(w, 200, map[string]interface{}{
+			"wallet":     wallet,
+			"score":      score,
+			"grade":      grade,
+			"threshold":  minScore,
+			"passes":     score >= minScore,
+			"checked_at": time.Now(),
+		})
+	})
+
+	// Signed portable attestation JWT — paid by subject agent (0.01 RLUSD)
+	r.Get("/v1/bureau/attest/{wallet}", func(w http.ResponseWriter, req *http.Request) {
+		token := req.Header.Get("X-Payment-Token")
+		if token == "" {
+			writeJSON(w, http.StatusPaymentRequired, map[string]interface{}{
+				"error":       "payment required",
+				"endpoint_id": seed.BureauAttestID,
+				"price":       "0.01",
+				"asset":       "RLUSD",
+				"description": "Signed portable credit attestation JWT (24h TTL)",
+				"pay_via":     serverURL + "/v1/invoice",
+			})
+			return
+		}
+		if _, err := invoice.VerifyTokenForEndpoint(token, tokenSecret, seed.BureauAttestID); err != nil {
+			http.Error(w, "invalid or expired payment token", http.StatusUnauthorized)
+			return
+		}
+		wallet := chi.URLParam(req, "wallet")
+		score, grade, tier, kyb, blocked := 300, "D", "Bronze", "none", false
+		if agent, ok := db.GetAgent(wallet); ok {
+			rep := bureau.Compute(agent)
+			score, grade, tier, kyb, blocked = rep.Score, rep.Grade, rep.LoyaltyTier, rep.KYBTier, rep.IsBlocked
+		}
+		attestToken, err := bureau.IssueAttestation(wallet, score, grade, tier, kyb, blocked, tokenSecret)
+		if err != nil {
+			http.Error(w, "attestation issuance failed", http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, 200, map[string]interface{}{
+			"wallet":     wallet,
+			"score":      score,
+			"grade":      grade,
+			"attest_jwt": attestToken,
+			"expires_in": "24h",
+			"verify_at":  serverURL + "/v1/bureau/verify-attest",
+			"issued_at":  time.Now(),
+		})
+	})
+
+	// Free verification endpoint — third parties call this to validate attestation JWTs
+	r.Post("/v1/bureau/verify-attest", func(w http.ResponseWriter, req *http.Request) {
+		req.Body = http.MaxBytesReader(w, req.Body, 8*1024)
+		var body struct {
+			Token string `json:"token"`
+		}
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil || body.Token == "" {
+			http.Error(w, "token required", http.StatusBadRequest)
+			return
+		}
+		claims, err := bureau.VerifyAttestation(body.Token, tokenSecret)
+		if err != nil {
+			http.Error(w, "invalid attestation: "+err.Error(), http.StatusUnauthorized)
+			return
+		}
+		writeJSON(w, 200, map[string]interface{}{
+			"valid":        true,
+			"wallet":       claims.Wallet,
+			"score":        claims.Score,
+			"grade":        claims.Grade,
+			"loyalty_tier": claims.LoyaltyTier,
+			"kyb_tier":     claims.KYBTier,
+			"is_blocked":   claims.IsBlocked,
+			"issued_at":    time.Unix(claims.IssuedAt, 0),
+			"expires_at":   time.Unix(claims.ExpiresAt, 0),
+		})
+	})
+
 	// ── STATIC DASHBOARD ──────────────────────────────────────────────────────────
 	fs := http.FileServer(http.Dir("./public"))
 	r.Handle("/*", fs)
