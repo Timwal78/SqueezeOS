@@ -17,6 +17,7 @@ from core.api.ceo import ceo_bp
 from core.api.market_scanner import market_bp, start_market_scanner
 from core.api.v2_bridge import v2_bp
 from core.api.premium_bp import premium_bp
+from core.api.relay_bp import relay_bp
 from core.api.honeypot import honeypot_bp, honeypot_before_request
 from core.legacy import start_whale_stalker, init_services, get_service, clean_data
 from core.market_graph import get_graph
@@ -53,6 +54,7 @@ def create_app():
     app.register_blueprint(ceo_bp, url_prefix='/api/ceo')
     app.register_blueprint(market_bp, url_prefix='/api/market')
     app.register_blueprint(premium_bp, url_prefix='/api')
+    app.register_blueprint(relay_bp, url_prefix='/api/relay')
     app.register_blueprint(v2_bp, url_prefix='/api')
     app.register_blueprint(v2_bp, url_prefix='/api/v1', name='v2_bridge_v1')
     
@@ -372,6 +374,49 @@ def create_app():
         except Exception as e:
             logger.error(f"[RDT] Error: {e}")
             return jsonify({"status": "error", "message": str(e)}), 500
+
+    # ── Free Signal Preview — acquisition funnel ─────────────────────────────
+    # Returns bias + regime only, cached 15 min. No payment required.
+    # Enough for an agent to verify SqueezeOS works; not enough to trade on.
+    _preview_cache: dict = {}
+    _PREVIEW_TTL = 900  # 15 minutes
+
+    @app.route('/api/preview', methods=['GET'])
+    @app.route('/api/preview/<symbol>', methods=['GET'])
+    def signal_preview(symbol='IWM'):
+        symbol = symbol.upper().strip()
+        now = time.time()
+        cached = _preview_cache.get(symbol)
+        if cached and (now - cached['ts']) < _PREVIEW_TTL:
+            return jsonify(cached)
+        try:
+            from core.oracle_engine import OracleEngine
+            services = {
+                "dm":            get_service("dm"),
+                "whale_stalker": get_service("whale_stalker"),
+                "sml":           get_service("sml"),
+            }
+            engine = OracleEngine(services)
+            data   = engine.analyze(symbol)
+            bias   = data.get("bias") or data.get("directive", "NEUTRAL")
+            regime = data.get("regime", "UNKNOWN")
+        except Exception:
+            bias, regime = "NEUTRAL", "UNKNOWN"
+        result = {
+            "symbol":  symbol,
+            "bias":    bias,
+            "regime":  regime,
+            "ts":      now,
+            "preview": True,
+            "upgrade": {
+                "full_verdict": "/api/council",
+                "price_rlusd":  "0.10",
+                "includes":     ["confidence", "thesis", "engine_breakdown", "gamma_wall", "vpin"],
+                "gateway":      "https://four02proof.onrender.com",
+            },
+        }
+        _preview_cache[symbol] = result
+        return jsonify(result)
 
     @app.route('/<path:path>')
     def serve_static(path):
