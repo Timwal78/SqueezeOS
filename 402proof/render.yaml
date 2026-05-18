@@ -32,5 +32,6 @@ services:
       # SMTP_FROM             — from address for receipt emails
       # SMTP_TO               — merchant receipt destination
       # ── Optional: wallet binding enforcement ─────────────────────────────────
-      # ENFORCE_WALLET_BINDING — set to "true" to hard-reject cross-wallet token use
-      #                          default "false" (logs mismatch, does not block)
+      # Hard-reject tokens used from a different wallet than the one that paid.
+      - key: ENFORCE_WALLET_BINDING
+        value: "true"

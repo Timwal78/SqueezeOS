@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>402PROOF OPERATOR</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --cyan: #00FFCC; --red: #FF0055; --gold: #FFD700; --purple: #AA00FF;
+    --dim: #334455; --bg: #020408; --panel: #070D14; --border: #0A1A2A;
+  }
+  body { background: var(--bg); color: var(--cyan); font-family: 'Courier New', monospace; font-size: 13px; min-height: 100vh; }
+  a { color: var(--cyan); }
+
+  /* ── Auth screen ─────────────────────────────────────────────────── */
+  #auth-screen {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 100vh; gap: 16px;
+  }
+  #auth-screen h1 { font-size: 1.4rem; letter-spacing: 0.15em; text-shadow: 0 0 20px var(--cyan); }
+  #auth-screen input {
+    background: var(--panel); border: 1px solid var(--border); color: var(--cyan);
+    font-family: inherit; font-size: 13px; padding: 10px 16px; width: 340px;
+    outline: none; letter-spacing: 0.05em;
+  }
+  #auth-screen input:focus { border-color: var(--cyan); }
+  #auth-screen button {
+    background: transparent; border: 1px solid var(--cyan); color: var(--cyan);
+    font-family: inherit; font-size: 13px; padding: 10px 32px; cursor: pointer;
+    letter-spacing: 0.1em; text-transform: uppercase;
+  }
+  #auth-screen button:hover { background: var(--cyan); color: var(--bg); }
+  #auth-error { color: var(--red); font-size: 12px; min-height: 16px; }
+
+  /* ── Main dashboard ──────────────────────────────────────────────── */
+  #dashboard { display: none; }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 24px; border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+  header h1 { font-size: 1rem; letter-spacing: 0.2em; }
+  #conn-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--red); margin-right: 6px; }
+  #conn-dot.live { background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
+  #conn-label { font-size: 11px; opacity: 0.7; }
+  #logout-btn {
+    background: transparent; border: 1px solid var(--dim); color: var(--dim);
+    font-family: inherit; font-size: 11px; padding: 4px 12px; cursor: pointer; letter-spacing: 0.1em;
+  }
+  #logout-btn:hover { border-color: var(--red); color: var(--red); }
+
+  /* ── Stats row ───────────────────────────────────────────────────── */
+  #stats-row {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 1px; background: var(--border); border-bottom: 1px solid var(--border);
+  }
+  .stat-box {
+    background: var(--panel); padding: 16px 20px;
+  }
+  .stat-label { font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 6px; }
+  .stat-val { font-size: 1.6rem; color: var(--cyan); font-weight: bold; letter-spacing: 0.05em; }
+  .stat-sub { font-size: 10px; color: var(--dim); margin-top: 4px; }
+
+  /* ── Body grid ───────────────────────────────────────────────────── */
+  #body-grid { display: grid; grid-template-columns: 1fr 380px; gap: 1px; background: var(--border); height: calc(100vh - 108px); overflow: hidden; }
+  #left-col { display: flex; flex-direction: column; overflow: hidden; }
+  #right-col { display: flex; flex-direction: column; overflow: hidden; background: var(--panel); }
+
+  /* ── Panels ──────────────────────────────────────────────────────── */
+  .panel-header {
+    padding: 10px 16px; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase;
+    color: var(--dim); border-bottom: 1px solid var(--border); background: var(--panel); flex-shrink: 0;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .panel-header span { color: var(--cyan); font-size: 11px; }
+
+  /* ── Agents table ────────────────────────────────────────────────── */
+  #agents-panel { flex: 1; overflow-y: auto; background: var(--bg); }
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    position: sticky; top: 0; background: var(--panel); padding: 8px 12px;
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--dim); text-align: left; border-bottom: 1px solid var(--border);
+    font-weight: normal;
+  }
+  tbody tr { border-bottom: 1px solid var(--border); }
+  tbody tr:hover { background: #050D16; }
+  td { padding: 8px 12px; font-size: 12px; color: #AAC8CC; white-space: nowrap; }
+  td.wallet { color: var(--cyan); font-size: 11px; }
+  td.score { font-weight: bold; font-size: 13px; }
+
+  .grade-badge {
+    display: inline-block; padding: 1px 7px; border-radius: 2px; font-size: 10px;
+    font-weight: bold; letter-spacing: 0.1em;
+  }
+  .grade-AAA { background: #003322; color: #00FFCC; border: 1px solid #00FFCC44; }
+  .grade-AA  { background: #002233; color: #00CCFF; border: 1px solid #00CCFF44; }
+  .grade-A   { background: #002244; color: #0099FF; border: 1px solid #0099FF44; }
+  .grade-BBB { background: #222200; color: #FFDD00; border: 1px solid #FFDD0044; }
+  .grade-BB  { background: #221100; color: #FF8800; border: 1px solid #FF880044; }
+  .grade-B   { background: #220011; color: #FF4455; border: 1px solid #FF445544; }
+  .grade-C   { background: #1A0A00; color: #AA4400; border: 1px solid #AA440044; }
+  .grade-D   { background: #111111; color: #555555; border: 1px solid #33333344; }
+
+  .tier-badge {
+    font-size: 10px; padding: 1px 6px; border-radius: 2px;
+    background: #0A1A0A; color: var(--dim); border: 1px solid var(--border);
+  }
+  .tier-Diamond  { color: #00FFFF; border-color: #00FFFF44; }
+  .tier-Platinum { color: #CC88FF; border-color: #CC88FF44; }
+  .tier-Gold     { color: var(--gold); border-color: #FFD70044; }
+  .tier-Silver   { color: #AABBCC; border-color: #AABBCC44; }
+
+  .blocked-row { opacity: 0.4; }
+  .blocked-row td.wallet::after { content: ' [BLOCKED]'; color: var(--red); font-size: 10px; }
+
+  /* ── Feed panel ──────────────────────────────────────────────────── */
+  #feed-panel { flex: 1; overflow-y: auto; }
+  .feed-item {
+    padding: 9px 14px; border-bottom: 1px solid var(--border); font-size: 11px; line-height: 1.5;
+    animation: fadeIn 0.3s ease;
+  }
+  @keyframes fadeIn { from { opacity: 0; transform: translateX(6px); } to { opacity: 1; transform: none; } }
+  .feed-item .fi-time { color: var(--dim); font-size: 10px; }
+  .feed-item .fi-wallet { color: var(--cyan); }
+  .feed-item .fi-path { color: var(--gold); }
+  .feed-item .fi-amount { color: #00FF88; font-weight: bold; }
+  .feed-item .fi-tx { color: var(--dim); font-size: 10px; }
+
+  /* ── Leaderboard ─────────────────────────────────────────────────── */
+  #leaderboard { flex-shrink: 0; border-top: 1px solid var(--border); max-height: 200px; overflow-y: auto; }
+  .lb-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 14px; border-bottom: 1px solid var(--border); font-size: 11px;
+  }
+  .lb-rank { color: var(--dim); width: 20px; }
+  .lb-wallet { color: var(--cyan); flex: 1; padding: 0 8px; font-size: 10px; }
+  .lb-spend { color: #00FF88; font-weight: bold; }
+
+  /* ── Scrollbar ───────────────────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); }
+
+  /* ── Empty state ─────────────────────────────────────────────────── */
+  .empty { text-align: center; color: var(--dim); padding: 40px 20px; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<!-- Auth screen -->
+<div id="auth-screen">
+  <h1>402PROOF OPERATOR</h1>
+  <p style="color:#334455;font-size:11px;letter-spacing:0.1em">ADMIN AUTHENTICATION REQUIRED</p>
+  <input type="password" id="token-input" placeholder="ADMIN_TOKEN" autocomplete="off" />
+  <div id="auth-error"></div>
+  <button onclick="attemptLogin()">AUTHENTICATE</button>
+</div>
+
+<!-- Dashboard -->
+<div id="dashboard">
+  <header>
+    <h1>402PROOF OPERATOR COMMAND</h1>
+    <div style="display:flex;align-items:center;gap:16px">
+      <span><span id="conn-dot"></span><span id="conn-label">CONNECTING</span></span>
+      <button id="logout-btn" onclick="logout()">LOGOUT</button>
+    </div>
+  </header>
+
+  <div id="stats-row">
+    <div class="stat-box">
+      <div class="stat-label">Total RLUSD Settled</div>
+      <div class="stat-val" id="s-rlusd">0.0000</div>
+      <div class="stat-sub">cumulative all-time</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Unique Agents</div>
+      <div class="stat-val" id="s-agents">0</div>
+      <div class="stat-sub">wallets seen</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Total Payments</div>
+      <div class="stat-val" id="s-calls">0</div>
+      <div class="stat-sub">verified settlements</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Active Endpoints</div>
+      <div class="stat-val" id="s-endpoints">0</div>
+      <div class="stat-sub">market + bureau</div>
+    </div>
+  </div>
+
+  <div id="body-grid">
+    <!-- Left: agents table -->
+    <div id="left-col">
+      <div class="panel-header">
+        Agent Registry — Credit Bureau
+        <span id="agent-count">0 agents</span>
+      </div>
+      <div id="agents-panel">
+        <table>
+          <thead>
+            <tr>
+              <th>Wallet</th>
+              <th>Score</th>
+              <th>Grade</th>
+              <th>Tier</th>
+              <th>Spend (RLUSD)</th>
+              <th>Calls</th>
+              <th>Last Active</th>
+              <th>KYB</th>
+            </tr>
+          </thead>
+          <tbody id="agents-tbody">
+            <tr><td colspan="8" class="empty">Waiting for first agent...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Right: feed + leaderboard -->
+    <div id="right-col">
+      <div class="panel-header">
+        Recent Payments
+        <span id="feed-count">0</span>
+      </div>
+      <div id="feed-panel">
+        <div id="feed-list">
+          <div class="empty">No payments yet — waiting for first agent...</div>
+        </div>
+      </div>
+
+      <div id="leaderboard">
+        <div class="panel-header">Top Earners</div>
+        <div id="lb-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const BASE = '';
+let token = '';
+let pollTimer = null;
+
+// ── Auth ────────────────────────────────────────────────────────────────────
+function attemptLogin() {
+  token = document.getElementById('token-input').value.trim();
+  if (!token) { showAuthError('Token required'); return; }
+  fetch(`${BASE}/v1/admin/stats`, { headers: { Authorization: 'Bearer ' + token } })
+    .then(r => {
+      if (!r.ok) throw new Error('Invalid token');
+      return r.json();
+    })
+    .then(() => {
+      localStorage.setItem('op_token', token);
+      showDashboard();
+    })
+    .catch(() => showAuthError('Authentication failed — check ADMIN_TOKEN'));
+}
+
+function showAuthError(msg) {
+  document.getElementById('auth-error').textContent = msg;
+}
+
+function logout() {
+  localStorage.removeItem('op_token');
+  clearInterval(pollTimer);
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('auth-screen').style.display = 'flex';
+  document.getElementById('token-input').value = '';
+}
+
+document.getElementById('token-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') attemptLogin();
+});
+
+// ── Bootstrap ────────────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  const saved = localStorage.getItem('op_token');
+  if (saved) { token = saved; showDashboard(); }
+});
+
+function showDashboard() {
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  poll();
+  pollTimer = setInterval(poll, 5000);
+}
+
+// ── Polling ──────────────────────────────────────────────────────────────────
+function poll() {
+  const headers = { Authorization: 'Bearer ' + token };
+  Promise.all([
+    fetch(`${BASE}/v1/admin/stats`,  { headers }).then(r => r.json()),
+    fetch(`${BASE}/v1/admin/agents`, { headers }).then(r => r.json()),
+    fetch(`${BASE}/v1/admin/feed`,   { headers }).then(r => r.json()),
+  ]).then(([stats, agents, feed]) => {
+    setConnected(true);
+    renderStats(stats);
+    renderAgents(agents.agents || []);
+    renderFeed(feed.receipts || []);
+  }).catch(() => setConnected(false));
+}
+
+// ── Stats ────────────────────────────────────────────────────────────────────
+function renderStats(s) {
+  setText('s-rlusd',     (s.total_rlusd || 0).toFixed(4));
+  setText('s-agents',    s.unique_agents    || 0);
+  setText('s-calls',     s.total_receipts   || 0);
+  setText('s-endpoints', s.active_endpoints || 0);
+}
+
+// ── Agents table ─────────────────────────────────────────────────────────────
+let knownAgents = new Set();
+
+function renderAgents(agents) {
+  const tbody = document.getElementById('agents-tbody');
+  document.getElementById('agent-count').textContent = agents.length + ' agents';
+  if (!agents.length) return;
+  tbody.innerHTML = '';
+  agents.forEach(a => {
+    if (!knownAgents.has(a.wallet)) knownAgents.add(a.wallet);
+    const tr = document.createElement('tr');
+    if (a.is_blocked) tr.classList.add('blocked-row');
+    const lastSeen = a.last_seen ? timeAgo(new Date(a.last_seen)) : 'never';
+    tr.innerHTML = `
+      <td class="wallet">${shortWallet(a.wallet)}</td>
+      <td class="score" style="color:${scoreColor(a.score)}">${a.score}</td>
+      <td><span class="grade-badge grade-${a.grade}">${a.grade}</span></td>
+      <td><span class="tier-badge tier-${a.loyalty_tier || 'Bronze'}">${a.loyalty_tier || 'Bronze'}</span></td>
+      <td>${(a.total_spend || 0).toFixed(4)}</td>
+      <td>${a.total_calls || 0}</td>
+      <td style="color:#556677">${lastSeen}</td>
+      <td style="color:${a.kyb_tier === 'verified' ? '#00FFCC' : '#334455'}">${a.kyb_tier || 'none'}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+  renderLeaderboard(agents.slice(0, 8));
+}
+
+function renderLeaderboard(agents) {
+  const lb = document.getElementById('lb-list');
+  lb.innerHTML = '';
+  agents.forEach((a, i) => {
+    const row = document.createElement('div');
+    row.className = 'lb-row';
+    row.innerHTML = `
+      <span class="lb-rank">${i + 1}</span>
+      <span class="lb-wallet">${shortWallet(a.wallet)}${a.domain ? ' · ' + a.domain : ''}</span>
+      <span class="lb-spend">${(a.total_spend || 0).toFixed(4)}</span>
+    `;
+    lb.appendChild(row);
+  });
+}
+
+// ── Feed ─────────────────────────────────────────────────────────────────────
+let seenReceipts = new Set();
+
+function renderFeed(receipts) {
+  const list = document.getElementById('feed-list');
+  document.getElementById('feed-count').textContent = receipts.length;
+  if (!receipts.length) return;
+
+  let added = 0;
+  receipts.slice(0, 20).forEach(r => {
+    if (seenReceipts.has(r.id)) return;
+    seenReceipts.add(r.id);
+    const div = document.createElement('div');
+    div.className = 'feed-item';
+    div.innerHTML = `
+      <div>
+        <span class="fi-wallet">${shortWallet(r.wallet)}</span>
+        <span style="color:#334455"> → </span>
+        <span class="fi-path">${r.path || r.endpoint_id}</span>
+        <span class="fi-amount" style="float:right">${r.amount} ${r.asset}</span>
+      </div>
+      <div>
+        <span class="fi-tx">${r.tx_hash || '—'}</span>
+        <span class="fi-time" style="float:right">${timeAgo(new Date(r.settled_at))}</span>
+      </div>
+    `;
+    if (list.firstChild && list.firstChild.className === 'empty') list.innerHTML = '';
+    list.insertBefore(div, list.firstChild);
+    added++;
+  });
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function setConnected(ok) {
+  const dot = document.getElementById('conn-dot');
+  const lbl = document.getElementById('conn-label');
+  dot.className = ok ? 'live' : '';
+  lbl.textContent = ok ? 'LIVE' : 'OFFLINE';
+}
+
+function setText(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+
+function shortWallet(w) {
+  if (!w) return '—';
+  return w.length > 16 ? w.slice(0, 8) + '…' + w.slice(-4) : w;
+}
+
+function scoreColor(score) {
+  if (score >= 750) return '#00FFCC';
+  if (score >= 650) return '#FFDD00';
+  if (score >= 500) return '#FF8800';
+  return '#FF4455';
+}
+
+function timeAgo(date) {
+  const s = Math.floor((Date.now() - date) / 1000);
+  if (s < 60) return s + 's ago';
+  if (s < 3600) return Math.floor(s / 60) + 'm ago';
+  if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+  return Math.floor(s / 86400) + 'd ago';
+}
+</script>
+</body>
+</html>
