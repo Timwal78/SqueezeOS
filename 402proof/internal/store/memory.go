@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"sync"
 	"time"
 
@@ -232,12 +233,49 @@ func (m *Memory) DailyCallCount(endpointID, wallet string) int {
 func (m *Memory) Stats() map[string]interface{} {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	totalRLUSD := 0.0
+	for _, a := range m.agents {
+		totalRLUSD += a.SpendFloat
+	}
 	return map[string]interface{}{
 		"total_calls":      m.totalCalls,
 		"total_receipts":   len(m.receipts),
 		"unique_agents":    len(m.agents),
 		"active_endpoints": len(m.endpoints),
+		"total_rlusd":      totalRLUSD,
 	}
+}
+
+// ListAgents returns all agents sorted by spend descending.
+func (m *Memory) ListAgents() []*models.Agent {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	result := make([]*models.Agent, 0, len(m.agents))
+	for _, a := range m.agents {
+		cp := *a
+		result = append(result, &cp)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].SpendFloat > result[j].SpendFloat
+	})
+	return result
+}
+
+// ListRecentReceiptsJSON returns the last N receipts sorted newest-first.
+func (m *Memory) ListRecentReceiptsJSON(limit int) []*models.Receipt {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	all := make([]*models.Receipt, 0, len(m.receipts))
+	for _, r := range m.receipts {
+		all = append(all, r)
+	}
+	sort.Slice(all, func(i, j int) bool {
+		return all[i].SettledAt.After(all[j].SettledAt)
+	})
+	if len(all) > limit {
+		all = all[:limit]
+	}
+	return all
 }
 
 // agentSnapshot is the serialisable form of the agents map.

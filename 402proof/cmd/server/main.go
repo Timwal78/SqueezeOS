@@ -587,6 +587,51 @@ func main() {
 		a.Get("/stats", func(w http.ResponseWriter, req *http.Request) {
 			writeJSON(w, 200, db.Stats())
 		})
+
+		// All agents with computed credit scores — dashboard agent table
+		a.Get("/agents", func(w http.ResponseWriter, req *http.Request) {
+			agents := db.ListAgents()
+			rows := make([]map[string]interface{}, 0, len(agents))
+			for _, agent := range agents {
+				rep := bureau.Compute(agent)
+				rows = append(rows, map[string]interface{}{
+					"wallet":       agent.Wallet,
+					"domain":       agent.Domain,
+					"score":        rep.Score,
+					"grade":        rep.Grade,
+					"loyalty_tier": agent.LoyaltyTier,
+					"kyb_tier":     agent.KYBTier,
+					"total_spend":  agent.SpendFloat,
+					"total_calls":  agent.TotalCalls,
+					"first_seen":   agent.FirstSeen,
+					"last_seen":    agent.LastSeen,
+					"is_blocked":   agent.IsBlocked,
+					"risk_score":   agent.RiskScore,
+				})
+			}
+			writeJSON(w, 200, map[string]interface{}{"agents": rows, "count": len(rows)})
+		})
+
+		// Recent payments as JSON — dashboard feed
+		a.Get("/feed", func(w http.ResponseWriter, req *http.Request) {
+			receipts := db.ListRecentReceiptsJSON(50)
+			rows := make([]map[string]interface{}, 0, len(receipts))
+			for _, r := range receipts {
+				rows = append(rows, map[string]interface{}{
+					"id":           r.ID[:8],
+					"wallet":       r.AgentWallet,
+					"domain":       r.AgentDomain,
+					"endpoint_id":  r.EndpointID[:8],
+					"path":         r.Path,
+					"amount":       r.Amount,
+					"asset":        r.Asset,
+					"tx_hash":      r.TxHash[:min8(len(r.TxHash))],
+					"risk_level":   r.RiskLevel,
+					"settled_at":   r.SettledAt,
+				})
+			}
+			writeJSON(w, 200, map[string]interface{}{"receipts": rows, "count": len(rows)})
+		})
 	})
 
 	// ── AGENT CREDIT BUREAU ───────────────────────────────────────────────────────
@@ -793,6 +838,13 @@ func main() {
 	defer cancel()
 	srv.Shutdown(ctx)
 	log.Println("[402Proof] Stopped.")
+}
+
+func min8(n int) int {
+	if n < 8 {
+		return n
+	}
+	return 8
 }
 
 func writeJSON(w http.ResponseWriter, code int, v interface{}) {
