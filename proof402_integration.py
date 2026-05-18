@@ -51,7 +51,12 @@ def _verify_token_local(token: str) -> dict:
         if int(time.time()) > payload['exp']:
             return {'valid': False}
 
-        return {'valid': True, 'endpoint_id': payload.get('eid')}
+        return {
+            'valid':       True,
+            'endpoint_id': payload.get('eid'),
+            'wallet':      payload.get('wlt', ''),  # bound paying wallet (empty on pre-v2 tokens)
+            'invoice_id':  payload.get('iid'),
+        }
     except Exception:
         return {'valid': False}
 

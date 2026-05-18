@@ -44,20 +44,31 @@ func IsExpired(inv *models.Invoice) bool {
 	return time.Now().After(inv.ExpiresAt)
 }
 
+// TokenClaims holds the verified claims extracted from an access token.
+type TokenClaims struct {
+	EndpointID string // eid — which endpoint this token unlocks
+	WalletAddr string // wlt — XRPL classic address of the paying wallet
+	InvoiceID  string // iid — invoice that originated this token
+}
+
 type tokenPayload struct {
 	InvoiceID  string `json:"iid"`
 	EndpointID string `json:"eid"`
+	WalletAddr string `json:"wlt"` // bound paying wallet — prevents token sharing
 	IssuedAt   int64  `json:"iat"`
 	ExpiresAt  int64  `json:"exp"`
 }
 
-func IssueToken(inv *models.Invoice, secret string) (string, error) {
+// IssueToken mints a signed JWT-style access token bound to the paying wallet.
+// Tokens encode the wallet address so middleware can reject cross-wallet reuse.
+func IssueToken(inv *models.Invoice, secret, walletAddr string) (string, error) {
 	if secret == "" {
 		return "", errors.New("token secret not configured")
 	}
 	payload := tokenPayload{
 		InvoiceID:  inv.ID,
 		EndpointID: inv.EndpointID,
+		WalletAddr: walletAddr,
 		IssuedAt:   time.Now().Unix(),
 		ExpiresAt:  time.Now().Add(TokenTTL).Unix(),
 	}
@@ -70,28 +81,48 @@ func IssueToken(inv *models.Invoice, secret string) (string, error) {
 	return fmt.Sprintf("%s.%s", encoded, mac), nil
 }
 
-func VerifyToken(token, secret string) (string, error) {
+// VerifyToken validates the HMAC signature, checks expiry, and returns TokenClaims.
+// The wlt field is present in all tokens issued after this version. Tokens issued
+// before the upgrade will have an empty WalletAddr — the caller decides enforcement.
+func VerifyToken(token, secret string) (*TokenClaims, error) {
 	parts := strings.SplitN(token, ".", 2)
 	if len(parts) != 2 {
-		return "", errors.New("malformed token")
+		return nil, errors.New("malformed token")
 	}
 	encoded, sig := parts[0], parts[1]
 	expected := hmacSign(encoded, secret)
 	if !hmac.Equal([]byte(sig), []byte(expected)) {
-		return "", errors.New("invalid token signature")
+		return nil, errors.New("invalid token signature")
 	}
 	payloadJSON, err := base64.RawURLEncoding.DecodeString(encoded)
 	if err != nil {
-		return "", errors.New("malformed token payload")
+		return nil, errors.New("malformed token payload")
 	}
 	var payload tokenPayload
 	if err := json.Unmarshal(payloadJSON, &payload); err != nil {
-		return "", errors.New("malformed token payload")
+		return nil, errors.New("malformed token payload")
 	}
 	if time.Now().Unix() > payload.ExpiresAt {
-		return "", errors.New("token expired")
+		return nil, errors.New("token expired")
 	}
-	return payload.EndpointID, nil
+	return &TokenClaims{
+		EndpointID: payload.EndpointID,
+		WalletAddr: payload.WalletAddr,
+		InvoiceID:  payload.InvoiceID,
+	}, nil
+}
+
+// VerifyTokenForEndpoint is a convenience wrapper: verifies the token AND enforces
+// that it was issued for the given endpoint. Used by the SqueezeOS middleware.
+func VerifyTokenForEndpoint(token, secret, endpointID string) (*TokenClaims, error) {
+	claims, err := VerifyToken(token, secret)
+	if err != nil {
+		return nil, err
+	}
+	if endpointID != "" && claims.EndpointID != endpointID {
+		return nil, errors.New("token not valid for this endpoint")
+	}
+	return claims, nil
 }
 
 func hmacSign(data, secret string) string {
