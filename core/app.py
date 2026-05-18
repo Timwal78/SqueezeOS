@@ -381,6 +381,67 @@ def create_app():
             logger.error(f"[RDT] Error: {e}")
             return jsonify({"status": "error", "message": str(e)}), 500
 
+    # ── Demo endpoint — full council verdict, IWM, no payment, 5-min cache ────
+    # Shows agents the EXACT response format they get when they pay.
+    # Eliminates "is this real?" friction for new agents evaluating the platform.
+    _demo_cache: dict = {}
+    _DEMO_TTL = 300  # 5 minutes
+
+    @app.route('/api/demo', methods=['GET'])
+    @app.route('/api/demo/council', methods=['GET'])
+    def demo_council():
+        now = time.time()
+        cached = _demo_cache.get('council')
+        if cached and (now - cached.get('_cached_at', 0)) < _DEMO_TTL:
+            return jsonify(cached)
+        try:
+            from core.oracle_engine import OracleEngine
+            services = {
+                "dm":            get_service("dm"),
+                "whale_stalker": get_service("whale_stalker"),
+                "sml":           get_service("sml"),
+            }
+            engine = OracleEngine(services)
+            data   = engine.analyze('IWM')
+            trend  = data.get('trend_score', 0) or 0
+            bias   = 'BULLISH' if trend > 0.2 else 'BEARISH' if trend < -0.2 else 'NEUTRAL'
+            result = {
+                "demo":       True,
+                "symbol":     "IWM",
+                "verdict": {
+                    "symbol":     "IWM",
+                    "bias":       bias,
+                    "regime":     data.get('regime', 'UNKNOWN'),
+                    "confidence": min(100, int(abs(trend) * 200)),
+                    "thesis":     f"IWM regime={data.get('regime','UNKNOWN')} trend_score={round(trend,3)} → {bias}",
+                    "timestamp":  now,
+                },
+                "engines": {
+                    "sml": {k: v for k, v in data.items() if k in (
+                        'regime','trend_score','vpin','gamma_wall_above',
+                        'gamma_wall_below','bias','directive',
+                    )},
+                },
+                "note":       "Demo data — fixed symbol IWM, refreshed every 5 min. Real paid calls accept any symbol.",
+                "upgrade": {
+                    "any_symbol":  "/api/council",
+                    "price_rlusd": "0.10",
+                    "gateway":     "https://four02proof.onrender.com",
+                    "includes":    ["any symbol", "live data", "full engine breakdown", "battle computer consensus"],
+                },
+                "_cached_at": now,
+            }
+        except Exception as e:
+            result = {
+                "demo":    True,
+                "symbol":  "IWM",
+                "error":   str(e),
+                "note":    "Oracle engine temporarily offline. Try /api/preview/IWM for cached preview.",
+                "_cached_at": now,
+            }
+        _demo_cache['council'] = result
+        return jsonify(result)
+
     # ── Free Signal Preview — acquisition funnel ─────────────────────────────
     # Returns bias + regime only, cached 15 min. No payment required.
     # Enough for an agent to verify SqueezeOS works; not enough to trade on.

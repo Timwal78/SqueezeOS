@@ -17,13 +17,19 @@ Relay Endpoint IDs (bulk discount via 402Proof):
   iwm     : b2r1e1a4-c004-4c3f-aa24-de6e3bc12b5a  — 0.018 RLUSD
 """
 
+import os
 import time
 import uuid
+import json
 import logging
+import urllib.request
 from flask import Blueprint, jsonify, request
 
 logger = logging.getLogger("SqueezeOS-Relay")
 relay_bp = Blueprint('relay', __name__)
+
+_BUREAU_URL  = os.environ.get('PROOF402_SERVER_URL', 'https://four02proof.onrender.com')
+_MIN_SCORE   = 600   # minimum Credit Bureau score to become a relay node
 
 # ── Relay Node Registry (in-memory, survives Railway crashes, resets on deploy)
 _registry: dict[str, dict] = {}
@@ -61,44 +67,91 @@ RELAY_ENDPOINTS = {
 }
 
 
+def _bureau_score(wallet: str) -> dict:
+    """Fetch credit bureau score from 402Proof. Returns score dict or {'offline': True}."""
+    try:
+        url = f"{_BUREAU_URL}/v1/bureau/score/{wallet}"
+        req = urllib.request.Request(url, headers={"User-Agent": "SqueezeOS-Relay/2.0"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return json.loads(resp.read())
+    except Exception as e:
+        logger.warning(f"[RELAY] Bureau offline during registration check: {e}")
+        return {"offline": True}
+
+
 @relay_bp.route('/register', methods=['POST'])
 def register():
     """
-    Register as a relay node.
+    Register as a relay node. Requires Credit Bureau score >= 600.
     Body: { wallet, markup_bps, relay_url (opt), description (opt) }
-    Returns relay_id, bulk endpoint IDs, and discount pricing table.
+
+    Credit Bureau score >= 600 requires roughly 10 payments (~1.5 RLUSD lifetime spend).
+    Build score by paying for signals through SqueezeOS standard endpoints first.
     """
     body = request.get_json(silent=True) or {}
     wallet = (body.get('wallet') or '').strip()
     markup_bps = body.get('markup_bps', 1000)  # default 10%
-    relay_url  = (body.get('relay_url') or '').strip()
+    relay_url   = (body.get('relay_url') or '').strip()
     description = (body.get('description') or '')[:200]
 
     if not wallet:
-        return jsonify({"error": "wallet required"}), 400
+        return jsonify({"error": "ERR_WALLET_REQUIRED", "message": "wallet field required"}), 400
     if not wallet.startswith('r') or len(wallet) < 25:
-        return jsonify({"error": "invalid XRPL wallet address"}), 400
+        return jsonify({"error": "ERR_INVALID_WALLET", "message": "invalid XRPL wallet address"}), 400
     if not isinstance(markup_bps, int) or not (100 <= markup_bps <= 10000):
-        return jsonify({"error": "markup_bps must be 100–10000 (1%–100%)"}), 400
+        return jsonify({
+            "error":   "ERR_INVALID_MARKUP",
+            "message": "markup_bps must be 100–10000 (1%–100%)",
+        }), 400
+
+    # ── Credit Bureau gate ────────────────────────────────────────────────────
+    bureau = _bureau_score(wallet)
+    bureau_verified = not bureau.get("offline")
+
+    if bureau_verified:
+        score = bureau.get("score", 300)
+        grade = bureau.get("grade", "D")
+        if score < _MIN_SCORE:
+            return jsonify({
+                "error":          "ERR_SCORE_TOO_LOW",
+                "message":        f"Relay node registration requires Credit Bureau score ≥ {_MIN_SCORE}. Your score: {score} ({grade}).",
+                "current_score":  score,
+                "current_grade":  grade,
+                "required_score": _MIN_SCORE,
+                "remedy": {
+                    "build_score":  "Make RLUSD payments through SqueezeOS to increase your score (~10 payments to qualify)",
+                    "check_score":  f"{_BUREAU_URL}/v1/bureau/score/{wallet}",
+                    "full_report":  f"{_BUREAU_URL}/v1/bureau/report/{wallet}",
+                    "standard_api": "https://lively-fascination-production-41fa.up.railway.app/api/council",
+                },
+            }), 403
+    else:
+        score, grade = None, None
+        logger.warning(f"[RELAY] Bureau offline — registering {wallet[:12]} without score gate")
 
     relay_id = str(uuid.uuid4())[:8]
     _registry[wallet] = {
-        "relay_id":    relay_id,
-        "wallet":      wallet,
-        "markup_bps":  markup_bps,
-        "relay_url":   relay_url,
-        "description": description,
-        "registered_at": time.time(),
-        "active":      True,
+        "relay_id":       relay_id,
+        "wallet":         wallet,
+        "markup_bps":     markup_bps,
+        "relay_url":      relay_url,
+        "description":    description,
+        "registered_at":  time.time(),
+        "active":         True,
+        "bureau_score":   score,
+        "bureau_grade":   grade,
+        "bureau_verified": bureau_verified,
     }
 
-    logger.info(f"[RELAY] New node: {wallet[:12]}… markup={markup_bps}bps")
+    logger.info(f"[RELAY] New node: {wallet[:12]}… markup={markup_bps}bps score={score}")
 
     return jsonify({
-        "status":       "REGISTERED",
-        "relay_id":     relay_id,
-        "wallet":       wallet,
-        "markup_bps":   markup_bps,
+        "status":         "REGISTERED",
+        "relay_id":       relay_id,
+        "wallet":         wallet,
+        "markup_bps":     markup_bps,
+        "bureau_score":   score,
+        "bureau_verified": bureau_verified,
         "bulk_endpoints": RELAY_ENDPOINTS,
         "note": (
             "Use bulk endpoint IDs above when calling POST /v1/invoice at "

@@ -65,6 +65,17 @@
       }
     },
     {
+      "name": "demo_council",
+      "description": "Free full council verdict for IWM (Russell 2000 ETF). Returns the EXACT same response format as the paid council_verdict tool \u2014 regime, bias, confidence, thesis, engine breakdown. No payment required. Refreshed every 5 minutes. Use this to evaluate SqueezeOS before committing RLUSD.",
+      "endpoint": "GET https://lively-fascination-production-41fa.up.railway.app/api/demo",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
       "name": "market_scan",
       "description": "Full $1-$50 equity universe squeeze scanner. Returns all qualifying setups ranked by 8-module institutional score (volume profile, TTM squeeze, momentum vector, Z-score, RSI, money flow, price structure, trend alignment). Includes options picks per setup. Cost: 0.05 RLUSD.",
       "endpoint": "GET https://lively-fascination-production-41fa.up.railway.app/api/scan",
