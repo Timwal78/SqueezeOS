@@ -1,0 +1,10 @@
+# compiled binaries
+bridge
+ghost-layer-core
+
+# build artifacts
+*.exe
+*.out
+
+# env
+.env
