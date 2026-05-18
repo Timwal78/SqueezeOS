@@ -14,12 +14,13 @@ services:
         value: rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De
       - key: SERVER_URL
         sync: false
-      # Agent state persistence — loyalty tiers, passport, risk scores.
-      # Default /tmp/proof402_agents.json survives process crashes but resets
-      # on Render redeploys. Mount a Render Disk at /data and set this to
-      # /data/proof402_agents.json for full cross-deploy durability.
+      # Agent state persisted to Render Disk — survives all redeploys
       - key: AGENT_STATE_PATH
-        value: /tmp/proof402_agents.json
+        value: /data/proof402_agents.json
+    disk:
+      name: proof402-state
+      mountPath: /data
+      sizeGB: 1
       # ── SECRETS: set in Render dashboard, never here ──────────────────────────
       # GATEWAY_XRPL_ADDRESS  — your 402Proof hot wallet (NOT your Xaman treasury)
       # TOKEN_SECRET          — openssl rand -hex 32

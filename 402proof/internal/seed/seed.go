@@ -20,6 +20,12 @@ const (
 	BureauReportID = "b1c2d3e4-0001-4c3f-aa24-de6e3bc12b5a"
 	BureauVerifyID = "b1c2d3e4-0002-4c3f-aa24-de6e3bc12b5a"
 	BureauAttestID = "b1c2d3e4-0003-4c3f-aa24-de6e3bc12b5a"
+
+	// Signal Relay Mesh — bulk discount endpoint IDs (40% off standard)
+	RelayCouncilID = "b2r1e1a4-c001-4c3f-aa24-de6e3bc12b5a"
+	RelayScanID    = "b2r1e1a4-c002-4c3f-aa24-de6e3bc12b5a"
+	RelayOptionsID = "b2r1e1a4-c003-4c3f-aa24-de6e3bc12b5a"
+	RelayIwmID     = "b2r1e1a4-c004-4c3f-aa24-de6e3bc12b5a"
 )
 
 type EndpointSeed struct {
@@ -28,6 +34,37 @@ type EndpointSeed struct {
 	Price       string
 	Asset       string
 	Description string
+}
+
+var RelayEndpoints = []EndpointSeed{
+	{
+		ID:          RelayCouncilID,
+		Path:        "/api/council",
+		Price:       "0.06",
+		Asset:       "RLUSD",
+		Description: "AI Council Verdict — relay bulk rate (40% off, registered relay nodes only)",
+	},
+	{
+		ID:          RelayScanID,
+		Path:        "/api/scan",
+		Price:       "0.03",
+		Asset:       "RLUSD",
+		Description: "Market Scan — relay bulk rate (40% off)",
+	},
+	{
+		ID:          RelayOptionsID,
+		Path:        "/api/options",
+		Price:       "0.03",
+		Asset:       "RLUSD",
+		Description: "Options Intelligence — relay bulk rate (40% off)",
+	},
+	{
+		ID:          RelayIwmID,
+		Path:        "/api/iwm",
+		Price:       "0.018",
+		Asset:       "RLUSD",
+		Description: "IWM 0DTE — relay bulk rate (40% off)",
+	},
 }
 
 var BureauEndpoints = []EndpointSeed{
@@ -106,8 +143,9 @@ func Run(db *store.Memory, gatewayAddr string) {
 		log.Printf("[SEED] Merchant: %s id=%s", merchantName, MerchantID)
 	}
 
-	// Seed all endpoints (SML + Bureau)
-	for _, e := range append(SMLEndpoints, BureauEndpoints...) {
+	// Seed all endpoints: SML market + Bureau + Relay bulk
+	all := append(append(SMLEndpoints, BureauEndpoints...), RelayEndpoints...)
+	for _, e := range all {
 		if _, ok := db.GetEndpoint(e.ID); !ok {
 			ep := &models.Endpoint{
 				ID:          e.ID,
@@ -124,7 +162,7 @@ func Run(db *store.Memory, gatewayAddr string) {
 		}
 	}
 
-	log.Printf("[SEED] Script Master Labs ready — 4 market + 3 bureau endpoints active")
+	log.Printf("[SEED] Script Master Labs ready — 4 market + 3 bureau + 4 relay endpoints active")
 }
 
 func env(key, fallback string) string {
