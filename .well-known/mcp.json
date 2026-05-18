@@ -1,0 +1,193 @@
+{
+  "mcp_version": "1.0",
+  "name": "squeezeos",
+  "display_name": "SqueezeOS Market Intelligence",
+  "description": "Institutional AI trading intelligence tools for autonomous agents. Squeeze scanner, options flow, IWM 0DTE analysis, and AI council verdicts — all gated by x402 RLUSD micropayment on XRPL via 402Proof. No API keys required.",
+  "homepage": "https://scriptmasterlabs.com/terminal",
+  "openapi_spec": "https://scriptmasterlabs.com/openapi.json",
+  "payment": {
+    "standard": "x402",
+    "description": "HTTP 402 micropayment standard. Agents pay RLUSD on XRPL per API call. No registration or API keys required.",
+    "middleware_npm": "@relayos/mcp-paywall",
+    "middleware_install": "npm install @relayos/mcp-paywall",
+    "middleware_usage": "import { mcpPaywall } from '@relayos/mcp-paywall'; app.use('/mcp', mcpPaywall({ feeAddress: 'YOUR_XRPL_WALLET', feeDrops: '1000' }));",
+    "settlement": {
+      "network": "XRPL Mainnet",
+      "currency": "RLUSD",
+      "issuer": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De",
+      "settlement_server": "https://four02proof.onrender.com"
+    },
+    "loyalty": {
+      "description": "Cumulative spend tracked per XRPL wallet. Free calls awarded automatically by tier.",
+      "tiers": [
+        { "name": "Silver", "min_rlusd": 1, "free_ratio": "1:10" },
+        { "name": "Gold",   "min_rlusd": 5, "free_ratio": "1:5" },
+        { "name": "Platinum","min_rlusd": 25,"free_ratio": "1:3" },
+        { "name": "Diamond","min_rlusd": 100,"free_ratio": "1:2" }
+      ],
+      "lookup": "https://four02proof.onrender.com/v1/loyalty/{wallet}"
+    }
+  },
+  "tools": [
+    {
+      "name": "council_verdict",
+      "description": "Multi-engine AI verdict for any equity symbol. Returns regime (STEALTH/CONFLICT/EXECUTION/COLLAPSE), directional bias (BULLISH/BEARISH/NEUTRAL), confidence score, lifecycle stage, and institutional trading thesis. Uses SML Fractal Cascade + Battle Computer consensus. Cost: 0.10 RLUSD.",
+      "endpoint": "POST https://lively-fascination-production-41fa.up.railway.app/api/council",
+      "endpoint_id": "12a0e7a1-6812-4c3f-aa24-de6e3bc12b5a",
+      "price_rlusd": 0.10,
+      "input_schema": {
+        "type": "object",
+        "required": ["symbol"],
+        "properties": {
+          "symbol": { "type": "string", "description": "Equity ticker, e.g. SPY, QQQ, AAPL" }
+        }
+      }
+    },
+    {
+      "name": "market_scan",
+      "description": "Full $1-$50 equity universe squeeze scanner. Returns all qualifying setups ranked by 8-module institutional score (volume profile, TTM squeeze, momentum vector, Z-score, RSI, money flow, price structure, trend alignment). Includes options picks per setup. Cost: 0.05 RLUSD.",
+      "endpoint": "GET https://lively-fascination-production-41fa.up.railway.app/api/scan",
+      "endpoint_id": "160cf28d-b364-44eb-adbd-2489c5cc2cf8",
+      "price_rlusd": 0.05,
+      "input_schema": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "options_intelligence",
+      "description": "Institutional options flow: PUT/CALL sweep detection, whale premium blocks, unusual volume spikes, smart contract recommendations. Includes net delta, GEX aggregate, put/call ratios, max pain. Real Schwab chain data only — no simulated values. Cost: 0.05 RLUSD.",
+      "endpoint": "GET https://lively-fascination-production-41fa.up.railway.app/api/options",
+      "endpoint_id": "c951a374-2424-4064-ab80-35afe8053d29",
+      "price_rlusd": 0.05,
+      "input_schema": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "iwm_odte",
+      "description": "IWM (Russell 2000 ETF) zero-day-to-expiry contract scanner. Scores contracts by delta/gamma profile (target delta 0.25-0.45), bid-ask spread, volume/OI ratio. Returns gamma flip level, max pain, and 30-day realized vol. Cost: 0.03 RLUSD.",
+      "endpoint": "GET https://lively-fascination-production-41fa.up.railway.app/api/iwm",
+      "endpoint_id": "60f48ce0-6002-4385-9b60-03a0d2bbebab",
+      "price_rlusd": 0.03,
+      "input_schema": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "get_invoice",
+      "description": "Manually request a payment invoice for a SqueezeOS endpoint. Returns XRPL destination address, amount, and memo_hex required for on-chain payment. Free — no payment required.",
+      "endpoint": "POST https://four02proof.onrender.com/v1/invoice",
+      "price_rlusd": 0,
+      "input_schema": {
+        "type": "object",
+        "required": ["endpoint_id"],
+        "properties": {
+          "endpoint_id": { "type": "string", "format": "uuid", "description": "UUID of the endpoint to pay for" }
+        }
+      }
+    },
+    {
+      "name": "verify_payment",
+      "description": "Submit XRPL transaction hash after paying an invoice. Returns a signed JWT access_token (1-hour TTL) to use as X-Payment-Token header on protected endpoints. Free — no payment required.",
+      "endpoint": "POST https://four02proof.onrender.com/v1/verify",
+      "price_rlusd": 0,
+      "input_schema": {
+        "type": "object",
+        "required": ["invoice_id", "tx_hash", "agent_wallet"],
+        "properties": {
+          "invoice_id": { "type": "string", "format": "uuid" },
+          "tx_hash": { "type": "string", "description": "64-char hex XRPL transaction hash" },
+          "agent_wallet": { "type": "string", "description": "Paying agent's XRPL classic address" },
+          "agent_domain": { "type": "string", "description": "Optional agent domain for attribution" }
+        }
+      }
+    },
+    {
+      "name": "check_loyalty",
+      "description": "Check loyalty tier and free-call balance for any XRPL wallet. Loyalty is automatic — no registration needed. Free.",
+      "endpoint": "GET https://four02proof.onrender.com/v1/loyalty/{wallet}",
+      "price_rlusd": 0,
+      "input_schema": {
+        "type": "object",
+        "required": ["wallet"],
+        "properties": {
+          "wallet": { "type": "string", "description": "XRPL classic address (rADDRESS)" }
+        }
+      }
+    },
+    {
+      "name": "platform_stats",
+      "description": "Public 402Proof platform statistics: total payments, volume, active agents. Free.",
+      "endpoint": "GET https://four02proof.onrender.com/v1/stats",
+      "price_rlusd": 0,
+      "input_schema": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "get_agent_passport",
+      "description": "Retrieve agent identity passport and risk score for any XRPL wallet. Returns cumulative payment history, risk score (0-100), loyalty tier, and signed passport hash. Free.",
+      "endpoint": "GET https://four02proof.onrender.com/v1/agent/{wallet}",
+      "price_rlusd": 0,
+      "input_schema": {
+        "type": "object",
+        "required": ["wallet"],
+        "properties": {
+          "wallet": { "type": "string", "description": "XRPL classic address (rADDRESS)" }
+        }
+      }
+    },
+    {
+      "name": "get_compliance_receipt",
+      "description": "Retrieve a tamper-evident compliance receipt by ID. Contains XRPL tx hash, agent wallet, endpoint, amount, risk level, and timestamp. Exportable as JSON or CSV. Free.",
+      "endpoint": "GET https://four02proof.onrender.com/v1/receipt/{id}",
+      "price_rlusd": 0,
+      "input_schema": {
+        "type": "object",
+        "required": ["receipt_id"],
+        "properties": {
+          "receipt_id": { "type": "string", "format": "uuid", "description": "Receipt UUID from /v1/verify response" }
+        }
+      }
+    },
+    {
+      "name": "ghost_layer_bridge",
+      "description": "Ghost Layer dual-chain transparent toll gateway. Routes payments on XRPL (XRP native) or Base chain (USDC with EIP-3009). Applies configurable basis-point fee with full disclosure, delivers net amount to destination, auto-sweeps fees to cold treasury. Use is_dust_test=true to validate without broadcasting. No RLUSD payment required — this is a direct settlement service.",
+      "endpoint": "POST https://ghost-layer.onrender.com/v1/bridge/execute",
+      "price_rlusd": 0,
+      "note": "Service charges a configurable fee_basis_points on the gross_amount. Not RLUSD gated.",
+      "input_schema": {
+        "type": "object",
+        "required": ["source_wallet", "destination_wallet", "gross_amount", "fee_basis_points"],
+        "properties": {
+          "signer": { "type": "string", "description": "XRPL address — required for XRPL routes" },
+          "message_hash": { "type": "string", "description": "EIP-191 message hash" },
+          "signature": { "type": "string", "description": "Ed25519 (XRPL) or ECDSA (EVM)" },
+          "source_wallet": { "type": "string", "description": "rADDRESS (XRPL) or 0x address (Base)" },
+          "destination_wallet": { "type": "string", "description": "rADDRESS (XRPL) or 0x address (Base)" },
+          "gross_amount": { "type": "string", "description": "Amount in base units (XRP drops or USDC wei)" },
+          "fee_basis_points": { "type": "integer", "description": "Fee in bps, e.g. 50 = 0.5%" },
+          "eip3009": { "type": "object", "description": "EIP-3009 gasless auth — required for Base/USDC routes" },
+          "is_dust_test": { "type": "boolean", "description": "Dry-run: validates without broadcasting", "default": false }
+        }
+      }
+    },
+    {
+      "name": "register_merchant",
+      "description": "Register your own API endpoints behind 402Proof's x402 payment firewall. Free registration — returns merchant API key. Then use register_endpoint for each route you want to monetize.",
+      "endpoint": "POST https://four02proof.onrender.com/v1/merchant/register",
+      "price_rlusd": 0,
+      "input_schema": {
+        "type": "object",
+        "required": ["name", "email"],
+        "properties": {
+          "name": { "type": "string", "description": "Merchant/platform name" },
+          "email": { "type": "string", "format": "email" }
+        }
+      }
+    }
+  ],
+  "agent_flow": [
+    "1. Call a tool endpoint → receive HTTP 402 + invoice JSON",
+    "2. Establish RLUSD trust line on XRPL if first time (TrustSet to rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De)",
+    "3. Submit Payment tx on XRPL: destination=invoice.pay_to, amount=invoice.amount RLUSD, MemoData=invoice.memo_hex",
+    "4. Call verify_payment tool with invoice_id + tx_hash",
+    "5. Receive access_token — cache it for 1 hour",
+    "6. Retry original tool call with X-Payment-Token: <access_token> header",
+    "7. Check loyalty tier to track free-call accrual"
+  ],
+  "data_integrity": "Zero simulated data. All market data is real-time from Schwab (options), Polygon (equities), and XRPL (payments). If a feed is unavailable, endpoints return status=AWAITING_DATA rather than placeholder values.",
+  "crawling": "This server and all subpaths are open to AI crawlers. See /robots.txt for explicit user-agent permissions."
+}

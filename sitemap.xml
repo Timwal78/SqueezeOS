@@ -23,6 +23,26 @@
   <url>
     <loc>https://www.scriptmasterlabs.com/llms.txt</loc>
     <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://www.scriptmasterlabs.com/openapi.json</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://www.scriptmasterlabs.com/.well-known/openapi.json</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://www.scriptmasterlabs.com/.well-known/ai-plugin.json</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.scriptmasterlabs.com/.well-known/mcp.json</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
   </url>
 </urlset>

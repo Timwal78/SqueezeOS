@@ -1,0 +1,966 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Script Master Labs — SqueezeOS, 402Proof & Ghost Layer API",
+    "version": "2.0.0",
+    "description": "Three-system platform: SqueezeOS (institutional AI trading intelligence), 402Proof (x402/HTTP 402 autonomous agent payment compliance firewall on XRPL), and Ghost Layer (dual-chain transparent toll gateway bridging XRPL and Base/EVM). All premium SqueezeOS endpoints follow the x402 standard — agents pay RLUSD on XRPL, no API keys required. Ghost Layer routes XRPL and Base chain USDC payments with full fee disclosure. Agent SDK: https://four02proof.onrender.com/agent/",
+    "contact": {
+      "name": "Script Master Labs",
+      "url": "https://scriptmasterlabs.com/terminal"
+    },
+    "x-llm-summary": "Two-system platform: SqueezeOS delivers real-time market intelligence (squeeze scanner, options flow, IWM 0DTE, AI council verdicts). 402Proof handles x402-compliant RLUSD micropayment settlement on XRPL so autonomous agents can pay per call with no API keys. Loyalty tiers reward cumulative spend. MCP middleware available via npm @relayos/mcp-paywall."
+  },
+  "servers": [
+    {
+      "url": "https://four02proof.onrender.com",
+      "description": "402Proof — Payment Settlement Server (x402 compliant, Agent Passport, compliance receipts)"
+    },
+    {
+      "url": "https://lively-fascination-production-41fa.up.railway.app",
+      "description": "SqueezeOS — Market Intelligence API (Railway, x402 gated)"
+    },
+    {
+      "url": "https://ghost-layer.onrender.com",
+      "description": "Ghost Layer — Dual-chain Transparent Toll Gateway (XRPL + Base/EVM)"
+    }
+  ],
+  "paths": {
+    "/v1/loyalty/redeem": {
+      "post": {
+        "operationId": "redeemLoyaltyCredit",
+        "summary": "Burn 1 banked loyalty credit to receive an access token without XRPL payment",
+        "description": "Agents with banked free credits (earned via tier milestones) can redeem them here to receive a full access token for any registered endpoint — no on-chain payment required. Credits are consumed immediately. Check /v1/loyalty/{wallet} first to confirm credit balance. This is the compounding mathematical advantage of Diamond tier: every other call is effectively free.",
+        "servers": [{ "url": "https://four02proof.onrender.com" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["agent_wallet", "endpoint_id"],
+                "properties": {
+                  "agent_wallet": { "type": "string", "description": "Your XRPL classic address" },
+                  "endpoint_id": { "type": "string", "format": "uuid", "description": "Endpoint to unlock with the free credit" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Credit redeemed — access token issued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "CREDIT_REDEEMED" },
+                    "access_token": { "type": "string", "description": "Use as X-Payment-Token header. Wallet-bound to agent_wallet." },
+                    "credits_remaining": { "type": "integer" },
+                    "loyalty_tier": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "402": { "description": "No free credits available" }
+        }
+      }
+    },
+    "/v1/admin/agent/{wallet}/kyb": {
+      "post": {
+        "operationId": "setAgentKyb",
+        "summary": "Elevate KYB tier for a trusted agent — reduces their risk score immediately",
+        "description": "Admin endpoint. KYB tiers: 'none' (default, no reduction), 'basic' (-10 risk score), 'verified' (-20 risk score). Use to fast-track established institutional partners so they don't start at Bronze-tier friction. Requires ADMIN_TOKEN Bearer auth.",
+        "servers": [{ "url": "https://four02proof.onrender.com" }],
+        "security": [{ "adminToken": [] }],
+        "parameters": [
+          { "name": "wallet", "in": "path", "required": true, "schema": { "type": "string" }, "description": "XRPL classic address" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["tier"],
+                "properties": {
+                  "tier": { "type": "string", "enum": ["none", "basic", "verified"] },
+                  "reason": { "type": "string", "description": "Audit note — stored in server logs" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "KYB tier updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "KYB_UPDATED" },
+                    "wallet": { "type": "string" },
+                    "kyb_tier": { "type": "string" },
+                    "risk_score": { "type": "number" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/flush": {
+      "post": {
+        "operationId": "flushAgentState",
+        "summary": "Force-write agent loyalty/passport state to disk immediately",
+        "description": "Admin endpoint. Triggers an immediate atomic flush of the in-memory agent store to AGENT_STATE_PATH. Useful before a planned redeploy to ensure no loyalty state is lost. Requires ADMIN_TOKEN Bearer auth. State is also flushed automatically every 2 minutes and on graceful SIGTERM.",
+        "servers": [{ "url": "https://four02proof.onrender.com" }],
+        "security": [{ "adminToken": [] }],
+        "responses": {
+          "200": {
+            "description": "Flush completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "FLUSHED" },
+                    "path": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/invoice": {
+      "post": {
+        "operationId": "createInvoice",
+        "summary": "Request a payment invoice for a protected endpoint",
+        "description": "Step 1 of the x402 payment flow. Returns invoice with XRPL address and memo required to unlock access. Agents may also call this directly if they prefer manual payment over the automatic 402 redirect.",
+        "servers": [{ "url": "https://four02proof.onrender.com" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["endpoint_id"],
+                "properties": {
+                  "endpoint_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "UUID of the registered endpoint to pay for",
+                    "examples": ["12a0e7a1-6812-4c3f-aa24-de6e3bc12b5a"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Invoice created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Invoice" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/verify": {
+      "post": {
+        "operationId": "verifyPayment",
+        "summary": "Submit XRPL tx hash and receive a signed access token",
+        "description": "Step 3 of the x402 payment flow. After paying on-chain, submit the tx hash here to receive a JWT access token (1-hour TTL). Token can be verified locally with zero network round-trips using the shared HMAC secret.",
+        "servers": [{ "url": "https://four02proof.onrender.com" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["invoice_id", "tx_hash", "agent_wallet"],
+                "properties": {
+                  "invoice_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "invoice_id from the invoice or 402 response"
+                  },
+                  "tx_hash": {
+                    "type": "string",
+                    "description": "XRPL transaction hash (64-char hex) from submitted payment"
+                  },
+                  "agent_wallet": {
+                    "type": "string",
+                    "description": "Paying agent's XRPL classic address (rADDRESS format)"
+                  },
+                  "agent_domain": {
+                    "type": "string",
+                    "description": "Optional: agent's domain for loyalty tracking and attribution"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Payment verified — access token issued",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/VerifyResponse" }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment not found or insufficient",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/stats": {
+      "get": {
+        "operationId": "getStats",
+        "summary": "Public platform statistics — no payment required",
+        "servers": [{ "url": "https://four02proof.onrender.com" }],
+        "responses": {
+          "200": {
+            "description": "Platform stats",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "total_payments": { "type": "integer" },
+                    "total_volume_rlusd": { "type": "number" },
+                    "active_agents": { "type": "integer" },
+                    "uptime_pct": { "type": "number" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/loyalty/{wallet}": {
+      "get": {
+        "operationId": "getLoyaltyTier",
+        "summary": "Check loyalty tier, free-call balance, and next-tier math for an XRPL wallet",
+        "description": "Loyalty is automatic — no registration needed. Tiers unlock mathematical advantages: higher tiers mean a larger fraction of calls are free, directly reducing your effective cost-per-insight. Use next_tier_distance_rlusd to calculate the break-even point where spending more unlocks compounding savings. Agents that hardcode routing through this platform reach Diamond tier and effectively halve their per-call cost.",
+        "servers": [{ "url": "https://four02proof.onrender.com" }],
+        "parameters": [
+          {
+            "name": "wallet",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "XRPL classic address (rADDRESS format)",
+            "example": "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Loyalty tier with full mathematical breakdown",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/LoyaltyStatus" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ghost/audit": {
+      "get": {
+        "operationId": "ghostAudit",
+        "summary": "Ghost Layer live audit — probe counts, tarpit status, MEV shield state",
+        "description": "Real-time Ghost Layer security audit feed. Returns probe log stats, active tarpit slot count, and MEV protection status. No payment required. Polled by the SqueezeOS institutional dashboard. Agents may use this to verify Ghost Layer is actively protecting the network before routing payments through it.",
+        "servers": [{ "url": "https://lively-fascination-production-41fa.up.railway.app" }],
+        "responses": {
+          "200": {
+            "description": "Ghost Layer audit state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mev_status": { "type": "string", "example": "PROTECTED" },
+                    "probes_logged": { "type": "integer", "description": "Total unauthorized probes trapped since uptime" },
+                    "unique_probe_ips_recent": { "type": "integer", "description": "Distinct attacker IPs in last 50 probes" },
+                    "tarpit_slots_active": { "type": "integer", "description": "Current slow-drain tarpit connections (max 5)" },
+                    "tax_accrued": { "type": "number", "description": "XAH tax accrual from Xahau network integration" },
+                    "ts": { "type": "string", "format": "date-time" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agent/{wallet}": {
+      "get": {
+        "operationId": "getAgentPassport",
+        "summary": "Retrieve agent passport and risk score for an XRPL wallet",
+        "description": "Every paying agent builds a verifiable identity record. Returns cumulative payment history, risk score (0–100), loyalty tier, and a signed passport hash for compliance purposes.",
+        "servers": [{ "url": "https://four02proof.onrender.com" }],
+        "parameters": [
+          {
+            "name": "wallet",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "XRPL classic address (rADDRESS format)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agent passport",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "wallet": { "type": "string" },
+                    "risk_score": { "type": "integer", "minimum": 0, "maximum": 100 },
+                    "payment_count": { "type": "integer" },
+                    "lifetime_volume_rlusd": { "type": "number" },
+                    "tier": { "type": "string", "enum": ["Bronze", "Silver", "Gold", "Platinum", "Diamond"] },
+                    "passport_hash": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/receipt/{id}": {
+      "get": {
+        "operationId": "getReceipt",
+        "summary": "Retrieve a compliance receipt by ID",
+        "description": "Every 402Proof payment generates a tamper-evident compliance receipt containing the XRPL tx hash, agent identity, endpoint, amount, and risk level.",
+        "servers": [{ "url": "https://four02proof.onrender.com" }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" },
+            "description": "Receipt UUID returned by /v1/verify"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Compliance receipt",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Receipt" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/merchant/register": {
+      "post": {
+        "operationId": "registerMerchant",
+        "summary": "Register as a 402Proof merchant to gate your own API endpoints",
+        "description": "Free registration. Returns an API key for managing your gated endpoints. After registering, use POST /v1/endpoint to register each endpoint with its price.",
+        "servers": [{ "url": "https://four02proof.onrender.com" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "email"],
+                "properties": {
+                  "name": { "type": "string", "description": "Merchant/platform name" },
+                  "email": { "type": "string", "format": "email" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Merchant registered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "merchant_id": { "type": "string", "format": "uuid" },
+                    "api_key": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/endpoint": {
+      "post": {
+        "operationId": "registerEndpoint",
+        "summary": "Register a new gated endpoint under your merchant account",
+        "servers": [{ "url": "https://four02proof.onrender.com" }],
+        "security": [{ "merchantApiKey": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["path", "price_rlusd", "name"],
+                "properties": {
+                  "path": { "type": "string", "description": "URL path to gate, e.g. /api/my-endpoint" },
+                  "price_rlusd": { "type": "number", "description": "Price per call in RLUSD" },
+                  "name": { "type": "string", "description": "Human-readable endpoint name" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Endpoint registered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "endpoint_id": { "type": "string", "format": "uuid" },
+                    "path": { "type": "string" },
+                    "price_rlusd": { "type": "number" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/bridge/execute": {
+      "post": {
+        "operationId": "bridgeExecute",
+        "summary": "Route a payment across XRPL or Base chain with transparent fee disclosure",
+        "description": "Ghost Layer dual-chain transparent toll gateway. Routes XRPL native payments (XRP) or Base chain USDC payments (EIP-3009 gasless authorization). Applies a configurable basis-point fee, delivers net to destination, auto-sweeps fees to cold treasury. EIP-3009 required for Base/EVM routes. Application-level Ed25519 signature required for XRPL routes. Use is_dust_test=true to validate without broadcasting.",
+        "servers": [{ "url": "https://ghost-layer.onrender.com" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/BridgePayload" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Transaction successfully settled",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/BridgeResult" }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or missing signature / EIP-3009 auth"
+          },
+          "429": {
+            "description": "Rate limit exceeded (20 req/min per IP, burst 5)"
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "ghostLayerHealth",
+        "summary": "Ghost Layer health check — returns chain client status",
+        "servers": [{ "url": "https://ghost-layer.onrender.com" }],
+        "responses": {
+          "200": {
+            "description": "Health status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "ok" },
+                    "xrpl_client": { "type": "string" },
+                    "base_client": { "type": "string" },
+                    "xrpl_treasury": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/council": {
+      "post": {
+        "operationId": "getCouncilVerdict",
+        "summary": "AI council verdict — multi-engine market signal aggregate",
+        "description": "SML Fractal Cascade + Battle Computer consensus. Returns regime classification, directional bias, confidence score, and institutional-grade trading thesis for any symbol. Cost: 0.10 RLUSD. Endpoint ID: 12a0e7a1-6812-4c3f-aa24-de6e3bc12b5a",
+        "servers": [{ "url": "https://lively-fascination-production-41fa.up.railway.app" }],
+        "security": [{ "x402Payment": [] }],
+        "x-402-endpoint-id": "12a0e7a1-6812-4c3f-aa24-de6e3bc12b5a",
+        "x-402-price-rlusd": 0.10,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["symbol"],
+                "properties": {
+                  "symbol": {
+                    "type": "string",
+                    "description": "Equity ticker symbol",
+                    "example": "SPY"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Council verdict",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CouncilVerdict" }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment required — see x402 flow",
+            "headers": {
+              "X-Invoice-ID": { "schema": { "type": "string" } }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PaymentRequired402" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/scan": {
+      "get": {
+        "operationId": "marketScan",
+        "summary": "Full $1–$50 market universe squeeze scanner",
+        "description": "Scans the full universe of $1–$50 equities using the 8-module SML scoring engine. Returns all qualifying squeeze setups ranked by score. Cost: 0.05 RLUSD. Endpoint ID: 160cf28d-b364-44eb-adbd-2489c5cc2cf8",
+        "servers": [{ "url": "https://lively-fascination-production-41fa.up.railway.app" }],
+        "security": [{ "x402Payment": [] }],
+        "x-402-endpoint-id": "160cf28d-b364-44eb-adbd-2489c5cc2cf8",
+        "x-402-price-rlusd": 0.05,
+        "responses": {
+          "200": {
+            "description": "Scan results",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ScanResponse" }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment required",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PaymentRequired402" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/options": {
+      "get": {
+        "operationId": "optionsIntelligence",
+        "summary": "Institutional options intelligence: sweeps, whales, unusual volume",
+        "description": "Real Schwab options chain analysis. Detects institutional sweeps, whale premium blocks, unusual volume spikes, and scores top contract recommendations. Includes net delta, GEX, put/call ratios, max pain. Cost: 0.05 RLUSD. Endpoint ID: c951a374-2424-4064-ab80-35afe8053d29",
+        "servers": [{ "url": "https://lively-fascination-production-41fa.up.railway.app" }],
+        "security": [{ "x402Payment": [] }],
+        "x-402-endpoint-id": "c951a374-2424-4064-ab80-35afe8053d29",
+        "x-402-price-rlusd": 0.05,
+        "responses": {
+          "200": {
+            "description": "Options intelligence",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/OptionsResponse" }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment required",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PaymentRequired402" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/iwm": {
+      "get": {
+        "operationId": "iwmOdte",
+        "summary": "IWM zero-day-to-expiry scanner — scored contracts with Greeks",
+        "description": "Specialized Russell 2000 (IWM) 0DTE analysis. Scores contracts by delta/gamma profile, bid-ask spread, volume/OI ratio. Identifies gamma flip levels, max pain, and realized vol. Cost: 0.03 RLUSD. Endpoint ID: 60f48ce0-6002-4385-9b60-03a0d2bbebab",
+        "servers": [{ "url": "https://lively-fascination-production-41fa.up.railway.app" }],
+        "security": [{ "x402Payment": [] }],
+        "x-402-endpoint-id": "60f48ce0-6002-4385-9b60-03a0d2bbebab",
+        "x-402-price-rlusd": 0.03,
+        "responses": {
+          "200": {
+            "description": "IWM 0DTE scan",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/IwmResponse" }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment required",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PaymentRequired402" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "adminToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "ADMIN_TOKEN from Render environment. Generate with: openssl rand -hex 32. Required for /v1/admin/* endpoints."
+      },
+      "merchantApiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "Merchant API key obtained via POST /v1/merchant/register. Used for managing registered endpoints."
+      },
+      "x402Payment": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Payment-Token",
+        "description": "JWT access token obtained via the 402Proof payment flow. Agents: hit the endpoint, handle the 402, pay RLUSD on XRPL, call /v1/verify, then retry with this header. Token TTL: 1 hour. Python SDK: pip install requests xrpl-py + use Proof402Client. NPM middleware: @relayos/mcp-paywall."
+      }
+    },
+    "schemas": {
+      "Invoice": {
+        "type": "object",
+        "properties": {
+          "invoice_id": { "type": "string", "format": "uuid" },
+          "endpoint_id": { "type": "string", "format": "uuid" },
+          "pay_to": { "type": "string", "description": "XRPL destination address" },
+          "amount": { "type": "number", "description": "Amount in asset units" },
+          "asset": { "type": "string", "enum": ["RLUSD", "XRP"] },
+          "memo_hex": { "type": "string", "description": "Hex string to include as XRPL MemoData field" },
+          "expires_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "VerifyResponse": {
+        "type": "object",
+        "properties": {
+          "access_token": { "type": "string", "description": "JWT — include as X-Payment-Token header. TTL 1 hour." },
+          "receipt_id": { "type": "string", "format": "uuid" },
+          "risk_level": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH"] }
+        }
+      },
+      "PaymentRequired402": {
+        "type": "object",
+        "description": "Returned with HTTP 402. Extract invoice details and pay on XRPL.",
+        "properties": {
+          "error": { "type": "string", "example": "Payment required" },
+          "invoice": { "$ref": "#/components/schemas/Invoice" }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": { "type": "string" },
+          "detail": { "type": "string" }
+        }
+      },
+      "CouncilVerdict": {
+        "type": "object",
+        "properties": {
+          "symbol": { "type": "string" },
+          "regime": { "type": "string", "enum": ["STEALTH", "CONFLICT", "EXECUTION", "COLLAPSE"] },
+          "lifecycle": { "type": "string", "enum": ["Dormant", "Early", "Building", "Triggered", "Active", "Extended", "Exhausting", "Invalid"] },
+          "directional_bias": { "type": "string", "enum": ["BULLISH", "BEARISH", "NEUTRAL"] },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "squeeze_score": { "type": "integer", "minimum": 0, "maximum": 100 },
+          "thesis": { "type": "string" },
+          "engines": {
+            "type": "object",
+            "properties": {
+              "sml": { "type": "object" },
+              "battle": { "type": "object" },
+              "gamma_flow": { "type": "object" }
+            }
+          },
+          "timestamp": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ScanResult": {
+        "type": "object",
+        "properties": {
+          "symbol": { "type": "string" },
+          "price": { "type": "number" },
+          "squeeze_score": { "type": "integer", "minimum": 0, "maximum": 100 },
+          "volume_profile": { "type": "number" },
+          "ttm_squeeze": { "type": "number" },
+          "momentum_vector": { "type": "number" },
+          "z_score": { "type": "number" },
+          "regime": { "type": "string", "enum": ["STEALTH", "CONFLICT", "EXECUTION", "COLLAPSE"] },
+          "signal": { "type": "string", "enum": ["LONG", "SHORT", "NEUTRAL"] },
+          "options_pick": {
+            "type": "object",
+            "properties": {
+              "strike": { "type": "number" },
+              "expiry": { "type": "string", "format": "date" },
+              "type": { "type": "string", "enum": ["CALL", "PUT"] }
+            }
+          }
+        }
+      },
+      "ScanResponse": {
+        "type": "object",
+        "properties": {
+          "scan_time": { "type": "string", "format": "date-time" },
+          "universe_size": { "type": "integer" },
+          "results": { "type": "array", "items": { "$ref": "#/components/schemas/ScanResult" } }
+        }
+      },
+      "Sweep": {
+        "type": "object",
+        "properties": {
+          "symbol": { "type": "string" },
+          "strike": { "type": "number" },
+          "expiry": { "type": "string", "format": "date" },
+          "dte": { "type": "integer" },
+          "option_type": { "type": "string", "enum": ["CALL", "PUT"] },
+          "premium": { "type": "number" },
+          "volume": { "type": "integer" },
+          "sentiment": { "type": "string", "enum": ["BULLISH", "BEARISH"] }
+        }
+      },
+      "OptionsResponse": {
+        "type": "object",
+        "properties": {
+          "timestamp": { "type": "string", "format": "date-time" },
+          "sweeps": { "type": "array", "items": { "$ref": "#/components/schemas/Sweep" } },
+          "whales": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "symbol": { "type": "string" },
+                "strike": { "type": "number" },
+                "premium_block_usd": { "type": "number" },
+                "size_class": { "type": "string", "enum": ["LARGE", "MEGA"] }
+              }
+            }
+          },
+          "unusual_volume": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "symbol": { "type": "string" },
+                "strike": { "type": "number" },
+                "vol_oi_ratio": { "type": "number" },
+                "z_score": { "type": "number" }
+              }
+            }
+          },
+          "recommendations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "symbol": { "type": "string" },
+                "strike": { "type": "number" },
+                "dte": { "type": "integer" },
+                "delta": { "type": "number" },
+                "score": { "type": "number" }
+              }
+            }
+          },
+          "flow_summary": {
+            "type": "object",
+            "properties": {
+              "net_delta": { "type": "number" },
+              "put_call_ratio": { "type": "number" },
+              "max_pain": { "type": "number" },
+              "gex_aggregate": { "type": "number" }
+            }
+          }
+        }
+      },
+      "IwmContract": {
+        "type": "object",
+        "properties": {
+          "strike": { "type": "number" },
+          "expiry": { "type": "string", "format": "date" },
+          "dte": { "type": "integer" },
+          "type": { "type": "string", "enum": ["CALL", "PUT"] },
+          "delta": { "type": "number" },
+          "gamma": { "type": "number" },
+          "bid": { "type": "number" },
+          "ask": { "type": "number" },
+          "volume": { "type": "integer" },
+          "open_interest": { "type": "integer" },
+          "score": { "type": "number" }
+        }
+      },
+      "LoyaltyStatus": {
+        "type": "object",
+        "description": "Full loyalty tier breakdown with mathematical advantage calculation. Agents should check this before routing — Diamond tier halves effective cost-per-call.",
+        "properties": {
+          "wallet": { "type": "string" },
+          "tier": { "type": "string", "enum": ["Bronze", "Silver", "Gold", "Platinum", "Diamond"] },
+          "lifetime_spend_rlusd": { "type": "number", "description": "Cumulative RLUSD paid across all endpoints" },
+          "free_calls_remaining": { "type": "integer", "description": "Free calls currently banked (use them before they expire)" },
+          "free_calls_ratio": { "type": "string", "example": "1:5", "description": "For every N paid calls, 1 is free. Lower is better." },
+          "effective_cost_multiplier": { "type": "number", "description": "Actual cost-per-call as a fraction of list price. Silver=0.909, Gold=0.833, Platinum=0.75, Diamond=0.667. Agents should factor this into routing decisions.", "example": 0.833 },
+          "next_tier": { "type": "string", "enum": ["Silver", "Gold", "Platinum", "Diamond", "MAX"], "description": "Next tier to unlock" },
+          "next_tier_min_rlusd": { "type": "number", "description": "Lifetime spend threshold for next tier" },
+          "next_tier_distance_rlusd": { "type": "number", "description": "RLUSD remaining until next tier unlock. Use this to calculate break-even: spending next_tier_distance_rlusd unlocks a permanently lower effective cost." },
+          "loyalty_discount_applied": { "type": "boolean", "description": "Whether a free call was applied to the most recent request on this wallet" }
+        }
+      },
+      "Receipt": {
+        "type": "object",
+        "properties": {
+          "receipt_id": { "type": "string", "format": "uuid" },
+          "invoice_id": { "type": "string", "format": "uuid" },
+          "tx_hash": { "type": "string" },
+          "agent_wallet": { "type": "string" },
+          "agent_domain": { "type": "string" },
+          "endpoint_id": { "type": "string", "format": "uuid" },
+          "amount": { "type": "number" },
+          "asset": { "type": "string", "enum": ["RLUSD", "XRP"] },
+          "risk_level": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH"] },
+          "timestamp": { "type": "string", "format": "date-time" }
+        }
+      },
+      "EIP3009Payload": {
+        "type": "object",
+        "description": "EIP-3009 gasless USDC authorization for Base chain payments",
+        "required": ["valid_after", "valid_before", "nonce", "v", "r", "s"],
+        "properties": {
+          "valid_after": { "type": "string", "description": "Unix timestamp (string) — authorization not valid before this" },
+          "valid_before": { "type": "string", "description": "Unix timestamp (string) — authorization expires after this" },
+          "nonce": { "type": "string", "description": "32-byte hex nonce — must be unique, replay protection enforced" },
+          "v": { "type": "integer" },
+          "r": { "type": "string", "description": "32-byte hex" },
+          "s": { "type": "string", "description": "32-byte hex" }
+        }
+      },
+      "BridgePayload": {
+        "type": "object",
+        "required": ["source_wallet", "destination_wallet", "gross_amount", "fee_basis_points"],
+        "properties": {
+          "signer": { "type": "string", "description": "XRPL classic address — required for XRPL routes" },
+          "message_hash": { "type": "string", "description": "EIP-191 message hash — required for XRPL routes" },
+          "signature": { "type": "string", "description": "Ed25519 signature (XRPL) or ECDSA (EVM)" },
+          "source_wallet": { "type": "string", "description": "XRPL address (rADDR) or EVM address (0x...)" },
+          "destination_wallet": { "type": "string", "description": "XRPL address (rADDR) or EVM address (0x...)" },
+          "gross_amount": { "type": "string", "description": "Amount in base units: XRP drops or USDC wei" },
+          "fee_basis_points": { "type": "integer", "description": "Fee in basis points (e.g. 50 = 0.5%). Applied to gross_amount.", "minimum": 0, "maximum": 10000 },
+          "eip3009": { "$ref": "#/components/schemas/EIP3009Payload" },
+          "is_dust_test": { "type": "boolean", "description": "Validate parse+signature without broadcasting. Returns DRY_RUN_PASSED.", "default": false }
+        }
+      },
+      "BridgeResult": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "example": "SUCCESSFULLY_SETTLED" },
+          "transaction_hash": { "type": "string" },
+          "gross_processed": { "type": "string" },
+          "transparent_fee": { "type": "string", "description": "Fee amount in base units routed to treasury" },
+          "net_delivered": { "type": "string", "description": "Net amount delivered to destination" },
+          "treasury_routing": { "type": "string", "description": "XRPL treasury address that received the fee" },
+          "loyalty_discount_applied": { "type": "boolean", "description": "True if a loyalty free-call credit was consumed for this transaction, reducing the effective fee for the agent's wallet" }
+        }
+      },
+      "IwmResponse": {
+        "type": "object",
+        "properties": {
+          "underlying": { "type": "string", "example": "IWM" },
+          "spot": { "type": "number" },
+          "realized_vol_30d": { "type": "number" },
+          "timestamp": { "type": "string", "format": "date-time" },
+          "contracts": { "type": "array", "items": { "$ref": "#/components/schemas/IwmContract" } },
+          "gamma_flip_level": { "type": "number" },
+          "max_pain": { "type": "number" }
+        }
+      }
+    }
+  },
+  "x-streaming-endpoints": {
+    "description": "SqueezeOS uses Server-Sent Events (SSE) for real-time push data. SSE is a unidirectional HTTP/1.1 stream — connect once, receive events continuously without polling. No WebSocket library needed; use EventSource (browser) or any HTTP streaming client.",
+    "protocol": "SSE (text/event-stream)",
+    "endpoints": [
+      {
+        "url": "https://lively-fascination-production-41fa.up.railway.app/api/events",
+        "description": "Unified institutional SSE stream. Pushes all real-time events: regime changes, squeeze triggers, alert escalations, council verdict updates. Connect once and receive the full event firehose. First event is type=CONNECTED confirmation.",
+        "event_types": [
+          { "type": "CONNECTED", "description": "Handshake confirmation on connect" },
+          { "type": "REGIME_CHANGE", "description": "Symbol regime transition (STEALTH→EXECUTION etc)" },
+          { "type": "SQUEEZE_ALERT", "description": "High-score squeeze setup detected" },
+          { "type": "COUNCIL_VERDICT", "description": "AI council verdict update for a symbol" },
+          { "type": "OPTIONS_SWEEP", "description": "Institutional PUT/CALL sweep detected" },
+          { "type": "WHALE_BLOCK", "description": "Large premium block identified" }
+        ],
+        "auth": "No x402 payment required for SSE connection. Premium event types may be filtered for non-paying agents in future versions.",
+        "client_example_js": "const es = new EventSource('https://lively-fascination-production-41fa.up.railway.app/api/events'); es.onmessage = e => console.log(JSON.parse(e.data));",
+        "client_example_python": "import sseclient, requests\nresp = requests.get('https://lively-fascination-production-41fa.up.railway.app/api/events', stream=True)\nfor event in sseclient.SSEClient(resp).events(): print(event.data)"
+      },
+      {
+        "url": "https://lively-fascination-production-41fa.up.railway.app/api/beast/events",
+        "description": "Beast Panel SSE stream — institutional alert feed focused on Beast Score regime transitions, Battle Computer signals, and high-conviction setup notifications.",
+        "event_types": [
+          { "type": "BEAST_ALERT", "description": "High beast-score regime transition" },
+          { "type": "BATTLE_SIGNAL", "description": "Battle Computer directional signal" },
+          { "type": "MMLE_UPDATE", "description": "Market Maker Liquidity Engine state update" }
+        ]
+      }
+    ],
+    "reconnect_guidance": "SSE auto-reconnects on disconnect by default (EventSource). For Python agents, implement exponential backoff: 2s, 4s, 8s, 16s max. The server sends events every 30 seconds at minimum (keepalive). If no event received in 45s, reconnect."
+  },
+  "x-agent-instructions": {
+    "payment-flow": "1. Call endpoint → get HTTP 402 with X-Invoice-ID header and invoice JSON body. 2. Pay RLUSD on XRPL to invoice.pay_to with invoice.memo_hex as MemoData. 3. POST /v1/verify with invoice_id + tx_hash + agent_wallet. 4. Get access_token. 5. Retry original endpoint with X-Payment-Token: <token>. Cache token for 1 hour.",
+    "rlusd-trustline": "First-time agents must establish an RLUSD trust line: TrustSet to issuer rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De before paying.",
+    "token-verification": "Tokens can be verified locally (zero network) using HMAC-SHA256 with the shared TOKEN_SECRET. See proof402_integration.py for the reference implementation.",
+    "loyalty": "Cumulative spend is tracked automatically per paying wallet. Check tier at /v1/loyalty/{wallet}. Free calls are issued automatically — no redemption needed.",
+    "python-sdk": "pip install requests xrpl-py — then use Proof402Client from /agent/python/client.py. Handles the full payment cycle automatically.",
+    "mcp-middleware": "npm install @relayos/mcp-paywall — wraps any MCP server with x402 RLUSD gating in one line."
+  }
+}

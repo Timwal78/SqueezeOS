@@ -26,3 +26,7 @@ services:
         sync: false
       - key: ADMIN_TOKEN
         sync: false
+      # Live agent monitoring feed — SqueezeOS Railway SSE URL
+      # Set to: https://lively-fascination-production-41fa.up.railway.app/api/events
+      - key: SQUEEZEOS_SSE_URL
+        value: "https://lively-fascination-production-41fa.up.railway.app/api/events"

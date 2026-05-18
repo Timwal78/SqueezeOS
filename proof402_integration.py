@@ -51,7 +51,12 @@ def _verify_token_local(token: str) -> dict:
         if int(time.time()) > payload['exp']:
             return {'valid': False}
 
-        return {'valid': True, 'endpoint_id': payload.get('eid')}
+        return {
+            'valid':       True,
+            'endpoint_id': payload.get('eid'),
+            'wallet':      payload.get('wlt', ''),  # bound paying wallet (empty on pre-v2 tokens)
+            'invoice_id':  payload.get('iid'),
+        }
     except Exception:
         return {'valid': False}
 
@@ -70,6 +75,16 @@ def _issue_invoice(endpoint_id: str) -> dict:
         return json.loads(resp.read())
 
 
+import logging as _logging
+from flask import g as _g
+
+# ── Wallet binding enforcement ────────────────────────────────────────────────
+# Set ENFORCE_WALLET_BINDING=true in env to reject tokens used by a different
+# wallet than the one that paid. Defaults to soft-check (logs mismatch only)
+# so existing agents aren't broken during the v2 token rollout.
+_ENFORCE_WALLET_BINDING = os.getenv('ENFORCE_WALLET_BINDING', 'false').lower() == 'true'
+
+
 def require_payment(f):
     """
     Flask decorator — gates any route behind 402Proof RLUSD payment.
@@ -85,28 +100,53 @@ def require_payment(f):
         2. Agent pays RLUSD on XRPL with memo_hex
         3. Agent calls four02proof.onrender.com/v1/verify → gets access_token
         4. Agent retries with X-Payment-Token header → passes through
+
+    Wallet binding (v2 tokens):
+        Tokens issued after the v2 upgrade encode the paying wallet as 'wlt'.
+        If the request also sends X-Agent-Wallet, the decorator verifies they
+        match. Set ENFORCE_WALLET_BINDING=true to hard-reject mismatches.
+        Pre-v2 tokens (no wlt field) always pass — backward compatible.
+
+    Flask g context (available inside decorated route):
+        g.proof402_wallet      — paying wallet address (str, may be empty)
+        g.proof402_endpoint_id — verified endpoint UUID
     """
     @wraps(f)
     def decorated(*args, **kwargs):
         path = request.path
         endpoint_id = ENDPOINTS.get(path)
         if not endpoint_id:
-            # No 402Proof config for this path — pass through
             return f(*args, **kwargs)
 
         token = request.headers.get('X-Payment-Token')
         if token:
             result = _verify_token_local(token)
             if result['valid'] and result.get('endpoint_id') == endpoint_id:
+                token_wallet  = result.get('wallet', '')
+                request_wallet = request.headers.get('X-Agent-Wallet', '')
+
+                # Wallet binding check — only fires when both sides supply a wallet
+                if token_wallet and request_wallet and token_wallet != request_wallet:
+                    _logging.warning(
+                        '[402Proof] wallet mismatch — token_wlt=%s request_wlt=%s path=%s',
+                        token_wallet, request_wallet, path
+                    )
+                    if _ENFORCE_WALLET_BINDING:
+                        return jsonify({
+                            'error': 'Wallet mismatch',
+                            'detail': 'Token was issued to a different wallet. Pay with your own wallet.',
+                        }), 401
+
+                # Expose verified identity to the route via Flask g
+                _g.proof402_wallet      = token_wallet
+                _g.proof402_endpoint_id = endpoint_id
                 return f(*args, **kwargs)
 
         # No valid token — issue invoice and return 402
         try:
             inv = _issue_invoice(endpoint_id)
         except Exception as e:
-            # 402Proof unreachable — fail open so SqueezeOS stays up
-            import logging
-            logging.warning(f'[402Proof] invoice fetch failed: {e} — passing through')
+            _logging.warning(f'[402Proof] invoice fetch failed: {e} — passing through')
             return f(*args, **kwargs)
 
         return jsonify({

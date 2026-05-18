@@ -52,7 +52,12 @@ func main() {
 		log.Fatalf("[FATAL] ADMIN_TOKEN not set — generate with: openssl rand -hex 32")
 	}
 
+	agentStatePath := env("AGENT_STATE_PATH", "/tmp/proof402_agents.json")
+
 	db := store.NewMemory()
+	if err := db.LoadAgentsFromDisk(agentStatePath); err != nil {
+		log.Printf("[STORE] Could not load agent state from %s: %v (starting fresh)", agentStatePath, err)
+	}
 	seed.Run(db, gatewayAddr)
 	xrplClient := xrpl.NewClient(xrplRPC)
 	emailCfg := notify.LoadConfig()
@@ -276,7 +281,7 @@ func main() {
 			return
 		}
 
-		accessToken, err := invoice.IssueToken(inv, tokenSecret)
+		accessToken, err := invoice.IssueToken(inv, tokenSecret, body.AgentWallet)
 		if err != nil {
 			log.Printf("[TOKEN] issue failed: %v", err)
 			http.Error(w, "token issuance failed", http.StatusInternalServerError)
@@ -348,16 +353,20 @@ func main() {
 			http.Error(w, "token required", http.StatusBadRequest)
 			return
 		}
-		endpointID, err := invoice.VerifyToken(body.Token, tokenSecret)
+		claims, err := invoice.VerifyToken(body.Token, tokenSecret)
 		if err != nil {
 			http.Error(w, "invalid token: "+err.Error(), http.StatusUnauthorized)
 			return
 		}
-		if body.EndpointID != "" && endpointID != body.EndpointID {
+		if body.EndpointID != "" && claims.EndpointID != body.EndpointID {
 			http.Error(w, "token not valid for this endpoint", http.StatusUnauthorized)
 			return
 		}
-		writeJSON(w, 200, map[string]string{"status": "VALID", "endpoint_id": endpointID})
+		writeJSON(w, 200, map[string]string{
+			"status":      "VALID",
+			"endpoint_id": claims.EndpointID,
+			"wallet":      claims.WalletAddr,
+		})
 	})
 
 	// ── RECEIPTS ──────────────────────────────────────────────────────────────────
@@ -443,7 +452,7 @@ func main() {
 		inv.Status = "paid"
 		db.SaveInvoice(inv)
 
-		accessToken, err := invoice.IssueToken(inv, tokenSecret)
+		accessToken, err := invoice.IssueToken(inv, tokenSecret, body.AgentWallet)
 		if err != nil {
 			http.Error(w, "token issuance failed", http.StatusInternalServerError)
 			return
@@ -531,6 +540,49 @@ func main() {
 			writeJSON(w, 200, map[string]string{"status": "unblocked", "wallet": wallet})
 		})
 
+		// POST /v1/admin/agent/{wallet}/kyb — elevate KYB tier for a trusted agent.
+		// Elevated KYB directly reduces risk score: basic -10, verified -20.
+		// Use this to whitelist institutional partners and reduce their friction.
+		a.Post("/agent/{wallet}/kyb", func(w http.ResponseWriter, req *http.Request) {
+			wallet := chi.URLParam(req, "wallet")
+			req.Body = http.MaxBytesReader(w, req.Body, 8*1024)
+			var body struct {
+				Tier   string `json:"tier"`   // "basic" or "verified"
+				Reason string `json:"reason"` // optional audit note
+			}
+			if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+				http.Error(w, "invalid body", http.StatusBadRequest)
+				return
+			}
+			if body.Tier != "basic" && body.Tier != "verified" && body.Tier != "none" {
+				http.Error(w, "tier must be 'basic', 'verified', or 'none'", http.StatusBadRequest)
+				return
+			}
+			agent := db.GetOrCreateAgent(wallet)
+			oldTier := agent.KYBTier
+			agent.KYBTier = body.Tier
+			agent.RiskScore = passport.Score(agent)
+			db.UpdateAgent(agent)
+			log.Printf("[KYB] %s elevated: %s → %s | risk=%.0f | note=%s",
+				wallet, oldTier, body.Tier, agent.RiskScore, body.Reason)
+			writeJSON(w, 200, map[string]interface{}{
+				"status":     "KYB_UPDATED",
+				"wallet":     wallet,
+				"kyb_tier":   agent.KYBTier,
+				"risk_score": agent.RiskScore,
+			})
+		})
+
+		// POST /v1/admin/flush — force-write agent state to disk now.
+		a.Post("/flush", func(w http.ResponseWriter, req *http.Request) {
+			if err := db.FlushAgentsToDisk(agentStatePath); err != nil {
+				log.Printf("[STORE] manual flush failed: %v", err)
+				http.Error(w, "flush failed: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			writeJSON(w, 200, map[string]string{"status": "FLUSHED", "path": agentStatePath})
+		})
+
 		a.Get("/stats", func(w http.ResponseWriter, req *http.Request) {
 			writeJSON(w, 200, db.Stats())
 		})
@@ -556,10 +608,25 @@ func main() {
 		}
 	}()
 
+	// Periodic agent state flush — every 2 minutes during operation.
+	// Ensures loyalty and passport data survive process crashes.
+	go func() {
+		t := time.NewTicker(2 * time.Minute)
+		defer t.Stop()
+		for range t.C {
+			if err := db.FlushAgentsToDisk(agentStatePath); err != nil {
+				log.Printf("[STORE] periodic flush failed: %v", err)
+			}
+		}
+	}()
+
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-	log.Println("[402Proof] Shutting down...")
+	log.Println("[402Proof] Shutting down — flushing agent state...")
+	if err := db.FlushAgentsToDisk(agentStatePath); err != nil {
+		log.Printf("[STORE] shutdown flush failed: %v", err)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	srv.Shutdown(ctx)

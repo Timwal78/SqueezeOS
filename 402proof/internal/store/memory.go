@@ -1,7 +1,10 @@
 package store
 
 import (
+	"encoding/json"
 	"fmt"
+	"log"
+	"os"
 	"sync"
 	"time"
 
@@ -235,4 +238,64 @@ func (m *Memory) Stats() map[string]interface{} {
 		"unique_agents":    len(m.agents),
 		"active_endpoints": len(m.endpoints),
 	}
+}
+
+// agentSnapshot is the serialisable form of the agents map.
+type agentSnapshot struct {
+	Agents     map[string]*models.Agent `json:"agents"`
+	TotalCalls int64                    `json:"total_calls"`
+	SavedAt    time.Time                `json:"saved_at"`
+}
+
+// FlushAgentsToDisk writes the agents map to path atomically (write-then-rename).
+// Call this periodically and on graceful shutdown so loyalty state survives restarts.
+// On Render free tier the filesystem persists within a running instance but resets
+// on redeploy; mount a persistent volume at AGENT_STATE_PATH for full durability.
+func (m *Memory) FlushAgentsToDisk(path string) error {
+	m.mu.RLock()
+	snap := agentSnapshot{
+		Agents:     make(map[string]*models.Agent, len(m.agents)),
+		TotalCalls: m.totalCalls,
+		SavedAt:    time.Now(),
+	}
+	for k, v := range m.agents {
+		a := *v // copy — don't expose pointer
+		snap.Agents[k] = &a
+	}
+	m.mu.RUnlock()
+
+	b, err := json.Marshal(snap)
+	if err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, b, 0600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path) // atomic on POSIX
+}
+
+// LoadAgentsFromDisk restores agent state saved by FlushAgentsToDisk.
+// Call once during startup before serving requests.
+func (m *Memory) LoadAgentsFromDisk(path string) error {
+	b, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil // first boot — no snapshot yet
+	}
+	if err != nil {
+		return err
+	}
+	var snap agentSnapshot
+	if err := json.Unmarshal(b, &snap); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for k, v := range snap.Agents {
+		m.agents[k] = v
+	}
+	m.totalCalls = snap.TotalCalls
+	log.Printf("[STORE] Restored %d agents from %s (saved %s ago)",
+		len(snap.Agents), path, time.Since(snap.SavedAt).Round(time.Second))
+	return nil
 }

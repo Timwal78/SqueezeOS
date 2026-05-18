@@ -17,6 +17,7 @@ from core.api.ceo import ceo_bp
 from core.api.market_scanner import market_bp, start_market_scanner
 from core.api.v2_bridge import v2_bp
 from core.api.premium_bp import premium_bp
+from core.api.honeypot import honeypot_bp, honeypot_before_request
 from core.legacy import start_whale_stalker, init_services, get_service, clean_data
 from core.market_graph import get_graph
 from core.rdt_engine import RecurrentDepthTransformer
@@ -38,6 +39,10 @@ def create_app():
     init_services()
     start_whale_stalker()
     
+    # Honeypot must be registered FIRST so explicit trap routes take priority
+    app.register_blueprint(honeypot_bp)
+    app.before_request(honeypot_before_request)
+
     # Register Blueprints
     app.register_blueprint(left_wing_bp, url_prefix='/api/left-wing')
     app.register_blueprint(beast_bp, url_prefix='/api/beast')
@@ -77,6 +82,48 @@ def create_app():
     def serve_legacy():
         return send_from_directory(app.static_folder, 'SML_Command_Center_ORACLE.html')
 
+    # Discovery paths that signal agent presence when accessed
+    _DISCOVERY_PATHS = frozenset({
+        '/llms.txt', '/openapi.json', '/robots.txt',
+        '/.well-known/mcp.json', '/.well-known/openapi.json', '/.well-known/ai-plugin.json',
+    })
+
+    def _broadcast_sse(event: dict):
+        dead = []
+        for q in list(sse_queues):
+            try:
+                q.put_nowait(event)
+            except Exception:
+                dead.append(q)
+        for q in dead:
+            try:
+                sse_queues.remove(q)
+            except ValueError:
+                pass
+
+    @app.after_request
+    def broadcast_agent_signals(response):
+        path = request.path
+        ua = request.headers.get('User-Agent', '')[:60]
+        wallet = request.headers.get('X-Agent-Wallet', '')
+        if path in _DISCOVERY_PATHS and response.status_code == 200:
+            _broadcast_sse({
+                'type': 'AGENT_PROBE',
+                'path': path,
+                'agent': ua,
+                'wallet': wallet,
+                'ts': time.time(),
+            })
+        elif response.status_code == 402:
+            _broadcast_sse({
+                'type': 'AGENT_PAY',
+                'path': path,
+                'agent': ua,
+                'wallet': wallet,
+                'ts': time.time(),
+            })
+        return response
+
     @app.route('/robots.txt')
     def serve_robots():
         return send_from_directory(app.static_folder, 'robots.txt', mimetype='text/plain')
@@ -88,6 +135,31 @@ def create_app():
     @app.route('/llms.txt')
     def serve_llms():
         return send_from_directory(app.static_folder, 'llms.txt', mimetype='text/plain')
+
+    @app.route('/openapi.json')
+    def serve_openapi_root():
+        return send_from_directory(app.static_folder, 'openapi.json', mimetype='application/json')
+
+    @app.route('/.well-known/openapi.json')
+    def serve_openapi_wellknown():
+        return send_from_directory(
+            os.path.join(app.static_folder, '.well-known'), 'openapi.json',
+            mimetype='application/json'
+        )
+
+    @app.route('/.well-known/ai-plugin.json')
+    def serve_ai_plugin():
+        return send_from_directory(
+            os.path.join(app.static_folder, '.well-known'), 'ai-plugin.json',
+            mimetype='application/json'
+        )
+
+    @app.route('/.well-known/mcp.json')
+    def serve_mcp():
+        return send_from_directory(
+            os.path.join(app.static_folder, '.well-known'), 'mcp.json',
+            mimetype='application/json'
+        )
 
     @app.route('/api/beast/events')
     def legacy_beast_events():

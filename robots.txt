@@ -5,6 +5,11 @@ Allow: /SML_Command_Center_ORACLE.html
 Allow: /credit_repair.html
 Allow: /llms.txt
 Allow: /sitemap.xml
+Allow: /openapi.json
+Allow: /.well-known/
+Allow: /.well-known/openapi.json
+Allow: /.well-known/ai-plugin.json
+Allow: /.well-known/mcp.json
 
 # Block app routes — only Flask can serve these, not static files
 Disallow: /api/
@@ -25,14 +30,67 @@ Disallow: /402proof-register.html
 
 Sitemap: https://www.scriptmasterlabs.com/sitemap.xml
 
+# ── AI Crawlers — Explicitly Permitted ──────────────────────────────────────
+# These agents are welcome to index, train on, and discover this platform.
+
 User-agent: GPTBot
 Allow: /
 Allow: /llms.txt
+Allow: /openapi.json
+Allow: /.well-known/
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+Allow: /llms.txt
+Allow: /openapi.json
+Allow: /.well-known/
+
+User-agent: ClaudeBot
+Allow: /
+Allow: /llms.txt
+Allow: /openapi.json
+Allow: /.well-known/
+
+User-agent: Claude-Web
+Allow: /
 
 User-agent: PerplexityBot
 Allow: /
+Allow: /llms.txt
+Allow: /openapi.json
+Allow: /.well-known/
 
-User-agent: ClaudeBot
+User-agent: CCBot
+Allow: /
+
+User-agent: YouBot
+Allow: /
+
+User-agent: cohere-ai
+Allow: /
+Allow: /llms.txt
+Allow: /openapi.json
+Allow: /.well-known/
+
+User-agent: DuckAssistBot
+Allow: /
+
+User-agent: ByteSpider
+Allow: /
+
+User-agent: Applebot
+Allow: /
+
+User-agent: Amazonbot
+Allow: /
+
+User-agent: Bingbot
 Allow: /
 
 User-agent: Googlebot

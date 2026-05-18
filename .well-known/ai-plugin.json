@@ -1,0 +1,28 @@
+{
+  "schema_version": "v1",
+  "name_for_human": "SqueezeOS — Market Intelligence",
+  "name_for_model": "squeezeos_market_intelligence",
+  "description_for_human": "Institutional AI trading intelligence: squeeze scanner, options flow, IWM 0DTE analysis, and AI council verdicts. Pay per call with RLUSD on XRP Ledger — no API keys required.",
+  "description_for_model": "SqueezeOS provides institutional-grade real-time market intelligence via pay-per-call RLUSD micropayments on XRPL (x402/HTTP 402 standard). Use this plugin to: (1) get AI council verdicts for any equity symbol (regime, bias, confidence, thesis), (2) scan the $1-$50 universe for squeeze setups, (3) retrieve options flow intelligence (institutional sweeps, whale blocks, unusual volume), (4) access IWM 0DTE scored contracts with Greeks. All endpoints gate on RLUSD payment via 402Proof — the plugin handles this automatically. No API keys needed. Loyalty tiers reward cumulative spend. Data is 100% real — never simulated.",
+  "auth": {
+    "type": "none",
+    "description": "No API key required. Endpoints use x402/HTTP 402 micropayment standard. Agents pay RLUSD on XRPL per call. The plugin handles the full payment cycle automatically via 402Proof."
+  },
+  "api": {
+    "type": "openapi",
+    "url": "https://scriptmasterlabs.com/openapi.json",
+    "is_user_authenticated": false
+  },
+  "logo_url": "https://scriptmasterlabs.com/favicon.ico",
+  "contact_email": "https://scriptmasterlabs.com/terminal",
+  "legal_info_url": "https://scriptmasterlabs.com/",
+  "x-402proof": {
+    "description": "Payment handled by 402Proof (https://four02proof.onrender.com). Agents receive HTTP 402 + invoice, pay RLUSD on XRPL, call /v1/verify, get access_token, retry with X-Payment-Token header.",
+    "settlement_currency": "RLUSD",
+    "settlement_network": "XRPL Mainnet",
+    "rlusd_issuer": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De",
+    "loyalty_program": "https://four02proof.onrender.com/v1/loyalty/{wallet}",
+    "python_sdk": "pip install requests xrpl-py",
+    "npm_middleware": "npm install @relayos/mcp-paywall"
+  }
+}

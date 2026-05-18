@@ -23,22 +23,107 @@
 <meta name="twitter:title" content="Script Master Labs — AI Market Intelligence">
 <meta name="twitter:description" content="Live AI trading intelligence. Harmonic scanner, options flow, squeeze radar. Pay per call with RLUSD on XRPL.">
 
+<!-- AI Agent Discovery — WebMCP (W3C Community Draft, Chrome 146+) -->
+<link rel="mcp-manifest" href="/.well-known/mcp.json" type="application/json">
+<link rel="alternate" type="text/plain" href="/llms.txt" title="LLM Discovery">
+<link rel="alternate" type="application/json" href="/.well-known/openapi.json" title="OpenAPI Spec">
+<meta name="mcp-payment-protocol" content="x402">
+<meta name="mcp-payment-asset" content="RLUSD/XRPL">
+
 <!-- JSON-LD Structured Data -->
 <script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "Organization",
-  "name": "Script Master Labs",
-  "url": "https://www.scriptmasterlabs.com",
-  "description": "Institutional-grade AI trading intelligence platform. Real-time market data, options flow, harmonic patterns, and autonomous agent payment infrastructure.",
-  "sameAs": ["https://four02proof.onrender.com"],
-  "offers": [
-    {"@type": "Offer", "name": "AI Council Verdict", "description": "Multi-engine market signal aggregate — regime, bias, confidence.", "price": "0.10", "priceCurrency": "RLUSD"},
-    {"@type": "Offer", "name": "Market Scanner", "description": "Full $1-$50 universe squeeze scanner with options picks.", "price": "0.05", "priceCurrency": "RLUSD"},
-    {"@type": "Offer", "name": "Options Intelligence", "description": "Sweeps, whales, unusual volume flow.", "price": "0.05", "priceCurrency": "RLUSD"},
-    {"@type": "Offer", "name": "IWM 0DTE Scanner", "description": "Russell 2000 zero-day contract scorer.", "price": "0.03", "priceCurrency": "RLUSD"}
-  ]
-}
+[
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "SqueezeOS",
+    "applicationCategory": "FinanceApplication",
+    "operatingSystem": "Web",
+    "url": "https://scriptmasterlabs.com/terminal",
+    "description": "Institutional-grade AI trading intelligence platform: real-time squeeze scanner, options flow analysis, harmonic pattern detection, IWM 0DTE analysis, and AI council verdicts. Premium API endpoints gated by x402/HTTP 402 RLUSD micropayment on XRP Ledger via 402Proof.",
+    "provider": {
+      "@type": "Organization",
+      "name": "Script Master Labs",
+      "url": "https://www.scriptmasterlabs.com",
+      "sameAs": ["https://four02proof.onrender.com", "https://www.npmjs.com/package/@relayos/mcp-paywall"]
+    },
+    "offers": [
+      {"@type": "Offer", "name": "AI Council Verdict", "description": "Multi-engine AI market signal aggregate — regime (STEALTH/CONFLICT/EXECUTION/COLLAPSE), directional bias, confidence score, and institutional trading thesis for any equity symbol.", "price": "0.10", "priceCurrency": "RLUSD"},
+      {"@type": "Offer", "name": "Market Scanner", "description": "Full $1-$50 equity universe scanner using 8-module SML Fractal Cascade scoring engine. Returns squeeze setups with options picks.", "price": "0.05", "priceCurrency": "RLUSD"},
+      {"@type": "Offer", "name": "Options Intelligence", "description": "Institutional options flow: PUT/CALL sweeps, whale blocks, unusual volume, GEX aggregate, max pain, net delta. Real Schwab chain data.", "price": "0.05", "priceCurrency": "RLUSD"},
+      {"@type": "Offer", "name": "IWM 0DTE Scanner", "description": "IWM zero-day-to-expiry contract scorer with Greeks, gamma flip level, max pain, and 30-day realized vol.", "price": "0.03", "priceCurrency": "RLUSD"}
+    ],
+    "featureList": [
+      "x402/HTTP 402 compliant autonomous agent payment",
+      "RLUSD micropayment settlement on XRP Ledger",
+      "Zero API keys required — pay per call",
+      "Loyalty program with cumulative spend tiers",
+      "MCP middleware: @relayos/mcp-paywall",
+      "Real-time market data — zero simulated values",
+      "Institutional squeeze detection (SML Fractal Cascade)",
+      "Options flow: sweeps, whales, unusual volume",
+      "IWM 0DTE analysis with Greeks",
+      "Harmonic pattern detection"
+    ],
+    "softwareVersion": "2.0",
+    "releaseNotes": "https://scriptmasterlabs.com/llms.txt"
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "WebAPI",
+    "name": "402Proof — x402 Agent Payment Settlement API",
+    "description": "HTTP 402 Payment Required compliant settlement server for autonomous AI agents. Agents pay RLUSD on XRPL to unlock premium API access — no API keys or registration required. Loyalty tiers reward cumulative spend. MCP paywall middleware available as npm package @relayos/mcp-paywall.",
+    "url": "https://four02proof.onrender.com",
+    "documentation": "https://scriptmasterlabs.com/openapi.json",
+    "termsOfService": "https://scriptmasterlabs.com/",
+    "provider": {
+      "@type": "Organization",
+      "name": "Script Master Labs",
+      "url": "https://www.scriptmasterlabs.com"
+    },
+    "potentialAction": {
+      "@type": "Action",
+      "name": "Pay per API call with RLUSD on XRP Ledger",
+      "description": "Agent hits protected endpoint → receives HTTP 402 + invoice → pays RLUSD on XRPL → calls /v1/verify → receives access_token → retries with X-Payment-Token header"
+    }
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Ghost Layer",
+    "applicationCategory": "FinanceApplication",
+    "operatingSystem": "Web",
+    "description": "Dual-chain transparent toll gateway bridging XRP Ledger and Base (Ethereum L2). Routes XRPL native payments and Base chain USDC payments (EIP-3009 gasless authorization) with configurable basis-point fees and automatic treasury sweep. Full fee disclosure on every transaction. XAH/Xahau ecosystem support.",
+    "url": "https://ghost-layer.onrender.com",
+    "provider": {
+      "@type": "Organization",
+      "name": "Script Master Labs",
+      "url": "https://www.scriptmasterlabs.com"
+    },
+    "featureList": [
+      "XRPL native XRP payment routing",
+      "Base chain USDC routing with EIP-3009 gasless authorization",
+      "Configurable basis-point fee with full disclosure",
+      "Automatic fee sweep to cold-storage treasury",
+      "Replay protection (EIP-3009 nonce tracking)",
+      "Per-IP rate limiting (20 req/min)",
+      "Dry-run mode for signature validation without broadcast",
+      "XAH/Xahau ecosystem integration"
+    ]
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "Script Master Labs",
+    "url": "https://www.scriptmasterlabs.com",
+    "description": "Builders of SqueezeOS (institutional AI trading intelligence), 402Proof (x402/HTTP 402 autonomous agent payment infrastructure on XRPL with Agent Passport identity), Ghost Layer (dual-chain XRPL+Base toll gateway), Credit Beast (AI credit repair), and @relayos/mcp-paywall (npm MCP paywall middleware).",
+    "sameAs": [
+      "https://four02proof.onrender.com",
+      "https://ghost-layer.onrender.com",
+      "https://www.npmjs.com/package/@relayos/mcp-paywall"
+    ]
+  }
+]
 </script>
 
 <style>

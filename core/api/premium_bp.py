@@ -15,7 +15,22 @@ import time
 import logging
 from flask import Blueprint, jsonify, request
 from core.legacy import get_service, clean_data
-from core.state import state
+from core.state import state, sse_queues
+
+
+def _broadcast_sse(event: dict):
+    """Push an event to all connected SSE clients."""
+    dead = []
+    for q in list(sse_queues):
+        try:
+            q.put_nowait(event)
+        except Exception:
+            dead.append(q)
+    for q in dead:
+        try:
+            sse_queues.remove(q)
+        except ValueError:
+            pass
 
 # proof402_integration.py lives at repo root
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -81,14 +96,24 @@ def council():
     trend = sml_data.get("trend_score", 0)
     bias = "BULLISH" if trend > 0.2 else "BEARISH" if trend < -0.2 else "NEUTRAL"
 
+    confidence = min(100, int(abs(trend) * 200))
     verdict["verdict"] = {
         "symbol": symbol,
         "bias": bias,
         "regime": regime,
-        "confidence": min(100, int(abs(trend) * 200)),
+        "confidence": confidence,
         "thesis": f"{symbol} regime={regime} trend_score={round(trend, 3)} → {bias}",
         "timestamp": time.time(),
     }
+
+    _broadcast_sse({
+        'type': 'COUNCIL_VERDICT',
+        'symbol': symbol,
+        'bias': bias,
+        'regime': regime,
+        'confidence': confidence,
+        'ts': time.time(),
+    })
 
     return jsonify(verdict)
 
