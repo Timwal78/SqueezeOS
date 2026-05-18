@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "name": "402Proof Payment Firewall",
+  "description": "x402 payment compliance firewall. Issues XRPL RLUSD invoices, verifies transactions, returns wallet-bound tokens with Agent Passport loyalty system.",
+  "url": "https://four02proof.onrender.com",
+  "payment_required": false,
+  "specs": {
+    "openapi": "https://four02proof.onrender.com/.well-known/openapi.json",
+    "mcp": "https://four02proof.onrender.com/.well-known/mcp.json",
+    "llms_txt": "https://four02proof.onrender.com/llms.txt"
+  },
+  "capabilities": [
+    {"id": "invoice", "name": "Issue Invoice", "cost": "free", "endpoint": "/v1/invoice"},
+    {"id": "verify", "name": "Verify Payment", "cost": "free", "endpoint": "/v1/verify"},
+    {"id": "passport", "name": "Agent Passport", "cost": "free", "endpoint": "/v1/agent/{wallet}"}
+  ]
+}
