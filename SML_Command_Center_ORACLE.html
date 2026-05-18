@@ -405,6 +405,34 @@ updateCEO();
 setInterval(fetchScan,3000);
 setInterval(fetchNews,30000); // Fetch news every 30s
 setInterval(updateCEO,2000);
+
+// ── LIVE SSE FEED ──
+(function connectSSE() {
+  const es = new EventSource('/api/events');
+  es.onmessage = (e) => {
+    try {
+      const d = JSON.parse(e.data);
+      switch (d.type) {
+        case 'SQUEEZE_ALERT':
+          pushFeed(`🔥 SQUEEZE ${d.symbol} score=${d.score} ${d.direction}`, 'buy');
+          break;
+        case 'OPTIONS_SWEEP':
+          pushFeed(`⚡ SWEEP ${d.symbol} ${d.option_type?.toUpperCase()} $${d.strike} exp=${d.expiration} grade=${d.grade}`, 'buy');
+          break;
+        case 'COUNCIL_VERDICT':
+          pushFeed(`🧠 COUNCIL ${d.symbol} → ${d.bias} (${d.confidence}% conf, regime=${d.regime})`, d.bias==='BULLISH'?'buy':'sell');
+          break;
+        case 'AGENT_PROBE':
+          pushFeed(`👁 AGENT PROBE ${d.path}${d.wallet?' wallet='+d.wallet.slice(0,12)+'…':''}`, 'warn');
+          break;
+        case 'AGENT_PAY':
+          pushFeed(`💰 AGENT PAY REQUEST ${d.path}${d.wallet?' wallet='+d.wallet.slice(0,12)+'…':''}`, 'warn');
+          break;
+      }
+    } catch (_) {}
+  };
+  es.onerror = () => { es.close(); setTimeout(connectSSE, 3000); };
+})();
 </script>
 </body>
 </html>

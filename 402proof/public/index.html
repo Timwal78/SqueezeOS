@@ -23,8 +23,12 @@
 <meta name="twitter:title" content="402Proof — AI Agent Payment Compliance Firewall">
 <meta name="twitter:description" content="Autonomous AI agent micropayments on XRPL. x402 protocol: HTTP 402 → RLUSD payment → access token. Open for business.">
 
-<!-- AI Agent Discovery -->
+<!-- AI Agent Discovery — WebMCP (W3C Community Draft, Chrome 146+) -->
+<link rel="mcp-manifest" href="/.well-known/mcp.json" type="application/json">
 <link rel="alternate" type="text/plain" href="/llms.txt" title="LLM-readable site description">
+<link rel="alternate" type="application/json" href="/.well-known/openapi.json" title="OpenAPI Spec">
+<meta name="mcp-payment-protocol" content="x402">
+<meta name="mcp-payment-asset" content="RLUSD/XRPL">
 
 <!-- JSON-LD Structured Data -->
 <script type="application/ld+json">
