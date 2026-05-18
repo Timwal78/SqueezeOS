@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <title>GHOST LAYER TERMINAL</title>
     <style>
-        body { margin: 0; background: #000; overflow: hidden; font-family: monospace; }
+        * { box-sizing: border-box; }
+        body { margin: 0; background: #000; overflow: hidden; font-family: 'Courier New', monospace; }
         #terminal-overlay {
             position: absolute;
             top: 20px;
@@ -12,9 +13,43 @@
             color: #00FFCC;
             z-index: 10;
             pointer-events: none;
+            user-select: none;
         }
-        #terminal-overlay h1 { margin: 0 0 4px; font-size: 1.4rem; letter-spacing: 0.1em; }
-        #terminal-overlay p  { margin: 0; font-size: 0.75rem; opacity: 0.7; }
+        #terminal-overlay h1 {
+            margin: 0 0 10px;
+            font-size: 1.4rem;
+            letter-spacing: 0.12em;
+            text-shadow: 0 0 12px #00FFCC88;
+        }
+        .gl-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.72rem;
+            opacity: 0.85;
+            margin: 2px 0;
+            letter-spacing: 0.05em;
+        }
+        .gl-label { color: #667788; text-transform: uppercase; min-width: 72px; }
+        .gl-val   { color: #00FFCC; font-weight: bold; }
+        #gl-status { font-size: 0.72rem; }
+        .tach-bar {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            height: 3px;
+            background: #111;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .tach-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #00FFCC, #AA00FF);
+            transition: width 0.1s linear;
+            box-shadow: 0 0 8px #00FFCC;
+        }
     </style>
     <script type="importmap">
       { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
@@ -59,7 +94,29 @@
 <body>
     <div id="terminal-overlay">
         <h1>GHOST LAYER V2</h1>
-        <p>STATUS: OPERATIONAL // TRANSPARENT TOLL GATEWAY</p>
+        <div class="gl-row">
+            <span class="gl-label">Stream</span>
+            <span class="gl-val" id="gl-status">○ CONNECTING</span>
+        </div>
+        <div class="gl-row">
+            <span class="gl-label">Bridges</span>
+            <span class="gl-val" id="gl-count">–</span>
+        </div>
+        <div class="gl-row">
+            <span class="gl-label">Chain</span>
+            <span class="gl-val" id="gl-chain">–</span>
+        </div>
+        <div class="gl-row">
+            <span class="gl-label">Last TX</span>
+            <span class="gl-val" id="gl-tx">–</span>
+        </div>
+        <div class="gl-row">
+            <span class="gl-label">Tach</span>
+            <span class="gl-val" id="gl-speed">0%</span>
+        </div>
+    </div>
+    <div class="tach-bar">
+        <div class="tach-fill" id="tach-fill"></div>
     </div>
     <script type="module" src="js/cube.js"></script>
 </body>

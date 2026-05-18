@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"math/big"
 	"net"
@@ -13,6 +14,7 @@ import (
 	"os/signal"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -23,6 +25,51 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
+
+// ── SSE Hub — broadcasts bridge events to connected cube.js clients ──────────
+
+type sseHub struct {
+	mu          sync.RWMutex
+	clients     map[chan []byte]struct{}
+	totalBridge atomic.Int64
+	totalFees   atomic.Int64 // in drops/wei, for display
+}
+
+var hub = &sseHub{clients: make(map[chan []byte]struct{})}
+
+func (h *sseHub) subscribe() chan []byte {
+	ch := make(chan []byte, 16)
+	h.mu.Lock()
+	h.clients[ch] = struct{}{}
+	h.mu.Unlock()
+	return ch
+}
+
+func (h *sseHub) unsubscribe(ch chan []byte) {
+	h.mu.Lock()
+	delete(h.clients, ch)
+	h.mu.Unlock()
+	close(ch)
+}
+
+func (h *sseHub) broadcast(eventType string, payload map[string]interface{}) {
+	payload["type"] = eventType
+	payload["ts"] = time.Now().UnixMilli()
+	payload["total_bridges"] = h.totalBridge.Load()
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	line := fmt.Appendf(nil, "data: %s\n\n", b)
+	h.mu.RLock()
+	for ch := range h.clients {
+		select {
+		case ch <- line:
+		default: // client too slow — skip frame
+		}
+	}
+	h.mu.RUnlock()
+}
 
 // ── Nonce replay cache ───────────────────────────────────────────────────────
 // Tracks EIP-3009 nonces that have already been consumed. Prevents replays
@@ -171,11 +218,60 @@ func main() {
 		status := engine.ClientStatus()
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":        "ok",
-			"xrpl_client":   status["xrpl"],
-			"base_client":   status["base"],
-			"xrpl_treasury": treasuryXRPL,
+			"status":         "ok",
+			"xrpl_client":    status["xrpl"],
+			"base_client":    status["base"],
+			"xrpl_treasury":  treasuryXRPL,
+			"total_bridges":  hub.totalBridge.Load(),
 		})
+	})
+
+	// ── CONFIG (injected into cube.js via fetch) ──────────────────────────────
+	r.Get("/api/config", func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"sse_url":       "/api/events",
+			"xrpl_treasury": treasuryXRPL,
+			"xrpl_enabled":  env("GATEWAY_XRPL_PRIVATE_KEY", "") != "",
+			"base_enabled":  env("GATEWAY_ETH_PRIVATE_KEY", "") != "",
+		})
+	})
+
+	// ── SSE LIVE STREAM (cube.js tachometer feed) ─────────────────────────────
+	r.Get("/api/events", func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+		w.Header().Set("X-Accel-Buffering", "no")
+
+		ch := hub.subscribe()
+		defer hub.unsubscribe(ch)
+
+		// Send connected event immediately
+		connected, _ := json.Marshal(map[string]interface{}{
+			"type":          "CONNECTED",
+			"total_bridges": hub.totalBridge.Load(),
+			"ts":            time.Now().UnixMilli(),
+		})
+		fmt.Fprintf(w, "data: %s\n\n", connected)
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+
+		for {
+			select {
+			case msg, ok := <-ch:
+				if !ok {
+					return
+				}
+				w.Write(msg)
+				if f, ok := w.(http.Flusher); ok {
+					f.Flush()
+				}
+			case <-req.Context().Done():
+				return
+			}
+		}
 	})
 
 	// ── INSTITUTIONAL EXECUTION PATH ─────────────────────────────────────────
@@ -238,7 +334,7 @@ func main() {
 		}
 
 		sweepWg.Add(1)
-		txHash, fee, net, err := engine.RouteTransactionWithDisclosure(
+		txHash, fee, netAmt, err := engine.RouteTransactionWithDisclosure(
 			req.Context(),
 			p.SourceWallet, p.DestinationWallet,
 			p.GrossAmount, p.FeeBasisPoints,
@@ -252,13 +348,29 @@ func main() {
 			return
 		}
 
+		// Detect chain from wallet addresses and broadcast to cube.js
+		chain := "xrpl"
+		if strings.HasPrefix(p.SourceWallet, "0x") {
+			chain = "base"
+		}
+		hub.totalBridge.Add(1)
+		hub.broadcast("BRIDGE_SETTLED", map[string]interface{}{
+			"tx_hash":    txHash,
+			"chain":      chain,
+			"gross":      p.GrossAmount,
+			"fee":        fee.String(),
+			"net":        netAmt.String(),
+			"source":     p.SourceWallet[:min(len(p.SourceWallet), 12)] + "...",
+			"dest":       p.DestinationWallet[:min(len(p.DestinationWallet), 12)] + "...",
+		})
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"status":           "SUCCESSFULLY_SETTLED",
 			"transaction_hash": txHash,
 			"gross_processed":  p.GrossAmount,
 			"transparent_fee":  fee.String(),
-			"net_delivered":    net.String(),
+			"net_delivered":    netAmt.String(),
 			"treasury_routing": treasuryXRPL,
 		})
 	})
