@@ -227,13 +227,16 @@ func main() {
 	})
 
 	// ── CONFIG (injected into cube.js via fetch) ──────────────────────────────
+	squeezeosSSE := env("SQUEEZEOS_SSE_URL", "")
 	r.Get("/api/config", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"sse_url":       "/api/events",
-			"xrpl_treasury": treasuryXRPL,
-			"xrpl_enabled":  env("GATEWAY_XRPL_PRIVATE_KEY", "") != "",
-			"base_enabled":  env("GATEWAY_ETH_PRIVATE_KEY", "") != "",
+			"sse_url":        "/api/events",
+			"squeezeos_sse":  squeezeosSSE,
+			"xrpl_treasury":  treasuryXRPL,
+			"xrpl_enabled":   xrplKey != "",
+			"base_enabled":   ethKey != "",
+			"total_bridges":  hub.totalBridge.Load(),
 		})
 	})
 

@@ -82,6 +82,48 @@ def create_app():
     def serve_legacy():
         return send_from_directory(app.static_folder, 'SML_Command_Center_ORACLE.html')
 
+    # Discovery paths that signal agent presence when accessed
+    _DISCOVERY_PATHS = frozenset({
+        '/llms.txt', '/openapi.json', '/robots.txt',
+        '/.well-known/mcp.json', '/.well-known/openapi.json', '/.well-known/ai-plugin.json',
+    })
+
+    def _broadcast_sse(event: dict):
+        dead = []
+        for q in list(sse_queues):
+            try:
+                q.put_nowait(event)
+            except Exception:
+                dead.append(q)
+        for q in dead:
+            try:
+                sse_queues.remove(q)
+            except ValueError:
+                pass
+
+    @app.after_request
+    def broadcast_agent_signals(response):
+        path = request.path
+        ua = request.headers.get('User-Agent', '')[:60]
+        wallet = request.headers.get('X-Agent-Wallet', '')
+        if path in _DISCOVERY_PATHS and response.status_code == 200:
+            _broadcast_sse({
+                'type': 'AGENT_PROBE',
+                'path': path,
+                'agent': ua,
+                'wallet': wallet,
+                'ts': time.time(),
+            })
+        elif response.status_code == 402:
+            _broadcast_sse({
+                'type': 'AGENT_PAY',
+                'path': path,
+                'agent': ua,
+                'wallet': wallet,
+                'ts': time.time(),
+            })
+        return response
+
     @app.route('/robots.txt')
     def serve_robots():
         return send_from_directory(app.static_folder, 'robots.txt', mimetype='text/plain')
