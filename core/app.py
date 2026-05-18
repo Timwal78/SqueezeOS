@@ -161,6 +161,13 @@ def create_app():
             mimetype='application/json'
         )
 
+    @app.route('/.well-known/agents.json')
+    def serve_agents():
+        return send_from_directory(
+            os.path.join(app.static_folder, '.well-known'), 'agents.json',
+            mimetype='application/json'
+        )
+
     @app.route('/api/beast/events')
     def legacy_beast_events():
         """Alias for legacy frontend support."""

@@ -1,0 +1,83 @@
+{
+  "schema_version": "1.0",
+  "name": "SqueezeOS Market Intelligence",
+  "description": "Institutional AI trading intelligence. Squeeze scanner, options flow, IWM 0DTE, AI council verdicts. Pay-per-call with RLUSD on XRPL via HTTP 402.",
+  "url": "https://lively-fascination-production-41fa.up.railway.app",
+  "homepage": "https://www.scriptmasterlabs.com",
+  "payment_required": true,
+  "payment_protocol": "x402",
+  "payment_settlement": "XRPL",
+  "payment_asset": "RLUSD",
+  "payment_issuer": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De",
+  "payment_gateway": "https://four02proof.onrender.com",
+  "specs": {
+    "openapi": "https://lively-fascination-production-41fa.up.railway.app/.well-known/openapi.json",
+    "mcp": "https://lively-fascination-production-41fa.up.railway.app/.well-known/mcp.json",
+    "llms_txt": "https://www.scriptmasterlabs.com/llms.txt"
+  },
+  "capabilities": [
+    {
+      "id": "council_verdict",
+      "name": "AI Council Verdict",
+      "endpoint": "/api/council",
+      "method": "POST",
+      "cost": "0.10",
+      "currency": "RLUSD",
+      "endpoint_id": "12a0e7a1-6812-4c3f-aa24-de6e3bc12b5a",
+      "description": "Multi-engine AI signal aggregate. Returns market regime, bias, confidence score, and actionable thesis for any symbol."
+    },
+    {
+      "id": "market_scan",
+      "name": "Full Universe Market Scan",
+      "endpoint": "/api/scan",
+      "method": "GET",
+      "cost": "0.05",
+      "currency": "RLUSD",
+      "endpoint_id": "160cf28d-b364-44eb-adbd-2489c5cc2cf8",
+      "description": "Live squeeze signals and grade-A options picks across $1-$50 universe (up to 250 symbols)."
+    },
+    {
+      "id": "options_intelligence",
+      "name": "Options Intelligence Flow",
+      "endpoint": "/api/options",
+      "method": "GET",
+      "cost": "0.05",
+      "currency": "RLUSD",
+      "endpoint_id": "c951a374-2424-4064-ab80-35afe8053d29",
+      "description": "Institutional sweeps, whale detection, unusual options volume for any symbol."
+    },
+    {
+      "id": "iwm_odte",
+      "name": "IWM 0DTE Institutional Scanner",
+      "endpoint": "/api/iwm",
+      "method": "GET",
+      "cost": "0.03",
+      "currency": "RLUSD",
+      "endpoint_id": "60f48ce0-6002-4385-9b60-03a0d2bbebab",
+      "description": "Scored 0DTE contracts, parity watch, realized volatility, delta/gamma for Russell 2000."
+    }
+  ],
+  "free_endpoints": [
+    {
+      "name": "Live SSE Event Stream",
+      "endpoint": "/api/events",
+      "method": "GET",
+      "description": "Real-time squeeze alerts, council verdicts, and agent activity. No auth required."
+    },
+    {
+      "name": "System Status",
+      "endpoint": "/api/status",
+      "method": "GET"
+    }
+  ],
+  "loyalty": {
+    "enabled": true,
+    "tiers": ["Bronze", "Silver", "Gold", "Platinum", "Diamond"],
+    "max_discount": "30%",
+    "passport_endpoint": "https://four02proof.onrender.com/v1/agent/{wallet}"
+  },
+  "related_services": {
+    "ghost_layer": "https://ghost-layer.onrender.com/.well-known/agents.json",
+    "proof402": "https://four02proof.onrender.com/.well-known/agents.json"
+  }
+}

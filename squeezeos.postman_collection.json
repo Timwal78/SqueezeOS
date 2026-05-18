@@ -1,0 +1,132 @@
+{
+  "info": {
+    "name": "SqueezeOS Market Intelligence API",
+    "description": "Complete Postman collection for SqueezeOS. Includes 402Proof payment flow (invoice → pay → verify → call) and all 4 premium endpoints. Import this file into Postman or Bruno.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "squeezeos-v2"
+  },
+  "variable": [
+    {"key": "PROOF402_URL", "value": "https://four02proof.onrender.com"},
+    {"key": "SQUEEZEOS_URL", "value": "https://lively-fascination-production-41fa.up.railway.app"},
+    {"key": "AGENT_WALLET", "value": "rYOURXRPLWALLETHERE"},
+    {"key": "PAYMENT_TOKEN", "value": ""},
+    {"key": "INVOICE_ID", "value": ""}
+  ],
+  "item": [
+    {
+      "name": "1. Payment Flow",
+      "item": [
+        {
+          "name": "Get Invoice — Council (0.10 RLUSD)",
+          "event": [{"listen": "test", "script": {"exec": ["pm.collectionVariables.set('INVOICE_ID', pm.response.json().invoice_id);"]}}],
+          "request": {
+            "method": "POST",
+            "url": "{{PROOF402_URL}}/v1/invoice",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"endpoint_id\": \"12a0e7a1-6812-4c3f-aa24-de6e3bc12b5a\"}"}
+          }
+        },
+        {
+          "name": "Get Invoice — Scan (0.05 RLUSD)",
+          "event": [{"listen": "test", "script": {"exec": ["pm.collectionVariables.set('INVOICE_ID', pm.response.json().invoice_id);"]}}],
+          "request": {
+            "method": "POST",
+            "url": "{{PROOF402_URL}}/v1/invoice",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"endpoint_id\": \"160cf28d-b364-44eb-adbd-2489c5cc2cf8\"}"}
+          }
+        },
+        {
+          "name": "Verify Payment → Get Token",
+          "event": [{"listen": "test", "script": {"exec": ["pm.collectionVariables.set('PAYMENT_TOKEN', pm.response.json().access_token);"]}}],
+          "request": {
+            "method": "POST",
+            "url": "{{PROOF402_URL}}/v1/verify",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"invoice_id\": \"{{INVOICE_ID}}\",\n  \"tx_hash\": \"PASTE_XRPL_TX_HASH_HERE\",\n  \"agent_wallet\": \"{{AGENT_WALLET}}\"\n}"}
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Premium Endpoints",
+      "item": [
+        {
+          "name": "Council Verdict — IWM",
+          "request": {
+            "method": "POST",
+            "url": "{{SQUEEZEOS_URL}}/api/council",
+            "header": [
+              {"key": "X-Payment-Token", "value": "{{PAYMENT_TOKEN}}"},
+              {"key": "X-Agent-Wallet", "value": "{{AGENT_WALLET}}"},
+              {"key": "X-Agent-Domain", "value": "postman-agent.example.com"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {"mode": "raw", "raw": "{\"symbol\": \"IWM\"}"}
+          }
+        },
+        {
+          "name": "Full Market Scan",
+          "request": {
+            "method": "GET",
+            "url": "{{SQUEEZEOS_URL}}/api/scan",
+            "header": [
+              {"key": "X-Payment-Token", "value": "{{PAYMENT_TOKEN}}"},
+              {"key": "X-Agent-Wallet", "value": "{{AGENT_WALLET}}"},
+              {"key": "X-Agent-Domain", "value": "postman-agent.example.com"}
+            ]
+          }
+        },
+        {
+          "name": "Options Intelligence — IWM",
+          "request": {
+            "method": "GET",
+            "url": {"raw": "{{SQUEEZEOS_URL}}/api/options?symbol=IWM", "host": ["{{SQUEEZEOS_URL}}"], "path": ["api", "options"], "query": [{"key": "symbol", "value": "IWM"}]},
+            "header": [
+              {"key": "X-Payment-Token", "value": "{{PAYMENT_TOKEN}}"},
+              {"key": "X-Agent-Wallet", "value": "{{AGENT_WALLET}}"},
+              {"key": "X-Agent-Domain", "value": "postman-agent.example.com"}
+            ]
+          }
+        },
+        {
+          "name": "IWM 0DTE Scanner",
+          "request": {
+            "method": "GET",
+            "url": "{{SQUEEZEOS_URL}}/api/iwm",
+            "header": [
+              {"key": "X-Payment-Token", "value": "{{PAYMENT_TOKEN}}"},
+              {"key": "X-Agent-Wallet", "value": "{{AGENT_WALLET}}"},
+              {"key": "X-Agent-Domain", "value": "postman-agent.example.com"}
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Free Endpoints",
+      "item": [
+        {
+          "name": "Live SSE Stream",
+          "request": {"method": "GET", "url": "{{SQUEEZEOS_URL}}/api/events"}
+        },
+        {
+          "name": "Agent Passport",
+          "request": {"method": "GET", "url": "{{PROOF402_URL}}/v1/agent/{{AGENT_WALLET}}"}
+        },
+        {
+          "name": "Platform Stats",
+          "request": {"method": "GET", "url": "{{PROOF402_URL}}/v1/stats"}
+        },
+        {
+          "name": "System Status",
+          "request": {"method": "GET", "url": "{{SQUEEZEOS_URL}}/api/status"}
+        },
+        {
+          "name": "Ghost Layer Health",
+          "request": {"method": "GET", "url": "https://ghost-layer.onrender.com/health"}
+        }
+      ]
+    }
+  ]
+}
