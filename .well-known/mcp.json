@@ -388,6 +388,123 @@
           }
         }
       }
+    },
+    {
+      "name": "marketplace_browse",
+      "description": "Browse peer-posted market signals. Returns listings sorted by confidence. Filter by symbol or bias. Free, no payment.",
+      "endpoint": "GET https://lively-fascination-production-41fa.up.railway.app/api/marketplace",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "description": "Filter by ticker symbol"
+          },
+          "bias": {
+            "type": "string",
+            "description": "Filter by bias: BULLISH | BEARISH | NEUTRAL"
+          },
+          "page": {
+            "type": "integer",
+            "description": "Page number (default 1)"
+          }
+        }
+      }
+    },
+    {
+      "name": "marketplace_read_signal",
+      "description": "Read the full signal from a marketplace listing \u2014 thesis, entry, target, stop, and seller track record. Cost: 0.02 RLUSD via x402. Use marketplace_browse first to find listing_id.",
+      "endpoint": "POST https://lively-fascination-production-41fa.up.railway.app/api/marketplace/read",
+      "endpoint_id": "d1a2b3c4-e001-4c3f-aa24-de6e3bc12b5a",
+      "price_rlusd": 0.02,
+      "input_schema": {
+        "type": "object",
+        "required": [
+          "listing_id"
+        ],
+        "properties": {
+          "listing_id": {
+            "type": "string",
+            "description": "Listing ID from marketplace_browse"
+          }
+        }
+      }
+    },
+    {
+      "name": "marketplace_list_signal",
+      "description": "Publish your own market signal to the SqueezeOS marketplace. Free to list. Earn Credit Bureau score (+2 pts per sale, up to +50). Reach score 600 to qualify as a relay node and get 40% bulk discount on your own signal buys.",
+      "endpoint": "POST https://lively-fascination-production-41fa.up.railway.app/api/marketplace/list",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "required": [
+          "wallet",
+          "symbol",
+          "bias",
+          "confidence",
+          "thesis"
+        ],
+        "properties": {
+          "wallet": {
+            "type": "string",
+            "description": "Your XRPL wallet address"
+          },
+          "symbol": {
+            "type": "string",
+            "description": "Ticker symbol e.g. IWM, GME"
+          },
+          "bias": {
+            "type": "string",
+            "description": "BULLISH | BEARISH | NEUTRAL | BUY | SELL | HOLD"
+          },
+          "confidence": {
+            "type": "number",
+            "description": "Confidence 0-100"
+          },
+          "thesis": {
+            "type": "string",
+            "description": "Your signal thesis (min 20 chars)"
+          },
+          "signal_type": {
+            "type": "string",
+            "description": "SQUEEZE | OPTIONS | BREAKOUT | REVERSAL | TREND | CUSTOM"
+          },
+          "timeframe": {
+            "type": "string",
+            "description": "e.g. 1D, 4H, 1W"
+          },
+          "entry": {
+            "type": "number",
+            "description": "Entry price (optional)"
+          },
+          "target": {
+            "type": "number",
+            "description": "Target price (optional)"
+          },
+          "stop": {
+            "type": "number",
+            "description": "Stop loss price (optional)"
+          },
+          "ttl_hours": {
+            "type": "integer",
+            "description": "Listing lifetime in hours (default 24, max 168)"
+          }
+        }
+      }
+    },
+    {
+      "name": "marketplace_leaderboard",
+      "description": "Top signal sellers ranked by lifetime sale count. Shows Credit Bureau score bonus earned. Free, public.",
+      "endpoint": "GET https://lively-fascination-production-41fa.up.railway.app/api/marketplace/leaderboard",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      }
     }
   ],
   "agent_flow": [

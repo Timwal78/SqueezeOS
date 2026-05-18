@@ -18,10 +18,11 @@ PROOF402_SECRET     = os.getenv('PROOF402_TOKEN_SECRET', '')  # same as Render T
 
 # ── Endpoint IDs (registered in 402Proof dashboard) ──────────────────────────
 ENDPOINTS = {
-    '/api/council': '12a0e7a1-6812-4c3f-aa24-de6e3bc12b5a',  # 0.10 RLUSD
-    '/api/scan':    '160cf28d-b364-44eb-adbd-2489c5cc2cf8',  # 0.05 RLUSD
-    '/api/options': 'c951a374-2424-4064-ab80-35afe8053d29',  # 0.05 RLUSD
-    '/api/iwm':     '60f48ce0-6002-4385-9b60-03a0d2bbebab',  # 0.03 RLUSD
+    '/api/council':          '12a0e7a1-6812-4c3f-aa24-de6e3bc12b5a',  # 0.10 RLUSD
+    '/api/scan':             '160cf28d-b364-44eb-adbd-2489c5cc2cf8',  # 0.05 RLUSD
+    '/api/options':          'c951a374-2424-4064-ab80-35afe8053d29',  # 0.05 RLUSD
+    '/api/iwm':              '60f48ce0-6002-4385-9b60-03a0d2bbebab',  # 0.03 RLUSD
+    '/api/marketplace/read': 'd1a2b3c4-e001-4c3f-aa24-de6e3bc12b5a',  # 0.02 RLUSD
 }
 
 
