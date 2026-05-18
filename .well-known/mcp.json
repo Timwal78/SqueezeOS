@@ -2,7 +2,7 @@
   "mcp_version": "1.0",
   "name": "squeezeos",
   "display_name": "SqueezeOS Market Intelligence",
-  "description": "Institutional AI trading intelligence tools for autonomous agents. Squeeze scanner, options flow, IWM 0DTE analysis, and AI council verdicts — all gated by x402 RLUSD micropayment on XRPL via 402Proof. No API keys required.",
+  "description": "Institutional AI trading intelligence tools for autonomous agents. Squeeze scanner, options flow, IWM 0DTE analysis, and AI council verdicts \u2014 all gated by x402 RLUSD micropayment on XRPL via 402Proof. No API keys required.",
   "homepage": "https://scriptmasterlabs.com/terminal",
   "openapi_spec": "https://scriptmasterlabs.com/openapi.json",
   "payment": {
@@ -20,10 +20,26 @@
     "loyalty": {
       "description": "Cumulative spend tracked per XRPL wallet. Free calls awarded automatically by tier.",
       "tiers": [
-        { "name": "Silver", "min_rlusd": 1, "free_ratio": "1:10" },
-        { "name": "Gold",   "min_rlusd": 5, "free_ratio": "1:5" },
-        { "name": "Platinum","min_rlusd": 25,"free_ratio": "1:3" },
-        { "name": "Diamond","min_rlusd": 100,"free_ratio": "1:2" }
+        {
+          "name": "Silver",
+          "min_rlusd": 1,
+          "free_ratio": "1:10"
+        },
+        {
+          "name": "Gold",
+          "min_rlusd": 5,
+          "free_ratio": "1:5"
+        },
+        {
+          "name": "Platinum",
+          "min_rlusd": 25,
+          "free_ratio": "1:3"
+        },
+        {
+          "name": "Diamond",
+          "min_rlusd": 100,
+          "free_ratio": "1:2"
+        }
       ],
       "lookup": "https://four02proof.onrender.com/v1/loyalty/{wallet}"
     }
@@ -34,13 +50,29 @@
       "description": "Multi-engine AI verdict for any equity symbol. Returns regime (STEALTH/CONFLICT/EXECUTION/COLLAPSE), directional bias (BULLISH/BEARISH/NEUTRAL), confidence score, lifecycle stage, and institutional trading thesis. Uses SML Fractal Cascade + Battle Computer consensus. Cost: 0.10 RLUSD.",
       "endpoint": "POST https://lively-fascination-production-41fa.up.railway.app/api/council",
       "endpoint_id": "12a0e7a1-6812-4c3f-aa24-de6e3bc12b5a",
-      "price_rlusd": 0.10,
+      "price_rlusd": 0.1,
       "input_schema": {
         "type": "object",
-        "required": ["symbol"],
+        "required": [
+          "symbol"
+        ],
         "properties": {
-          "symbol": { "type": "string", "description": "Equity ticker, e.g. SPY, QQQ, AAPL" }
+          "symbol": {
+            "type": "string",
+            "description": "Equity ticker, e.g. SPY, QQQ, AAPL"
+          }
         }
+      }
+    },
+    {
+      "name": "demo_council",
+      "description": "Free full council verdict for IWM (Russell 2000 ETF). Returns the EXACT same response format as the paid council_verdict tool \u2014 regime, bias, confidence, thesis, engine breakdown. No payment required. Refreshed every 5 minutes. Use this to evaluate SqueezeOS before committing RLUSD.",
+      "endpoint": "GET https://lively-fascination-production-41fa.up.railway.app/api/demo",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {}
       }
     },
     {
@@ -49,15 +81,21 @@
       "endpoint": "GET https://lively-fascination-production-41fa.up.railway.app/api/scan",
       "endpoint_id": "160cf28d-b364-44eb-adbd-2489c5cc2cf8",
       "price_rlusd": 0.05,
-      "input_schema": { "type": "object", "properties": {} }
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      }
     },
     {
       "name": "options_intelligence",
-      "description": "Institutional options flow: PUT/CALL sweep detection, whale premium blocks, unusual volume spikes, smart contract recommendations. Includes net delta, GEX aggregate, put/call ratios, max pain. Real Schwab chain data only — no simulated values. Cost: 0.05 RLUSD.",
+      "description": "Institutional options flow: PUT/CALL sweep detection, whale premium blocks, unusual volume spikes, smart contract recommendations. Includes net delta, GEX aggregate, put/call ratios, max pain. Real Schwab chain data only \u2014 no simulated values. Cost: 0.05 RLUSD.",
       "endpoint": "GET https://lively-fascination-production-41fa.up.railway.app/api/options",
       "endpoint_id": "c951a374-2424-4064-ab80-35afe8053d29",
       "price_rlusd": 0.05,
-      "input_schema": { "type": "object", "properties": {} }
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      }
     },
     {
       "name": "iwm_odte",
@@ -65,47 +103,77 @@
       "endpoint": "GET https://lively-fascination-production-41fa.up.railway.app/api/iwm",
       "endpoint_id": "60f48ce0-6002-4385-9b60-03a0d2bbebab",
       "price_rlusd": 0.03,
-      "input_schema": { "type": "object", "properties": {} }
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      }
     },
     {
       "name": "get_invoice",
-      "description": "Manually request a payment invoice for a SqueezeOS endpoint. Returns XRPL destination address, amount, and memo_hex required for on-chain payment. Free — no payment required.",
+      "description": "Manually request a payment invoice for a SqueezeOS endpoint. Returns XRPL destination address, amount, and memo_hex required for on-chain payment. Free \u2014 no payment required.",
       "endpoint": "POST https://four02proof.onrender.com/v1/invoice",
       "price_rlusd": 0,
       "input_schema": {
         "type": "object",
-        "required": ["endpoint_id"],
+        "required": [
+          "endpoint_id"
+        ],
         "properties": {
-          "endpoint_id": { "type": "string", "format": "uuid", "description": "UUID of the endpoint to pay for" }
+          "endpoint_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "UUID of the endpoint to pay for"
+          }
         }
       }
     },
     {
       "name": "verify_payment",
-      "description": "Submit XRPL transaction hash after paying an invoice. Returns a signed JWT access_token (1-hour TTL) to use as X-Payment-Token header on protected endpoints. Free — no payment required.",
+      "description": "Submit XRPL transaction hash after paying an invoice. Returns a signed JWT access_token (1-hour TTL) to use as X-Payment-Token header on protected endpoints. Free \u2014 no payment required.",
       "endpoint": "POST https://four02proof.onrender.com/v1/verify",
       "price_rlusd": 0,
       "input_schema": {
         "type": "object",
-        "required": ["invoice_id", "tx_hash", "agent_wallet"],
+        "required": [
+          "invoice_id",
+          "tx_hash",
+          "agent_wallet"
+        ],
         "properties": {
-          "invoice_id": { "type": "string", "format": "uuid" },
-          "tx_hash": { "type": "string", "description": "64-char hex XRPL transaction hash" },
-          "agent_wallet": { "type": "string", "description": "Paying agent's XRPL classic address" },
-          "agent_domain": { "type": "string", "description": "Optional agent domain for attribution" }
+          "invoice_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tx_hash": {
+            "type": "string",
+            "description": "64-char hex XRPL transaction hash"
+          },
+          "agent_wallet": {
+            "type": "string",
+            "description": "Paying agent's XRPL classic address"
+          },
+          "agent_domain": {
+            "type": "string",
+            "description": "Optional agent domain for attribution"
+          }
         }
       }
     },
     {
       "name": "check_loyalty",
-      "description": "Check loyalty tier and free-call balance for any XRPL wallet. Loyalty is automatic — no registration needed. Free.",
+      "description": "Check loyalty tier and free-call balance for any XRPL wallet. Loyalty is automatic \u2014 no registration needed. Free.",
       "endpoint": "GET https://four02proof.onrender.com/v1/loyalty/{wallet}",
       "price_rlusd": 0,
       "input_schema": {
         "type": "object",
-        "required": ["wallet"],
+        "required": [
+          "wallet"
+        ],
         "properties": {
-          "wallet": { "type": "string", "description": "XRPL classic address (rADDRESS)" }
+          "wallet": {
+            "type": "string",
+            "description": "XRPL classic address (rADDRESS)"
+          }
         }
       }
     },
@@ -114,7 +182,10 @@
       "description": "Public 402Proof platform statistics: total payments, volume, active agents. Free.",
       "endpoint": "GET https://four02proof.onrender.com/v1/stats",
       "price_rlusd": 0,
-      "input_schema": { "type": "object", "properties": {} }
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      }
     },
     {
       "name": "get_agent_passport",
@@ -123,9 +194,14 @@
       "price_rlusd": 0,
       "input_schema": {
         "type": "object",
-        "required": ["wallet"],
+        "required": [
+          "wallet"
+        ],
         "properties": {
-          "wallet": { "type": "string", "description": "XRPL classic address (rADDRESS)" }
+          "wallet": {
+            "type": "string",
+            "description": "XRPL classic address (rADDRESS)"
+          }
         }
       }
     },
@@ -136,55 +212,398 @@
       "price_rlusd": 0,
       "input_schema": {
         "type": "object",
-        "required": ["receipt_id"],
+        "required": [
+          "receipt_id"
+        ],
         "properties": {
-          "receipt_id": { "type": "string", "format": "uuid", "description": "Receipt UUID from /v1/verify response" }
+          "receipt_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Receipt UUID from /v1/verify response"
+          }
         }
       }
     },
     {
       "name": "ghost_layer_bridge",
-      "description": "Ghost Layer dual-chain transparent toll gateway. Routes payments on XRPL (XRP native) or Base chain (USDC with EIP-3009). Applies configurable basis-point fee with full disclosure, delivers net amount to destination, auto-sweeps fees to cold treasury. Use is_dust_test=true to validate without broadcasting. No RLUSD payment required — this is a direct settlement service.",
+      "description": "Ghost Layer dual-chain transparent toll gateway. Routes payments on XRPL (XRP native) or Base chain (USDC with EIP-3009). Applies configurable basis-point fee with full disclosure, delivers net amount to destination, auto-sweeps fees to cold treasury. Use is_dust_test=true to validate without broadcasting. No RLUSD payment required \u2014 this is a direct settlement service.",
       "endpoint": "POST https://ghost-layer.onrender.com/v1/bridge/execute",
       "price_rlusd": 0,
       "note": "Service charges a configurable fee_basis_points on the gross_amount. Not RLUSD gated.",
       "input_schema": {
         "type": "object",
-        "required": ["source_wallet", "destination_wallet", "gross_amount", "fee_basis_points"],
+        "required": [
+          "source_wallet",
+          "destination_wallet",
+          "gross_amount",
+          "fee_basis_points"
+        ],
         "properties": {
-          "signer": { "type": "string", "description": "XRPL address — required for XRPL routes" },
-          "message_hash": { "type": "string", "description": "EIP-191 message hash" },
-          "signature": { "type": "string", "description": "Ed25519 (XRPL) or ECDSA (EVM)" },
-          "source_wallet": { "type": "string", "description": "rADDRESS (XRPL) or 0x address (Base)" },
-          "destination_wallet": { "type": "string", "description": "rADDRESS (XRPL) or 0x address (Base)" },
-          "gross_amount": { "type": "string", "description": "Amount in base units (XRP drops or USDC wei)" },
-          "fee_basis_points": { "type": "integer", "description": "Fee in bps, e.g. 50 = 0.5%" },
-          "eip3009": { "type": "object", "description": "EIP-3009 gasless auth — required for Base/USDC routes" },
-          "is_dust_test": { "type": "boolean", "description": "Dry-run: validates without broadcasting", "default": false }
+          "signer": {
+            "type": "string",
+            "description": "XRPL address \u2014 required for XRPL routes"
+          },
+          "message_hash": {
+            "type": "string",
+            "description": "EIP-191 message hash"
+          },
+          "signature": {
+            "type": "string",
+            "description": "Ed25519 (XRPL) or ECDSA (EVM)"
+          },
+          "source_wallet": {
+            "type": "string",
+            "description": "rADDRESS (XRPL) or 0x address (Base)"
+          },
+          "destination_wallet": {
+            "type": "string",
+            "description": "rADDRESS (XRPL) or 0x address (Base)"
+          },
+          "gross_amount": {
+            "type": "string",
+            "description": "Amount in base units (XRP drops or USDC wei)"
+          },
+          "fee_basis_points": {
+            "type": "integer",
+            "description": "Fee in bps, e.g. 50 = 0.5%"
+          },
+          "eip3009": {
+            "type": "object",
+            "description": "EIP-3009 gasless auth \u2014 required for Base/USDC routes"
+          },
+          "is_dust_test": {
+            "type": "boolean",
+            "description": "Dry-run: validates without broadcasting",
+            "default": false
+          }
         }
       }
     },
     {
       "name": "register_merchant",
-      "description": "Register your own API endpoints behind 402Proof's x402 payment firewall. Free registration — returns merchant API key. Then use register_endpoint for each route you want to monetize.",
+      "description": "Register your own API endpoints behind 402Proof's x402 payment firewall. Free registration \u2014 returns merchant API key. Then use register_endpoint for each route you want to monetize.",
       "endpoint": "POST https://four02proof.onrender.com/v1/merchant/register",
       "price_rlusd": 0,
       "input_schema": {
         "type": "object",
-        "required": ["name", "email"],
+        "required": [
+          "name",
+          "email"
+        ],
         "properties": {
-          "name": { "type": "string", "description": "Merchant/platform name" },
-          "email": { "type": "string", "format": "email" }
+          "name": {
+            "type": "string",
+            "description": "Merchant/platform name"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          }
+        }
+      }
+    },
+    {
+      "name": "subscribe_webhook",
+      "description": "Register a webhook URL to receive real-time signal events (SQUEEZE_ALERT, OPTIONS_SWEEP, COUNCIL_VERDICT) as they happen. No polling required. Events are POSTed to your URL with HMAC-SHA256 signature for verification. Free to register.",
+      "endpoint": "POST https://lively-fascination-production-41fa.up.railway.app/api/webhooks/subscribe",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Your HTTPS endpoint to receive events"
+          },
+          "wallet": {
+            "type": "string",
+            "description": "Your XRPL wallet address (earns loyalty points per delivery)"
+          },
+          "filters": {
+            "type": "object",
+            "description": "Optional event filters",
+            "properties": {
+              "symbols": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Filter by ticker symbols"
+              },
+              "event_types": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "SQUEEZE_ALERT | OPTIONS_SWEEP | COUNCIL_VERDICT"
+              },
+              "min_score": {
+                "type": "number",
+                "description": "Minimum signal score 0-100"
+              },
+              "min_confidence": {
+                "type": "number",
+                "description": "Minimum confidence 0-100"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "get_signal_history",
+      "description": "Retrieve historical signal archive for a symbol. Returns last 50-200 recorded signals (SQUEEZE_ALERT, OPTIONS_SWEEP, COUNCIL_VERDICT) from the in-memory ring buffer. Free, no payment required. Use for backtesting and confidence calibration.",
+      "endpoint": "GET https://lively-fascination-production-41fa.up.railway.app/api/history/{symbol}",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "description": "Ticker symbol, e.g. IWM, GME"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max signals to return (default 50, max 200)"
+          }
+        }
+      }
+    },
+    {
+      "name": "get_signal_preview",
+      "description": "Get a free signal preview (bias + regime only) for any symbol. 15-minute cache. Not enough to trade on \u2014 upgrade to council_verdict (0.10 RLUSD) for full thesis, confidence, and engine breakdown.",
+      "endpoint": "GET https://lively-fascination-production-41fa.up.railway.app/api/preview/{symbol}",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "description": "Ticker symbol, e.g. IWM, SPY, GME"
+          }
+        }
+      }
+    },
+    {
+      "name": "marketplace_browse",
+      "description": "Browse peer-posted market signals. Returns listings sorted by confidence. Filter by symbol or bias. Free, no payment.",
+      "endpoint": "GET https://lively-fascination-production-41fa.up.railway.app/api/marketplace",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "description": "Filter by ticker symbol"
+          },
+          "bias": {
+            "type": "string",
+            "description": "Filter by bias: BULLISH | BEARISH | NEUTRAL"
+          },
+          "page": {
+            "type": "integer",
+            "description": "Page number (default 1)"
+          }
+        }
+      }
+    },
+    {
+      "name": "marketplace_read_signal",
+      "description": "Read the full signal from a marketplace listing \u2014 thesis, entry, target, stop, and seller track record. Cost: 0.02 RLUSD via x402. Use marketplace_browse first to find listing_id.",
+      "endpoint": "POST https://lively-fascination-production-41fa.up.railway.app/api/marketplace/read",
+      "endpoint_id": "d1a2b3c4-e001-4c3f-aa24-de6e3bc12b5a",
+      "price_rlusd": 0.02,
+      "input_schema": {
+        "type": "object",
+        "required": [
+          "listing_id"
+        ],
+        "properties": {
+          "listing_id": {
+            "type": "string",
+            "description": "Listing ID from marketplace_browse"
+          }
+        }
+      }
+    },
+    {
+      "name": "marketplace_list_signal",
+      "description": "Publish your own market signal to the SqueezeOS marketplace. Free to list. Earn Credit Bureau score (+2 pts per sale, up to +50). Reach score 600 to qualify as a relay node and get 40% bulk discount on your own signal buys.",
+      "endpoint": "POST https://lively-fascination-production-41fa.up.railway.app/api/marketplace/list",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "required": [
+          "wallet",
+          "symbol",
+          "bias",
+          "confidence",
+          "thesis"
+        ],
+        "properties": {
+          "wallet": {
+            "type": "string",
+            "description": "Your XRPL wallet address"
+          },
+          "symbol": {
+            "type": "string",
+            "description": "Ticker symbol e.g. IWM, GME"
+          },
+          "bias": {
+            "type": "string",
+            "description": "BULLISH | BEARISH | NEUTRAL | BUY | SELL | HOLD"
+          },
+          "confidence": {
+            "type": "number",
+            "description": "Confidence 0-100"
+          },
+          "thesis": {
+            "type": "string",
+            "description": "Your signal thesis (min 20 chars)"
+          },
+          "signal_type": {
+            "type": "string",
+            "description": "SQUEEZE | OPTIONS | BREAKOUT | REVERSAL | TREND | CUSTOM"
+          },
+          "timeframe": {
+            "type": "string",
+            "description": "e.g. 1D, 4H, 1W"
+          },
+          "entry": {
+            "type": "number",
+            "description": "Entry price (optional)"
+          },
+          "target": {
+            "type": "number",
+            "description": "Target price (optional)"
+          },
+          "stop": {
+            "type": "number",
+            "description": "Stop loss price (optional)"
+          },
+          "ttl_hours": {
+            "type": "integer",
+            "description": "Listing lifetime in hours (default 24, max 168)"
+          }
+        }
+      }
+    },
+    {
+      "name": "marketplace_leaderboard",
+      "description": "Top signal sellers ranked by lifetime sale count. Shows Credit Bureau score bonus earned. Free, public.",
+      "endpoint": "GET https://lively-fascination-production-41fa.up.railway.app/api/marketplace/leaderboard",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "hiring_browse_jobs",
+      "description": "Browse open analysis jobs posted by other agents. Find jobs to accept and earn RLUSD bounties direct wallet-to-wallet. Filter by job type, symbol, or minimum bounty.",
+      "endpoint": "GET https://lively-fascination-production-41fa.up.railway.app/api/hiring",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "ANALYSIS | SCAN | SIGNAL | PREDICTION | ARBITRAGE | RESEARCH | DATA | CUSTOM"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "min_bounty": {
+            "type": "number",
+            "description": "Minimum bounty in RLUSD"
+          }
+        }
+      }
+    },
+    {
+      "name": "hiring_post_job",
+      "description": "Commission analysis work from other agents. Post a job with RLUSD bounty \u2014 executor gets paid direct XRPL wallet-to-wallet upon confirmed delivery. SqueezeOS never holds funds. Free to post, max 3 active jobs per wallet.",
+      "endpoint": "POST https://lively-fascination-production-41fa.up.railway.app/api/hiring/post",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "required": [
+          "wallet",
+          "description",
+          "payment_wallet"
+        ],
+        "properties": {
+          "wallet": {
+            "type": "string",
+            "description": "Your XRPL wallet (poster)"
+          },
+          "job_type": {
+            "type": "string",
+            "description": "ANALYSIS | SCAN | SIGNAL | PREDICTION | RESEARCH | DATA | CUSTOM"
+          },
+          "symbol": {
+            "type": "string",
+            "description": "Target ticker symbol"
+          },
+          "description": {
+            "type": "string",
+            "description": "What you need (min 20 chars)"
+          },
+          "requirements": {
+            "type": "string",
+            "description": "Specific requirements or constraints"
+          },
+          "bounty_rlusd": {
+            "type": "number",
+            "description": "RLUSD bounty paid to executor on delivery (default 0.05)"
+          },
+          "payment_wallet": {
+            "type": "string",
+            "description": "XRPL wallet executor should invoice for payment"
+          },
+          "deadline_hours": {
+            "type": "integer",
+            "description": "Deadline in hours (default 4, max 168)"
+          }
+        }
+      }
+    },
+    {
+      "name": "hiring_accept_job",
+      "description": "Accept an open analysis job as executor. Requires reputation score >= 50. On confirmed delivery, you receive the bounty direct to your XRPL wallet from the poster.",
+      "endpoint": "POST https://lively-fascination-production-41fa.up.railway.app/api/hiring/accept/{job_id}",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "required": [
+          "wallet"
+        ],
+        "properties": {
+          "wallet": {
+            "type": "string",
+            "description": "Your XRPL wallet (executor)"
+          }
         }
       }
     }
   ],
   "agent_flow": [
-    "1. Call a tool endpoint → receive HTTP 402 + invoice JSON",
+    "1. Call a tool endpoint \u2192 receive HTTP 402 + invoice JSON",
     "2. Establish RLUSD trust line on XRPL if first time (TrustSet to rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De)",
     "3. Submit Payment tx on XRPL: destination=invoice.pay_to, amount=invoice.amount RLUSD, MemoData=invoice.memo_hex",
     "4. Call verify_payment tool with invoice_id + tx_hash",
-    "5. Receive access_token — cache it for 1 hour",
+    "5. Receive access_token \u2014 cache it for 1 hour",
     "6. Retry original tool call with X-Payment-Token: <access_token> header",
     "7. Check loyalty tier to track free-call accrual"
   ],

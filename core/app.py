@@ -18,7 +18,11 @@ from core.api.market_scanner import market_bp, start_market_scanner
 from core.api.v2_bridge import v2_bp
 from core.api.premium_bp import premium_bp
 from core.api.relay_bp import relay_bp
+from core.api.webhook_bp import webhook_bp, start_webhook_engine
+from core.api.marketplace_bp import marketplace_bp
+from core.api.hiring_bp import hiring_bp
 from core.api.honeypot import honeypot_bp, honeypot_before_request
+import core.signal_history as signal_history
 from core.legacy import start_whale_stalker, init_services, get_service, clean_data
 from core.market_graph import get_graph
 from core.rdt_engine import RecurrentDepthTransformer
@@ -55,12 +59,18 @@ def create_app():
     app.register_blueprint(market_bp, url_prefix='/api/market')
     app.register_blueprint(premium_bp, url_prefix='/api')
     app.register_blueprint(relay_bp, url_prefix='/api/relay')
+    app.register_blueprint(webhook_bp,     url_prefix='/api/webhooks')
+    app.register_blueprint(marketplace_bp, url_prefix='/api/marketplace')
+    app.register_blueprint(hiring_bp,     url_prefix='/api/hiring')
     app.register_blueprint(v2_bp, url_prefix='/api')
     app.register_blueprint(v2_bp, url_prefix='/api/v1', name='v2_bridge_v1')
     
     # Start background market scanner
     start_market_scanner()
-    
+
+    # Start webhook delivery engine (SSE tap + delivery workers)
+    start_webhook_engine()
+
     # Start institutional telemetry rotator (Goal 3)
     start_telemetry_rotator()
     
@@ -375,6 +385,67 @@ def create_app():
             logger.error(f"[RDT] Error: {e}")
             return jsonify({"status": "error", "message": str(e)}), 500
 
+    # ── Demo endpoint — full council verdict, IWM, no payment, 5-min cache ────
+    # Shows agents the EXACT response format they get when they pay.
+    # Eliminates "is this real?" friction for new agents evaluating the platform.
+    _demo_cache: dict = {}
+    _DEMO_TTL = 300  # 5 minutes
+
+    @app.route('/api/demo', methods=['GET'])
+    @app.route('/api/demo/council', methods=['GET'])
+    def demo_council():
+        now = time.time()
+        cached = _demo_cache.get('council')
+        if cached and (now - cached.get('_cached_at', 0)) < _DEMO_TTL:
+            return jsonify(cached)
+        try:
+            from core.oracle_engine import OracleEngine
+            services = {
+                "dm":            get_service("dm"),
+                "whale_stalker": get_service("whale_stalker"),
+                "sml":           get_service("sml"),
+            }
+            engine = OracleEngine(services)
+            data   = engine.analyze('IWM')
+            trend  = data.get('trend_score', 0) or 0
+            bias   = 'BULLISH' if trend > 0.2 else 'BEARISH' if trend < -0.2 else 'NEUTRAL'
+            result = {
+                "demo":       True,
+                "symbol":     "IWM",
+                "verdict": {
+                    "symbol":     "IWM",
+                    "bias":       bias,
+                    "regime":     data.get('regime', 'UNKNOWN'),
+                    "confidence": min(100, int(abs(trend) * 200)),
+                    "thesis":     f"IWM regime={data.get('regime','UNKNOWN')} trend_score={round(trend,3)} → {bias}",
+                    "timestamp":  now,
+                },
+                "engines": {
+                    "sml": {k: v for k, v in data.items() if k in (
+                        'regime','trend_score','vpin','gamma_wall_above',
+                        'gamma_wall_below','bias','directive',
+                    )},
+                },
+                "note":       "Demo data — fixed symbol IWM, refreshed every 5 min. Real paid calls accept any symbol.",
+                "upgrade": {
+                    "any_symbol":  "/api/council",
+                    "price_rlusd": "0.10",
+                    "gateway":     "https://four02proof.onrender.com",
+                    "includes":    ["any symbol", "live data", "full engine breakdown", "battle computer consensus"],
+                },
+                "_cached_at": now,
+            }
+        except Exception as e:
+            result = {
+                "demo":    True,
+                "symbol":  "IWM",
+                "error":   str(e),
+                "note":    "Oracle engine temporarily offline. Try /api/preview/IWM for cached preview.",
+                "_cached_at": now,
+            }
+        _demo_cache['council'] = result
+        return jsonify(result)
+
     # ── Free Signal Preview — acquisition funnel ─────────────────────────────
     # Returns bias + regime only, cached 15 min. No payment required.
     # Enough for an agent to verify SqueezeOS works; not enough to trade on.
@@ -417,6 +488,40 @@ def create_app():
         }
         _preview_cache[symbol] = result
         return jsonify(result)
+
+    # ── Signal History — free public endpoint ────────────────────────────────
+    # Last N signals per symbol from the in-memory ring buffer.
+    # Free, no auth. Enables agent backtesting and confidence calibration.
+
+    @app.route('/api/history', methods=['GET'])
+    def signal_history_all():
+        limit = min(int(request.args.get('limit', 100)), 500)
+        return jsonify({
+            "signals":  signal_history.get_all_recent(limit),
+            "symbols":  signal_history.get_symbols(),
+            "limit":    limit,
+            "free":     True,
+            "ts":       time.time(),
+        })
+
+    @app.route('/api/history/<symbol>', methods=['GET'])
+    def signal_history_symbol(symbol):
+        sym   = symbol.upper().strip()
+        limit = min(int(request.args.get('limit', 50)), 200)
+        return jsonify({
+            "symbol":   sym,
+            "signals":  signal_history.get_history(sym, limit),
+            "count":    len(signal_history.get_history(sym, limit)),
+            "limit":    limit,
+            "free":     True,
+            "upgrade":  {
+                "live_stream":  "/api/events",
+                "webhooks":     "/api/webhooks/subscribe",
+                "full_verdict": "/api/council",
+                "price_rlusd":  "0.10",
+            },
+            "ts":       time.time(),
+        })
 
     @app.route('/<path:path>')
     def serve_static(path):

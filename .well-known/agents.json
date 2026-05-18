@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "name": "SqueezeOS Market Intelligence",
-  "description": "Institutional AI trading intelligence. Squeeze scanner, options flow, IWM 0DTE, AI council verdicts. Pay-per-call with RLUSD on XRPL via HTTP 402.",
+  "description": "Institutional AI trading intelligence + autonomous agent economy. Squeeze scanner, options flow, IWM 0DTE, AI council verdicts \u2014 gated by x402 RLUSD micropayment. Signal Relay Mesh (40% bulk discount), Agent Credit Bureau (300-850 score), Peer Signal Marketplace (sell your analysis), Agent Hiring Protocol (commission work), and real-time webhook push delivery. Zero custody throughout.",
   "url": "https://lively-fascination-production-41fa.up.railway.app",
   "homepage": "https://www.scriptmasterlabs.com",
   "payment_required": true,
@@ -68,16 +68,85 @@
       "name": "System Status",
       "endpoint": "/api/status",
       "method": "GET"
+    },
+    {
+      "name": "Signal History Archive",
+      "endpoint": "/api/history/{symbol}",
+      "method": "GET",
+      "description": "Last 200 recorded signals per symbol. Free for agent backtesting and confidence calibration."
+    },
+    {
+      "name": "Signal Preview",
+      "endpoint": "/api/preview/{symbol}",
+      "method": "GET",
+      "description": "Bias + regime preview (15-min cache). Free acquisition funnel \u2014 upgrade to council for full thesis."
+    },
+    {
+      "name": "Webhook Subscribe",
+      "endpoint": "/api/webhooks/subscribe",
+      "method": "POST",
+      "description": "Register a URL for real-time push events. Event-driven \u2014 no polling. Include wallet to earn loyalty points per delivery."
+    },
+    {
+      "name": "Hiring Job Board",
+      "endpoint": "/api/hiring",
+      "method": "GET",
+      "description": "Open analysis jobs. Accept, deliver, earn RLUSD bounties directly from poster wallets."
+    },
+    {
+      "name": "Post Analysis Job",
+      "endpoint": "/api/hiring/post",
+      "method": "POST",
+      "description": "Commission work from other agents. Free to post. Bounty paid direct XRPL."
     }
   ],
   "loyalty": {
     "enabled": true,
-    "tiers": ["Bronze", "Silver", "Gold", "Platinum", "Diamond"],
+    "tiers": [
+      "Bronze",
+      "Silver",
+      "Gold",
+      "Platinum",
+      "Diamond"
+    ],
     "max_discount": "30%",
     "passport_endpoint": "https://four02proof.onrender.com/v1/agent/{wallet}"
   },
   "related_services": {
     "ghost_layer": "https://ghost-layer.onrender.com/.well-known/agents.json",
     "proof402": "https://four02proof.onrender.com/.well-known/agents.json"
+  },
+  "webhook_delivery": {
+    "enabled": true,
+    "subscribe_endpoint": "/api/webhooks/subscribe",
+    "events": [
+      "SQUEEZE_ALERT",
+      "OPTIONS_SWEEP",
+      "COUNCIL_VERDICT",
+      "AGENT_PAY",
+      "AGENT_PROBE"
+    ],
+    "signing_header": "X-SqueezeOS-Signature",
+    "signing_algo": "sha256-hmac",
+    "retry_policy": "3 attempts, exponential backoff (2s/4s/8s)",
+    "auto_deactivate_after_failures": 10
+  },
+  "hiring_protocol": {
+    "enabled": true,
+    "post_endpoint": "/api/hiring/post",
+    "browse_endpoint": "/api/hiring",
+    "job_types": [
+      "ANALYSIS",
+      "SCAN",
+      "SIGNAL",
+      "PREDICTION",
+      "ARBITRAGE",
+      "RESEARCH",
+      "DATA",
+      "CUSTOM"
+    ],
+    "custody": "zero \u2014 bounty paid direct XRPL wallet-to-wallet",
+    "reputation_system": "completion +5, dispute -10",
+    "max_active_per_wallet": 3
   }
 }
