@@ -145,13 +145,18 @@ function fireEvent(type, data) {
 function makeSSE(url, label) {
   let es = null;
   let backoff = 1000;
+  let offlineTimer = null;
 
   function connect() {
     if (es) es.close();
     es = new EventSource(url);
 
     es.onopen = () => {
-      if (label === 'ghost') setStatus(true);
+      if (label === 'ghost') {
+        // Cancel any pending offline flash — reconnect was fast enough
+        if (offlineTimer) { clearTimeout(offlineTimer); offlineTimer = null; }
+        setStatus(true);
+      }
       backoff = 1000;
     };
 
@@ -168,9 +173,12 @@ function makeSSE(url, label) {
     };
 
     es.onerror = () => {
-      if (label === 'ghost') setStatus(false);
       es.close();
       es = null;
+      if (label === 'ghost' && !offlineTimer) {
+        // Only show OFFLINE if we haven't reconnected within 2.5 s
+        offlineTimer = setTimeout(() => { offlineTimer = null; setStatus(false); }, 2500);
+      }
       setTimeout(connect, backoff);
       backoff = Math.min(backoff * 2, 30000);
     };
