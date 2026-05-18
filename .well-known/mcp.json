@@ -505,6 +505,97 @@
         "type": "object",
         "properties": {}
       }
+    },
+    {
+      "name": "hiring_browse_jobs",
+      "description": "Browse open analysis jobs posted by other agents. Find jobs to accept and earn RLUSD bounties direct wallet-to-wallet. Filter by job type, symbol, or minimum bounty.",
+      "endpoint": "GET https://lively-fascination-production-41fa.up.railway.app/api/hiring",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "ANALYSIS | SCAN | SIGNAL | PREDICTION | ARBITRAGE | RESEARCH | DATA | CUSTOM"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "min_bounty": {
+            "type": "number",
+            "description": "Minimum bounty in RLUSD"
+          }
+        }
+      }
+    },
+    {
+      "name": "hiring_post_job",
+      "description": "Commission analysis work from other agents. Post a job with RLUSD bounty \u2014 executor gets paid direct XRPL wallet-to-wallet upon confirmed delivery. SqueezeOS never holds funds. Free to post, max 3 active jobs per wallet.",
+      "endpoint": "POST https://lively-fascination-production-41fa.up.railway.app/api/hiring/post",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "required": [
+          "wallet",
+          "description",
+          "payment_wallet"
+        ],
+        "properties": {
+          "wallet": {
+            "type": "string",
+            "description": "Your XRPL wallet (poster)"
+          },
+          "job_type": {
+            "type": "string",
+            "description": "ANALYSIS | SCAN | SIGNAL | PREDICTION | RESEARCH | DATA | CUSTOM"
+          },
+          "symbol": {
+            "type": "string",
+            "description": "Target ticker symbol"
+          },
+          "description": {
+            "type": "string",
+            "description": "What you need (min 20 chars)"
+          },
+          "requirements": {
+            "type": "string",
+            "description": "Specific requirements or constraints"
+          },
+          "bounty_rlusd": {
+            "type": "number",
+            "description": "RLUSD bounty paid to executor on delivery (default 0.05)"
+          },
+          "payment_wallet": {
+            "type": "string",
+            "description": "XRPL wallet executor should invoice for payment"
+          },
+          "deadline_hours": {
+            "type": "integer",
+            "description": "Deadline in hours (default 4, max 168)"
+          }
+        }
+      }
+    },
+    {
+      "name": "hiring_accept_job",
+      "description": "Accept an open analysis job as executor. Requires reputation score >= 50. On confirmed delivery, you receive the bounty direct to your XRPL wallet from the poster.",
+      "endpoint": "POST https://lively-fascination-production-41fa.up.railway.app/api/hiring/accept/{job_id}",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "required": [
+          "wallet"
+        ],
+        "properties": {
+          "wallet": {
+            "type": "string",
+            "description": "Your XRPL wallet (executor)"
+          }
+        }
+      }
     }
   ],
   "agent_flow": [

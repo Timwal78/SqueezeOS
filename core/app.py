@@ -20,6 +20,7 @@ from core.api.premium_bp import premium_bp
 from core.api.relay_bp import relay_bp
 from core.api.webhook_bp import webhook_bp, start_webhook_engine
 from core.api.marketplace_bp import marketplace_bp
+from core.api.hiring_bp import hiring_bp
 from core.api.honeypot import honeypot_bp, honeypot_before_request
 import core.signal_history as signal_history
 from core.legacy import start_whale_stalker, init_services, get_service, clean_data
@@ -60,6 +61,7 @@ def create_app():
     app.register_blueprint(relay_bp, url_prefix='/api/relay')
     app.register_blueprint(webhook_bp,     url_prefix='/api/webhooks')
     app.register_blueprint(marketplace_bp, url_prefix='/api/marketplace')
+    app.register_blueprint(hiring_bp,     url_prefix='/api/hiring')
     app.register_blueprint(v2_bp, url_prefix='/api')
     app.register_blueprint(v2_bp, url_prefix='/api/v1', name='v2_bridge_v1')
     

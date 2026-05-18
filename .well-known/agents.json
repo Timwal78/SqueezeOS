@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "name": "SqueezeOS Market Intelligence",
-  "description": "Institutional AI trading intelligence. Squeeze scanner, options flow, IWM 0DTE, AI council verdicts. Pay-per-call with RLUSD on XRPL via HTTP 402.",
+  "description": "Institutional AI trading intelligence + autonomous agent economy. Squeeze scanner, options flow, IWM 0DTE, AI council verdicts \u2014 gated by x402 RLUSD micropayment. Signal Relay Mesh (40% bulk discount), Agent Credit Bureau (300-850 score), Peer Signal Marketplace (sell your analysis), Agent Hiring Protocol (commission work), and real-time webhook push delivery. Zero custody throughout.",
   "url": "https://lively-fascination-production-41fa.up.railway.app",
   "homepage": "https://www.scriptmasterlabs.com",
   "payment_required": true,
@@ -86,6 +86,18 @@
       "endpoint": "/api/webhooks/subscribe",
       "method": "POST",
       "description": "Register a URL for real-time push events. Event-driven \u2014 no polling. Include wallet to earn loyalty points per delivery."
+    },
+    {
+      "name": "Hiring Job Board",
+      "endpoint": "/api/hiring",
+      "method": "GET",
+      "description": "Open analysis jobs. Accept, deliver, earn RLUSD bounties directly from poster wallets."
+    },
+    {
+      "name": "Post Analysis Job",
+      "endpoint": "/api/hiring/post",
+      "method": "POST",
+      "description": "Commission work from other agents. Free to post. Bounty paid direct XRPL."
     }
   ],
   "loyalty": {
@@ -118,5 +130,23 @@
     "signing_algo": "sha256-hmac",
     "retry_policy": "3 attempts, exponential backoff (2s/4s/8s)",
     "auto_deactivate_after_failures": 10
+  },
+  "hiring_protocol": {
+    "enabled": true,
+    "post_endpoint": "/api/hiring/post",
+    "browse_endpoint": "/api/hiring",
+    "job_types": [
+      "ANALYSIS",
+      "SCAN",
+      "SIGNAL",
+      "PREDICTION",
+      "ARBITRAGE",
+      "RESEARCH",
+      "DATA",
+      "CUSTOM"
+    ],
+    "custody": "zero \u2014 bounty paid direct XRPL wallet-to-wallet",
+    "reputation_system": "completion +5, dispute -10",
+    "max_active_per_wallet": 3
   }
 }
