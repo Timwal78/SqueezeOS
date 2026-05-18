@@ -68,16 +68,55 @@
       "name": "System Status",
       "endpoint": "/api/status",
       "method": "GET"
+    },
+    {
+      "name": "Signal History Archive",
+      "endpoint": "/api/history/{symbol}",
+      "method": "GET",
+      "description": "Last 200 recorded signals per symbol. Free for agent backtesting and confidence calibration."
+    },
+    {
+      "name": "Signal Preview",
+      "endpoint": "/api/preview/{symbol}",
+      "method": "GET",
+      "description": "Bias + regime preview (15-min cache). Free acquisition funnel \u2014 upgrade to council for full thesis."
+    },
+    {
+      "name": "Webhook Subscribe",
+      "endpoint": "/api/webhooks/subscribe",
+      "method": "POST",
+      "description": "Register a URL for real-time push events. Event-driven \u2014 no polling. Include wallet to earn loyalty points per delivery."
     }
   ],
   "loyalty": {
     "enabled": true,
-    "tiers": ["Bronze", "Silver", "Gold", "Platinum", "Diamond"],
+    "tiers": [
+      "Bronze",
+      "Silver",
+      "Gold",
+      "Platinum",
+      "Diamond"
+    ],
     "max_discount": "30%",
     "passport_endpoint": "https://four02proof.onrender.com/v1/agent/{wallet}"
   },
   "related_services": {
     "ghost_layer": "https://ghost-layer.onrender.com/.well-known/agents.json",
     "proof402": "https://four02proof.onrender.com/.well-known/agents.json"
+  },
+  "webhook_delivery": {
+    "enabled": true,
+    "subscribe_endpoint": "/api/webhooks/subscribe",
+    "events": [
+      "SQUEEZE_ALERT",
+      "OPTIONS_SWEEP",
+      "COUNCIL_VERDICT",
+      "AGENT_PAY",
+      "AGENT_PROBE"
+    ],
+    "signing_header": "X-SqueezeOS-Signature",
+    "signing_algo": "sha256-hmac",
+    "retry_policy": "3 attempts, exponential backoff (2s/4s/8s)",
+    "auto_deactivate_after_failures": 10
   }
 }

@@ -16,6 +16,7 @@ import logging
 from flask import Blueprint, jsonify, request
 from core.legacy import get_service, clean_data
 from core.state import state, sse_queues
+import core.signal_history as signal_history
 
 
 def _broadcast_sse(event: dict):
@@ -106,14 +107,16 @@ def council():
         "timestamp": time.time(),
     }
 
-    _broadcast_sse({
-        'type': 'COUNCIL_VERDICT',
-        'symbol': symbol,
-        'bias': bias,
-        'regime': regime,
+    council_evt = {
+        'type':       'COUNCIL_VERDICT',
+        'symbol':     symbol,
+        'bias':       bias,
+        'regime':     regime,
         'confidence': confidence,
-        'ts': time.time(),
-    })
+        'ts':         time.time(),
+    }
+    _broadcast_sse(council_evt)
+    signal_history.record(symbol, 'COUNCIL_VERDICT', council_evt)
 
     return jsonify(verdict)
 

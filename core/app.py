@@ -18,7 +18,9 @@ from core.api.market_scanner import market_bp, start_market_scanner
 from core.api.v2_bridge import v2_bp
 from core.api.premium_bp import premium_bp
 from core.api.relay_bp import relay_bp
+from core.api.webhook_bp import webhook_bp, start_webhook_engine
 from core.api.honeypot import honeypot_bp, honeypot_before_request
+import core.signal_history as signal_history
 from core.legacy import start_whale_stalker, init_services, get_service, clean_data
 from core.market_graph import get_graph
 from core.rdt_engine import RecurrentDepthTransformer
@@ -55,12 +57,16 @@ def create_app():
     app.register_blueprint(market_bp, url_prefix='/api/market')
     app.register_blueprint(premium_bp, url_prefix='/api')
     app.register_blueprint(relay_bp, url_prefix='/api/relay')
+    app.register_blueprint(webhook_bp, url_prefix='/api/webhooks')
     app.register_blueprint(v2_bp, url_prefix='/api')
     app.register_blueprint(v2_bp, url_prefix='/api/v1', name='v2_bridge_v1')
     
     # Start background market scanner
     start_market_scanner()
-    
+
+    # Start webhook delivery engine (SSE tap + delivery workers)
+    start_webhook_engine()
+
     # Start institutional telemetry rotator (Goal 3)
     start_telemetry_rotator()
     
@@ -417,6 +423,40 @@ def create_app():
         }
         _preview_cache[symbol] = result
         return jsonify(result)
+
+    # ── Signal History — free public endpoint ────────────────────────────────
+    # Last N signals per symbol from the in-memory ring buffer.
+    # Free, no auth. Enables agent backtesting and confidence calibration.
+
+    @app.route('/api/history', methods=['GET'])
+    def signal_history_all():
+        limit = min(int(request.args.get('limit', 100)), 500)
+        return jsonify({
+            "signals":  signal_history.get_all_recent(limit),
+            "symbols":  signal_history.get_symbols(),
+            "limit":    limit,
+            "free":     True,
+            "ts":       time.time(),
+        })
+
+    @app.route('/api/history/<symbol>', methods=['GET'])
+    def signal_history_symbol(symbol):
+        sym   = symbol.upper().strip()
+        limit = min(int(request.args.get('limit', 50)), 200)
+        return jsonify({
+            "symbol":   sym,
+            "signals":  signal_history.get_history(sym, limit),
+            "count":    len(signal_history.get_history(sym, limit)),
+            "limit":    limit,
+            "free":     True,
+            "upgrade":  {
+                "live_stream":  "/api/events",
+                "webhooks":     "/api/webhooks/subscribe",
+                "full_verdict": "/api/council",
+                "price_rlusd":  "0.10",
+            },
+            "ts":       time.time(),
+        })
 
     @app.route('/<path:path>')
     def serve_static(path):

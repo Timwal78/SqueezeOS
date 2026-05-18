@@ -13,6 +13,7 @@ import time
 import logging
 import threading
 from squeeze_analyzer import SqueezeAnalyzer
+import core.signal_history as signal_history
 
 
 def _broadcast_sse(event: dict):
@@ -155,14 +156,16 @@ def _run_scan():
         for r in technical_results:
             if r.get('squeeze_score', 0) >= 80:
                 ceo_triggers.append(r)
-                _broadcast_sse({
+                evt = {
                     'type': 'SQUEEZE_ALERT',
                     'symbol': r['symbol'],
                     'score': r['squeeze_score'],
                     'direction': r.get('direction', 'UNKNOWN'),
                     'price': r.get('price'),
                     'ts': time.time(),
-                })
+                }
+                _broadcast_sse(evt)
+                signal_history.record(r['symbol'], 'SQUEEZE_ALERT', evt)
 
         # B) Add High-Grade Options
         for p in options_picks:
@@ -173,7 +176,7 @@ def _run_scan():
                     'direction': 'BULLISH' if p['type'] == 'call' else 'BEARISH',
                     'price': p['stock_price']
                 })
-                _broadcast_sse({
+                sweep = {
                     'type': 'OPTIONS_SWEEP',
                     'symbol': p['symbol'],
                     'strike': p['strike'],
@@ -183,7 +186,9 @@ def _run_scan():
                     'score': p['score'],
                     'mid': p['mid'],
                     'ts': time.time(),
-                })
+                }
+                _broadcast_sse(sweep)
+                signal_history.record(p['symbol'], 'OPTIONS_SWEEP', sweep)
                 
         if ceo_triggers:
             # Sort highest scores first
