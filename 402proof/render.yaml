@@ -4,7 +4,7 @@ services:
     runtime: docker
     dockerfilePath: ./402proof/Dockerfile
     dockerContext: ./402proof
-    plan: free
+    plan: starter
     envVars:
       - key: PORT
         value: "9090"
