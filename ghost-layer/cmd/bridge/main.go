@@ -261,6 +261,10 @@ func main() {
 			f.Flush()
 		}
 
+		// Heartbeat every 20 s keeps Render/nginx proxies from closing idle connections
+		heartbeat := time.NewTicker(20 * time.Second)
+		defer heartbeat.Stop()
+
 		for {
 			select {
 			case msg, ok := <-ch:
@@ -268,6 +272,11 @@ func main() {
 					return
 				}
 				w.Write(msg)
+				if f, ok := w.(http.Flusher); ok {
+					f.Flush()
+				}
+			case <-heartbeat.C:
+				fmt.Fprintf(w, ": keepalive\n\n")
 				if f, ok := w.(http.Flusher); ok {
 					f.Flush()
 				}
