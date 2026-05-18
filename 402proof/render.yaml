@@ -14,7 +14,23 @@ services:
         value: rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De
       - key: SERVER_URL
         sync: false
+      # Agent state persistence — loyalty tiers, passport, risk scores.
+      # Default /tmp/proof402_agents.json survives process crashes but resets
+      # on Render redeploys. Mount a Render Disk at /data and set this to
+      # /data/proof402_agents.json for full cross-deploy durability.
+      - key: AGENT_STATE_PATH
+        value: /tmp/proof402_agents.json
       # ── SECRETS: set in Render dashboard, never here ──────────────────────────
       # GATEWAY_XRPL_ADDRESS  — your 402Proof hot wallet (NOT your Xaman treasury)
       # TOKEN_SECRET          — openssl rand -hex 32
       # ADMIN_TOKEN           — openssl rand -hex 32
+      # ── Optional: email receipt delivery ─────────────────────────────────────
+      # SMTP_HOST             — e.g. smtp.sendgrid.net
+      # SMTP_PORT             — e.g. 587
+      # SMTP_USER             — SMTP username
+      # SMTP_PASS             — SMTP password / API key
+      # SMTP_FROM             — from address for receipt emails
+      # SMTP_TO               — merchant receipt destination
+      # ── Optional: wallet binding enforcement ─────────────────────────────────
+      # ENFORCE_WALLET_BINDING — set to "true" to hard-reject cross-wallet token use
+      #                          default "false" (logs mismatch, does not block)

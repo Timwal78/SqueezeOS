@@ -25,6 +25,118 @@
     }
   ],
   "paths": {
+    "/v1/loyalty/redeem": {
+      "post": {
+        "operationId": "redeemLoyaltyCredit",
+        "summary": "Burn 1 banked loyalty credit to receive an access token without XRPL payment",
+        "description": "Agents with banked free credits (earned via tier milestones) can redeem them here to receive a full access token for any registered endpoint — no on-chain payment required. Credits are consumed immediately. Check /v1/loyalty/{wallet} first to confirm credit balance. This is the compounding mathematical advantage of Diamond tier: every other call is effectively free.",
+        "servers": [{ "url": "https://four02proof.onrender.com" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["agent_wallet", "endpoint_id"],
+                "properties": {
+                  "agent_wallet": { "type": "string", "description": "Your XRPL classic address" },
+                  "endpoint_id": { "type": "string", "format": "uuid", "description": "Endpoint to unlock with the free credit" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Credit redeemed — access token issued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "CREDIT_REDEEMED" },
+                    "access_token": { "type": "string", "description": "Use as X-Payment-Token header. Wallet-bound to agent_wallet." },
+                    "credits_remaining": { "type": "integer" },
+                    "loyalty_tier": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "402": { "description": "No free credits available" }
+        }
+      }
+    },
+    "/v1/admin/agent/{wallet}/kyb": {
+      "post": {
+        "operationId": "setAgentKyb",
+        "summary": "Elevate KYB tier for a trusted agent — reduces their risk score immediately",
+        "description": "Admin endpoint. KYB tiers: 'none' (default, no reduction), 'basic' (-10 risk score), 'verified' (-20 risk score). Use to fast-track established institutional partners so they don't start at Bronze-tier friction. Requires ADMIN_TOKEN Bearer auth.",
+        "servers": [{ "url": "https://four02proof.onrender.com" }],
+        "security": [{ "adminToken": [] }],
+        "parameters": [
+          { "name": "wallet", "in": "path", "required": true, "schema": { "type": "string" }, "description": "XRPL classic address" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["tier"],
+                "properties": {
+                  "tier": { "type": "string", "enum": ["none", "basic", "verified"] },
+                  "reason": { "type": "string", "description": "Audit note — stored in server logs" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "KYB tier updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "KYB_UPDATED" },
+                    "wallet": { "type": "string" },
+                    "kyb_tier": { "type": "string" },
+                    "risk_score": { "type": "number" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/flush": {
+      "post": {
+        "operationId": "flushAgentState",
+        "summary": "Force-write agent loyalty/passport state to disk immediately",
+        "description": "Admin endpoint. Triggers an immediate atomic flush of the in-memory agent store to AGENT_STATE_PATH. Useful before a planned redeploy to ensure no loyalty state is lost. Requires ADMIN_TOKEN Bearer auth. State is also flushed automatically every 2 minutes and on graceful SIGTERM.",
+        "servers": [{ "url": "https://four02proof.onrender.com" }],
+        "security": [{ "adminToken": [] }],
+        "responses": {
+          "200": {
+            "description": "Flush completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "FLUSHED" },
+                    "path": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/invoice": {
       "post": {
         "operationId": "createInvoice",
@@ -540,6 +652,11 @@
   },
   "components": {
     "securitySchemes": {
+      "adminToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "ADMIN_TOKEN from Render environment. Generate with: openssl rand -hex 32. Required for /v1/admin/* endpoints."
+      },
       "merchantApiKey": {
         "type": "apiKey",
         "in": "header",
