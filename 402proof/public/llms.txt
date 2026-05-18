@@ -206,11 +206,17 @@ KYB tier (admin-assigned) unlocks enterprise features and compliance reporting.
 
 ## Settlement Details
 
-- Blockchain: XRP Ledger mainnet (wss://xrplcluster.com)
-- RLUSD issuer: rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De
-- Gateway wallet: set via GATEWAY_XRPL_ADDRESS env var
-- Finality: sub-5 second
+| Network | Currency | Details |
+|---------|----------|---------|
+| XRPL mainnet | RLUSD | Issuer: rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De — trust line required |
+| Xahau | XAH | Native currency, no trust line, Hooks-enabled, wss://xahau.network |
+
+- XRPL RPC: wss://xrplcluster.com
+- Xahau RPC: https://xahau.network
+- Xahau Explorer: https://xahauexplorer.com
+- Finality: sub-5 seconds (both networks)
 - Token verification: sub-millisecond local HMAC-SHA256
+- Gateway wallet: set via GATEWAY_XRPL_ADDRESS env var
 
 ## SSE Live Events
 
@@ -292,8 +298,23 @@ def pay_and_call(endpoint_id, target_url, method="GET", body=None):
         return json.loads(r.read())
 ```
 
+## MCP Server
+
+402Proof exposes a native MCP JSON-RPC 2.0 endpoint for Smithery and MCP clients:
+
+```
+POST https://four02proof.onrender.com/mcp
+{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}
+```
+
+Tools: `platform_stats`, `get_invoice`, `verify_payment`, `check_loyalty`,
+`get_compliance_receipt`, `get_agent_passport`, `bureau_public_score`,
+`bureau_full_report`, `bureau_verify_threshold`, `bureau_get_attestation`,
+`bureau_verify_attestation`
+
 ## Machine-Discovery Links
 
+- MCP endpoint: https://four02proof.onrender.com/mcp
 - OpenAPI spec: https://four02proof.onrender.com/.well-known/openapi.json
 - MCP manifest: https://four02proof.onrender.com/.well-known/mcp.json
 - AI plugin: https://four02proof.onrender.com/.well-known/ai-plugin.json

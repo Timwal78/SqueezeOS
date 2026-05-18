@@ -445,6 +445,148 @@ func main() {
 		})
 	})
 
+	// ── MCP JSON-RPC 2.0 (Smithery / MCP client compatibility) ─────────────
+	{
+		type mcpTool struct {
+			Name        string      `json:"name"`
+			Description string      `json:"description"`
+			InputSchema interface{} `json:"inputSchema"`
+		}
+		glTools := []mcpTool{
+			{
+				Name:        "ghost_bridge_health",
+				Description: "Ghost Layer service health. Returns XRPL and Base client connection status and total lifetime bridge count. Free.",
+				InputSchema: map[string]interface{}{"type": "object", "properties": map[string]interface{}{}},
+			},
+			{
+				Name:        "ghost_layer_bridge",
+				Description: "Execute a dual-chain payment bridge. Routes XRPL RLUSD or Base USDC with transparent fee split. No custody — net amount goes directly to destination_wallet. Set is_dust_test=true for dry-run validation without broadcasting.",
+				InputSchema: map[string]interface{}{
+					"type":     "object",
+					"required": []string{"source_wallet", "destination_wallet", "gross_amount", "fee_basis_points"},
+					"properties": map[string]interface{}{
+						"signer":             map[string]string{"type": "string", "description": "XRPL address — required for XRPL routes"},
+						"message_hash":       map[string]string{"type": "string", "description": "EIP-191 message hash"},
+						"signature":          map[string]string{"type": "string", "description": "Ed25519 (XRPL) or ECDSA (EVM) signature"},
+						"source_wallet":      map[string]string{"type": "string", "description": "rADDRESS (XRPL) or 0x address (Base)"},
+						"destination_wallet": map[string]string{"type": "string", "description": "rADDRESS (XRPL) or 0x address (Base)"},
+						"gross_amount":       map[string]string{"type": "string", "description": "Amount in drops (XRP) or wei (USDC)"},
+						"fee_basis_points":   map[string]interface{}{"type": "integer", "description": "Fee in bps, e.g. 50 = 0.5%"},
+						"is_dust_test":       map[string]interface{}{"type": "boolean", "description": "Dry-run without broadcasting", "default": false},
+					},
+				},
+			},
+			{
+				Name:        "ghost_audit_stats",
+				Description: "Public audit stats: total bridges executed, XRPL and Base client status, supported chains and currencies. Free.",
+				InputSchema: map[string]interface{}{"type": "object", "properties": map[string]interface{}{}},
+			},
+		}
+		selfClient := &http.Client{Timeout: 30 * time.Second}
+
+		r.Get("/mcp", func(w http.ResponseWriter, req *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"server":      map[string]string{"name": "ghost-layer", "version": "1.0.0", "description": "Dual-chain XRPL RLUSD + Base USDC transparent payment bridge"},
+				"protocol":    "MCP JSON-RPC 2.0",
+				"tools_count": len(glTools),
+			})
+		})
+
+		r.Post("/mcp", func(w http.ResponseWriter, req *http.Request) {
+			var body struct {
+				ID     interface{}     `json:"id"`
+				Method string          `json:"method"`
+				Params json.RawMessage `json:"params"`
+			}
+			w.Header().Set("Content-Type", "application/json")
+			enc := json.NewEncoder(w)
+
+			if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+				enc.Encode(map[string]interface{}{"jsonrpc": "2.0", "id": nil, "error": map[string]interface{}{"code": -32700, "message": "Parse error"}})
+				return
+			}
+			ok := func(res interface{}) {
+				enc.Encode(map[string]interface{}{"jsonrpc": "2.0", "id": body.ID, "result": res})
+			}
+			text := func(data interface{}) map[string]interface{} {
+				b, _ := json.MarshalIndent(data, "", "  ")
+				return map[string]interface{}{"content": []interface{}{map[string]string{"type": "text", "text": string(b)}}}
+			}
+
+			switch body.Method {
+			case "initialize":
+				ok(map[string]interface{}{
+					"protocolVersion": "2024-11-05",
+					"serverInfo":      map[string]string{"name": "ghost-layer", "version": "1.0.0"},
+					"capabilities":    map[string]interface{}{"tools": map[string]interface{}{}},
+				})
+			case "ping":
+				ok(map[string]interface{}{})
+			case "tools/list":
+				ok(map[string]interface{}{"tools": glTools, "nextCursor": nil})
+			case "tools/call":
+				var p struct {
+					Name      string                 `json:"name"`
+					Arguments map[string]interface{} `json:"arguments"`
+				}
+				if err := json.Unmarshal(body.Params, &p); err != nil {
+					w.WriteHeader(400)
+					enc.Encode(map[string]interface{}{"jsonrpc": "2.0", "id": body.ID, "error": map[string]interface{}{"code": -32602, "message": "Invalid params"}})
+					return
+				}
+				switch p.Name {
+				case "ghost_bridge_health":
+					st := engine.ClientStatus()
+					ok(text(map[string]interface{}{
+						"status":        "ok",
+						"xrpl_client":   st["xrpl"],
+						"base_client":   st["base"],
+						"total_bridges": hub.totalBridge.Load(),
+					}))
+				case "ghost_audit_stats":
+					st := engine.ClientStatus()
+					ok(text(map[string]interface{}{
+						"total_bridges": hub.totalBridge.Load(),
+						"xrpl_status":   st["xrpl"],
+						"base_status":   st["base"],
+						"chains":        []string{"XRPL", "Base"},
+						"currencies":    []string{"RLUSD", "USDC"},
+						"networks": map[string]interface{}{
+							"xrpl": map[string]string{"network": "mainnet", "rpc": "https://xrplcluster.com", "currency": "RLUSD", "issuer": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De"},
+							"base": map[string]string{"network": "base-mainnet", "currency": "USDC"},
+						},
+					}))
+				case "ghost_layer_bridge":
+					args, _ := json.Marshal(p.Arguments)
+					proxyReq, _ := http.NewRequestWithContext(req.Context(), "POST", "http://localhost:"+port+"/v1/bridge/execute", strings.NewReader(string(args)))
+					proxyReq.Header.Set("Content-Type", "application/json")
+					resp, err := selfClient.Do(proxyReq)
+					if err != nil {
+						ok(text(map[string]string{"error": err.Error()}))
+						return
+					}
+					defer resp.Body.Close()
+					var result interface{}
+					json.NewDecoder(resp.Body).Decode(&result)
+					ok(text(result))
+				default:
+					ok(map[string]interface{}{
+						"content": []interface{}{map[string]string{"type": "text", "text": `{"error":"ERR_UNKNOWN_TOOL","tool":"` + p.Name + `"}`}},
+						"isError": true,
+					})
+				}
+			default:
+				if strings.HasPrefix(body.Method, "notifications/") {
+					w.WriteHeader(204)
+					return
+				}
+				w.WriteHeader(400)
+				enc.Encode(map[string]interface{}{"jsonrpc": "2.0", "id": body.ID, "error": map[string]interface{}{"code": -32601, "message": "Method not found: " + body.Method}})
+			}
+		})
+	}
+
 	// ── STATIC FRONTEND (Three.js terminal) ──────────────────────────────────
 	fs := http.FileServer(http.Dir("./public"))
 	r.Handle("/*", fs)

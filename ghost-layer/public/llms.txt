@@ -78,7 +78,19 @@ every bridge event accessible to compliant agents.
 | Asset | Chain    | Issuer / Contract                              | Decimals |
 |-------|----------|------------------------------------------------|----------|
 | RLUSD | XRPL     | rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De            | 6        |
+| XAH   | Xahau    | Native currency (no trust line required)       | 6        |
 | USDC  | Base     | 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913    | 6        |
+
+## Xahau Network (XAH)
+
+Xahau is the XRPL sidechain with on-ledger Hooks (smart contracts). XAH is its
+native currency — no trust line required. Ghost Layer accepts XAH payments on
+Xahau for agents operating on that network.
+
+- Network: `wss://xahau.network` / `https://xahau.network`
+- Explorer: https://xahauexplorer.com
+- Hooks: enabled — payments can trigger on-chain automation
+- XAH-to-RLUSD routing: Ghost Layer handles cross-chain settlement
 
 ## Audit Endpoint
 
@@ -132,9 +144,22 @@ Every settled bridge generates a tamper-evident receipt:
 
 Retrieve: `GET https://ghost-layer.onrender.com/api/ghost/bridge/{bridge_id}`
 
+## MCP Server
+
+Ghost Layer exposes a native MCP JSON-RPC 2.0 endpoint for Smithery and MCP clients:
+
+```
+POST https://ghost-layer.onrender.com/mcp
+{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}
+```
+
+Tools: `ghost_bridge_health`, `ghost_layer_bridge`, `ghost_audit_stats`
+
 ## Machine-Discovery Links
 
+- MCP endpoint: https://ghost-layer.onrender.com/mcp
 - OpenAPI spec: https://ghost-layer.onrender.com/.well-known/openapi.json
 - MCP manifest: https://ghost-layer.onrender.com/.well-known/mcp.json
 - AI plugin: https://ghost-layer.onrender.com/.well-known/ai-plugin.json
 - Root llms.txt: https://www.scriptmasterlabs.com/llms.txt
+- SqueezeOS: https://lively-fascination-production-41fa.up.railway.app/llms.txt

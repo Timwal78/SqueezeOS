@@ -344,14 +344,25 @@ Live tachometer at: `https://ghost-layer.onrender.com` (Three.js cube)
 
 ---
 
-## XRPL Settlement Details
+## Settlement Networks
 
-- **Network:** XRP Ledger Mainnet (`https://xrplcluster.com`)
-- **Currency:** RLUSD
-- **Issuer:** `rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De`
-- **Trust line:** Required before first payment (TrustSet to issuer)
-- **Confirmation:** ~3-5 seconds (XRPL ledger close)
-- **Memo:** MemoData must contain `memo_hex` from invoice exactly
+| Network | Currency | Trust Line | RPC | Finality |
+|---------|----------|-----------|-----|---------|
+| XRPL Mainnet | RLUSD | Required → `rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De` | https://xrplcluster.com | ~3-5s |
+| Xahau | XAH | None (native) | https://xahau.network | ~3-5s |
+| Base | USDC | EIP-3009 gasless | via Ghost Layer | ~2s |
+
+- **XRPL:** MemoData must contain `memo_hex` from invoice exactly
+- **Xahau:** XAH is the native currency — no TrustSet required. Hooks-enabled for on-chain automation. Explorer: https://xahauexplorer.com
+- **Base/USDC:** Route via Ghost Layer `https://ghost-layer.onrender.com/v1/bridge/execute`
+
+### MCP Endpoints (all three services)
+
+| Service | MCP URL |
+|---------|---------|
+| SqueezeOS | `https://lively-fascination-production-41fa.up.railway.app/mcp` |
+| 402Proof | `https://four02proof.onrender.com/mcp` |
+| Ghost Layer | `https://ghost-layer.onrender.com/mcp` |
 
 ---
 
