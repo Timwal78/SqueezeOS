@@ -151,6 +151,73 @@
         },
         "required": ["amount", "asset", "from_chain"]
       }
+    },
+    {
+      "name": "bureau_public_score",
+      "description": "FREE — Get an agent's public credit score (300–850) and grade (AAA→D). Returns score, grade, loyalty tier, and block status. No payment required. Use this as a pre-flight check before calling paid bureau tools.",
+      "x-free": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "wallet": {"type": "string", "description": "XRPL r-address to score"}
+        },
+        "required": ["wallet"]
+      }
+    },
+    {
+      "name": "bureau_full_report",
+      "description": "PAID (0.01 RLUSD) — Full credit report for any agent wallet. Returns score breakdown (payment_volume, spend_history, account_age, kyb_verification, loyalty_tier, risk_penalty, domain_verified, recent_activity), total spend, call count, risk level, and all tier data. Paid by querier — you pay to look up anyone.",
+      "x-402-endpoint-id": "b1c2d3e4-0001-4c3f-aa24-de6e3bc12b5a",
+      "x-402-price-rlusd": "0.01",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "wallet": {"type": "string", "description": "XRPL r-address to report on"},
+          "payment_token": {"type": "string", "description": "X-Payment-Token from /v1/verify"}
+        },
+        "required": ["wallet"]
+      }
+    },
+    {
+      "name": "bureau_verify_threshold",
+      "description": "PAID (0.005 RLUSD) — Boolean creditworthiness gate. Returns {passes: true/false} for whether a wallet meets a minimum score. Use to gate access, set deposit requirements, or qualify agents before routing them signals. Default threshold 600 (BB grade).",
+      "x-402-endpoint-id": "b1c2d3e4-0002-4c3f-aa24-de6e3bc12b5a",
+      "x-402-price-rlusd": "0.005",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "wallet": {"type": "string"},
+          "min_score": {"type": "integer", "minimum": 300, "maximum": 850, "default": 600, "description": "Minimum score threshold"},
+          "payment_token": {"type": "string"}
+        },
+        "required": ["wallet"]
+      }
+    },
+    {
+      "name": "bureau_get_attestation",
+      "description": "PAID (0.01 RLUSD) — Issue a signed portable credit attestation JWT (24h TTL). Agents carry this JWT and present it to any third-party service. Third parties verify free at POST /v1/bureau/verify-attest — no payment, no 402Proof dependency at verification time.",
+      "x-402-endpoint-id": "b1c2d3e4-0003-4c3f-aa24-de6e3bc12b5a",
+      "x-402-price-rlusd": "0.01",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "wallet": {"type": "string", "description": "Wallet to attest — should be your own"},
+          "payment_token": {"type": "string"}
+        },
+        "required": ["wallet"]
+      }
+    },
+    {
+      "name": "bureau_verify_attestation",
+      "description": "FREE — Verify a portable attestation JWT issued by GET /v1/bureau/attest. Returns wallet, score, grade, tier, kyb_tier, expiry. Called by third-party services to validate an agent's credit claim without paying 402Proof.",
+      "x-free": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "token": {"type": "string", "description": "Attestation JWT from bureau_get_attestation"}
+        },
+        "required": ["token"]
+      }
     }
   ]
 }

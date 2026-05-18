@@ -13,8 +13,13 @@ import (
 
 // Fixed stable IDs — never change these after first deploy
 const (
-	MerchantID     = "3a5db2f8-6812-4c3f-aa24-de6e3bc12b5a"
-	DefaultAPIKey  = "sml-402proof-api-key-scriptmasterlabs-2026"
+	MerchantID    = "3a5db2f8-6812-4c3f-aa24-de6e3bc12b5a"
+	DefaultAPIKey = "sml-402proof-api-key-scriptmasterlabs-2026"
+
+	// Agent Credit Bureau endpoint IDs
+	BureauReportID = "b1c2d3e4-0001-4c3f-aa24-de6e3bc12b5a"
+	BureauVerifyID = "b1c2d3e4-0002-4c3f-aa24-de6e3bc12b5a"
+	BureauAttestID = "b1c2d3e4-0003-4c3f-aa24-de6e3bc12b5a"
 )
 
 type EndpointSeed struct {
@@ -23,6 +28,30 @@ type EndpointSeed struct {
 	Price       string
 	Asset       string
 	Description string
+}
+
+var BureauEndpoints = []EndpointSeed{
+	{
+		ID:          BureauReportID,
+		Path:        "/v1/bureau/report",
+		Price:       "0.01",
+		Asset:       "RLUSD",
+		Description: "Full agent credit report — score breakdown, spend history, risk level, account age",
+	},
+	{
+		ID:          BureauVerifyID,
+		Path:        "/v1/bureau/verify",
+		Price:       "0.005",
+		Asset:       "RLUSD",
+		Description: "Boolean creditworthiness check — does wallet meet minimum score threshold?",
+	},
+	{
+		ID:          BureauAttestID,
+		Path:        "/v1/bureau/attest",
+		Price:       "0.01",
+		Asset:       "RLUSD",
+		Description: "Signed portable attestation JWT — present to third-party services without them calling 402Proof",
+	},
 }
 
 var SMLEndpoints = []EndpointSeed{
@@ -77,8 +106,8 @@ func Run(db *store.Memory, gatewayAddr string) {
 		log.Printf("[SEED] Merchant: %s id=%s", merchantName, MerchantID)
 	}
 
-	// Seed all 4 endpoints
-	for _, e := range SMLEndpoints {
+	// Seed all endpoints (SML + Bureau)
+	for _, e := range append(SMLEndpoints, BureauEndpoints...) {
 		if _, ok := db.GetEndpoint(e.ID); !ok {
 			ep := &models.Endpoint{
 				ID:          e.ID,
@@ -95,7 +124,7 @@ func Run(db *store.Memory, gatewayAddr string) {
 		}
 	}
 
-	log.Printf("[SEED] Script Master Labs ready — 4 endpoints active")
+	log.Printf("[SEED] Script Master Labs ready — 4 market + 3 bureau endpoints active")
 }
 
 func env(key, fallback string) string {
