@@ -1,13 +1,23 @@
+# ============================================================
+# Smithery MCP Registry Manifest
+# SqueezeOS Market Intelligence — Script Master Labs
+# https://smithery.ai
+# ============================================================
+
 name: squeezeos-market-intelligence
 display_name: "SqueezeOS Market Intelligence"
-description: |
-  Institutional AI market intelligence for autonomous agents. Real-time squeeze
-  signals, options flow analysis, AI council verdicts, and IWM 0DTE scanning.
-  Pay-per-call with RLUSD on XRPL via HTTP 402 — no API keys, no subscriptions.
-  Tokens are wallet-bound and issued via 402Proof compliance firewall.
+description: >
+  Institutional-grade market intelligence for autonomous AI agents.
+  Delivers real-time squeeze scanning, AI council verdicts, options flow
+  analysis, and IWM zero-day-to-expiry scoring. Powered by the SML Fractal
+  Cascade, Battle Computer, and Gamma Flow Engine. All premium endpoints are
+  gated by the x402 RLUSD micropayment standard — agents pay per call on the
+  XRPL with no API keys required. Loyalty tiers (Bronze → Diamond) reward
+  cumulative spend with up to 33% effective cost reduction.
 version: "2.0.0"
 homepage: "https://www.scriptmasterlabs.com"
 repository: "https://github.com/Timwal78/SqueezeOS"
+documentation: "https://lively-fascination-production-41fa.up.railway.app/llms.txt"
 license: "Proprietary"
 category: "finance"
 tags:
@@ -15,110 +25,821 @@ tags:
   - trading
   - options
   - market-intelligence
-  - xrpl
-  - micropayments
-  - x402
-  - ai-agents
-  - squeeze
+  - squeeze-scanner
   - institutional
+  - xrpl
+  - rlusd
+  - x402
+  - agent-payments
+  - micropayments
+  - zero-dte
+  - gamma-flow
+  - ai-council
+
+# ============================================================
+# Server
+# ============================================================
 
 server:
-  type: http
+  type: "http"
   url: "https://lively-fascination-production-41fa.up.railway.app"
-  openapi: "https://lively-fascination-production-41fa.up.railway.app/.well-known/openapi.json"
+  openapi: "https://lively-fascination-production-41fa.up.railway.app/openapi.json"
+  health_check: "/health"
+
+# ============================================================
+# Payment (x402 / RLUSD on XRPL)
+# ============================================================
 
 payment:
   required: true
-  protocol: x402
-  gateway: "https://four02proof.onrender.com"
-  asset: RLUSD
-  network: XRPL
-  issuer: "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De"
+  protocol: "x402"
+  description: >
+    All premium tools require per-call RLUSD payment on the XRP Ledger mainnet.
+    No API keys or subscriptions. Full payment flow:
+      1. Call any premium tool → receive HTTP 402 with invoice JSON body.
+      2. Send the invoiced RLUSD amount to invoice.pay_to on XRPL, including
+         invoice.memo_hex as the MemoData field of the payment transaction.
+      3. POST https://four02proof.onrender.com/v1/verify with invoice_id,
+         tx_hash (64-char hex), and your agent_wallet address.
+      4. Receive a signed access_token (1-hour TTL, wallet-bound).
+      5. Retry the original tool call with X-Payment-Token: <token>.
+         Cache the token for up to 1 hour — it covers all calls to the same
+         endpoint within the TTL window without re-paying.
+  gateway:
+    url: "https://four02proof.onrender.com"
+    standard: "x402"
+    chain: "XRPL"
+    network: "mainnet"
+    asset: "RLUSD"
+    asset_issuer: "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De"
+    token_ttl_seconds: 3600
+    token_header: "X-Payment-Token"
+    wallet_header: "X-Agent-Wallet"
   flow:
-    - step: "POST {gateway}/v1/invoice with endpoint_id"
-    - step: "Send RLUSD on XRPL to pay_to with memo_hex as MemoData"
-    - step: "POST {gateway}/v1/verify with invoice_id, tx_hash, agent_wallet"
-    - step: "Use access_token in X-Payment-Token header"
+    - step: 1
+      action: "POST {gateway}/v1/invoice with {endpoint_id}"
+      description: "Obtain a fresh invoice with payment destination and memo"
+    - step: 2
+      action: "XRPL Payment: amount=invoice.amount currency=RLUSD to=invoice.pay_to memo=invoice.memo_hex"
+      description: "Submit RLUSD payment on-chain with the invoice memo as MemoData"
+    - step: 3
+      action: "POST {gateway}/v1/verify with invoice_id, tx_hash, agent_wallet"
+      description: "402Proof verifies the on-chain payment and issues a signed token"
+    - step: 4
+      action: "Retry original endpoint with X-Payment-Token: <access_token>"
+      description: "Server verifies token locally (zero network) and returns data"
+  prerequisites:
+    - "Agent wallet must have an RLUSD trust line to issuer rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De (limit ≥ 10 RLUSD recommended)"
+    - "Agent wallet must hold sufficient RLUSD balance for the intended calls"
+    - "Minimum XRPL wallet reserve: 2 XRP (Ripple base reserve)"
+    - "Invoices expire in ~10–15 minutes — request the invoice immediately before submitting the on-chain payment"
+  loyalty:
+    description: >
+      Cumulative spend is tracked automatically per paying wallet address.
+      Free calls are credited and applied automatically at each tier — no
+      redemption code is needed. Diamond agents pay ~33% less per call on average.
+    tiers:
+      - name: "Bronze"
+        threshold_rlusd: 0
+        free_call_ratio: "none"
+        effective_cost_multiplier: 1.000
+        discount_pct: 0
+      - name: "Silver"
+        threshold_rlusd: 5
+        free_call_ratio: "1:10"
+        effective_cost_multiplier: 0.909
+        discount_pct: 9
+      - name: "Gold"
+        threshold_rlusd: 25
+        free_call_ratio: "1:5"
+        effective_cost_multiplier: 0.833
+        discount_pct: 17
+      - name: "Platinum"
+        threshold_rlusd: 100
+        free_call_ratio: "1:3"
+        effective_cost_multiplier: 0.750
+        discount_pct: 25
+      - name: "Diamond"
+        threshold_rlusd: 500
+        free_call_ratio: "1:2"
+        effective_cost_multiplier: 0.667
+        discount_pct: 33
+
+# ============================================================
+# Authentication
+# ============================================================
+
+auth:
+  type: "x402"
+  description: >
+    No API keys. Authentication is proof-of-payment. Agents pay RLUSD on the
+    XRPL and receive a signed access token from the 402Proof gateway. Tokens
+    are HMAC-SHA256 signed and verified server-side with zero network latency.
+    Tokens are wallet-bound: X-Agent-Wallet must match the wallet that paid.
+  headers:
+    - name: "X-Payment-Token"
+      description: "Signed access token from verify_payment. Required for all premium tools."
+      required: true
+      applies_to: [council_verdict, market_scan, options_intelligence, iwm_odte]
+    - name: "X-Agent-Wallet"
+      description: >
+        Your XRPL classic address (rADDRESS). Recommended for all calls.
+        Required when server-side wallet binding is enforced — token.wlt must
+        match this value. Used for loyalty attribution and compliance receipts.
+      required: false
+      recommended: true
+
+# ============================================================
+# Tools
+# ============================================================
 
 tools:
+
+  # ----------------------------------------------------------
+  # council_verdict
+  # ----------------------------------------------------------
   - name: council_verdict
-    description: "AI Council Verdict — multi-engine signal aggregate (SML fractal cascade + Battle Computer). Returns market regime, bias (BULLISH/BEARISH/NEUTRAL), confidence 0-100, and actionable thesis for any ticker."
+    display_name: "AI Council Verdict"
+    description: >
+      Aggregates SML Fractal Cascade, Battle Computer, and Gamma Flow Engine
+      signals for any equity ticker. Returns a regime classification
+      (STEALTH / CONFLICT / EXECUTION / COLLAPSE), directional bias
+      (BULLISH / BEARISH / NEUTRAL), confidence score (0–1), squeeze score
+      (0–100), lifecycle phase, and an institutional trading thesis in plain
+      English. Per-engine breakdowns are included so agents can weight signals
+      by their own models.
     cost: "0.10 RLUSD"
+    endpoint:
+      path: "/api/council"
+      method: "POST"
+      server: "https://lively-fascination-production-41fa.up.railway.app"
     endpoint_id: "12a0e7a1-6812-4c3f-aa24-de6e3bc12b5a"
     inputSchema:
+      type: object
+      required:
+        - symbol
+      properties:
+        symbol:
+          type: string
+          description: "Equity ticker symbol (e.g. IWM, SPY, QQQ, AAPL, GME)"
+          example: "IWM"
+          minLength: 1
+          maxLength: 10
+    outputSchema:
       type: object
       properties:
         symbol:
           type: string
-          description: "Ticker symbol (e.g. IWM, GME, MSTR)"
-          default: "IWM"
-      required: []
+        regime:
+          type: string
+          enum: [STEALTH, CONFLICT, EXECUTION, COLLAPSE]
+          description: "Market regime classification from the SML engine"
+        lifecycle:
+          type: string
+          enum: [Dormant, Early, Building, Triggered, Active, Extended, Exhausting, Invalid]
+          description: "Squeeze lifecycle phase"
+        directional_bias:
+          type: string
+          enum: [BULLISH, BEARISH, NEUTRAL]
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: "Aggregate confidence across all engines (0=no signal, 1=full conviction)"
+        squeeze_score:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: "Composite squeeze score — above 70 is actionable"
+        thesis:
+          type: string
+          description: "Institutional trading thesis in plain English"
+        engines:
+          type: object
+          description: "Per-engine signal breakdown"
+          properties:
+            sml:
+              type: object
+              description: "SML Fractal Cascade signal and score"
+            battle:
+              type: object
+              description: "Battle Computer bias and conviction"
+            gamma_flow:
+              type: object
+              description: "Gamma Flow Engine — GEX, flip level, dealer positioning"
+        timestamp:
+          type: string
+          format: date-time
+    examples:
+      - name: "IWM council verdict"
+        input:
+          symbol: "IWM"
+        description: "Get AI council verdict for IWM (Russell 2000 ETF)"
+      - name: "SPY council verdict"
+        input:
+          symbol: "SPY"
+        description: "Get AI council verdict for SPY (S&P 500 ETF)"
 
+  # ----------------------------------------------------------
+  # market_scan
+  # ----------------------------------------------------------
   - name: market_scan
-    description: "Full $1-$50 universe market scan. Live squeeze signals, grade-A options picks, and technical scores across up to 250 symbols. Background-refreshed every 3 seconds."
+    display_name: "Market Squeeze Scanner"
+    description: >
+      Scans the full universe of $1–$50 equities using the 8-module SML
+      scoring engine. Returns all qualifying squeeze setups ranked by score,
+      with regime classification, signal direction (LONG / SHORT / NEUTRAL),
+      momentum vector, TTM squeeze reading, and an options contract
+      recommendation for each setup. Background-refreshed every few seconds.
+      Ideal for daily pre-market screening and intraday opportunity discovery.
     cost: "0.05 RLUSD"
+    endpoint:
+      path: "/api/scan"
+      method: "GET"
+      server: "https://lively-fascination-production-41fa.up.railway.app"
     endpoint_id: "160cf28d-b364-44eb-adbd-2489c5cc2cf8"
     inputSchema:
       type: object
       properties: {}
+      additionalProperties: false
+    outputSchema:
+      type: object
+      properties:
+        scan_time:
+          type: string
+          format: date-time
+        universe_size:
+          type: integer
+          description: "Total number of symbols evaluated in this scan"
+        results:
+          type: array
+          description: "All qualifying setups, ranked by squeeze_score descending"
+          items:
+            type: object
+            properties:
+              symbol:
+                type: string
+              price:
+                type: number
+              squeeze_score:
+                type: integer
+                minimum: 0
+                maximum: 100
+              volume_profile:
+                type: number
+                description: "Relative volume (1.0 = average)"
+              ttm_squeeze:
+                type: number
+                description: "TTM Squeeze momentum histogram value"
+              momentum_vector:
+                type: number
+                description: "Directional momentum — positive=bullish, negative=bearish"
+              z_score:
+                type: number
+                description: "Price z-score relative to 20-day range"
+              regime:
+                type: string
+                enum: [STEALTH, CONFLICT, EXECUTION, COLLAPSE]
+              signal:
+                type: string
+                enum: [LONG, SHORT, NEUTRAL]
+              options_pick:
+                type: object
+                description: "Highest-scored options contract recommendation"
+                properties:
+                  strike:
+                    type: number
+                  expiry:
+                    type: string
+                    format: date
+                  type:
+                    type: string
+                    enum: [CALL, PUT]
 
+  # ----------------------------------------------------------
+  # options_intelligence
+  # ----------------------------------------------------------
   - name: options_intelligence
-    description: "Options intelligence flow for any symbol. Institutional sweeps, whale detection, unusual volume, and scored contract recommendations with plain-English explanations."
+    display_name: "Options Intelligence"
+    description: >
+      Real-time institutional options flow analysis using live Schwab chain
+      data. Detects large-block sweeps (signals of institutional urgency),
+      whale premium blocks (single prints > $100k), and statistically unusual
+      volume spikes ranked by volume/OI z-score. Computes net delta, aggregate
+      gamma exposure (GEX), put/call ratio, and max pain for the session.
+      Returns scored contract recommendations. Use before entering to identify
+      where institutional money is positioning.
     cost: "0.05 RLUSD"
+    endpoint:
+      path: "/api/options"
+      method: "GET"
+      server: "https://lively-fascination-production-41fa.up.railway.app"
     endpoint_id: "c951a374-2424-4064-ab80-35afe8053d29"
     inputSchema:
       type: object
       properties:
         symbol:
           type: string
+          description: "Equity ticker to analyse. Defaults to IWM if omitted."
+          example: "IWM"
           default: "IWM"
+    outputSchema:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        sweeps:
+          type: array
+          description: "Institutional sweep orders — urgency signal, typically directional"
+          items:
+            type: object
+            properties:
+              symbol:
+                type: string
+              strike:
+                type: number
+              expiry:
+                type: string
+                format: date
+              dte:
+                type: integer
+              option_type:
+                type: string
+                enum: [CALL, PUT]
+              premium:
+                type: number
+                description: "Total premium paid in USD"
+              volume:
+                type: integer
+              sentiment:
+                type: string
+                enum: [BULLISH, BEARISH]
+        whales:
+          type: array
+          description: "Whale premium blocks — large single-contract prints"
+          items:
+            type: object
+            properties:
+              symbol:
+                type: string
+              strike:
+                type: number
+              premium_block_usd:
+                type: number
+              size_class:
+                type: string
+                enum: [LARGE, MEGA]
+        unusual_volume:
+          type: array
+          description: "Statistically unusual volume by z-score vs open interest"
+          items:
+            type: object
+            properties:
+              symbol:
+                type: string
+              strike:
+                type: number
+              vol_oi_ratio:
+                type: number
+              z_score:
+                type: number
+        recommendations:
+          type: array
+          description: "Top-scored contract recommendations for the session"
+          items:
+            type: object
+            properties:
+              symbol:
+                type: string
+              strike:
+                type: number
+              dte:
+                type: integer
+              delta:
+                type: number
+              score:
+                type: number
+        flow_summary:
+          type: object
+          description: "Aggregate options market structure"
+          properties:
+            net_delta:
+              type: number
+            put_call_ratio:
+              type: number
+            max_pain:
+              type: number
+            gex_aggregate:
+              type: number
+              description: "Net gamma exposure in USD — positive=dealers long gamma"
+    examples:
+      - name: "IWM options flow"
+        input:
+          symbol: "IWM"
+        description: "Institutional options flow analysis for IWM"
 
+  # ----------------------------------------------------------
+  # iwm_odte
+  # ----------------------------------------------------------
   - name: iwm_odte
-    description: "IWM 0DTE institutional scanner. Scored contracts, parity watch, realized volatility, and delta/gamma analytics for Russell 2000 index options expiring today."
+    display_name: "IWM 0DTE Scanner"
+    description: >
+      Specialized Russell 2000 (IWM) zero-day-to-expiry analysis.
+      Scores every 0DTE contract by delta/gamma profile, bid-ask spread
+      efficiency, and volume/OI ratio. Identifies the gamma flip level
+      (the price at which net dealer gamma exposure reverses sign, changing
+      market microstructure dynamics) and max pain for today's expiry.
+      Returns a full ranked contract list with Greeks. Cheapest endpoint on
+      the platform — designed for high-frequency 0DTE strategy agents.
     cost: "0.03 RLUSD"
+    endpoint:
+      path: "/api/iwm"
+      method: "GET"
+      server: "https://lively-fascination-production-41fa.up.railway.app"
     endpoint_id: "60f48ce0-6002-4385-9b60-03a0d2bbebab"
     inputSchema:
       type: object
       properties: {}
+      additionalProperties: false
+    outputSchema:
+      type: object
+      properties:
+        underlying:
+          type: string
+          example: "IWM"
+        spot:
+          type: number
+          description: "Current IWM spot price"
+        realized_vol_30d:
+          type: number
+          description: "30-day realized volatility, annualized"
+        timestamp:
+          type: string
+          format: date-time
+        gamma_flip_level:
+          type: number
+          description: >
+            Price at which net GEX crosses zero. Above flip: dealers long gamma
+            (dampening). Below flip: dealers short gamma (amplifying).
+        max_pain:
+          type: number
+          description: "Max pain strike for today's expiry"
+        contracts:
+          type: array
+          description: "All 0DTE IWM contracts ranked by composite score"
+          items:
+            type: object
+            properties:
+              strike:
+                type: number
+              expiry:
+                type: string
+                format: date
+              dte:
+                type: integer
+                enum: [0]
+              type:
+                type: string
+                enum: [CALL, PUT]
+              delta:
+                type: number
+                description: "Option delta (-1 to 1)"
+              gamma:
+                type: number
+                description: "Option gamma"
+              bid:
+                type: number
+              ask:
+                type: number
+              volume:
+                type: integer
+              open_interest:
+                type: integer
+              score:
+                type: number
+                description: "Composite contract score — higher is better risk/reward"
 
+  # ----------------------------------------------------------
+  # get_invoice
+  # ----------------------------------------------------------
   - name: get_invoice
-    description: "Request a payment invoice from 402Proof for a specific endpoint. Free — no auth required."
+    display_name: "Get Payment Invoice"
+    description: >
+      Request a fresh payment invoice from the 402Proof gateway for any
+      registered endpoint. Returns the XRPL destination address, RLUSD
+      amount, and the memo_hex that must be included as MemoData in the
+      XRPL payment transaction. Invoke this directly when you prefer to
+      manage payment yourself rather than relying on the automatic 402
+      redirect. Invoices expire in ~10–15 minutes.
     cost: "free"
-    endpoint: "POST https://four02proof.onrender.com/v1/invoice"
+    endpoint:
+      path: "/v1/invoice"
+      method: "POST"
+      server: "https://four02proof.onrender.com"
     inputSchema:
       type: object
+      required:
+        - endpoint_id
       properties:
         endpoint_id:
           type: string
-          description: "UUID of the endpoint to pay for"
-      required: [endpoint_id]
+          format: uuid
+          description: >
+            UUID of the endpoint to purchase access for.
+            Known endpoint IDs:
+              council_verdict  — 12a0e7a1-6812-4c3f-aa24-de6e3bc12b5a (0.10 RLUSD)
+              market_scan      — 160cf28d-b364-44eb-adbd-2489c5cc2cf8 (0.05 RLUSD)
+              options_intel    — c951a374-2424-4064-ab80-35afe8053d29 (0.05 RLUSD)
+              iwm_odte         — 60f48ce0-6002-4385-9b60-03a0d2bbebab (0.03 RLUSD)
+          example: "12a0e7a1-6812-4c3f-aa24-de6e3bc12b5a"
+    outputSchema:
+      type: object
+      properties:
+        invoice_id:
+          type: string
+          format: uuid
+          description: "Store this — required for verify_payment"
+        endpoint_id:
+          type: string
+          format: uuid
+        pay_to:
+          type: string
+          description: "XRPL destination address for the RLUSD payment"
+        amount:
+          type: number
+          description: "Exact RLUSD amount to send"
+        asset:
+          type: string
+          enum: [RLUSD]
+        memo_hex:
+          type: string
+          description: "Include this as MemoData in the XRPL Payment transaction"
+        expires_at:
+          type: string
+          format: date-time
+          description: "Invoice expiry timestamp — pay before this time"
 
+  # ----------------------------------------------------------
+  # verify_payment
+  # ----------------------------------------------------------
   - name: verify_payment
-    description: "Submit XRPL transaction hash after paying an invoice. Returns wallet-bound access token (1-hour TTL) and compliance receipt."
+    display_name: "Verify Payment"
+    description: >
+      Submit the XRPL transaction hash after paying an invoice.
+      402Proof queries the XRPL ledger to confirm destination, amount, and
+      MemoData match the invoice, then issues a signed access token (1-hour TTL).
+      The token encodes the paying wallet address (wallet binding) — pass the
+      same wallet in X-Agent-Wallet on subsequent premium endpoint calls.
+      Also records loyalty points and generates a compliance receipt.
     cost: "free"
-    endpoint: "POST https://four02proof.onrender.com/v1/verify"
+    endpoint:
+      path: "/v1/verify"
+      method: "POST"
+      server: "https://four02proof.onrender.com"
     inputSchema:
+      type: object
+      required:
+        - invoice_id
+        - tx_hash
+        - agent_wallet
+      properties:
+        invoice_id:
+          type: string
+          format: uuid
+          description: "invoice_id returned by get_invoice or the 402 response body"
+        tx_hash:
+          type: string
+          description: "XRPL transaction hash (64-char uppercase hex)"
+          pattern: "^[A-F0-9]{64}$"
+          example: "A1B2C3D4E5F6789012345678901234567890123456789012345678901234ABCD"
+        agent_wallet:
+          type: string
+          description: >
+            Your XRPL classic address (rADDRESS). This wallet is bound to the
+            token — use the same address in X-Agent-Wallet when calling premium
+            endpoints.
+          example: "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh"
+        agent_domain:
+          type: string
+          description: "Your agent's domain or identifier for loyalty and compliance attribution"
+          example: "mybot.example.com"
+    outputSchema:
       type: object
       properties:
-        invoice_id: {type: string}
-        tx_hash: {type: string, description: "XRPL transaction hash"}
-        agent_wallet: {type: string, description: "Your XRPL r-address"}
-      required: [invoice_id, tx_hash, agent_wallet]
+        access_token:
+          type: string
+          description: >
+            Signed access token. Pass as X-Payment-Token header.
+            Valid for 1 hour. Cache it — same token covers all calls to the
+            same endpoint within the TTL window.
+        receipt_id:
+          type: string
+          format: uuid
+          description: "Compliance receipt ID — retrieve full receipt at /v1/receipt/{id}"
+        risk_level:
+          type: string
+          enum: [LOW, MEDIUM, HIGH]
+          description: "Risk classification of the paying wallet based on Agent Passport history"
 
-  - name: agent_passport
-    description: "Get Agent Passport: loyalty tier, cumulative RLUSD spend, discount rate, KYB status. Bronze→Silver→Gold→Platinum→Diamond."
+  # ----------------------------------------------------------
+  # check_loyalty
+  # ----------------------------------------------------------
+  - name: check_loyalty
+    display_name: "Check Agent Loyalty Tier"
+    description: >
+      Retrieve the Agent Passport and loyalty tier for any XRPL wallet.
+      Returns current tier (Bronze through Diamond), lifetime RLUSD spend,
+      free calls currently banked, effective cost multiplier, RLUSD distance
+      to the next tier, and a tamper-evident passport hash for compliance.
+      Check this before routing calls to compute the true cost-per-insight
+      after loyalty discounts. Diamond agents pay ~33% less on average — the
+      break-even point for upgrading is always calculable from
+      next_tier_distance_rlusd. No payment required.
     cost: "free"
-    endpoint: "GET https://four02proof.onrender.com/v1/agent/{wallet}"
+    endpoint:
+      path: "/v1/agent/{wallet}"
+      method: "GET"
+      server: "https://four02proof.onrender.com"
     inputSchema:
+      type: object
+      required:
+        - wallet
+      properties:
+        wallet:
+          type: string
+          description: "XRPL classic address (rADDRESS format)"
+          example: "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh"
+    outputSchema:
       type: object
       properties:
-        wallet: {type: string}
-      required: [wallet]
+        wallet:
+          type: string
+        tier:
+          type: string
+          enum: [Bronze, Silver, Gold, Platinum, Diamond]
+          description: "Current loyalty tier"
+        risk_score:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: >
+            Risk score (0=lowest risk, 100=highest). Starts at 50 for new wallets
+            and improves with consistent payment history. KYB verification can
+            reduce it by up to 20 points.
+        payment_count:
+          type: integer
+          description: "Cumulative number of verified payments from this wallet"
+        lifetime_volume_rlusd:
+          type: number
+          description: "Total RLUSD spent across all endpoints (determines loyalty tier)"
+        free_calls_remaining:
+          type: integer
+          description: "Free call credits currently banked — applied automatically on next calls"
+        free_calls_ratio:
+          type: string
+          example: "1:5"
+          description: "For every N paid calls at this tier, 1 is free"
+        effective_cost_multiplier:
+          type: number
+          description: >
+            True cost fraction of list price after loyalty discount.
+            Bronze=1.000, Silver=0.909, Gold=0.833, Platinum=0.750, Diamond=0.667.
+          example: 0.833
+        next_tier:
+          type: string
+          enum: [Silver, Gold, Platinum, Diamond, MAX]
+          description: "Next loyalty tier to unlock (MAX if already Diamond)"
+        next_tier_min_rlusd:
+          type: number
+          description: "Lifetime spend threshold required to unlock next tier"
+        next_tier_distance_rlusd:
+          type: number
+          description: >
+            RLUSD remaining until next tier unlock. Spending this amount permanently
+            reduces effective_cost_multiplier. Use to calculate break-even ROI on
+            higher call volume.
+        passport_hash:
+          type: string
+          description: "Tamper-evident hash of the agent passport state for compliance"
 
-  - name: live_events
-    description: "Subscribe to live SSE event stream. Receives SQUEEZE_ALERT, OPTIONS_SWEEP, COUNCIL_VERDICT, AGENT_PROBE, AGENT_PAY events in real time. No auth required."
-    cost: "free"
-    endpoint: "GET https://lively-fascination-production-41fa.up.railway.app/api/events"
-    inputSchema:
-      type: object
-      properties: {}
+# ============================================================
+# Rate limits
+# ============================================================
+
+rate_limits:
+  description: >
+    Rate limits are enforced per paying wallet via the Agent Passport risk score.
+    Bronze wallets (new, risk_score~50) face stricter limits. Gold and above
+    receive elevated throughput. Agents with risk_score > 80 may be throttled
+    until additional payment history lowers the score.
+  defaults:
+    requests_per_minute: 20
+    burst: 5
+  by_tier:
+    Bronze:
+      requests_per_minute: 10
+    Silver:
+      requests_per_minute: 15
+    Gold:
+      requests_per_minute: 30
+    Platinum:
+      requests_per_minute: 60
+    Diamond:
+      requests_per_minute: 120
+
+# ============================================================
+# Real-time streaming (free, no payment required)
+# ============================================================
+
+streaming:
+  protocol: "SSE (Server-Sent Events / text/event-stream)"
+  description: >
+    SqueezeOS pushes real-time market events over SSE. Connect once and receive
+    events continuously without polling. Auto-reconnects on disconnect. If no
+    event is received for 45 seconds, reconnect. The server sends a keepalive
+    event every 30 seconds minimum.
+  endpoints:
+    - url: "https://lively-fascination-production-41fa.up.railway.app/api/events"
+      description: >
+        Unified institutional event stream. All event types in one connection.
+      auth_required: false
+      event_types:
+        - name: CONNECTED
+          description: "Handshake confirmation — first event on connect"
+        - name: REGIME_CHANGE
+          description: "Symbol regime transition (e.g. STEALTH → EXECUTION)"
+        - name: SQUEEZE_ALERT
+          description: "High-score squeeze setup detected (squeeze_score >= 75)"
+        - name: COUNCIL_VERDICT
+          description: "AI council verdict update for a symbol"
+        - name: OPTIONS_SWEEP
+          description: "Institutional PUT or CALL sweep detected"
+        - name: WHALE_BLOCK
+          description: "Large premium block identified (> $100k single print)"
+      client_example_python: |
+        import requests, sseclient
+        resp = requests.get(
+            "https://lively-fascination-production-41fa.up.railway.app/api/events",
+            stream=True
+        )
+        for event in sseclient.SSEClient(resp).events():
+            print(event.data)
+      client_example_js: |
+        const es = new EventSource(
+          "https://lively-fascination-production-41fa.up.railway.app/api/events"
+        );
+        es.onmessage = e => console.log(JSON.parse(e.data));
+    - url: "https://lively-fascination-production-41fa.up.railway.app/api/beast/events"
+      description: "Beast Panel stream — high-conviction regime transitions and Battle Computer signals"
+      auth_required: false
+      event_types:
+        - name: BEAST_ALERT
+          description: "High beast-score regime transition"
+        - name: BATTLE_SIGNAL
+          description: "Battle Computer directional signal"
+        - name: MMLE_UPDATE
+          description: "Market Maker Liquidity Engine state update"
+
+# ============================================================
+# Operational notes
+# ============================================================
+
+operational_notes:
+  - "SqueezeOS API is hosted on Railway (EU West). Persistent deployment — cold starts are uncommon."
+  - "402Proof gateway is hosted on Render free tier. First request after >15 min idle may take 30–60 seconds. Implement exponential backoff: 2s, 4s, 8s, 16s."
+  - "XRPL mainnet is used exclusively for payments. Testnet seeds are rejected by the production gateway."
+  - "Tokens are wallet-bound. Never share your access token. Mismatched X-Agent-Wallet headers are rejected when ENFORCE_WALLET_BINDING=true is set server-side."
+  - "RLUSD trust line is mandatory before the first payment: TrustSet currency=RLUSD issuer=rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De limit=1000."
+  - "Compliance receipts are generated for every verified payment and retrievable at https://four02proof.onrender.com/v1/receipt/{receipt_id}."
+
+# ============================================================
+# SDK and integration resources
+# ============================================================
+
+sdk:
+  python:
+    description: "Native Python SDK with automatic payment handling and disk-based token caching"
+    dependencies: "pip install requests xrpl-py"
+    file: "squeezeos_sdk.py"
+    class: "SqueezeOSClient"
+    quickstart: |
+      from squeezeos_sdk import SqueezeOSClient
+      client = SqueezeOSClient(
+          xrpl_seed="sEd...",
+          agent_domain="mybot.example.com"
+      )
+      # First call pays automatically, subsequent calls use the cached token
+      verdict = client.council("IWM")
+      scan    = client.scan()
+      opts    = client.options("SPY")
+      iwm     = client.iwm()
+      loyalty = client.loyalty_status()
+  demo:
+    description: "Standalone step-by-step walkthrough with DEMO_MODE for evaluation without RLUSD"
+    file: "agent_demo.py"
+    run: "AGENT_XRPL_SEED=sEd... python agent_demo.py"
+  openapi:
+    url: "https://lively-fascination-production-41fa.up.railway.app/openapi.json"
+  llms_txt:
+    url: "https://lively-fascination-production-41fa.up.railway.app/llms.txt"
