@@ -38,6 +38,8 @@ func main() {
 	port := env("PORT", "9090")
 	xrplRPC := env("XRPL_RPC_URL", "https://xrplcluster.com")
 	gatewayAddr := env("GATEWAY_XRPL_ADDRESS", "")
+	gatewayXahau := env("GATEWAY_XAHAU_ADDRESS", "rNduuviQ3CCvHqWUTjJDD82Ko2tjqFGs3q")
+	xahauRPC := env("XAHAU_RPC_URL", "https://xahau.network")
 	tokenSecret := env("TOKEN_SECRET", "")
 	adminToken := env("ADMIN_TOKEN", "")
 	rlusdIssuer := env("RLUSD_ISSUER", "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De")
@@ -76,7 +78,13 @@ func main() {
 
 	// ── HEALTH ──────────────────────────────────────────────────────────────────
 	r.Get("/health", func(w http.ResponseWriter, req *http.Request) {
-		writeJSON(w, 200, map[string]string{"status": "ok", "gateway": gatewayAddr})
+		writeJSON(w, 200, map[string]interface{}{
+			"status":  "ok",
+			"networks": map[string]interface{}{
+				"xrpl":  map[string]string{"gateway": gatewayAddr, "rpc": xrplRPC, "currency": "RLUSD", "issuer": rlusdIssuer},
+				"xahau": map[string]string{"gateway": gatewayXahau, "rpc": xahauRPC, "currency": "RLUSD", "issuer": rlusdIssuer},
+			},
+		})
 	})
 
 	// ── PUBLIC STATS + LEADERBOARD ───────────────────────────────────────────────
@@ -223,7 +231,11 @@ func main() {
 			"network":    inv.Network,
 			"memo_hex":   inv.MemoHex,
 			"expires_at": inv.ExpiresAt.Unix(),
-			"memo_note":  "Set this as MemoData in your XRPL payment transaction",
+			"memo_note":  "Set this as MemoData in your XRPL or Xahau payment transaction",
+			"payment_options": []map[string]string{
+				{"network": "XRPL", "pay_to": gatewayAddr, "currency": "RLUSD", "issuer": rlusdIssuer, "rpc": xrplRPC},
+				{"network": "Xahau", "pay_to": gatewayXahau, "currency": "RLUSD", "issuer": rlusdIssuer, "rpc": xahauRPC, "note": "XAH trust line required for RLUSD on Xahau"},
+			},
 		})
 	})
 
