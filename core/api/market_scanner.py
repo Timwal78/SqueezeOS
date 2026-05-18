@@ -8,11 +8,26 @@ Batch quotes = 1 call for 50+ symbols.
 
 from flask import Blueprint, jsonify, request
 from core.legacy import get_service, clean_data
-from core.state import state
+from core.state import state, sse_queues
 import time
 import logging
 import threading
 from squeeze_analyzer import SqueezeAnalyzer
+
+
+def _broadcast_sse(event: dict):
+    """Push an event to all connected SSE clients."""
+    dead = []
+    for q in list(sse_queues):
+        try:
+            q.put_nowait(event)
+        except Exception:
+            dead.append(q)
+    for q in dead:
+        try:
+            sse_queues.remove(q)
+        except ValueError:
+            pass
 
 logger = logging.getLogger("Market-Scanner")
 market_bp = Blueprint('market', __name__)
@@ -140,7 +155,15 @@ def _run_scan():
         for r in technical_results:
             if r.get('squeeze_score', 0) >= 80:
                 ceo_triggers.append(r)
-                
+                _broadcast_sse({
+                    'type': 'SQUEEZE_ALERT',
+                    'symbol': r['symbol'],
+                    'score': r['squeeze_score'],
+                    'direction': r.get('direction', 'UNKNOWN'),
+                    'price': r.get('price'),
+                    'ts': time.time(),
+                })
+
         # B) Add High-Grade Options
         for p in options_picks:
             if p.get('score', 0) >= 80:  # Grade A or high B
@@ -149,6 +172,17 @@ def _run_scan():
                     'squeeze_score': p['score'],
                     'direction': 'BULLISH' if p['type'] == 'call' else 'BEARISH',
                     'price': p['stock_price']
+                })
+                _broadcast_sse({
+                    'type': 'OPTIONS_SWEEP',
+                    'symbol': p['symbol'],
+                    'strike': p['strike'],
+                    'option_type': p['type'],
+                    'expiration': p['expiration'],
+                    'grade': p['grade'],
+                    'score': p['score'],
+                    'mid': p['mid'],
+                    'ts': time.time(),
                 })
                 
         if ceo_triggers:

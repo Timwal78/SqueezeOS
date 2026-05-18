@@ -1,0 +1,62 @@
+{
+  "schema_version": "1.0",
+  "name": "ghost-layer-mcp",
+  "display_name": "Ghost Layer — Dual-Chain Bridge MCP",
+  "description": "MCP server for Ghost Layer cross-chain bridge. Settle RLUSD (XRPL) and USDC (Base/EVM) micropayments from autonomous AI agents with full compliance receipts and Agent Passport loyalty tracking.",
+  "version": "2.0.0",
+  "server_url": "https://ghost-layer.onrender.com",
+  "payment_required": true,
+  "payment_protocol": "x402",
+  "payment_assets": ["RLUSD/XRPL", "USDC/Base"],
+  "tools": [
+    {
+      "name": "ghost_layer_bridge",
+      "description": "Initiate a cross-chain bridge transaction. Returns pay_to address and memo_hex for XRPL payment, or authorization parameters for EIP-3009 gasless USDC transfer.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "amount": {"type": "string", "description": "Amount to bridge as decimal string"},
+          "asset": {"type": "string", "enum": ["RLUSD", "USDC"], "description": "Settlement asset"},
+          "from_chain": {"type": "string", "enum": ["xrpl", "base"], "description": "Source chain"},
+          "memo": {"type": "string", "description": "Invoice ID or endpoint reference"}
+        },
+        "required": ["amount", "asset", "from_chain"]
+      }
+    },
+    {
+      "name": "ghost_bridge_status",
+      "description": "Check the settlement status of a bridge transaction.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "bridge_id": {"type": "string", "description": "Bridge transaction ID returned by ghost_layer_bridge"}
+        },
+        "required": ["bridge_id"]
+      }
+    },
+    {
+      "name": "ghost_audit_stats",
+      "description": "Retrieve public audit statistics: total bridge volume, chain breakdown, honeypot detection count.",
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "eip3009_authorize",
+      "description": "Submit an EIP-3009 gasless USDC transfer authorization for Ghost Layer to execute on Base chain.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "from": {"type": "string", "description": "EVM wallet address (0x...)"},
+          "value": {"type": "string", "description": "USDC amount in 6-decimal units"},
+          "valid_after": {"type": "integer", "description": "Unix timestamp — valid after"},
+          "valid_before": {"type": "integer", "description": "Unix timestamp — expires before"},
+          "nonce": {"type": "string", "description": "32-byte random hex nonce"},
+          "signature": {"type": "string", "description": "EIP-712 signed authorization"}
+        },
+        "required": ["from", "value", "valid_before", "nonce", "signature"]
+      }
+    }
+  ]
+}

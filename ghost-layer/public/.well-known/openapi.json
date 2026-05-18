@@ -1,0 +1,212 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Ghost Layer API",
+    "version": "2.0.0",
+    "description": "Dual-chain transparent toll gateway operated by Script Master Labs. Bridge RLUSD (XRPL) and USDC (Base/EVM) for autonomous AI agent micropayments with full compliance receipts.",
+    "contact": {
+      "name": "Script Master Labs",
+      "url": "https://www.scriptmasterlabs.com",
+      "email": "agents@scriptmasterlabs.com"
+    },
+    "x-agent-instructions": "Payment is mandatory for all bridge operations. Include X-Agent-Wallet and X-Agent-Domain headers on every request. Anonymous requests without wallet identity are tarpitted. Obtain a payment token from 402Proof after settling RLUSD on XRPL, then include it as X-Payment-Token."
+  },
+  "servers": [
+    {
+      "url": "https://ghost-layer.onrender.com",
+      "description": "Ghost Layer production bridge"
+    }
+  ],
+  "paths": {
+    "/api/ghost/bridge": {
+      "post": {
+        "operationId": "initiateBridge",
+        "summary": "Initiate a cross-chain bridge transaction",
+        "description": "Creates a bridge request and returns payment parameters. For XRPL: returns pay_to wallet and memo_hex. For Base/EVM: returns EIP-3009 authorization parameters.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["amount", "asset", "from_chain"],
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "description": "Amount as decimal string (e.g. '0.10')"
+                  },
+                  "asset": {
+                    "type": "string",
+                    "enum": ["RLUSD", "USDC"]
+                  },
+                  "from_chain": {
+                    "type": "string",
+                    "enum": ["xrpl", "base"]
+                  },
+                  "memo": {
+                    "type": "string",
+                    "description": "Invoice ID or endpoint reference for routing"
+                  },
+                  "agent_wallet": {
+                    "type": "string",
+                    "description": "Your XRPL r-address or EVM 0x address"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Bridge initiated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BridgeInitResponse"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment required — bridge fee must be settled first"
+          }
+        }
+      }
+    },
+    "/api/ghost/bridge/{bridge_id}": {
+      "get": {
+        "operationId": "getBridgeStatus",
+        "summary": "Check bridge settlement status",
+        "parameters": [
+          {
+            "name": "bridge_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bridge status and receipt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BridgeResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ghost/eip3009/authorize": {
+      "post": {
+        "operationId": "eip3009Authorize",
+        "summary": "Submit EIP-3009 gasless USDC authorization",
+        "description": "Agent submits a pre-signed EIP-3009 transferFrom authorization. Ghost Layer executes the USDC transfer on Base without the agent paying gas.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EIP3009Authorization"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Authorization accepted, transfer executing"
+          }
+        }
+      }
+    },
+    "/api/ghost/audit": {
+      "get": {
+        "operationId": "getAuditStats",
+        "summary": "Public bridge audit statistics",
+        "description": "Returns aggregate bridge volume, chain breakdown, and honeypot detection count. No authentication required.",
+        "responses": {
+          "200": {
+            "description": "Audit statistics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditStats"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BridgeInitResponse": {
+        "type": "object",
+        "properties": {
+          "bridge_id": {"type": "string"},
+          "asset": {"type": "string"},
+          "amount": {"type": "string"},
+          "from_chain": {"type": "string"},
+          "pay_to": {"type": "string", "description": "XRPL r-address or EVM 0x address to send payment"},
+          "memo_hex": {"type": "string", "description": "XRPL MemoData hex for routing (XRPL path only)"},
+          "expires_at": {"type": "integer", "description": "Unix timestamp — bridge request expires"}
+        }
+      },
+      "BridgeResult": {
+        "type": "object",
+        "properties": {
+          "bridge_id": {"type": "string"},
+          "status": {"type": "string", "enum": ["pending", "settled", "expired", "failed"]},
+          "tx_hash": {"type": "string", "description": "XRPL or EVM transaction hash"},
+          "chain": {"type": "string"},
+          "amount": {"type": "string"},
+          "asset": {"type": "string"},
+          "agent_wallet": {"type": "string"},
+          "settled_at": {"type": "string", "format": "date-time"},
+          "loyalty_discount_applied": {"type": "number", "description": "Fractional discount applied from Agent Passport tier"},
+          "receipt": {"$ref": "#/components/schemas/ComplianceReceipt"}
+        }
+      },
+      "EIP3009Authorization": {
+        "type": "object",
+        "required": ["from", "value", "valid_before", "nonce", "signature"],
+        "properties": {
+          "from": {"type": "string", "description": "EVM wallet (0x...)"},
+          "to": {"type": "string", "description": "Ghost Layer receiver (auto-filled if omitted)"},
+          "value": {"type": "string", "description": "USDC in 6-decimal units"},
+          "valid_after": {"type": "integer", "default": 0},
+          "valid_before": {"type": "integer", "description": "Expiry unix timestamp"},
+          "nonce": {"type": "string", "description": "32-byte random hex"},
+          "signature": {"type": "string", "description": "EIP-712 v/r/s signature"}
+        }
+      },
+      "ComplianceReceipt": {
+        "type": "object",
+        "properties": {
+          "receipt_id": {"type": "string"},
+          "bridge_id": {"type": "string"},
+          "tx_hash": {"type": "string"},
+          "amount": {"type": "string"},
+          "asset": {"type": "string"},
+          "agent_wallet": {"type": "string"},
+          "risk_score": {"type": "integer", "minimum": 0, "maximum": 100},
+          "timestamp": {"type": "string", "format": "date-time"}
+        }
+      },
+      "AuditStats": {
+        "type": "object",
+        "properties": {
+          "total_bridges": {"type": "integer"},
+          "xrpl_volume_rlusd": {"type": "string"},
+          "base_volume_usdc": {"type": "string"},
+          "honeypot_detections": {"type": "integer"},
+          "active_agents": {"type": "integer"},
+          "probe_log_url": {"type": "string"}
+        }
+      }
+    }
+  }
+}

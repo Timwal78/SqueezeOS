@@ -94,6 +94,31 @@ def create_app():
     def serve_llms():
         return send_from_directory(app.static_folder, 'llms.txt', mimetype='text/plain')
 
+    @app.route('/openapi.json')
+    def serve_openapi_root():
+        return send_from_directory(app.static_folder, 'openapi.json', mimetype='application/json')
+
+    @app.route('/.well-known/openapi.json')
+    def serve_openapi_wellknown():
+        return send_from_directory(
+            os.path.join(app.static_folder, '.well-known'), 'openapi.json',
+            mimetype='application/json'
+        )
+
+    @app.route('/.well-known/ai-plugin.json')
+    def serve_ai_plugin():
+        return send_from_directory(
+            os.path.join(app.static_folder, '.well-known'), 'ai-plugin.json',
+            mimetype='application/json'
+        )
+
+    @app.route('/.well-known/mcp.json')
+    def serve_mcp():
+        return send_from_directory(
+            os.path.join(app.static_folder, '.well-known'), 'mcp.json',
+            mimetype='application/json'
+        )
+
     @app.route('/api/beast/events')
     def legacy_beast_events():
         """Alias for legacy frontend support."""
