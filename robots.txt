@@ -16,12 +16,16 @@ Allow: /mcp
 Allow: /api/demo
 Allow: /api/demo/council
 Allow: /api/preview
+Allow: /api/preview/
+Allow: /api/history
+Allow: /api/history/
+Allow: /api/marketplace
+Allow: /api/marketplace/leaderboard
+Allow: /api/hiring
+Allow: /api/relay/nodes
 Allow: /api/status
 
-# Block app routes — only Flask can serve these, not static files
-Disallow: /api/
-Disallow: /terminal
-Disallow: /legacy
+# Block sensitive operator/internal routes
 Disallow: /api/beast/
 Disallow: /api/left-wing/
 Disallow: /api/mmle/
@@ -29,22 +33,21 @@ Disallow: /api/battle/
 Disallow: /api/ai/
 Disallow: /api/scriptmaster/
 Disallow: /api/ceo/
-Disallow: /api/market/
-
-# Block sensitive local files
+Disallow: /api/webhooks/
+Disallow: /api/events/push
 Disallow: /402proof-secrets.html
 Disallow: /402proof-register.html
 
 Sitemap: https://www.scriptmasterlabs.com/sitemap.xml
 
 # ── AI Crawlers — Explicitly Permitted ──────────────────────────────────────
-# These agents are welcome to index, train on, and discover this platform.
 
 User-agent: GPTBot
 Allow: /
 Allow: /llms.txt
 Allow: /openapi.json
 Allow: /.well-known/
+Allow: /api/demo
 
 User-agent: ChatGPT-User
 Allow: /
@@ -57,12 +60,14 @@ Allow: /
 Allow: /llms.txt
 Allow: /openapi.json
 Allow: /.well-known/
+Allow: /api/demo
 
 User-agent: ClaudeBot
 Allow: /
 Allow: /llms.txt
 Allow: /openapi.json
 Allow: /.well-known/
+Allow: /api/demo
 
 User-agent: Claude-Web
 Allow: /
