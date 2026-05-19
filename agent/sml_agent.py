@@ -268,45 +268,99 @@ def synthesize_brief(data: dict) -> dict:
     client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
     now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
-    prompt = f"""You are the SML Autonomous Market Intelligence Agent. Synthesize this live market data into a concise, actionable daily brief.
+    prompt = f"""You are the SML Autonomous Market Intelligence Agent — a zero-simulation, absolute-execution trading intelligence system built on Script Master Labs' proprietary engine stack. Your mandate: synthesize live multi-engine data into a high-conviction brief. Never estimate, interpolate, or fabricate. If a data source is missing, note it explicitly.
 
 TIMESTAMP: {now_str}
 
-MARKET DATA:
+═══ RAW ENGINE OUTPUT ═══
 {json.dumps(data, indent=2, default=str)}
 
-Generate a JSON brief with this exact structure:
+═══ YOUR ANALYTICAL MANDATE ═══
+
+STEP 1 — ENGINE ALIGNMENT CHECK
+Examine every data source and answer:
+- Does the council verdict bias (BULLISH/BEARISH/NEUTRAL) match the scan's top-scoring symbols' momentum direction?
+- Does the options flow (PUT/CALL sweep sentiment) confirm or contradict the council bias?
+- Does the IWM 0DTE gamma flip level support or resist the current price action implied by the council regime?
+- Is the current bias a CONTINUATION (same as last 2+ signals in history) or a REVERSAL? Reversals need higher evidence threshold.
+
+STEP 2 — CONTRADICTION FLAGS
+Identify any conflicts across engines. Examples:
+- Council says BULLISH but options flow shows heavy PUT sweeps → CONFLICT
+- Regime is EXECUTION but squeeze count is 0 → CONFLICT
+- IWM verdict is BEARISH but 0DTE gamma flip is above current price → BEARISH CONFIRMATION
+Flag each conflict explicitly. Do not average them away.
+
+STEP 3 — TOP PICK SELECTION
+A pick is only grade-A if ALL THREE are true:
+  (a) it appears in the scan results with score > 70
+  (b) the council bias for IWM or that symbol is directionally aligned
+  (c) options flow is NOT explicitly contradicting the direction
+Picks that meet only 1 or 2 criteria are grade-B — still list them but flag the grade.
+
+STEP 4 — CONFIDENCE CALIBRATION
+Start at the council confidence score. Then:
+  +10 if scan top picks align with council bias
+  +10 if options flow confirms
+  +5  if signal history shows continuation (same bias 2+ times)
+  +5  if IWM 0DTE gamma flip confirms direction
+  -15 if any CONFLICT flag from Step 2
+  -10 if this is a bias reversal with < 2 confirming signals
+  -20 if 2 or more CONFLICT flags
+Cap final confidence at 95. Floor at 5.
+
+STEP 5 — KEY LEVELS
+Extract IWM support and resistance ONLY from hard data:
+- gamma_flip_level and max_pain from the 0DTE data (these are real structural levels)
+- Do NOT invent levels. If 0DTE data is missing, set both to 0 and note "0DTE_UNAVAILABLE"
+
+═══ OUTPUT FORMAT ═══
+Return ONLY valid JSON. No markdown, no explanation, no commentary outside the JSON.
+
 {{
   "title": "SML Market Brief — {now_str}",
   "session": "PRE_MARKET|OPEN|MIDDAY|POWER_HOUR|CLOSE",
   "master_bias": "BULLISH|BEARISH|NEUTRAL",
   "regime": "EXECUTION|STEALTH|CONFLICT|COLLAPSE",
-  "confidence": 0-100,
-  "top_picks": ["SYM1", "SYM2"],
-  "iwm_thesis": "2-3 sentence IWM analysis",
-  "market_thesis": "3-4 sentence overall market thesis",
-  "key_levels": {{"IWM_support": 0.0, "IWM_resistance": 0.0}},
+  "confidence": 0-95,
+  "engine_alignment": "CONFIRMED|PARTIAL|CONFLICTED",
+  "conflict_flags": ["list any conflicts found, empty array if none"],
+  "continuation_or_reversal": "CONTINUATION|REVERSAL|INSUFFICIENT_HISTORY",
+  "top_picks": [
+    {{"symbol": "SYM", "bias": "BULLISH|BEARISH", "grade": "A|B", "reason": "one sentence why"}}
+  ],
+  "iwm_thesis": "2-3 sentences: what the council said + what the 0DTE data confirms or challenges",
+  "market_thesis": "3-4 sentences: the full picture across scan + council + options, explicitly noting any conflicts",
+  "key_levels": {{"IWM_support": 0.0, "IWM_resistance": 0.0, "source": "gamma_flip|max_pain|0DTE_UNAVAILABLE"}},
   "squeeze_count": 0,
   "options_flow": "BULLISH|BEARISH|NEUTRAL|MIXED",
   "risk_level": "LOW|MEDIUM|HIGH|EXTREME",
-  "actionable": "One clear actionable sentence for the session",
+  "actionable": "One sentence — ONLY if confidence >= 60 and engine_alignment != CONFLICTED. Otherwise: STAND_ASIDE — [reason]",
+  "conviction_grade": "A|B|C|STAND_ASIDE",
   "agent_wallet": "{AGENT_ADDR}"
-}}
-
-Return ONLY the JSON. No markdown. No explanation."""
+}}"""
 
     message = client.messages.create(
         model="claude-opus-4-7",
-        max_tokens=1024,
+        max_tokens=2048,
         messages=[{"role": "user", "content": prompt}],
     )
 
     raw = message.content[0].text.strip()
-    brief = json.loads(raw)
+    # Strip markdown code fences if Claude adds them despite instructions
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+    brief = json.loads(raw.strip())
     brief["generated_at"] = time.time()
     brief["data_sources"]  = list(data.keys())
 
-    logger.info(f"[AGENT] Brief: {brief.get('master_bias')} | {brief.get('regime')} | conf={brief.get('confidence')}")
+    logger.info(
+        f"[AGENT] Brief: {brief.get('master_bias')} | {brief.get('regime')} | "
+        f"conf={brief.get('confidence')} | alignment={brief.get('engine_alignment')} | "
+        f"grade={brief.get('conviction_grade')} | conflicts={brief.get('conflict_flags', [])}"
+    )
     return brief
 
 # ── List brief on marketplace ─────────────────────────────────────────────────
@@ -316,11 +370,22 @@ def list_brief(brief: dict) -> Optional[str]:
         logger.warning("[AGENT] No AGENT_XRPL_ADDRESS — skipping marketplace listing")
         return None
 
-    top_picks = brief.get("top_picks", ["IWM"])
-    symbol    = top_picks[0] if top_picks else "IWM"
-    thesis    = f"{brief.get('market_thesis', '')} Actionable: {brief.get('actionable', '')}".strip()
+    picks     = brief.get("top_picks", [])
+    top_pick  = picks[0] if picks and isinstance(picks[0], dict) else None
+    symbol    = top_pick["symbol"] if top_pick else "IWM"
+
+    conflicts = brief.get("conflict_flags", [])
+    conflict_note = f" CONFLICTS: {'; '.join(conflicts)}." if conflicts else ""
+    thesis = (
+        f"[{brief.get('conviction_grade','?')} | {brief.get('engine_alignment','?')} | "
+        f"{brief.get('continuation_or_reversal','?')}] "
+        f"{brief.get('market_thesis', '')} "
+        f"{brief.get('iwm_thesis', '')}"
+        f"{conflict_note} "
+        f"Actionable: {brief.get('actionable', '')}"
+    ).strip()
     if len(thesis) < 20:
-        thesis = f"SML Agent brief: {brief.get('master_bias', 'NEUTRAL')} bias, {brief.get('regime', 'UNKNOWN')} regime. {brief.get('iwm_thesis', '')}"
+        thesis = f"SML Agent: {brief.get('master_bias','NEUTRAL')} | {brief.get('regime','UNKNOWN')} | conf={brief.get('confidence',0)}"
 
     payload = {
         "wallet":      AGENT_ADDR,
@@ -344,15 +409,23 @@ def list_brief(brief: dict) -> Optional[str]:
 # ── Open Signal Futures position ─────────────────────────────────────────────
 
 def post_futures_position(brief: dict) -> Optional[str]:
-    """Agent opens a Signal Futures position staking on its own IWM prediction."""
+    """Agent stakes on its own IWM prediction — only when conviction grade is A or B."""
     if not AGENT_ADDR:
+        return None
+    grade = brief.get("conviction_grade", "C")
+    if grade == "STAND_ASIDE":
+        logger.info("[AGENT] Skipping futures — conviction grade STAND_ASIDE")
         return None
     bias = brief.get("master_bias", "").upper()
     if bias not in {"BULLISH", "BEARISH", "NEUTRAL"}:
         return None
+    # Stake higher on grade-A conviction
+    stake = 0.02 if grade == "A" else 0.01
     session = brief.get("session", "ANY").upper()
     if session not in {"PRE_MARKET", "OPEN", "MIDDAY", "POWER_HOUR", "CLOSE", "ANY"}:
         session = "ANY"
+    alignment = brief.get("engine_alignment", "")
+    conflicts  = brief.get("conflict_flags", [])
     try:
         resp = requests.post(
             f"{SQUEEZEOS}/api/futures/create",
@@ -361,14 +434,14 @@ def post_futures_position(brief: dict) -> Optional[str]:
                 "symbol":         "IWM",
                 "predicted_bias": bias,
                 "session":        session,
-                "stake_rlusd":    0.01,
-                "note":           f"SML Agent: conf={brief.get('confidence', 0)} regime={brief.get('regime', '')}",
+                "stake_rlusd":    stake,
+                "note":           f"Grade={grade} alignment={alignment} conf={brief.get('confidence',0)} conflicts={len(conflicts)}",
             },
             timeout=10,
         )
         if resp.ok:
             future_id = resp.json().get("future_id")
-            logger.info(f"[AGENT] Futures position opened: {future_id[:8]}… IWM {bias}")
+            logger.info(f"[AGENT] Futures {grade}-grade position: {future_id[:8]}… IWM {bias} stake={stake} RLUSD")
             return future_id
     except Exception as e:
         logger.warning(f"[AGENT] Futures position failed: {e}")
