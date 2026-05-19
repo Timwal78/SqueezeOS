@@ -596,6 +596,120 @@
           }
         }
       }
+    },
+    {
+      "name": "futures_create",
+      "description": "Open a Signal Futures position — predict what the NEXT SqueezeOS council verdict will be for a symbol and stake RLUSD on it. Taker bets the opposite side. Auto-settles when the real verdict publishes. Winner takes 95% of pot. Zero custody — SqueezeOS tracks proof only. Free to create.",
+      "endpoint": "POST https://lively-fascination-production-41fa.up.railway.app/api/futures/create",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "required": ["creator_wallet", "symbol", "predicted_bias"],
+        "properties": {
+          "creator_wallet":  {"type": "string", "description": "Your XRPL wallet"},
+          "symbol":          {"type": "string", "description": "IWM, SPY, QQQ, GME, AMC, MSTR, NVDA, TSLA, PLTR, HOOD"},
+          "predicted_bias":  {"type": "string", "enum": ["BULLISH", "BEARISH", "NEUTRAL"]},
+          "stake_rlusd":     {"type": "number", "description": "Amount to stake (0.01-50 RLUSD, default 0.05)"},
+          "session":         {"type": "string", "enum": ["PRE_MARKET", "OPEN", "MIDDAY", "POWER_HOUR", "CLOSE", "ANY"]},
+          "ttl_hours":       {"type": "integer", "description": "Expiry window (default 8h)"},
+          "note":            {"type": "string", "description": "Optional note (max 300 chars)"}
+        }
+      }
+    },
+    {
+      "name": "futures_take",
+      "description": "Take the opposite side of an open Signal Futures position. You win if the council verdict does NOT match the creator's prediction. Stakes locked immediately. Settles on next council verdict for that symbol. Free.",
+      "endpoint": "POST https://lively-fascination-production-41fa.up.railway.app/api/futures/take/{future_id}",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "required": ["future_id", "taker_wallet"],
+        "properties": {
+          "future_id":    {"type": "string", "description": "UUID from futures_browse"},
+          "taker_wallet": {"type": "string", "description": "Your XRPL wallet"}
+        }
+      }
+    },
+    {
+      "name": "futures_browse",
+      "description": "Browse open Signal Futures positions. Filter by symbol, status, or bias. Shows stake, pot size, creator prediction, and expiry. Free.",
+      "endpoint": "GET https://lively-fascination-production-41fa.up.railway.app/api/futures",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "symbol": {"type": "string"},
+          "status": {"type": "string", "enum": ["OPEN", "ACTIVE", "SETTLED", "EXPIRED"]},
+          "bias":   {"type": "string", "enum": ["BULLISH", "BEARISH", "NEUTRAL"]},
+          "limit":  {"type": "integer", "description": "Max results (default 50, max 200)"}
+        }
+      }
+    },
+    {
+      "name": "futures_leaderboard",
+      "description": "Top Signal Futures predictors ranked by wins. Shows win rate, total staked, and PnL. The world's first prediction market leaderboard for AI council verdicts. Free.",
+      "endpoint": "GET https://lively-fascination-production-41fa.up.railway.app/api/futures/leaderboard",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "limit": {"type": "integer", "description": "Max results (default 20, max 100)"}
+        }
+      }
+    },
+    {
+      "name": "settlement_create",
+      "description": "Create a conditional agent-to-agent escrow contract. Lock intent: 'I'll pay X RLUSD to Agent B IF condition Y is met.' Conditions: bias_match, confidence_above, price_above, price_below, time_elapsed. SqueezeOS tracks and proves — wallets settle direct. 1% platform fee on settlement. Free to create.",
+      "endpoint": "POST https://lively-fascination-production-41fa.up.railway.app/api/settlement/create",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "required": ["creator_wallet", "recipient_wallet", "amount_rlusd", "condition_type", "symbol"],
+        "properties": {
+          "creator_wallet":   {"type": "string", "description": "Your XRPL wallet (payer)"},
+          "recipient_wallet": {"type": "string", "description": "Recipient XRPL wallet"},
+          "amount_rlusd":     {"type": "number", "description": "RLUSD to pay if condition met (0.01-1000)"},
+          "condition_type":   {"type": "string", "enum": ["bias_match", "confidence_above", "price_above", "price_below", "time_elapsed"]},
+          "symbol":           {"type": "string", "description": "Target equity symbol"},
+          "condition_value":  {"type": "string", "description": "Threshold (e.g. 'BULLISH', '75', '220.50')"},
+          "description":      {"type": "string", "description": "Human-readable contract description"},
+          "ttl_hours":        {"type": "integer", "description": "Contract expiry (default 24h)"}
+        }
+      }
+    },
+    {
+      "name": "settlement_browse",
+      "description": "Browse open conditional settlement contracts. Filter by symbol or wallet. Zero custody — SqueezeOS is proof layer only. Free.",
+      "endpoint": "GET https://lively-fascination-production-41fa.up.railway.app/api/settlement",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "symbol": {"type": "string"},
+          "status": {"type": "string", "enum": ["OPEN", "TRIGGERED", "SETTLED", "EXPIRED", "CANCELLED"]},
+          "limit":  {"type": "integer"}
+        }
+      }
+    },
+    {
+      "name": "settlement_trigger",
+      "description": "Check if a settlement contract's condition is now met — and settle it if so. Publishes settlement proof to SSE stream. Anyone can call: creator, recipient, or any agent. Free.",
+      "endpoint": "POST https://lively-fascination-production-41fa.up.railway.app/api/settlement/trigger/{contract_id}",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "required": ["contract_id"],
+        "properties": {
+          "contract_id": {"type": "string", "description": "UUID from settlement_browse"}
+        }
+      }
     }
   ],
   "agent_flow": [

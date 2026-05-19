@@ -1457,6 +1457,245 @@
         }
       }
     },
+    "/api/futures/create": {
+      "post": {
+        "summary": "Open a Signal Futures position (free)",
+        "description": "Predict the next SqueezeOS council verdict bias for a symbol and stake RLUSD. Auto-settles when verdict publishes. Zero custody — SqueezeOS tracks proof only. Winner takes 95% of pot.",
+        "operationId": "futuresCreate",
+        "tags": ["Futures"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["creator_wallet", "symbol", "predicted_bias"],
+                "properties": {
+                  "creator_wallet":  {"type": "string"},
+                  "symbol":          {"type": "string", "enum": ["IWM","SPY","QQQ","GME","AMC","MSTR","NVDA","TSLA","PLTR","HOOD"]},
+                  "predicted_bias":  {"type": "string", "enum": ["BULLISH","BEARISH","NEUTRAL"]},
+                  "stake_rlusd":     {"type": "number", "default": 0.05, "minimum": 0.01, "maximum": 50},
+                  "session":         {"type": "string", "enum": ["PRE_MARKET","OPEN","MIDDAY","POWER_HOUR","CLOSE","ANY"], "default": "ANY"},
+                  "ttl_hours":       {"type": "integer", "default": 8},
+                  "note":            {"type": "string", "maxLength": 300}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {"description": "Future created — awaiting taker"},
+          "400": {"description": "Validation error"},
+          "429": {"description": "Max active futures per wallet reached"}
+        }
+      }
+    },
+    "/api/futures/take/{future_id}": {
+      "post": {
+        "summary": "Take the opposite side of a Signal Futures position",
+        "description": "Bet against the creator's predicted bias. You win if the verdict does NOT match creator's prediction.",
+        "operationId": "futuresTake",
+        "tags": ["Futures"],
+        "parameters": [
+          {"name": "future_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["taker_wallet"],
+                "properties": {
+                  "taker_wallet": {"type": "string"}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {"description": "Position taken — stakes locked"},
+          "400": {"description": "Future not OPEN or expired"},
+          "404": {"description": "Future not found"}
+        }
+      }
+    },
+    "/api/futures": {
+      "get": {
+        "summary": "Browse open Signal Futures positions (free)",
+        "operationId": "futuresList",
+        "tags": ["Futures"],
+        "parameters": [
+          {"name": "symbol", "in": "query", "schema": {"type": "string"}},
+          {"name": "status", "in": "query", "schema": {"type": "string", "enum": ["OPEN","ACTIVE","SETTLED","EXPIRED"]}},
+          {"name": "bias",   "in": "query", "schema": {"type": "string", "enum": ["BULLISH","BEARISH","NEUTRAL"]}},
+          {"name": "limit",  "in": "query", "schema": {"type": "integer", "default": 50, "maximum": 200}}
+        ],
+        "responses": {
+          "200": {"description": "List of futures"}
+        }
+      }
+    },
+    "/api/futures/settle/{future_id}": {
+      "post": {
+        "summary": "Force-settle a future against latest verdict",
+        "operationId": "futuresSettle",
+        "tags": ["Futures"],
+        "parameters": [
+          {"name": "future_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
+        ],
+        "responses": {
+          "200": {"description": "Settlement proof"},
+          "400": {"description": "No verdict found or future not ACTIVE"}
+        }
+      }
+    },
+    "/api/futures/leaderboard": {
+      "get": {
+        "summary": "Top Signal Futures predictors by wins",
+        "operationId": "futuresLeaderboard",
+        "tags": ["Futures"],
+        "parameters": [
+          {"name": "limit", "in": "query", "schema": {"type": "integer", "default": 20, "maximum": 100}}
+        ],
+        "responses": {
+          "200": {"description": "Leaderboard"}
+        }
+      }
+    },
+    "/api/futures/wallet/{wallet}": {
+      "get": {
+        "summary": "All futures for a wallet (creator or taker)",
+        "operationId": "futuresWallet",
+        "tags": ["Futures"],
+        "parameters": [
+          {"name": "wallet", "in": "path", "required": true, "schema": {"type": "string"}}
+        ],
+        "responses": {
+          "200": {"description": "Wallet futures history"}
+        }
+      }
+    },
+    "/api/settlement/create": {
+      "post": {
+        "summary": "Create a conditional settlement contract (free)",
+        "description": "Lock intent to pay RLUSD to another agent when a condition is met. Conditions: bias_match, confidence_above, price_above, price_below, time_elapsed. Zero custody — 1% platform fee logged on settlement.",
+        "operationId": "settlementCreate",
+        "tags": ["Settlement"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["creator_wallet", "recipient_wallet", "amount_rlusd", "condition_type", "symbol"],
+                "properties": {
+                  "creator_wallet":   {"type": "string"},
+                  "recipient_wallet": {"type": "string"},
+                  "amount_rlusd":     {"type": "number", "minimum": 0.01, "maximum": 1000},
+                  "condition_type":   {"type": "string", "enum": ["bias_match","confidence_above","price_above","price_below","time_elapsed"]},
+                  "symbol":           {"type": "string"},
+                  "condition_value":  {"type": "string", "description": "Threshold — e.g. 'BULLISH', '75', '220.50'"},
+                  "description":      {"type": "string"},
+                  "ttl_hours":        {"type": "integer", "default": 24}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {"description": "Contract created"},
+          "400": {"description": "Validation error"}
+        }
+      }
+    },
+    "/api/settlement": {
+      "get": {
+        "summary": "Browse open settlement contracts (free)",
+        "operationId": "settlementList",
+        "tags": ["Settlement"],
+        "parameters": [
+          {"name": "symbol", "in": "query", "schema": {"type": "string"}},
+          {"name": "status", "in": "query", "schema": {"type": "string", "enum": ["OPEN","TRIGGERED","SETTLED","EXPIRED","CANCELLED"]}},
+          {"name": "limit",  "in": "query", "schema": {"type": "integer", "default": 50}}
+        ],
+        "responses": {
+          "200": {"description": "List of contracts"}
+        }
+      }
+    },
+    "/api/settlement/{contract_id}": {
+      "get": {
+        "summary": "Get settlement contract status",
+        "operationId": "settlementGet",
+        "tags": ["Settlement"],
+        "parameters": [
+          {"name": "contract_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
+        ],
+        "responses": {
+          "200": {"description": "Contract detail"},
+          "404": {"description": "Not found"}
+        }
+      }
+    },
+    "/api/settlement/trigger/{contract_id}": {
+      "post": {
+        "summary": "Check condition and settle if met",
+        "description": "Anyone may call. Checks live data against contract condition. Emits SETTLEMENT_COMPLETE SSE event on success.",
+        "operationId": "settlementTrigger",
+        "tags": ["Settlement"],
+        "parameters": [
+          {"name": "contract_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
+        ],
+        "responses": {
+          "200": {"description": "Condition met — settlement proof returned"},
+          "202": {"description": "Condition not yet met"},
+          "400": {"description": "Invalid state"}
+        }
+      }
+    },
+    "/api/settlement/cancel/{contract_id}": {
+      "post": {
+        "summary": "Cancel a contract (creator only, OPEN status)",
+        "operationId": "settlementCancel",
+        "tags": ["Settlement"],
+        "parameters": [
+          {"name": "contract_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["creator_wallet"],
+                "properties": {
+                  "creator_wallet": {"type": "string"}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {"description": "Contract cancelled"},
+          "403": {"description": "Not creator"},
+          "400": {"description": "Not cancellable"}
+        }
+      }
+    },
+    "/api/settlement/wallet/{wallet}": {
+      "get": {
+        "summary": "All settlement contracts for a wallet",
+        "operationId": "settlementWallet",
+        "tags": ["Settlement"],
+        "parameters": [
+          {"name": "wallet", "in": "path", "required": true, "schema": {"type": "string"}}
+        ],
+        "responses": {
+          "200": {"description": "Wallet contracts"}
+        }
+      }
+    },
     "/api/relay/register": {
       "post": {
         "summary": "Register as relay node (40% bulk discount)",
@@ -2283,6 +2522,14 @@
     {
       "name": "Relay",
       "description": "Signal relay mesh \u2014 bulk discount nodes"
+    },
+    {
+      "name": "Futures",
+      "description": "Signal Futures Market \u2014 prediction market on AI council verdicts"
+    },
+    {
+      "name": "Settlement",
+      "description": "Conditional agent-to-agent settlement contracts"
     }
   ]
 }
