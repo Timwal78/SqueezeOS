@@ -17,6 +17,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
 
+	"proof402/internal/base"
 	"proof402/internal/bureau"
 	"proof402/internal/firewall"
 	"proof402/internal/invoice"
@@ -44,6 +45,18 @@ func main() {
 	adminToken := env("ADMIN_TOKEN", "")
 	rlusdIssuer := env("RLUSD_ISSUER", "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De")
 	serverURL := env("SERVER_URL", "http://localhost:9090")
+
+	// ── Base / USDC ─────────────────────────────────────────────────────────────
+	baseRPC          := env("BASE_RPC_URL",           "https://mainnet.base.org")
+	ghostLayerETH    := env("GHOST_LAYER_ETH_ADDRESS", "") // 0x address on Base
+	usdcContract     := env("USDC_CONTRACT_ADDRESS",  "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913")
+	baseClient       := base.NewClient(baseRPC)
+	usdcEnabled      := ghostLayerETH != ""
+	if usdcEnabled {
+		log.Printf("[USDC] Base payment rail enabled — Ghost Layer ETH: %s", ghostLayerETH)
+	} else {
+		log.Println("[USDC] GHOST_LAYER_ETH_ADDRESS not set — USDC rail disabled")
+	}
 
 	if gatewayAddr == "" {
 		log.Fatalf("[FATAL] GATEWAY_XRPL_ADDRESS not set")
@@ -78,12 +91,24 @@ func main() {
 
 	// ── HEALTH ──────────────────────────────────────────────────────────────────
 	r.Get("/health", func(w http.ResponseWriter, req *http.Request) {
+		networks := map[string]interface{}{
+			"xrpl":  map[string]string{"gateway": gatewayAddr, "rpc": xrplRPC, "currency": "RLUSD", "issuer": rlusdIssuer},
+			"xahau": map[string]string{"gateway": gatewayXahau, "rpc": xahauRPC, "currency": "RLUSD", "issuer": rlusdIssuer},
+		}
+		if usdcEnabled {
+			networks["base"] = map[string]string{
+				"gateway":  ghostLayerETH,
+				"rpc":      baseRPC,
+				"currency": "USDC",
+				"contract": usdcContract,
+				"chain_id": "8453",
+				"note":     "USDC on Base routed via Ghost Layer",
+			}
+		}
 		writeJSON(w, 200, map[string]interface{}{
-			"status":  "ok",
-			"networks": map[string]interface{}{
-				"xrpl":  map[string]string{"gateway": gatewayAddr, "rpc": xrplRPC, "currency": "RLUSD", "issuer": rlusdIssuer},
-				"xahau": map[string]string{"gateway": gatewayXahau, "rpc": xahauRPC, "currency": "RLUSD", "issuer": rlusdIssuer},
-			},
+			"status":       "ok",
+			"usdc_enabled": usdcEnabled,
+			"networks":     networks,
 		})
 	})
 
@@ -211,6 +236,7 @@ func main() {
 		req.Body = http.MaxBytesReader(w, req.Body, 64*1024)
 		var body struct {
 			EndpointID string `json:"endpoint_id"`
+			Currency   string `json:"currency"` // optional: "USDC" for Base rail
 		}
 		if err := json.NewDecoder(req.Body).Decode(&body); err != nil || body.EndpointID == "" {
 			http.Error(w, "endpoint_id required", http.StatusBadRequest)
@@ -221,21 +247,49 @@ func main() {
 			http.Error(w, "endpoint not found", http.StatusNotFound)
 			return
 		}
-		inv := invoice.New(ep, gatewayAddr)
+
+		// Route to USDC/Base if requested and configured
+		wantUSDC := strings.ToUpper(body.Currency) == "USDC"
+		if wantUSDC && !usdcEnabled {
+			http.Error(w, "USDC payment rail not configured on this server", http.StatusServiceUnavailable)
+			return
+		}
+
+		var inv *models.Invoice
+		if wantUSDC {
+			inv = invoice.NewBase(ep, ghostLayerETH)
+		} else {
+			inv = invoice.New(ep, gatewayAddr)
+		}
 		db.SaveInvoice(inv)
+
+		// Build payment options list
+		paymentOptions := []map[string]string{
+			{"network": "XRPL", "pay_to": gatewayAddr, "currency": "RLUSD", "issuer": rlusdIssuer, "rpc": xrplRPC},
+			{"network": "Xahau", "pay_to": gatewayXahau, "currency": "RLUSD", "issuer": rlusdIssuer, "rpc": xahauRPC, "note": "XAH trust line required for RLUSD on Xahau"},
+		}
+		if usdcEnabled {
+			paymentOptions = append(paymentOptions, map[string]string{
+				"network":       "Base",
+				"pay_to":        ghostLayerETH,
+				"currency":      "USDC",
+				"contract":      usdcContract,
+				"chain_id":      "8453",
+				"rpc":           baseRPC,
+				"memo_note":     "Include memo_hex as calldata for faster matching. Amount must be >= invoice amount.",
+			})
+		}
+
 		writeJSON(w, 200, map[string]interface{}{
-			"invoice_id": inv.ID,
-			"pay_to":     inv.PayTo,
-			"amount":     inv.Price,
-			"asset":      inv.Asset,
-			"network":    inv.Network,
-			"memo_hex":   inv.MemoHex,
-			"expires_at": inv.ExpiresAt.Unix(),
-			"memo_note":  "Set this as MemoData in your XRPL or Xahau payment transaction",
-			"payment_options": []map[string]string{
-				{"network": "XRPL", "pay_to": gatewayAddr, "currency": "RLUSD", "issuer": rlusdIssuer, "rpc": xrplRPC},
-				{"network": "Xahau", "pay_to": gatewayXahau, "currency": "RLUSD", "issuer": rlusdIssuer, "rpc": xahauRPC, "note": "XAH trust line required for RLUSD on Xahau"},
-			},
+			"invoice_id":      inv.ID,
+			"pay_to":          inv.PayTo,
+			"amount":          inv.Price,
+			"asset":           inv.Asset,
+			"network":         inv.Network,
+			"memo_hex":        inv.MemoHex,
+			"expires_at":      inv.ExpiresAt.Unix(),
+			"memo_note":       "Include memo_hex in your payment — MemoData (XRPL/Xahau) or calldata (Base)",
+			"payment_options": paymentOptions,
 		})
 	})
 
@@ -275,10 +329,27 @@ func main() {
 			return
 		}
 
-		if _, err := xrplClient.VerifyPayment(body.TxHash, gatewayAddr, inv.Price, inv.Asset, inv.MemoHex, rlusdIssuer); err != nil {
-			log.Printf("[VERIFY] failed invoice=%s tx=%s: %v", body.InvoiceID, body.TxHash, err)
-			http.Error(w, "payment verification failed", http.StatusPaymentRequired)
-			return
+		// Route verification by chain — Base tx hashes start with "0x"
+		if strings.HasPrefix(body.TxHash, "0x") {
+			if !usdcEnabled {
+				http.Error(w, "USDC payment rail not configured on this server", http.StatusServiceUnavailable)
+				return
+			}
+			if inv.Network != "Base" {
+				http.Error(w, "tx_hash is a Base tx but invoice was issued for "+inv.Network, http.StatusBadRequest)
+				return
+			}
+			if err := baseClient.VerifyUSDCPayment(body.TxHash, ghostLayerETH, inv.Price, usdcContract); err != nil {
+				log.Printf("[VERIFY/BASE] failed invoice=%s tx=%s: %v", body.InvoiceID, body.TxHash, err)
+				http.Error(w, "USDC payment verification failed: "+err.Error(), http.StatusPaymentRequired)
+				return
+			}
+		} else {
+			if _, err := xrplClient.VerifyPayment(body.TxHash, gatewayAddr, inv.Price, inv.Asset, inv.MemoHex, rlusdIssuer); err != nil {
+				log.Printf("[VERIFY] failed invoice=%s tx=%s: %v", body.InvoiceID, body.TxHash, err)
+				http.Error(w, "payment verification failed", http.StatusPaymentRequired)
+				return
+			}
 		}
 
 		agent := db.GetOrCreateAgent(body.AgentWallet)
