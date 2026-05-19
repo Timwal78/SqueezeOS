@@ -23,6 +23,8 @@ from core.api.marketplace_bp import marketplace_bp
 from core.api.hiring_bp import hiring_bp
 from core.api.mcp_bp import mcp_bp
 from core.api.honeypot import honeypot_bp, honeypot_before_request
+from core.api.settlement_bp import settlement_bp
+from core.api.futures_bp import futures_bp
 import core.signal_history as signal_history
 from core.legacy import start_whale_stalker, init_services, get_service, clean_data
 from core.market_graph import get_graph
@@ -64,6 +66,8 @@ def create_app():
     app.register_blueprint(marketplace_bp, url_prefix='/api/marketplace')
     app.register_blueprint(hiring_bp,     url_prefix='/api/hiring')
     app.register_blueprint(mcp_bp,        url_prefix='/mcp')
+    app.register_blueprint(settlement_bp, url_prefix='/api/settlement')
+    app.register_blueprint(futures_bp,    url_prefix='/api/futures')
     app.register_blueprint(v2_bp, url_prefix='/api')
     app.register_blueprint(v2_bp, url_prefix='/api/v1', name='v2_bridge_v1')
     
@@ -115,6 +119,10 @@ def create_app():
                 sse_queues.remove(q)
             except ValueError:
                 pass
+
+    # Global broadcast accessible by blueprints (settlement, futures)
+    import core.app as _self_module
+    _self_module._broadcast_sse_global = _broadcast_sse
 
     @app.after_request
     def broadcast_agent_signals(response):
@@ -257,7 +265,6 @@ def create_app():
             registry = {"gme": [], "amc": [], "last_updated": "never"}
 
         if request.method == 'POST':
-            # Logic for updating anchors from external ingestion
             new_data = request.get_json()
             if 'gme' in new_data: registry['gme'] = new_data['gme']
             if 'amc' in new_data: registry['amc'] = new_data['amc']
@@ -284,12 +291,6 @@ def create_app():
     @app.route('/api/oracle', methods=['GET'])
     @app.route('/api/oracle/<symbol>', methods=['GET'])
     def oracle_signal(symbol=None):
-        """
-        SML Command Center Oracle — master signal aggregator.
-        Returns BUY/SELL/HOLD/SHIELD directive with full Driver/Navigator payload.
-        Supports: /api/oracle  (all 3 symbols)
-                  /api/oracle/GME  (single symbol)
-        """
         from core.oracle_engine import OracleEngine, ORACLE_SYMBOLS, run_oracle_batch
         services = {
             "dm":            get_service("dm"),
@@ -303,7 +304,6 @@ def create_app():
             return jsonify({"status": "success", "oracle": result})
         else:
             results = run_oracle_batch(ORACLE_SYMBOLS, services)
-            # Master directive = highest confidence non-SHIELD signal
             ranked = sorted(
                 [v for v in results.values() if v.get("directive") != "SHIELD"],
                 key=lambda x: x.get("confidence", 0), reverse=True
@@ -316,13 +316,9 @@ def create_app():
                 "timestamp": datetime.now().isoformat(),
             })
 
-
-    # ── SML MarketGraphify + RDT Routes ──────────────────────────────────────
-
     @app.route('/api/graph', methods=['GET'])
     @app.route('/api/graph/<symbol>', methods=['GET'])
     def graph_snapshot(symbol=None):
-        """Full Neo4j graph snapshot — nodes + edges. Live market relationship map."""
         graph = get_graph()
         if not graph:
             return jsonify({"status": "error", "message": "Neo4j unavailable"}), 503
@@ -346,11 +342,9 @@ def create_app():
 
     @app.route('/api/graph/rdt', methods=['GET'])
     def rdt_signals():
-        """OpenMythos RDT — recursive fractal correlation across SML universe."""
         graph = get_graph()
         rdt = RecurrentDepthTransformer(graph=graph)
         try:
-            # Pull live prices from oracle for RDT input
             from core.oracle_engine import OracleEngine, ORACLE_SYMBOLS
             services = {
                 "dm":            get_service("dm"),
@@ -359,12 +353,10 @@ def create_app():
             }
             engine = OracleEngine(services)
             snapshots = {}
-            # Dynamic Universe Discovery (Goal 1)
             active_universe = list(state.quotes.keys())[:20] if state.quotes else ORACLE_SYMBOLS
             for sym in active_universe:
                 try:
                     oracle_data = engine.analyze(sym)
-                    # Use `or 0.0` — oracle returns explicit None for missing fields
                     price  = oracle_data.get("price")  or 0.0
                     vpin   = oracle_data.get("vpin")   or 0.0
                     gex    = oracle_data.get("gamma_wall_above") or 0.0
@@ -373,7 +365,6 @@ def create_app():
                         "price": price, "vpin": vpin,
                         "gex": gex, "regime": regime
                     }
-                    # Write live state into graph
                     if graph:
                         graph.update_ticker(
                             symbol=sym, price=price,
@@ -405,11 +396,8 @@ def create_app():
             logger.error(f"[RDT] Error: {e}")
             return jsonify({"status": "error", "message": str(e)}), 500
 
-    # ── Demo endpoint — full council verdict, IWM, no payment, 5-min cache ────
-    # Shows agents the EXACT response format they get when they pay.
-    # Eliminates "is this real?" friction for new agents evaluating the platform.
     _demo_cache: dict = {}
-    _DEMO_TTL = 300  # 5 minutes
+    _DEMO_TTL = 300
 
     @app.route('/api/demo', methods=['GET'])
     @app.route('/api/demo/council', methods=['GET'])
@@ -466,11 +454,8 @@ def create_app():
         _demo_cache['council'] = result
         return jsonify(result)
 
-    # ── Free Signal Preview — acquisition funnel ─────────────────────────────
-    # Returns bias + regime only, cached 15 min. No payment required.
-    # Enough for an agent to verify SqueezeOS works; not enough to trade on.
     _preview_cache: dict = {}
-    _PREVIEW_TTL = 900  # 15 minutes
+    _PREVIEW_TTL = 900
 
     @app.route('/api/preview', methods=['GET'])
     @app.route('/api/preview/<symbol>', methods=['GET'])
@@ -508,10 +493,6 @@ def create_app():
         }
         _preview_cache[symbol] = result
         return jsonify(result)
-
-    # ── Signal History — free public endpoint ────────────────────────────────
-    # Last N signals per symbol from the in-memory ring buffer.
-    # Free, no auth. Enables agent backtesting and confidence calibration.
 
     @app.route('/api/history', methods=['GET'])
     def signal_history_all():
@@ -558,7 +539,6 @@ if __name__ == "__main__":
     key_file = 'private.key.pem'
     ssl_ctx = None
     
-    # Goal 3: Stabilize mobile handshake by making SSL optional
     force_ssl = os.environ.get('FORCE_SSL', 'false').lower() == 'true'
 
     if force_ssl and os.path.exists(cert_file) and os.path.exists(key_file):
