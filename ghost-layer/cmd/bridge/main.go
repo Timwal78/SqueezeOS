@@ -597,6 +597,7 @@ func main() {
 		http.ServeFile(w, req, "./public/.well-known/server.json")
 	})
 
+
 	// ── STATIC FRONTEND (Three.js terminal) ──────────────────────────────────
 	fs := http.FileServer(http.Dir("./public"))
 	r.Handle("/*", fs)

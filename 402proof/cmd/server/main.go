@@ -1118,6 +1118,7 @@ func main() {
 		http.ServeFile(w, req, "./public/.well-known/server.json")
 	})
 
+
 	// ── STATIC DASHBOARD ──────────────────────────────────────────────────────────
 	fs := http.FileServer(http.Dir("./public"))
 	r.Handle("/*", fs)
