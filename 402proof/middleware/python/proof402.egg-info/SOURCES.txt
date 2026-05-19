@@ -1,0 +1,7 @@
+README.md
+setup.py
+proof402/__init__.py
+proof402.egg-info/PKG-INFO
+proof402.egg-info/SOURCES.txt
+proof402.egg-info/dependency_links.txt
+proof402.egg-info/top_level.txt

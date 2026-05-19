@@ -1,0 +1,184 @@
+Metadata-Version: 2.4
+Name: proof402
+Version: 1.1.0
+Summary: x402/HTTP 402 payment middleware for FastAPI and Flask. Gate any API behind RLUSD micropayments on XRP Ledger via 402Proof. Sub-millisecond local HMAC verification. Zero API keys.
+Home-page: https://four02proof.onrender.com
+Author: Script Master Labs
+License: MIT
+Project-URL: Homepage, https://four02proof.onrender.com
+Project-URL: Repository, https://github.com/timwal78/squeezeos
+Project-URL: Bug Tracker, https://github.com/timwal78/squeezeos/issues
+Keywords: x402,xrpl,rlusd,payment,ai-agents,fastapi,flask,wsgi,middleware,http-402,micropayment,agent-economy,402proof
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Internet :: WWW/HTTP :: WSGI :: Middleware
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Dynamic: author
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: home-page
+Dynamic: keywords
+Dynamic: license
+Dynamic: project-url
+Dynamic: requires-python
+Dynamic: summary
+
+# proof402
+
+> x402/HTTP 402 payment middleware for FastAPI and Flask/WSGI.  
+> Gate any API behind RLUSD micropayments on XRP Ledger via [402Proof](https://four02proof.onrender.com).  
+> Sub-millisecond local HMAC verification. Zero API keys. Zero custody.
+
+[![PyPI](https://img.shields.io/pypi/v/proof402)](https://pypi.org/project/proof402/)
+[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![python](https://img.shields.io/badge/python-3.9%2B-blue)]()
+
+---
+
+## Install
+
+```bash
+pip install proof402
+```
+
+---
+
+## How It Works
+
+1. Agent hits your protected route → middleware checks for `X-Payment-Token` header
+2. No token (or invalid) → middleware returns `HTTP 402` + invoice (pay_to, memo_hex, amount)
+3. Agent sends RLUSD on XRPL → calls `POST /v1/verify` on 402Proof → receives signed token
+4. Agent retries with `X-Payment-Token: <token>` → verified locally in <1ms → access granted
+
+Token verification is pure HMAC-SHA256 — **zero network call, sub-millisecond** when `token_secret` is set.
+
+---
+
+## FastAPI
+
+```python
+import os
+from fastapi import FastAPI, Depends
+from proof402 import Proof402
+
+app = FastAPI()
+
+proof = Proof402(
+    endpoint_id=os.environ["PROOF402_ENDPOINT_ID"],
+    server_url="https://four02proof.onrender.com",
+    token_secret=os.environ.get("PROOF402_TOKEN_SECRET"),  # enables zero-latency local verify
+)
+
+@app.get("/api/premium/council")
+async def council_verdict(symbol: str, verified=Depends(proof.require_payment())):
+    return {"symbol": symbol, "verdict": "BULLISH", "verified": verified}
+```
+
+## Flask / WSGI
+
+```python
+import os
+from flask import Flask
+from proof402 import Proof402Middleware
+
+app = Flask(__name__)
+
+app.wsgi_app = Proof402Middleware(
+    app.wsgi_app,
+    endpoint_id=os.environ["PROOF402_ENDPOINT_ID"],
+    server_url="https://four02proof.onrender.com",
+    protected_paths=["/api/premium", "/api/council"],
+    token_secret=os.environ.get("PROOF402_TOKEN_SECRET"),
+)
+
+@app.route("/api/premium/data")
+def premium_data():
+    return {"data": "paid content"}
+```
+
+---
+
+## HTTP 402 Response Format
+
+When payment is required, clients receive `HTTP 402` with:
+
+```json
+{
+  "error": "Payment Required",
+  "invoice": {
+    "invoice_id": "inv_abc123",
+    "pay_to": "rGATEWAY...",
+    "memo_hex": "696e765f616263313233",
+    "amount": "0.10",
+    "asset": "RLUSD",
+    "expires_at": 1747616400
+  },
+  "instructions": {
+    "step1": "Send 0.10 RLUSD on XRPL to rGATEWAY...",
+    "step2": "Include MemoData: 696e765f... in your XRPL payment",
+    "step3": "POST https://four02proof.onrender.com/v1/verify with invoice_id, tx_hash, agent_wallet",
+    "step4": "Retry with header: X-Payment-Token: <token>"
+  }
+}
+```
+
+---
+
+## Options
+
+### `Proof402(endpoint_id, server_url, token_secret=None)`
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `endpoint_id` | str | yes | UUID from 402Proof merchant dashboard |
+| `server_url` | str | no | 402Proof server URL (default: `https://four02proof.onrender.com`) |
+| `token_secret` | str | recommended | Same `TOKEN_SECRET` as your 402Proof server. Enables zero-network local verification. |
+
+### `Proof402Middleware(app, endpoint_id, server_url, protected_paths, token_secret=None)`
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `app` | WSGI app | yes | Your Flask/Django WSGI app |
+| `protected_paths` | list[str] | no | Path prefixes to protect (default: `["/"]`) |
+
+---
+
+## Environment Variables
+
+```bash
+PROOF402_ENDPOINT_ID=your-endpoint-uuid
+PROOF402_TOKEN_SECRET=your-token-secret   # from 402Proof server env
+```
+
+---
+
+## Register Your Endpoint
+
+1. Go to [four02proof.onrender.com](https://four02proof.onrender.com)
+2. Register as a merchant → create an endpoint → copy the UUID
+3. Set `PROOF402_ENDPOINT_ID` in your environment
+4. Set `PROOF402_TOKEN_SECRET` to the same value as your 402Proof `TOKEN_SECRET`
+
+---
+
+## Links
+
+- **402Proof Dashboard:** https://four02proof.onrender.com
+- **402Proof llms.txt:** https://four02proof.onrender.com/llms.txt
+- **SqueezeOS (live example):** https://lively-fascination-production-41fa.up.railway.app
+- **JavaScript SDK:** `npm install proof402-middleware` (see `/402proof/middleware/js/`)
+
+---
+
+## License
+
+MIT © Script Master Labs

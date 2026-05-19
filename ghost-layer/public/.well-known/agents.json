@@ -1,17 +1,32 @@
 {
   "schema_version": "1.0",
-  "name": "Ghost Layer Bridge",
-  "description": "Dual-chain transparent toll gateway. Bridge RLUSD (XRPL) and USDC (Base/EVM EIP-3009) for autonomous AI agent micropayments.",
+  "name": "Ghost Layer — Dual-Chain Toll Gateway",
+  "description": "Neutral bridge between XRPL native RLUSD payments and Base/EVM gasless USDC authorization (EIP-3009). XAH/Xahau support. Enables autonomous AI agents to transact across XRPL, Base, and Xahau with a single unified settlement flow. Every bridge event immutably logged. Zero custody.",
   "url": "https://ghost-layer.onrender.com",
+  "homepage": "https://www.scriptmasterlabs.com",
   "payment_required": true,
   "payment_protocol": "x402",
+  "payment_assets": ["RLUSD/XRPL", "USDC/Base", "XAH/Xahau"],
+  "payment_gateway": "https://four02proof.onrender.com",
   "specs": {
     "openapi": "https://ghost-layer.onrender.com/.well-known/openapi.json",
     "mcp": "https://ghost-layer.onrender.com/.well-known/mcp.json",
+    "server_json": "https://ghost-layer.onrender.com/.well-known/server.json",
     "llms_txt": "https://ghost-layer.onrender.com/llms.txt"
   },
-  "capabilities": [
-    {"id": "bridge_xrpl", "name": "XRPL Bridge", "cost_min": "0.01", "currency": "RLUSD"},
-    {"id": "bridge_base", "name": "Base EIP-3009 Bridge", "cost_min": "0.01", "currency": "USDC"}
-  ]
+  "mcp_endpoint": "https://ghost-layer.onrender.com/mcp",
+  "tools": [
+    {"name": "ghost_bridge_health", "cost": "free"},
+    {"name": "ghost_layer_bridge", "cost": "variable"},
+    {"name": "ghost_audit_stats", "cost": "free"}
+  ],
+  "networks": {
+    "xrpl": {"rpc": "https://xrplcluster.com", "currency": "RLUSD", "issuer": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De"},
+    "base": {"currency": "USDC", "contract": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"},
+    "xahau": {"rpc": "https://xahau.network", "currency": "XAH", "native": true, "hooks_enabled": true}
+  },
+  "related_services": {
+    "squeezeos": "https://lively-fascination-production-41fa.up.railway.app/.well-known/agents.json",
+    "proof402": "https://four02proof.onrender.com/.well-known/agents.json"
+  }
 }

@@ -1,6 +1,10 @@
 User-agent: *
 Allow: /
 Allow: /.well-known/
+Allow: /.well-known/mcp.json
+Allow: /.well-known/server.json
+Allow: /.well-known/agents.json
+Allow: /mcp
 Allow: /llms.txt
 Allow: /sitemap.xml
 

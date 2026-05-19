@@ -1112,6 +1112,13 @@ func main() {
 		})
 	}
 
+	// ── WELL-KNOWN: explicit handler for server.json (MCP registry discovery) ────
+	r.Get("/.well-known/server.json", func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		http.ServeFile(w, req, "./public/.well-known/server.json")
+	})
+
+
 	// ── STATIC DASHBOARD ──────────────────────────────────────────────────────────
 	fs := http.FileServer(http.Dir("./public"))
 	r.Handle("/*", fs)

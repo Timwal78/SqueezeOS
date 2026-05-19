@@ -1,5 +1,11 @@
 User-agent: *
 Allow: /
+Allow: /.well-known/mcp.json
+Allow: /.well-known/server.json
+Allow: /.well-known/agents.json
+Allow: /mcp
+Allow: /v1/stats
+Allow: /v1/agent/
 
 User-agent: GPTBot
 Allow: /

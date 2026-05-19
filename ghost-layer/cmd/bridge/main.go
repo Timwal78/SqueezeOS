@@ -587,6 +587,17 @@ func main() {
 		})
 	}
 
+	// ── WELL-KNOWN DISCOVERY FILES ───────────────────────────────────────────
+	r.Get("/.well-known/mcp.json", func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		http.ServeFile(w, req, "./public/.well-known/mcp.json")
+	})
+	r.Get("/.well-known/server.json", func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		http.ServeFile(w, req, "./public/.well-known/server.json")
+	})
+
+
 	// ── STATIC FRONTEND (Three.js terminal) ──────────────────────────────────
 	fs := http.FileServer(http.Dir("./public"))
 	r.Handle("/*", fs)
