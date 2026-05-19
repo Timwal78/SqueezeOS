@@ -44,7 +44,7 @@ from apscheduler.triggers.cron import CronTrigger
 # ── XRPL ──────────────────────────────────────────────────────────────────────
 from xrpl.wallet import Wallet
 from xrpl.clients import JsonRpcClient
-from xrpl.models.transactions import Payment, Memo, MemoWrapper
+from xrpl.models.transactions import Payment, Memo
 from xrpl.models.amounts import IssuedCurrencyAmount
 from xrpl.transaction import submit_and_wait
 
@@ -127,7 +127,7 @@ def pay_invoice(invoice: dict) -> str:
             issuer   = RLUSD_ISSUER,
             value    = amount_str,
         ),
-        memos = [MemoWrapper(memo=Memo(memo_data=memo_hex))],
+        memos = [Memo(memo_data=memo_hex)],
         fee   = "12",
     )
 
