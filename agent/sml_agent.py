@@ -57,11 +57,12 @@ logger = logging.getLogger("SML-Agent")
 # ── Config ────────────────────────────────────────────────────────────────────
 SQUEEZEOS   = os.environ.get("SQUEEZEOS_BASE_URL",  "https://lively-fascination-production-41fa.up.railway.app")
 PROOF402    = os.environ.get("PROOF402_BASE_URL",   "https://four02proof.onrender.com")
-XRPL_RPC    = os.environ.get("XRPL_RPC_URL",        "https://xrplcluster.com")
-AGENT_SEED  = os.environ.get("AGENT_XRPL_SEED",     "")
-AGENT_ADDR  = os.environ.get("AGENT_XRPL_ADDRESS",  "")
-AGENT_DOM   = os.environ.get("AGENT_DOMAIN",        "agent.scriptmasterlabs.com")
-ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+XRPL_RPC      = os.environ.get("XRPL_RPC_URL",          "https://xrplcluster.com")
+AGENT_SEED    = os.environ.get("AGENT_XRPL_SEED",       "")
+AGENT_ADDR    = os.environ.get("AGENT_XRPL_ADDRESS",    "")
+AGENT_DOM     = os.environ.get("AGENT_DOMAIN",          "agent.scriptmasterlabs.com")
+ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY",     "")
+DISCORD_WEBHOOK = os.environ.get("DISCORD_WEBHOOK_URL", "")
 BRIEF_PRICE = float(os.environ.get("BRIEF_PRICE_RLUSD", "0.01"))
 BRIEF_TTL   = int(os.environ.get("BRIEF_TTL_HOURS", "6"))
 RUN_ONCE    = os.environ.get("RUN_ONCE", "false").lower() == "true"
@@ -475,6 +476,90 @@ def trigger_pending_settlements():
         logger.warning(f"[AGENT] Settlement scan failed: {e}")
 
 
+# ── Discord webhook ───────────────────────────────────────────────────────────
+
+_BIAS_COLOR = {"BULLISH": 0x00C851, "BEARISH": 0xFF4444, "NEUTRAL": 0xFFBB33}
+_GRADE_EMOJI = {"A": "🟢", "B": "🟡", "C": "🟠", "STAND_ASIDE": "🔴"}
+_REGIME_EMOJI = {
+    "EXECUTION": "⚡", "STEALTH": "👻",
+    "CONFLICT":  "⚠️", "COLLAPSE": "💀",
+}
+
+def push_discord(brief: dict, listing_id: Optional[str]):
+    if not DISCORD_WEBHOOK:
+        return
+
+    bias      = brief.get("master_bias", "NEUTRAL")
+    regime    = brief.get("regime", "")
+    conf      = brief.get("confidence", 0)
+    grade     = brief.get("conviction_grade", "C")
+    alignment = brief.get("engine_alignment", "")
+    conflicts = brief.get("conflict_flags", [])
+    actionable = brief.get("actionable", "")
+    picks     = brief.get("top_picks", [])
+    levels    = brief.get("key_levels", {})
+    color     = _BIAS_COLOR.get(bias, 0x888888)
+    g_emoji   = _GRADE_EMOJI.get(grade, "⚪")
+    r_emoji   = _REGIME_EMOJI.get(regime, "")
+    session   = brief.get("session", "")
+
+    # Top picks field
+    picks_lines = []
+    for p in (picks if isinstance(picks, list) else []):
+        if isinstance(p, dict):
+            pg = _GRADE_EMOJI.get(p.get("grade",""), "")
+            picks_lines.append(f"{pg} **{p.get('symbol','')}** {p.get('bias','')} — {p.get('reason','')}")
+        else:
+            picks_lines.append(f"• {p}")
+    picks_str = "\n".join(picks_lines) if picks_lines else "None"
+
+    # Conflict field
+    conflict_str = "\n".join(f"⚠️ {c}" for c in conflicts) if conflicts else "✅ None"
+
+    # Key levels
+    support    = levels.get("IWM_support", 0)
+    resistance = levels.get("IWM_resistance", 0)
+    levels_str = f"Support: **{support}** | Resistance: **{resistance}**" if support else "0DTE data unavailable"
+
+    fields = [
+        {"name": f"{r_emoji} Regime",          "value": regime,       "inline": True},
+        {"name": "📊 Confidence",               "value": f"{conf}",    "inline": True},
+        {"name": "🔗 Engine Alignment",         "value": alignment,    "inline": True},
+        {"name": "📈 Top Picks",                "value": picks_str,    "inline": False},
+        {"name": "🎯 Key Levels (IWM)",         "value": levels_str,   "inline": False},
+        {"name": "⚡ Actionable",               "value": actionable,   "inline": False},
+        {"name": "⚠️ Conflict Flags",           "value": conflict_str, "inline": False},
+    ]
+    if listing_id:
+        fields.append({
+            "name":  "🛒 Marketplace",
+            "value": f"[Read full thesis]({SQUEEZEOS}/api/marketplace/preview/{listing_id})",
+            "inline": False,
+        })
+
+    embed = {
+        "title":       f"{g_emoji} SML Agent — {bias} | {session}",
+        "description": brief.get("market_thesis", ""),
+        "color":       color,
+        "fields":      fields,
+        "footer":      {"text": f"Script Master Labs • {brief.get('title','')[:60]}"},
+        "timestamp":   datetime.now(timezone.utc).isoformat(),
+    }
+
+    try:
+        resp = requests.post(
+            DISCORD_WEBHOOK,
+            json={"embeds": [embed]},
+            timeout=10,
+        )
+        if resp.ok:
+            logger.info(f"[DISCORD] Brief posted — {bias} {grade} conf={conf}")
+        else:
+            logger.warning(f"[DISCORD] Post failed: {resp.status_code} {resp.text[:100]}")
+    except Exception as e:
+        logger.warning(f"[DISCORD] Failed: {e}")
+
+
 # ── Push to webhooks ──────────────────────────────────────────────────────────
 
 def push_to_webhooks(brief: dict, listing_id: Optional[str]):
@@ -531,6 +616,7 @@ def run_cycle():
         listing_id = list_brief(brief)
         post_futures_position(brief)
         trigger_pending_settlements()
+        push_discord(brief, listing_id)
         push_to_webhooks(brief, listing_id)
         log_passport()
 
