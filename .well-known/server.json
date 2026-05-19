@@ -1,0 +1,53 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "com.scriptmasterlabs/squeezeos",
+  "title": "SqueezeOS — Institutional AI Market Intelligence",
+  "description": "Institutional-grade AI trading intelligence for autonomous agents. Squeeze scanner, options flow, IWM 0DTE analysis, AI council verdicts, peer signal marketplace, and Agent Credit Bureau. All premium endpoints gated by x402 RLUSD micropayment on XRP Ledger via 402Proof. 16 MCP tools including free demo and preview endpoints.",
+  "version": "3.0.0",
+  "websiteUrl": "https://www.scriptmasterlabs.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/timwal78/squeezeos"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://lively-fascination-production-41fa.up.railway.app/mcp"
+    }
+  ],
+  "capabilities": {
+    "tools": true,
+    "resources": false,
+    "prompts": false,
+    "sampling": false
+  },
+  "tags": [
+    "finance",
+    "trading",
+    "market-intelligence",
+    "options-flow",
+    "squeeze-scanner",
+    "xrpl",
+    "rlusd",
+    "x402",
+    "micropayment",
+    "agent-economy",
+    "mcp-paywall"
+  ],
+  "payment": {
+    "protocol": "x402",
+    "asset": "RLUSD",
+    "network": "XRPL",
+    "gateway": "https://four02proof.onrender.com",
+    "free_tools": ["demo_council", "signal_preview", "signal_history", "system_status"]
+  },
+  "_meta": {
+    "io.modelcontextprotocol.registry/publisher-provided": {
+      "operator": "Script Master Labs",
+      "contact": "https://www.scriptmasterlabs.com",
+      "payment_protocol": "x402",
+      "free_demo": "https://lively-fascination-production-41fa.up.railway.app/api/demo/council",
+      "llms_txt": "https://lively-fascination-production-41fa.up.railway.app/llms.txt"
+    }
+  }
+}

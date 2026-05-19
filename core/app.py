@@ -100,6 +100,7 @@ def create_app():
     _DISCOVERY_PATHS = frozenset({
         '/llms.txt', '/openapi.json', '/robots.txt',
         '/.well-known/mcp.json', '/.well-known/openapi.json', '/.well-known/ai-plugin.json',
+        '/.well-known/server.json', '/.well-known/agents.json',
     })
 
     def _broadcast_sse(event: dict):
@@ -179,6 +180,13 @@ def create_app():
     def serve_agents():
         return send_from_directory(
             os.path.join(app.static_folder, '.well-known'), 'agents.json',
+            mimetype='application/json'
+        )
+
+    @app.route('/.well-known/server.json')
+    def serve_server_json():
+        return send_from_directory(
+            os.path.join(app.static_folder, '.well-known'), 'server.json',
             mimetype='application/json'
         )
 

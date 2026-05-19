@@ -10,6 +10,13 @@ Allow: /.well-known/
 Allow: /.well-known/openapi.json
 Allow: /.well-known/ai-plugin.json
 Allow: /.well-known/mcp.json
+Allow: /.well-known/server.json
+Allow: /.well-known/agents.json
+Allow: /mcp
+Allow: /api/demo
+Allow: /api/demo/council
+Allow: /api/preview
+Allow: /api/status
 
 # Block app routes — only Flask can serve these, not static files
 Disallow: /api/
