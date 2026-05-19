@@ -341,6 +341,67 @@ def list_brief(brief: dict) -> Optional[str]:
     logger.info(f"[AGENT] Listed on marketplace: {listing_id} — {symbol} {brief.get('master_bias')}")
     return listing_id
 
+# ── Open Signal Futures position ─────────────────────────────────────────────
+
+def post_futures_position(brief: dict) -> Optional[str]:
+    """Agent opens a Signal Futures position staking on its own IWM prediction."""
+    if not AGENT_ADDR:
+        return None
+    bias = brief.get("master_bias", "").upper()
+    if bias not in {"BULLISH", "BEARISH", "NEUTRAL"}:
+        return None
+    session = brief.get("session", "ANY").upper()
+    if session not in {"PRE_MARKET", "OPEN", "MIDDAY", "POWER_HOUR", "CLOSE", "ANY"}:
+        session = "ANY"
+    try:
+        resp = requests.post(
+            f"{SQUEEZEOS}/api/futures/create",
+            json={
+                "creator_wallet": AGENT_ADDR,
+                "symbol":         "IWM",
+                "predicted_bias": bias,
+                "session":        session,
+                "stake_rlusd":    0.01,
+                "note":           f"SML Agent: conf={brief.get('confidence', 0)} regime={brief.get('regime', '')}",
+            },
+            timeout=10,
+        )
+        if resp.ok:
+            future_id = resp.json().get("future_id")
+            logger.info(f"[AGENT] Futures position opened: {future_id[:8]}… IWM {bias}")
+            return future_id
+    except Exception as e:
+        logger.warning(f"[AGENT] Futures position failed: {e}")
+    return None
+
+
+# ── Trigger pending settlement contracts ──────────────────────────────────────
+
+def trigger_pending_settlements():
+    """Scan open settlement contracts and trigger any that may now be met."""
+    try:
+        resp = requests.get(f"{SQUEEZEOS}/api/settlement", params={"status": "OPEN", "limit": 50}, timeout=10)
+        if not resp.ok:
+            return
+        contracts = resp.json().get("contracts", [])
+        triggered = 0
+        for c in contracts:
+            cid = c.get("id")
+            if not cid:
+                continue
+            try:
+                t = requests.post(f"{SQUEEZEOS}/api/settlement/trigger/{cid}", timeout=10)
+                if t.ok and t.json().get("status") == "settled":
+                    triggered += 1
+                    logger.info(f"[AGENT] Settlement triggered: {cid[:8]}…")
+            except Exception:
+                pass
+        if triggered:
+            logger.info(f"[AGENT] Triggered {triggered} settlement contracts")
+    except Exception as e:
+        logger.warning(f"[AGENT] Settlement scan failed: {e}")
+
+
 # ── Push to webhooks ──────────────────────────────────────────────────────────
 
 def push_to_webhooks(brief: dict, listing_id: Optional[str]):
@@ -395,6 +456,8 @@ def run_cycle():
         data       = collect_market_data()
         brief      = synthesize_brief(data)
         listing_id = list_brief(brief)
+        post_futures_position(brief)
+        trigger_pending_settlements()
         push_to_webhooks(brief, listing_id)
         log_passport()
 
