@@ -27,6 +27,17 @@ def record(symbol: str, event_type: str, data: dict):
         _buffers[sym].appendleft(entry)
         _global.appendleft(entry)
 
+    # Auto-settle Signal Futures when a council verdict is recorded
+    if event_type == "COUNCIL_VERDICT":
+        bias       = data.get("bias", "").upper()
+        confidence = int(data.get("confidence", 0))
+        if bias:
+            try:
+                from core.api.futures_bp import auto_settle_for_symbol
+                auto_settle_for_symbol(sym, bias, confidence, entry)
+            except Exception:
+                pass
+
 
 def get_history(symbol: str, limit: int = 50) -> list:
     with _lock:

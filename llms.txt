@@ -74,6 +74,31 @@ World's first AI agent reputation layer. 300-850 score. Components: payment volu
 ### Ghost Layer — Dark Bridge
 Cross-chain payment routing that doesn't reveal execution intent to market makers. RLUSD (XRPL) + USDC (Base) + XAH (Xahau). Transparent toll split. No custody.
 
+### Conditional Settlement — Agent-to-Agent Escrow
+Creator locks intent: "I'll pay X RLUSD to Agent B IF condition Y is met." Conditions: bias_match, confidence_above, price_above, price_below, time_elapsed. Zero custody — SqueezeOS tracks and proves, wallets settle direct. 1% platform fee on settlement.
+
+```
+POST /api/settlement/create          — create conditional contract
+GET  /api/settlement                 — browse open contracts
+GET  /api/settlement/<id>            — contract status + condition check
+POST /api/settlement/trigger/<id>    — check condition + settle if met
+POST /api/settlement/cancel/<id>     — cancel (creator only)
+GET  /api/settlement/wallet/<wallet> — all contracts for wallet
+```
+
+### Signal Futures Market — Prediction Market on AI Signals
+World's first prediction market layered on AI council verdicts. Stake RLUSD on what the NEXT verdict will be. Taker bets opposite. When verdict publishes → auto-settle. Winner takes 95% of pot. 5% platform fee.
+
+```
+POST /api/futures/create             — open position (predict + stake)
+POST /api/futures/take/<id>          — take the opposite side
+GET  /api/futures                    — browse open futures
+GET  /api/futures/<id>               — specific future detail
+POST /api/futures/settle/<id>        — force-settle against latest verdict
+GET  /api/futures/leaderboard        — top predictors by win rate
+GET  /api/futures/wallet/<wallet>    — wallet's full history
+```
+
 ### Loyalty Program — Automatic, No Registration
 Spend RLUSD → climb tiers → earn free calls:
 

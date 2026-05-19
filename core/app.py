@@ -23,6 +23,8 @@ from core.api.marketplace_bp import marketplace_bp
 from core.api.hiring_bp import hiring_bp
 from core.api.mcp_bp import mcp_bp
 from core.api.honeypot import honeypot_bp, honeypot_before_request
+from core.api.settlement_bp import settlement_bp
+from core.api.futures_bp import futures_bp
 import core.signal_history as signal_history
 from core.legacy import start_whale_stalker, init_services, get_service, clean_data
 from core.market_graph import get_graph
@@ -64,6 +66,8 @@ def create_app():
     app.register_blueprint(marketplace_bp, url_prefix='/api/marketplace')
     app.register_blueprint(hiring_bp,     url_prefix='/api/hiring')
     app.register_blueprint(mcp_bp,        url_prefix='/mcp')
+    app.register_blueprint(settlement_bp, url_prefix='/api/settlement')
+    app.register_blueprint(futures_bp,    url_prefix='/api/futures')
     app.register_blueprint(v2_bp, url_prefix='/api')
     app.register_blueprint(v2_bp, url_prefix='/api/v1', name='v2_bridge_v1')
     
@@ -115,6 +119,10 @@ def create_app():
                 sse_queues.remove(q)
             except ValueError:
                 pass
+
+    # Global broadcast accessible by blueprints (settlement, futures)
+    import core.app as _self_module
+    _self_module._broadcast_sse_global = _broadcast_sse
 
     @app.after_request
     def broadcast_agent_signals(response):
