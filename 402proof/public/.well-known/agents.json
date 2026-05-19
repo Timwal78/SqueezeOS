@@ -1,17 +1,45 @@
 {
   "schema_version": "1.0",
-  "name": "402Proof Payment Firewall",
-  "description": "x402 payment compliance firewall. Issues XRPL RLUSD invoices, verifies transactions, returns wallet-bound tokens with Agent Passport loyalty system.",
+  "name": "402Proof — x402 Payment Compliance Firewall",
+  "description": "x402/HTTP 402 compliant payment settlement server for autonomous AI agents. Issue RLUSD and XAH invoices, verify transactions, receive wallet-bound access tokens. Agent Passport identity system with Bronze/Silver/Gold/Platinum/Diamond loyalty tiers. Agent Credit Bureau with FICO-style 300-850 score. Zero API keys required.",
   "url": "https://four02proof.onrender.com",
+  "homepage": "https://www.scriptmasterlabs.com",
   "payment_required": false,
+  "payment_protocol": "x402",
+  "payment_assets": ["RLUSD/XRPL", "XAH/Xahau"],
   "specs": {
     "openapi": "https://four02proof.onrender.com/.well-known/openapi.json",
     "mcp": "https://four02proof.onrender.com/.well-known/mcp.json",
+    "server_json": "https://four02proof.onrender.com/.well-known/server.json",
     "llms_txt": "https://four02proof.onrender.com/llms.txt"
   },
-  "capabilities": [
-    {"id": "invoice", "name": "Issue Invoice", "cost": "free", "endpoint": "/v1/invoice"},
-    {"id": "verify", "name": "Verify Payment", "cost": "free", "endpoint": "/v1/verify"},
-    {"id": "passport", "name": "Agent Passport", "cost": "free", "endpoint": "/v1/agent/{wallet}"}
-  ]
+  "mcp_endpoint": "https://four02proof.onrender.com/mcp",
+  "tools": [
+    {"name": "get_invoice", "cost": "free"},
+    {"name": "verify_payment", "cost": "free"},
+    {"name": "check_loyalty", "cost": "free"},
+    {"name": "get_compliance_receipt", "cost": "free"},
+    {"name": "platform_stats", "cost": "free"},
+    {"name": "get_agent_passport", "cost": "free"},
+    {"name": "bureau_public_score", "cost": "free"},
+    {"name": "bureau_full_report", "cost": "0.01 RLUSD"},
+    {"name": "bureau_verify_threshold", "cost": "0.005 RLUSD"},
+    {"name": "bureau_get_attestation", "cost": "0.01 RLUSD"},
+    {"name": "bureau_verify_attestation", "cost": "free"}
+  ],
+  "networks": {
+    "xrpl": {"rpc": "https://xrplcluster.com", "currency": "RLUSD", "issuer": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De"},
+    "xahau": {"rpc": "https://xahau.network", "currency": "XAH", "native": true, "hooks_enabled": true}
+  },
+  "loyalty_tiers": [
+    {"tier": "Bronze", "min_rlusd": "0.00", "discount": "0%"},
+    {"tier": "Silver", "min_rlusd": "1.00", "discount": "5%"},
+    {"tier": "Gold", "min_rlusd": "5.00", "discount": "10%"},
+    {"tier": "Platinum", "min_rlusd": "20.00", "discount": "20%"},
+    {"tier": "Diamond", "min_rlusd": "50.00", "discount": "30%"}
+  ],
+  "related_services": {
+    "squeezeos": "https://lively-fascination-production-41fa.up.railway.app/.well-known/agents.json",
+    "ghost_layer": "https://ghost-layer.onrender.com/.well-known/agents.json"
+  }
 }
