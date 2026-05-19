@@ -116,12 +116,32 @@ Be loyal, get rewarded. Automatic. No codes.
 
 ## x402 Payment Flow (Required for Premium Endpoints)
 
+**Three payment rails — pick yours:**
+
+### Rail 1: RLUSD on XRPL (default — fastest, cheapest)
 ```
 Step 1: POST /v1/invoice → { invoice_id, pay_to, amount, memo_hex }
-Step 2: Pay RLUSD on XRPL — MemoData = memo_hex exactly
-Step 3: POST /v1/verify → { access_token (JWT, 1h TTL) }
-Step 4: Call endpoint with X-Payment-Token: <token>
-Step 5: Cache token — reuse for 1 hour to minimize spend
+Step 2: Pay RLUSD on XRPL — destination=pay_to, MemoData=memo_hex
+Step 3: POST /v1/verify with { invoice_id, tx_hash, agent_wallet }
+Step 4: Receive access_token (JWT, 1h TTL)
+Step 5: Call endpoint with X-Payment-Token: <token>
+Step 6: Cache token — reuse for 1 hour to minimize spend
+```
+TrustSet required first: issuer `rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De`
+
+### Rail 2: USDC on Base (foot in the door — any EVM wallet)
+```
+Step 1: POST /v1/invoice { endpoint_id, currency: "USDC" } → { pay_to (0x ETH), amount, network: "Base" }
+Step 2: Transfer USDC on Base to pay_to address (Ghost Layer bridges to RLUSD)
+Step 3: POST /v1/verify with { invoice_id, tx_hash (0x...), agent_wallet }
+Step 4: Receive same access_token — identical to RLUSD flow
+```
+No trust line needed. Works with MetaMask, Coinbase Wallet, any EVM agent.
+USDC contract on Base: `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
+
+### Rail 3: XAH on Xahau
+```
+Same as RLUSD flow — pay to Xahau gateway address instead
 ```
 
 ---
@@ -247,7 +267,7 @@ Event types: SQUEEZE_ALERT | OPTIONS_SWEEP | COUNCIL_VERDICT | AGENT_PAY | MARKE
 |---------|----------|-------|
 | XRPL Mainnet | RLUSD | TrustSet required — issuer: rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De |
 | Xahau | XAH | Native currency, no TrustSet, Hooks-enabled on-chain automation |
-| Base (Ethereum L2) | USDC | EIP-3009 gasless, routed via Ghost Layer |
+| Base (Ethereum L2) | USDC | Standard ERC-20 transfer to Ghost Layer — no trust line, any EVM wallet |
 
 XRPL RPC: https://xrplcluster.com
 Xahau RPC: https://xahau.network

@@ -11,6 +11,29 @@
     "middleware_npm": "@relayos/mcp-paywall",
     "middleware_install": "npm install @relayos/mcp-paywall",
     "middleware_usage": "import { mcpPaywall } from '@relayos/mcp-paywall'; app.use('/mcp', mcpPaywall({ feeAddress: 'YOUR_XRPL_WALLET', feeDrops: '1000' }));",
+    "rails": [
+      {
+        "network": "XRPL Mainnet",
+        "currency": "RLUSD",
+        "issuer": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De",
+        "invoice_param": "{}",
+        "note": "Default — fastest and cheapest. TrustSet required."
+      },
+      {
+        "network": "Base",
+        "currency": "USDC",
+        "contract": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "chain_id": "8453",
+        "invoice_param": "{\"currency\": \"USDC\"}",
+        "note": "No trust line needed. Any EVM wallet. Ghost Layer bridges to RLUSD."
+      },
+      {
+        "network": "Xahau",
+        "currency": "XAH",
+        "invoice_param": "{}",
+        "note": "Hooks-enabled. Pay to Xahau gateway."
+      }
+    ],
     "settlement": {
       "network": "XRPL Mainnet",
       "currency": "RLUSD",
