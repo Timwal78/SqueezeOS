@@ -1,0 +1,41 @@
+name: SML Agent — Market Intelligence
+
+on:
+  schedule:
+    - cron: '45 13 * * 1-5'   # 08:45 ET (UTC-5) pre-market
+    - cron: '35 14 * * 1-5'   # 09:35 ET open
+    - cron: '0 17 * * 1-5'    # 12:00 ET midday
+    - cron: '0 20 * * 1-5'    # 15:00 ET power hour
+    - cron: '15 21 * * 1-5'   # 16:15 ET close
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Manual trigger reason'
+        required: false
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r agent/requirements.txt
+
+      - name: Run agent cycle
+        env:
+          AGENT_XRPL_SEED:     ${{ secrets.AGENT_XRPL_SEED }}
+          AGENT_XRPL_ADDRESS:  ${{ secrets.AGENT_XRPL_ADDRESS }}
+          ANTHROPIC_API_KEY:   ${{ secrets.ANTHROPIC_API_KEY }}
+          AGENT_DOMAIN:        agent.scriptmasterlabs.com
+          SQUEEZEOS_BASE_URL:  https://lively-fascination-production-41fa.up.railway.app
+          PROOF402_BASE_URL:   https://four02proof.onrender.com
+          BRIEF_PRICE_RLUSD:   "0.01"
+          BRIEF_TTL_HOURS:     "6"
+          RUN_ONCE:            "true"
+        run: python agent/sml_agent.py

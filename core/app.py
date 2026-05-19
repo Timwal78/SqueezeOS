@@ -200,6 +200,16 @@ def create_app():
         """Root-level telemetry bridge (legacy support)."""
         return redirect('/api/left-wing/telemetry', code=307)
 
+    @app.route('/api/events/push', methods=['POST'])
+    def push_event():
+        """Agent broadcast endpoint — pushes an event to all SSE + webhook subscribers."""
+        event = request.get_json(silent=True) or {}
+        if not event.get("type"):
+            return jsonify({"error": "type required"}), 400
+        event["ts"] = event.get("ts") or time.time()
+        _broadcast_sse(event)
+        return jsonify({"status": "pushed", "type": event["type"], "ts": event["ts"]})
+
     @app.route('/api/events')
     def sse_events():
         """Unified SSE stream for institutional alerts."""
