@@ -60,6 +60,37 @@ func (c *XahauClient) MintURIToken(uri string, hookParams []URITokenHookParam, m
 	return txHash, nil
 }
 
+// xahauSubmit is a Xahau-aware submit that handles both standard engine_result
+// responses and the error-object format Xahau returns for RPC-level rejections.
+func (c *XahauClient) xahauSubmit(txHex string) (string, error) {
+	result, err := c.call("submit", map[string]interface{}{"tx_blob": txHex})
+	if err != nil {
+		return "", err
+	}
+	var res struct {
+		EngineResult        string `json:"engine_result"`
+		EngineResultMessage string `json:"engine_result_message"`
+		// Xahau also surfaces errors at the RPC level with these fields
+		Error        string `json:"error"`
+		ErrorMessage string `json:"error_message"`
+		Status       string `json:"status"`
+		TxJSON       struct {
+			Hash string `json:"hash"`
+		} `json:"tx_json"`
+	}
+	if err := json.Unmarshal(result, &res); err != nil {
+		return "", fmt.Errorf("parse submit response: %w (raw: %s)", err, string(result))
+	}
+	// RPC-level error (account not found, malformed, etc.)
+	if res.Status == "error" || (res.Error != "" && res.EngineResult == "") {
+		return "", fmt.Errorf("Xahau RPC error: %s — %s", res.Error, res.ErrorMessage)
+	}
+	if !strings.HasPrefix(res.EngineResult, "tes") {
+		return "", fmt.Errorf("Xahau rejected: %s — %s (raw: %s)", res.EngineResult, res.EngineResultMessage, string(result))
+	}
+	return res.TxJSON.Hash, nil
+}
+
 // fetchCurrentLedger returns the current ledger index, or 0 on failure.
 // Used to set LastLedgerSequence = current + 10, giving the tx ~30s to land.
 func (c *XahauClient) fetchCurrentLedger() uint32 {
@@ -105,7 +136,7 @@ func (c *XahauClient) buildSignSubmitMint(
 	derSig := derEncodeSignature(compact[:64])
 
 	txBlob := buildURITokenMintTx(seq, currentLedger, feeDrops, c.pubKey, derSig, srcAcct, uriBytes, hookParams, memoJSON, false)
-	return c.submit(strings.ToUpper(hex.EncodeToString(txBlob)))
+	return c.xahauSubmit(strings.ToUpper(hex.EncodeToString(txBlob)))
 }
 
 // buildURITokenMintTx serialises a Xahau URITokenMint in canonical XRPL binary.
