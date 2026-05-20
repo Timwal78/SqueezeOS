@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Ghost Layer API",
-    "version": "2.0.0",
-    "description": "Dual-chain transparent toll gateway operated by Script Master Labs. Bridge RLUSD (XRPL) and USDC (Base/EVM) for autonomous AI agent micropayments with full compliance receipts.",
+    "version": "2.1.0",
+    "description": "Dual-chain transparent toll gateway + on-chain Execution Matrix operated by Script Master Labs. Bridge RLUSD (XRPL) and USDC (Base/EVM) for autonomous AI agent micropayments. Mint 54-block programmable routing state (LIQUIDITY, PRIVACY, SPEED, POOL, HOOKS, BASE) as URIToken on Xahau with server-side validation and Hook parameter encoding.",
     "contact": {
       "name": "Script Master Labs",
       "url": "https://www.scriptmasterlabs.com",
@@ -121,6 +121,54 @@
         }
       }
     },
+    "/api/cube/state": {
+      "post": {
+        "operationId": "mintCubeState",
+        "summary": "Mint Execution Matrix state as URIToken on Xahau",
+        "description": "Submit the full 54-block Execution Matrix payload. Server validates all 6 face centers via center=clamp(weighted_sum(edges)×coefficient(corners), min, max), verifies the CUBE-XXXXXXXX djb2 hash, then submits a URITokenMint (tx type 45) to Xahau with 6 HookParameters (face centers as hex name + 4-digit hex value) and a CUBE_STATE memo (MemoFormat=application/json). Fires XAHAU_MINT_CONFIRMED SSE on success. View result at https://xahauexplorer.com/tx/<xahau_tx_hash>.",
+        "tags": ["Execution Matrix"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["cube_hash", "faces"],
+                "properties": {
+                  "cube_hash": {
+                    "type": "string",
+                    "example": "CUBE-A3F2B1C4",
+                    "description": "Deterministic djb2 hash of the 54-block state, format CUBE-XXXXXXXX"
+                  },
+                  "faces": {
+                    "type": "object",
+                    "description": "6 face objects keyed px/nx/py/ny/pz/nz",
+                    "additionalProperties": {
+                      "$ref": "#/components/schemas/FaceState"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "URIToken minted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CubeMintResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Face center validation failed or hash mismatch"
+          }
+        }
+      }
+    },
     "/api/ghost/audit": {
       "get": {
         "operationId": "getAuditStats",
@@ -194,6 +242,36 @@
           "agent_wallet": {"type": "string"},
           "risk_score": {"type": "integer", "minimum": 0, "maximum": 100},
           "timestamp": {"type": "string", "format": "date-time"}
+        }
+      },
+      "FaceState": {
+        "type": "object",
+        "required": ["center", "edges", "corners"],
+        "properties": {
+          "center": {"type": "integer", "description": "Computed center (server re-validates — must match equation)"},
+          "edges": {"type": "array", "items": {"type": "integer"}, "minItems": 4, "maxItems": 4, "description": "4 direct modifier inputs"},
+          "corners": {"type": "array", "items": {"type": "number", "minimum": 0, "maximum": 2}, "minItems": 4, "maxItems": 4, "description": "4 weighting coefficients (0.0–2.0)"}
+        }
+      },
+      "CubeMintResult": {
+        "type": "object",
+        "properties": {
+          "xahau_tx_hash": {"type": "string", "description": "Xahau transaction hash for the URITokenMint"},
+          "cube_hash": {"type": "string", "description": "Verified CUBE-XXXXXXXX state hash"},
+          "uri_token_id": {"type": "string", "description": "Xahau URIToken ID"},
+          "face_centers": {
+            "type": "object",
+            "description": "Validated face center values encoded as HookParameters",
+            "properties": {
+              "px": {"type": "integer"},
+              "nx": {"type": "integer"},
+              "py": {"type": "integer"},
+              "ny": {"type": "integer"},
+              "pz": {"type": "integer"},
+              "nz": {"type": "integer"}
+            }
+          },
+          "explorer_url": {"type": "string", "example": "https://xahauexplorer.com/tx/<hash>"}
         }
       },
       "AuditStats": {

@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
-  "name": "Ghost Layer — Dual-Chain Toll Gateway",
-  "description": "Neutral bridge between XRPL native RLUSD payments and Base/EVM gasless USDC authorization (EIP-3009). XAH/Xahau support. Enables autonomous AI agents to transact across XRPL, Base, and Xahau with a single unified settlement flow. Every bridge event immutably logged. Zero custody.",
+  "name": "Ghost Layer — Dual-Chain Toll Gateway + Execution Matrix",
+  "description": "Neutral bridge between XRPL RLUSD and Base/EVM USDC (EIP-3009) + 54-block on-chain Execution Matrix. Six programmable routing faces (LIQUIDITY, PRIVACY, SPEED, POOL, HOOKS, BASE) with weighted sub-parameter grids. Canonical state hash minted as URIToken on Xahau via URITokenMint (tx type 45) with HookParameters encoding each face center. Server validates all face equations before submission. XAHAU_MINT_CONFIRMED SSE event broadcast on success. Zero custody.",
   "url": "https://ghost-layer.onrender.com",
   "homepage": "https://www.scriptmasterlabs.com",
   "payment_required": true,
@@ -18,8 +18,10 @@
   "tools": [
     {"name": "ghost_bridge_health", "cost": "free"},
     {"name": "ghost_layer_bridge", "cost": "variable"},
-    {"name": "ghost_audit_stats", "cost": "free"}
+    {"name": "ghost_audit_stats", "cost": "free"},
+    {"name": "cube_state_mint", "cost": "free", "description": "Mint 54-block Execution Matrix state as URIToken on Xahau. POST /api/cube/state"}
   ],
+  "sse_events": ["BRIDGE_SETTLED", "XAHAU_MINT_CONFIRMED", "AGENT_PROBE", "AGENT_PAY"],
   "networks": {
     "xrpl": {"rpc": "https://xrplcluster.com", "currency": "RLUSD", "issuer": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De"},
     "base": {"currency": "USDC", "contract": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"},

@@ -235,11 +235,18 @@ Bureau Endpoint IDs:
 ## Ghost Layer API — Base: `https://ghost-layer.onrender.com`
 
 ```
-POST /v1/bridge/execute   — cross-chain bridge payment
-POST /v1/matrix/mint      — mint 54-block state hash as URIToken on Xahau
-GET  /v1/matrix/state     — current execution matrix state (54 values)
+POST /v1/bridge/execute   — cross-chain bridge payment (RLUSD/XRPL or USDC/Base)
+POST /api/cube/state      — mint 54-block Execution Matrix state as URIToken on Xahau
+                            validates all face centers server-side, verifies CUBE-XXXXXXXX hash,
+                            returns xahau_tx_hash + fires XAHAU_MINT_CONFIRMED SSE
 GET  /health              — XRPL + Base + Xahau status
-GET  /                    — live Execution Matrix terminal (Three.js)
+GET  /api/events          — SSE stream (BRIDGE_SETTLED, XAHAU_MINT_CONFIRMED, AGENT_PROBE, ...)
+GET  /                    — live Execution Matrix terminal (Three.js, 54-block interactive cube)
+```
+
+SSE event `XAHAU_MINT_CONFIRMED` payload:
+```json
+{ "type": "XAHAU_MINT_CONFIRMED", "xahau_tx_hash": "...", "cube_hash": "CUBE-XXXXXXXX", "face_centers": { "px": 87, "nx": 64, "py": 71, "ny": 55, "pz": 90, "nz": 48 } }
 ```
 
 ---
