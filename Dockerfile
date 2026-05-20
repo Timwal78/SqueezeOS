@@ -12,4 +12,4 @@ RUN pip install --prefer-binary --no-cache-dir -r requirements.txt
 
 COPY . .
 EXPOSE 8182
-CMD ["python", "core/app.py"]
+CMD ["python", "-m", "core.app"]
