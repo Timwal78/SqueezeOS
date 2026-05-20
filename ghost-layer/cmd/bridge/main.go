@@ -80,9 +80,11 @@ func verifyPaymentToken(token, endpointID, secret string) error {
 }
 
 // fetchCubeMintInvoice requests a fresh payment invoice from 402Proof.
+// Uses a 8s timeout so a cold-start Render service doesn't hang the mint handler.
 func fetchCubeMintInvoice() (map[string]interface{}, error) {
 	body, _ := json.Marshal(map[string]string{"endpoint_id": cubeMintEndpointID})
-	resp, err := http.Post(proof402BaseURL+"/v1/invoice", "application/json", bytes.NewReader(body))
+	client := &http.Client{Timeout: 8 * time.Second}
+	resp, err := client.Post(proof402BaseURL+"/v1/invoice", "application/json", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -871,18 +873,25 @@ func main() {
 			if token == "" {
 				inv, err := fetchCubeMintInvoice()
 				w.Header().Set("Content-Type", "application/json")
-				if err != nil || inv == nil {
-					log.Printf("[CUBE] invoice fetch failed: %v", err)
-					w.WriteHeader(http.StatusServiceUnavailable)
-					json.NewEncoder(w).Encode(map[string]string{"error": "payment server unavailable"})
-					return
-				}
 				w.WriteHeader(http.StatusPaymentRequired)
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"error":   "ERR_PAYMENT_REQUIRED",
-					"message": "Minting costs 0.05 RLUSD. Pay on XRPL to continue.",
-					"invoice": inv,
-				})
+				if err != nil || inv == nil {
+					// 402proof cold-starting — return 402 with instructions so UI shows overlay
+					log.Printf("[CUBE] invoice fetch failed (402proof waking up?): %v", err)
+					json.NewEncoder(w).Encode(map[string]interface{}{
+						"error":   "ERR_PAYMENT_REQUIRED",
+						"message": "Payment server is starting up. Wait 30s then try again.",
+						"invoice": map[string]interface{}{
+							"pay_to": "", "amount": "0.05", "asset": "RLUSD",
+							"memo_hex": "", "invoice_id": "",
+						},
+					})
+				} else {
+					json.NewEncoder(w).Encode(map[string]interface{}{
+						"error":   "ERR_PAYMENT_REQUIRED",
+						"message": "Minting costs 0.05 RLUSD. Pay on XRPL to continue.",
+						"invoice": inv,
+					})
+				}
 				return
 			}
 			if err := verifyPaymentToken(token, cubeMintEndpointID, proof402Secret); err != nil {

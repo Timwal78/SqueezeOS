@@ -641,10 +641,15 @@ document.getElementById('btn-mint')?.addEventListener('click', async () => {
     const data = await res.json();
 
     if (res.status === 402) {
-      // Payment required — show invoice overlay
-      if (tokenStatEl) { tokenStatEl.textContent = 'PAY 0.05 RLUSD'; tokenStatEl.style.color = '#FF8800'; }
       setState('IDLE');
-      showPayOverlay(data.invoice ?? {});
+      const inv = data.invoice ?? {};
+      if (!inv.pay_to) {
+        // 402proof still waking up — show status, no overlay needed
+        if (tokenStatEl) { tokenStatEl.textContent = data.message ?? 'PAYMENT SERVER STARTING — WAIT 30s'; tokenStatEl.style.color = '#FF8800'; }
+        return;
+      }
+      if (tokenStatEl) { tokenStatEl.textContent = 'PAY 0.05 RLUSD'; tokenStatEl.style.color = '#FF8800'; }
+      showPayOverlay(inv);
       return;
     }
 
