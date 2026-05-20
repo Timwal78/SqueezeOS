@@ -294,7 +294,7 @@ def _market_is_open() -> bool:
 
 # ── Main scan loop ────────────────────────────────────────────────────────────
 
-def _run_anomaly_scan(broadcast_fn, signal_history_module):
+def _run_anomaly_scan(broadcast_fn, signal_history_module, discord=None):
     """One full anomaly scan pass."""
     try:
         import tradier_api
@@ -349,6 +349,11 @@ def _run_anomaly_scan(broadcast_fn, signal_history_module):
                         signal_history_module.record(symbol, "OPTIONS_ANOMALY", evt)
                     except Exception:
                         pass
+                    if discord:
+                        try:
+                            discord.fire_anomaly_alert(evt)
+                        except Exception as _de:
+                            logger.warning(f"[ANOMALY] discord post failed: {_de}")
                     logger.info(
                         "[ANOMALY] %s %s %s z=%.1f | %s",
                         a.severity, a.anomaly_type, symbol, a.z_score, a.thesis[:80]
@@ -393,6 +398,8 @@ def start_anomaly_engine():
         return
 
     import core.signal_history as _sh
+    from discord_alerts import DiscordAlerts
+    _discord = DiscordAlerts()
 
     # Grab the broadcast function from the running app module
     def _get_broadcast():
@@ -410,7 +417,7 @@ def start_anomaly_engine():
                 if _market_is_open():
                     broadcast = _get_broadcast()
                     if broadcast:
-                        _run_anomaly_scan(broadcast, _sh)
+                        _run_anomaly_scan(broadcast, _sh, _discord)
                     else:
                         logger.warning("[ANOMALY] broadcast fn not ready yet")
                 else:

@@ -452,6 +452,78 @@ class DiscordAlerts:
             })
 
     # ══════════════════════════════════════════════════════════
+    # OPTIONS ANOMALY ALERTS (crime solver)
+    # ══════════════════════════════════════════════════════════
+
+    def fire_anomaly_alert(self, anomaly: dict):
+        """Post an OPTIONS_ANOMALY event to Discord."""
+        if not self.enabled:
+            return
+        url = self.webhook_all or self.webhook_flow or self.webhook_squeeze
+        if not url:
+            return
+
+        symbol   = anomaly.get("symbol", "?")
+        atype    = anomaly.get("anomaly_type", "ANOMALY")
+        severity = anomaly.get("severity", "ELEVATED")
+        z        = anomaly.get("z_score", 0.0)
+        thesis   = anomaly.get("thesis", "")
+        current  = anomaly.get("current_val", 0)
+        mean_val = anomaly.get("baseline_mean", 0)
+        supp     = anomaly.get("supporting", {})
+
+        key = f"anomaly_{symbol}_{atype}"
+        if not self._can_alert(key):
+            return
+
+        severity_colors = {
+            "CRITICAL":   0xFF0000,
+            "SUSPICIOUS": 0xFF8C00,
+            "ELEVATED":   0xFFD700,
+        }
+        severity_emoji = {
+            "CRITICAL":   "🚨",
+            "SUSPICIOUS": "⚠️",
+            "ELEVATED":   "🔍",
+        }
+        atype_emoji = {
+            "VOLUME_SURGE":   "📊",
+            "IV_SPIKE":       "🌋",
+            "IV_CRUSH":       "📉",
+            "SKEW_BREAK":     "⚡",
+            "WHALE_PRINT":    "🐋",
+            "PREMIUM_FLOOD":  "💰",
+            "OI_JUMP":        "🎯",
+        }
+        color = severity_colors.get(severity, 0x00BFFF)
+        s_emoji = severity_emoji.get(severity, "🔍")
+        a_emoji = atype_emoji.get(atype, "📡")
+
+        fields = [
+            {"name": "Anomaly",  "value": f"**{atype.replace('_', ' ')}**", "inline": True},
+            {"name": "Severity", "value": f"**{severity}**",                "inline": True},
+            {"name": "Z-Score",  "value": f"**{z:.1f}σ**",                  "inline": True},
+            {"name": "Current",  "value": f"{current:.2f}",                 "inline": True},
+            {"name": "Baseline", "value": f"{mean_val:.2f}",                "inline": True},
+        ]
+        if supp.get("size_class"):
+            fields.append({"name": "Class", "value": supp["size_class"], "inline": True})
+        if thesis:
+            fields.append({"name": "Thesis", "value": thesis[:800], "inline": False})
+
+        embed = {
+            "embeds": [{
+                "title": f"{s_emoji} {a_emoji} OPTIONS ANOMALY — {symbol}",
+                "color": color,
+                "fields": fields,
+                "footer": {"text": f"SqueezeOS Crime Solver | {datetime.now().strftime('%I:%M %p ET')}"},
+                "timestamp": datetime.utcnow().isoformat(),
+            }]
+        }
+        self._post(url, embed)
+        self._mark(key)
+
+    # ══════════════════════════════════════════════════════════
     # SYSTEM ALERTS
     # ══════════════════════════════════════════════════════════
 

@@ -122,7 +122,7 @@ def register():
                     "build_score":  "Make RLUSD payments through SqueezeOS to increase your score (~10 payments to qualify)",
                     "check_score":  f"{_BUREAU_URL}/v1/bureau/score/{wallet}",
                     "full_report":  f"{_BUREAU_URL}/v1/bureau/report/{wallet}",
-                    "standard_api": "https://lively-fascination-production-41fa.up.railway.app/api/council",
+                    "standard_api": "https://squeezeos-terminal.vercel.app/api/council",
                 },
             }), 403
     else:
