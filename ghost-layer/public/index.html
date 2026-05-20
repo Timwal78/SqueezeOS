@@ -181,6 +181,43 @@
             text-decoration: underline;
         }
 
+        /* ── Payment overlay ── */
+        #pay-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.88);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+        }
+        .pay-box {
+            background: #080810;
+            border: 1px solid #AA00FF;
+            border-radius: 8px;
+            padding: 1.4rem 1.6rem;
+            max-width: 460px;
+            width: 90%;
+            font-size: 0.7rem;
+            color: #94a3b8;
+        }
+        .pay-box h3 { color: #AA00FF; font-size: 0.8rem; margin-bottom: 0.8rem; letter-spacing: 0.1em; }
+        .pay-row { display: flex; align-items: center; gap: 6px; margin-bottom: 0.5rem; }
+        .pay-label { color: #475569; font-size: 0.6rem; letter-spacing: 0.08em; min-width: 80px; }
+        .pay-val { color: #e2e8f0; word-break: break-all; flex: 1; font-size: 0.62rem; }
+        .pay-copy { font-size: 0.55rem; color: #475569; border: 1px solid #1e1e2e; border-radius: 3px; padding: 2px 6px; cursor: pointer; background: none; white-space: nowrap; }
+        .pay-copy:hover { color: #AA00FF; border-color: #AA00FF; }
+        .pay-divider { border: none; border-top: 1px solid #1e1e2e; margin: 0.8rem 0; }
+        .pay-box input { width: 100%; background: #0d0d14; border: 1px solid #1e1e2e; border-radius: 4px; padding: 6px 8px; color: #e2e8f0; font-size: 0.65rem; font-family: 'Courier New', monospace; margin-bottom: 0.4rem; }
+        .pay-box input:focus { outline: none; border-color: #AA00FF; }
+        #pay-status { font-size: 0.65rem; min-height: 1.2rem; margin-bottom: 0.5rem; }
+        .pay-actions { display: flex; gap: 8px; margin-top: 0.6rem; }
+        .pay-btn { flex: 1; padding: 7px; border: none; border-radius: 4px; font-size: 0.7rem; font-family: 'Courier New', monospace; cursor: pointer; letter-spacing: 0.06em; }
+        .pay-btn.primary { background: #7c3aed; color: #fff; }
+        .pay-btn.primary:hover { background: #6d28d9; }
+        .pay-btn.cancel { background: transparent; border: 1px solid #334455; color: #475569; }
+        .pay-btn.cancel:hover { border-color: #FF0055; color: #FF0055; }
+
         /* ── Buttons ── */
         .btn {
             font-family: 'Courier New', monospace;
@@ -498,6 +535,42 @@
     <div class="vdivider"></div>
     <span style="font-size:0.56rem;color:#223344;white-space:nowrap">BLOCKS</span>
     <span style="font-size:0.58rem;color:#00FFCC;font-weight:bold">54 LIVE</span>
+  </div>
+
+  <!-- ── Payment Overlay ───────────────────────────────────────────────────── -->
+  <div id="pay-overlay">
+    <div class="pay-box">
+      <h3>MINT dNFT — 0.05 RLUSD</h3>
+      <p style="font-size:0.6rem;color:#475569;margin-bottom:0.8rem;line-height:1.5">
+        Your solve becomes permanent proof on Xahau. Pay 0.05 RLUSD on XRPL, then verify below.
+      </p>
+
+      <div class="pay-row">
+        <span class="pay-label">SEND TO</span>
+        <span class="pay-val" id="pay-addr">—</span>
+        <button class="pay-copy" id="pay-copy-addr">COPY</button>
+      </div>
+      <div class="pay-row">
+        <span class="pay-label">AMOUNT</span>
+        <span class="pay-val" id="pay-amount">0.05 RLUSD</span>
+      </div>
+      <div class="pay-row">
+        <span class="pay-label">MEMO HEX</span>
+        <span class="pay-val" id="pay-memo">—</span>
+        <button class="pay-copy" id="pay-copy-memo">COPY</button>
+      </div>
+      <input type="hidden" id="pay-invoice-id" value="">
+
+      <hr class="pay-divider">
+      <p style="font-size:0.6rem;color:#475569;margin-bottom:0.5rem">After paying, enter your details:</p>
+      <input id="pay-tx-hash" placeholder="XRPL transaction hash" />
+      <input id="pay-wallet"  placeholder="Your XRPL wallet (r...)" />
+      <div id="pay-status"></div>
+      <div class="pay-actions">
+        <button class="pay-btn primary" id="pay-verify-btn">VERIFY &amp; MINT</button>
+        <button class="pay-btn cancel"  id="pay-cancel-btn">CANCEL</button>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="js/cube.js"></script>

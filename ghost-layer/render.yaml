@@ -18,13 +18,27 @@ services:
         value: "https://mainnet.base.org"
       - key: XRPL_RPC_URL
         value: "https://xrplcluster.com"
+      - key: XAHAU_RPC_URL
+        value: "https://xahau.network"
       - key: USDC_CONTRACT_ADDRESS
         value: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+      # ── Gateway signing keys (set in Render dashboard — never commit) ──────────
+      # GATEWAY_XRPL_PRIVATE_KEY  : secp256k1 private key for XRPL payments
+      # GATEWAY_XAHAU_PRIVATE_KEY : same key format for Xahau URITokenMint
+      #   → if not set, falls back to GATEWAY_XRPL_PRIVATE_KEY automatically
+      #   → the gateway wallet must hold XAH on Xahau network for tx fees
       - key: GATEWAY_XRPL_PRIVATE_KEY
+        sync: false
+      - key: GATEWAY_XAHAU_PRIVATE_KEY
         sync: false
       - key: GATEWAY_ETH_PRIVATE_KEY
         sync: false
       - key: ADMIN_TOKEN
+        sync: false
+      # 402Proof shared HMAC secret — same value as TOKEN_SECRET on four02proof service
+      # Required to verify X-Payment-Token on POST /api/cube/state (Cube Terminal mint gate)
+      # If not set, the mint gate is disabled (fail open for dev mode)
+      - key: PROOF402_TOKEN_SECRET
         sync: false
       # Live agent monitoring feed — SqueezeOS Railway SSE URL
       # Set to: https://lively-fascination-production-41fa.up.railway.app/api/events

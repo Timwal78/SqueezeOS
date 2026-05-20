@@ -6,7 +6,7 @@
 
 ```bash
 # 1. Try free demo first — see full response format
-curl https://lively-fascination-production-41fa.up.railway.app/api/demo
+curl https://squeezeos-terminal.vercel.app/api/demo
 
 # 2. Get invoice
 curl -X POST https://four02proof.onrender.com/v1/invoice \
@@ -22,7 +22,7 @@ curl -X POST https://four02proof.onrender.com/v1/verify \
   -d '{"invoice_id":"...","tx_hash":"...","agent_wallet":"rYOURWALLET"}'
 
 # 5. Call with token
-curl -X POST https://lively-fascination-production-41fa.up.railway.app/api/council \
+curl -X POST https://squeezeos-terminal.vercel.app/api/council \
   -H "X-Payment-Token: <token>" \
   -H "X-Agent-Wallet: rYOURWALLET" \
   -d '{"symbol":"IWM"}'
@@ -39,6 +39,7 @@ curl -X POST https://lively-fascination-production-41fa.up.railway.app/api/counc
 | `GET  /api/options` | **0.05 RLUSD** | `c951a374-2424-4064-ab80-35afe8053d29` |
 | `GET  /api/iwm`     | **0.03 RLUSD** | `60f48ce0-6002-4385-9b60-03a0d2bbebab` |
 | `POST /api/marketplace/read` | **0.02 RLUSD** | `d1a2b3c4-e001-4c3f-aa24-de6e3bc12b5a` |
+| `POST https://ghost-layer.onrender.com/api/cube/state` | **0.05 RLUSD** | `c8b3e2f1-5a4d-4c3f-aa24-de6e3bc12b5a` |
 
 **Error codes:** All rejections return machine-parseable `ERR_*` codes with `remedy` field.
 `ERR_PAYMENT_REQUIRED` • `ERR_TOKEN_EXPIRED` • `ERR_TOKEN_INVALID` • `ERR_WALLET_MISMATCH` • `ERR_ENDPOINT_MISMATCH`
@@ -68,7 +69,7 @@ Registered relay nodes access signals at **40% off** standard pricing.
 
 ```bash
 # Register as relay node (requires Credit Bureau score >= 600)
-curl -X POST https://lively-fascination-production-41fa.up.railway.app/api/relay/register \
+curl -X POST https://squeezeos-terminal.vercel.app/api/relay/register \
   -H "Content-Type: application/json" \
   -d '{"wallet":"rYOUR...","markup_bps":1000}'
 ```
@@ -107,7 +108,7 @@ Body: {"token":"<jwt>"}
 
 ```bash
 # Subscribe — receive real-time events at your URL
-curl -X POST https://lively-fascination-production-41fa.up.railway.app/api/webhooks/subscribe \
+curl -X POST https://squeezeos-terminal.vercel.app/api/webhooks/subscribe \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://your-agent.example.com/signals",
@@ -128,7 +129,7 @@ curl -X DELETE .../api/webhooks/subscribe/<subscription_id>
 
 **Delivery:** HMAC-SHA256 signed `X-SqueezeOS-Signature` header. 3-attempt retry (2s/4s/8s backoff). Auto-deactivate after 10 consecutive failures.
 
-**Event types:** `SQUEEZE_ALERT` • `OPTIONS_SWEEP` • `COUNCIL_VERDICT` • `AGENT_PAY` • `AGENT_PROBE`
+**Event types:** `SQUEEZE_ALERT` • `OPTIONS_SWEEP` • `COUNCIL_VERDICT` • `OPTIONS_ANOMALY` • `AGENT_PAY` • `AGENT_PROBE`
 
 ---
 
@@ -225,9 +226,36 @@ print(score["score"], score["grade"])
 
 | Service | URL |
 |---------|-----|
-| SqueezeOS (Railway) | `https://lively-fascination-production-41fa.up.railway.app` |
+| SqueezeOS (Vercel) | `https://squeezeos-terminal.vercel.app` |
 | 402Proof (Render) | `https://four02proof.onrender.com` |
 | Ghost Layer (Render) | `https://ghost-layer.onrender.com` |
+
+---
+
+## Ghost Layer — Render Deployment Secrets
+
+Ghost Layer lives at `https://ghost-layer.onrender.com`. It is a Go server (Docker, `ghost-layer/` directory).
+
+**Required secrets — set in Render dashboard → ghost-layer-facilitator → Environment:**
+
+| Key | What it is | Notes |
+|-----|-----------|-------|
+| `GATEWAY_XRPL_PRIVATE_KEY` | secp256k1 private key (hex, no 0x prefix) | Signs XRPL payment txs. Derives the gateway rADDRESS shown at startup. |
+| `GATEWAY_XAHAU_PRIVATE_KEY` | Same key format for Xahau | If not set, falls back to `GATEWAY_XRPL_PRIVATE_KEY` automatically. Gateway wallet must hold **XAH** (not XRP) on the Xahau network for fees. |
+| `GATEWAY_ETH_PRIVATE_KEY` | EVM private key | Signs Base chain USDC txs. Optional if only using XRPL. |
+| `ADMIN_TOKEN` | Bearer token for `/v1/admin/*` | Force-sweep and dust-test endpoints. |
+
+**The gateway wallet address** is printed in Render logs on every startup:
+```
+[SERVER] XRPL gateway: rXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+[SERVER] Xahau gateway: rXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+```
+It is also visible at `https://ghost-layer.onrender.com/health`.
+
+**If MINT dNFT shows LOCAL instead of ON-CHAIN:**
+1. Check Render logs for `[WARN] No Xahau key configured` → add `GATEWAY_XRPL_PRIVATE_KEY` to Render
+2. Check logs for `[CUBE] Xahau mint failed:` → the gateway address needs XAH balance on Xahau network
+3. The same wallet address works on both XRPL mainnet and Xahau — balances are separate networks
 
 ## Discovery
 

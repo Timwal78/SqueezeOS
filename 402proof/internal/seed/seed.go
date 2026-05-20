@@ -29,6 +29,9 @@ const (
 
 	// Peer Signal Marketplace
 	MarketplaceReadID = "d1a2b3c4-e001-4c3f-aa24-de6e3bc12b5a"
+
+	// Cube Terminal — Ghost Layer dNFT mint
+	CubeMintID = "c8b3e2f1-5a4d-4c3f-aa24-de6e3bc12b5a"
 )
 
 type EndpointSeed struct {
@@ -77,6 +80,16 @@ var MarketplaceEndpoints = []EndpointSeed{
 		Price:       "0.02",
 		Asset:       "RLUSD",
 		Description: "Peer signal full read — thesis, entry, target, stop from verified seller wallet",
+	},
+}
+
+var GhostLayerEndpoints = []EndpointSeed{
+	{
+		ID:          CubeMintID,
+		Path:        "/api/cube/state",
+		Price:       "0.05",
+		Asset:       "RLUSD",
+		Description: "Cube Terminal dNFT mint — commit Rubik's Cube state as Xahau URIToken, permanent on-chain proof",
 	},
 }
 
@@ -156,8 +169,8 @@ func Run(db *store.Memory, gatewayAddr string) {
 		log.Printf("[SEED] Merchant: %s id=%s", merchantName, MerchantID)
 	}
 
-	// Seed all endpoints: SML market + Bureau + Relay bulk + Marketplace
-	all := append(append(append(SMLEndpoints, BureauEndpoints...), RelayEndpoints...), MarketplaceEndpoints...)
+	// Seed all endpoints: SML market + Bureau + Relay bulk + Marketplace + Ghost Layer
+	all := append(append(append(append(SMLEndpoints, BureauEndpoints...), RelayEndpoints...), MarketplaceEndpoints...), GhostLayerEndpoints...)
 	for _, e := range all {
 		if _, ok := db.GetEndpoint(e.ID); !ok {
 			ep := &models.Endpoint{
@@ -175,7 +188,7 @@ func Run(db *store.Memory, gatewayAddr string) {
 		}
 	}
 
-	log.Printf("[SEED] Script Master Labs ready — 4 market + 3 bureau + 4 relay + 1 marketplace endpoints active")
+	log.Printf("[SEED] Script Master Labs ready — 4 market + 3 bureau + 4 relay + 1 marketplace + 1 ghost-layer endpoints active")
 }
 
 func env(key, fallback string) string {

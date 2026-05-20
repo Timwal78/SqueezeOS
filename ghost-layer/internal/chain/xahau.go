@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	gocrypto "github.com/ethereum/go-ethereum/crypto"
@@ -60,6 +61,60 @@ func (c *XahauClient) MintURIToken(uri string, hookParams []URITokenHookParam, m
 	return txHash, nil
 }
 
+// xahauSubmit is a Xahau-aware submit that handles both standard engine_result
+// responses and the error-object format Xahau returns for RPC-level rejections.
+func (c *XahauClient) xahauSubmit(txHex string) (string, error) {
+	result, err := c.call("submit", map[string]interface{}{"tx_blob": txHex})
+	if err != nil {
+		return "", err
+	}
+	var res struct {
+		EngineResult        string `json:"engine_result"`
+		EngineResultMessage string `json:"engine_result_message"`
+		// Xahau also surfaces errors at the RPC level with these fields
+		Error        string `json:"error"`
+		ErrorMessage string `json:"error_message"`
+		Status       string `json:"status"`
+		TxJSON       struct {
+			Hash string `json:"hash"`
+		} `json:"tx_json"`
+	}
+	if err := json.Unmarshal(result, &res); err != nil {
+		return "", fmt.Errorf("parse submit response: %w (raw: %s)", err, string(result))
+	}
+	// RPC-level error (account not found, malformed, etc.)
+	if res.Status == "error" || (res.Error != "" && res.EngineResult == "") {
+		return "", fmt.Errorf("Xahau RPC error: %s — %s | raw: %s", res.Error, res.ErrorMessage, string(result))
+	}
+	if !strings.HasPrefix(res.EngineResult, "tes") {
+		return "", fmt.Errorf("Xahau rejected: %s — %s | raw: %s", res.EngineResult, res.EngineResultMessage, string(result))
+	}
+	return res.TxJSON.Hash, nil
+}
+
+// fetchXahauFeeDrops queries the fee RPC for the actual open-ledger cost and
+// adds a 20% buffer. Falls back to 2000 drops if the query fails.
+// Xahau's open_ledger_fee is much higher than XRPL mainnet due to Hook execution.
+func (c *XahauClient) fetchXahauFeeDrops() uint64 {
+	result, err := c.call("fee", map[string]interface{}{})
+	if err != nil {
+		return 2000
+	}
+	var res struct {
+		Drops struct {
+			OpenLedgerFee string `json:"open_ledger_fee"`
+		} `json:"drops"`
+	}
+	if err := json.Unmarshal(result, &res); err != nil {
+		return 2000
+	}
+	fee, _ := strconv.ParseUint(res.Drops.OpenLedgerFee, 10, 64)
+	if fee < 5000 {
+		fee = 5000 // Xahau floor — well above observed open_ledger_cost of 1088
+	}
+	return fee
+}
+
 // fetchCurrentLedger returns the current ledger index, or 0 on failure.
 // Used to set LastLedgerSequence = current + 10, giving the tx ~30s to land.
 func (c *XahauClient) fetchCurrentLedger() uint32 {
@@ -87,13 +142,11 @@ func (c *XahauClient) buildSignSubmitMint(
 		return "", fmt.Errorf("decode gateway address: %w", err)
 	}
 
-	feeDrops := c.fetchFeeDrops()
-	if feeDrops == 0 {
-		return "", fmt.Errorf("Xahau fee exceeds safety ceiling — aborting")
-	}
+	feeDrops := c.fetchXahauFeeDrops()
 
 	currentLedger := c.fetchCurrentLedger()
-	uriBytes := []byte(uri) // raw ASCII bytes of the hash string
+	// Xahau requires URI to be hex-encoded bytes, not raw ASCII
+	uriBytes := []byte(strings.ToUpper(hex.EncodeToString([]byte(uri))))
 
 	signingBytes := buildURITokenMintTx(seq, currentLedger, feeDrops, c.pubKey, nil, srcAcct, uriBytes, hookParams, memoJSON, true)
 	hash := sha512Half(signingBytes)
@@ -105,19 +158,28 @@ func (c *XahauClient) buildSignSubmitMint(
 	derSig := derEncodeSignature(compact[:64])
 
 	txBlob := buildURITokenMintTx(seq, currentLedger, feeDrops, c.pubKey, derSig, srcAcct, uriBytes, hookParams, memoJSON, false)
-	return c.submit(strings.ToUpper(hex.EncodeToString(txBlob)))
+	if len(txBlob) >= 8 {
+		txType := binary.BigEndian.Uint16(txBlob[1:3])
+		netID := binary.BigEndian.Uint32(txBlob[4:8])
+		fmt.Printf("[CUBE] URITokenMint encoded: TransactionType=%d NetworkID=%d blobBytes=%d\n", txType, netID, len(txBlob))
+	}
+	txHex := strings.ToUpper(hex.EncodeToString(txBlob))
+	return c.xahauSubmit(txHex)
 }
 
 // buildURITokenMintTx serialises a Xahau URITokenMint in canonical XRPL binary.
 //
 // Field order: (TypeCode ASC, FieldCode ASC) — the XRPL canonical serialisation spec.
+// Field codes verified against xahau.js/packages/ripple-binary-codec/src/enums/definitions.json
 //
 //	UInt16(1):   TransactionType(2)
-//	UInt32(2):   Flags(2), Sequence(4), LastLedgerSequence(27)
+//	UInt32(2):   NetworkID(1), Flags(2), Sequence(4), LastLedgerSequence(27)
 //	Amount(6):   Fee(8)
 //	Blob(7):     SigningPubKey(3), TxnSignature(4), URI(5)
 //	AccountID(8):Account(1)
-//	STArray(15): Memos(9), HookParameters(20)
+//	STArray(15): Memos(9), HookParameters(19)
+//
+// Xahau mainnet NetworkID=21337 is mandatory — nodes reject transactions without it.
 func buildURITokenMintTx(
 	seq, currentLedger uint32,
 	feeDrops uint64,
@@ -140,6 +202,10 @@ func buildURITokenMintTx(
 	binary.Write(&buf, binary.BigEndian, uint16(45))
 
 	// ── UInt32 (type=2) ─────────────────────────────────────────────────────
+	// NetworkID = 21337 (Xahau mainnet) [field 1 → 0x21] — MUST come before Flags
+	buf.WriteByte(0x21)
+	binary.Write(&buf, binary.BigEndian, uint32(21337))
+
 	// Flags = 1 (tfBurnable) [field 2 → 0x22]
 	buf.WriteByte(0x22)
 	binary.Write(&buf, binary.BigEndian, uint32(1))
@@ -201,19 +267,22 @@ func buildURITokenMintTx(
 		buf.WriteByte(0xF1) // end Memos STArray
 	}
 
-	// ── HookParameters STArray (type=15, field=20 → 0xF0 0x14) ─────────────
+	// ── HookParameters STArray (type=15, nth=19 → 0xF0 0x13) ──────────────────
+	// Verified field codes from xahau.js definitions.json:
+	//   HookParameters STArray nth=19, HookParameter STObject nth=23
+	//   HookParameterName Blob nth=24, HookParameterValue Blob nth=25
 	if len(hookParams) > 0 {
-		buf.Write([]byte{0xF0, 0x14}) // HookParameters array start
+		buf.Write([]byte{0xF0, 0x13}) // HookParameters array start (type=15, field=19)
 
 		for _, hp := range hookParams {
-			buf.Write([]byte{0xE0, 0x11}) // HookParameter STObject (type=14, field=17)
+			buf.Write([]byte{0xE0, 0x17}) // HookParameter STObject (type=14, field=23)
 
-			// HookParameterName  [Blob field=24 → 0x70 0x18]
+			// HookParameterName  [Blob nth=24 → 0x70 0x18]
 			nameBytes, _ := hex.DecodeString(hp.Name)
 			buf.Write([]byte{0x70, 0x18})
 			buf.Write(vlEncode(nameBytes))
 
-			// HookParameterValue [Blob field=25 → 0x70 0x19]
+			// HookParameterValue [Blob nth=25 → 0x70 0x19]
 			valBytes, _ := hex.DecodeString(hp.Value)
 			buf.Write([]byte{0x70, 0x19})
 			buf.Write(vlEncode(valBytes))
