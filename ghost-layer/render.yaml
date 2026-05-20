@@ -18,9 +18,18 @@ services:
         value: "https://mainnet.base.org"
       - key: XRPL_RPC_URL
         value: "https://xrplcluster.com"
+      - key: XAHAU_RPC_URL
+        value: "https://xahau.network"
       - key: USDC_CONTRACT_ADDRESS
         value: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+      # ── Gateway signing keys (set in Render dashboard — never commit) ──────────
+      # GATEWAY_XRPL_PRIVATE_KEY  : secp256k1 private key for XRPL payments
+      # GATEWAY_XAHAU_PRIVATE_KEY : same key format for Xahau URITokenMint
+      #   → if not set, falls back to GATEWAY_XRPL_PRIVATE_KEY automatically
+      #   → the gateway wallet must hold XAH on Xahau network for tx fees
       - key: GATEWAY_XRPL_PRIVATE_KEY
+        sync: false
+      - key: GATEWAY_XAHAU_PRIVATE_KEY
         sync: false
       - key: GATEWAY_ETH_PRIVATE_KEY
         sync: false

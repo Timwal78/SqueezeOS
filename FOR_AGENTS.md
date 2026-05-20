@@ -229,6 +229,33 @@ print(score["score"], score["grade"])
 | 402Proof (Render) | `https://four02proof.onrender.com` |
 | Ghost Layer (Render) | `https://ghost-layer.onrender.com` |
 
+---
+
+## Ghost Layer — Render Deployment Secrets
+
+Ghost Layer lives at `https://ghost-layer.onrender.com`. It is a Go server (Docker, `ghost-layer/` directory).
+
+**Required secrets — set in Render dashboard → ghost-layer-facilitator → Environment:**
+
+| Key | What it is | Notes |
+|-----|-----------|-------|
+| `GATEWAY_XRPL_PRIVATE_KEY` | secp256k1 private key (hex, no 0x prefix) | Signs XRPL payment txs. Derives the gateway rADDRESS shown at startup. |
+| `GATEWAY_XAHAU_PRIVATE_KEY` | Same key format for Xahau | If not set, falls back to `GATEWAY_XRPL_PRIVATE_KEY` automatically. Gateway wallet must hold **XAH** (not XRP) on the Xahau network for fees. |
+| `GATEWAY_ETH_PRIVATE_KEY` | EVM private key | Signs Base chain USDC txs. Optional if only using XRPL. |
+| `ADMIN_TOKEN` | Bearer token for `/v1/admin/*` | Force-sweep and dust-test endpoints. |
+
+**The gateway wallet address** is printed in Render logs on every startup:
+```
+[SERVER] XRPL gateway: rXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+[SERVER] Xahau gateway: rXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+```
+It is also visible at `https://ghost-layer.onrender.com/health`.
+
+**If MINT dNFT shows LOCAL instead of ON-CHAIN:**
+1. Check Render logs for `[WARN] No Xahau key configured` → add `GATEWAY_XRPL_PRIVATE_KEY` to Render
+2. Check logs for `[CUBE] Xahau mint failed:` → the gateway address needs XAH balance on Xahau network
+3. The same wallet address works on both XRPL mainnet and Xahau — balances are separate networks
+
 ## Discovery
 
 | Resource | URL |
