@@ -144,11 +144,13 @@ func (c *XahauClient) buildSignSubmitMint(
 // Field order: (TypeCode ASC, FieldCode ASC) — the XRPL canonical serialisation spec.
 //
 //	UInt16(1):   TransactionType(2)
-//	UInt32(2):   Flags(2), Sequence(4), LastLedgerSequence(27)
+//	UInt32(2):   NetworkID(1), Flags(2), Sequence(4), LastLedgerSequence(27)
 //	Amount(6):   Fee(8)
 //	Blob(7):     SigningPubKey(3), TxnSignature(4), URI(5)
 //	AccountID(8):Account(1)
 //	STArray(15): Memos(9), HookParameters(20)
+//
+// Xahau mainnet NetworkID=21337 is mandatory — nodes reject transactions without it.
 func buildURITokenMintTx(
 	seq, currentLedger uint32,
 	feeDrops uint64,
@@ -171,6 +173,10 @@ func buildURITokenMintTx(
 	binary.Write(&buf, binary.BigEndian, uint16(45))
 
 	// ── UInt32 (type=2) ─────────────────────────────────────────────────────
+	// NetworkID = 21337 (Xahau mainnet) [field 1 → 0x21] — MUST come before Flags
+	buf.WriteByte(0x21)
+	binary.Write(&buf, binary.BigEndian, uint32(21337))
+
 	// Flags = 1 (tfBurnable) [field 2 → 0x22]
 	buf.WriteByte(0x22)
 	binary.Write(&buf, binary.BigEndian, uint32(1))
