@@ -248,28 +248,10 @@ func buildURITokenMintTx(
 		buf.WriteByte(0xF1) // end Memos STArray
 	}
 
-	// ── HookParameters STArray (type=15, field=20 → 0xF0 0x14) ─────────────
-	if len(hookParams) > 0 {
-		buf.Write([]byte{0xF0, 0x14}) // HookParameters array start
-
-		for _, hp := range hookParams {
-			buf.Write([]byte{0xE0, 0x11}) // HookParameter STObject (type=14, field=17)
-
-			// HookParameterName  [Blob field=24 → 0x70 0x18]
-			nameBytes, _ := hex.DecodeString(hp.Name)
-			buf.Write([]byte{0x70, 0x18})
-			buf.Write(vlEncode(nameBytes))
-
-			// HookParameterValue [Blob field=25 → 0x70 0x19]
-			valBytes, _ := hex.DecodeString(hp.Value)
-			buf.Write([]byte{0x70, 0x19})
-			buf.Write(vlEncode(valBytes))
-
-			buf.WriteByte(0xE1) // end HookParameter STObject
-		}
-
-		buf.WriteByte(0xF1) // end HookParameters STArray
-	}
+	// HookParameters intentionally omitted — field codes are Xahau-version-specific
+	// and caused "Unknown field in Array" rejection. The 6 face centers are encoded
+	// in the Memo above and in the URI hash, which is the canonical on-chain record.
+	_ = hookParams
 
 	return buf.Bytes()
 }
