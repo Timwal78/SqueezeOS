@@ -136,7 +136,9 @@ func (c *XahauClient) buildSignSubmitMint(
 	derSig := derEncodeSignature(compact[:64])
 
 	txBlob := buildURITokenMintTx(seq, currentLedger, feeDrops, c.pubKey, derSig, srcAcct, uriBytes, hookParams, memoJSON, false)
-	return c.xahauSubmit(strings.ToUpper(hex.EncodeToString(txBlob)))
+	txHex := strings.ToUpper(hex.EncodeToString(txBlob))
+	fmt.Printf("[CUBE] tx_blob prefix=%s len=%d\n", txHex[:min(40, len(txHex))], len(txHex))
+	return c.xahauSubmit(txHex)
 }
 
 // buildURITokenMintTx serialises a Xahau URITokenMint in canonical XRPL binary.
