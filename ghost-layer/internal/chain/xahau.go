@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	gocrypto "github.com/ethereum/go-ethereum/crypto"
@@ -91,6 +92,29 @@ func (c *XahauClient) xahauSubmit(txHex string) (string, error) {
 	return res.TxJSON.Hash, nil
 }
 
+// fetchXahauFeeDrops queries the fee RPC for the actual open-ledger cost and
+// adds a 20% buffer. Falls back to 2000 drops if the query fails.
+// Xahau's open_ledger_fee is much higher than XRPL mainnet due to Hook execution.
+func (c *XahauClient) fetchXahauFeeDrops() uint64 {
+	result, err := c.call("fee", map[string]interface{}{})
+	if err != nil {
+		return 2000
+	}
+	var res struct {
+		Drops struct {
+			OpenLedgerFee string `json:"open_ledger_fee"`
+		} `json:"drops"`
+	}
+	if err := json.Unmarshal(result, &res); err != nil {
+		return 2000
+	}
+	fee, _ := strconv.ParseUint(res.Drops.OpenLedgerFee, 10, 64)
+	if fee == 0 {
+		return 2000
+	}
+	return fee * 12 / 10 // +20% buffer
+}
+
 // fetchCurrentLedger returns the current ledger index, or 0 on failure.
 // Used to set LastLedgerSequence = current + 10, giving the tx ~30s to land.
 func (c *XahauClient) fetchCurrentLedger() uint32 {
@@ -118,13 +142,7 @@ func (c *XahauClient) buildSignSubmitMint(
 		return "", fmt.Errorf("decode gateway address: %w", err)
 	}
 
-	feeDrops := c.fetchFeeDrops()
-	if feeDrops == 0 {
-		feeDrops = 100 // Xahau Hook execution requires higher base fee
-	}
-	if feeDrops < 100 {
-		feeDrops = 100
-	}
+	feeDrops := c.fetchXahauFeeDrops()
 
 	currentLedger := c.fetchCurrentLedger()
 	// Xahau requires URI to be hex-encoded bytes, not raw ASCII
