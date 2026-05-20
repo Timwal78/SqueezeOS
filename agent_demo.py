@@ -41,7 +41,7 @@ import requests
 DEMO_MODE       = True          # Flip to False for a live end-to-end run
 SYMBOL          = "IWM"         # Symbol to query via /api/council
 
-SQUEEZEOS_URL   = "https://lively-fascination-production-41fa.up.railway.app"
+SQUEEZEOS_URL   = "https://squeezeos-api.onrender.com"
 PROOF402_URL    = "https://four02proof.onrender.com"
 XRPL_RPC        = "https://s1.ripple.com:51234/"
 

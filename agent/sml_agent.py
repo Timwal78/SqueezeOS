@@ -55,7 +55,7 @@ logging.basicConfig(
 logger = logging.getLogger("SML-Agent")
 
 # ── Config ────────────────────────────────────────────────────────────────────
-SQUEEZEOS   = os.environ.get("SQUEEZEOS_BASE_URL",  "https://lively-fascination-production-41fa.up.railway.app")
+SQUEEZEOS   = os.environ.get("SQUEEZEOS_BASE_URL",  "https://squeezeos-api.onrender.com")
 PROOF402    = os.environ.get("PROOF402_BASE_URL",   "https://four02proof.onrender.com")
 XRPL_RPC    = os.environ.get("XRPL_RPC_URL",        "https://xrplcluster.com")
 AGENT_SEED  = os.environ.get("AGENT_XRPL_SEED",     "")

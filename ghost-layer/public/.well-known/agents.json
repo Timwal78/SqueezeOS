@@ -26,7 +26,7 @@
     "xahau": {"rpc": "https://xahau.network", "currency": "XAH", "native": true, "hooks_enabled": true}
   },
   "related_services": {
-    "squeezeos": "https://lively-fascination-production-41fa.up.railway.app/.well-known/agents.json",
+    "squeezeos": "https://squeezeos-api.onrender.com/.well-known/agents.json",
     "proof402": "https://four02proof.onrender.com/.well-known/agents.json"
   }
 }
