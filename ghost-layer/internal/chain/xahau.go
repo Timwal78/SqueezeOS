@@ -83,10 +83,10 @@ func (c *XahauClient) xahauSubmit(txHex string) (string, error) {
 	}
 	// RPC-level error (account not found, malformed, etc.)
 	if res.Status == "error" || (res.Error != "" && res.EngineResult == "") {
-		return "", fmt.Errorf("Xahau RPC error: %s — %s", res.Error, res.ErrorMessage)
+		return "", fmt.Errorf("Xahau RPC error: %s — %s | raw: %s", res.Error, res.ErrorMessage, string(result))
 	}
 	if !strings.HasPrefix(res.EngineResult, "tes") {
-		return "", fmt.Errorf("Xahau rejected: %s — %s (raw: %s)", res.EngineResult, res.EngineResultMessage, string(result))
+		return "", fmt.Errorf("Xahau rejected: %s — %s | raw: %s", res.EngineResult, res.EngineResultMessage, string(result))
 	}
 	return res.TxJSON.Hash, nil
 }
@@ -120,11 +120,15 @@ func (c *XahauClient) buildSignSubmitMint(
 
 	feeDrops := c.fetchFeeDrops()
 	if feeDrops == 0 {
-		return "", fmt.Errorf("Xahau fee exceeds safety ceiling — aborting")
+		feeDrops = 100 // Xahau Hook execution requires higher base fee
+	}
+	if feeDrops < 100 {
+		feeDrops = 100
 	}
 
 	currentLedger := c.fetchCurrentLedger()
-	uriBytes := []byte(uri) // raw ASCII bytes of the hash string
+	// Xahau requires URI to be hex-encoded bytes, not raw ASCII
+	uriBytes := []byte(strings.ToUpper(hex.EncodeToString([]byte(uri))))
 
 	signingBytes := buildURITokenMintTx(seq, currentLedger, feeDrops, c.pubKey, nil, srcAcct, uriBytes, hookParams, memoJSON, true)
 	hash := sha512Half(signingBytes)
