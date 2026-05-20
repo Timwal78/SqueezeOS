@@ -34,6 +34,9 @@ from core.telemetry_rotator import start_telemetry_rotator
 
 state.audit['uptime_start'] = time.time()
 
+# Serverless detection — skip background threads on Vercel (stateless per-request)
+_IS_SERVERLESS = os.environ.get('VERCEL') == '1'
+
 # Configure Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("SqueezeOS-Core")
@@ -44,9 +47,10 @@ def create_app():
     app = Flask(__name__, static_folder=root_dir, static_url_path='')
     CORS(app) # Enable CORS for institutional dashboard
     
-    # Start Legacy Workers & Services
-    init_services()
-    start_whale_stalker()
+    # Start Legacy Workers & Services (skipped in Vercel serverless mode)
+    if not _IS_SERVERLESS:
+        init_services()
+        start_whale_stalker()
     
     # Honeypot must be registered FIRST so explicit trap routes take priority
     app.register_blueprint(honeypot_bp)
@@ -72,17 +76,18 @@ def create_app():
     app.register_blueprint(v2_bp, url_prefix='/api')
     app.register_blueprint(v2_bp, url_prefix='/api/v1', name='v2_bridge_v1')
     
-    # Start background market scanner
-    start_market_scanner()
+    if not _IS_SERVERLESS:
+        # Start background market scanner
+        start_market_scanner()
 
-    # Start webhook delivery engine (SSE tap + delivery workers)
-    start_webhook_engine()
+        # Start webhook delivery engine (SSE tap + delivery workers)
+        start_webhook_engine()
 
-    # Start 24/7 options anomaly crime solver
-    start_anomaly_engine()
+        # Start 24/7 options anomaly crime solver
+        start_anomaly_engine()
 
-    # Start institutional telemetry rotator (Goal 3)
-    start_telemetry_rotator()
+        # Start institutional telemetry rotator (Goal 3)
+        start_telemetry_rotator()
     
     @app.after_request
     def add_no_cache(response):
