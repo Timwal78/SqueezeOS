@@ -166,9 +166,11 @@ const tachFill    = document.getElementById('tach-fill');
 const eventEl     = document.getElementById('gl-event');
 const faceGridEl  = document.getElementById('face-grid');
 const faceDetailEl= document.getElementById('face-detail');
-const tokenHashEl = document.getElementById('token-hash');
-const tokenStatEl = document.getElementById('token-status');
-const tokenHooksEl= document.getElementById('token-hooks');
+const tokenHashEl  = document.getElementById('token-hash');
+const tokenStatEl  = document.getElementById('token-status');
+const tokenHooksEl = document.getElementById('token-hooks');
+const tokenXahauEl = document.getElementById('token-xahau');
+const tokenChainEl = document.getElementById('token-chain');
 const stateLabelEl= document.getElementById('state-label');
 const revTotalEl  = document.getElementById('rev-total');
 
@@ -345,7 +347,8 @@ const EVENT_CFG = {
   COUNCIL_VERDICT:      { speed: 0.025, palette: 'verdict', label: 'VERDICT',   face: 'py', edgeIdx: 2, delta: -10 },
   SQUEEZE_ALERT:        { speed: 0.030, palette: 'squeeze', label: 'SQUEEZE',   face: 'px', edgeIdx: 2, delta:  5 },
   OPTIONS_SWEEP:        { speed: 0.030, palette: 'squeeze', label: 'SWEEP',     face: 'px', edgeIdx: 3, delta:  3 },
-  CUBE_STATE_COMMITTED: { speed: 0.045, palette: 'verdict', label: 'COMMITTED'                                   },
+  CUBE_STATE_COMMITTED:  { speed: 0.045, palette: 'verdict', label: 'COMMITTED'                                   },
+  XAHAU_MINT_CONFIRMED:  { speed: 0.055, palette: 'verdict', label: 'ON-CHAIN'                                    },
 };
 
 let rotSpeed       = BASE_SPEED;
@@ -435,6 +438,14 @@ function fireEvent(type, data) {
   } else if (type === 'SQUEEZE_ALERT' || type === 'OPTIONS_SWEEP') {
     if (chainEl) chainEl.textContent = data.symbol ?? cfg.label;
     setState('SQUEEZE'); setTimeout(() => setState('IDLE'), 2000);
+  } else if (type === 'XAHAU_MINT_CONFIRMED') {
+    const txHash = data.xahau_tx ?? '';
+    if (tokenChainEl) { tokenChainEl.textContent = 'ON-CHAIN'; tokenChainEl.style.color = '#00FF88'; }
+    if (tokenXahauEl && txHash) {
+      const txUrl = `https://xahau.network/tx/${txHash}`;
+      tokenXahauEl.innerHTML = `<a href="${txUrl}" target="_blank" rel="noopener">${txHash.slice(0,16)}…</a>`;
+    }
+    setState('MINTED'); setTimeout(() => setState('IDLE'), 3000);
   }
 }
 
@@ -529,6 +540,14 @@ document.getElementById('btn-mint')?.addEventListener('click', async () => {
       if (tokenStatEl)  { tokenStatEl.textContent = 'MINTED'; tokenStatEl.style.color = '#00FF88'; }
       if (tokenHashEl)  tokenHashEl.textContent  = data.state_hash;
       if (tokenHooksEl) tokenHooksEl.textContent = data.faces?.pz?.center ?? computeCenter(FACE_PARAMS.pz);
+      if (data.xahau_tx_hash) {
+        const txUrl = `https://xahau.network/tx/${data.xahau_tx_hash}`;
+        if (tokenXahauEl) tokenXahauEl.innerHTML = `<a href="${txUrl}" target="_blank" rel="noopener">${data.xahau_tx_hash.slice(0,16)}…</a>`;
+        if (tokenChainEl) { tokenChainEl.textContent = 'ON-CHAIN'; tokenChainEl.style.color = '#00FF88'; }
+      } else {
+        if (tokenXahauEl) tokenXahauEl.textContent = 'mint pending';
+        if (tokenChainEl) { tokenChainEl.textContent = 'LOCAL'; tokenChainEl.style.color = '#FF8800'; }
+      }
       setState('IDLE');
       pulseIntensity = 1.0;
       activePalette  = 'verdict';

@@ -157,12 +157,13 @@ type XahauHookParam struct {
 }
 
 type CubeStateResponse struct {
-	Verified    bool                      `json:"verified"`
-	StateHash   string                    `json:"state_hash"`
-	Faces       map[string]*CubeFaceState `json:"faces,omitempty"`
-	HookParams  []XahauHookParam          `json:"hook_params"`
-	CommittedAt string                    `json:"committed_at,omitempty"`
-	Error       string                    `json:"error,omitempty"`
+	Verified      bool                      `json:"verified"`
+	StateHash     string                    `json:"state_hash"`
+	Faces         map[string]*CubeFaceState `json:"faces,omitempty"`
+	HookParams    []XahauHookParam          `json:"hook_params"`
+	CommittedAt   string                    `json:"committed_at,omitempty"`
+	XahauTxHash   string                    `json:"xahau_tx_hash,omitempty"`
+	Error         string                    `json:"error,omitempty"`
 }
 
 // valid [min, max] for each face's center — must mirror cube.js FACE_PARAMS
@@ -357,6 +358,24 @@ func main() {
 		log.Printf("[SERVER] XRPL gateway: %s", c.GatewayAddress)
 	} else {
 		log.Println("[WARN] GATEWAY_XRPL_PRIVATE_KEY not set — XRPL routing disabled")
+	}
+
+	xahauRPC := env("XAHAU_RPC_URL", "https://xahau.network")
+	xahauKey := os.Getenv("GATEWAY_XAHAU_PRIVATE_KEY")
+	if xahauKey == "" {
+		xahauKey = xrplKey // fall back to XRPL key — same secp256k1 key format
+	}
+	var xahauClient *chain.XahauClient
+	if xahauKey != "" {
+		c, err := chain.NewXahauClient(xahauRPC, xahauKey)
+		if err != nil {
+			log.Printf("[WARN] Xahau client init failed: %v", err)
+		} else {
+			xahauClient = c
+			log.Printf("[SERVER] Xahau gateway: %s", c.GatewayAddress)
+		}
+	} else {
+		log.Println("[WARN] No Xahau key configured — URIToken minting disabled")
 	}
 
 	var baseClient *chain.BaseClient
@@ -792,6 +811,35 @@ func main() {
 			"hook_count":   len(hookParams),
 		})
 
+		// ── Xahau URITokenMint ────────────────────────────────────────────────
+		var xahauTxHash string
+		if xahauClient != nil {
+			uriParams := make([]chain.URITokenHookParam, len(hookParams))
+			for i, hp := range hookParams {
+				uriParams[i] = chain.URITokenHookParam{
+					Name:  hp.HookParameterName,
+					Value: hp.HookParameterValue,
+				}
+			}
+			memoObj := map[string]interface{}{
+				"state_hash": hash,
+				"faces":      centers,
+				"committed":  committed.UTC().Format(time.RFC3339),
+			}
+			memoBytes, _ := json.Marshal(memoObj)
+			mintHash, mintErr := xahauClient.MintURIToken(hash, uriParams, string(memoBytes))
+			if mintErr != nil {
+				log.Printf("[CUBE] Xahau mint failed: %v", mintErr)
+			} else {
+				xahauTxHash = mintHash
+				log.Printf("[CUBE] Xahau URIToken minted: %s", mintHash)
+				hub.broadcast("XAHAU_MINT_CONFIRMED", map[string]interface{}{
+					"state_hash":   hash,
+					"xahau_tx":    mintHash,
+				})
+			}
+		}
+
 		log.Printf("[CUBE] committed hash=%s hooks=%d", hash, len(hookParams))
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(CubeStateResponse{
@@ -800,6 +848,7 @@ func main() {
 			Faces:       p.Faces,
 			HookParams:  hookParams,
 			CommittedAt: committed.UTC().Format(time.RFC3339),
+			XahauTxHash: xahauTxHash,
 		})
 	})
 
