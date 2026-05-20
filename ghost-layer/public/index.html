@@ -2,54 +2,211 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>GHOST LAYER TERMINAL</title>
+    <title>CUBE TERMINAL — GHOST LAYER</title>
     <style>
-        * { box-sizing: border-box; }
-        body { margin: 0; background: #000; overflow: hidden; font-family: 'Courier New', monospace; }
-        #terminal-overlay {
-            position: absolute;
-            top: 20px;
-            left: 20px;
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: #000;
             color: #00FFCC;
-            z-index: 10;
-            pointer-events: none;
-            user-select: none;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+            height: 100vh;
+            display: grid;
+            grid-template-rows: 1fr 38px;
         }
-        #terminal-overlay h1 {
-            margin: 0 0 10px;
-            font-size: 1.4rem;
-            letter-spacing: 0.12em;
-            text-shadow: 0 0 12px #00FFCC88;
-        }
-        .gl-row {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 0.72rem;
-            opacity: 0.85;
-            margin: 2px 0;
-            letter-spacing: 0.05em;
-        }
-        .gl-label { color: #667788; text-transform: uppercase; min-width: 72px; }
-        .gl-val   { color: #00FFCC; font-weight: bold; }
-        #gl-status { font-size: 0.72rem; }
-        .tach-bar {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            right: 20px;
-            height: 3px;
-            background: #111;
-            border-radius: 2px;
+        #main {
+            display: grid;
+            grid-template-columns: 272px 1fr 292px;
             overflow: hidden;
         }
+        #left-panel {
+            padding: 18px 14px;
+            border-right: 1px solid #0a2020;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            background: rgba(0,0,0,0.92);
+            z-index: 10;
+            overflow-y: auto;
+        }
+        #canvas-container {
+            position: relative;
+            overflow: hidden;
+        }
+        #canvas-container canvas {
+            position: absolute !important;
+            top: 0; left: 0;
+        }
+        #right-panel {
+            padding: 18px 14px;
+            border-left: 1px solid #0a2020;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            background: rgba(0,0,0,0.92);
+            z-index: 10;
+            overflow-y: auto;
+        }
+        #bottom-bar {
+            border-top: 1px solid #0a2020;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 0 18px;
+            background: #000;
+            z-index: 20;
+        }
+
+        /* ── Typography ── */
+        .panel-title {
+            font-size: 0.60rem;
+            letter-spacing: 0.22em;
+            color: #223344;
+            text-transform: uppercase;
+            border-bottom: 1px solid #0a2020;
+            padding-bottom: 7px;
+            margin-bottom: 2px;
+        }
+        h1 {
+            font-size: 1.05rem;
+            letter-spacing: 0.16em;
+            color: #00FFCC;
+            text-shadow: 0 0 14px #00FFCC33;
+        }
+        .sub-head {
+            font-size: 0.54rem;
+            color: #223344;
+            letter-spacing: 0.10em;
+            margin-top: 2px;
+        }
+
+        /* ── Stat rows ── */
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.68rem;
+            padding: 2px 0;
+        }
+        .stat-label { color: #334455; text-transform: uppercase; letter-spacing: 0.08em; }
+        .stat-val   { color: #00FFCC; font-weight: bold; }
+
+        /* ── Face grid ── */
+        .face-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 5px;
+        }
+        .face-block {
+            border: 1px solid #0a2020;
+            padding: 7px 8px;
+            cursor: pointer;
+            transition: border-color 0.12s, background 0.12s;
+        }
+        .face-block:hover  { border-color: #00FFCC33; background: #001818; }
+        .face-block.active { border-color: currentColor; background: #001818; }
+        .face-name { font-size: 0.54rem; letter-spacing: 0.16em; text-transform: uppercase; margin-bottom: 3px; }
+        .face-val  { font-size: 1.05rem; font-weight: bold; line-height: 1; }
+        .face-unit { font-size: 0.50rem; margin-left: 2px; color: #223344; }
+        .face-desc { font-size: 0.50rem; color: #223344; margin-top: 3px; }
+
+        /* ── Face detail ── */
+        #face-detail {
+            border: 1px solid #0a3030;
+            padding: 10px;
+            min-height: 88px;
+        }
+        .detail-name { font-size: 0.76rem; letter-spacing: 0.14em; margin-bottom: 5px; }
+        .detail-sub  { font-size: 0.58rem; color: #334455; margin-bottom: 6px; }
+        .detail-bar  { height: 2px; background: #0a2020; border-radius: 1px; overflow: hidden; margin: 5px 0; }
+        .detail-fill { height: 100%; transition: width 0.3s ease; }
+        .detail-note { font-size: 0.50rem; color: #1a2a3a; margin-top: 5px; }
+
+        /* ── Mapping table ── */
+        .map-table { width: 100%; border-collapse: collapse; font-size: 0.60rem; }
+        .map-table th {
+            text-align: left; color: #223344; letter-spacing: 0.12em;
+            text-transform: uppercase; padding: 4px 5px;
+            border-bottom: 1px solid #0a2020; font-weight: normal;
+        }
+        .map-table td { padding: 6px 5px; vertical-align: top; border-bottom: 1px solid #050e0e; }
+        .map-table td:first-child { color: #00FFCC; white-space: nowrap; padding-right: 10px; }
+        .map-table td:last-child  { color: #445566; line-height: 1.45; }
+
+        /* ── Chain path blocks ── */
+        .chain-block {
+            border: 1px solid #0a2020;
+            padding: 8px 9px;
+            margin-bottom: 5px;
+        }
+        .chain-model { font-size: 0.63rem; color: #00FFCC; letter-spacing: 0.08em; margin-bottom: 2px; }
+        .chain-env   { font-size: 0.56rem; color: #AA00FF; margin-bottom: 3px; }
+        .chain-core  { font-size: 0.55rem; color: #334455; line-height: 1.45; }
+
+        /* ── Revenue rows ── */
+        .rev-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.60rem;
+            padding: 4px 0;
+            border-bottom: 1px solid #050e0e;
+        }
+        .rev-row:last-child { border: none; }
+        .rev-name { color: #445566; }
+        .rev-val  { color: #00FF88; font-weight: bold; }
+
+        /* ── Token box ── */
+        .token-box {
+            border: 1px solid #AA00FF33;
+            padding: 9px;
+        }
+        #token-hash {
+            font-size: 0.52rem;
+            color: #AA00FF;
+            word-break: break-all;
+            letter-spacing: 0.04em;
+        }
+
+        /* ── Buttons ── */
+        .btn {
+            font-family: 'Courier New', monospace;
+            font-size: 0.58rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            border: 1px solid #00FFCC33;
+            background: none;
+            color: #00FFCC;
+            padding: 5px 10px;
+            cursor: pointer;
+            transition: all 0.12s;
+            flex: 1;
+        }
+        .btn:hover { border-color: #00FFCC; background: #00FFCC0d; }
+        .btn.purple { border-color: #AA00FF33; color: #AA00FF; }
+        .btn.purple:hover { border-color: #AA00FF; background: #AA00FF0d; }
+
+        /* ── Tach bar ── */
+        .tach-wrap { flex: 1; height: 3px; background: #0a1a1a; border-radius: 2px; overflow: hidden; }
         .tach-fill {
             height: 100%;
             width: 0%;
             background: linear-gradient(90deg, #00FFCC, #AA00FF);
+            box-shadow: 0 0 6px #00FFCC66;
             transition: width 0.1s linear;
-            box-shadow: 0 0 8px #00FFCC;
         }
+
+        /* ── Dividers ── */
+        .vdivider { width: 1px; height: 20px; background: #0a2020; flex-shrink: 0; }
+
+        /* ── Scrollbars ── */
+        #left-panel::-webkit-scrollbar,
+        #right-panel::-webkit-scrollbar { width: 2px; }
+        #left-panel::-webkit-scrollbar-thumb,
+        #right-panel::-webkit-scrollbar-thumb { background: #0a2020; }
+
+        /* ── Neon pulse ── */
+        @keyframes liveDot { 0%,100% { opacity:1; } 50% { opacity:0.35; } }
+        .live { animation: liveDot 1.6s infinite; }
     </style>
     <script type="importmap">
       { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
@@ -95,36 +252,197 @@
     </script>
 </head>
 <body>
-    <div id="terminal-overlay">
-        <h1>GHOST LAYER V2</h1>
-        <div class="gl-row">
-            <span class="gl-label">Stream</span>
-            <span class="gl-val" id="gl-status">○ CONNECTING</span>
+  <div id="main">
+
+    <!-- ── LEFT PANEL ──────────────────────────────────────────────────────── -->
+    <div id="left-panel">
+
+      <div>
+        <h1>CUBE TERMINAL</h1>
+        <div class="sub-head">GHOST LAYER V2 — 6-FACE EXECUTION MATRIX</div>
+      </div>
+
+      <div>
+        <div class="panel-title">System</div>
+        <div class="stat-row">
+          <span class="stat-label">Stream</span>
+          <span class="stat-val live" id="gl-status">○ CONNECTING</span>
         </div>
-        <div class="gl-row">
-            <span class="gl-label">Bridges</span>
-            <span class="gl-val" id="gl-count">–</span>
+        <div class="stat-row">
+          <span class="stat-label">Bridges</span>
+          <span class="stat-val" id="gl-count">–</span>
         </div>
-        <div class="gl-row">
-            <span class="gl-label">Chain</span>
-            <span class="gl-val" id="gl-chain">–</span>
+        <div class="stat-row">
+          <span class="stat-label">Chain</span>
+          <span class="stat-val" id="gl-chain">–</span>
         </div>
-        <div class="gl-row">
-            <span class="gl-label">Last TX</span>
-            <span class="gl-val" id="gl-tx">–</span>
+        <div class="stat-row">
+          <span class="stat-label">Last TX</span>
+          <span class="stat-val" id="gl-tx" style="font-size:0.55rem">–</span>
         </div>
-        <div class="gl-row">
-            <span class="gl-label">Last</span>
-            <span class="gl-val" id="gl-event">–</span>
+        <div class="stat-row">
+          <span class="stat-label">Event</span>
+          <span class="stat-val" id="gl-event">–</span>
         </div>
-        <div class="gl-row">
-            <span class="gl-label">Tach</span>
-            <span class="gl-val" id="gl-speed">0%</span>
+      </div>
+
+      <div>
+        <div class="panel-title">Execution Faces — 54-Block Matrix</div>
+        <div class="face-grid" id="face-grid">
+          <!-- Populated by cube.js -->
         </div>
+      </div>
+
+      <div>
+        <div class="panel-title">Selected Face</div>
+        <div id="face-detail">
+          <div class="stat-label" style="font-size:0.56rem">Click a face block to inspect parameters</div>
+        </div>
+      </div>
+
+      <div style="margin-top:auto">
+        <div class="stat-row" style="margin-bottom:6px">
+          <span class="stat-label">Tach</span>
+          <span class="stat-val" id="gl-speed">0%</span>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="btn" id="btn-rotate">ROTATE LAYER</button>
+          <button class="btn purple" id="btn-mint">MINT dNFT</button>
+        </div>
+      </div>
+
     </div>
-    <div class="tach-bar">
-        <div class="tach-fill" id="tach-fill"></div>
+
+    <!-- ── CENTER: 3D Canvas ─────────────────────────────────────────────── -->
+    <div id="canvas-container"></div>
+
+    <!-- ── RIGHT PANEL ─────────────────────────────────────────────────────── -->
+    <div id="right-panel">
+
+      <div>
+        <div class="panel-title">Interface Mapping</div>
+        <table class="map-table">
+          <thead>
+            <tr>
+              <th>Terminal Function</th>
+              <th>SML Infrastructure Tie-In</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Macro Variable Control</td>
+              <td>Liquidity, Privacy, and Speed across SML Rails</td>
+            </tr>
+            <tr>
+              <td>Granular Toggles</td>
+              <td>Specific RLUSD pools and Xahau Hook triggers</td>
+            </tr>
+            <tr>
+              <td>Live Logic Execution</td>
+              <td>Executing cross-chain Ghost Layer settlements</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div>
+        <div class="panel-title">On-Chain Implementation Paths</div>
+        <div class="chain-block">
+          <div class="chain-model">Dynamic NFT (dNFT)</div>
+          <div class="chain-env">Base Chain</div>
+          <div class="chain-core">Visual mutation based on cube state. Network and settlement triggers fire when RLUSD routing rebalances across the 54 blocks.</div>
+        </div>
+        <div class="chain-block">
+          <div class="chain-model">URIToken + Hooks</div>
+          <div class="chain-env">Xahau / XRPL</div>
+          <div class="chain-core">Tracks cube state mutations on-ledger. Every face rotation fires a Xahau Hook and records the micro-transaction permanently.</div>
+        </div>
+        <div class="chain-block" style="margin-bottom:0">
+          <div class="chain-model">Identity / Access</div>
+          <div class="chain-env">Cross-Chain</div>
+          <div class="chain-core">Token acts as sovereign encrypted license. Only wallets holding the Cube Token can interface with the Go-based Ghost Layer server.</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel-title">Zero-Custody Revenue</div>
+        <div class="rev-row">
+          <span class="rev-name">Toll Booth (routing fee)</span>
+          <span class="rev-val" id="rev-toll">0.10%</span>
+        </div>
+        <div class="rev-row">
+          <span class="rev-name">BYOK license sales</span>
+          <span class="rev-val" id="rev-license">0 RLUSD</span>
+        </div>
+        <div class="rev-row">
+          <span class="rev-name">Agent gas optimization</span>
+          <span class="rev-val" id="rev-gas">0 drops</span>
+        </div>
+        <div class="rev-row">
+          <span class="rev-name">Total accumulated</span>
+          <span class="rev-val" id="rev-total">0.0000 RLUSD</span>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel-title">Cube Token State</div>
+        <div class="token-box">
+          <div class="stat-row">
+            <span class="stat-label">Protocol</span>
+            <span class="stat-val">dNFT / URIToken</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Status</span>
+            <span class="stat-val" id="token-status">UNMINTED</span>
+          </div>
+          <div class="stat-row" style="margin-top:4px">
+            <span class="stat-label">State Hash</span>
+          </div>
+          <div id="token-hash" style="margin-top:2px">—</div>
+          <div class="stat-row" style="margin-top:6px">
+            <span class="stat-label">Blocks mapped</span>
+            <span class="stat-val">54 / 54</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Active hooks</span>
+            <span class="stat-val" id="token-hooks">6</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel-title">Block Parameter Legend</div>
+        <div style="font-size:0.56rem;color:#334455;line-height:1.8">
+          <div>&#9632; CENTER BLOCK &mdash; primary parameter value</div>
+          <div>&#9632; EDGE BLOCKS &mdash; modifier &amp; sub-routing</div>
+          <div>&#9632; CORNER BLOCKS &mdash; fine-tuning coefficients</div>
+        </div>
+      </div>
+
     </div>
-    <script type="module" src="js/cube.js"></script>
+  </div>
+
+  <!-- ── BOTTOM BAR ─────────────────────────────────────────────────────────── -->
+  <div id="bottom-bar">
+    <span style="font-size:0.56rem;color:#223344;letter-spacing:0.12em;white-space:nowrap">TACH</span>
+    <div class="tach-wrap">
+      <div class="tach-fill" id="tach-fill"></div>
+    </div>
+    <span style="font-size:0.56rem;color:#445566;white-space:nowrap" id="gl-speed-bar">0%</span>
+    <div class="vdivider"></div>
+    <span style="font-size:0.56rem;color:#223344;white-space:nowrap">STATE</span>
+    <span style="font-size:0.58rem;color:#AA00FF;font-weight:bold;letter-spacing:0.06em" id="state-label">IDLE</span>
+    <div class="vdivider"></div>
+    <span style="font-size:0.56rem;color:#223344;white-space:nowrap">CUSTODY</span>
+    <span style="font-size:0.58rem;color:#00FF88;font-weight:bold">ZERO</span>
+    <div class="vdivider"></div>
+    <span style="font-size:0.56rem;color:#223344;white-space:nowrap">FACES</span>
+    <span style="font-size:0.58rem;color:#00FFCC;font-weight:bold">6 ARMED</span>
+    <div class="vdivider"></div>
+    <span style="font-size:0.56rem;color:#223344;white-space:nowrap">BLOCKS</span>
+    <span style="font-size:0.58rem;color:#00FFCC;font-weight:bold">54 LIVE</span>
+  </div>
+
+  <script type="module" src="js/cube.js"></script>
 </body>
 </html>
