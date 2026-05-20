@@ -39,7 +39,7 @@ class SqueezeOS_CEO:
     def __init__(self):
         self.polygon = PolygonProvider()
         self.alpaca = AlpacaProvider()
-        self.watchlist = ["IWM"] # Only large cap anchor (0DTE)
+        self.watchlist = ["IWM", "AMC", "GME"] # Base anchors
         self.engine = GammaFlowEngine(self.polygon, self.watchlist)
         self.last_discovery = 0
         
@@ -65,8 +65,8 @@ class SqueezeOS_CEO:
                     actives = self.alpaca.get_most_actives(top=50)
                     new_tickers = [a['symbol'] for a in actives if a.get('symbol')]
             
-            # Merge with anchors (only IWM) and remove duplicates
-            combined = list(dict.fromkeys(["IWM"] + new_tickers))[:20]
+            # Merge with anchors and remove duplicates
+            combined = list(dict.fromkeys(["IWM", "AMC", "GME"] + new_tickers))[:20]
             
             if set(combined) != set(self.watchlist):
                 logger.info(f"🔄 [CEO] Dynamic Discovery ($1-$60 Wide Net): {', '.join(combined)}")
