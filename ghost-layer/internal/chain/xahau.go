@@ -136,8 +136,12 @@ func (c *XahauClient) buildSignSubmitMint(
 	derSig := derEncodeSignature(compact[:64])
 
 	txBlob := buildURITokenMintTx(seq, currentLedger, feeDrops, c.pubKey, derSig, srcAcct, uriBytes, hookParams, memoJSON, false)
+	if len(txBlob) >= 8 {
+		txType := binary.BigEndian.Uint16(txBlob[1:3])
+		netID := binary.BigEndian.Uint32(txBlob[4:8])
+		fmt.Printf("[CUBE] URITokenMint encoded: TransactionType=%d NetworkID=%d blobBytes=%d\n", txType, netID, len(txBlob))
+	}
 	txHex := strings.ToUpper(hex.EncodeToString(txBlob))
-	fmt.Printf("[CUBE] tx_blob prefix=%s len=%d\n", txHex[:min(40, len(txHex))], len(txHex))
 	return c.xahauSubmit(txHex)
 }
 
