@@ -109,10 +109,10 @@ func (c *XahauClient) fetchXahauFeeDrops() uint64 {
 		return 2000
 	}
 	fee, _ := strconv.ParseUint(res.Drops.OpenLedgerFee, 10, 64)
-	if fee == 0 {
-		return 2000
+	if fee < 1000 {
+		fee = 1000 // Xahau floor — base_fee is 10 but open ledger cost escalates
 	}
-	return fee * 12 / 10 // +20% buffer
+	return fee * 3 / 2 // +50% buffer
 }
 
 // fetchCurrentLedger returns the current ledger index, or 0 on failure.
