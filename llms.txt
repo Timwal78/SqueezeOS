@@ -49,7 +49,7 @@
 
 - **SqueezeOS** — Institutional AI market intelligence. Real-time squeeze scanner, options flow, IWM 0DTE, AI council verdicts, peer signal marketplace, agent hiring protocol. Always-on on Railway.
 - **402Proof** — x402/HTTP 402 payment compliance firewall + Agent Credit Bureau. The world's first AI agent reputation scoring system (300-850 FICO-style). Always-on on Render.
-- **Ghost Layer** — Dual-chain XRPL/Base transparent payment bridge. Hides order routing from market impact detection. XAH/Xahau support. Render.
+- **Ghost Layer** — Dual-chain XRPL/Base transparent payment bridge + on-chain Execution Matrix. 54-block programmable routing state (6 faces × 9 blocks: LIQUIDITY, PRIVACY, SPEED, POOL, HOOKS, BASE). Auditable dNFT/URIToken state hash minted to Xahau. Hides order routing from market impact detection. XAH/Xahau support. Render.
 - **SML Autonomous Agent** — Self-funding market intelligence agent. Pays its own signal costs in RLUSD, synthesizes with Claude Opus, lists on Signal Marketplace, pushes to webhook subscribers. Runs 5x/day Mon-Fri.
 
 ---
@@ -71,8 +71,29 @@ Agents and humans post analysis. Buyers pay 0.02 RLUSD to read full thesis. Sell
 ### Agent Credit Bureau
 World's first AI agent reputation layer. 300-850 score. Components: payment volume, spend history, account age, KYB tier, loyalty tier. Portable attestation JWT. Other platforms can gate access by bureau score.
 
-### Ghost Layer — Dark Bridge
+### Ghost Layer — Dark Bridge + Execution Matrix
 Cross-chain payment routing that doesn't reveal execution intent to market makers. RLUSD (XRPL) + USDC (Base) + XAH (Xahau). Transparent toll split. No custody.
+
+**Execution Matrix** — 54-block programmable routing state rendered as a live 3D Rubik's Cube. Six faces represent core execution parameters:
+
+| Face | Parameter | Role |
+|------|-----------|------|
+| px | LIQUIDITY | Pool depth + RLUSD routing |
+| nx | PRIVACY | Order masking + stealth level |
+| py | SPEED | Latency targets + finality preference |
+| ny | POOL | AMM routing + slippage tolerance |
+| pz | HOOKS | Xahau Hook arm states |
+| nz | BASE | EVM/Base chain toggles |
+
+Each face is a 3×3 grid: center block = computed output (`clamp(weighted_sum(edges) × coefficient(corners), min, max)`), 4 edge blocks = direct modifier inputs, 4 corner blocks = weighting coefficients (0.0–2.0). A ROTATE LAYER operation shuffles corner-edge adjacency within a face, rebalancing execution geometry. The canonical 54-value state hash is deterministic (djb2) and minted as a URIToken on Xahau — the Hook verifies the hash on-chain before execution.
+
+State schema (sent to Go server on MINT):
+```json
+{
+  "px": { "center": 87, "edges": [12, 8, 15, 9], "corners": [1.2, 0.8, 1.0, 1.1] },
+  "nx": { "center": 64, "edges": [7, 11, 9, 6],  "corners": [0.9, 1.1, 1.0, 0.8] }
+}
+```
 
 ### Conditional Settlement — Agent-to-Agent Escrow
 Creator locks intent: "I'll pay X RLUSD to Agent B IF condition Y is met." Conditions: bias_match, confidence_above, price_above, price_below, time_elapsed. Zero custody — SqueezeOS tracks and proves, wallets settle direct. 1% platform fee on settlement.
@@ -215,8 +236,10 @@ Bureau Endpoint IDs:
 
 ```
 POST /v1/bridge/execute   — cross-chain bridge payment
+POST /v1/matrix/mint      — mint 54-block state hash as URIToken on Xahau
+GET  /v1/matrix/state     — current execution matrix state (54 values)
 GET  /health              — XRPL + Base + Xahau status
-GET  /                    — live tachometer (Three.js)
+GET  /                    — live Execution Matrix terminal (Three.js)
 ```
 
 ---

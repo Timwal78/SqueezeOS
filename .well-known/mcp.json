@@ -249,7 +249,7 @@
     },
     {
       "name": "ghost_layer_bridge",
-      "description": "Ghost Layer dual-chain transparent toll gateway. Routes payments on XRPL (XRP native) or Base chain (USDC with EIP-3009). Applies configurable basis-point fee with full disclosure, delivers net amount to destination, auto-sweeps fees to cold treasury. Use is_dust_test=true to validate without broadcasting. No RLUSD payment required \u2014 this is a direct settlement service.",
+      "description": "Ghost Layer dual-chain transparent toll gateway + 54-block on-chain Execution Matrix. Routes payments on XRPL (RLUSD) or Base (USDC/EIP-3009). Six programmable routing faces \u2014 LIQUIDITY, PRIVACY, SPEED, POOL, HOOKS, BASE \u2014 each a 3\u00d73 grid of weighted sub-parameters. Canonical 54-value state hash minted as URIToken on Xahau; Hook verifies hash on-chain before execution. Applies configurable basis-point fee, delivers net amount to destination, auto-sweeps fees to cold treasury. Use is_dust_test=true to validate without broadcasting. No RLUSD payment required \u2014 direct settlement service.",
       "endpoint": "POST https://ghost-layer.onrender.com/v1/bridge/execute",
       "price_rlusd": 0,
       "note": "Service charges a configurable fee_basis_points on the gross_amount. Not RLUSD gated.",
