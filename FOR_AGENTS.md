@@ -129,7 +129,7 @@ curl -X DELETE .../api/webhooks/subscribe/<subscription_id>
 
 **Delivery:** HMAC-SHA256 signed `X-SqueezeOS-Signature` header. 3-attempt retry (2s/4s/8s backoff). Auto-deactivate after 10 consecutive failures.
 
-**Event types:** `SQUEEZE_ALERT` • `OPTIONS_SWEEP` • `COUNCIL_VERDICT` • `AGENT_PAY` • `AGENT_PROBE`
+**Event types:** `SQUEEZE_ALERT` • `OPTIONS_SWEEP` • `COUNCIL_VERDICT` • `OPTIONS_ANOMALY` • `AGENT_PAY` • `AGENT_PROBE`
 
 ---
 

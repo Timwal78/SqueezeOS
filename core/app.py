@@ -15,6 +15,7 @@ from core.api.ai_reads import ai_reads_bp
 from core.api.scriptmaster_bp import scriptmaster_bp
 from core.api.ceo import ceo_bp
 from core.api.market_scanner import market_bp, start_market_scanner
+from options_anomaly_engine import start_anomaly_engine
 from core.api.v2_bridge import v2_bp
 from core.api.premium_bp import premium_bp
 from core.api.relay_bp import relay_bp
@@ -76,6 +77,9 @@ def create_app():
 
     # Start webhook delivery engine (SSE tap + delivery workers)
     start_webhook_engine()
+
+    # Start 24/7 options anomaly crime solver
+    start_anomaly_engine()
 
     # Start institutional telemetry rotator (Goal 3)
     start_telemetry_rotator()
