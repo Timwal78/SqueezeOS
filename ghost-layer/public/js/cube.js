@@ -339,12 +339,13 @@ const DECAY      = 0.97;
 
 // SSE events target specific edge indices — centers are derived, never set directly
 const EVENT_CFG = {
-  BRIDGE_SETTLED:  { speed: 0.060, palette: 'xrpl',    label: 'SETTLED', face: 'px', edgeIdx: 0, delta:  2 },
-  AGENT_PROBE:     { speed: 0.008, palette: 'probe',   label: 'PROBE',   face: 'ny', edgeIdx: 1, delta:  1 },
-  AGENT_PAY:       { speed: 0.020, palette: 'pay',     label: 'INVOICE', face: 'pz', edgeIdx: 0, delta:  1 },
-  COUNCIL_VERDICT: { speed: 0.025, palette: 'verdict', label: 'VERDICT', face: 'py', edgeIdx: 2, delta: -10 },
-  SQUEEZE_ALERT:   { speed: 0.030, palette: 'squeeze', label: 'SQUEEZE', face: 'px', edgeIdx: 2, delta:  5 },
-  OPTIONS_SWEEP:   { speed: 0.030, palette: 'squeeze', label: 'SWEEP',   face: 'px', edgeIdx: 3, delta:  3 },
+  BRIDGE_SETTLED:       { speed: 0.060, palette: 'xrpl',    label: 'SETTLED',   face: 'px', edgeIdx: 0, delta:  2 },
+  AGENT_PROBE:          { speed: 0.008, palette: 'probe',   label: 'PROBE',     face: 'ny', edgeIdx: 1, delta:  1 },
+  AGENT_PAY:            { speed: 0.020, palette: 'pay',     label: 'INVOICE',   face: 'pz', edgeIdx: 0, delta:  1 },
+  COUNCIL_VERDICT:      { speed: 0.025, palette: 'verdict', label: 'VERDICT',   face: 'py', edgeIdx: 2, delta: -10 },
+  SQUEEZE_ALERT:        { speed: 0.030, palette: 'squeeze', label: 'SQUEEZE',   face: 'px', edgeIdx: 2, delta:  5 },
+  OPTIONS_SWEEP:        { speed: 0.030, palette: 'squeeze', label: 'SWEEP',     face: 'px', edgeIdx: 3, delta:  3 },
+  CUBE_STATE_COMMITTED: { speed: 0.045, palette: 'verdict', label: 'COMMITTED'                                   },
 };
 
 let rotSpeed       = BASE_SPEED;
@@ -499,18 +500,51 @@ document.getElementById('btn-rotate')?.addEventListener('click', () => {
   setState('ROTATING');
 });
 
-document.getElementById('btn-mint')?.addEventListener('click', () => {
+document.getElementById('btn-mint')?.addEventListener('click', async () => {
   if (tokenStatEl) { tokenStatEl.textContent = 'PENDING'; tokenStatEl.style.color = '#FF8800'; }
   setState('MINTING');
-  setTimeout(() => {
-    if (tokenStatEl) { tokenStatEl.textContent = 'MINTED'; tokenStatEl.style.color = '#00FF88'; }
-    if (tokenHooksEl) tokenHooksEl.textContent = computeCenter(FACE_PARAMS.pz);
-    setState('IDLE');
-    pulseIntensity = 1.0;
-    activePalette  = 'verdict';
-    rotSpeed       = 0.04;
-    setTimeout(() => { activePalette = 'default'; resetFaceColors(); }, 3000);
-  }, 1500);
+
+  // Build the canonical 54-block payload the server will verify
+  const faces = {};
+  for (const key of FACE_KEYS) {
+    const fp = FACE_PARAMS[key];
+    faces[key] = {
+      center:   computeCenter(fp),
+      edges:    [...fp.edges],
+      corners:  [...fp.corners],
+      rotation: fp.rotation,
+    };
+  }
+  const hash = updateStateHash();
+
+  try {
+    const res  = await fetch('/api/cube/state', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ hash, faces }),
+    });
+    const data = await res.json();
+
+    if (res.ok && data.verified) {
+      if (tokenStatEl)  { tokenStatEl.textContent = 'MINTED'; tokenStatEl.style.color = '#00FF88'; }
+      if (tokenHashEl)  tokenHashEl.textContent  = data.state_hash;
+      if (tokenHooksEl) tokenHooksEl.textContent = data.faces?.pz?.center ?? computeCenter(FACE_PARAMS.pz);
+      setState('IDLE');
+      pulseIntensity = 1.0;
+      activePalette  = 'verdict';
+      rotSpeed       = 0.04;
+      setTimeout(() => { activePalette = 'default'; resetFaceColors(); }, 3000);
+    } else {
+      if (tokenStatEl) { tokenStatEl.textContent = 'REJECTED'; tokenStatEl.style.color = '#FF0055'; }
+      setState('VERIFY_ERR');
+      console.error('[CUBE] mint rejected:', data.error);
+      setTimeout(() => setState('IDLE'), 3000);
+    }
+  } catch (err) {
+    if (tokenStatEl) { tokenStatEl.textContent = 'OFFLINE'; tokenStatEl.style.color = '#FF4400'; }
+    setState('NET_ERR');
+    setTimeout(() => setState('IDLE'), 3000);
+  }
 });
 
 // ── Resize ─────────────────────────────────────────────────────────────────────

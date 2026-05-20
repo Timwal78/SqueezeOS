@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"math/big"
 	"net"
 	"net/http"
@@ -135,6 +136,172 @@ func allowIP(ip string) bool {
 
 // sweepWg tracks pending async sweep goroutines so graceful shutdown can drain them.
 var sweepWg sync.WaitGroup
+
+// ── Cube execution matrix types ───────────────────────────────────────────────
+
+type CubeFaceState struct {
+	Center   int       `json:"center"`
+	Edges    []int     `json:"edges"`
+	Corners  []float64 `json:"corners"`
+	Rotation int       `json:"rotation"`
+}
+
+type CubeStatePayload struct {
+	Hash  string                    `json:"hash"`
+	Faces map[string]*CubeFaceState `json:"faces"`
+}
+
+type XahauHookParam struct {
+	HookParameterName  string `json:"HookParameterName"`
+	HookParameterValue string `json:"HookParameterValue"`
+}
+
+type CubeStateResponse struct {
+	Verified    bool                      `json:"verified"`
+	StateHash   string                    `json:"state_hash"`
+	Faces       map[string]*CubeFaceState `json:"faces,omitempty"`
+	HookParams  []XahauHookParam          `json:"hook_params"`
+	CommittedAt string                    `json:"committed_at,omitempty"`
+	Error       string                    `json:"error,omitempty"`
+}
+
+// valid [min, max] for each face's center — must mirror cube.js FACE_PARAMS
+var cubeFaceBounds = map[string][2]int{
+	"px": {0, 100},
+	"nx": {0, 10},
+	"py": {100, 5000},
+	"ny": {0, 50},
+	"pz": {0, 20},
+	"nz": {0, 500},
+}
+
+var cubeKeys = []string{"px", "nx", "py", "ny", "pz", "nz"}
+
+// cubeStateStore: last verified + committed cube state
+var (
+	cubeStateMu    sync.RWMutex
+	lastCubeState  *CubeStatePayload
+	lastCommitTime time.Time
+)
+
+// computeFaceCenter mirrors the cube.js formula exactly:
+//
+//	center = clamp( Σ(edge[i] × corner[(i+rotation)%4]) / Σ(corner[(i+rotation)%4]), min, max )
+func computeFaceCenter(key string, fp *CubeFaceState) int {
+	rot := fp.Rotation % 4
+	var wSum, wTotal float64
+	for i := 0; i < 4; i++ {
+		cIdx := (i + rot) % 4
+		wSum += float64(fp.Edges[i]) * fp.Corners[cIdx]
+		wTotal += fp.Corners[cIdx]
+	}
+	if wTotal == 0 {
+		return 0
+	}
+	rounded := int(math.Round(wSum / wTotal))
+	b, ok := cubeFaceBounds[key]
+	if !ok {
+		return rounded
+	}
+	if rounded < b[0] {
+		return b[0]
+	}
+	if rounded > b[1] {
+		return b[1]
+	}
+	return rounded
+}
+
+// djb2Hash mirrors the uint32 djb2 used in cube.js updateStateHash()
+func djb2Hash(s string) uint32 {
+	h := uint32(5381)
+	for _, c := range []byte(s) {
+		h = ((h << 5) + h) ^ uint32(c)
+	}
+	return h
+}
+
+// buildStateString constructs the canonical 54-field pipe-delimited string.
+// Format: pxc:87|pxe0:91|pxe1:82|…|pxk0:1.1|…|nzk3:1.0
+func buildStateString(faces map[string]*CubeFaceState) string {
+	var parts []string
+	for _, key := range cubeKeys {
+		fp, ok := faces[key]
+		if !ok {
+			continue
+		}
+		ctr := computeFaceCenter(key, fp)
+		parts = append(parts, fmt.Sprintf("%sc:%d", key, ctr))
+		for i, v := range fp.Edges {
+			parts = append(parts, fmt.Sprintf("%se%d:%d", key, i, v))
+		}
+		for i, v := range fp.Corners {
+			parts = append(parts, fmt.Sprintf("%sk%d:%.1f", key, i, v))
+		}
+	}
+	return strings.Join(parts, "|")
+}
+
+// computeCubeHash returns CUBE-XXXXXXXX matching cube.js updateStateHash()
+func computeCubeHash(faces map[string]*CubeFaceState) string {
+	return fmt.Sprintf("CUBE-%08X", djb2Hash(buildStateString(faces)))
+}
+
+// buildHookParams encodes the 6 face centers as Xahau HookParameters.
+// Names are hex-encoded 3-byte abbreviations; values are 4-digit hex centers.
+func buildHookParams(faces map[string]*CubeFaceState) []XahauHookParam {
+	faceShorts := []struct{ key, abbr string }{
+		{"px", "liq"}, {"nx", "prv"}, {"py", "spd"},
+		{"ny", "pol"}, {"pz", "hks"}, {"nz", "bas"},
+	}
+	params := make([]XahauHookParam, 0, len(faceShorts))
+	for _, fs := range faceShorts {
+		fp, ok := faces[fs.key]
+		if !ok {
+			continue
+		}
+		ctr := computeFaceCenter(fs.key, fp)
+		params = append(params, XahauHookParam{
+			HookParameterName:  strings.ToUpper(hex.EncodeToString([]byte(fs.abbr))),
+			HookParameterValue: fmt.Sprintf("%04X", ctr),
+		})
+	}
+	return params
+}
+
+// validateCubePayload checks shape, verifies every face center against the
+// server's computation, and verifies the submitted hash is canonical.
+func validateCubePayload(p *CubeStatePayload) (string, error) {
+	if len(p.Faces) != 6 {
+		return "", fmt.Errorf("expected 6 faces, got %d", len(p.Faces))
+	}
+	for _, key := range cubeKeys {
+		fp, ok := p.Faces[key]
+		if !ok {
+			return "", fmt.Errorf("missing face %q", key)
+		}
+		if len(fp.Edges) != 4 {
+			return "", fmt.Errorf("face %s: need 4 edges, got %d", key, len(fp.Edges))
+		}
+		if len(fp.Corners) != 4 {
+			return "", fmt.Errorf("face %s: need 4 corners, got %d", key, len(fp.Corners))
+		}
+		for i, c := range fp.Corners {
+			if c <= 0 || c > 3.0 {
+				return "", fmt.Errorf("face %s corner[%d]=%.2f out of range (0, 3.0]", key, i, c)
+			}
+		}
+		computed := computeFaceCenter(key, fp)
+		if computed != fp.Center {
+			return "", fmt.Errorf("face %s center mismatch: submitted %d, server computed %d", key, fp.Center, computed)
+		}
+	}
+	serverHash := computeCubeHash(p.Faces)
+	if p.Hash != serverHash {
+		return "", fmt.Errorf("hash mismatch: submitted %q, server computed %q", p.Hash, serverHash)
+	}
+	return serverHash, nil
+}
 
 // ── Payload types ─────────────────────────────────────────────────────────────
 
@@ -586,6 +753,106 @@ func main() {
 			}
 		})
 	}
+
+	// ── CUBE EXECUTION MATRIX ─────────────────────────────────────────────────
+	// POST /api/cube/state — receive 54-block payload, verify, store, broadcast
+	r.Post("/api/cube/state", func(w http.ResponseWriter, req *http.Request) {
+		req.Body = http.MaxBytesReader(w, req.Body, 64*1024)
+		var p CubeStatePayload
+		if err := json.NewDecoder(req.Body).Decode(&p); err != nil {
+			http.Error(w, "malformed payload", http.StatusBadRequest)
+			return
+		}
+
+		hash, err := validateCubePayload(&p)
+		if err != nil {
+			log.Printf("[CUBE] validation failed: %v", err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnprocessableEntity)
+			json.NewEncoder(w).Encode(CubeStateResponse{Verified: false, Error: err.Error()})
+			return
+		}
+
+		cubeStateMu.Lock()
+		lastCubeState = &p
+		lastCommitTime = time.Now()
+		committed := lastCommitTime
+		cubeStateMu.Unlock()
+
+		hookParams := buildHookParams(p.Faces)
+
+		// SSE broadcast so all connected terminals see the commit
+		centers := make(map[string]interface{}, 6)
+		for _, key := range cubeKeys {
+			centers[key] = p.Faces[key].Center
+		}
+		hub.broadcast("CUBE_STATE_COMMITTED", map[string]interface{}{
+			"state_hash":   hash,
+			"face_centers": centers,
+			"hook_count":   len(hookParams),
+		})
+
+		log.Printf("[CUBE] committed hash=%s hooks=%d", hash, len(hookParams))
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(CubeStateResponse{
+			Verified:    true,
+			StateHash:   hash,
+			Faces:       p.Faces,
+			HookParams:  hookParams,
+			CommittedAt: committed.UTC().Format(time.RFC3339),
+		})
+	})
+
+	// GET /api/cube/state — return last committed state
+	r.Get("/api/cube/state", func(w http.ResponseWriter, req *http.Request) {
+		cubeStateMu.RLock()
+		state := lastCubeState
+		committed := lastCommitTime
+		cubeStateMu.RUnlock()
+
+		w.Header().Set("Content-Type", "application/json")
+		if state == nil {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"committed": false,
+				"msg":       "no cube state committed yet",
+			})
+			return
+		}
+		json.NewEncoder(w).Encode(CubeStateResponse{
+			Verified:    true,
+			StateHash:   state.Hash,
+			Faces:       state.Faces,
+			HookParams:  buildHookParams(state.Faces),
+			CommittedAt: committed.UTC().Format(time.RFC3339),
+		})
+	})
+
+	// GET /api/cube/payload — Xahau Hook-ready URIToken memo payload
+	r.Get("/api/cube/payload", func(w http.ResponseWriter, req *http.Request) {
+		cubeStateMu.RLock()
+		state := lastCubeState
+		committed := lastCommitTime
+		cubeStateMu.RUnlock()
+
+		w.Header().Set("Content-Type", "application/json")
+		if state == nil {
+			http.Error(w, "no committed cube state", http.StatusNotFound)
+			return
+		}
+		hookParams := buildHookParams(state.Faces)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"schema_version":  "54-block-v1",
+			"hook_type":       "CUBE_STATE",
+			"state_hash":      state.Hash,
+			"committed_at":    committed.UTC().Format(time.RFC3339),
+			"hook_parameters": hookParams,
+			"memo": map[string]string{
+				"MemoData":   strings.ToUpper(hex.EncodeToString([]byte(state.Hash))),
+				"MemoType":   strings.ToUpper(hex.EncodeToString([]byte("CUBE_STATE"))),
+				"MemoFormat": strings.ToUpper(hex.EncodeToString([]byte("application/json"))),
+			},
+		})
+	})
 
 	// ── WELL-KNOWN DISCOVERY FILES ───────────────────────────────────────────
 	r.Get("/.well-known/mcp.json", func(w http.ResponseWriter, req *http.Request) {
