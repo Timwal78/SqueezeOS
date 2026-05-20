@@ -152,13 +152,14 @@ func (c *XahauClient) buildSignSubmitMint(
 // buildURITokenMintTx serialises a Xahau URITokenMint in canonical XRPL binary.
 //
 // Field order: (TypeCode ASC, FieldCode ASC) — the XRPL canonical serialisation spec.
+// Field codes verified against xahau.js/packages/ripple-binary-codec/src/enums/definitions.json
 //
 //	UInt16(1):   TransactionType(2)
 //	UInt32(2):   NetworkID(1), Flags(2), Sequence(4), LastLedgerSequence(27)
 //	Amount(6):   Fee(8)
 //	Blob(7):     SigningPubKey(3), TxnSignature(4), URI(5)
 //	AccountID(8):Account(1)
-//	STArray(15): Memos(9), HookParameters(20)
+//	STArray(15): Memos(9), HookParameters(19)
 //
 // Xahau mainnet NetworkID=21337 is mandatory — nodes reject transactions without it.
 func buildURITokenMintTx(
@@ -248,10 +249,31 @@ func buildURITokenMintTx(
 		buf.WriteByte(0xF1) // end Memos STArray
 	}
 
-	// HookParameters intentionally omitted — field codes are Xahau-version-specific
-	// and caused "Unknown field in Array" rejection. The 6 face centers are encoded
-	// in the Memo above and in the URI hash, which is the canonical on-chain record.
-	_ = hookParams
+	// ── HookParameters STArray (type=15, nth=19 → 0xF0 0x13) ──────────────────
+	// Verified field codes from xahau.js definitions.json:
+	//   HookParameters STArray nth=19, HookParameter STObject nth=23
+	//   HookParameterName Blob nth=24, HookParameterValue Blob nth=25
+	if len(hookParams) > 0 {
+		buf.Write([]byte{0xF0, 0x13}) // HookParameters array start (type=15, field=19)
+
+		for _, hp := range hookParams {
+			buf.Write([]byte{0xE0, 0x17}) // HookParameter STObject (type=14, field=23)
+
+			// HookParameterName  [Blob nth=24 → 0x70 0x18]
+			nameBytes, _ := hex.DecodeString(hp.Name)
+			buf.Write([]byte{0x70, 0x18})
+			buf.Write(vlEncode(nameBytes))
+
+			// HookParameterValue [Blob nth=25 → 0x70 0x19]
+			valBytes, _ := hex.DecodeString(hp.Value)
+			buf.Write([]byte{0x70, 0x19})
+			buf.Write(vlEncode(valBytes))
+
+			buf.WriteByte(0xE1) // end HookParameter STObject
+		}
+
+		buf.WriteByte(0xF1) // end HookParameters STArray
+	}
 
 	return buf.Bytes()
 }
