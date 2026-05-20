@@ -50,7 +50,7 @@
 - **SqueezeOS** — Institutional AI market intelligence. Real-time squeeze scanner, options flow, IWM 0DTE, AI council verdicts, peer signal marketplace, agent hiring protocol. Always-on on Railway.
 - **402Proof** — x402/HTTP 402 payment compliance firewall + Agent Credit Bureau. The world's first AI agent reputation scoring system (300-850 FICO-style). Always-on on Render.
 - **Ghost Layer** — Dual-chain XRPL/Base transparent payment bridge + Cube Terminal dNFT minting. x402 payment gated. XAH/Xahau support. Render. `https://ghost-layer.onrender.com`
-- **Ghost Layer Sovereign** — Private XRP routing engine. MEV-proof execution, ZK-shielded transactions (XLS-372 + XLS-0096), The Sentinel MEV blocker, Sovereign Threshold circuit, EC-ElGamal BN254 encryption. 0.2% fee. No KYC. `https://frontend-woad-kappa-73.vercel.app/dashboard`
+- **Ghost Layer Sovereign** — Private XRP routing engine. MEV-proof execution, ZK-shielded transactions (XLS-372 + XLS-0096), The Sentinel MEV blocker, Sovereign Threshold circuit, EC-ElGamal BN254 encryption. 0.2% fee. No KYC. `https://ghost-layer-sovereign.vercel.app/dashboard`
 - **SML Autonomous Agent** — Self-funding market intelligence agent. Pays its own signal costs in RLUSD, synthesizes with Claude Opus, lists on Signal Marketplace, pushes to webhook subscribers. Runs 5x/day Mon-Fri.
 
 ---
