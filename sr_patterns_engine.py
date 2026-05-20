@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 import logging
-import yfinance as yf
+import tradier_api
 from typing import Dict, List
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -20,11 +20,14 @@ class SRPatternsEngine:
         self.proximity_pct = proximity_pct
 
     def fetch_batch_data(self, symbols, period="60d", interval="60m"):
-        """Fetch historical data. Uses 60 days of hourly (intraday) bars for deep pivot detection."""
+        """Fetch historical data via Tradier. Uses daily bars for pivot detection."""
         if not symbols: return {}
+        if not tradier_api.is_available():
+            logger.warning("[SR] TRADIER_API_KEY not set — cannot fetch history")
+            return {}
         try:
-            data = yf.download(symbols, period=period, interval=interval, group_by='ticker', progress=False, threads=False)
-            return data
+            days = int(period.replace("d", "")) if isinstance(period, str) and period.endswith("d") else 60
+            return tradier_api.get_history_batch(symbols, days=days)
         except Exception as e:
             logger.error(f"Batch fetch error SRPatterns: {e}")
             return {}
@@ -212,7 +215,7 @@ class SRPatternsEngine:
         for sym in symbols:
             try:
                 if len(symbols) > 1:
-                    df = batch_df[sym].copy() if sym in batch_df.columns.levels[0] else None
+                    df = batch_df[sym].copy() if sym in batch_df else None
                 else:
                     df = batch_df.copy()
                     

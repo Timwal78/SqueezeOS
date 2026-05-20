@@ -22,8 +22,6 @@ from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
-# Suppress noisy yfinance delisting errors
-logging.getLogger('yfinance').setLevel(logging.CRITICAL)
 
 # ============================================================
 # BULLETPROOF .env loader
