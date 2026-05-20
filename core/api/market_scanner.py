@@ -143,7 +143,7 @@ def _run_scan():
         
         # 4. Technical Pattern Analysis (Golden Cross, Double Bottom, Momentum)
         try:
-            analyzer = SqueezeAnalyzer(tradier_api=tradier)
+            analyzer = SqueezeAnalyzer()
             technical_results = analyzer.analyze_batch(sweet)
         except Exception as e:
             logger.error(f"[SCAN] SqueezeAnalyzer failed: {e}")
