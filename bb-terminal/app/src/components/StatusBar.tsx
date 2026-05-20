@@ -15,12 +15,12 @@ export function StatusBar() {
     let alive = true;
     const ping = async () => {
       try {
-        const r = await fetch("/api/v1/equity/price/quote?symbol=SPY&provider=yfinance");
+        const r = await fetch("/api/v1/equity/price/quote?symbol=SPY&provider=tradier");
         if (alive) setApiOk(r.ok);
       } catch { if (alive) setApiOk(false); }
     };
     ping();
-    const t = setInterval(ping, 15000);
+    const t = setInterval(ping, 5000);  // 5s — always-connected institutional feed
     return () => { alive = false; clearInterval(t); };
   }, []);
 
@@ -29,13 +29,13 @@ export function StatusBar() {
       <div className="flex items-center gap-5">
         <span className="flex items-center gap-2">
           <span className={
-            apiOk == null ? "w-1.5 h-1.5 bg-term-muted"
-            : apiOk ? "w-1.5 h-1.5 bg-term-green shadow-[0_0_6px_rgba(34,238,34,0.6)]"
+            apiOk == null ? "w-1.5 h-1.5 bg-term-muted animate-pulse"
+            : apiOk ? "w-1.5 h-1.5 bg-term-green shadow-[0_0_6px_rgba(34,238,34,0.6)] animate-pulse"
             : "w-1.5 h-1.5 bg-term-red shadow-[0_0_6px_rgba(255,59,59,0.6)]"
           } />
-          <span>OPENBB {apiOk == null ? "…" : apiOk ? "LIVE" : "DOWN"}</span>
+          <span>TRADIER {apiOk == null ? "CONNECTING…" : apiOk ? "LIVE" : "RECONNECTING…"}</span>
         </span>
-        <span>PROVIDER <span className="text-term-amber ml-1">YFINANCE</span></span>
+        <span>PROVIDER <span className="text-term-green ml-1 font-bold">TRADIER</span></span>
         <span>TABS <span className="text-term-text ml-1 num">{tabs.length}</span></span>
       </div>
       <div className="flex items-center gap-5 num">

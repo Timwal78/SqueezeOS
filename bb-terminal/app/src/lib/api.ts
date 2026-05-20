@@ -1,4 +1,12 @@
+// ── Provider config ─────────────────────────────────────────────────────────
+// PRIMARY: Tradier (institutional brokerage feed — always connected)
+// FALLBACK: yfinance only for asset classes Tradier doesn't cover (FX, crypto, indices)
 const BASE = "/api/v1";
+const EQUITY_PROVIDER = "tradier";      // quotes, historical, options, movers
+const NEWS_PROVIDER   = "tradier";      // company news
+const INDEX_PROVIDER  = "yfinance";     // index historical (^GSPC etc — Tradier equity only)
+const FX_PROVIDER     = "yfinance";     // FX pairs (Tradier equity only)
+const CRYPTO_PROVIDER = "yfinance";     // crypto (Tradier equity only)
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public needsKey?: string) {
@@ -90,54 +98,54 @@ export interface TreasuryRow {
 
 // Fetchers
 export const fetchQuote = (s: string) =>
-  get<Quote[] | Quote>("/equity/price/quote", { symbol: s, provider: "yfinance" })
+  get<Quote[] | Quote>("/equity/price/quote", { symbol: s, provider: EQUITY_PROVIDER })
     .then((r) => (Array.isArray(r) ? r[0] : r));
 
 export const fetchHistorical = (s: string, o: { interval?: string; start_date?: string } = {}) => {
   const start = o.start_date ?? new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10);
   return get<Candle[]>("/equity/price/historical", {
-    symbol: s, provider: "yfinance", interval: o.interval ?? "1d", start_date: start,
+    symbol: s, provider: EQUITY_PROVIDER, interval: o.interval ?? "1d", start_date: start,
   });
 };
 
 export const fetchNewsCompany = (s: string, limit = 30) =>
-  get<NewsItem[]>("/news/company", { symbol: s, provider: "yfinance", limit });
+  get<NewsItem[]>("/news/company", { symbol: s, provider: NEWS_PROVIDER, limit });
 
 export const fetchProfile = (s: string) =>
-  get<Profile[] | Profile>("/equity/profile", { symbol: s, provider: "yfinance" })
+  get<Profile[] | Profile>("/equity/profile", { symbol: s, provider: EQUITY_PROVIDER })
     .then((r) => (Array.isArray(r) ? r[0] : r));
 
 export const fetchIncome = (s: string) =>
   get<IncomeRow[]>("/equity/fundamental/income", {
-    symbol: s, provider: "yfinance", period: "annual", limit: 5,
+    symbol: s, provider: EQUITY_PROVIDER, period: "annual", limit: 5,
   });
 
 export const fetchMetrics = (s: string) =>
-  get<Metrics[] | Metrics>("/equity/fundamental/metrics", { symbol: s, provider: "yfinance" })
+  get<Metrics[] | Metrics>("/equity/fundamental/metrics", { symbol: s, provider: EQUITY_PROVIDER })
     .then((r) => (Array.isArray(r) ? r[0] : r));
 
 export const fetchDividends = (s: string) =>
-  get<Dividend[]>("/equity/fundamental/dividends", { symbol: s, provider: "yfinance" });
+  get<Dividend[]>("/equity/fundamental/dividends", { symbol: s, provider: EQUITY_PROVIDER });
 
 export const fetchConsensus = (s: string) =>
   get<ConsensusEstimate[] | ConsensusEstimate>("/equity/estimates/consensus", {
-    symbol: s, provider: "yfinance",
+    symbol: s, provider: EQUITY_PROVIDER,
   }).then((r) => (Array.isArray(r) ? r[0] : r));
 
 export const fetchGainers = () =>
-  get<Mover[]>("/equity/discovery/gainers", { provider: "yfinance" });
+  get<Mover[]>("/equity/discovery/gainers", { provider: EQUITY_PROVIDER });
 export const fetchLosers = () =>
-  get<Mover[]>("/equity/discovery/losers", { provider: "yfinance" });
+  get<Mover[]>("/equity/discovery/losers", { provider: EQUITY_PROVIDER });
 export const fetchMostActive = () =>
-  get<Mover[]>("/equity/discovery/active", { provider: "yfinance" });
+  get<Mover[]>("/equity/discovery/active", { provider: EQUITY_PROVIDER });
 
 export const fetchOptions = (s: string) =>
-  get<OptionsRow[]>("/derivatives/options/chains", { symbol: s, provider: "yfinance" });
+  get<OptionsRow[]>("/derivatives/options/chains", { symbol: s, provider: EQUITY_PROVIDER });
 
 export const fetchIndexHistorical = (s: string, days = 30) => {
   const start = new Date(Date.now() - days * 864e5).toISOString().slice(0, 10);
   return get<Candle[]>("/index/price/historical", {
-    symbol: s, provider: "yfinance", interval: "1d", start_date: start,
+    symbol: s, provider: INDEX_PROVIDER, interval: "1d", start_date: start,
   });
 };
 
@@ -151,14 +159,14 @@ export const fetchTreasuryRates = (days = 30) => {
 export const fetchFxHistorical = (pair: string, days = 30) => {
   const start = new Date(Date.now() - days * 864e5).toISOString().slice(0, 10);
   return get<Candle[]>("/currency/price/historical", {
-    symbol: pair, provider: "yfinance", interval: "1d", start_date: start,
+    symbol: pair, provider: FX_PROVIDER, interval: "1d", start_date: start,
   });
 };
 
 export const fetchCryptoHistorical = (sym: string, days = 30) => {
   const start = new Date(Date.now() - days * 864e5).toISOString().slice(0, 10);
   return get<Candle[]>("/crypto/price/historical", {
-    symbol: sym, provider: "yfinance", interval: "1d", start_date: start,
+    symbol: sym, provider: CRYPTO_PROVIDER, interval: "1d", start_date: start,
   });
 };
 
