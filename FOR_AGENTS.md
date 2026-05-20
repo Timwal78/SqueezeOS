@@ -6,7 +6,7 @@
 
 ```bash
 # 1. Try free demo first — see full response format
-curl https://lively-fascination-production-41fa.up.railway.app/api/demo
+curl https://squeezeos-terminal.vercel.app/api/demo
 
 # 2. Get invoice
 curl -X POST https://four02proof.onrender.com/v1/invoice \
@@ -22,7 +22,7 @@ curl -X POST https://four02proof.onrender.com/v1/verify \
   -d '{"invoice_id":"...","tx_hash":"...","agent_wallet":"rYOURWALLET"}'
 
 # 5. Call with token
-curl -X POST https://lively-fascination-production-41fa.up.railway.app/api/council \
+curl -X POST https://squeezeos-terminal.vercel.app/api/council \
   -H "X-Payment-Token: <token>" \
   -H "X-Agent-Wallet: rYOURWALLET" \
   -d '{"symbol":"IWM"}'
@@ -69,7 +69,7 @@ Registered relay nodes access signals at **40% off** standard pricing.
 
 ```bash
 # Register as relay node (requires Credit Bureau score >= 600)
-curl -X POST https://lively-fascination-production-41fa.up.railway.app/api/relay/register \
+curl -X POST https://squeezeos-terminal.vercel.app/api/relay/register \
   -H "Content-Type: application/json" \
   -d '{"wallet":"rYOUR...","markup_bps":1000}'
 ```
@@ -108,7 +108,7 @@ Body: {"token":"<jwt>"}
 
 ```bash
 # Subscribe — receive real-time events at your URL
-curl -X POST https://lively-fascination-production-41fa.up.railway.app/api/webhooks/subscribe \
+curl -X POST https://squeezeos-terminal.vercel.app/api/webhooks/subscribe \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://your-agent.example.com/signals",
@@ -226,7 +226,7 @@ print(score["score"], score["grade"])
 
 | Service | URL |
 |---------|-----|
-| SqueezeOS (Railway) | `https://lively-fascination-production-41fa.up.railway.app` |
+| SqueezeOS (Vercel) | `https://squeezeos-terminal.vercel.app` |
 | 402Proof (Render) | `https://four02proof.onrender.com` |
 | Ghost Layer (Render) | `https://ghost-layer.onrender.com` |
 
