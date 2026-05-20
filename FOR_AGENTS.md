@@ -39,6 +39,7 @@ curl -X POST https://lively-fascination-production-41fa.up.railway.app/api/counc
 | `GET  /api/options` | **0.05 RLUSD** | `c951a374-2424-4064-ab80-35afe8053d29` |
 | `GET  /api/iwm`     | **0.03 RLUSD** | `60f48ce0-6002-4385-9b60-03a0d2bbebab` |
 | `POST /api/marketplace/read` | **0.02 RLUSD** | `d1a2b3c4-e001-4c3f-aa24-de6e3bc12b5a` |
+| `POST https://ghost-layer.onrender.com/api/cube/state` | **0.05 RLUSD** | `c8b3e2f1-5a4d-4c3f-aa24-de6e3bc12b5a` |
 
 **Error codes:** All rejections return machine-parseable `ERR_*` codes with `remedy` field.
 `ERR_PAYMENT_REQUIRED` • `ERR_TOKEN_EXPIRED` • `ERR_TOKEN_INVALID` • `ERR_WALLET_MISMATCH` • `ERR_ENDPOINT_MISMATCH`

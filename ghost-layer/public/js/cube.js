@@ -511,48 +511,153 @@ document.getElementById('btn-rotate')?.addEventListener('click', () => {
   setState('ROTATING');
 });
 
+// ── Payment helpers ────────────────────────────────────────────────────────────
+
+function buildMintPayload() {
+  const faces = {};
+  for (const key of FACE_KEYS) {
+    const fp = FACE_PARAMS[key];
+    faces[key] = { center: computeCenter(fp), edges: [...fp.edges], corners: [...fp.corners], rotation: fp.rotation };
+  }
+  return { hash: updateStateHash(), faces };
+}
+
+function applyMintSuccess(data) {
+  if (tokenStatEl)  { tokenStatEl.textContent = 'MINTED'; tokenStatEl.style.color = '#00FF88'; }
+  if (tokenHashEl)  tokenHashEl.textContent  = data.state_hash;
+  if (tokenHooksEl) tokenHooksEl.textContent = data.faces?.pz?.center ?? computeCenter(FACE_PARAMS.pz);
+  if (data.xahau_tx_hash) {
+    const txUrl = `https://xahau.network/tx/${data.xahau_tx_hash}`;
+    if (tokenXahauEl) tokenXahauEl.innerHTML = `<a href="${txUrl}" target="_blank" rel="noopener">${data.xahau_tx_hash.slice(0,16)}…</a>`;
+    if (tokenChainEl) { tokenChainEl.textContent = 'ON-CHAIN'; tokenChainEl.style.color = '#00FF88'; }
+  } else {
+    if (tokenXahauEl) tokenXahauEl.textContent = 'mint pending';
+    if (tokenChainEl) { tokenChainEl.textContent = 'LOCAL'; tokenChainEl.style.color = '#FF8800'; }
+  }
+  setState('IDLE');
+  pulseIntensity = 1.0;
+  activePalette  = 'verdict';
+  rotSpeed       = 0.04;
+  setTimeout(() => { activePalette = 'default'; resetFaceColors(); }, 3000);
+}
+
+async function submitMint(payload, token) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['X-Payment-Token'] = token;
+  return fetch('/api/cube/state', { method: 'POST', headers, body: JSON.stringify(payload) });
+}
+
+function showPayOverlay(invoice) {
+  const overlay = document.getElementById('pay-overlay');
+  if (!overlay) return;
+  document.getElementById('pay-addr').textContent  = invoice.pay_to  ?? '—';
+  document.getElementById('pay-amount').textContent = `${invoice.amount ?? '0.05'} ${invoice.asset ?? 'RLUSD'}`;
+  document.getElementById('pay-memo').textContent   = invoice.memo_hex ?? '—';
+  document.getElementById('pay-invoice-id').value   = invoice.invoice_id ?? '';
+  document.getElementById('pay-status').textContent = '';
+  document.getElementById('pay-tx-hash').value      = '';
+  document.getElementById('pay-wallet').value       = '';
+  overlay.style.display = 'flex';
+}
+
+function hidePayOverlay() {
+  const overlay = document.getElementById('pay-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+document.getElementById('pay-cancel-btn')?.addEventListener('click', () => {
+  hidePayOverlay();
+  if (tokenStatEl) { tokenStatEl.textContent = 'UNMINTED'; tokenStatEl.style.color = ''; }
+  setState('IDLE');
+});
+
+document.getElementById('pay-verify-btn')?.addEventListener('click', async () => {
+  const txHash  = document.getElementById('pay-tx-hash')?.value.trim();
+  const wallet  = document.getElementById('pay-wallet')?.value.trim();
+  const invoiceId = document.getElementById('pay-invoice-id')?.value.trim();
+  const statusEl = document.getElementById('pay-status');
+
+  if (!txHash || !wallet) {
+    if (statusEl) statusEl.textContent = 'Enter tx hash and wallet address.';
+    return;
+  }
+  if (statusEl) { statusEl.textContent = 'Verifying…'; statusEl.style.color = '#FF8800'; }
+
+  try {
+    const vRes  = await fetch('/api/cube/pay/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ invoice_id: invoiceId, tx_hash: txHash, agent_wallet: wallet }),
+    });
+    const vData = await vRes.json();
+    if (!vRes.ok || !vData.access_token) {
+      if (statusEl) { statusEl.textContent = vData.error ?? 'Verification failed — check tx hash and wallet.'; statusEl.style.color = '#FF0055'; }
+      return;
+    }
+    const token = vData.access_token;
+    sessionStorage.setItem('cube_mint_token', token);
+
+    if (statusEl) { statusEl.textContent = 'Payment verified. Minting…'; statusEl.style.color = '#00FF88'; }
+    hidePayOverlay();
+
+    const payload = buildMintPayload();
+    const res  = await submitMint(payload, token);
+    const data = await res.json();
+    if (res.ok && data.verified) {
+      applyMintSuccess(data);
+    } else {
+      if (tokenStatEl) { tokenStatEl.textContent = 'REJECTED'; tokenStatEl.style.color = '#FF0055'; }
+      setState('VERIFY_ERR');
+      setTimeout(() => setState('IDLE'), 3000);
+    }
+  } catch (err) {
+    if (statusEl) { statusEl.textContent = 'Network error. Try again.'; statusEl.style.color = '#FF4400'; }
+  }
+});
+
+document.getElementById('pay-copy-addr')?.addEventListener('click', () => {
+  navigator.clipboard?.writeText(document.getElementById('pay-addr')?.textContent ?? '');
+  document.getElementById('pay-copy-addr').textContent = 'COPIED';
+  setTimeout(() => { document.getElementById('pay-copy-addr').textContent = 'COPY'; }, 1500);
+});
+
+document.getElementById('pay-copy-memo')?.addEventListener('click', () => {
+  navigator.clipboard?.writeText(document.getElementById('pay-memo')?.textContent ?? '');
+  document.getElementById('pay-copy-memo').textContent = 'COPIED';
+  setTimeout(() => { document.getElementById('pay-copy-memo').textContent = 'COPY'; }, 1500);
+});
+
+// ── Mint button ────────────────────────────────────────────────────────────────
+
 document.getElementById('btn-mint')?.addEventListener('click', async () => {
   if (tokenStatEl) { tokenStatEl.textContent = 'PENDING'; tokenStatEl.style.color = '#FF8800'; }
   setState('MINTING');
 
-  // Build the canonical 54-block payload the server will verify
-  const faces = {};
-  for (const key of FACE_KEYS) {
-    const fp = FACE_PARAMS[key];
-    faces[key] = {
-      center:   computeCenter(fp),
-      edges:    [...fp.edges],
-      corners:  [...fp.corners],
-      rotation: fp.rotation,
-    };
-  }
-  const hash = updateStateHash();
+  const payload = buildMintPayload();
+  const token   = sessionStorage.getItem('cube_mint_token') ?? undefined;
 
   try {
-    const res  = await fetch('/api/cube/state', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ hash, faces }),
-    });
+    const res  = await submitMint(payload, token);
     const data = await res.json();
 
-    if (res.ok && data.verified) {
-      if (tokenStatEl)  { tokenStatEl.textContent = 'MINTED'; tokenStatEl.style.color = '#00FF88'; }
-      if (tokenHashEl)  tokenHashEl.textContent  = data.state_hash;
-      if (tokenHooksEl) tokenHooksEl.textContent = data.faces?.pz?.center ?? computeCenter(FACE_PARAMS.pz);
-      if (data.xahau_tx_hash) {
-        const txUrl = `https://xahau.network/tx/${data.xahau_tx_hash}`;
-        if (tokenXahauEl) tokenXahauEl.innerHTML = `<a href="${txUrl}" target="_blank" rel="noopener">${data.xahau_tx_hash.slice(0,16)}…</a>`;
-        if (tokenChainEl) { tokenChainEl.textContent = 'ON-CHAIN'; tokenChainEl.style.color = '#00FF88'; }
-      } else {
-        if (tokenXahauEl) tokenXahauEl.textContent = 'mint pending';
-        if (tokenChainEl) { tokenChainEl.textContent = 'LOCAL'; tokenChainEl.style.color = '#FF8800'; }
-      }
+    if (res.status === 402) {
+      // Payment required — show invoice overlay
+      if (tokenStatEl) { tokenStatEl.textContent = 'PAY 0.05 RLUSD'; tokenStatEl.style.color = '#FF8800'; }
       setState('IDLE');
-      pulseIntensity = 1.0;
-      activePalette  = 'verdict';
-      rotSpeed       = 0.04;
-      setTimeout(() => { activePalette = 'default'; resetFaceColors(); }, 3000);
+      showPayOverlay(data.invoice ?? {});
+      return;
+    }
+
+    if (res.status === 401) {
+      // Token expired or invalid — clear cache, re-click triggers fresh 402 with new invoice
+      sessionStorage.removeItem('cube_mint_token');
+      if (tokenStatEl) { tokenStatEl.textContent = 'TOKEN EXPIRED — CLICK MINT'; tokenStatEl.style.color = '#FF8800'; }
+      setState('IDLE');
+      return;
+    }
+
+    if (res.ok && data.verified) {
+      applyMintSuccess(data);
     } else {
       if (tokenStatEl) { tokenStatEl.textContent = 'REJECTED'; tokenStatEl.style.color = '#FF0055'; }
       setState('VERIFY_ERR');
@@ -565,6 +670,7 @@ document.getElementById('btn-mint')?.addEventListener('click', async () => {
     setTimeout(() => setState('IDLE'), 3000);
   }
 });
+
 
 // ── Resize ─────────────────────────────────────────────────────────────────────
 new ResizeObserver(fitRenderer).observe(container);

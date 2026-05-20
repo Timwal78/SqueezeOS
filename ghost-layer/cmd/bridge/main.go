@@ -1,11 +1,16 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"math/big"
@@ -26,6 +31,68 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
+
+// ── Cube Terminal x402 payment gate ──────────────────────────────────────────
+
+const (
+	cubeMintEndpointID = "c8b3e2f1-5a4d-4c3f-aa24-de6e3bc12b5a"
+	proof402BaseURL    = "https://four02proof.onrender.com"
+)
+
+// verifyPaymentToken validates a 402Proof HMAC token locally (zero network).
+// Mirrors proof402_integration.py _verify_token_local exactly.
+func verifyPaymentToken(token, endpointID, secret string) error {
+	if secret == "" {
+		return errors.New("ERR_SECRET_NOT_CONFIGURED")
+	}
+	dot := strings.LastIndex(token, ".")
+	if dot < 0 {
+		return errors.New("ERR_TOKEN_MALFORMED")
+	}
+	encoded, sig := token[:dot], token[dot+1:]
+
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(encoded))
+	expected := hex.EncodeToString(mac.Sum(nil))
+	if !hmac.Equal([]byte(sig), []byte(expected)) {
+		return errors.New("ERR_TOKEN_INVALID")
+	}
+
+	pad := (4 - len(encoded)%4) % 4
+	decoded, err := base64.URLEncoding.DecodeString(encoded + strings.Repeat("=", pad))
+	if err != nil {
+		return errors.New("ERR_TOKEN_MALFORMED")
+	}
+	var payload struct {
+		Eid string `json:"eid"`
+		Exp int64  `json:"exp"`
+	}
+	if err := json.Unmarshal(decoded, &payload); err != nil {
+		return errors.New("ERR_TOKEN_MALFORMED")
+	}
+	if time.Now().Unix() > payload.Exp {
+		return errors.New("ERR_TOKEN_EXPIRED")
+	}
+	if payload.Eid != endpointID {
+		return errors.New("ERR_ENDPOINT_MISMATCH")
+	}
+	return nil
+}
+
+// fetchCubeMintInvoice requests a fresh payment invoice from 402Proof.
+func fetchCubeMintInvoice() (map[string]interface{}, error) {
+	body, _ := json.Marshal(map[string]string{"endpoint_id": cubeMintEndpointID})
+	resp, err := http.Post(proof402BaseURL+"/v1/invoice", "application/json", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var inv map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&inv); err != nil {
+		return nil, err
+	}
+	return inv, nil
+}
 
 // ── SSE Hub — broadcasts bridge events to connected cube.js clients ──────────
 
@@ -774,8 +841,58 @@ func main() {
 	}
 
 	// ── CUBE EXECUTION MATRIX ─────────────────────────────────────────────────
+	// POST /api/cube/pay/verify — proxy to 402Proof /v1/verify (avoids CORS for browser clients)
+	r.Post("/api/cube/pay/verify", func(w http.ResponseWriter, req *http.Request) {
+		req.Body = http.MaxBytesReader(w, req.Body, 4*1024)
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		proxyResp, err := http.Post(proof402BaseURL+"/v1/verify", "application/json", bytes.NewReader(body))
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadGateway)
+			json.NewEncoder(w).Encode(map[string]string{"error": "402Proof unreachable"})
+			return
+		}
+		defer proxyResp.Body.Close()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(proxyResp.StatusCode)
+		io.Copy(w, proxyResp.Body)
+	})
+
 	// POST /api/cube/state — receive 54-block payload, verify, store, broadcast
 	r.Post("/api/cube/state", func(w http.ResponseWriter, req *http.Request) {
+		// ── x402 payment gate ─────────────────────────────────────────────
+		proof402Secret := os.Getenv("PROOF402_TOKEN_SECRET")
+		if proof402Secret != "" {
+			token := req.Header.Get("X-Payment-Token")
+			if token == "" {
+				inv, err := fetchCubeMintInvoice()
+				w.Header().Set("Content-Type", "application/json")
+				if err != nil || inv == nil {
+					log.Printf("[CUBE] invoice fetch failed: %v", err)
+					w.WriteHeader(http.StatusServiceUnavailable)
+					json.NewEncoder(w).Encode(map[string]string{"error": "payment server unavailable"})
+					return
+				}
+				w.WriteHeader(http.StatusPaymentRequired)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error":   "ERR_PAYMENT_REQUIRED",
+					"message": "Minting costs 0.05 RLUSD. Pay on XRPL to continue.",
+					"invoice": inv,
+				})
+				return
+			}
+			if err := verifyPaymentToken(token, cubeMintEndpointID, proof402Secret); err != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusUnauthorized)
+				json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+				return
+			}
+		}
+
 		req.Body = http.MaxBytesReader(w, req.Body, 64*1024)
 		var p CubeStatePayload
 		if err := json.NewDecoder(req.Body).Decode(&p); err != nil {
