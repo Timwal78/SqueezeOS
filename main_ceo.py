@@ -39,25 +39,37 @@ class SqueezeOS_CEO:
     def __init__(self):
         self.polygon = PolygonProvider()
         self.alpaca = AlpacaProvider()
-        self.watchlist = ["IWM", "SPY"] # Base anchors
+        self.watchlist = ["IWM"] # Only large cap anchor (0DTE)
         self.engine = GammaFlowEngine(self.polygon, self.watchlist)
         self.last_discovery = 0
         
     async def discover_tickers(self):
-        """Dynamically discovers high-velocity tickers from the live tape."""
-        if not self.alpaca.available:
-            logger.warning("[CEO] Alpaca not available for discovery.")
-            return
-        
+        """Dynamically discovers high-velocity tickers from the live tape in the $1-$60 sweet spot."""
         try:
-            actives = self.alpaca.get_most_actives(top=15)
-            new_tickers = [a['symbol'] for a in actives if a.get('symbol')]
+            # 1. Widest free tier fetch: Polygon Grouped Daily (entire US market)
+            poly_data = self.polygon.get_grouped_daily()
+            new_tickers = []
             
-            # Merge with anchors and remove duplicates
-            combined = list(dict.fromkeys(["IWM", "SPY"] + new_tickers))[:20]
+            if poly_data:
+                # Filter for sweet spot: $1 - $60
+                candidates = [
+                    v for k, v in poly_data.items()
+                    if 1.0 <= v.get('price', 0) <= 60.0
+                ]
+                # Sort by volume to get the most active in this price range
+                candidates.sort(key=lambda x: x.get('volume', 0), reverse=True)
+                new_tickers = [x['symbol'] for x in candidates[:19]]
+            else:
+                # Fallback to Alpaca if Polygon fails
+                if self.alpaca.available:
+                    actives = self.alpaca.get_most_actives(top=50)
+                    new_tickers = [a['symbol'] for a in actives if a.get('symbol')]
+            
+            # Merge with anchors (only IWM) and remove duplicates
+            combined = list(dict.fromkeys(["IWM"] + new_tickers))[:20]
             
             if set(combined) != set(self.watchlist):
-                logger.info(f"🔄 [CEO] Dynamic Discovery: {', '.join(combined)}")
+                logger.info(f"🔄 [CEO] Dynamic Discovery ($1-$60 Wide Net): {', '.join(combined)}")
                 self.watchlist = combined
                 self.engine.watchlist = combined
                 
