@@ -1,7 +1,7 @@
 {
   "name": "proof402-middleware",
-  "version": "1.1.0",
-  "description": "x402/HTTP 402 payment middleware for Express, Next.js, and Cloudflare Workers. Gate any API behind RLUSD micropayments on XRP Ledger via 402Proof. Sub-millisecond local HMAC verification. Zero API keys.",
+  "version": "1.2.0",
+  "description": "x402/HTTP 402 payment middleware for Express, Next.js, and Cloudflare Workers. Gate any API behind RLUSD (XRPL) or USDC (Base) micropayments via 402Proof. Sub-millisecond local HMAC verification. Zero API keys.",
   "main": "index.js",
   "exports": {
     ".": "./index.js"
