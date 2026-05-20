@@ -198,6 +198,44 @@
         /* ── Dividers ── */
         .vdivider { width: 1px; height: 20px; background: #0a2020; flex-shrink: 0; }
 
+        /* ── 3×3 block grid ── */
+        .grid-3x3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 3px;
+            margin: 7px 0 5px;
+        }
+        .grid-cell {
+            border: 1px solid #0a2020;
+            padding: 5px 3px;
+            text-align: center;
+            min-height: 60px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .g-edge   { cursor: pointer; }
+        .g-edge:hover  { background: #001a1a; }
+        .g-edge:active { background: #002828; }
+        .g-corner { border-color: #0d1f2a !important; cursor: pointer; }
+        .g-corner:hover { background: #050f14; }
+        .g-center { background: #001414; }
+        .gc-label {
+            font-size: 0.40rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: #223344;
+            margin-bottom: 2px;
+            white-space: nowrap;
+        }
+        .gc-val  { font-size: 0.88rem; font-weight: bold; line-height: 1.1; }
+        .gc-unit { font-size: 0.40rem; color: #334455; margin-top: 2px; }
+        .gc-bar  { height: 1px; background: #0a2020; width: 100%; margin-top: 4px; overflow: hidden; }
+        .gc-fill { height: 100%; transition: width 0.3s ease; }
+        .detail-rot  { font-size: 0.48rem; color: #223344; margin-left: 5px; }
+        .detail-note { font-size: 0.48rem; color: #1a2a3a; margin-top: 4px; }
+
         /* ── Scrollbars ── */
         #left-panel::-webkit-scrollbar,
         #right-panel::-webkit-scrollbar { width: 2px; }
