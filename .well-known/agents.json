@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "name": "SqueezeOS Market Intelligence",
   "description": "Institutional AI trading intelligence + autonomous agent economy. Squeeze scanner, options flow, IWM 0DTE, AI council verdicts \u2014 gated by x402 RLUSD micropayment. Signal Relay Mesh (40% bulk discount), Agent Credit Bureau (300-850 score), Peer Signal Marketplace (sell your analysis), Agent Hiring Protocol (commission work), and real-time webhook push delivery. Zero custody throughout.",
-  "url": "https://lively-fascination-production-41fa.up.railway.app",
+  "url": "https://squeezeos-terminal.vercel.app",
   "homepage": "https://www.scriptmasterlabs.com",
   "payment_required": true,
   "payment_protocol": "x402",
@@ -11,8 +11,8 @@
   "payment_issuer": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De",
   "payment_gateway": "https://four02proof.onrender.com",
   "specs": {
-    "openapi": "https://lively-fascination-production-41fa.up.railway.app/.well-known/openapi.json",
-    "mcp": "https://lively-fascination-production-41fa.up.railway.app/.well-known/mcp.json",
+    "openapi": "https://squeezeos-terminal.vercel.app/.well-known/openapi.json",
+    "mcp": "https://squeezeos-terminal.vercel.app/.well-known/mcp.json",
     "llms_txt": "https://www.scriptmasterlabs.com/llms.txt"
   },
   "capabilities": [

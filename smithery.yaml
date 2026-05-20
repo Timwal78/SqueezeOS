@@ -16,11 +16,11 @@ description: >
   direct wallet-to-wallet), and real-time webhook push delivery.
   Free demo at /api/demo. Free signal history at /api/history/{symbol}.
   Loyalty tiers Bronze→Diamond reward cumulative spend with up to 33% off.
-  Zero custody throughout. Deployed on Railway (always-on).
+  Zero custody throughout. Deployed on Render + Vercel (always-on).
 version: "3.0.0"
 homepage: "https://www.scriptmasterlabs.com"
 repository: "https://github.com/Timwal78/SqueezeOS"
-documentation: "https://lively-fascination-production-41fa.up.railway.app/llms.txt"
+documentation: "https://squeezeos-terminal.vercel.app/llms.txt"
 license: "Proprietary"
 category: "finance"
 tags:
@@ -51,10 +51,10 @@ tags:
 
 server:
   type: "http"
-  url: "https://lively-fascination-production-41fa.up.railway.app"
-  openapi: "https://lively-fascination-production-41fa.up.railway.app/openapi.json"
+  url: "https://squeezeos-terminal.vercel.app"
+  openapi: "https://squeezeos-terminal.vercel.app/openapi.json"
   health_check: "/api/status"
-  demo: "https://lively-fascination-production-41fa.up.railway.app/api/demo"
+  demo: "https://squeezeos-terminal.vercel.app/api/demo"
 
 # ============================================================
 # Payment (x402 / RLUSD on XRPL)
@@ -159,7 +159,7 @@ tools:
     endpoint:
       path: "/api/demo"
       method: "GET"
-      server: "https://lively-fascination-production-41fa.up.railway.app"
+      server: "https://squeezeos-terminal.vercel.app"
     inputSchema:
       type: object
       properties: {}
@@ -199,7 +199,7 @@ tools:
     endpoint:
       path: "/api/preview/{symbol}"
       method: "GET"
-      server: "https://lively-fascination-production-41fa.up.railway.app"
+      server: "https://squeezeos-terminal.vercel.app"
     inputSchema:
       type: object
       required: [symbol]
@@ -231,7 +231,7 @@ tools:
     endpoint:
       path: "/api/history/{symbol}"
       method: "GET"
-      server: "https://lively-fascination-production-41fa.up.railway.app"
+      server: "https://squeezeos-terminal.vercel.app"
     inputSchema:
       type: object
       required: [symbol]
@@ -309,7 +309,7 @@ tools:
     endpoint:
       path: "/api/webhooks/subscribe"
       method: "POST"
-      server: "https://lively-fascination-production-41fa.up.railway.app"
+      server: "https://squeezeos-terminal.vercel.app"
     inputSchema:
       type: object
       required: [url]
@@ -361,7 +361,7 @@ tools:
     endpoint:
       path: "/api/marketplace"
       method: "GET"
-      server: "https://lively-fascination-production-41fa.up.railway.app"
+      server: "https://squeezeos-terminal.vercel.app"
     inputSchema:
       type: object
       properties:
@@ -401,7 +401,7 @@ tools:
     endpoint:
       path: "/api/marketplace/list"
       method: "POST"
-      server: "https://lively-fascination-production-41fa.up.railway.app"
+      server: "https://squeezeos-terminal.vercel.app"
     inputSchema:
       type: object
       required: [wallet, symbol, bias, confidence, thesis]
@@ -462,7 +462,7 @@ tools:
     endpoint:
       path: "/api/hiring"
       method: "GET"
-      server: "https://lively-fascination-production-41fa.up.railway.app"
+      server: "https://squeezeos-terminal.vercel.app"
     inputSchema:
       type: object
       properties:
@@ -502,7 +502,7 @@ tools:
     endpoint:
       path: "/api/hiring/post"
       method: "POST"
-      server: "https://lively-fascination-production-41fa.up.railway.app"
+      server: "https://squeezeos-terminal.vercel.app"
     inputSchema:
       type: object
       required: [wallet, description, payment_wallet]
@@ -561,7 +561,7 @@ tools:
     endpoint:
       path: "/api/council"
       method: "POST"
-      server: "https://lively-fascination-production-41fa.up.railway.app"
+      server: "https://squeezeos-terminal.vercel.app"
     endpoint_id: "12a0e7a1-6812-4c3f-aa24-de6e3bc12b5a"
     inputSchema:
       type: object
@@ -608,7 +608,7 @@ tools:
     endpoint:
       path: "/api/scan"
       method: "GET"
-      server: "https://lively-fascination-production-41fa.up.railway.app"
+      server: "https://squeezeos-terminal.vercel.app"
     endpoint_id: "160cf28d-b364-44eb-adbd-2489c5cc2cf8"
     inputSchema:
       type: object
@@ -643,7 +643,7 @@ tools:
     endpoint:
       path: "/api/options"
       method: "GET"
-      server: "https://lively-fascination-production-41fa.up.railway.app"
+      server: "https://squeezeos-terminal.vercel.app"
     endpoint_id: "c951a374-2424-4064-ab80-35afe8053d29"
     inputSchema:
       type: object
@@ -670,7 +670,7 @@ tools:
     endpoint:
       path: "/api/iwm"
       method: "GET"
-      server: "https://lively-fascination-production-41fa.up.railway.app"
+      server: "https://squeezeos-terminal.vercel.app"
     endpoint_id: "60f48ce0-6002-4385-9b60-03a0d2bbebab"
     inputSchema:
       type: object
@@ -697,7 +697,7 @@ tools:
     endpoint:
       path: "/api/marketplace/read"
       method: "POST"
-      server: "https://lively-fascination-production-41fa.up.railway.app"
+      server: "https://squeezeos-terminal.vercel.app"
     endpoint_id: "d1a2b3c4-e001-4c3f-aa24-de6e3bc12b5a"
     inputSchema:
       type: object
@@ -857,7 +857,7 @@ streaming:
   protocol: "SSE (Server-Sent Events)"
   description: "Real-time market events. Free, no auth. Also available via webhooks (POST /api/webhooks/subscribe)."
   endpoints:
-    - url: "https://lively-fascination-production-41fa.up.railway.app/api/events"
+    - url: "https://squeezeos-terminal.vercel.app/api/events"
       auth_required: false
       event_types:
         - {name: SQUEEZE_ALERT, description: "High-score squeeze detected (score >= 75)"}
@@ -868,7 +868,7 @@ streaming:
         - {name: JOB_POSTED, description: "New hiring job posted"}
       client_example_python: |
         import requests, json
-        for line in requests.get("https://lively-fascination-production-41fa.up.railway.app/api/events", stream=True).iter_lines():
+        for line in requests.get("https://squeezeos-terminal.vercel.app/api/events", stream=True).iter_lines():
             if line.startswith(b"data:"):
                 print(json.loads(line[5:]))
 
@@ -910,9 +910,9 @@ sdk:
     quickstart: |
       from squeezeos_sdk import SqueezeOSClient
       client = SqueezeOSClient(xrpl_seed="sEd...", agent_domain="mybot.example.com")
-      print(client.get("https://lively-fascination-production-41fa.up.railway.app/api/demo").json())
+      print(client.get("https://squeezeos-terminal.vercel.app/api/demo").json())
       verdict = client.council("IWM")
   demo_file: "agent_demo.py"
-  openapi: "https://lively-fascination-production-41fa.up.railway.app/openapi.json"
-  mcp_manifest: "https://lively-fascination-production-41fa.up.railway.app/.well-known/mcp.json"
-  agents_json: "https://lively-fascination-production-41fa.up.railway.app/.well-known/agents.json"
+  openapi: "https://squeezeos-terminal.vercel.app/openapi.json"
+  mcp_manifest: "https://squeezeos-terminal.vercel.app/.well-known/mcp.json"
+  agents_json: "https://squeezeos-terminal.vercel.app/.well-known/agents.json"
