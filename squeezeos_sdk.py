@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 # Platform constants
 # ---------------------------------------------------------------------------
 
-SQUEEZEOS_API   = "https://lively-fascination-production-41fa.up.railway.app"
+SQUEEZEOS_API   = "https://squeezeos-api.onrender.com"
 PROOF402_API    = "https://four02proof.onrender.com"
 XRPL_RPC        = "https://s1.ripple.com:51234/"   # mainnet JSON-RPC
 RLUSD_ISSUER    = "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De"

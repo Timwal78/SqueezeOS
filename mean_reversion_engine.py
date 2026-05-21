@@ -1,8 +1,8 @@
-import yfinance as yf
 import pandas as pd
 import numpy as np
 import logging
 from datetime import datetime, timedelta
+import tradier_api
 
 # Standard SqueezeOS Logger
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -22,14 +22,14 @@ class MeanReversionEngine:
         self.max_price = max_price
 
     def fetch_batch_data(self, symbols, days=100):
-        """Fetch historical data for a list of symbols efficiently."""
+        """Fetch historical data for a list of symbols via Tradier."""
         if not symbols: return {}
-        logger.info(f"Batch fetching {len(symbols)} symbols...")
-        # yf.download is faster for batches
+        logger.info(f"Batch fetching {len(symbols)} symbols via Tradier...")
+        if not tradier_api.is_available():
+            logger.warning("[MRE] TRADIER_API_KEY not set — cannot fetch history")
+            return {}
         try:
-            # yfinance threads=True causes deadlocks on Windows and hangs the Flask server.
-            data = yf.download(symbols, period=f"{days}d", group_by='ticker', progress=False, threads=False)
-            return data
+            return tradier_api.get_history_batch(symbols, days=days)
         except Exception as e:
             logger.error(f"Batch fetch error: {e}")
             return {}
@@ -77,10 +77,9 @@ class MeanReversionEngine:
         
         for sym in symbols:
             try:
-                if len(symbols) > 1:
-                    df = batch_df[sym].copy() if sym in batch_df.columns.levels[0] else None
-                else:
-                    df = batch_df.copy()
+                df = batch_df.get(sym)
+                if df is not None:
+                    df = df.copy()
                 
                 if df is None or df.dropna(subset=['Close']).empty: continue
                 

@@ -26,7 +26,7 @@ mcp_bp    = Blueprint('mcp', __name__)
 
 SQUEEZEOS_BASE = os.environ.get(
     "SQUEEZEOS_BASE_URL",
-    "https://lively-fascination-production-41fa.up.railway.app"
+    "https://squeezeos-api.onrender.com"
 )
 PROOF402_BASE = "https://four02proof.onrender.com"
 

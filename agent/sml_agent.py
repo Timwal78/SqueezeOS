@@ -55,14 +55,13 @@ logging.basicConfig(
 logger = logging.getLogger("SML-Agent")
 
 # ── Config ────────────────────────────────────────────────────────────────────
-SQUEEZEOS   = os.environ.get("SQUEEZEOS_BASE_URL",  "https://lively-fascination-production-41fa.up.railway.app")
+SQUEEZEOS   = os.environ.get("SQUEEZEOS_BASE_URL",  "https://squeezeos-api.onrender.com")
 PROOF402    = os.environ.get("PROOF402_BASE_URL",   "https://four02proof.onrender.com")
-XRPL_RPC      = os.environ.get("XRPL_RPC_URL",          "https://xrplcluster.com")
-AGENT_SEED    = os.environ.get("AGENT_XRPL_SEED",       "")
-AGENT_ADDR    = os.environ.get("AGENT_XRPL_ADDRESS",    "")
-AGENT_DOM     = os.environ.get("AGENT_DOMAIN",          "agent.scriptmasterlabs.com")
-ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY",     "")
-DISCORD_WEBHOOK = os.environ.get("DISCORD_WEBHOOK_URL", "")
+XRPL_RPC    = os.environ.get("XRPL_RPC_URL",        "https://xrplcluster.com")
+AGENT_SEED  = os.environ.get("AGENT_XRPL_SEED",     "")
+AGENT_ADDR  = os.environ.get("AGENT_XRPL_ADDRESS",  "")
+AGENT_DOM   = os.environ.get("AGENT_DOMAIN",        "agent.scriptmasterlabs.com")
+ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 BRIEF_PRICE = float(os.environ.get("BRIEF_PRICE_RLUSD", "0.01"))
 BRIEF_TTL   = int(os.environ.get("BRIEF_TTL_HOURS", "6"))
 RUN_ONCE    = os.environ.get("RUN_ONCE", "false").lower() == "true"
@@ -269,99 +268,45 @@ def synthesize_brief(data: dict) -> dict:
     client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
     now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
-    prompt = f"""You are the SML Autonomous Market Intelligence Agent — a zero-simulation, absolute-execution trading intelligence system built on Script Master Labs' proprietary engine stack. Your mandate: synthesize live multi-engine data into a high-conviction brief. Never estimate, interpolate, or fabricate. If a data source is missing, note it explicitly.
+    prompt = f"""You are the SML Autonomous Market Intelligence Agent. Synthesize this live market data into a concise, actionable daily brief.
 
 TIMESTAMP: {now_str}
 
-═══ RAW ENGINE OUTPUT ═══
+MARKET DATA:
 {json.dumps(data, indent=2, default=str)}
 
-═══ YOUR ANALYTICAL MANDATE ═══
-
-STEP 1 — ENGINE ALIGNMENT CHECK
-Examine every data source and answer:
-- Does the council verdict bias (BULLISH/BEARISH/NEUTRAL) match the scan's top-scoring symbols' momentum direction?
-- Does the options flow (PUT/CALL sweep sentiment) confirm or contradict the council bias?
-- Does the IWM 0DTE gamma flip level support or resist the current price action implied by the council regime?
-- Is the current bias a CONTINUATION (same as last 2+ signals in history) or a REVERSAL? Reversals need higher evidence threshold.
-
-STEP 2 — CONTRADICTION FLAGS
-Identify any conflicts across engines. Examples:
-- Council says BULLISH but options flow shows heavy PUT sweeps → CONFLICT
-- Regime is EXECUTION but squeeze count is 0 → CONFLICT
-- IWM verdict is BEARISH but 0DTE gamma flip is above current price → BEARISH CONFIRMATION
-Flag each conflict explicitly. Do not average them away.
-
-STEP 3 — TOP PICK SELECTION
-A pick is only grade-A if ALL THREE are true:
-  (a) it appears in the scan results with score > 70
-  (b) the council bias for IWM or that symbol is directionally aligned
-  (c) options flow is NOT explicitly contradicting the direction
-Picks that meet only 1 or 2 criteria are grade-B — still list them but flag the grade.
-
-STEP 4 — CONFIDENCE CALIBRATION
-Start at the council confidence score. Then:
-  +10 if scan top picks align with council bias
-  +10 if options flow confirms
-  +5  if signal history shows continuation (same bias 2+ times)
-  +5  if IWM 0DTE gamma flip confirms direction
-  -15 if any CONFLICT flag from Step 2
-  -10 if this is a bias reversal with < 2 confirming signals
-  -20 if 2 or more CONFLICT flags
-Cap final confidence at 95. Floor at 5.
-
-STEP 5 — KEY LEVELS
-Extract IWM support and resistance ONLY from hard data:
-- gamma_flip_level and max_pain from the 0DTE data (these are real structural levels)
-- Do NOT invent levels. If 0DTE data is missing, set both to 0 and note "0DTE_UNAVAILABLE"
-
-═══ OUTPUT FORMAT ═══
-Return ONLY valid JSON. No markdown, no explanation, no commentary outside the JSON.
-
+Generate a JSON brief with this exact structure:
 {{
   "title": "SML Market Brief — {now_str}",
   "session": "PRE_MARKET|OPEN|MIDDAY|POWER_HOUR|CLOSE",
   "master_bias": "BULLISH|BEARISH|NEUTRAL",
   "regime": "EXECUTION|STEALTH|CONFLICT|COLLAPSE",
-  "confidence": 0-95,
-  "engine_alignment": "CONFIRMED|PARTIAL|CONFLICTED",
-  "conflict_flags": ["list any conflicts found, empty array if none"],
-  "continuation_or_reversal": "CONTINUATION|REVERSAL|INSUFFICIENT_HISTORY",
-  "top_picks": [
-    {{"symbol": "SYM", "bias": "BULLISH|BEARISH", "grade": "A|B", "reason": "one sentence why"}}
-  ],
-  "iwm_thesis": "2-3 sentences: what the council said + what the 0DTE data confirms or challenges",
-  "market_thesis": "3-4 sentences: the full picture across scan + council + options, explicitly noting any conflicts",
-  "key_levels": {{"IWM_support": 0.0, "IWM_resistance": 0.0, "source": "gamma_flip|max_pain|0DTE_UNAVAILABLE"}},
+  "confidence": 0-100,
+  "top_picks": ["SYM1", "SYM2"],
+  "iwm_thesis": "2-3 sentence IWM analysis",
+  "market_thesis": "3-4 sentence overall market thesis",
+  "key_levels": {{"IWM_support": 0.0, "IWM_resistance": 0.0}},
   "squeeze_count": 0,
   "options_flow": "BULLISH|BEARISH|NEUTRAL|MIXED",
   "risk_level": "LOW|MEDIUM|HIGH|EXTREME",
-  "actionable": "One sentence — ONLY if confidence >= 60 and engine_alignment != CONFLICTED. Otherwise: STAND_ASIDE — [reason]",
-  "conviction_grade": "A|B|C|STAND_ASIDE",
+  "actionable": "One clear actionable sentence for the session",
   "agent_wallet": "{AGENT_ADDR}"
-}}"""
+}}
+
+Return ONLY the JSON. No markdown. No explanation."""
 
     message = client.messages.create(
         model="claude-opus-4-7",
-        max_tokens=2048,
+        max_tokens=1024,
         messages=[{"role": "user", "content": prompt}],
     )
 
     raw = message.content[0].text.strip()
-    # Strip markdown code fences if Claude adds them despite instructions
-    if raw.startswith("```"):
-        raw = raw.split("```")[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
-    brief = json.loads(raw.strip())
+    brief = json.loads(raw)
     brief["generated_at"] = time.time()
     brief["data_sources"]  = list(data.keys())
 
-    logger.info(
-        f"[AGENT] Brief: {brief.get('master_bias')} | {brief.get('regime')} | "
-        f"conf={brief.get('confidence')} | alignment={brief.get('engine_alignment')} | "
-        f"grade={brief.get('conviction_grade')} | conflicts={brief.get('conflict_flags', [])}"
-    )
+    logger.info(f"[AGENT] Brief: {brief.get('master_bias')} | {brief.get('regime')} | conf={brief.get('confidence')}")
     return brief
 
 # ── List brief on marketplace ─────────────────────────────────────────────────
@@ -371,22 +316,11 @@ def list_brief(brief: dict) -> Optional[str]:
         logger.warning("[AGENT] No AGENT_XRPL_ADDRESS — skipping marketplace listing")
         return None
 
-    picks     = brief.get("top_picks", [])
-    top_pick  = picks[0] if picks and isinstance(picks[0], dict) else None
-    symbol    = top_pick["symbol"] if top_pick else "IWM"
-
-    conflicts = brief.get("conflict_flags", [])
-    conflict_note = f" CONFLICTS: {'; '.join(conflicts)}." if conflicts else ""
-    thesis = (
-        f"[{brief.get('conviction_grade','?')} | {brief.get('engine_alignment','?')} | "
-        f"{brief.get('continuation_or_reversal','?')}] "
-        f"{brief.get('market_thesis', '')} "
-        f"{brief.get('iwm_thesis', '')}"
-        f"{conflict_note} "
-        f"Actionable: {brief.get('actionable', '')}"
-    ).strip()
+    top_picks = brief.get("top_picks", ["IWM"])
+    symbol    = top_picks[0] if top_picks else "IWM"
+    thesis    = f"{brief.get('market_thesis', '')} Actionable: {brief.get('actionable', '')}".strip()
     if len(thesis) < 20:
-        thesis = f"SML Agent: {brief.get('master_bias','NEUTRAL')} | {brief.get('regime','UNKNOWN')} | conf={brief.get('confidence',0)}"
+        thesis = f"SML Agent brief: {brief.get('master_bias', 'NEUTRAL')} bias, {brief.get('regime', 'UNKNOWN')} regime. {brief.get('iwm_thesis', '')}"
 
     payload = {
         "wallet":      AGENT_ADDR,
@@ -406,159 +340,6 @@ def list_brief(brief: dict) -> Optional[str]:
     pnl.record_earn(BRIEF_PRICE)
     logger.info(f"[AGENT] Listed on marketplace: {listing_id} — {symbol} {brief.get('master_bias')}")
     return listing_id
-
-# ── Open Signal Futures position ─────────────────────────────────────────────
-
-def post_futures_position(brief: dict) -> Optional[str]:
-    """Agent stakes on its own IWM prediction — only when conviction grade is A or B."""
-    if not AGENT_ADDR:
-        return None
-    grade = brief.get("conviction_grade", "C")
-    if grade == "STAND_ASIDE":
-        logger.info("[AGENT] Skipping futures — conviction grade STAND_ASIDE")
-        return None
-    bias = brief.get("master_bias", "").upper()
-    if bias not in {"BULLISH", "BEARISH", "NEUTRAL"}:
-        return None
-    # Stake higher on grade-A conviction
-    stake = 0.02 if grade == "A" else 0.01
-    session = brief.get("session", "ANY").upper()
-    if session not in {"PRE_MARKET", "OPEN", "MIDDAY", "POWER_HOUR", "CLOSE", "ANY"}:
-        session = "ANY"
-    alignment = brief.get("engine_alignment", "")
-    conflicts  = brief.get("conflict_flags", [])
-    try:
-        resp = requests.post(
-            f"{SQUEEZEOS}/api/futures/create",
-            json={
-                "creator_wallet": AGENT_ADDR,
-                "symbol":         "IWM",
-                "predicted_bias": bias,
-                "session":        session,
-                "stake_rlusd":    stake,
-                "note":           f"Grade={grade} alignment={alignment} conf={brief.get('confidence',0)} conflicts={len(conflicts)}",
-            },
-            timeout=10,
-        )
-        if resp.ok:
-            future_id = resp.json().get("future_id")
-            logger.info(f"[AGENT] Futures {grade}-grade position: {future_id[:8]}… IWM {bias} stake={stake} RLUSD")
-            return future_id
-    except Exception as e:
-        logger.warning(f"[AGENT] Futures position failed: {e}")
-    return None
-
-
-# ── Trigger pending settlement contracts ──────────────────────────────────────
-
-def trigger_pending_settlements():
-    """Scan open settlement contracts and trigger any that may now be met."""
-    try:
-        resp = requests.get(f"{SQUEEZEOS}/api/settlement", params={"status": "OPEN", "limit": 50}, timeout=10)
-        if not resp.ok:
-            return
-        contracts = resp.json().get("contracts", [])
-        triggered = 0
-        for c in contracts:
-            cid = c.get("id")
-            if not cid:
-                continue
-            try:
-                t = requests.post(f"{SQUEEZEOS}/api/settlement/trigger/{cid}", timeout=10)
-                if t.ok and t.json().get("status") == "settled":
-                    triggered += 1
-                    logger.info(f"[AGENT] Settlement triggered: {cid[:8]}…")
-            except Exception:
-                pass
-        if triggered:
-            logger.info(f"[AGENT] Triggered {triggered} settlement contracts")
-    except Exception as e:
-        logger.warning(f"[AGENT] Settlement scan failed: {e}")
-
-
-# ── Discord webhook ───────────────────────────────────────────────────────────
-
-_BIAS_COLOR = {"BULLISH": 0x00C851, "BEARISH": 0xFF4444, "NEUTRAL": 0xFFBB33}
-_GRADE_EMOJI = {"A": "🟢", "B": "🟡", "C": "🟠", "STAND_ASIDE": "🔴"}
-_REGIME_EMOJI = {
-    "EXECUTION": "⚡", "STEALTH": "👻",
-    "CONFLICT":  "⚠️", "COLLAPSE": "💀",
-}
-
-def push_discord(brief: dict, listing_id: Optional[str]):
-    if not DISCORD_WEBHOOK:
-        return
-
-    bias      = brief.get("master_bias", "NEUTRAL")
-    regime    = brief.get("regime", "")
-    conf      = brief.get("confidence", 0)
-    grade     = brief.get("conviction_grade", "C")
-    alignment = brief.get("engine_alignment", "")
-    conflicts = brief.get("conflict_flags", [])
-    actionable = brief.get("actionable", "")
-    picks     = brief.get("top_picks", [])
-    levels    = brief.get("key_levels", {})
-    color     = _BIAS_COLOR.get(bias, 0x888888)
-    g_emoji   = _GRADE_EMOJI.get(grade, "⚪")
-    r_emoji   = _REGIME_EMOJI.get(regime, "")
-    session   = brief.get("session", "")
-
-    # Top picks field
-    picks_lines = []
-    for p in (picks if isinstance(picks, list) else []):
-        if isinstance(p, dict):
-            pg = _GRADE_EMOJI.get(p.get("grade",""), "")
-            picks_lines.append(f"{pg} **{p.get('symbol','')}** {p.get('bias','')} — {p.get('reason','')}")
-        else:
-            picks_lines.append(f"• {p}")
-    picks_str = "\n".join(picks_lines) if picks_lines else "None"
-
-    # Conflict field
-    conflict_str = "\n".join(f"⚠️ {c}" for c in conflicts) if conflicts else "✅ None"
-
-    # Key levels
-    support    = levels.get("IWM_support", 0)
-    resistance = levels.get("IWM_resistance", 0)
-    levels_str = f"Support: **{support}** | Resistance: **{resistance}**" if support else "0DTE data unavailable"
-
-    fields = [
-        {"name": f"{r_emoji} Regime",          "value": regime,       "inline": True},
-        {"name": "📊 Confidence",               "value": f"{conf}",    "inline": True},
-        {"name": "🔗 Engine Alignment",         "value": alignment,    "inline": True},
-        {"name": "📈 Top Picks",                "value": picks_str,    "inline": False},
-        {"name": "🎯 Key Levels (IWM)",         "value": levels_str,   "inline": False},
-        {"name": "⚡ Actionable",               "value": actionable,   "inline": False},
-        {"name": "⚠️ Conflict Flags",           "value": conflict_str, "inline": False},
-    ]
-    if listing_id:
-        fields.append({
-            "name":  "🛒 Marketplace",
-            "value": f"[Read full thesis]({SQUEEZEOS}/api/marketplace/preview/{listing_id})",
-            "inline": False,
-        })
-
-    embed = {
-        "title":       f"{g_emoji} SML Agent — {bias} | {session}",
-        "description": brief.get("market_thesis", ""),
-        "color":       color,
-        "fields":      fields,
-        "footer":      {"text": f"Script Master Labs • {brief.get('title','')[:60]}"},
-        "timestamp":   datetime.now(timezone.utc).isoformat(),
-    }
-
-    try:
-        resp = requests.post(
-            DISCORD_WEBHOOK,
-            json={"embeds": [embed]},
-            timeout=10,
-        )
-        if resp.ok:
-            logger.info(f"[DISCORD] Brief posted — {bias} {grade} conf={conf}")
-        else:
-            logger.warning(f"[DISCORD] Post failed: {resp.status_code} {resp.text[:100]}")
-    except Exception as e:
-        logger.warning(f"[DISCORD] Failed: {e}")
-
 
 # ── Push to webhooks ──────────────────────────────────────────────────────────
 
@@ -614,9 +395,6 @@ def run_cycle():
         data       = collect_market_data()
         brief      = synthesize_brief(data)
         listing_id = list_brief(brief)
-        post_futures_position(brief)
-        trigger_pending_settlements()
-        push_discord(brief, listing_id)
         push_to_webhooks(brief, listing_id)
         log_passport()
 

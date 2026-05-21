@@ -15,6 +15,7 @@ from core.api.ai_reads import ai_reads_bp
 from core.api.scriptmaster_bp import scriptmaster_bp
 from core.api.ceo import ceo_bp
 from core.api.market_scanner import market_bp, start_market_scanner
+from options_anomaly_engine import start_anomaly_engine
 from core.api.v2_bridge import v2_bp
 from core.api.premium_bp import premium_bp
 from core.api.relay_bp import relay_bp
@@ -34,6 +35,9 @@ from core.telemetry_rotator import start_telemetry_rotator
 
 state.audit['uptime_start'] = time.time()
 
+# Serverless detection — skip background threads on Vercel (stateless per-request)
+_IS_SERVERLESS = os.environ.get('VERCEL') == '1'
+
 # Configure Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("SqueezeOS-Core")
@@ -44,9 +48,10 @@ def create_app():
     app = Flask(__name__, static_folder=root_dir, static_url_path='')
     CORS(app) # Enable CORS for institutional dashboard
     
-    # Start Legacy Workers & Services
-    init_services()
-    start_whale_stalker()
+    # Start Legacy Workers & Services (skipped in Vercel serverless mode)
+    if not _IS_SERVERLESS:
+        init_services()
+        start_whale_stalker()
     
     # Honeypot must be registered FIRST so explicit trap routes take priority
     app.register_blueprint(honeypot_bp)
@@ -74,14 +79,18 @@ def create_app():
     app.register_blueprint(v2_bp, url_prefix='/api')
     app.register_blueprint(v2_bp, url_prefix='/api/v1', name='v2_bridge_v1')
     
-    # Start background market scanner
-    start_market_scanner()
+    if not _IS_SERVERLESS:
+        # Start background market scanner
+        start_market_scanner()
 
-    # Start webhook delivery engine (SSE tap + delivery workers)
-    start_webhook_engine()
+        # Start webhook delivery engine (SSE tap + delivery workers)
+        start_webhook_engine()
 
-    # Start institutional telemetry rotator (Goal 3)
-    start_telemetry_rotator()
+        # Start 24/7 options anomaly crime solver
+        start_anomaly_engine()
+
+        # Start institutional telemetry rotator (Goal 3)
+        start_telemetry_rotator()
     
     @app.after_request
     def run_analytics(response):
@@ -272,7 +281,6 @@ def create_app():
             registry = {"gme": [], "amc": [], "last_updated": "never"}
 
         if request.method == 'POST':
-            # Logic for updating anchors from external ingestion
             new_data = request.get_json()
             if 'gme' in new_data: registry['gme'] = new_data['gme']
             if 'amc' in new_data: registry['amc'] = new_data['amc']
@@ -299,12 +307,6 @@ def create_app():
     @app.route('/api/oracle', methods=['GET'])
     @app.route('/api/oracle/<symbol>', methods=['GET'])
     def oracle_signal(symbol=None):
-        """
-        SML Command Center Oracle — master signal aggregator.
-        Returns BUY/SELL/HOLD/SHIELD directive with full Driver/Navigator payload.
-        Supports: /api/oracle  (all 3 symbols)
-                  /api/oracle/GME  (single symbol)
-        """
         from core.oracle_engine import OracleEngine, ORACLE_SYMBOLS, run_oracle_batch
         services = {
             "dm":            get_service("dm"),
@@ -318,7 +320,6 @@ def create_app():
             return jsonify({"status": "success", "oracle": result})
         else:
             results = run_oracle_batch(ORACLE_SYMBOLS, services)
-            # Master directive = highest confidence non-SHIELD signal
             ranked = sorted(
                 [v for v in results.values() if v.get("directive") != "SHIELD"],
                 key=lambda x: x.get("confidence", 0), reverse=True
@@ -331,13 +332,9 @@ def create_app():
                 "timestamp": datetime.now().isoformat(),
             })
 
-
-    # ── SML MarketGraphify + RDT Routes ──────────────────────────────────────
-
     @app.route('/api/graph', methods=['GET'])
     @app.route('/api/graph/<symbol>', methods=['GET'])
     def graph_snapshot(symbol=None):
-        """Full Neo4j graph snapshot — nodes + edges. Live market relationship map."""
         graph = get_graph()
         if not graph:
             return jsonify({"status": "error", "message": "Neo4j unavailable"}), 503
@@ -361,11 +358,9 @@ def create_app():
 
     @app.route('/api/graph/rdt', methods=['GET'])
     def rdt_signals():
-        """OpenMythos RDT — recursive fractal correlation across SML universe."""
         graph = get_graph()
         rdt = RecurrentDepthTransformer(graph=graph)
         try:
-            # Pull live prices from oracle for RDT input
             from core.oracle_engine import OracleEngine, ORACLE_SYMBOLS
             services = {
                 "dm":            get_service("dm"),
@@ -374,12 +369,10 @@ def create_app():
             }
             engine = OracleEngine(services)
             snapshots = {}
-            # Dynamic Universe Discovery (Goal 1)
             active_universe = list(state.quotes.keys())[:20] if state.quotes else ORACLE_SYMBOLS
             for sym in active_universe:
                 try:
                     oracle_data = engine.analyze(sym)
-                    # Use `or 0.0` — oracle returns explicit None for missing fields
                     price  = oracle_data.get("price")  or 0.0
                     vpin   = oracle_data.get("vpin")   or 0.0
                     gex    = oracle_data.get("gamma_wall_above") or 0.0
@@ -388,7 +381,6 @@ def create_app():
                         "price": price, "vpin": vpin,
                         "gex": gex, "regime": regime
                     }
-                    # Write live state into graph
                     if graph:
                         graph.update_ticker(
                             symbol=sym, price=price,
@@ -420,11 +412,8 @@ def create_app():
             logger.error(f"[RDT] Error: {e}")
             return jsonify({"status": "error", "message": str(e)}), 500
 
-    # ── Demo endpoint — full council verdict, IWM, no payment, 5-min cache ────
-    # Shows agents the EXACT response format they get when they pay.
-    # Eliminates "is this real?" friction for new agents evaluating the platform.
     _demo_cache: dict = {}
-    _DEMO_TTL = 300  # 5 minutes
+    _DEMO_TTL = 300
 
     @app.route('/api/demo', methods=['GET'])
     @app.route('/api/demo/council', methods=['GET'])
@@ -481,11 +470,8 @@ def create_app():
         _demo_cache['council'] = result
         return jsonify(result)
 
-    # ── Free Signal Preview — acquisition funnel ─────────────────────────────
-    # Returns bias + regime only, cached 15 min. No payment required.
-    # Enough for an agent to verify SqueezeOS works; not enough to trade on.
     _preview_cache: dict = {}
-    _PREVIEW_TTL = 900  # 15 minutes
+    _PREVIEW_TTL = 900
 
     @app.route('/api/preview', methods=['GET'])
     @app.route('/api/preview/<symbol>', methods=['GET'])
@@ -523,10 +509,6 @@ def create_app():
         }
         _preview_cache[symbol] = result
         return jsonify(result)
-
-    # ── Signal History — free public endpoint ────────────────────────────────
-    # Last N signals per symbol from the in-memory ring buffer.
-    # Free, no auth. Enables agent backtesting and confidence calibration.
 
     @app.route('/api/history', methods=['GET'])
     def signal_history_all():
@@ -573,7 +555,6 @@ if __name__ == "__main__":
     key_file = 'private.key.pem'
     ssl_ctx = None
     
-    # Goal 3: Stabilize mobile handshake by making SSL optional
     force_ssl = os.environ.get('FORCE_SSL', 'false').lower() == 'true'
 
     if force_ssl and os.path.exists(cert_file) and os.path.exists(key_file):

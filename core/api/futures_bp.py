@@ -21,11 +21,6 @@ Flow:
   4. Auto-settle: matching party wins (0.095 RLUSD), platform keeps 5% (0.005 RLUSD)
   5. Settlement proof published to SSE stream
 
-Auto-settle:
-  Futures are auto-settled by the signal history engine whenever a new
-  COUNCIL_VERDICT is recorded for the symbol. Callers can also force-settle
-  by calling POST /api/futures/settle/<id>.
-
 Platform fee: 5% of total pot on settlement
 """
 
@@ -38,7 +33,7 @@ from flask import Blueprint, jsonify, request
 logger = logging.getLogger("SqueezeOS-Futures")
 futures_bp = Blueprint('futures', __name__)
 
-# ── Storage ────────────────────────────────────────────────────────────────────
+# ── Storage ──────────────────────────────────────────────────────────────────────────────
 _futures:       dict = {}       # future_id -> future dict
 _leaderboard:   dict = {}       # wallet -> { wins, losses, total_staked, total_earned }
 _lock = threading.Lock()
@@ -69,7 +64,6 @@ def _lb(wallet: str) -> dict:
 
 
 def _settle_future(future: dict, actual_bias: str, verdict_data: dict) -> dict:
-    """Settle a future against actual council verdict bias."""
     predicted = future["predicted_bias"]
     creator   = future["creator_wallet"]
     taker     = future["taker_wallet"]
@@ -78,12 +72,8 @@ def _settle_future(future: dict, actual_bias: str, verdict_data: dict) -> dict:
     fee       = round(pot * PLATFORM_FEE_PCT, 6)
     net       = round(pot - fee, 6)
 
-    if actual_bias == predicted:
-        winner = creator
-        loser  = taker
-    else:
-        winner = taker
-        loser  = creator
+    winner = creator if actual_bias == predicted else taker
+    loser  = taker   if actual_bias == predicted else creator
 
     proof = {
         "future_id":      future["id"],
@@ -106,7 +96,6 @@ def _settle_future(future: dict, actual_bias: str, verdict_data: dict) -> dict:
     future["proof"]      = proof
     future["settled_at"] = _now()
 
-    # Update leaderboard
     for w, won in [(winner, True), (loser, False)]:
         if not w:
             continue
@@ -120,19 +109,20 @@ def _settle_future(future: dict, actual_bias: str, verdict_data: dict) -> dict:
         total = lb["wins"] + lb["losses"]
         lb["win_rate"] = round(lb["wins"] / total, 3) if total else 0.0
 
-    # Broadcast SSE
     try:
-        from core.app import _broadcast_sse_global
-        _broadcast_sse_global({
-            "type":      "FUTURES_SETTLED",
-            "future_id": future["id"],
-            "symbol":    future["symbol"],
-            "winner":    winner,
-            "net_rlusd": net,
-            "actual_bias":    actual_bias,
-            "predicted_bias": predicted,
-            "ts":        _now(),
-        })
+        import core.app as _app
+        broadcast = getattr(_app, '_broadcast_sse_global', None)
+        if broadcast:
+            broadcast({
+                "type":      "FUTURES_SETTLED",
+                "future_id": future["id"],
+                "symbol":    future["symbol"],
+                "winner":    winner,
+                "net_rlusd": net,
+                "actual_bias":    actual_bias,
+                "predicted_bias": predicted,
+                "ts":        _now(),
+            })
     except Exception:
         pass
 
@@ -141,10 +131,7 @@ def _settle_future(future: dict, actual_bias: str, verdict_data: dict) -> dict:
 
 
 def auto_settle_for_symbol(symbol: str, actual_bias: str, confidence: int, verdict_data: dict):
-    """
-    Called by the signal history engine when a COUNCIL_VERDICT is recorded.
-    Settles all open futures for this symbol that have a taker.
-    """
+    """Called by signal_history.record on every COUNCIL_VERDICT."""
     settled = []
     with _lock:
         for f in list(_futures.values()):
@@ -158,7 +145,7 @@ def auto_settle_for_symbol(symbol: str, actual_bias: str, confidence: int, verdi
     return settled
 
 
-# ── Routes ─────────────────────────────────────────────────────────────────────
+# ── Routes ──────────────────────────────────────────────────────────────────────────────
 
 @futures_bp.route('/create', methods=['POST'])
 def create_future():
@@ -216,10 +203,7 @@ def create_future():
             "proof":           None,
         }
         _futures[future_id] = future
-
-        # Update leaderboard stake tracking
-        lb = _lb(creator)
-        lb["total_staked"] = round(lb["total_staked"] + stake, 6)
+        _lb(creator)["total_staked"] = round(_lb(creator)["total_staked"] + stake, 6)
 
     logger.info(f"[FUTURES] Created {future_id[:8]}… {symbol} {bias} stake={stake} RLUSD")
     return jsonify({
@@ -230,7 +214,7 @@ def create_future():
         "stake_rlusd":    stake,
         "status":         "OPEN",
         "expires_at":     future["expires_at"],
-        "message":        f"Future open. Taker must stake {stake} RLUSD on the opposite side. Settles on next {symbol} council verdict.",
+        "message":        f"Future open. Taker stakes {stake} RLUSD on opposite side. Settles on next {symbol} council verdict.",
     }), 201
 
 
@@ -257,36 +241,32 @@ def take_future(future_id):
         future["taker_wallet"] = taker
         future["status"]       = "ACTIVE"
         future["activated_at"] = _now()
-
-        # Track taker's stake
-        lb = _lb(taker)
-        lb["total_staked"] = round(lb["total_staked"] + future["stake_rlusd"], 6)
+        _lb(taker)["total_staked"] = round(_lb(taker)["total_staked"] + future["stake_rlusd"], 6)
 
     opposite = {b for b in _VALID_BIASES if b != future["predicted_bias"]}
-    logger.info(f"[FUTURES] {future_id[:8]}… taken by {taker[:12]}… (betting {opposite})")
+    logger.info(f"[FUTURES] {future_id[:8]}… taken by {taker[:12]}…")
     return jsonify({
-        "future_id":       future_id,
-        "symbol":          future["symbol"],
-        "your_position":   f"NOT {future['predicted_bias']} — you win if verdict is {opposite}",
+        "future_id":        future_id,
+        "symbol":           future["symbol"],
+        "your_position":    f"NOT {future['predicted_bias']} — you win if verdict is {opposite}",
         "creator_predicts": future["predicted_bias"],
-        "stake_rlusd":     future["stake_rlusd"],
-        "status":          "ACTIVE",
-        "message":         f"Position taken. Stakes locked. Settles on next {future['symbol']} council verdict.",
+        "stake_rlusd":      future["stake_rlusd"],
+        "status":           "ACTIVE",
+        "message":          f"Position taken. Settles on next {future['symbol']} council verdict.",
     })
 
 
 @futures_bp.route('', methods=['GET'])
 def list_futures():
-    symbol  = request.args.get("symbol", "").upper()
-    status  = request.args.get("status", "OPEN").upper()
-    bias    = request.args.get("bias", "").upper()
-    limit   = min(int(request.args.get("limit", 50)), 200)
+    symbol = request.args.get("symbol", "").upper()
+    status = request.args.get("status", "OPEN").upper()
+    bias   = request.args.get("bias", "").upper()
+    limit  = min(int(request.args.get("limit", 50)), 200)
 
     with _lock:
         results = list(_futures.values())
 
     now = _now()
-    # Auto-expire
     for f in results:
         if f["status"] == "OPEN" and now > f["expires_at"]:
             f["status"] = "EXPIRED"
@@ -315,7 +295,7 @@ def list_futures():
         } for f in results],
         "count":   len(results),
         "free":    True,
-        "message": "Stake on the opposite side by calling POST /api/futures/take/<id>",
+        "message": "Take the opposite side: POST /api/futures/take/<id>",
     })
 
 
@@ -325,11 +305,9 @@ def get_future(future_id):
         future = _futures.get(future_id)
     if not future:
         return jsonify({"error": "Future not found"}), 404
-
     now = _now()
     if future["status"] == "OPEN" and now > future["expires_at"]:
         future["status"] = "EXPIRED"
-
     return jsonify({**future,
         "pot_rlusd":      round(future["stake_rlusd"] * 2, 6),
         "time_remaining": max(0, future["expires_at"] - now),
@@ -338,7 +316,6 @@ def get_future(future_id):
 
 @futures_bp.route('/settle/<future_id>', methods=['POST'])
 def settle_future(future_id):
-    """Force-settle a future against the latest council verdict."""
     with _lock:
         future = _futures.get(future_id)
         if not future:
@@ -348,10 +325,9 @@ def settle_future(future_id):
         if future["status"] != "ACTIVE":
             return jsonify({"error": f"Future must be ACTIVE to settle (status: {future['status']})"}), 400
 
-        # Pull latest verdict from signal history
         latest = _get_latest_verdict(future["symbol"])
         if not latest:
-            return jsonify({"error": f"No council verdict found for {future['symbol']} — cannot settle yet"}), 400
+            return jsonify({"error": f"No council verdict found for {future['symbol']}"}), 400
 
         actual_bias = latest.get("bias", "").upper()
         if actual_bias not in _VALID_BIASES:
@@ -367,7 +343,7 @@ def _get_latest_verdict(symbol: str) -> dict:
         import core.signal_history as sh
         signals = sh.get_history(symbol, limit=20)
         for s in signals:
-            if s.get("type") == "COUNCIL_VERDICT":
+            if s.get("type") == "COUNCIL_VERDICT" or s.get("event_type") == "COUNCIL_VERDICT":
                 return s
     except Exception:
         pass
@@ -402,9 +378,4 @@ def wallet_futures(wallet):
                    if f["creator_wallet"] == wallet or f["taker_wallet"] == wallet]
     results = sorted(results, key=lambda f: f["created_at"], reverse=True)[:limit]
     lb = _leaderboard.get(wallet, {})
-    return jsonify({
-        "wallet":   wallet,
-        "futures":  results,
-        "count":    len(results),
-        "stats":    lb,
-    })
+    return jsonify({"wallet": wallet, "futures": results, "count": len(results), "stats": lb})

@@ -221,7 +221,7 @@ KYB tier (admin-assigned) unlocks enterprise features and compliance reporting.
 ## SSE Live Events
 
 ```
-GET https://lively-fascination-production-41fa.up.railway.app/api/events
+GET https://squeezeos-api.onrender.com/api/events
 
 Events emitted:
   {"type": "CONNECTED", "msg": "SqueezeOS-Core SSE Active"}
@@ -241,7 +241,7 @@ slots — beyond the cap, HTTP 403 is returned immediately.
 All probe events are logged with IP, path, timestamp, and agent headers.
 Query the probe log (admin token required):
 ```
-GET https://lively-fascination-production-41fa.up.railway.app/api/ghost/probe-log
+GET https://squeezeos-api.onrender.com/api/ghost/probe-log
 Header: X-Admin-Token: <ADMIN_TOKEN>
 ```
 
@@ -262,7 +262,7 @@ from xrpl.models.transactions import Payment
 from xrpl.utils import xrp_to_drops
 
 PROOF402 = "https://four02proof.onrender.com"
-SQUEEZEOS = "https://lively-fascination-production-41fa.up.railway.app"
+SQUEEZEOS = "https://squeezeos-api.onrender.com"
 
 wallet = Wallet.from_seed(os.environ["AGENT_XRPL_SEED"])
 
@@ -320,4 +320,4 @@ Tools: `platform_stats`, `get_invoice`, `verify_payment`, `check_loyalty`,
 - AI plugin: https://four02proof.onrender.com/.well-known/ai-plugin.json
 - Root llms.txt: https://www.scriptmasterlabs.com/llms.txt
 - Ghost Layer: https://ghost-layer.onrender.com/llms.txt
-- SqueezeOS: https://lively-fascination-production-41fa.up.railway.app/llms.txt
+- SqueezeOS: https://squeezeos-api.onrender.com/llms.txt

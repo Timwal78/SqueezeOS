@@ -70,99 +70,84 @@
 
   <!-- ═══ SqueezeOS — Railway ═══════════════════════════════════════════════ -->
   <url>
-    <loc>https://lively-fascination-production-41fa.up.railway.app/</loc>
+    <loc>https://squeezeos-terminal.vercel.app/</loc>
     <changefreq>daily</changefreq>
     <priority>0.95</priority>
   </url>
   <url>
-    <loc>https://lively-fascination-production-41fa.up.railway.app/llms.txt</loc>
+    <loc>https://squeezeos-terminal.vercel.app/llms.txt</loc>
     <changefreq>weekly</changefreq>
     <priority>0.95</priority>
   </url>
   <url>
-    <loc>https://lively-fascination-production-41fa.up.railway.app/.well-known/server.json</loc>
+    <loc>https://squeezeos-terminal.vercel.app/.well-known/server.json</loc>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://lively-fascination-production-41fa.up.railway.app/.well-known/mcp.json</loc>
+    <loc>https://squeezeos-terminal.vercel.app/.well-known/mcp.json</loc>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://lively-fascination-production-41fa.up.railway.app/.well-known/agents.json</loc>
+    <loc>https://squeezeos-terminal.vercel.app/.well-known/agents.json</loc>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://lively-fascination-production-41fa.up.railway.app/mcp</loc>
+    <loc>https://squeezeos-terminal.vercel.app/mcp</loc>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://lively-fascination-production-41fa.up.railway.app/api/demo/council</loc>
+    <loc>https://squeezeos-terminal.vercel.app/api/demo/council</loc>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://lively-fascination-production-41fa.up.railway.app/api/demo</loc>
+    <loc>https://squeezeos-terminal.vercel.app/api/demo</loc>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://lively-fascination-production-41fa.up.railway.app/api/preview/IWM</loc>
+    <loc>https://squeezeos-terminal.vercel.app/api/preview/IWM</loc>
     <changefreq>always</changefreq>
     <priority>0.85</priority>
   </url>
   <url>
-    <loc>https://lively-fascination-production-41fa.up.railway.app/api/history/IWM</loc>
+    <loc>https://squeezeos-terminal.vercel.app/api/history/IWM</loc>
     <changefreq>always</changefreq>
     <priority>0.85</priority>
   </url>
   <url>
-    <loc>https://lively-fascination-production-41fa.up.railway.app/api/history</loc>
+    <loc>https://squeezeos-terminal.vercel.app/api/history</loc>
     <changefreq>always</changefreq>
     <priority>0.85</priority>
   </url>
   <url>
-    <loc>https://lively-fascination-production-41fa.up.railway.app/api/marketplace</loc>
+    <loc>https://squeezeos-terminal.vercel.app/api/marketplace</loc>
     <changefreq>always</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://lively-fascination-production-41fa.up.railway.app/api/marketplace/leaderboard</loc>
+    <loc>https://squeezeos-terminal.vercel.app/api/marketplace/leaderboard</loc>
     <changefreq>daily</changefreq>
     <priority>0.85</priority>
   </url>
   <url>
-    <loc>https://lively-fascination-production-41fa.up.railway.app/api/hiring</loc>
+    <loc>https://squeezeos-terminal.vercel.app/api/hiring</loc>
     <changefreq>always</changefreq>
     <priority>0.85</priority>
   </url>
   <url>
-    <loc>https://lively-fascination-production-41fa.up.railway.app/api/relay/nodes</loc>
+    <loc>https://squeezeos-terminal.vercel.app/api/relay/nodes</loc>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://lively-fascination-production-41fa.up.railway.app/api/status</loc>
+    <loc>https://squeezeos-terminal.vercel.app/api/status</loc>
     <changefreq>always</changefreq>
     <priority>0.75</priority>
-  </url>
-  <url>
-    <loc>https://lively-fascination-production-41fa.up.railway.app/api/settlement</loc>
-    <changefreq>always</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://lively-fascination-production-41fa.up.railway.app/api/futures</loc>
-    <changefreq>always</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://lively-fascination-production-41fa.up.railway.app/api/futures/leaderboard</loc>
-    <changefreq>daily</changefreq>
-    <priority>0.85</priority>
   </url>
 
   <!-- ═══ 402Proof — Render ════════════════════════════════════════════════ -->

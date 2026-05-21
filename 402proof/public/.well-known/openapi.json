@@ -11,7 +11,7 @@
   },
   "servers": [
     {
-      "url": "https://lively-fascination-production-41fa.up.railway.app",
+      "url": "https://squeezeos-api.onrender.com",
       "description": "SqueezeOS — Live premium endpoints"
     },
     {

@@ -16,7 +16,7 @@
       "description": "402Proof \u2014 Payment Settlement Server (x402 compliant, Agent Passport, compliance receipts)"
     },
     {
-      "url": "https://lively-fascination-production-41fa.up.railway.app",
+      "url": "https://squeezeos-terminal.vercel.app",
       "description": "SqueezeOS \u2014 Market Intelligence API (Railway, x402 gated)"
     },
     {
@@ -408,7 +408,7 @@
         "description": "Real-time Ghost Layer security audit feed. Returns probe log stats, active tarpit slot count, and MEV protection status. No payment required. Polled by the SqueezeOS institutional dashboard. Agents may use this to verify Ghost Layer is actively protecting the network before routing payments through it.",
         "servers": [
           {
-            "url": "https://lively-fascination-production-41fa.up.railway.app"
+            "url": "https://squeezeos-terminal.vercel.app"
           }
         ],
         "responses": {
@@ -762,7 +762,7 @@
         "description": "SML Fractal Cascade + Battle Computer consensus. Returns regime classification, directional bias, confidence score, and institutional-grade trading thesis for any symbol. Cost: 0.10 RLUSD. Endpoint ID: 12a0e7a1-6812-4c3f-aa24-de6e3bc12b5a",
         "servers": [
           {
-            "url": "https://lively-fascination-production-41fa.up.railway.app"
+            "url": "https://squeezeos-terminal.vercel.app"
           }
         ],
         "security": [
@@ -830,7 +830,7 @@
         "description": "Scans the full universe of $1\u2013$50 equities using the 8-module SML scoring engine. Returns all qualifying squeeze setups ranked by score. Cost: 0.05 RLUSD. Endpoint ID: 160cf28d-b364-44eb-adbd-2489c5cc2cf8",
         "servers": [
           {
-            "url": "https://lively-fascination-production-41fa.up.railway.app"
+            "url": "https://squeezeos-terminal.vercel.app"
           }
         ],
         "security": [
@@ -871,7 +871,7 @@
         "description": "Real Schwab options chain analysis. Detects institutional sweeps, whale premium blocks, unusual volume spikes, and scores top contract recommendations. Includes net delta, GEX, put/call ratios, max pain. Cost: 0.05 RLUSD. Endpoint ID: c951a374-2424-4064-ab80-35afe8053d29",
         "servers": [
           {
-            "url": "https://lively-fascination-production-41fa.up.railway.app"
+            "url": "https://squeezeos-terminal.vercel.app"
           }
         ],
         "security": [
@@ -912,7 +912,7 @@
         "description": "Specialized Russell 2000 (IWM) 0DTE analysis. Scores contracts by delta/gamma profile, bid-ask spread, volume/OI ratio. Identifies gamma flip levels, max pain, and realized vol. Cost: 0.03 RLUSD. Endpoint ID: 60f48ce0-6002-4385-9b60-03a0d2bbebab",
         "servers": [
           {
-            "url": "https://lively-fascination-production-41fa.up.railway.app"
+            "url": "https://squeezeos-terminal.vercel.app"
           }
         ],
         "security": [
@@ -2441,7 +2441,7 @@
     "protocol": "SSE (text/event-stream)",
     "endpoints": [
       {
-        "url": "https://lively-fascination-production-41fa.up.railway.app/api/events",
+        "url": "https://squeezeos-terminal.vercel.app/api/events",
         "description": "Unified institutional SSE stream. Pushes all real-time events: regime changes, squeeze triggers, alert escalations, council verdict updates. Connect once and receive the full event firehose. First event is type=CONNECTED confirmation.",
         "event_types": [
           {
@@ -2470,11 +2470,11 @@
           }
         ],
         "auth": "No x402 payment required for SSE connection. Premium event types may be filtered for non-paying agents in future versions.",
-        "client_example_js": "const es = new EventSource('https://lively-fascination-production-41fa.up.railway.app/api/events'); es.onmessage = e => console.log(JSON.parse(e.data));",
-        "client_example_python": "import sseclient, requests\nresp = requests.get('https://lively-fascination-production-41fa.up.railway.app/api/events', stream=True)\nfor event in sseclient.SSEClient(resp).events(): print(event.data)"
+        "client_example_js": "const es = new EventSource('https://squeezeos-terminal.vercel.app/api/events'); es.onmessage = e => console.log(JSON.parse(e.data));",
+        "client_example_python": "import sseclient, requests\nresp = requests.get('https://squeezeos-terminal.vercel.app/api/events', stream=True)\nfor event in sseclient.SSEClient(resp).events(): print(event.data)"
       },
       {
-        "url": "https://lively-fascination-production-41fa.up.railway.app/api/beast/events",
+        "url": "https://squeezeos-terminal.vercel.app/api/beast/events",
         "description": "Beast Panel SSE stream \u2014 institutional alert feed focused on Beast Score regime transitions, Battle Computer signals, and high-conviction setup notifications.",
         "event_types": [
           {

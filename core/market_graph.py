@@ -7,16 +7,21 @@ import os
 import logging
 from datetime import datetime
 from typing import Optional
-from neo4j import GraphDatabase
+
+try:
+    from neo4j import GraphDatabase
+    _NEO4J_AVAILABLE = True
+except ImportError:
+    GraphDatabase = None
+    _NEO4J_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
-# ── Credentials ──
-# neo4j+ssc = SSL with self-signed cert support (works on Windows without cert store)
-NEO4J_URI      = os.getenv("NEO4J_URI",      "neo4j+s://e57655ba.databases.neo4j.io").replace("neo4j+s://", "neo4j+ssc://")
-NEO4J_USERNAME = os.getenv("NEO4J_USERNAME", "e57655ba")
-NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "Ht8JMleC3KCOPd_ORFEdBB6VbjUZHeDA_dyRb-S07Mc")
-NEO4J_DATABASE = os.getenv("NEO4J_DATABASE", "e57655ba")
+# ── Credentials (set via environment variables — never hardcode) ──
+NEO4J_URI      = os.getenv("NEO4J_URI",      "").replace("neo4j+s://", "neo4j+ssc://")
+NEO4J_USERNAME = os.getenv("NEO4J_USERNAME", "")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "")
+NEO4J_DATABASE = os.getenv("NEO4J_DATABASE", "")
 
 # ── SML Universe ──
 SML_TICKERS = ["GME", "AMC", "IWM"]
@@ -185,9 +190,11 @@ _graph_instance: Optional[MarketGraph] = None
 
 def get_graph() -> Optional[MarketGraph]:
     global _graph_instance
+    if not _NEO4J_AVAILABLE or not NEO4J_URI or not NEO4J_PASSWORD:
+        return None
     if _graph_instance is None:
         try:
             _graph_instance = MarketGraph()
         except Exception as e:
-            logger.error(f"[GRAPH] Failed to connect to Neo4j: {e}")
+            logger.warning(f"[GRAPH] Neo4j unavailable: {e}")
     return _graph_instance

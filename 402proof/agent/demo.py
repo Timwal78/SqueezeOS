@@ -33,7 +33,7 @@ PROOF402_SERVER = "https://four02proof.onrender.com"
 # Set SQUEEZEOS_URL env var to your Railway deployment URL.
 _SQUEEZEOS = os.environ.get(
     "SQUEEZEOS_URL",
-    "https://lively-fascination-production-41fa.up.railway.app"
+    "https://squeezeos-api.onrender.com"
 ).rstrip("/")
 
 ENDPOINTS = {

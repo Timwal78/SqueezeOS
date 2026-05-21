@@ -35,7 +35,7 @@ from core.state import state
 logger = logging.getLogger("SqueezeOS-Settlement")
 settlement_bp = Blueprint('settlement', __name__)
 
-# ── Storage ────────────────────────────────────────────────────────────────────
+# ── Storage ──────────────────────────────────────────────────────────────────────────────
 _contracts: dict = {}        # contract_id -> contract dict
 _lock = threading.Lock()
 
@@ -55,7 +55,7 @@ def _now() -> float:
     return time.time()
 
 
-def _check_condition(contract: dict) -> tuple[bool, str]:
+def _check_condition(contract: dict) -> tuple:
     """Evaluate contract condition against current state. Returns (met, reason)."""
     ctype     = contract["condition_type"]
     symbol    = contract["symbol"]
@@ -68,7 +68,6 @@ def _check_condition(contract: dict) -> tuple[bool, str]:
 
     if ctype == "bias_match":
         expected = params.get("expected_bias", "").upper()
-        # Pull latest signal from history
         history = _get_latest_signal(symbol, "COUNCIL_VERDICT")
         if not history:
             return False, f"No council verdict yet for {symbol}"
@@ -102,20 +101,18 @@ def _check_condition(contract: dict) -> tuple[bool, str]:
 
 
 def _get_latest_signal(symbol: str, event_type: str) -> dict:
-    """Pull latest signal of given type from state history."""
     try:
         import core.signal_history as sh
         signals = sh.get_history(symbol, limit=10)
         for s in signals:
-            if s.get("type") == event_type:
+            if s.get("type") == event_type or s.get("event_type") == event_type:
                 return s
     except Exception:
         pass
     return {}
 
 
-def _get_latest_price(symbol: str) -> float | None:
-    """Get latest price from market scanner state."""
+def _get_latest_price(symbol: str):
     try:
         quotes = state.get("quotes", {})
         if symbol in quotes:
@@ -126,7 +123,6 @@ def _get_latest_price(symbol: str) -> float | None:
 
 
 def _settle(contract: dict, reason: str, winner: str) -> dict:
-    """Mark contract as settled, compute proof."""
     fee = round(contract["stake_rlusd"] * PLATFORM_FEE_PCT, 6)
     net = round(contract["stake_rlusd"] - fee, 6)
 
@@ -147,18 +143,19 @@ def _settle(contract: dict, reason: str, winner: str) -> dict:
     contract["proof"]      = proof
     contract["settled_at"] = _now()
 
-    # Broadcast to SSE
     try:
-        from core.app import _broadcast_sse_global
-        _broadcast_sse_global({
-            "type":        "SETTLEMENT_COMPLETE",
-            "contract_id": contract["id"],
-            "symbol":      contract["symbol"],
-            "winner":      winner,
-            "net_rlusd":   net,
-            "reason":      reason,
-            "ts":          _now(),
-        })
+        import core.app as _app
+        broadcast = getattr(_app, '_broadcast_sse_global', None)
+        if broadcast:
+            broadcast({
+                "type":        "SETTLEMENT_COMPLETE",
+                "contract_id": contract["id"],
+                "symbol":      contract["symbol"],
+                "winner":      winner,
+                "net_rlusd":   net,
+                "reason":      reason,
+                "ts":          _now(),
+            })
     except Exception:
         pass
 
@@ -166,7 +163,7 @@ def _settle(contract: dict, reason: str, winner: str) -> dict:
     return proof
 
 
-# ── Routes ─────────────────────────────────────────────────────────────────────
+# ── Routes ──────────────────────────────────────────────────────────────────────────────
 
 @settlement_bp.route('/create', methods=['POST'])
 def create_contract():
@@ -195,12 +192,10 @@ def create_contract():
         return jsonify({"error": "stake_rlusd must be between 0.01 and 100.0"}), 400
 
     with _lock:
-        # Wallet cap
         wallet_count = sum(1 for c in _contracts.values() if c["creator_wallet"] == creator and c["status"] in ("PENDING", "ACTIVE"))
         if wallet_count >= MAX_PER_WALLET:
             return jsonify({"error": f"Max {MAX_PER_WALLET} active contracts per wallet"}), 429
 
-        # Global cap — evict oldest settled
         if len(_contracts) >= MAX_CONTRACTS:
             oldest = sorted(_contracts.values(), key=lambda c: c["created_at"])
             for old in oldest:
@@ -234,7 +229,7 @@ def create_contract():
         "stake_rlusd":     stake,
         "status":          "PENDING",
         "expires_at":      contract["expires_at"],
-        "message":         "Contract created. Share contract_id with counterparty to activate. Call /trigger to check condition.",
+        "message":         "Contract created. Call /trigger to check condition.",
     }), 201
 
 
@@ -283,8 +278,7 @@ def get_contract(contract_id):
 
 @settlement_bp.route('/trigger/<contract_id>', methods=['POST'])
 def trigger_contract(contract_id):
-    body = request.get_json(silent=True) or {}
-    caller = body.get("wallet", "").strip()
+    body   = request.get_json(silent=True) or {}
 
     with _lock:
         contract = _contracts.get(contract_id)
@@ -296,13 +290,12 @@ def trigger_contract(contract_id):
             return jsonify({"error": "Contract cancelled"}), 400
         if _now() > contract["expires_at"] and contract["status"] != "SETTLED":
             contract["status"] = "EXPIRED"
-            return jsonify({"status": "expired", "message": "Contract expired — no condition met"}), 200
+            return jsonify({"status": "expired", "message": "Contract expired"}), 200
 
         met, reason = _check_condition(contract)
         if not met:
             return jsonify({"status": "pending", "condition_met": False, "reason": reason}), 200
 
-        # Condition met — settle in creator's favor (they predicted correctly)
         winner = contract["creator_wallet"]
         proof  = _settle(contract, reason, winner)
 

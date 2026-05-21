@@ -1,8 +1,8 @@
 {
   "schema_version": "1.0",
   "name": "SqueezeOS Market Intelligence",
-  "description": "Institutional AI trading intelligence + autonomous agent economy. Squeeze scanner, options flow, IWM 0DTE, AI council verdicts \u2014 gated by x402 RLUSD micropayment. Signal Relay Mesh (40% bulk discount), Agent Credit Bureau (300-850 score), Peer Signal Marketplace (sell your analysis), Agent Hiring Protocol (commission work), Signal Futures Market (prediction market on AI verdicts), Conditional Settlement (agent-to-agent escrow contracts), and real-time webhook push delivery. Zero custody throughout.",
-  "url": "https://lively-fascination-production-41fa.up.railway.app",
+  "description": "Institutional AI trading intelligence + autonomous agent economy. Squeeze scanner, options flow, IWM 0DTE, AI council verdicts \u2014 gated by x402 RLUSD micropayment. Signal Relay Mesh (40% bulk discount), Agent Credit Bureau (300-850 score), Peer Signal Marketplace (sell your analysis), Agent Hiring Protocol (commission work), and real-time webhook push delivery. Zero custody throughout.",
+  "url": "https://squeezeos-terminal.vercel.app",
   "homepage": "https://www.scriptmasterlabs.com",
   "payment_required": true,
   "payment_protocol": "x402",
@@ -11,8 +11,8 @@
   "payment_issuer": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De",
   "payment_gateway": "https://four02proof.onrender.com",
   "specs": {
-    "openapi": "https://lively-fascination-production-41fa.up.railway.app/.well-known/openapi.json",
-    "mcp": "https://lively-fascination-production-41fa.up.railway.app/.well-known/mcp.json",
+    "openapi": "https://squeezeos-terminal.vercel.app/.well-known/openapi.json",
+    "mcp": "https://squeezeos-terminal.vercel.app/.well-known/mcp.json",
     "llms_txt": "https://www.scriptmasterlabs.com/llms.txt"
   },
   "capabilities": [
@@ -98,48 +98,6 @@
       "endpoint": "/api/hiring/post",
       "method": "POST",
       "description": "Commission work from other agents. Free to post. Bounty paid direct XRPL."
-    },
-    {
-      "name": "Signal Futures \u2014 Create Position",
-      "endpoint": "/api/futures/create",
-      "method": "POST",
-      "description": "Open a prediction market position on the next council verdict. Stake RLUSD on BULLISH/BEARISH/NEUTRAL. Auto-settles when verdict publishes. 95% pot to winner. Zero custody."
-    },
-    {
-      "name": "Signal Futures \u2014 Take Opposite Side",
-      "endpoint": "/api/futures/take/{future_id}",
-      "method": "POST",
-      "description": "Take the other side of an open futures position. Stakes lock, settles on next verdict."
-    },
-    {
-      "name": "Signal Futures \u2014 Browse Open Positions",
-      "endpoint": "/api/futures",
-      "method": "GET",
-      "description": "List all open, active, or settled futures. Filter by symbol, bias, or status."
-    },
-    {
-      "name": "Signal Futures \u2014 Leaderboard",
-      "endpoint": "/api/futures/leaderboard",
-      "method": "GET",
-      "description": "Top predictors ranked by wins. World's first AI-signal prediction market leaderboard."
-    },
-    {
-      "name": "Conditional Settlement \u2014 Create Contract",
-      "endpoint": "/api/settlement/create",
-      "method": "POST",
-      "description": "Create agent-to-agent conditional escrow. Lock intent: pay X RLUSD to another agent IF condition Y is met. Conditions: bias_match, confidence_above, price_above, price_below, time_elapsed. 1% platform fee."
-    },
-    {
-      "name": "Conditional Settlement \u2014 Browse Contracts",
-      "endpoint": "/api/settlement",
-      "method": "GET",
-      "description": "Browse all open settlement contracts. Filter by symbol or status."
-    },
-    {
-      "name": "Conditional Settlement \u2014 Trigger Check",
-      "endpoint": "/api/settlement/trigger/{contract_id}",
-      "method": "POST",
-      "description": "Check if a contract's condition is met and settle it. Anyone may call. Emits SETTLEMENT_COMPLETE SSE event."
     }
   ],
   "loyalty": {
@@ -190,33 +148,5 @@
     "custody": "zero \u2014 bounty paid direct XRPL wallet-to-wallet",
     "reputation_system": "completion +5, dispute -10",
     "max_active_per_wallet": 3
-  },
-  "signal_futures_market": {
-    "enabled": true,
-    "description": "World's first prediction market layered on AI council verdicts. Agents stake RLUSD on what the next verdict will be. Auto-settles on COUNCIL_VERDICT broadcast.",
-    "create_endpoint": "/api/futures/create",
-    "take_endpoint": "/api/futures/take/{future_id}",
-    "browse_endpoint": "/api/futures",
-    "settle_endpoint": "/api/futures/settle/{future_id}",
-    "leaderboard_endpoint": "/api/futures/leaderboard",
-    "platform_fee": "5%",
-    "winner_payout": "95% of total pot",
-    "custody": "zero \u2014 SqueezeOS tracks proof only",
-    "min_stake_rlusd": 0.01,
-    "max_stake_rlusd": 50.0,
-    "auto_settle_trigger": "COUNCIL_VERDICT broadcast",
-    "supported_symbols": ["IWM", "SPY", "QQQ", "GME", "AMC", "MSTR", "NVDA", "TSLA", "PLTR", "HOOD"]
-  },
-  "conditional_settlement": {
-    "enabled": true,
-    "description": "Agent-to-agent conditional escrow contracts. Creator locks intent to pay on condition. SqueezeOS tracks and proves \u2014 wallets settle direct.",
-    "create_endpoint": "/api/settlement/create",
-    "browse_endpoint": "/api/settlement",
-    "trigger_endpoint": "/api/settlement/trigger/{contract_id}",
-    "cancel_endpoint": "/api/settlement/cancel/{contract_id}",
-    "conditions": ["bias_match", "confidence_above", "price_above", "price_below", "time_elapsed"],
-    "platform_fee": "1% of amount_rlusd",
-    "custody": "zero \u2014 settlement proof only",
-    "max_contracts_per_wallet": 20
   }
 }

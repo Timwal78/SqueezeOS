@@ -265,11 +265,90 @@ def get_option_chain_schwab_format(
     }
 
 
+def get_quotes_batch(symbols: List[str]) -> Dict[str, Dict[str, Any]]:
+    """Fetch quotes for multiple symbols in a single API call."""
+    if not symbols:
+        return {}
+    data = _get("/markets/quotes", {"symbols": ",".join(symbols), "greeks": "false"})
+    if not data:
+        return {}
+    raw = (data.get("quotes") or {}).get("quote") or []
+    if isinstance(raw, dict):
+        raw = [raw]
+    return {q["symbol"]: q for q in raw if isinstance(q, dict) and "symbol" in q}
+
+
+def get_history_df(symbol: str, days: int = 100, interval: str = "daily"):
+    """
+    Fetch OHLCV history for a symbol from Tradier.
+    Returns a pandas DataFrame with columns Open/High/Low/Close/Volume
+    and a DatetimeIndex — same shape as yfinance.download(symbol).
+    Returns None if unavailable.
+    """
+    try:
+        import pandas as pd
+        from datetime import date, timedelta
+    except ImportError:
+        return None
+
+    end   = date.today()
+    start = end - timedelta(days=days + 10)  # small buffer for weekends
+
+    # Tradier interval: daily | weekly | monthly
+    tradier_interval = "daily" if interval in ("1d", "daily", "1Day") else interval
+
+    data = _get("/markets/history", {
+        "symbol":   symbol,
+        "interval": tradier_interval,
+        "start":    start.strftime("%Y-%m-%d"),
+        "end":      end.strftime("%Y-%m-%d"),
+    })
+    if not data:
+        return None
+
+    days_data = (data.get("history") or {}).get("day") or []
+    if isinstance(days_data, dict):
+        days_data = [days_data]
+    if not days_data:
+        return None
+
+    df = pd.DataFrame(days_data)
+    df["date"] = pd.to_datetime(df["date"])
+    df = df.set_index("date").sort_index()
+    df = df.rename(columns={
+        "open":   "Open",
+        "high":   "High",
+        "low":    "Low",
+        "close":  "Close",
+        "volume": "Volume",
+    })
+    for col in ("Open", "High", "Low", "Close", "Volume"):
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    return df
+
+
+def get_history_batch(symbols: List[str], days: int = 100) -> Dict[str, Any]:
+    """
+    Fetch historical DataFrames for multiple symbols sequentially.
+    Returns { symbol: DataFrame } — same shape as yf.download(symbols, group_by='ticker').
+    """
+    result = {}
+    for sym in symbols:
+        df = get_history_df(sym, days=days)
+        if df is not None and not df.empty:
+            result[sym] = df
+    return result
+
+
 __all__ = [
     "is_available",
     "get_expirations",
     "get_chain",
     "get_quote",
+    "get_quotes_batch",
+    "get_history_df",
+    "get_history_batch",
     "get_option_chain_schwab_format",
     "SANDBOX_BASE",
     "PRODUCTION_BASE",

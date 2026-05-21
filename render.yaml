@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: squeezeos-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    envVars:
+      - key: TRADIER_API_KEY
+        sync: false
+      - key: TRADIER_ENV
+        value: production
+      - key: DISCORD_WEBHOOK_URL
+        sync: false
+      - key: DISCORD_WEBHOOK_ALL
+        sync: false
+      - key: POLYGON_API_KEY
+        sync: false
+      - key: PROOF402_TOKEN_SECRET
+        sync: false
+      - key: PROOF402_SERVER_URL
+        value: https://four02proof.onrender.com
+      - key: PORT
+        value: "8182"
+    healthCheckPath: /api/status
+    autoDeploy: true
