@@ -162,4 +162,4 @@ Tools: `ghost_bridge_health`, `ghost_layer_bridge`, `ghost_audit_stats`
 - MCP manifest: https://ghost-layer.onrender.com/.well-known/mcp.json
 - AI plugin: https://ghost-layer.onrender.com/.well-known/ai-plugin.json
 - Root llms.txt: https://www.scriptmasterlabs.com/llms.txt
-- SqueezeOS: https://lively-fascination-production-41fa.up.railway.app/llms.txt
+- SqueezeOS: https://squeezeos-api.onrender.com/llms.txt
