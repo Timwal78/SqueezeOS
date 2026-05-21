@@ -248,6 +248,18 @@
       }
     },
     {
+      "name": "agent_traffic_analytics",
+      "description": "Real-time agent traffic analytics for SqueezeOS. Tracks every AI agent interaction across the full conversion funnel: DISCOVERED (hit llms.txt/mcp.json) → FREE_TRIAL (hit free endpoints) → INVOICED (got 402) → CONVERTED (paid + hit premium). Returns breakdown by agent type (claude, gpt, gemini, python-bot, curl, etc.), top paths, shortlist drop-off analysis, and wallet leaderboard. Use this to understand which AI systems are evaluating SqueezeOS and where they drop off before paying.",
+      "endpoint": "GET https://lively-fascination-production-41fa.up.railway.app/api/analytics/agents",
+      "price_rlusd": 0,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "hours": {"type": "integer", "description": "Window in hours for funnel endpoint (default 24, max 720)"}
+        }
+      }
+    },
+    {
       "name": "ghost_layer_bridge",
       "description": "Ghost Layer dual-chain transparent toll gateway + 54-block on-chain Execution Matrix. Routes payments on XRPL (RLUSD) or Base (USDC/EIP-3009). Six programmable routing faces \u2014 LIQUIDITY, PRIVACY, SPEED, POOL, HOOKS, BASE \u2014 each a 3\u00d73 grid of weighted sub-parameters. Canonical 54-value state hash minted as URIToken on Xahau; Hook verifies hash on-chain before execution. Applies configurable basis-point fee, delivers net amount to destination, auto-sweeps fees to cold treasury. Use is_dust_test=true to validate without broadcasting. No RLUSD payment required \u2014 direct settlement service.",
       "endpoint": "POST https://ghost-layer.onrender.com/v1/bridge/execute",
