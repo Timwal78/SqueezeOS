@@ -212,15 +212,22 @@ func (c *XRPLClient) submit(txHex string) (string, error) {
 	var res struct {
 		EngineResult        string `json:"engine_result"`
 		EngineResultMessage string `json:"engine_result_message"`
+		Error               string `json:"error"`
+		ErrorMessage        string `json:"error_message"`
+		ErrorException      string `json:"error_exception"`
 		TxJSON              struct {
 			Hash string `json:"hash"`
 		} `json:"tx_json"`
 	}
 	if err := json.Unmarshal(result, &res); err != nil {
-		return "", fmt.Errorf("parse submit response: %w", err)
+		return "", fmt.Errorf("parse submit response: %w — raw: %s", err, string(result))
+	}
+	// RPC-level error (malformed tx, unknown fields, etc.)
+	if res.Error != "" {
+		return "", fmt.Errorf("RPC error: %s — %s %s", res.Error, res.ErrorMessage, res.ErrorException)
 	}
 	if !strings.HasPrefix(res.EngineResult, "tes") {
-		return "", fmt.Errorf("XRPL rejected: %s — %s", res.EngineResult, res.EngineResultMessage)
+		return "", fmt.Errorf("ledger rejected: %s — %s (raw: %s)", res.EngineResult, res.EngineResultMessage, string(result))
 	}
 	return res.TxJSON.Hash, nil
 }

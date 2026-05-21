@@ -9,7 +9,7 @@ GET  /mcp  — server info (health check)
 
 Supported methods:
   initialize        — handshake + capabilities
-  tools/list        — all 16 tools
+  tools/list        — all 23 tools
   tools/call        — execute a tool (proxies to REST API)
   ping              — keepalive
   notifications/*   — silently acknowledged
@@ -271,6 +271,123 @@ _TOOLS = [
         "description": "SqueezeOS system health check. Returns uptime and version. Free.",
         "inputSchema": {"type": "object", "properties": {}},
     },
+    # ── Signal Futures Market ────────────────────────────────────────────────
+    {
+        "name": "futures_create",
+        "description": (
+            "Open a Signal Futures position — predict what the NEXT SqueezeOS council verdict "
+            "will be for a symbol and stake RLUSD on it. Taker bets the opposite side. "
+            "Auto-settles when the real verdict publishes. Winner takes 95% of pot. "
+            "Zero custody — SqueezeOS tracks proof, wallets settle direct. Free to create."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["creator_wallet", "symbol", "predicted_bias"],
+            "properties": {
+                "creator_wallet":  {"type": "string", "description": "Your XRPL wallet"},
+                "symbol":          {"type": "string", "description": "IWM, SPY, QQQ, GME, AMC, MSTR, NVDA, TSLA, PLTR, HOOD"},
+                "predicted_bias":  {"type": "string", "enum": ["BULLISH", "BEARISH", "NEUTRAL"]},
+                "stake_rlusd":     {"type": "number", "description": "Amount to stake (0.01-50 RLUSD, default 0.05)"},
+                "session":         {"type": "string", "enum": ["PRE_MARKET", "OPEN", "MIDDAY", "POWER_HOUR", "CLOSE", "ANY"]},
+                "ttl_hours":       {"type": "integer", "description": "Expiry window (default 8h)"},
+                "note":            {"type": "string", "description": "Optional note (max 300 chars)"},
+            },
+        },
+    },
+    {
+        "name": "futures_take",
+        "description": (
+            "Take the opposite side of an open Signal Futures position. "
+            "You win if the council verdict does NOT match the creator's prediction. "
+            "Stakes locked immediately. Settles on next council verdict for that symbol. Free."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["future_id", "taker_wallet"],
+            "properties": {
+                "future_id":    {"type": "string", "description": "UUID from futures_browse"},
+                "taker_wallet": {"type": "string", "description": "Your XRPL wallet"},
+            },
+        },
+    },
+    {
+        "name": "futures_browse",
+        "description": (
+            "Browse open Signal Futures positions. Filter by symbol, status, or bias. "
+            "Shows stake, pot size, creator prediction, and expiry. Free."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string"},
+                "status": {"type": "string", "enum": ["OPEN", "ACTIVE", "SETTLED", "EXPIRED"]},
+                "bias":   {"type": "string", "enum": ["BULLISH", "BEARISH", "NEUTRAL"]},
+                "limit":  {"type": "integer", "description": "Max results (default 50, max 200)"},
+            },
+        },
+    },
+    {
+        "name": "futures_leaderboard",
+        "description": "Top Signal Futures predictors ranked by wins. Shows win rate, PnL, total staked. Free.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "description": "Max results (default 20, max 100)"},
+            },
+        },
+    },
+    # ── Conditional Settlement ────────────────────────────────────────────────
+    {
+        "name": "settlement_create",
+        "description": (
+            "Create a conditional agent-to-agent escrow contract. "
+            "Lock intent: 'I'll pay X RLUSD to Agent B IF condition Y is met.' "
+            "Conditions: bias_match, confidence_above, price_above, price_below, time_elapsed. "
+            "SqueezeOS tracks and proves — wallets settle direct. 1% platform fee on settlement. Free to create."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["creator_wallet", "recipient_wallet", "amount_rlusd", "condition_type", "symbol"],
+            "properties": {
+                "creator_wallet":   {"type": "string", "description": "Your XRPL wallet (payer)"},
+                "recipient_wallet": {"type": "string", "description": "Recipient XRPL wallet"},
+                "amount_rlusd":     {"type": "number", "description": "RLUSD to pay on condition met (0.01-1000)"},
+                "condition_type":   {"type": "string", "enum": ["bias_match", "confidence_above", "price_above", "price_below", "time_elapsed"]},
+                "symbol":           {"type": "string", "description": "Target equity symbol"},
+                "condition_value":  {"type": "string", "description": "Condition threshold (e.g. 'BULLISH', '75', '220.50')"},
+                "description":      {"type": "string", "description": "Human-readable contract description"},
+                "ttl_hours":        {"type": "integer", "description": "Contract expiry (default 24h)"},
+            },
+        },
+    },
+    {
+        "name": "settlement_browse",
+        "description": "Browse open conditional settlement contracts. Filter by symbol or creator wallet. Free.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "symbol":  {"type": "string"},
+                "wallet":  {"type": "string", "description": "Filter by creator or recipient wallet"},
+                "status":  {"type": "string", "enum": ["OPEN", "TRIGGERED", "SETTLED", "EXPIRED", "CANCELLED"]},
+                "limit":   {"type": "integer"},
+            },
+        },
+    },
+    {
+        "name": "settlement_trigger",
+        "description": (
+            "Check if a settlement contract's condition is now met — and settle it if so. "
+            "Publishes a settlement proof to SSE stream. Returns proof on success. "
+            "Anyone can call — contract creator, recipient, or any agent. Free."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["contract_id"],
+            "properties": {
+                "contract_id": {"type": "string", "description": "UUID from settlement_browse"},
+            },
+        },
+    },
 ]
 
 # Endpoint IDs for helpful 402 error messages
@@ -394,6 +511,31 @@ def _dispatch(name: str, args: dict, req_headers: dict) -> dict:
 
     if name == "hiring_post_job":
         return _text(_proxy("POST", f"{sq}/api/hiring/post", json_body=args))
+
+    # ── Signal Futures Market ────────────────────────────────────────────────
+    if name == "futures_create":
+        return _text(_proxy("POST", f"{sq}/api/futures/create", json_body=args))
+
+    if name == "futures_take":
+        future_id = args.pop("future_id", "")
+        return _text(_proxy("POST", f"{sq}/api/futures/take/{future_id}", json_body=args))
+
+    if name == "futures_browse":
+        return _text(_proxy("GET", f"{sq}/api/futures", params=args))
+
+    if name == "futures_leaderboard":
+        return _text(_proxy("GET", f"{sq}/api/futures/leaderboard", params=args))
+
+    # ── Conditional Settlement ────────────────────────────────────────────────
+    if name == "settlement_create":
+        return _text(_proxy("POST", f"{sq}/api/settlement/create", json_body=args))
+
+    if name == "settlement_browse":
+        return _text(_proxy("GET", f"{sq}/api/settlement", params=args))
+
+    if name == "settlement_trigger":
+        contract_id = args.pop("contract_id", "")
+        return _text(_proxy("POST", f"{sq}/api/settlement/trigger/{contract_id}", json_body=args))
 
     return {
         "content": [{"type": "text", "text": json.dumps({"error": "ERR_UNKNOWN_TOOL", "tool": name})}],

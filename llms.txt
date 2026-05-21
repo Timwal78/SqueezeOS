@@ -120,6 +120,10 @@ Step 5: Cache token — reuse for 1 hour to minimize spend
 | GET /api/relay/nodes | Relay node directory (cheapest first) |
 | GET /api/events | SSE live event stream |
 | GET /api/status | System health |
+| GET /api/analytics/agents | Agent traffic analytics — funnel, conversion rates, leaderboard |
+| GET /api/analytics/agents/live | Last 50 agent requests real-time |
+| GET /api/analytics/agents/funnel | Conversion funnel (discovery→free→invoice→paid) |
+| GET /api/analytics/agents/leaderboard | Top agents by activity and spend |
 
 ### Premium Endpoints (RLUSD)
 

@@ -26,6 +26,7 @@ from core.api.mcp_bp import mcp_bp
 from core.api.honeypot import honeypot_bp, honeypot_before_request
 from core.api.settlement_bp import settlement_bp
 from core.api.futures_bp import futures_bp
+from core.api.agent_analytics import analytics_bp, before_analytics, after_analytics
 import core.signal_history as signal_history
 from core.legacy import start_whale_stalker, init_services, get_service, clean_data
 from core.market_graph import get_graph
@@ -55,6 +56,7 @@ def create_app():
     # Honeypot must be registered FIRST so explicit trap routes take priority
     app.register_blueprint(honeypot_bp)
     app.before_request(honeypot_before_request)
+    app.before_request(before_analytics)
 
     # Register Blueprints
     app.register_blueprint(left_wing_bp, url_prefix='/api/left-wing')
@@ -73,6 +75,7 @@ def create_app():
     app.register_blueprint(mcp_bp,        url_prefix='/mcp')
     app.register_blueprint(settlement_bp, url_prefix='/api/settlement')
     app.register_blueprint(futures_bp,    url_prefix='/api/futures')
+    app.register_blueprint(analytics_bp)
     app.register_blueprint(v2_bp, url_prefix='/api')
     app.register_blueprint(v2_bp, url_prefix='/api/v1', name='v2_bridge_v1')
     
@@ -89,6 +92,10 @@ def create_app():
         # Start institutional telemetry rotator (Goal 3)
         start_telemetry_rotator()
     
+    @app.after_request
+    def run_analytics(response):
+        return after_analytics(response)
+
     @app.after_request
     def add_no_cache(response):
         if 'text/html' in response.content_type:

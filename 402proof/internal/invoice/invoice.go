@@ -40,6 +40,30 @@ func New(ep *models.Endpoint, payTo string) *models.Invoice {
 	}
 }
 
+// NewBase creates a USDC-on-Base invoice. Price is the same decimal amount
+// as the RLUSD endpoint price (1:1 USD peg). PayTo is the Ghost Layer ETH address.
+// MemoHex encodes the invoice ID as hex — agents that support calldata memos
+// should include it; verification falls back to amount+destination matching.
+func NewBase(ep *models.Endpoint, ghostLayerETH string) *models.Invoice {
+	id := uuid.New().String()
+	now := time.Now()
+	memoHex := strings.ToUpper(hex.EncodeToString([]byte(id)))
+	return &models.Invoice{
+		ID:         id,
+		EndpointID: ep.ID,
+		MerchantID: ep.MerchantID,
+		Path:       ep.Path,
+		Price:      ep.Price,
+		Asset:      "USDC",
+		Network:    "Base",
+		PayTo:      ghostLayerETH,
+		MemoHex:    memoHex,
+		ExpiresAt:  now.Add(InvoiceTTL),
+		CreatedAt:  now,
+		Status:     "pending",
+	}
+}
+
 func IsExpired(inv *models.Invoice) bool {
 	return time.Now().After(inv.ExpiresAt)
 }
