@@ -17,3 +17,6 @@ jobs:
 
       - name: Ping SqueezeOS API
         run: curl -sf https://squeezeos-api.onrender.com/api/status -o /dev/null || true
+
+      - name: Ping Ghost Layer Sovereign
+        run: curl -sf https://ghost-layer-sovereign.vercel.app/api/health -o /dev/null || true
