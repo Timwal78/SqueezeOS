@@ -104,6 +104,14 @@ def create_app():
             response.headers['Expires'] = '0'
         return response
 
+    @app.errorhandler(404)
+    def not_found(e):
+        return jsonify({"error": "NOT_FOUND", "message": "Endpoint does not exist"}), 404
+
+    @app.errorhandler(500)
+    def internal_error(e):
+        return jsonify({"error": "INTERNAL_ERROR", "message": "Server error"}), 500
+
     @app.route('/')
     def serve_index():
         return send_from_directory(app.static_folder, 'index.html')

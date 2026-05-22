@@ -72,7 +72,7 @@ def _bureau_score(wallet: str) -> dict:
     try:
         url = f"{_BUREAU_URL}/v1/bureau/score/{wallet}"
         req = urllib.request.Request(url, headers={"User-Agent": "SqueezeOS-Relay/2.0"})
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        with urllib.request.urlopen(req, timeout=15) as resp:
             return json.loads(resp.read())
     except Exception as e:
         logger.warning(f"[RELAY] Bureau offline during registration check: {e}")

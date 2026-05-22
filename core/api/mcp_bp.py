@@ -405,7 +405,7 @@ _PRICES = {
 }
 
 
-def _proxy(method, url, headers=None, json_body=None, params=None, timeout=20):
+def _proxy(method, url, headers=None, json_body=None, params=None, timeout=30):
     try:
         resp = requests.request(
             method, url,
