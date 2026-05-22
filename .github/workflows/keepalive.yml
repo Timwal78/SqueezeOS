@@ -1,0 +1,19 @@
+name: Keep-Alive Ping
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping 402Proof
+        run: curl -sf https://four02proof.onrender.com/v1/stats -o /dev/null || true
+
+      - name: Ping Ghost Layer
+        run: curl -sf https://ghost-layer.onrender.com/health -o /dev/null || true
+
+      - name: Ping SqueezeOS API
+        run: curl -sf https://squeezeos-api.onrender.com/api/status -o /dev/null || true
