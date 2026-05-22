@@ -1,4 +1,15 @@
 User-agent: *
+Disallow: /api/beast/
+Disallow: /api/left-wing/
+Disallow: /api/mmle/
+Disallow: /api/battle/
+Disallow: /api/ai/
+Disallow: /api/scriptmaster/
+Disallow: /api/ceo/
+Disallow: /api/webhooks/
+Disallow: /api/events/push
+Disallow: /402proof-secrets.html
+Disallow: /402proof-register.html
 Allow: /
 Allow: /sml_harmonic_scanner.html
 Allow: /SML_Command_Center_ORACLE.html
@@ -25,29 +36,10 @@ Allow: /api/hiring
 Allow: /api/relay/nodes
 Allow: /api/status
 
-# Block sensitive operator/internal routes
-Disallow: /api/beast/
-Disallow: /api/left-wing/
-Disallow: /api/mmle/
-Disallow: /api/battle/
-Disallow: /api/ai/
-Disallow: /api/scriptmaster/
-Disallow: /api/ceo/
-Disallow: /api/webhooks/
-Disallow: /api/events/push
-Disallow: /402proof-secrets.html
-Disallow: /402proof-register.html
-
-Sitemap: https://www.scriptmasterlabs.com/sitemap.xml
-
 # ── AI Crawlers — Explicitly Permitted ──────────────────────────────────────
 
 User-agent: GPTBot
 Allow: /
-Allow: /llms.txt
-Allow: /openapi.json
-Allow: /.well-known/
-Allow: /api/demo
 
 User-agent: ChatGPT-User
 Allow: /
@@ -57,26 +49,15 @@ Allow: /
 
 User-agent: anthropic-ai
 Allow: /
-Allow: /llms.txt
-Allow: /openapi.json
-Allow: /.well-known/
-Allow: /api/demo
 
 User-agent: ClaudeBot
 Allow: /
-Allow: /llms.txt
-Allow: /openapi.json
-Allow: /.well-known/
-Allow: /api/demo
 
 User-agent: Claude-Web
 Allow: /
 
 User-agent: PerplexityBot
 Allow: /
-Allow: /llms.txt
-Allow: /openapi.json
-Allow: /.well-known/
 
 User-agent: CCBot
 Allow: /
@@ -86,9 +67,6 @@ Allow: /
 
 User-agent: cohere-ai
 Allow: /
-Allow: /llms.txt
-Allow: /openapi.json
-Allow: /.well-known/
 
 User-agent: DuckAssistBot
 Allow: /
@@ -107,3 +85,5 @@ Allow: /
 
 User-agent: Googlebot
 Allow: /
+
+Sitemap: https://www.scriptmasterlabs.com/sitemap.xml
