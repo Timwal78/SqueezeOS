@@ -116,6 +116,53 @@ def create_app():
     def serve_legacy():
         return send_from_directory(app.static_folder, 'SML_Command_Center_ORACLE.html')
 
+    # ── 301 Redirects — dead routes indexed by Google ────────────────────────
+    # All permanently redirect to / so link equity passes forward, no 404 penalty.
+    @app.route('/trading-indicators')
+    @app.route('/trading-indicators/')
+    def redirect_trading_indicators():
+        return redirect('/', code=301)
+
+    @app.route('/neurospark')
+    @app.route('/neurospark/')
+    def redirect_neurospark():
+        return redirect('/', code=301)
+
+    @app.route('/enoch-adhd')
+    @app.route('/enoch-adhd/')
+    def redirect_enoch_adhd():
+        return redirect('/', code=301)
+
+    @app.route('/NeuroStack')
+    @app.route('/NeuroStack/')
+    def redirect_neurostack():
+        return redirect('/', code=301)
+
+    @app.route('/MasterSheets')
+    @app.route('/MasterSheets/')
+    def redirect_mastersheets():
+        return redirect('/', code=301)
+
+    @app.route('/apps/fee-forge')
+    @app.route('/apps/fee-forge/')
+    def redirect_fee_forge():
+        return redirect('/', code=301)
+
+    @app.route('/books/book-of-enoch')
+    @app.route('/books/book-of-enoch/')
+    def redirect_book_of_enoch():
+        return redirect('/', code=301)
+
+    @app.route('/apps/darkpool-scanner')
+    @app.route('/apps/darkpool-scanner/')
+    def redirect_darkpool_scanner():
+        return redirect('/', code=301)
+
+    @app.route('/apps/exo-brain')
+    @app.route('/apps/exo-brain/')
+    def redirect_exo_brain():
+        return redirect('/', code=301)
+
     # Discovery paths that signal agent presence when accessed
     _DISCOVERY_PATHS = frozenset({
         '/llms.txt', '/openapi.json', '/robots.txt',
