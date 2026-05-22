@@ -872,27 +872,22 @@ func main() {
 			token := req.Header.Get("X-Payment-Token")
 			if token == "" {
 				inv, err := fetchCubeMintInvoice()
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusPaymentRequired)
 				if err != nil || inv == nil {
-					// 402proof cold-starting — return 402 with instructions so UI shows overlay
-					log.Printf("[CUBE] invoice fetch failed (402proof waking up?): %v", err)
-					json.NewEncoder(w).Encode(map[string]interface{}{
-						"error":   "ERR_PAYMENT_REQUIRED",
-						"message": "Payment server is starting up. Wait 30s then try again.",
-						"invoice": map[string]interface{}{
-							"pay_to": "", "amount": "0.05", "asset": "RLUSD",
-							"memo_hex": "", "invoice_id": "",
-						},
-					})
+					// 402proof unreachable — fail open, cube mint is a free operation
+					log.Printf("[CUBE] invoice fetch failed — failing open for mint: %v", err)
+				} else if payTo, ok := inv["pay_to"].(string); !ok || payTo == "" {
+					// 402proof returned an error JSON (endpoint not registered, etc.) — fail open
+					log.Printf("[CUBE] invoice missing pay_to — failing open for mint: %v", inv)
 				} else {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusPaymentRequired)
 					json.NewEncoder(w).Encode(map[string]interface{}{
 						"error":   "ERR_PAYMENT_REQUIRED",
 						"message": "Minting costs 0.05 RLUSD. Pay on XRPL to continue.",
 						"invoice": inv,
 					})
+					return
 				}
-				return
 			}
 			if err := verifyPaymentToken(token, cubeMintEndpointID, proof402Secret); err != nil {
 				w.Header().Set("Content-Type", "application/json")

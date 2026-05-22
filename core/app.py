@@ -97,12 +97,23 @@ def create_app():
         return after_analytics(response)
 
     @app.after_request
-    def add_no_cache(response):
+    def add_security_headers(response):
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'SAMEORIGIN'
         if 'text/html' in response.content_type:
             response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
             response.headers['Pragma'] = 'no-cache'
             response.headers['Expires'] = '0'
         return response
+
+    @app.errorhandler(404)
+    def not_found(e):
+        return jsonify({"error": "NOT_FOUND", "message": "Endpoint does not exist"}), 404
+
+    @app.errorhandler(500)
+    def internal_error(e):
+        return jsonify({"error": "INTERNAL_ERROR", "message": "Server error"}), 500
 
     @app.route('/')
     def serve_index():
