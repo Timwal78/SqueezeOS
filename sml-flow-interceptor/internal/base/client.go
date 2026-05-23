@@ -112,14 +112,26 @@ func (c *Client) runOnce(ctx context.Context) error {
 		}
 	}()
 
-	// Subscribe with the provider-extended full-object variant. Providers that
-	// don't support it ignore the boolean and emit hashes; we handle that case
-	// in handleMessage with a one-shot warning.
+	// Alchemy alchemy_pendingTransactions: the provider only forwards pending
+	// txs whose `to` field matches one of our watched contracts, eliminating
+	// per-pending-tx parsing on our side. The client-side contract filter in
+	// handleMessage acts as defense-in-depth in case of misconfiguration.
+	// Docs: https://docs.alchemy.com/reference/alchemy-pendingtransactions
+	toAddresses := make([]string, 0, len(c.watchedContracts))
+	for addr := range c.watchedContracts {
+		toAddresses = append(toAddresses, addr)
+	}
 	sub := map[string]any{
 		"jsonrpc": "2.0",
 		"id":      1,
 		"method":  "eth_subscribe",
-		"params":  []any{"newPendingTransactions", true},
+		"params": []any{
+			"alchemy_pendingTransactions",
+			map[string]any{
+				"toAddress":  toAddresses,
+				"hashesOnly": false,
+			},
+		},
 	}
 	if err := conn.WriteJSON(sub); err != nil {
 		return fmt.Errorf("subscribe: %w", err)

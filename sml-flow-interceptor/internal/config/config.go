@@ -10,12 +10,11 @@ import (
 
 // Config is loaded from environment variables (Render-friendly).
 type Config struct {
-	// BaseWSURL is the JSON-RPC websocket endpoint for the Base mainnet
-	// RPC provider. Must support `eth_subscribe newPendingTransactions`
-	// with the provider-extended full-object variant (Alchemy, Blocknative,
-	// or QuickNode). Hash-only feeds are accepted but logged as a warning
-	// because the required per-tx eth_getTransactionByHash roundtrip
-	// destroys the read-side latency budget.
+	// BaseWSURL is the Alchemy Base mainnet websocket endpoint
+	// (wss://base-mainnet.g.alchemy.com/v2/<key>). The client subscribes
+	// via `alchemy_pendingTransactions` with server-side toAddress filtering
+	// against WatchedContracts and hashesOnly=false; non-Alchemy providers
+	// will reject the subscription.
 	BaseWSURL string
 
 	// WatchedContracts is the lowercased, 0x-prefixed list of ERC-20

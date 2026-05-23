@@ -7,7 +7,7 @@ COPY go.mod go.sum* ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-w -s" -o logger ./cmd/logger
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-w -s" -o interceptor ./cmd/interceptor
 
 FROM alpine:latest
 RUN apk --no-cache add ca-certificates tzdata && \
@@ -15,8 +15,8 @@ RUN apk --no-cache add ca-certificates tzdata && \
     mkdir -p /var/data && chown -R sml:sml /var/data
 
 WORKDIR /app
-COPY --from=builder /app/logger /app/logger
+COPY --from=builder /app/interceptor /app/interceptor
 
 USER sml
 ENV EVENT_LOG_PATH=/var/data/events.ndjson
-ENTRYPOINT ["/app/logger"]
+ENTRYPOINT ["/app/interceptor"]
