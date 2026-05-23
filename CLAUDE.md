@@ -54,6 +54,20 @@ SqueezeOS is an **institutional-grade AI trading intelligence platform** exposed
 
 ---
 
+## Project Name Aliases (internal codenames)
+
+When the user or docs reference these names, map them here — do not search the codebase:
+
+| Name | Module | Location |
+|------|--------|----------|
+| **GraphiFY** / MarketGraphify | `MarketGraph` — Neo4j AuraDB graph (ticker nodes, Greek/dark-pool/fractal edges) | `core/market_graph.py` |
+| **OpenMythos** / RDT | `RecurrentDepthTransformer` — recursive what-if loop on the graph (depth 0–3, fractal anchors) | `core/rdt_engine.py` |
+| **Superpower** / Beastmode | `scriptmaster_bp` — SEO/recon node: P01 Authority Signaling, P02 Visual Saturation, P03 Sentiment Exploitation | `core/api/scriptmaster_bp.py` |
+
+GraphiFY and OpenMythos are tightly coupled — RDT reads from `MarketGraph`. Superpower runs independently. All three surface under `GET /api/graph/rdt`, `GET /api/graph`, and `GET /api/scriptmaster/status`.
+
+---
+
 ## The Prime Directive (non-negotiable)
 
 These rules from `DEVELOPER_MANIFESTO.md` override everything:
@@ -384,6 +398,12 @@ All vars documented in `.env.example`. Key ones:
 | `ALPACA_API_KEY` / `ALPACA_API_SECRET` | No | Alpaca fallback |
 | `PORT` | No | Defaults to `8182` |
 | `FORCE_SSL` | No | `true` to enable TLS (needs cert files) |
+| `NEO4J_URI` | No | Neo4j AuraDB URI (GraphiFY). Omit to disable graph. |
+| `NEO4J_USERNAME` | No | Neo4j username |
+| `NEO4J_PASSWORD` | No | Neo4j password |
+| `NEO4J_DATABASE` | No | Neo4j database name |
+| `OPENAI_API_KEY` | No | Required only by `scriptmaster_bp` (Beastmode `/api/scriptmaster/ingest_intel`, `/ai_brief`) |
+| `SQUEEZEOS_BASE_URL` | No | Self-referencing base URL used by MCP proxy. Defaults to `https://squeezeos-api.onrender.com` |
 
 ---
 
@@ -432,6 +452,12 @@ Secrets: `AGENT_XRPL_SEED`, `AGENT_XRPL_ADDRESS`, `ANTHROPIC_API_KEY` (GitHub Ac
 - **Caching pattern**: use a local `_cache: dict` with a TTL check (`time.time() - entry["ts"] < TTL`) inside the route handler.
 - **Security headers**: applied globally in `add_security_headers` after_request hook. Do not override them per-route.
 - **Pine Scripts**: `pine/` and `indicators/` contain TradingView Pine Script v5 indicators. Do not rename functions — TradingView identifiers are user-facing.
+- **GraphiFY graceful degradation**: `get_graph()` returns `None` when Neo4j env vars are missing or connection fails. Every caller checks `if not graph: return 503`. Never assume the graph is available.
+- **OpenMythos (RDT) degraded mode**: `RecurrentDepthTransformer` accepts `graph=None` and falls back to price/vpin-only scoring — it will not crash without Neo4j.
+- **Superpower (Beastmode) protocols** run async in daemon threads — `POST /api/scriptmaster/run_protocol` returns immediately. Results appear in the mission log ring buffer (50 entries), not the response body.
+- **In-memory stores reset on restart**: `_futures`, `_contracts`, `_listings`, `_scan_cache`, `_preview_cache`, `_demo_cache`, `_MISSION_LOG`, `signal_history` — all lost on redeploy. This is intentional for MVP; do not add disk persistence without discussion.
+- **MCP tool count**: the `_TOOLS` list in `mcp_bp.py` is the source of truth (currently 23 tools). The `_SERVER_INFO` version string is `"3.0.0"`. Update both when adding tools.
+- **Blueprint registration order matters**: honeypot first, then analytics middleware, then all domain blueprints. Changing this order can cause trap routes to be shadowed or analytics to miss requests.
 
 ---
 
