@@ -8,30 +8,58 @@ on:
 jobs:
   health:
     runs-on: ubuntu-latest
+    env:
+      BASE_URL: https://lively-fascination-production-41fa.up.railway.app
+      MAX_WAIT_SECONDS: "300"
+      RETRY_INTERVAL: "10"
     steps:
-      - name: Wait for Railway deploy
-        run: sleep 90
-
-      - name: Check /api/status
+      - name: Wait for /api/status to be healthy
         run: |
-          RESPONSE=$(curl -sf --max-time 15 \
-            https://lively-fascination-production-41fa.up.railway.app/api/status)
-          echo "Response: $RESPONSE"
-          echo "$RESPONSE" | python3 -c "
+          deadline=$(( $(date +%s) + MAX_WAIT_SECONDS ))
+          attempt=0
+          status="000"
+          body=""
+          while :; do
+            attempt=$((attempt + 1))
+            body_file=$(mktemp)
+            status=$(curl -s -o "$body_file" -w "%{http_code}" --max-time 15 "$BASE_URL/api/status" || echo "000")
+            body=$(cat "$body_file")
+            echo "attempt=$attempt http_status=$status body=$body"
+
+            if [ "$status" = "200" ]; then
+              echo "$body" | python3 -c "
           import sys, json
           data = json.load(sys.stdin)
           assert data.get('status') == 'online', f'Expected online, got: {data}'
           print(f'  OK  status=online  uptime={data.get(\"uptime\")}s  version={data.get(\"version\")}')
           "
+              exit 0
+            fi
+
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "FAIL: /api/status never returned 200 within ${MAX_WAIT_SECONDS}s"
+              echo "Last status: $status"
+              echo "Last body:   $body"
+              exit 1
+            fi
+
+            sleep "$RETRY_INTERVAL"
+          done
 
       - name: Check MCP endpoint
         run: |
-          RESPONSE=$(curl -sf --max-time 15 -X POST \
-            https://lively-fascination-production-41fa.up.railway.app/mcp \
+          body_file=$(mktemp)
+          status=$(curl -s -o "$body_file" -w "%{http_code}" --max-time 15 -X POST \
+            "$BASE_URL/mcp" \
             -H "Content-Type: application/json" \
-            -d '{"jsonrpc":"2.0","id":1,"method":"ping","params":{}}')
-          echo "Response: $RESPONSE"
-          echo "$RESPONSE" | python3 -c "
+            -d '{"jsonrpc":"2.0","id":1,"method":"ping","params":{}}' || echo "000")
+          body=$(cat "$body_file")
+          echo "http_status=$status body=$body"
+          if [ "$status" != "200" ]; then
+            echo "FAIL: MCP ping returned $status"
+            exit 1
+          fi
+          echo "$body" | python3 -c "
           import sys, json
           data = json.load(sys.stdin)
           assert 'result' in data, f'No result in MCP ping response: {data}'
@@ -40,8 +68,13 @@ jobs:
 
       - name: Check free demo endpoint
         run: |
-          STATUS=$(curl -sf --max-time 20 -o /dev/null -w "%{http_code}" \
-            https://lively-fascination-production-41fa.up.railway.app/api/demo/council)
-          echo "HTTP $STATUS"
-          [ "$STATUS" = "200" ] || (echo "FAIL: /api/demo/council returned $STATUS" && exit 1)
+          body_file=$(mktemp)
+          status=$(curl -s -o "$body_file" -w "%{http_code}" --max-time 20 \
+            "$BASE_URL/api/demo/council" || echo "000")
+          body_preview=$(head -c 500 "$body_file")
+          echo "http_status=$status body_preview=$body_preview"
+          if [ "$status" != "200" ]; then
+            echo "FAIL: /api/demo/council returned $status"
+            exit 1
+          fi
           echo "  OK  /api/demo/council reachable"
