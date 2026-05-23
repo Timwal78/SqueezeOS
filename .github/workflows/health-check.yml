@@ -1,0 +1,47 @@
+name: Post-Deploy Health Check
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Railway deploy
+        run: sleep 90
+
+      - name: Check /api/status
+        run: |
+          RESPONSE=$(curl -sf --max-time 15 \
+            https://lively-fascination-production-41fa.up.railway.app/api/status)
+          echo "Response: $RESPONSE"
+          echo "$RESPONSE" | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          assert data.get('status') == 'online', f'Expected online, got: {data}'
+          print(f'  OK  status=online  uptime={data.get(\"uptime\")}s  version={data.get(\"version\")}')
+          "
+
+      - name: Check MCP endpoint
+        run: |
+          RESPONSE=$(curl -sf --max-time 15 -X POST \
+            https://lively-fascination-production-41fa.up.railway.app/mcp \
+            -H "Content-Type: application/json" \
+            -d '{"jsonrpc":"2.0","id":1,"method":"ping","params":{}}')
+          echo "Response: $RESPONSE"
+          echo "$RESPONSE" | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          assert 'result' in data, f'No result in MCP ping response: {data}'
+          print('  OK  MCP ping responded')
+          "
+
+      - name: Check free demo endpoint
+        run: |
+          STATUS=$(curl -sf --max-time 20 -o /dev/null -w "%{http_code}" \
+            https://lively-fascination-production-41fa.up.railway.app/api/demo/council)
+          echo "HTTP $STATUS"
+          [ "$STATUS" = "200" ] || (echo "FAIL: /api/demo/council returned $STATUS" && exit 1)
+          echo "  OK  /api/demo/council reachable"
