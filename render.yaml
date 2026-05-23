@@ -3,7 +3,7 @@ services:
     name: squeezeos-api
     runtime: docker
     dockerfilePath: ./Dockerfile
-    plan: starter
+    plan:  starter
     envVars:
       - key: TRADIER_API_KEY
         sync: false
