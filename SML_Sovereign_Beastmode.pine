@@ -1,0 +1,227 @@
+//@version=6
+indicator("SML Sovereign Command: Leviathan + FTD — BEASTMODE", overlay=true, max_labels_count=500, max_lines_count=500)
+
+// =========================================================================
+// COLOR PALETTE
+// =========================================================================
+C_GREEN   = #39FF14
+C_RED     = #FF073A
+C_CYAN    = #00FFFF
+C_PURPLE  = #BF5FFF
+C_GOLD    = #FFD700
+C_DARK    = #0A0A0A
+C_GRAY    = #888888
+C_WHITE   = #FFFFFF
+C_PANEL   = #111111
+C_BORDER  = #333333
+
+// =========================================================================
+// INPUTS
+// =========================================================================
+grp_vis = "Visuals"
+i_showLevEMAs  = input.bool(true, "Show Leviathan EMAs",      group=grp_vis)
+i_showFTDEMAs  = input.bool(true, "Show FTD Hunter EMAs",     group=grp_vis)
+i_showFills    = input.bool(true, "Show EMA Zone Fills",       group=grp_vis)
+i_showLabels   = input.bool(true, "Show Snap Labels",          group=grp_vis)
+i_showBars     = input.bool(true, "Color Bars on Snap",        group=grp_vis)
+i_showBg       = input.bool(true, "Flash BG on Snap",          group=grp_vis)
+i_showCompress = input.bool(true, "Highlight Compression Zone",group=grp_vis)
+
+// =========================================================================
+// CORE 1: THE LEVIATHAN MATRIX (Hardcoded & Locked)
+// 65m Target: 1 / 24 / 578 / 963
+// =========================================================================
+levSpearhead  = ta.ema(close, 1)
+levMomentum   = ta.ema(close, 24)
+levMidAnchor  = ta.ema(close, 578)
+levDeepAnchor = ta.ema(close, 963)
+
+levBullishSnap = ta.crossover(levSpearhead, levMomentum)  and (close < levDeepAnchor)
+levBearishSnap = ta.crossunder(levSpearhead, levMomentum) and (close > levDeepAnchor)
+
+// =========================================================================
+// CORE 2: THE FTD HUNTER (Hardcoded & Locked)
+// Target: 1 / 42 / 369 / 875
+// =========================================================================
+ftdSpearhead  = ta.ema(close, 1)
+ftdMomentum   = ta.ema(close, 42)
+ftdMidAnchor  = ta.ema(close, 369)
+ftdDeepAnchor = ta.ema(close, 875)
+
+ftdBullishSnap = ta.crossover(ftdSpearhead, ftdMomentum)  and (close < ftdDeepAnchor)
+ftdBearishSnap = ta.crossunder(ftdSpearhead, ftdMomentum) and (close > ftdDeepAnchor)
+
+// =========================================================================
+// EMA PLOTS — LEVIATHAN (green family)
+// =========================================================================
+p_levSpear = plot(i_showLevEMAs ? levSpearhead  : na, "LEV Spearhead (1)",    color.new(C_GREEN, 0),  1)
+p_levMom   = plot(i_showLevEMAs ? levMomentum   : na, "LEV Momentum (24)",    color.new(C_GREEN, 30), 2)
+p_levMid   = plot(i_showLevEMAs ? levMidAnchor  : na, "LEV Mid Anchor (578)", color.new(C_GREEN, 65), 1)
+p_levDeep  = plot(i_showLevEMAs ? levDeepAnchor : na, "LEV Deep Anchor (963)",color.new(C_GREEN, 40), 3)
+
+// EMA PLOTS — FTD HUNTER (cyan family)
+p_ftdSpear = plot(i_showFTDEMAs ? ftdSpearhead  : na, "FTD Spearhead (1)",    color.new(C_CYAN, 0),  1)
+p_ftdMom   = plot(i_showFTDEMAs ? ftdMomentum   : na, "FTD Momentum (42)",    color.new(C_CYAN, 30), 2)
+p_ftdMid   = plot(i_showFTDEMAs ? ftdMidAnchor  : na, "FTD Mid Anchor (369)", color.new(C_CYAN, 65), 1)
+p_ftdDeep  = plot(i_showFTDEMAs ? ftdDeepAnchor : na, "FTD Deep Anchor (875)",color.new(C_CYAN, 40), 3)
+
+// =========================================================================
+// ZONE FILLS (momentum → deep anchor)
+// =========================================================================
+fill(p_levMom,  p_levDeep, i_showFills ? color.new(C_GREEN, 94) : na, title="LEV Zone")
+fill(p_ftdMom,  p_ftdDeep, i_showFills ? color.new(C_CYAN,  94) : na, title="FTD Zone")
+
+// =========================================================================
+// COMPRESSION DETECTION
+// Price within 0.5% of momentum EMA = coiling for snap
+// =========================================================================
+levCompress = math.abs(close - levMomentum) / levMomentum * 100 < 0.5
+ftdCompress = math.abs(close - ftdMomentum) / ftdMomentum * 100 < 0.5
+bgcolor(i_showCompress and (levCompress or ftdCompress) ? color.new(C_GOLD, 96) : na, title="Compression Zone")
+
+// =========================================================================
+// BACKGROUND FLASH ON SNAP
+// =========================================================================
+bgcolor(i_showBg and levBullishSnap ? color.new(C_GREEN, 88) : na, title="LEV Bull Flash")
+bgcolor(i_showBg and levBearishSnap ? color.new(C_RED,   88) : na, title="LEV Bear Flash")
+
+// =========================================================================
+// BAR COLORING
+// =========================================================================
+barcolor(i_showBars and (levBullishSnap or ftdBullishSnap) ? C_GREEN  : na, title="Bull Snap Bar")
+barcolor(i_showBars and (levBearishSnap or ftdBearishSnap) ? C_RED    : na, title="Bear Snap Bar")
+
+// =========================================================================
+// SNAP SHAPES
+// =========================================================================
+plotshape(levBullishSnap, "LEV Bull Snap", shape.triangleup,   location.belowbar, C_GREEN,  offset=0, size=size.normal, text="LEV▲", textcolor=C_GREEN)
+plotshape(levBearishSnap, "LEV Bear Snap", shape.triangledown, location.abovebar, C_RED,    offset=0, size=size.normal, text="LEV▼", textcolor=C_RED)
+plotshape(ftdBullishSnap, "FTD Bull Snap", shape.triangleup,   location.belowbar, C_CYAN,   offset=0, size=size.small,  text="FTD▲", textcolor=C_CYAN)
+plotshape(ftdBearishSnap, "FTD Bear Snap", shape.triangledown, location.abovebar, C_PURPLE, offset=0, size=size.small,  text="FTD▼", textcolor=C_PURPLE)
+
+// =========================================================================
+// SNAP LABELS (detailed callout on each event)
+// =========================================================================
+pctFromAnchor(src, anchor) =>
+    str.tostring(math.round((src - anchor) / anchor * 100, 2), "#.##") + "%"
+
+if i_showLabels and levBullishSnap
+    label.new(bar_index, low * 0.997,
+        "⚡ LEVIATHAN LONG\n" +
+        "Price:       " + str.tostring(close,        "#.##") + "\n" +
+        "Mom  (24):   " + str.tostring(levMomentum,  "#.##") + "\n" +
+        "Deep (963):  " + str.tostring(levDeepAnchor,"#.##") + "\n" +
+        "Δ Deep:      " + pctFromAnchor(close, levDeepAnchor),
+        color=C_GREEN, textcolor=C_DARK,
+        style=label.style_label_up, size=size.small)
+
+if i_showLabels and levBearishSnap
+    label.new(bar_index, high * 1.003,
+        "⚡ LEVIATHAN SHORT\n" +
+        "Price:       " + str.tostring(close,        "#.##") + "\n" +
+        "Mom  (24):   " + str.tostring(levMomentum,  "#.##") + "\n" +
+        "Deep (963):  " + str.tostring(levDeepAnchor,"#.##") + "\n" +
+        "Δ Deep:      " + pctFromAnchor(close, levDeepAnchor),
+        color=C_RED, textcolor=C_WHITE,
+        style=label.style_label_down, size=size.small)
+
+if i_showLabels and ftdBullishSnap
+    label.new(bar_index, low * 0.994,
+        "⚡ FTD HUNTER LONG\n" +
+        "Price:       " + str.tostring(close,        "#.##") + "\n" +
+        "Mom  (42):   " + str.tostring(ftdMomentum,  "#.##") + "\n" +
+        "Deep (875):  " + str.tostring(ftdDeepAnchor,"#.##") + "\n" +
+        "Δ Deep:      " + pctFromAnchor(close, ftdDeepAnchor),
+        color=C_CYAN, textcolor=C_DARK,
+        style=label.style_label_up, size=size.small)
+
+if i_showLabels and ftdBearishSnap
+    label.new(bar_index, high * 1.006,
+        "⚡ FTD HUNTER SHORT\n" +
+        "Price:       " + str.tostring(close,        "#.##") + "\n" +
+        "Mom  (42):   " + str.tostring(ftdMomentum,  "#.##") + "\n" +
+        "Deep (875):  " + str.tostring(ftdDeepAnchor,"#.##") + "\n" +
+        "Δ Deep:      " + pctFromAnchor(close, ftdDeepAnchor),
+        color=C_PURPLE, textcolor=C_WHITE,
+        style=label.style_label_down, size=size.small)
+
+// =========================================================================
+// LIVE TABLE — 3 cols × 6 rows
+// Col 0: label | Col 1: current value | Col 2: Δ Deep Anchor
+// =========================================================================
+var table grid = table.new(position.top_right, 3, 6,
+     bgcolor=C_DARK, border_width=1, border_color=C_BORDER,
+     frame_width=2,  frame_color=#444444)
+
+if barstate.islast
+    // ── Header ──
+    table.cell(grid, 0, 0, "SML SYSTEM",    text_color=C_GRAY,  text_size=size.small, bgcolor=#1a1a1a)
+    table.cell(grid, 1, 0, "STATE / EMA",   text_color=C_GRAY,  text_size=size.small, bgcolor=#1a1a1a)
+    table.cell(grid, 2, 0, "Δ DEEP ANCHOR", text_color=C_GRAY,  text_size=size.small, bgcolor=#1a1a1a)
+
+    // ── Leviathan ──
+    levState = levBullishSnap ? "⚡ BULL SNAP" : levBearishSnap ? "⚡ BEAR SNAP" : levCompress ? "◈ COILING" : "HOLDING"
+    levCol   = levBullishSnap ? C_GREEN        : levBearishSnap ? C_RED          : levCompress ? C_GOLD      : C_GRAY
+    levDelta = pctFromAnchor(close, levDeepAnchor)
+
+    table.cell(grid, 0, 1, "LEVIATHAN",     text_color=C_WHITE, text_size=size.small, bgcolor=C_PANEL)
+    table.cell(grid, 1, 1, levState,        text_color=levCol,  text_size=size.small, bgcolor=C_PANEL)
+    table.cell(grid, 2, 1, levDelta,        text_color=levCol,  text_size=size.small, bgcolor=C_PANEL)
+
+    table.cell(grid, 0, 2, "24 / 578 / 963",
+         text_color=color.new(C_GREEN, 30), text_size=size.tiny)
+    table.cell(grid, 1, 2,
+         str.tostring(levMomentum,"#.##") + " / " + str.tostring(levMidAnchor,"#.##"),
+         text_color=color.new(C_GREEN, 40), text_size=size.tiny)
+    table.cell(grid, 2, 2, str.tostring(levDeepAnchor,"#.##"),
+         text_color=color.new(C_GREEN, 20), text_size=size.tiny)
+
+    // ── Separator ──
+    table.cell(grid, 0, 3, "─────────", text_color=C_BORDER, text_size=size.tiny, bgcolor=C_DARK)
+    table.cell(grid, 1, 3, "─────────", text_color=C_BORDER, text_size=size.tiny, bgcolor=C_DARK)
+    table.cell(grid, 2, 3, "─────────", text_color=C_BORDER, text_size=size.tiny, bgcolor=C_DARK)
+
+    // ── FTD Hunter ──
+    ftdState = ftdBullishSnap ? "⚡ FTD LONG" : ftdBearishSnap ? "⚡ FTD SHORT" : ftdCompress ? "◈ COILING" : "SCANNING"
+    ftdCol   = ftdBullishSnap ? C_CYAN        : ftdBearishSnap ? C_PURPLE       : ftdCompress ? C_GOLD      : C_GRAY
+    ftdDelta = pctFromAnchor(close, ftdDeepAnchor)
+
+    table.cell(grid, 0, 4, "FTD HUNTER",    text_color=C_WHITE, text_size=size.small, bgcolor=C_PANEL)
+    table.cell(grid, 1, 4, ftdState,        text_color=ftdCol,  text_size=size.small, bgcolor=C_PANEL)
+    table.cell(grid, 2, 4, ftdDelta,        text_color=ftdCol,  text_size=size.small, bgcolor=C_PANEL)
+
+    table.cell(grid, 0, 5, "42 / 369 / 875",
+         text_color=color.new(C_CYAN, 30), text_size=size.tiny)
+    table.cell(grid, 1, 5,
+         str.tostring(ftdMomentum,"#.##") + " / " + str.tostring(ftdMidAnchor,"#.##"),
+         text_color=color.new(C_CYAN, 40), text_size=size.tiny)
+    table.cell(grid, 2, 5, str.tostring(ftdDeepAnchor,"#.##"),
+         text_color=color.new(C_CYAN, 20), text_size=size.tiny)
+
+// =========================================================================
+// ALERT PAYLOADS — exact JSON the Go Router expects (unchanged)
+// =========================================================================
+if levBullishSnap
+    payload = '{"system": "SML_Leviathan", "ticker": "' + syminfo.ticker + '", "action": "EXECUTE_LONG", "timestamp": ' + str.tostring(time) + '}'
+    alert(payload, alert.freq_once_per_bar_close)
+
+if levBearishSnap
+    payload = '{"system": "SML_Leviathan", "ticker": "' + syminfo.ticker + '", "action": "EXECUTE_SHORT", "timestamp": ' + str.tostring(time) + '}'
+    alert(payload, alert.freq_once_per_bar_close)
+
+if ftdBullishSnap
+    ftdPayload = '{"system": "SML_FTD_Hunter", "ticker": "' + syminfo.ticker + '", "action": "EXECUTE_LONG", "timestamp": ' + str.tostring(time) + '}'
+    alert(ftdPayload, alert.freq_once_per_bar_close)
+
+if ftdBearishSnap
+    ftdPayload = '{"system": "SML_FTD_Hunter", "ticker": "' + syminfo.ticker + '", "action": "EXECUTE_SHORT", "timestamp": ' + str.tostring(time) + '}'
+    alert(ftdPayload, alert.freq_once_per_bar_close)
+
+// Named alert conditions for the TV alert panel
+alertcondition(levBullishSnap,                    "LEV Bull Snap",  "Leviathan EXECUTE_LONG")
+alertcondition(levBearishSnap,                    "LEV Bear Snap",  "Leviathan EXECUTE_SHORT")
+alertcondition(ftdBullishSnap,                    "FTD Bull Snap",  "FTD Hunter EXECUTE_LONG")
+alertcondition(ftdBearishSnap,                    "FTD Bear Snap",  "FTD Hunter EXECUTE_SHORT")
+alertcondition(levBullishSnap or ftdBullishSnap,  "ANY Bull Snap",  "SML Bull Snap Fired")
+alertcondition(levBearishSnap or ftdBearishSnap,  "ANY Bear Snap",  "SML Bear Snap Fired")
+alertcondition(levCompress    or ftdCompress,     "Compression",    "SML Coiling — Snap Imminent")
