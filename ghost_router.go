@@ -87,8 +87,7 @@ func updateSharedVault(p TVPayload) {
 		fmt.Printf("[VAULT ERROR] Failed to marshal payload: %v\n", err)
 		return
 	}
-	// 65-minute TTL: dead signals clear automatically
-	err = redisClient.Set(ctx, "SML:ACTIVE_TARGET", payloadBytes, 65*time.Minute).Err()
+	err = redisClient.Set(ctx, "SML:ACTIVE_TARGET", payloadBytes, 0).Err()
 	if err != nil {
 		fmt.Printf("[VAULT ERROR] Failed to write to Upstash: %v\n", err)
 		return
