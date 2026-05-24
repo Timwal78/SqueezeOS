@@ -27,7 +27,7 @@ from .exceptions import (
     PNEError,
     UpstreamError,
 )
-from .payment import XRPLAdapter, LightningAdapter, MockAdapter
+from .payment import XRPLAdapter, USDCAdapter, LightningAdapter, DevAdapter
 
 __all__ = [
     "PNEClient",
@@ -43,8 +43,9 @@ __all__ = [
     "PaymentError",
     "UpstreamError",
     "XRPLAdapter",
+    "USDCAdapter",
     "LightningAdapter",
-    "MockAdapter",
+    "DevAdapter",
 ]
 
 __version__ = "1.0.0"

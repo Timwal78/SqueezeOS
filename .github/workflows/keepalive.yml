@@ -15,8 +15,17 @@ jobs:
       - name: Ping Ghost Layer
         run: curl -sf https://ghost-layer.onrender.com/health -o /dev/null || true
 
-      - name: Ping SqueezeOS API
+      - name: Ping SqueezeOS API (Render)
         run: curl -sf https://squeezeos-api.onrender.com/api/status -o /dev/null || true
+
+      - name: Ping SqueezeOS API (Railway — primary)
+        run: curl -sf https://lively-fascination-production-41fa.up.railway.app/api/status -o /dev/null || true
 
       - name: Ping Ghost Layer Sovereign
         run: curl -sf https://ghost-layer-sovereign.vercel.app/api/health -o /dev/null || true
+
+      - name: Ping PNE Discovery (Railway)
+        run: curl -sf https://lively-fascination-production-41fa.up.railway.app/llms.txt -o /dev/null || true
+
+      - name: Ping PNE MCP Manifest (Railway)
+        run: curl -sf https://lively-fascination-production-41fa.up.railway.app/.well-known/mcp.json -o /dev/null || true

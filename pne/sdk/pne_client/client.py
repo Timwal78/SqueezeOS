@@ -53,7 +53,7 @@ class PNEClient:
         target_rank: int = 1,
         max_retries: int = 3,
         strategy: str = "optimal",
-        payment_rail: str = "mock",
+        payment_rail: str = "dev",
         lnd_endpoint: str | None = None,
         lnd_macaroon: str | None = None,
         timeout: float = 30.0,

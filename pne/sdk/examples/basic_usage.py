@@ -14,7 +14,7 @@ async def example_basic():
         base_url="http://localhost:8402",
         max_tip=5000,
         strategy="optimal",
-        # payment_rail="mock" by default — no real payments in dev
+        # payment_rail="dev" by default — no real payments in sandbox
     ) as client:
         print("=== Gateway Status ===")
         status = await client.status()

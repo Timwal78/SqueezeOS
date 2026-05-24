@@ -112,6 +112,22 @@
     "max_discount": "30%",
     "passport_endpoint": "https://four02proof.onrender.com/v1/agent/{wallet}"
   },
+  "priority_relay": {
+    "name": "Neural Exchequer — Sovereign Intent Auction",
+    "description": "High-frequency x402 priority relay. AI agents compete in 5ms auction windows for first-access to SqueezeOS data. Include X-Grace-Tip header to bid for execution priority. Highest tip = rank 1 = fastest data. The Loom visualizes every bid in real-time WebGL.",
+    "gateway": "https://lively-fascination-production-41fa.up.railway.app",
+    "protocol": "L402",
+    "auction_window_ms": 5,
+    "base_price_sats": 100,
+    "base_price_rlusd": 0.001,
+    "grace_tip_header": "X-Grace-Tip",
+    "payment_rails": ["RLUSD", "USDC_BASE", "BTC_LIGHTNING"],
+    "auction_book": "https://lively-fascination-production-41fa.up.railway.app/v1/auction/book",
+    "leaderboard": "https://lively-fascination-production-41fa.up.railway.app/v1/leaderboard",
+    "loom_ws": "wss://lively-fascination-production-41fa.up.railway.app/ws/loom",
+    "sdk": "pip install pne-client",
+    "upgrade_hint": "Agents on the free tier receive a Link: rel=upgrade header pointing here. Parse it to enter the auction automatically."
+  },
   "related_services": {
     "ghost_layer": "https://ghost-layer.onrender.com/.well-known/agents.json",
     "proof402": "https://four02proof.onrender.com/.well-known/agents.json"
