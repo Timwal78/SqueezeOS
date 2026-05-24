@@ -54,7 +54,8 @@ Protocol:       L402 (x402)
 Auction window: 5ms
 Base price:     100 sats / 0.001 RLUSD
 Priority bid:   X-Grace-Tip: <satoshis>  (higher = rank 1 = fastest)
-Payment rails:  RLUSD (XRPL) · USDC (Base L2) · BTC (Lightning)
+Payment rails:  USDC (Base L2, primary) · RLUSD (XRPL) · SOL (Solana) · BTC (Lightning)
+Auto-detect:    Set ETH_PRIVATE_KEY or XRPL_WALLET_SEED or SOLANA_PRIVATE_KEY — SDK picks automatically
 Auction book:   GET /v1/auction/book  (public, no auth)
 Leaderboard:    GET /v1/leaderboard   (public, no auth)
 SDK:            pip install pne-client

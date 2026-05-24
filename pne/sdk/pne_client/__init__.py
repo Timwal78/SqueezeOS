@@ -27,7 +27,7 @@ from .exceptions import (
     PNEError,
     UpstreamError,
 )
-from .payment import XRPLAdapter, USDCAdapter, LightningAdapter, DevAdapter
+from .payment import AutoAdapter, USDCAdapter, XRPLAdapter, SolanaAdapter, LightningAdapter, DevAdapter
 
 __all__ = [
     "PNEClient",
@@ -42,8 +42,11 @@ __all__ = [
     "MerkleVerificationError",
     "PaymentError",
     "UpstreamError",
-    "XRPLAdapter",
+    # Payment adapters — AutoAdapter is the default, no config needed
+    "AutoAdapter",
     "USDCAdapter",
+    "XRPLAdapter",
+    "SolanaAdapter",
     "LightningAdapter",
     "DevAdapter",
 ]
