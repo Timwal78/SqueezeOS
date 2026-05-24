@@ -15,6 +15,7 @@ from flask import request, jsonify
 # ── Config (set these in your .env / environment) ────────────────────────────
 PROOF402_SERVER     = os.getenv('PROOF402_SERVER_URL', 'https://four02proof.onrender.com')
 PROOF402_SECRET     = os.getenv('PROOF402_TOKEN_SECRET', '')  # same as Render TOKEN_SECRET
+OWNER_API_KEY       = os.getenv('OWNER_API_KEY', '')          # set this to bypass payment as owner
 
 # ── Endpoint IDs (registered in 402Proof dashboard) ──────────────────────────
 ENDPOINTS = {
@@ -130,6 +131,12 @@ def require_payment(f):
         path = request.path
         endpoint_id = ENDPOINTS.get(path)
         if not endpoint_id:
+            return f(*args, **kwargs)
+
+        # Owner bypass — set OWNER_API_KEY in env, pass X-Owner-Key header to get free access
+        if OWNER_API_KEY and request.headers.get('X-Owner-Key') == OWNER_API_KEY:
+            _g.proof402_wallet      = 'OWNER'
+            _g.proof402_endpoint_id = endpoint_id
             return f(*args, **kwargs)
 
         token = request.headers.get('X-Payment-Token')

@@ -42,6 +42,7 @@ func main() {
 		"cex_products", cfg.CEXProducts,
 		"event_log", cfg.EventLogPath,
 		"hud_webhook_enabled", cfg.HUDWebhookURL != "",
+		"discord_alerts_enabled", cfg.DiscordWebhookURL != "",
 	)
 
 	file, err := sink.OpenFile(cfg.EventLogPath)
@@ -54,6 +55,11 @@ func main() {
 	var webhook *sink.Webhook
 	if cfg.HUDWebhookURL != "" {
 		webhook = sink.NewWebhook(cfg.HUDWebhookURL)
+	}
+
+	var discord *sink.Discord
+	if cfg.DiscordWebhookURL != "" {
+		discord = sink.NewDiscord(cfg.DiscordWebhookURL)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -81,7 +87,7 @@ func main() {
 	wg.Add(3)
 	go func() { defer wg.Done(); baseClient.Run(ctx) }()
 	go func() { defer wg.Done(); coinbaseClient.Run(ctx) }()
-	go func() { defer wg.Done(); consume(ctx, eventCh, file, webhook, log) }()
+	go func() { defer wg.Done(); consume(ctx, eventCh, file, webhook, discord, log) }()
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
@@ -92,14 +98,15 @@ func main() {
 	log.Info("clean exit")
 }
 
-// consume drains eventCh into the file sink, and forwards Base mempool hits
-// to the HUD webhook. CEX ticks are intentionally not webhooked — they're
-// too chatty and the HUD reads price from its own market data subscription.
+// consume drains eventCh into the file sink and forwards Base mempool hits
+// to the HUD webhook and Discord. CEX ticks are intentionally not alerted —
+// they're too chatty and the HUD reads price from its own market data feed.
 func consume(
 	ctx context.Context,
 	in <-chan events.Event,
 	file *sink.File,
 	webhook *sink.Webhook,
+	discord *sink.Discord,
 	log *slog.Logger,
 ) {
 	for {
@@ -113,9 +120,16 @@ func consume(
 			if err := file.Write(e); err != nil {
 				log.Error("file sink write failed", "err", err)
 			}
-			if webhook != nil && e.Source == events.SourceBaseMempool {
-				if err := webhook.Send(ctx, e); err != nil {
-					log.Warn("hud webhook failed", "err", err)
+			if e.Source == events.SourceBaseMempool {
+				if webhook != nil {
+					if err := webhook.Send(ctx, e); err != nil {
+						log.Warn("hud webhook failed", "err", err)
+					}
+				}
+				if discord != nil {
+					if err := discord.Send(ctx, e); err != nil {
+						log.Warn("discord alert failed", "err", err)
+					}
 				}
 			}
 		}
