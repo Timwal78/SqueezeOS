@@ -54,6 +54,33 @@ SqueezeOS is an **institutional-grade AI trading intelligence platform** exposed
 
 ---
 
+## Deployment — Source of Truth (read this before touching any URL)
+
+> **STOP.** Before editing any URL anywhere in this repo, verify against this table.
+> Previous agents caused cascading URL mistakes by trusting stale docs. This table is authoritative.
+
+| Service | Platform | Canonical URL | Config file |
+|---------|----------|---------------|-------------|
+| **SqueezeOS API** (this repo) | Render | `https://squeezeos-api.onrender.com` | `render.yaml` |
+| **Ghost Layer** (Go routing backend) | Render | `https://ghost-layer.onrender.com` | `ghost-layer/render.yaml` |
+| **Ghost Layer Sovereign** (frontend dashboard) | Vercel | `https://scriptmasterlabs.com` | Vercel project `ghost-layer-sovereign` |
+| **402Proof** (payment firewall) | Render | `https://four02proof.onrender.com` | separate repo |
+
+**GitHub:** `github.com/timwal78/squeezeos`  
+**Vercel (deleted):** `squeeze-os` project deleted May 2026 — do not recreate.  
+**Railway:** not used — ignore any Railway URLs found in older docs or comments.
+
+### scriptmasterlabs.com product catalog (what's live vs planned)
+
+The `scriptmasterlabs.com` site lists multiple products. Only these have live backends:
+- ✅ Ghost Layer Sovereign — ZK/MEV dashboard (the site itself)
+- ✅ SqueezeOS — market intelligence API
+- ✅ Ghost Layer — private XRP routing engine
+- ✅ 402Proof — x402 payment firewall
+- 🚧 Everything else on the site (Xahau Remittance Rails, Pulse-Verify, Xahau Hooks Intelligence, XRPL Copy-Trader, Memecoin Launchpad) — listed but not yet deployed
+
+---
+
 ## Project Name Aliases (internal codenames)
 
 When the user or docs reference these names, map them here — do not search the codebase:
