@@ -475,7 +475,7 @@ Secrets: `AGENT_XRPL_SEED`, `AGENT_XRPL_ADDRESS`, `ANTHROPIC_API_KEY` (GitHub Ac
 | Directory | Product | Deployed URL | Status |
 |-----------|---------|-------------|--------|
 | `rails/` | RLUSD Rails™ | `https://sml-rails.onrender.com` | ✅ Live on Render |
-| `tiphawk/` | TipHawk™ | `https://sml-tiphawk.onrender.com` | ⚠️ Deploy failing — health check timeout at `/api/health` port 8001 (port mismatch vs Render config) |
+| `tiphawk/` | TipHawk™ | `https://sml-tiphawk.onrender.com` | ⚠️ Deploy failing — requires **paid X.com API** (Twitter tipping). Health check times out because service can't initialise without valid X API credentials. Do NOT debug as a port issue — it's a billing/credentials blocker. |
 | `copytrader/` | XRPL Copy-Trader Engine™ | unknown | ❓ check Render dashboard |
 | `launchpad/` | Memecoin Launchpad (Forge)™ | unknown | ❓ check Render dashboard |
 
