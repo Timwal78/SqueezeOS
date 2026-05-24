@@ -1,0 +1,181 @@
+name: TipMaster — One-Shot Configure (DELETE AFTER USE)
+
+on:
+  workflow_dispatch:
+    inputs:
+      treasury_address:
+        description: 'Your XRPL cold/treasury wallet address (optional — leave blank to skip fee sweeps)'
+        required: false
+        default: ''
+
+jobs:
+  configure:
+    name: Configure TipMaster end-to-end
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NK: '5E46E636-CC5C-4D02-AF62-042269DEC9B8'
+      RK: 'rnd_HwBcJWniVQM1oJI4R310AZeFqahJ'
+
+    steps:
+      - name: Mask secrets
+        run: |
+          echo "::add-mask::$NK"
+          echo "::add-mask::$RK"
+
+      - name: Generate XRPL gateway wallet
+        id: xrpl
+        run: |
+          pip install xrpl-py -q 2>&1 | grep -E "Successfully|already" || true
+          WALLET=$(python3 -c "
+from xrpl.wallet import Wallet
+w = Wallet.create()
+print(w.seed + '|' + w.classic_address)
+")
+          SEED="${WALLET%%|*}"
+          ADDR="${WALLET##*|}"
+          echo "::add-mask::$SEED"
+          echo "seed=$SEED" >> "$GITHUB_OUTPUT"
+          echo "address=$ADDR" >> "$GITHUB_OUTPUT"
+          echo "Gateway wallet address: $ADDR"
+
+      - name: Create Neynar managed signer
+        id: signer
+        run: |
+          RESP=$(curl -s -X POST "https://api.neynar.com/v2/farcaster/signer" \
+            -H "x-api-key: $NK" \
+            -H "Content-Type: application/json")
+          SIGNER_UUID=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('signer_uuid',''))")
+          APPROVAL_URL=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('signer_approval_url',''))")
+          echo "::add-mask::$SIGNER_UUID"
+          echo "signer_uuid=$SIGNER_UUID" >> "$GITHUB_OUTPUT"
+          echo ""
+          echo "======================================================================"
+          echo "  ACTION REQUIRED — open this link in Warpcast on your phone:"
+          echo "  $APPROVAL_URL"
+          echo "  (This connects the bot account. Create a new Farcaster account"
+          echo "   in Warpcast if you don't have one yet — that becomes the bot FID.)"
+          echo "======================================================================"
+          echo "Waiting up to 10 minutes for approval..."
+
+      - name: Wait for signer approval (polls every 30 s, up to 10 min)
+        id: poll
+        run: |
+          SIGNER_UUID="${{ steps.signer.outputs.signer_uuid }}"
+          FID=""
+          for i in $(seq 1 20); do
+            sleep 30
+            RESP=$(curl -s "https://api.neynar.com/v2/farcaster/signer?signer_uuid=$SIGNER_UUID" \
+              -H "x-api-key: $NK")
+            STATUS=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status',''))" 2>/dev/null)
+            FID=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('fid','') or '')" 2>/dev/null)
+            echo "[$i/20] status=$STATUS"
+            if [ "$STATUS" = "approved" ] && [ -n "$FID" ]; then
+              break
+            fi
+            FID=""
+          done
+          if [ -z "$FID" ]; then
+            echo "TIMEOUT: signer not approved in 10 min — re-run after approving"
+            exit 1
+          fi
+          echo "::add-mask::$FID"
+          echo "fid=$FID" >> "$GITHUB_OUTPUT"
+          echo "Bot approved! FID: $FID"
+
+      - name: Create Neynar webhook
+        id: webhook
+        run: |
+          BOT_FID="${{ steps.poll.outputs.fid }}"
+          RESP=$(curl -s -X POST "https://api.neynar.com/v2/farcaster/webhook" \
+            -H "x-api-key: $NK" \
+            -H "Content-Type: application/json" \
+            -d "{\"name\":\"tipmaster\",\"url\":\"https://tipmaster.onrender.com/webhook/cast\",\"subscription\":{\"cast.created\":{\"mentioned_fids\":[$BOT_FID]}}}")
+          SECRET=$(echo "$RESP" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+print((d.get('webhook') or d).get('secret',''))
+")
+          echo "::add-mask::$SECRET"
+          echo "secret=$SECRET" >> "$GITHUB_OUTPUT"
+          echo "Webhook created"
+
+      - name: Find Render tipmaster service
+        id: svc
+        run: |
+          RESP=$(curl -s "https://api.render.com/v1/services?limit=20" \
+            -H "Authorization: Bearer $RK")
+          SVC_ID=$(echo "$RESP" | python3 -c "
+import sys, json
+for item in json.load(sys.stdin):
+    svc = item.get('service', item)
+    if svc.get('name','').lower() == 'tipmaster':
+        print(svc['id']); break
+")
+          echo "service_id=$SVC_ID" >> "$GITHUB_OUTPUT"
+          echo "Render service: $SVC_ID"
+
+      - name: Set Render env vars
+        env:
+          SVC_ID:         ${{ steps.svc.outputs.service_id }}
+          WEBHOOK_SECRET: ${{ steps.webhook.outputs.secret }}
+          SIGNER_UUID:    ${{ steps.signer.outputs.signer_uuid }}
+          BOT_FID:        ${{ steps.poll.outputs.fid }}
+          XRPL_SEED:      ${{ steps.xrpl.outputs.seed }}
+          XRPL_ADDR:      ${{ steps.xrpl.outputs.address }}
+          TREASURY:       ${{ github.event.inputs.treasury_address }}
+        run: |
+          python3 - <<'PYEOF'
+import json, subprocess, os
+
+svc  = os.environ["SVC_ID"]
+rk   = os.environ["RK"]
+
+env_vars = [
+    {"key": "NEYNAR_API_KEY",             "value": os.environ["NK"]},
+    {"key": "NEYNAR_WEBHOOK_SECRET",      "value": os.environ["WEBHOOK_SECRET"]},
+    {"key": "NEYNAR_BOT_SIGNER_UUID",     "value": os.environ["SIGNER_UUID"]},
+    {"key": "TIPMASTER_BOT_FID",          "value": os.environ["BOT_FID"]},
+    {"key": "TIPMASTER_XRPL_SEED",        "value": os.environ["XRPL_SEED"]},
+    {"key": "TIPMASTER_XRPL_ADDRESS",     "value": os.environ["XRPL_ADDR"]},
+    {"key": "TIPMASTER_TREASURY_ADDRESS", "value": os.environ.get("TREASURY", "")},
+]
+
+r = subprocess.run(
+    ["curl", "-s", "-X", "PUT",
+     f"https://api.render.com/v1/services/{svc}/env-vars",
+     "-H", f"Authorization: Bearer {rk}",
+     "-H", "Content-Type: application/json",
+     "-d", json.dumps(env_vars)],
+    capture_output=True, text=True,
+)
+resp = json.loads(r.stdout) if r.stdout.strip().startswith("[") else r.stdout
+count = len(resp) if isinstance(resp, list) else "?"
+print(f"Env vars set: {count}")
+PYEOF
+
+      - name: Trigger Render redeploy
+        run: |
+          SVC="${{ steps.svc.outputs.service_id }}"
+          curl -s -X POST "https://api.render.com/v1/services/$SVC/deploys" \
+            -H "Authorization: Bearer $RK" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache":"do_not_clear"}'
+          echo "Redeploy triggered"
+
+      - name: Summary
+        run: |
+          echo ""
+          echo "========================================================"
+          echo "  TipMaster is LIVE"
+          echo "  URL:            https://tipmaster.onrender.com"
+          echo "  Bot FID:        ${{ steps.poll.outputs.fid }}"
+          echo "  Gateway wallet: ${{ steps.xrpl.outputs.address }}"
+          echo ""
+          echo "  Fund the gateway wallet with RLUSD to enable tipping."
+          echo "  Set up TrustSet on the wallet for RLUSD issuer:"
+          echo "  rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De"
+          echo "========================================================"
+          echo ""
+          echo "  DELETE branch tipmaster-configure-oneshot when done."
+          echo "========================================================"
