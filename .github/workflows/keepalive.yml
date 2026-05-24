@@ -37,7 +37,7 @@ jobs:
             exit 1
           fi
 
-      # ── SqueezeOS — market intelligence API (Railway) ────────────
+      # ── SqueezeOS — market intelligence API (Render) ────────────
       - name: Ping SqueezeOS
         id: squeezeos
         run: |
@@ -48,6 +48,18 @@ jobs:
           if [ "$status" != "200" ]; then
             echo "FAIL: SqueezeOS returned $status" >&2
             exit 1
+          fi
+
+      # ── Ghost Layer Sovereign — frontend (Vercel, scriptmasterlabs.com) ──
+      - name: Ping Ghost Layer Sovereign
+        id: sovereign
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+            https://scriptmasterlabs.com)
+          echo "status=$status" >> $GITHUB_OUTPUT
+          echo "Ghost Layer Sovereign → $status"
+          if [ "$status" != "200" ]; then
+            echo "WARN: Ghost Layer Sovereign returned $status" >&2
           fi
 
       # ── Discord alert on any failure ─────────────────────────────
