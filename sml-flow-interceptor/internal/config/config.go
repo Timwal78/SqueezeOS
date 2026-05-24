@@ -48,6 +48,11 @@ type Config struct {
 	// HUDWebhookURL receives a POST per Base-mempool hit, formatted for
 	// the Pine Script HUD's external data ingestion. Empty disables.
 	HUDWebhookURL string
+
+	// DiscordWebhookURL receives a Discord embed per Base-mempool hit.
+	// Set DISCORD_WEBHOOK_URL to a Discord webhook URL to enable.
+	// Format: https://discord.com/api/webhooks/{id}/{token}
+	DiscordWebhookURL string
 }
 
 func FromEnv() (*Config, error) {
@@ -59,6 +64,7 @@ func FromEnv() (*Config, error) {
 		CEXProducts:           splitCSV(envDefault("CEX_PRODUCTS", "XRP-USD,SOL-USD")),
 		EventLogPath:          envDefault("EVENT_LOG_PATH", "./events.ndjson"),
 		HUDWebhookURL:         os.Getenv("HUD_WEBHOOK_URL"),
+		DiscordWebhookURL:     os.Getenv("DISCORD_WEBHOOK_URL"),
 	}
 
 	minStr := envDefault("MIN_TRANSFER_VALUE", "1000000")

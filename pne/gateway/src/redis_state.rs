@@ -7,8 +7,10 @@ use tracing::warn;
 
 use crate::auction::AuctionBid;
 
-const AUCTION_WINDOW_TTL_SECS: usize = 10;
+const AUCTION_WINDOW_TTL_SECS: i64 = 10;
 const LOOM_CHANNEL: &str = "loom:events";
+const CERTIFICATE_TTL_SECS: u64 = 86_400; // 24 hours
+const FLOW_WINDOW_SECS: i64 = 3_600;      // 1 hour rolling
 
 #[derive(Clone)]
 pub struct RedisState {
@@ -39,19 +41,21 @@ impl RedisState {
         let _: () = conn
             .zadd(&key, &bid.request_id, bid.grace_tip as f64)
             .await?;
-        let _: () = conn.expire(&key, AUCTION_WINDOW_TTL_SECS).await?;
+        let _: () = conn.expire::<_, ()>(&key, AUCTION_WINDOW_TTL_SECS).await?;
 
         // Store full bid metadata
         let _: () = conn.set_ex(&meta_key, &json, AUCTION_WINDOW_TTL_SECS as u64).await?;
 
-        // Broadcast to Loom
+        // Broadcast to Loom — dark pool bids are redacted from public view
+        let dark_pool = bid.wallet_hash == "[REDACTED]";
         let event = serde_json::json!({
             "type": "BID_RECEIVED",
             "ts": bid.submitted_ms,
-            "request_id": bid.request_id,
-            "tip_sats": bid.grace_tip,
-            "wallet_hash": bid.wallet_hash,
-            "endpoint": bid.endpoint,
+            "request_id": if dark_pool { "[REDACTED]" } else { &bid.request_id },
+            "tip_sats": if dark_pool { 0 } else { bid.grace_tip }, // dark pool hides tip amount
+            "wallet_hash": &bid.wallet_hash,
+            "endpoint": &bid.endpoint,
+            "dark_pool": dark_pool,
         });
         self.broadcast_loom_event(&event.to_string()).await;
 
@@ -137,11 +141,75 @@ impl RedisState {
         Ok(members)
     }
 
-    /// Get agent leaderboard top N.
-    pub async fn get_leaderboard(&self, limit: isize) -> Result<Vec<(String, f64)>> {
+    /// Set a signal embargo on a symbol. SqueezeOS checks this header directly,
+    /// but we also track it in Redis for the auction book to surface.
+    pub async fn set_embargo(&self, symbol: &str, auction_id: &str, secs: u64) -> Result<()> {
+        let key = format!("embargo:{}", symbol.to_uppercase());
         let mut conn = self.conn.clone();
+        let _: () = conn.set_ex(&key, auction_id, secs).await?;
+        Ok(())
+    }
+
+    /// Check if a symbol is currently under embargo.
+    pub async fn get_embargo(&self, symbol: &str) -> Option<String> {
+        let key = format!("embargo:{}", symbol.to_uppercase());
+        let mut conn = self.conn.clone();
+        conn.get(&key).await.ok()
+    }
+
+    /// Record a bid in the flow intelligence index (ticker → bid volume).
+    pub async fn record_flow_bid(&self, symbol: &str, tip_sats: u64, dark_pool: bool) -> Result<()> {
+        if dark_pool {
+            return Ok(()); // Dark pool bids don't contribute to public flow signal
+        }
+        let tips_key = format!("flow:tips:{}", symbol.to_uppercase());
+        let count_key = format!("flow:count:{}", symbol.to_uppercase());
+        let mut conn = self.conn.clone();
+        let _: i64 = conn.incr(&tips_key, tip_sats as i64).await?;
+        let _: i64 = conn.incr(&count_key, 1i64).await?;
+        conn.expire::<_, ()>(&tips_key, FLOW_WINDOW_SECS).await.ok();
+        conn.expire::<_, ()>(&count_key, FLOW_WINDOW_SECS).await.ok();
+        Ok(())
+    }
+
+    /// Get flow stats for top symbols by bid volume.
+    pub async fn get_flow_stats(&self, symbols: &[&str]) -> Result<Vec<(String, u64, u64)>> {
+        let mut conn = self.conn.clone();
+        let mut results = Vec::new();
+        for &sym in symbols {
+            let tips_key = format!("flow:tips:{}", sym.to_uppercase());
+            let count_key = format!("flow:count:{}", sym.to_uppercase());
+            let tips: i64 = conn.get(&tips_key).await.unwrap_or(0i64);
+            let count: i64 = conn.get(&count_key).await.unwrap_or(0i64);
+            if tips > 0 || count > 0 {
+                results.push((sym.to_uppercase(), tips as u64, count as u64));
+            }
+        }
+        results.sort_by(|a, b| b.1.cmp(&a.1)); // Sort by total tips desc
+        Ok(results)
+    }
+
+    /// Store a latency certificate (Merkle proof + auction metadata) for 24 hours.
+    pub async fn store_certificate(&self, auction_id: &str, cert_json: &str) -> Result<()> {
+        let key = format!("cert:{}", auction_id);
+        let mut conn = self.conn.clone();
+        let _: () = conn.set_ex(&key, cert_json, CERTIFICATE_TTL_SECS).await?;
+        Ok(())
+    }
+
+    /// Retrieve a stored latency certificate.
+    pub async fn get_certificate(&self, auction_id: &str) -> Option<String> {
+        let key = format!("cert:{}", auction_id);
+        let mut conn = self.conn.clone();
+        conn.get(&key).await.ok()
+    }
+
+    /// Get agent leaderboard top N.
+    pub async fn get_leaderboard(&self, limit: i64) -> Result<Vec<(String, f64)>> {
+        let mut conn = self.conn.clone();
+        let stop = (limit - 1) as isize;
         let entries: Vec<(String, f64)> = conn
-            .zrevrange_withscores("agent:leaderboard", 0, limit - 1)
+            .zrevrange_withscores("agent:leaderboard", 0isize, stop)
             .await?;
         Ok(entries)
     }
@@ -171,14 +239,15 @@ impl RedisState {
                                     continue;
                                 }
                                 loop {
-                                    match pubsub.on_message().next_message().await {
-                                        Ok(msg) => {
+                                    use futures_util::StreamExt;
+                                    match pubsub.on_message().next().await {
+                                        Some(msg) => {
                                             if let Ok(payload) = msg.get_payload::<String>() {
                                                 let _ = tx.send(payload);
                                             }
                                         }
-                                        Err(e) => {
-                                            warn!("Redis pubsub message error: {}", e);
+                                        None => {
+                                            warn!("Redis pubsub stream ended");
                                             break;
                                         }
                                     }
@@ -199,17 +268,3 @@ impl RedisState {
     }
 }
 
-// Extension trait for a simpler pubsub API
-trait NextMessage {
-    async fn next_message(&mut self) -> Result<redis::Msg, redis::RedisError>;
-}
-
-impl NextMessage for redis::aio::PubSub {
-    async fn next_message(&mut self) -> Result<redis::Msg, redis::RedisError> {
-        use futures_util::StreamExt;
-        self.on_message()
-            .next()
-            .await
-            .ok_or_else(|| redis::RedisError::from((redis::ErrorKind::IoError, "stream ended")))
-    }
-}

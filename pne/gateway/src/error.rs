@@ -64,7 +64,30 @@ impl IntoResponse for PneError {
                     "payment_hash": payment_hash,
                     "amount_sats": amount_sats,
                     "expires_at": expires_at,
-                    "message": "Pay invoice to receive authorization preimage. Add X-Grace-Tip to bid for auction priority."
+                    "message": "Pay via any supported rail. Add X-Grace-Tip to bid for priority.",
+                    "payment_rails": [
+                        {
+                            "rail": "usdc_base",
+                            "label": "USDC on Base L2 (primary)",
+                            "contract": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                            "chain_id": 8453,
+                            "gateway_wallet": std::env::var("PNE_GATEWAY_BASE_WALLET").unwrap_or_default()
+                        },
+                        {
+                            "rail": "rlusd_xrpl",
+                            "label": "RLUSD on XRP Ledger",
+                            "issuer": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De",
+                            "gateway_wallet": std::env::var("PNE_GATEWAY_XRPL_WALLET").unwrap_or_default()
+                        },
+                        {
+                            "rail": "sol_solana",
+                            "label": "SOL on Solana",
+                            "network": "mainnet-beta",
+                            "gateway_wallet": std::env::var("PNE_GATEWAY_SOL_WALLET").unwrap_or_default()
+                        }
+                    ],
+                    "sdk": "pip install pne-client",
+                    "sdk_note": "AutoAdapter detects your wallet from env vars — no extra config needed."
                 });
                 let mut resp = (StatusCode::PAYMENT_REQUIRED, Json(body)).into_response();
                 resp.headers_mut().insert(

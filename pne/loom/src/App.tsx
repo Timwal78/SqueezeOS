@@ -1,4 +1,3 @@
-import React from 'react'
 import Loom from './components/Loom'
 import AuctionBook from './components/AuctionBook'
 import Leaderboard from './components/Leaderboard'
@@ -65,7 +64,6 @@ const styles = {
 function StatusBar() {
   const connected = useAuctionStore(s => s.connected)
   const totalVolumeSats = useAuctionStore(s => s.totalVolumeSats)
-  const lastWindowId = useAuctionStore(s => s.lastWindowId)
 
   return (
     <div style={styles.statusBar}>

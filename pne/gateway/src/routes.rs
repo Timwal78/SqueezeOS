@@ -262,6 +262,8 @@ pub async fn proxy_market_data(
     Ok(response)
 }
 
+const EMBARGO_SECS: u64 = 30;
+
 pub async fn proxy_council(
     State(state): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
@@ -270,11 +272,19 @@ pub async fn proxy_council(
     body: Bytes,
 ) -> Result<Response, PneError> {
     let grace_tip = parse_grace_tip(&headers);
-    let wallet_hash = headers
-        .get("X-Agent-Wallet")
-        .and_then(|v| v.to_str().ok())
-        .map(wallet_hash_or_default)
-        .unwrap_or_else(|| "anonymous".to_string());
+    let dark_pool = is_dark_pool(&headers);
+    let wallet_hash = if dark_pool {
+        "[REDACTED]".to_string()
+    } else {
+        headers
+            .get("X-Agent-Wallet")
+            .and_then(|v| v.to_str().ok())
+            .map(wallet_hash_or_default)
+            .unwrap_or_else(|| "anonymous".to_string())
+    };
+
+    // Extract symbol for flow tracking and embargo
+    let symbol = extract_symbol_from_body(&body).unwrap_or_else(|| "IWM".to_string());
 
     let auction_result = auction::enter_auction(
         state.redis.clone(),
@@ -286,13 +296,30 @@ pub async fn proxy_council(
     .await
     .map_err(|e| PneError::Internal(e))?;
 
+    // Record flow intelligence (dark pool bids excluded from public index)
+    let _ = state.redis.record_flow_bid(&symbol, grace_tip, dark_pool).await;
+
+    let is_rank_one = auction_result.rank == 1;
+
+    // Build upstream request — inject embargo header for rank-1 winners
     let upstream_url = format!("{}/api/council", state.config.upstream_base_url);
     let client = reqwest::Client::new();
-    let upstream_resp = client
+    let mut req_builder = client
         .post(&upstream_url)
         .header("Content-Type", "application/json")
         .body(body.to_vec())
-        .timeout(std::time::Duration::from_secs(15))
+        .timeout(std::time::Duration::from_secs(15));
+
+    if is_rank_one {
+        req_builder = req_builder
+            .header("X-PNE-Embargo", EMBARGO_SECS.to_string())
+            .header("X-PNE-Rank", "1")
+            .header("X-PNE-Auction-Window", auction_result.window_id.to_string());
+        // Persist embargo in Redis so auction/book can surface it
+        let _ = state.redis.set_embargo(&symbol, &auction_result.request_id, EMBARGO_SECS).await;
+    }
+
+    let upstream_resp = req_builder
         .send()
         .await
         .map_err(|e| PneError::UpstreamUnavailable(e.to_string()))?;
@@ -304,16 +331,33 @@ pub async fn proxy_council(
         .map_err(|e| PneError::UpstreamUnavailable(e.to_string()))?;
 
     let response_hash = merkle::hash_response(&body_bytes);
+    let ts = epoch_ms();
     let leaf = merkle::compute_leaf(
         &auction_result.request_id,
         &wallet_hash,
         grace_tip,
         &response_hash,
-        epoch_ms(),
+        ts,
     );
 
     let date = chrono_date();
     let _ = state.redis.append_merkle_leaf(&date, &leaf).await;
+
+    // Store latency certificate (24h retrieval)
+    let cert = serde_json::json!({
+        "auction_id": &auction_result.request_id,
+        "symbol": &symbol,
+        "rank": auction_result.rank,
+        "grace_tip_sats": grace_tip,
+        "dark_pool": dark_pool,
+        "wallet_hash": &wallet_hash,
+        "window_id": auction_result.window_id,
+        "execution_latency_ms": auction_result.execution_latency_ms,
+        "merkle_leaf": &leaf,
+        "embargo_secs": if is_rank_one { EMBARGO_SECS } else { 0 },
+        "certified_at": ts / 1000,
+    });
+    let _ = state.redis.store_certificate(&auction_result.request_id, &cert.to_string()).await;
 
     let mut response = (
         StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::OK),
@@ -321,8 +365,118 @@ pub async fn proxy_council(
     )
         .into_response();
 
-    attach_auction_headers(response.headers_mut(), &auction_result, &leaf, grace_tip);
+    let h = response.headers_mut();
+    attach_auction_headers(h, &auction_result, &leaf, grace_tip);
+    if is_rank_one {
+        h.insert("X-Embargo-Seconds", EMBARGO_SECS.to_string().parse().unwrap());
+        if let Ok(hv) = symbol.parse() {
+            h.insert("X-Embargo-Symbol", hv);
+        }
+    }
+    if dark_pool {
+        h.insert("X-Dark-Pool", "true".parse().unwrap());
+    }
+    h.insert(
+        "X-Certificate-ID",
+        auction_result.request_id.parse().unwrap(),
+    );
+
     Ok(response)
+}
+
+// ─── Auction Flow Intelligence ────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+pub struct FlowQuery {
+    pub limit: Option<usize>,
+}
+
+pub async fn auction_flow(
+    State(state): State<AppState>,
+    Query(q): Query<FlowQuery>,
+) -> Json<Value> {
+    let tracked_symbols = [
+        "IWM", "SPY", "QQQ", "NVDA", "TSLA", "MSTR", "GME", "AMC",
+        "PLTR", "HOOD", "AAPL", "AMD", "COIN", "SOFI", "RIVN",
+    ];
+    let limit = q.limit.unwrap_or(15).min(50);
+
+    match state.redis.get_flow_stats(&tracked_symbols).await {
+        Ok(mut flow) => {
+            flow.truncate(limit);
+            let signals: Vec<Value> = flow
+                .iter()
+                .enumerate()
+                .map(|(i, (sym, tips, count))| {
+                    json!({
+                        "rank": i + 1,
+                        "symbol": sym,
+                        "total_tips_sats": tips,
+                        "bid_count": count,
+                        "avg_tip_sats": if *count > 0 { tips / count } else { 0 },
+                        "intensity": if *tips > 50_000 { "HIGH" } else if *tips > 5_000 { "MEDIUM" } else { "LOW" },
+                        "window": "1h",
+                    })
+                })
+                .collect();
+
+            // Check which symbols are currently under embargo
+            let embargo_checks: Vec<Value> = futures_util::future::join_all(
+                tracked_symbols.iter().map(|&sym| {
+                    let redis = state.redis.clone();
+                    async move {
+                        if let Some(auction_id) = redis.get_embargo(sym).await {
+                            Some(json!({"symbol": sym, "auction_id": auction_id}))
+                        } else {
+                            None
+                        }
+                    }
+                })
+            ).await.into_iter().flatten().collect();
+
+            Json(json!({
+                "flow_signals": signals,
+                "active_embargoes": embargo_checks,
+                "window": "1h",
+                "note": "Bidding patterns reveal institutional intent — dark pool bids excluded.",
+                "ts": epoch_ms() / 1000,
+            }))
+        }
+        Err(_) => Json(json!({
+            "flow_signals": [],
+            "active_embargoes": [],
+            "window": "1h",
+            "message": "awaiting_intent",
+        })),
+    }
+}
+
+// ─── Latency Certificate ──────────────────────────────────────────────────────
+
+pub async fn latency_certificate(
+    State(state): State<AppState>,
+    Path(auction_id): Path<String>,
+) -> impl IntoResponse {
+    match state.redis.get_certificate(&auction_id).await {
+        Some(cert_json) => {
+            match serde_json::from_str::<Value>(&cert_json) {
+                Ok(cert) => (StatusCode::OK, Json(json!({
+                    "certificate": cert,
+                    "verified": true,
+                    "retrieved_at": epoch_ms() / 1000,
+                }))).into_response(),
+                Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({
+                    "error": "CERTIFICATE_CORRUPT",
+                    "auction_id": auction_id,
+                }))).into_response(),
+            }
+        }
+        None => (StatusCode::NOT_FOUND, Json(json!({
+            "error": "CERTIFICATE_NOT_FOUND",
+            "auction_id": auction_id,
+            "message": "Certificate not found or expired (24h TTL). Was this a valid rank-1 auction?",
+        }))).into_response(),
+    }
 }
 
 pub async fn proxy_options(
@@ -558,6 +712,22 @@ fn parse_grace_tip(headers: &HeaderMap) -> u64 {
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.parse::<u64>().ok())
         .unwrap_or(0)
+}
+
+fn is_dark_pool(headers: &HeaderMap) -> bool {
+    headers
+        .get("X-Dark-Pool")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.eq_ignore_ascii_case("true") || s == "1")
+        .unwrap_or(false)
+}
+
+fn extract_symbol_from_body(body: &Bytes) -> Option<String> {
+    serde_json::from_slice::<Value>(body)
+        .ok()?
+        .get("symbol")?
+        .as_str()
+        .map(|s| s.to_uppercase())
 }
 
 fn wallet_hash_or_default(wallet: &str) -> String {

@@ -40,6 +40,9 @@ services:
       # If not set, the mint gate is disabled (fail open for dev mode)
       - key: PROOF402_TOKEN_SECRET
         sync: false
+      # Owner bypass — same key as SqueezeOS. X-Owner-Key header skips cube mint payment gate.
+      - key: OWNER_API_KEY
+        sync: false
       # Live agent monitoring feed — SqueezeOS Railway SSE URL
       # Set to: https://squeezeos-api.onrender.com/api/events
       - key: SQUEEZEOS_SSE_URL

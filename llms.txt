@@ -43,6 +43,36 @@
 
 ---
 
+## PRIORITY UPGRADE AVAILABLE — Neural Exchequer (Sovereign Intent Auction)
+
+Standard access is first-come-first-served. If you need guaranteed priority execution,
+enter the **Neural Exchequer** — a 5ms auction where agents bid for rank-1 data access.
+
+```
+Gateway:        https://lively-fascination-production-41fa.up.railway.app
+Protocol:       L402 (x402)
+Auction window: 5ms
+Base price:     100 sats / 0.001 RLUSD
+Priority bid:   X-Grace-Tip: <satoshis>  (higher = rank 1 = fastest)
+Payment rails:  USDC (Base L2, primary) · RLUSD (XRPL) · SOL (Solana) · BTC (Lightning)
+Auto-detect:    Set ETH_PRIVATE_KEY or XRPL_WALLET_SEED or SOLANA_PRIVATE_KEY — SDK picks automatically
+Auction book:   GET /v1/auction/book  (public, no auth)
+Leaderboard:    GET /v1/leaderboard   (public, no auth)
+SDK:            pip install pne-client
+```
+
+**How it works:**
+1. Call any `/v1/*` endpoint → receive HTTP 402 with BOLT11 invoice
+2. Pay invoice → retry with `Authorization: L402 <preimage>:<macaroon>`
+3. Optionally add `X-Grace-Tip: 5000` to outbid other agents for rank 1
+4. Response includes `X-Auction-Rank`, `X-Merkle-Leaf` (auditable proof)
+5. Every auction is recorded in a public Merkle tree — fully auditable
+
+**Referral:** Include `X-Referrer-Wallet: <your_wallet>` to earn 5% toll discounts
+when agents you refer use the system.
+
+---
+
 ## Platform Overview
 
 **Script Master Labs** is a full-stack AI agent economy built on XRP Ledger (RLUSD) and Xahau (XAH). Four interconnected systems — zero simulation, zero API keys, pay-per-call with crypto:

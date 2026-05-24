@@ -76,6 +76,16 @@ jobs:
             echo "WARN: Ghost Layer Sovereign returned $status" >&2
           fi
 
+      # ── PNE Gateway — Neural Exchequer (Railway) ─────────────────
+      - name: Ping PNE Gateway (Railway)
+        run: curl -sf https://lively-fascination-production-41fa.up.railway.app/api/status -o /dev/null || true
+
+      - name: Ping PNE Discovery
+        run: curl -sf https://lively-fascination-production-41fa.up.railway.app/llms.txt -o /dev/null || true
+
+      - name: Ping PNE MCP Manifest
+        run: curl -sf https://lively-fascination-production-41fa.up.railway.app/.well-known/mcp.json -o /dev/null || true
+
       # ── Discord alert on any failure ─────────────────────────────
       - name: Alert Discord on failure
         if: failure() && env.DISCORD_WEBHOOK_ALL != ''
