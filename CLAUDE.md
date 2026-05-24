@@ -475,9 +475,9 @@ Secrets: `AGENT_XRPL_SEED`, `AGENT_XRPL_ADDRESS`, `ANTHROPIC_API_KEY` (GitHub Ac
 | Directory | Product | Deployed URL | Status |
 |-----------|---------|-------------|--------|
 | `rails/` | RLUSD Rails™ | `https://sml-rails.onrender.com` | ✅ Live on Render |
+| `tiphawk/` | TipHawk™ | `https://sml-tiphawk.onrender.com` | ⚠️ Deploy failing — health check timeout at `/api/health` port 8001 (port mismatch vs Render config) |
 | `copytrader/` | XRPL Copy-Trader Engine™ | unknown | ❓ check Render dashboard |
 | `launchpad/` | Memecoin Launchpad (Forge)™ | unknown | ❓ check Render dashboard |
-| `tiphawk/` | TipHawk™ | unknown | ❓ check Render dashboard |
 
 **echo-forge repo** (`github.com/Timwal78/echo-forge`, public) — historical pattern matching engine (Polygon.io + ML cosine similarity). Dockerized, NOT yet deployed to Render as of May 2026.
 
