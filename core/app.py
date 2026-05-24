@@ -127,6 +127,10 @@ def create_app():
     def serve_legacy():
         return send_from_directory(app.static_folder, 'SML_Command_Center_ORACLE.html')
 
+    @app.route('/beast')
+    def serve_beast():
+        return send_from_directory(app.static_folder, 'beast.html')
+
     # ── 301 Redirects — dead routes indexed by Google ────────────────────────
     # All permanently redirect to / so link equity passes forward, no 404 penalty.
     @app.route('/trading-indicators')
