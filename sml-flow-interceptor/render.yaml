@@ -45,6 +45,11 @@ services:
       # Optional: HUD webhook receiver URL. POSTed per Base mempool hit.
       - key: HUD_WEBHOOK_URL
         sync: false
+
+      # Discord webhook URL for rich embed alerts on large Base transfers.
+      # Discord: Server Settings → Integrations → Webhooks → New Webhook → Copy URL
+      - key: DISCORD_WEBHOOK_URL
+        sync: false
     disk:
       name: events
       mountPath: /var/data
