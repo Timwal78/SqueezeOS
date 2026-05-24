@@ -113,7 +113,7 @@ jobs:
           echo "address=$ADDR" >> "$GITHUB_OUTPUT"
           echo "Gateway wallet: $ADDR"
 
-      - name: "[P2] Register existing signer as sponsored + get approval URL"
+      - name: "[P2] Get Warpcast approval URL via signed_key_request"
         if: steps.state.outputs.phase == '2'
         id: register
         run: |
@@ -122,44 +122,51 @@ jobs:
           # Check current status first
           GET0=$(curl -s "https://api.neynar.com/v2/farcaster/signer?signer_uuid=$UUID" -H "x-api-key: $NK")
           STATUS0=$(echo "$GET0" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status',''))" 2>/dev/null)
-          echo "Current signer status: $STATUS0"
+          PUBKEY=$(echo "$GET0" | python3 -c "import sys,json; print(json.load(sys.stdin).get('public_key',''))" 2>/dev/null)
+          echo "Current signer status: $STATUS0  pubkey: $PUBKEY"
 
           if [ "$STATUS0" = "approved" ]; then
-            echo "Signer already approved — skipping registration"
+            echo "Signer already approved — skipping"
             FID=$(echo "$GET0" | python3 -c "import sys,json; print(json.load(sys.stdin).get('fid') or '')" 2>/dev/null)
             echo "fid=$FID" >> "$GITHUB_OUTPUT"
             echo "already_approved=true" >> "$GITHUB_OUTPUT"
           else
-            # Call the registration endpoint with sponsored:true
-            echo "Calling POST /signed_key with sponsored:true ..."
-            REG=$(curl -s -w "\nHTTP:%{http_code}" \
-              -X POST "https://api.neynar.com/v2/farcaster/signer/signed_key" \
-              -H "x-api-key: $NK" -H "Content-Type: application/json" \
-              -d "{\"signer_uuid\":\"$UUID\",\"sponsored\":true}")
-            HTTP=$(echo "$REG" | grep "HTTP:" | cut -d: -f2)
-            BODY=$(echo "$REG" | sed '/HTTP:/d')
-            echo "HTTP $HTTP — response: $BODY"
+            # Try GET signed_key_request — returns token used to build Warpcast approval URL
+            echo "==> GET /signed_key_request for pubkey $PUBKEY"
+            SKR=$(curl -s "https://api.neynar.com/v2/farcaster/signer/signed_key_request?key=${PUBKEY}" \
+              -H "x-api-key: $NK")
+            echo "SKR response: $SKR"
 
-            # Wait for key to be registered on-chain (a few seconds)
-            sleep 6
+            # Try to extract token (used in deep link)
+            TOKEN=$(echo "$SKR" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('token') or d.get('result',{}).get('token',''))" 2>/dev/null || true)
+            echo "Token: $TOKEN"
 
-            # GET updated signer state
+            # Check if approval URL already in signer GET response after above call
             GET1=$(curl -s "https://api.neynar.com/v2/farcaster/signer?signer_uuid=$UUID" -H "x-api-key: $NK")
-            STATUS1=$(echo "$GET1" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status',''))" 2>/dev/null)
-            APPROVAL_URL=$(echo "$GET1" | python3 -c "import sys,json; print(json.load(sys.stdin).get('signer_approval_url',''))" 2>/dev/null)
-            echo "Status after register: $STATUS1"
+            APPROVAL_URL=$(echo "$GET1" | python3 -c "import sys,json; print(json.load(sys.stdin).get('signer_approval_url',''))" 2>/dev/null || true)
             echo "Approval URL from GET: $APPROVAL_URL"
 
-            # Also check response body for URL
+            # Build from token if direct URL not available
+            if [ -z "$APPROVAL_URL" ] && [ -n "$TOKEN" ]; then
+              APPROVAL_URL="https://client.warpcast.com/deeplinks/signed-key-request?token=${TOKEN}"
+              echo "Built approval URL from token: $APPROVAL_URL"
+            fi
+
+            # Also try POST sponsored (might work on some plan tiers)
             if [ -z "$APPROVAL_URL" ]; then
-              APPROVAL_URL=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('signer_approval_url') or d.get('approval_url') or '')" 2>/dev/null || true)
-              echo "Approval URL from POST response: $APPROVAL_URL"
+              echo "==> Trying POST /signed_key with sponsored:true ..."
+              REG=$(curl -s -X POST "https://api.neynar.com/v2/farcaster/signer/signed_key" \
+                -H "x-api-key: $NK" -H "Content-Type: application/json" \
+                -d "{\"signer_uuid\":\"$UUID\",\"sponsored\":true}")
+              echo "POST /signed_key response: $REG"
+              APPROVAL_URL=$(echo "$REG" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('signer_approval_url') or d.get('approval_url') or '')" 2>/dev/null || true)
+              echo "Approval URL from POST: $APPROVAL_URL"
             fi
 
             # Commit all debug info + approval URL
             mkdir -p tipmaster-setup
             echo "$GET0"  > tipmaster-setup/neynar_before.txt
-            echo "$BODY"  > tipmaster-setup/neynar_register.txt
+            echo "$SKR"   > tipmaster-setup/neynar_skr.txt
             echo "$GET1"  > tipmaster-setup/neynar_after.txt
             printf '%s' "$APPROVAL_URL" > tipmaster-setup/approval_url.txt
 
@@ -167,7 +174,7 @@ jobs:
             git config user.name  "github-actions[bot]"
             git pull --rebase origin tipmaster-configure-oneshot
             git add tipmaster-setup/
-            git commit -m "tipmaster-setup: registration result + approval URL [skip ci]" || echo "nothing to commit"
+            git commit -m "tipmaster-setup: approval URL probe results [skip ci]" || echo "nothing to commit"
             git push origin tipmaster-configure-oneshot
 
             echo "approval_url=$APPROVAL_URL" >> "$GITHUB_OUTPUT"
