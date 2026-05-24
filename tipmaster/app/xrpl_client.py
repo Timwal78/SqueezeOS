@@ -5,8 +5,8 @@ from typing import Optional, Tuple
 from xrpl.asyncio.clients import AsyncJsonRpcClient
 from xrpl.asyncio.transaction import submit_and_wait
 from xrpl.models.amounts import IssuedCurrencyAmount
-from xrpl.models.requests import AccountLines, AccountOffers
-from xrpl.models.transactions import Payment
+from xrpl.models.requests import AccountLines
+from xrpl.models.transactions import Memo, Payment
 from xrpl.wallet import Wallet
 
 RLUSD_ISSUER = "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De"
@@ -23,38 +23,36 @@ def _get_bot_wallet() -> Wallet:
     return Wallet.from_seed(BOT_SEED)
 
 
+def _make_client() -> AsyncJsonRpcClient:
+    return AsyncJsonRpcClient(XRPL_RPC_URL)
+
+
 async def check_trust_line(address: str) -> bool:
-    client = AsyncJsonRpcClient(XRPL_RPC_URL)
-    try:
-        req = AccountLines(account=address)
-        resp = await client.request(req)
-        lines = resp.result.get("lines", [])
-        for line in lines:
-            if (
-                line.get("account") == RLUSD_ISSUER
-                and line.get("currency") == RLUSD_CURRENCY
-            ):
-                return True
-        return False
-    finally:
-        await client.close()
+    client = _make_client()
+    req = AccountLines(account=address)
+    resp = await client.request(req)
+    lines = resp.result.get("lines", [])
+    for line in lines:
+        if (
+            line.get("account") == RLUSD_ISSUER
+            and line.get("currency") == RLUSD_CURRENCY
+        ):
+            return True
+    return False
 
 
-async def get_rlusd_balance(address: str) -> Optional[Decimal]:
-    client = AsyncJsonRpcClient(XRPL_RPC_URL)
-    try:
-        req = AccountLines(account=address)
-        resp = await client.request(req)
-        lines = resp.result.get("lines", [])
-        for line in lines:
-            if (
-                line.get("account") == RLUSD_ISSUER
-                and line.get("currency") == RLUSD_CURRENCY
-            ):
-                return Decimal(line["balance"])
-        return Decimal("0")
-    finally:
-        await client.close()
+async def get_rlusd_balance(address: str) -> Decimal:
+    client = _make_client()
+    req = AccountLines(account=address)
+    resp = await client.request(req)
+    lines = resp.result.get("lines", [])
+    for line in lines:
+        if (
+            line.get("account") == RLUSD_ISSUER
+            and line.get("currency") == RLUSD_CURRENCY
+        ):
+            return Decimal(line["balance"])
+    return Decimal("0")
 
 
 async def send_rlusd(
@@ -62,7 +60,7 @@ async def send_rlusd(
     amount: Decimal,
     memo: Optional[str] = None,
 ) -> Tuple[bool, str]:
-    client = AsyncJsonRpcClient(XRPL_RPC_URL)
+    client = _make_client()
     try:
         wallet = _get_bot_wallet()
 
@@ -79,14 +77,10 @@ async def send_rlusd(
         }
 
         if memo:
-            from xrpl.models.transactions import Memo, MemoWrapper
             memo_hex = memo.encode("utf-8").hex().upper()
-            tx_kwargs["memos"] = [
-                MemoWrapper(memo=Memo(memo_data=memo_hex))
-            ]
+            tx_kwargs["memos"] = [Memo(memo_data=memo_hex)]
 
         tx = Payment(**tx_kwargs)
-
         response = await submit_and_wait(tx, client, wallet)
 
         meta = response.result.get("meta", {})
@@ -100,8 +94,6 @@ async def send_rlusd(
 
     except Exception as exc:
         return False, str(exc)
-    finally:
-        await client.close()
 
 
 async def two_leg_tip(
@@ -115,7 +107,7 @@ async def two_leg_tip(
     ok1, result1 = await send_rlusd(
         destination=BOT_ADDRESS,
         amount=amount,
-        memo=memo,
+        memo=memo + ":leg1",
     )
     if not ok1:
         return False, "", f"Leg 1 (sender→bot) failed: {result1}"
@@ -123,7 +115,7 @@ async def two_leg_tip(
     ok2, result2 = await send_rlusd(
         destination=recipient_wallet,
         amount=amount,
-        memo=memo,
+        memo=memo + ":leg2",
     )
     if not ok2:
         return False, result1, f"Leg 2 (bot→recipient) failed: {result2}"

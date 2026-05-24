@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: tipmaster
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: "8080"
+      - key: NEYNAR_API_KEY
+        sync: false
+      - key: NEYNAR_WEBHOOK_SECRET
+        sync: false
+      - key: NEYNAR_BOT_SIGNER_UUID
+        sync: false
+      - key: TIPMASTER_BOT_FID
+        sync: false
+      - key: TIPMASTER_XRPL_SEED
+        sync: false
+      - key: TIPMASTER_XRPL_ADDRESS
+        sync: false
+      - key: TIPMASTER_DB_PATH
+        value: /data/tipmaster.db
+      - key: XRPL_RPC_URL
+        value: https://xrplcluster.com
+    disk:
+      name: tipmaster-data
+      mountPath: /data
+      sizeGB: 1

@@ -30,7 +30,7 @@ async def reply_to_cast(
         payload["channel_id"] = channel_id
 
     headers = {
-        "api_key": NEYNAR_API_KEY,
+        "x-api-key": NEYNAR_API_KEY,
         "Content-Type": "application/json",
     }
 
@@ -107,6 +107,4 @@ def help_text() -> str:
 
 
 def unknown_command_text() -> str:
-    return (
-        "I didn't understand that. Try `@tipmaster help` for a list of commands."
-    )
+    return "I didn't understand that. Try `@tipmaster help` for a list of commands."

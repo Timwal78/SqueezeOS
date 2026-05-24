@@ -8,9 +8,9 @@ from typing import Any
 from fastapi import FastAPI, Request, Response, HTTPException
 
 from .neynar import verify_webhook_signature
-from .parser import parse_command, CommandType
+from .parser import parse_command, CommandType, MIN_TIP, MAX_TIP
 from .registry import init_db, register_wallet, get_wallet_by_fid, get_wallet_by_username
-from .xrpl_client import check_trust_line, get_rlusd_balance, send_rlusd, BOT_ADDRESS
+from .xrpl_client import check_trust_line, get_rlusd_balance, two_leg_tip, BOT_ADDRESS
 from . import caster
 
 logging.basicConfig(
@@ -92,12 +92,15 @@ async def webhook_cast(request: Request):
     if not is_mention:
         return Response(status_code=204)
 
-    log.info("Processing cast %s from @%s (FID %d): %s", cast_hash[:12], sender_username, sender_fid, cast_text[:80])
+    log.info(
+        "Processing cast %s from @%s (FID %d): %s",
+        cast_hash[:12], sender_username, sender_fid, cast_text[:80],
+    )
 
     cmd = parse_command(cast_text)
 
     try:
-        await _handle_command(cmd, sender_fid, sender_username, cast_hash, cast_data)
+        await _handle_command(cmd, sender_fid, sender_username, cast_hash)
     except Exception as exc:
         log.exception("Unhandled error processing cast %s: %s", cast_hash[:12], exc)
         try:
@@ -113,29 +116,28 @@ async def _handle_command(
     sender_fid: int,
     sender_username: str,
     cast_hash: str,
-    cast_data: dict,
 ) -> None:
-    if cmd.type == CommandType.HELP or cmd.type == CommandType.UNKNOWN:
-        if cmd.type == CommandType.UNKNOWN and cmd.amount is not None:
-            amount = cmd.amount
-            from .parser import MIN_TIP, MAX_TIP
-            if amount < MIN_TIP or amount > MAX_TIP:
-                await caster.reply_to_cast(
-                    cast_hash,
-                    f"Tip amount must be between {MIN_TIP} and {MAX_TIP} RLUSD.",
-                )
-                return
-            await caster.reply_to_cast(cast_hash, caster.unknown_command_text())
+    if cmd.type == CommandType.HELP:
+        await caster.reply_to_cast(cast_hash, caster.help_text())
+        return
+
+    if cmd.type == CommandType.UNKNOWN:
+        if cmd.amount is not None and (cmd.amount < MIN_TIP or cmd.amount > MAX_TIP):
+            await caster.reply_to_cast(
+                cast_hash,
+                f"Tip amount must be between {MIN_TIP} and {MAX_TIP} RLUSD.",
+            )
             return
-        text = caster.help_text() if cmd.type == CommandType.HELP else caster.unknown_command_text()
-        await caster.reply_to_cast(cast_hash, text)
+        await caster.reply_to_cast(cast_hash, caster.unknown_command_text())
         return
 
     if cmd.type == CommandType.REGISTER:
-        wallet = cmd.wallet_address
-        await register_wallet(sender_fid, sender_username, wallet)
-        log.info("Registered FID %d (@%s) → %s", sender_fid, sender_username, wallet)
-        await caster.reply_to_cast(cast_hash, caster.register_success_text(sender_username, wallet))
+        await register_wallet(sender_fid, sender_username, cmd.wallet_address)
+        log.info("Registered FID %d (@%s) → %s", sender_fid, sender_username, cmd.wallet_address)
+        await caster.reply_to_cast(
+            cast_hash,
+            caster.register_success_text(sender_username, cmd.wallet_address),
+        )
         return
 
     if cmd.type == CommandType.BALANCE:
@@ -151,11 +153,11 @@ async def _handle_command(
         return
 
     if cmd.type == CommandType.TIP:
-        await _handle_tip(cmd, sender_fid, sender_username, cast_hash, cast_data)
+        await _handle_tip(cmd, sender_fid, sender_username, cast_hash)
         return
 
 
-async def _handle_tip(cmd, sender_fid: int, sender_username: str, cast_hash: str, cast_data: dict) -> None:
+async def _handle_tip(cmd, sender_fid: int, sender_username: str, cast_hash: str) -> None:
     sender_wallet = await get_wallet_by_fid(sender_fid)
     if not sender_wallet:
         await caster.reply_to_cast(cast_hash, caster.tip_no_sender_wallet_text(sender_username))
@@ -163,7 +165,6 @@ async def _handle_tip(cmd, sender_fid: int, sender_username: str, cast_hash: str
 
     target_username = cmd.target_username
     recipient_wallet = await get_wallet_by_username(target_username)
-
     if not recipient_wallet:
         await caster.reply_to_cast(cast_hash, caster.tip_no_recipient_wallet_text(target_username))
         return
@@ -184,18 +185,19 @@ async def _handle_tip(cmd, sender_fid: int, sender_username: str, cast_hash: str
         return
 
     log.info(
-        "Tip: @%s → @%s, amount %s RLUSD, cast %s",
-        sender_username, target_username, amount, cast_hash[:12],
+        "Tip: @%s (%s) → @%s (%s), amount %s RLUSD, cast %s",
+        sender_username, sender_wallet, target_username, recipient_wallet, amount, cast_hash[:12],
     )
 
-    ok, tx_hash = await send_rlusd(
-        destination=recipient_wallet,
+    ok, tx_hash, err = await two_leg_tip(
+        sender_wallet=sender_wallet,
+        recipient_wallet=recipient_wallet,
         amount=amount,
-        memo=f"TipMaster:{cast_hash[:16]}",
+        cast_hash=cast_hash,
     )
 
     if ok:
-        log.info("Tip succeeded, tx_hash=%s", tx_hash)
+        log.info("Tip succeeded, delivery_tx=%s", tx_hash)
         await caster.reply_to_cast(
             cast_hash,
             caster.tip_success_text(
@@ -206,5 +208,5 @@ async def _handle_tip(cmd, sender_fid: int, sender_username: str, cast_hash: str
             ),
         )
     else:
-        log.error("Tip failed: %s", tx_hash)
-        await caster.reply_to_cast(cast_hash, caster.tip_failed_text(tx_hash))
+        log.error("Tip failed: %s", err)
+        await caster.reply_to_cast(cast_hash, caster.tip_failed_text(err))
