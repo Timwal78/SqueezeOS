@@ -1,6 +1,6 @@
 flask>=3.0
 gunicorn>=21.0
-flask-cors>=5.0
+flask-cors>=6.0.2
 requests>=2.31
 numpy>=1.26
 pandas>=2.2
