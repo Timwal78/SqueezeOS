@@ -4,9 +4,9 @@
 
 SqueezeOS is an institutional-grade AI trading intelligence platform for autonomous agents. Premium endpoints are pay-per-call via [402Proof](https://four02proof.onrender.com) — agents pay RLUSD on the XRP Ledger and receive a 1-hour access token. No API keys, no subscriptions.
 
-**Live MCP endpoint:** `https://lively-fascination-production-41fa.up.railway.app/mcp`  
-**Free demo:** `https://lively-fascination-production-41fa.up.railway.app/api/demo/council`  
-**Agent guide:** `https://lively-fascination-production-41fa.up.railway.app/llms.txt`
+**Live MCP endpoint:** `https://squeezeos-api.onrender.com/mcp`  
+**Free demo:** `https://squeezeos-api.onrender.com/api/demo/council`  
+**Agent guide:** `https://squeezeos-api.onrender.com/llms.txt`
 
 ---
 
@@ -44,7 +44,7 @@ SqueezeOS is an institutional-grade AI trading intelligence platform for autonom
 {
   "mcpServers": {
     "squeezeos": {
-      "url": "https://lively-fascination-production-41fa.up.railway.app/mcp",
+      "url": "https://squeezeos-api.onrender.com/mcp",
       "transport": "streamable-http"
     }
   }
@@ -54,7 +54,7 @@ SqueezeOS is an institutional-grade AI trading intelligence platform for autonom
 Or call directly:
 
 ```bash
-curl -X POST https://lively-fascination-production-41fa.up.railway.app/mcp \
+curl -X POST https://squeezeos-api.onrender.com/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 ```
@@ -79,7 +79,7 @@ curl -X POST https://lively-fascination-production-41fa.up.railway.app/mcp \
 
 | Service | URL | Description |
 |---------|-----|-------------|
-| SqueezeOS | `https://lively-fascination-production-41fa.up.railway.app` | This service — market intelligence API |
+| SqueezeOS | `https://squeezeos-api.onrender.com` | This service — market intelligence API |
 | 402Proof | `https://four02proof.onrender.com` | x402 payment firewall + Agent Passport |
 | Ghost Layer | `https://ghost-layer.onrender.com` | Dual-chain XRPL+Base toll gateway |
 | Script Master Labs | `https://www.scriptmasterlabs.com` | Operator homepage |

@@ -41,7 +41,7 @@ impl Config {
             redis_url: env::var("REDIS_URL")
                 .unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string()),
             upstream_base_url: env::var("UPSTREAM_BASE_URL")
-                .unwrap_or_else(|_| "https://lively-fascination-production-41fa.up.railway.app".to_string()),
+                .unwrap_or_else(|_| "https://squeezeos-api.onrender.com".to_string()),
             macaroon_secret,
             rate_limit_unauth: env::var("RATE_LIMIT_UNAUTH")
                 .unwrap_or_else(|_| "100".to_string())

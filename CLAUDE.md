@@ -48,7 +48,7 @@ This project is indexed by GitNexus as **SqueezeOS** (2652 symbols, 4519 relatio
 
 SqueezeOS is an **institutional-grade AI trading intelligence platform** exposed as an MCP server. Premium endpoints are pay-per-call via [402Proof](https://four02proof.onrender.com) — agents pay RLUSD on the XRP Ledger and receive a 1-hour signed JWT. No API keys, no subscriptions.
 
-**Live endpoint:** `https://lively-fascination-production-41fa.up.railway.app`  
+**Live endpoint:** `https://squeezeos-api.onrender.com`  
 **MCP endpoint:** `/mcp` (JSON-RPC 2.0)  
 **Health check:** `GET /api/status`
 
@@ -243,7 +243,7 @@ Mounted at `/mcp`. Implements JSON-RPC 2.0. **23 tools** total.
 {
   "mcpServers": {
     "squeezeos": {
-      "url": "https://lively-fascination-production-41fa.up.railway.app/mcp",
+      "url": "https://squeezeos-api.onrender.com/mcp",
       "transport": "streamable-http"
     }
   }

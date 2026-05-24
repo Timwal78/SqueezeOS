@@ -315,7 +315,7 @@ ENVIRONMENT VARIABLES (pne/.env.example)
 # Gateway
 PORT=8402
 REDIS_URL=redis://localhost:6379
-UPSTREAM_BASE_URL=https://lively-fascination-production-41fa.up.railway.app
+UPSTREAM_BASE_URL=https://squeezeos-api.onrender.com
 MACAROON_SECRET=<32-byte-hex-string>
 RATE_LIMIT_UNAUTH=100          # requests per minute per IP
 

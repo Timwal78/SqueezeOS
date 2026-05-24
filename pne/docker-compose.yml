@@ -10,7 +10,7 @@ services:
     environment:
       - PORT=8402
       - REDIS_URL=redis://redis:6379
-      - UPSTREAM_BASE_URL=${UPSTREAM_BASE_URL:-https://lively-fascination-production-41fa.up.railway.app}
+      - UPSTREAM_BASE_URL=${UPSTREAM_BASE_URL:-https://squeezeos-api.onrender.com}
       - MACAROON_SECRET=${MACAROON_SECRET}
       - RATE_LIMIT_UNAUTH=100
       - AUCTION_WINDOW_MS=5

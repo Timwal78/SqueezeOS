@@ -12,7 +12,7 @@
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://lively-fascination-production-41fa.up.railway.app/mcp"
+      "url": "https://squeezeos-api.onrender.com/mcp"
     }
   ],
   "capabilities": {
@@ -46,8 +46,8 @@
       "operator": "Script Master Labs",
       "contact": "https://www.scriptmasterlabs.com",
       "payment_protocol": "x402",
-      "free_demo": "https://lively-fascination-production-41fa.up.railway.app/api/demo/council",
-      "llms_txt": "https://lively-fascination-production-41fa.up.railway.app/llms.txt"
+      "free_demo": "https://squeezeos-api.onrender.com/api/demo/council",
+      "llms_txt": "https://squeezeos-api.onrender.com/llms.txt"
     }
   }
 }
