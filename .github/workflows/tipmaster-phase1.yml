@@ -19,29 +19,59 @@ jobs:
       - name: Mask API key
         run: echo "::add-mask::$NK"
 
+      - name: Verify Neynar API key (fetch a public user)
+        id: verify
+        run: |
+          echo "Testing Neynar API key..."
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://api.neynar.com/v2/farcaster/user?fid=3" \
+            -H "x-api-key: $NK")
+          echo "Neynar API key check → HTTP $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "ERROR: Neynar API key invalid or Neynar is down (HTTP $STATUS)"
+            echo "Full error response:"
+            curl -s "https://api.neynar.com/v2/farcaster/user?fid=3" \
+              -H "x-api-key: $NK"
+            exit 1
+          fi
+          echo "API key is valid ✓"
+
       - name: Create Neynar managed signer
         id: signer
         run: |
-          RESP=$(curl -s -X POST "https://api.neynar.com/v2/farcaster/signer" \
+          echo "Creating managed signer..."
+          RESP=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
+            -X POST "https://api.neynar.com/v2/farcaster/signer" \
             -H "x-api-key: $NK" \
-            -H "Content-Type: application/json")
+            -H "Content-Type: application/json" \
+            -d '{}')
 
-          echo "Raw response: $RESP"
+          HTTP_STATUS=$(echo "$RESP" | grep "HTTP_STATUS:" | cut -d: -f2)
+          BODY=$(echo "$RESP" | sed '/HTTP_STATUS:/d')
 
-          SIGNER_UUID=$(echo "$RESP" | python3 -c "
+          echo "HTTP status: $HTTP_STATUS"
+          echo "Response body: $BODY"
+
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "ERROR: Signer creation failed with HTTP $HTTP_STATUS"
+            exit 1
+          fi
+
+          SIGNER_UUID=$(echo "$BODY" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
 print(d.get('signer_uuid', ''))
-")
-          APPROVAL_URL=$(echo "$RESP" | python3 -c "
+" 2>/dev/null)
+
+          APPROVAL_URL=$(echo "$BODY" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
 print(d.get('signer_approval_url', ''))
-")
+" 2>/dev/null)
 
           if [ -z "$SIGNER_UUID" ]; then
-            echo "ERROR: Neynar did not return a signer_uuid. Response was:"
-            echo "$RESP"
+            echo "ERROR: No signer_uuid in response. Full response:"
+            echo "$BODY"
             exit 1
           fi
 
@@ -49,44 +79,37 @@ print(d.get('signer_approval_url', ''))
           echo "signer_uuid=$SIGNER_UUID" >> "$GITHUB_OUTPUT"
           echo "approval_url=$APPROVAL_URL" >> "$GITHUB_OUTPUT"
 
-          # Write to step summary so it shows prominently in the Actions UI
           cat >> "$GITHUB_STEP_SUMMARY" <<SUMMARY
 ## ⚡ TipMaster Bot — Action Required
 
-### Step 1 — Get Warpcast
-Install [Warpcast](https://warpcast.com) on your phone (iOS or Android) and create a **new** Farcaster account.
-This new account will become the TipMaster bot (@tipmaster or any username you choose).
-
-### Step 2 — Approve the bot signer
-Tap the link below on your phone **in the Warpcast app**:
+### 1 — Approve the bot signer in Warpcast
+Tap this link on your phone:
 
 **[👉 TAP HERE TO APPROVE THE BOT]($APPROVAL_URL)**
 
-Or copy this URL:
+Direct URL (copy if link doesn't work):
 \`\`\`
 $APPROVAL_URL
 \`\`\`
 
-### Step 3 — Copy the Signer UUID
-After approving, run **TipMaster Phase 2** with this Signer UUID (from the Artifacts tab):
+### 2 — Copy the Signer UUID for Phase 2
 \`\`\`
 $SIGNER_UUID
 \`\`\`
 
----
-Take as long as you need. Phase 2 can be run any time after approval.
+Take as long as you need — Phase 2 can run any time after you tap the link.
 SUMMARY
 
           echo ""
           echo "============================================================"
-          echo "  SIGNER UUID (copy this for Phase 2):"
-          echo "  $SIGNER_UUID"
-          echo ""
-          echo "  APPROVAL URL (tap this in Warpcast on your phone):"
+          echo "  APPROVAL URL — tap this in Warpcast:"
           echo "  $APPROVAL_URL"
+          echo ""
+          echo "  SIGNER UUID — paste into Phase 2:"
+          echo "  $SIGNER_UUID"
           echo "============================================================"
 
-      - name: Save signer UUID to artifact
+      - name: Save to artifact
         run: |
           mkdir -p /tmp/tipmaster-signer
           echo "${{ steps.signer.outputs.signer_uuid }}" > /tmp/tipmaster-signer/signer_uuid.txt
