@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "name": "SqueezeOS Market Intelligence",
   "description": "Institutional AI trading intelligence + autonomous agent economy. Squeeze scanner, options flow, IWM 0DTE, AI council verdicts \u2014 gated by x402 RLUSD micropayment. Signal Relay Mesh (40% bulk discount), Agent Credit Bureau (300-850 score), Peer Signal Marketplace (sell your analysis), Agent Hiring Protocol (commission work), and real-time webhook push delivery. Zero custody throughout.",
-  "url": "https://squeezeos-terminal.vercel.app",
+  "url": "https://lively-fascination-production-41fa.up.railway.app",
   "homepage": "https://www.scriptmasterlabs.com",
   "payment_required": true,
   "payment_protocol": "x402",
@@ -11,8 +11,8 @@
   "payment_issuer": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De",
   "payment_gateway": "https://four02proof.onrender.com",
   "specs": {
-    "openapi": "https://squeezeos-terminal.vercel.app/.well-known/openapi.json",
-    "mcp": "https://squeezeos-terminal.vercel.app/.well-known/mcp.json",
+    "openapi": "https://lively-fascination-production-41fa.up.railway.app/.well-known/openapi.json",
+    "mcp": "https://lively-fascination-production-41fa.up.railway.app/.well-known/mcp.json",
     "llms_txt": "https://www.scriptmasterlabs.com/llms.txt"
   },
   "capabilities": [
@@ -112,9 +112,29 @@
     "max_discount": "30%",
     "passport_endpoint": "https://four02proof.onrender.com/v1/agent/{wallet}"
   },
-  "related_services": {
-    "ghost_layer": "https://ghost-layer.onrender.com/.well-known/agents.json",
-    "proof402": "https://four02proof.onrender.com/.well-known/agents.json"
+  "ecosystem": {
+    "ghost_layer": {
+      "description": "Ghost Layer — Private XRP Routing. MEV-Proof. 0.2% fee. No KYC. ZK-shielded transactions on XRPL mainnet.",
+      "url": "https://ghost-layer.onrender.com",
+      "dashboard": "https://www.scriptmasterlabs.com/dashboard",
+      "agents_json": "https://ghost-layer.onrender.com/.well-known/agents.json",
+      "mcp": "https://ghost-layer.onrender.com/mcp",
+      "features": [
+        "EC-ElGamal (BN254) encryption — amount and destination hidden",
+        "The Sentinel — MEV sandwich detection, ARMED",
+        "The Veil — ZK engine, Sovereign Threshold v1 circuit",
+        "Fixed Block Execution — ENFORCED",
+        "XLS-372 + XLS-0096 standard compliant",
+        "Selective SDK disclosure — auditors receive range proof only"
+      ],
+      "fee": "0.2%",
+      "settlement": "XRPL mainnet"
+    },
+    "proof402": {
+      "description": "402Proof — x402/HTTP 402 autonomous agent payment compliance firewall on XRPL. Agent Credit Bureau (300-850 score), loyalty tiers, compliance receipts.",
+      "url": "https://four02proof.onrender.com",
+      "agents_json": "https://four02proof.onrender.com/.well-known/agents.json"
+    }
   },
   "webhook_delivery": {
     "enabled": true,
