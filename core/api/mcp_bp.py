@@ -40,26 +40,36 @@ _TOOLS = [
     {
         "name": "demo_council",
         "description": (
-            "Free full AI council verdict for IWM (Russell 2000 ETF). "
-            "Returns the exact same format as the paid council_verdict tool: "
-            "regime (EXECUTION/STEALTH/CONFLICT/COLLAPSE), bias (BULLISH/BEARISH/NEUTRAL), "
-            "confidence 0-100, and institutional thesis. Refreshed every 5 minutes. No payment required."
+            "Free preview of council_verdict, scoped to IWM (Russell 2000 ETF). "
+            "Same JSON shape, same engines, 5-minute cache. "
+            "Use this to validate output quality and integration before paying 0.10 RLUSD "
+            "per call on council_verdict for any symbol."
         ),
         "inputSchema": {"type": "object", "properties": {}},
     },
     {
         "name": "council_verdict",
         "description": (
-            "Multi-engine AI verdict for any equity symbol. "
-            "SML Fractal Cascade + Battle Computer consensus. "
-            "Returns regime, bias, confidence, thesis, and per-engine breakdown. "
-            "Cost: 0.10 RLUSD. Pass your payment_token from verify_payment."
+            "Institutional-grade BUY/SELL/HOLD directive for US equity symbols — "
+            "the production-grade upgrade from demo_council (which is IWM-only, 5-min cached, free). "
+            "Aggregates 8 proprietary engines — gamma-flow + flip detection, VPIN order-flow toxicity, "
+            "fractal anchor confluence, regime classifier, dark-pool axis tracking, "
+            "options sweep intelligence, mean-reversion regime, and Battle Computer consensus — "
+            "into one tradeable verdict: directive, confidence 0-100, regime label "
+            "(ALPHA_EXPANSION / MACRO_COLLAPSE / NEUTRAL / SHIELD), price targets (tp1/tp2/stop), "
+            "and a per-engine breakdown explaining the score. "
+            "Call this when you need a high-conviction directional read before sizing or executing a position — "
+            "this is the same verdict institutional desks subscribe to at $1,000/mo via the Leviathan tier. "
+            "Cost: 0.10 RLUSD per call (~$0.10). 60-second per-symbol cache, so back-to-back queries on the same "
+            "ticker are effectively free. Pass payment_token from verify_payment plus your agent_wallet. "
+            "Coverage: US equities; crypto coverage in roadmap. "
+            "Typical response time: <2s cached, ~4s fresh compute."
         ),
         "inputSchema": {
             "type": "object",
             "required": ["symbol"],
             "properties": {
-                "symbol": {"type": "string", "description": "Equity ticker e.g. SPY, QQQ, AAPL"},
+                "symbol": {"type": "string", "description": "US equity ticker (e.g. SPY, QQQ, AAPL, NVDA, GME, AMC, IWM)"},
                 "payment_token": {"type": "string", "description": "JWT from verify_payment (1h TTL)"},
                 "agent_wallet": {"type": "string", "description": "Your XRPL wallet address"},
             },
