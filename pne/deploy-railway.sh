@@ -30,7 +30,7 @@ railway variables set \
   UPSTREAM_BASE_URL=https://squeezeos-api.onrender.com \
   MACAROON_SECRET=$MACAROON_SECRET \
   RUST_LOG="pne_gateway=info,tower_http=warn" \
-  CORS_ORIGINS="https://squeeze-os.vercel.app,https://n-exchequer.io" \
+  CORS_ORIGINS="https://signal-auction-loom.vercel.app,https://squeeze-os.vercel.app,https://n-exchequer.io" \
   RATE_LIMIT_UNAUTH=100 \
   AUCTION_WINDOW_MS=5 \
   BASE_PRICE_SATS=100 \

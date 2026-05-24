@@ -67,8 +67,8 @@ SqueezeOS is an **institutional-grade AI trading intelligence platform** exposed
 | **402Proof** (payment firewall) | Render | `https://four02proof.onrender.com` | separate repo |
 
 **GitHub:** `github.com/timwal78/squeezeos`  
-**Vercel (deleted):** `squeeze-os` project deleted May 2026 — do not recreate.  
-**Railway:** not used — ignore any Railway URLs found in older docs or comments.
+**Vercel (Loom):** `signal-auction-loom` project — `https://signal-auction-loom.vercel.app` (also reachable via legacy `squeeze-os.vercel.app`). Root dir: `pne/loom`.  
+**Railway (PNE Gateway):** project `signal-auction-gateway`, service `pne-gateway`. PENDING deployment — URL to be filled in once deployed.
 
 ### scriptmasterlabs.com product catalog (what's live vs planned)
 
@@ -459,12 +459,13 @@ Secrets: `AGENT_XRPL_SEED`, `AGENT_XRPL_ADDRESS`, `ANTHROPIC_API_KEY` (GitHub Ac
 ## Deployment — Source of Truth
 
 > ⛔ STOP. Before touching any URL, service name, or deployment config — read this table first.
-> Railway is DEAD for this project. `squeeze-os` Vercel project was DELETED May 2026.
-> The only correct URLs are listed below. Do not guess. Do not use Railway URLs.
+> The only correct URLs are listed below. Do not guess.
 
 | Service | Platform | Canonical URL | Config |
 |---------|----------|---------------|--------|
 | SqueezeOS API | **Render** | `https://squeezeos-api.onrender.com` | `render.yaml` |
+| PNE Gateway | **Railway** | PENDING — project `signal-auction-gateway`, service `pne-gateway` | `pne/gateway/railway.toml` |
+| Signal Auction Loom | **Vercel** | `https://signal-auction-loom.vercel.app` | project `signal-auction-loom`, root `pne/loom` |
 | Ghost Layer (bridge backend) | **Render** | `https://ghost-layer.onrender.com` | `ghost-layer/render.yaml` |
 | Ghost Layer Sovereign (frontend) | **Vercel** | `https://www.scriptmasterlabs.com` | project: `ghost-layer-sovereign` |
 | 402Proof | **Render** | `https://four02proof.onrender.com` | separate repo |
