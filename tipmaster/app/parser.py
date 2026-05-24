@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
 import re
@@ -8,6 +8,8 @@ class CommandType(str, Enum):
     TIP = "tip"
     REGISTER = "register"
     BALANCE = "balance"
+    STATS = "stats"
+    LEADERBOARD = "leaderboard"
     HELP = "help"
     UNKNOWN = "unknown"
 
@@ -18,6 +20,7 @@ class Command:
     amount: Optional[float] = None
     target_username: Optional[str] = None
     wallet_address: Optional[str] = None
+    boost: bool = False
     raw_text: str = ""
 
 
@@ -30,7 +33,7 @@ MIN_TIP = 0.10
 MAX_TIP = 100.0
 
 
-def parse_command(text: str, bot_username: str = "tipmaster") -> Command:
+def parse_command(text: str) -> Command:
     cleaned = _BOT_MENTION_RE.sub("", text).strip()
     tokens = cleaned.split()
 
@@ -43,18 +46,27 @@ def parse_command(text: str, bot_username: str = "tipmaster") -> Command:
         rest = cleaned[len("register"):].strip()
         addr_match = _XRPL_ADDRESS_RE.search(rest)
         if addr_match:
-            return Command(
-                type=CommandType.REGISTER,
-                wallet_address=addr_match.group(0),
-                raw_text=text,
-            )
+            return Command(type=CommandType.REGISTER, wallet_address=addr_match.group(0), raw_text=text)
         return Command(type=CommandType.UNKNOWN, raw_text=text)
 
     if first == "balance":
         return Command(type=CommandType.BALANCE, raw_text=text)
 
+    if first in ("stats", "history"):
+        return Command(type=CommandType.STATS, raw_text=text)
+
+    if first in ("leaderboard", "lb", "top"):
+        return Command(type=CommandType.LEADERBOARD, raw_text=text)
+
     if first == "help":
         return Command(type=CommandType.HELP, raw_text=text)
+
+    if first == "boost":
+        rest = cleaned[len("boost"):].strip()
+        cmd = _parse_tip(rest, text)
+        if cmd.type == CommandType.TIP:
+            cmd.boost = True
+        return cmd
 
     if first == "tip":
         rest = cleaned[len("tip"):].strip()
@@ -74,22 +86,12 @@ def _parse_tip(text: str, raw_text: str) -> Command:
         return Command(type=CommandType.UNKNOWN, raw_text=raw_text)
 
     if amount < MIN_TIP or amount > MAX_TIP:
-        return Command(
-            type=CommandType.UNKNOWN,
-            amount=amount,
-            raw_text=raw_text,
-        )
+        return Command(type=CommandType.UNKNOWN, amount=amount, raw_text=raw_text)
 
     usernames = _USERNAME_RE.findall(text)
-    bot_lower = "tipmaster"
-    targets = [u for u in usernames if u.lower() != bot_lower]
+    targets = [u for u in usernames if u.lower() != "tipmaster"]
 
     if not targets:
         return Command(type=CommandType.UNKNOWN, raw_text=raw_text)
 
-    return Command(
-        type=CommandType.TIP,
-        amount=amount,
-        target_username=targets[0],
-        raw_text=raw_text,
-    )
+    return Command(type=CommandType.TIP, amount=amount, target_username=targets[0], raw_text=raw_text)

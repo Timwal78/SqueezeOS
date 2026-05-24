@@ -21,8 +21,12 @@ services:
         sync: false
       - key: TIPMASTER_DB_PATH
         value: /data/tipmaster.db
+      - key: TIPMASTER_TREASURY_ADDRESS
+        sync: false
       - key: XRPL_RPC_URL
         value: https://xrplcluster.com
+      - key: PROOF402_BASE_URL
+        value: https://four02proof.onrender.com
     disk:
       name: tipmaster-data
       mountPath: /data
