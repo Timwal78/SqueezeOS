@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
-import { useAuctionStore, Particle, ParticleState } from '../hooks/useAuction'
+import { useAuctionStore, ParticleState } from '../hooks/useAuction'
+import type { Particle } from '../hooks/useAuction'
 
 const PALETTE = {
   obsidian: 0x0a0a0f,
@@ -14,7 +15,7 @@ const PALETTE = {
 const MAX_PARTICLES = 100_000
 const MAX_THREADS = 10_000
 
-function stateToColor(state: ParticleState, tip: number): THREE.Color {
+function stateToColor(state: ParticleState, _tip: number): THREE.Color {
   switch (state) {
     case 1: return PALETTE.challengeRed
     case 2: return PALETTE.neonCyan

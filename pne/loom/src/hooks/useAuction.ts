@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import { useEffect, useRef } from 'react'
 import { create } from 'zustand'
 
