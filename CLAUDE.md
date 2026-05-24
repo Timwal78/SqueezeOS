@@ -475,7 +475,7 @@ Secrets: `AGENT_XRPL_SEED`, `AGENT_XRPL_ADDRESS`, `ANTHROPIC_API_KEY` (GitHub Ac
 | Directory | Product | Deployed URL | Status |
 |-----------|---------|-------------|--------|
 | `rails/` | RLUSD Rails™ | `https://sml-rails.onrender.com` | ✅ Live on Render |
-| `tiphawk/` | TipMaster™ | `https://sml-tiphawk.onrender.com` | ⚠️ Deploy failing — requires **paid X.com API** (Twitter tipping). Health check times out because service can't initialise without valid X API credentials. Do NOT debug as a port issue — it's a billing/credentials blocker. |
+| `tiphawk/` | TipMaster™ | not deployed | ❌ No live deployment. X.com API is paid — blocked on billing. `sml-tiphawk.onrender.com` is an abandoned failed attempt, ignore it. Needs a free platform (Farcaster/Telegram/Discord) to be viable. |
 | `copytrader/` | XRPL Copy-Trader Engine™ | unknown | ❓ check Render dashboard |
 | `launchpad/` | Memecoin Launchpad (Forge)™ | unknown | ❓ check Render dashboard |
 
