@@ -33,7 +33,7 @@ jobs:
           AGENT_XRPL_ADDRESS:  ${{ secrets.AGENT_XRPL_ADDRESS }}
           ANTHROPIC_API_KEY:   ${{ secrets.ANTHROPIC_API_KEY }}
           AGENT_DOMAIN:        agent.scriptmasterlabs.com
-          SQUEEZEOS_BASE_URL:  https://lively-fascination-production-41fa.up.railway.app
+          SQUEEZEOS_BASE_URL:  https://squeezeos-api.onrender.com
           PROOF402_BASE_URL:   https://four02proof.onrender.com
           BRIEF_PRICE_RLUSD:   "0.01"
           BRIEF_TTL_HOURS:     "6"

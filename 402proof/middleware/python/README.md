@@ -140,7 +140,7 @@ PROOF402_TOKEN_SECRET=your-token-secret   # from 402Proof server env
 
 - **402Proof Dashboard:** https://four02proof.onrender.com
 - **402Proof llms.txt:** https://four02proof.onrender.com/llms.txt
-- **SqueezeOS (live example):** https://lively-fascination-production-41fa.up.railway.app
+- **SqueezeOS (live example):** https://squeezeos-api.onrender.com
 - **JavaScript SDK:** `npm install proof402-middleware` (see `/402proof/middleware/js/`)
 
 ---

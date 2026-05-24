@@ -9,7 +9,7 @@ jobs:
   health:
     runs-on: ubuntu-latest
     env:
-      BASE_URL: https://lively-fascination-production-41fa.up.railway.app
+      BASE_URL: https://squeezeos-api.onrender.com
       MAX_WAIT_SECONDS: "300"
       RETRY_INTERVAL: "10"
     steps:

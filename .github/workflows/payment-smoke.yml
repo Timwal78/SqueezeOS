@@ -63,7 +63,7 @@ jobs:
         id: demo
         run: |
           body=$(curl -sf --max-time 20 \
-            https://lively-fascination-production-41fa.up.railway.app/api/demo/council)
+            https://squeezeos-api.onrender.com/api/demo/council)
           echo "$body" | python3 -c "
           import sys, json
           d = json.load(sys.stdin)

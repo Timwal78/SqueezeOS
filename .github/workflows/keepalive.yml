@@ -42,7 +42,7 @@ jobs:
         id: squeezeos
         run: |
           status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
-            https://lively-fascination-production-41fa.up.railway.app/api/status)
+            https://squeezeos-api.onrender.com/api/status)
           echo "status=$status" >> $GITHUB_OUTPUT
           echo "SqueezeOS /api/status → $status"
           if [ "$status" != "200" ]; then
