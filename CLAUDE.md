@@ -475,7 +475,7 @@ Secrets: `AGENT_XRPL_SEED`, `AGENT_XRPL_ADDRESS`, `ANTHROPIC_API_KEY` (GitHub Ac
 | Directory | Product | Deployed URL | Status |
 |-----------|---------|-------------|--------|
 | `rails/` | RLUSD Rails™ | `https://sml-rails.onrender.com` | ✅ Live on Render |
-| `tiphawk/` | TipMaster™ | not deployed | ❌ No live deployment. X.com API is paid — blocked on billing. `sml-tiphawk.onrender.com` is an abandoned failed attempt, ignore it. Needs a free platform (Farcaster/Telegram/Discord) to be viable. |
+| `tiphawk/` | TipMaster™ | `https://tipmaster.onrender.com` | ⚠️ Service created on Render — needs secret env vars set in dashboard (NEYNAR_API_KEY, NEYNAR_WEBHOOK_SECRET, NEYNAR_BOT_SIGNER_UUID, TIPMASTER_BOT_FID, TIPMASTER_XRPL_SEED, TIPMASTER_XRPL_ADDRESS, TIPMASTER_TREASURY_ADDRESS). X.com API is paid/blocked — rebuilt for Farcaster (Neynar free tier). |
 | `copytrader/` | XRPL Copy-Trader Engine™ | unknown | ❓ check Render dashboard |
 | `launchpad/` | Memecoin Launchpad (Forge)™ | unknown | ❓ check Render dashboard |
 
