@@ -15,7 +15,7 @@ jobs:
       - name: Ping 402Proof
         id: proof
         run: |
-          status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+          status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
             https://four02proof.onrender.com/v1/stats)
           echo "status=$status" >> $GITHUB_OUTPUT
           echo "402Proof /v1/stats → $status"
@@ -28,7 +28,7 @@ jobs:
       - name: Ping Ghost Layer
         id: ghost
         run: |
-          status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+          status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
             https://ghost-layer.onrender.com/health)
           echo "status=$status" >> $GITHUB_OUTPUT
           echo "Ghost Layer /health → $status"
@@ -41,7 +41,7 @@ jobs:
       - name: Ping SqueezeOS
         id: squeezeos
         run: |
-          status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+          status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
             https://squeezeos-api.onrender.com/api/status)
           echo "status=$status" >> $GITHUB_OUTPUT
           echo "SqueezeOS /api/status → $status"
@@ -55,7 +55,7 @@ jobs:
       - name: Ping SML Rails
         id: rails
         run: |
-          status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+          status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
             https://sml-rails.onrender.com/health)
           echo "status=$status" >> $GITHUB_OUTPUT
           echo "SML Rails /health → $status"
@@ -68,23 +68,13 @@ jobs:
       - name: Ping Ghost Layer Sovereign
         id: sovereign
         run: |
-          status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+          status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
             https://scriptmasterlabs.com)
           echo "status=$status" >> $GITHUB_OUTPUT
           echo "Ghost Layer Sovereign → $status"
           if [ "$status" != "200" ]; then
             echo "WARN: Ghost Layer Sovereign returned $status" >&2
           fi
-
-      # ── PNE Gateway — Neural Exchequer (Railway) ─────────────────
-      - name: Ping PNE Gateway (Railway)
-        run: curl -sf https://lively-fascination-production-41fa.up.railway.app/v1/status -o /dev/null || true
-
-      - name: Ping PNE Discovery
-        run: curl -sf https://lively-fascination-production-41fa.up.railway.app/llms.txt -o /dev/null || true
-
-      - name: Ping PNE MCP Manifest
-        run: curl -sf https://lively-fascination-production-41fa.up.railway.app/.well-known/mcp.json -o /dev/null || true
 
       # ── Discord alert on any failure ─────────────────────────────
       - name: Alert Discord on failure
