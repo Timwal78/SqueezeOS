@@ -94,6 +94,19 @@ jobs:
           echo "address=$ADDR" >> "$GITHUB_OUTPUT"
           echo "Gateway wallet: $ADDR"
 
+      - name: "[P2] Check signer status (debug)"
+        if: steps.state.outputs.phase == '2'
+        run: |
+          UUID="${{ steps.state.outputs.signer_uuid }}"
+          RESP=$(curl -s "https://api.neynar.com/v2/farcaster/signer?signer_uuid=$UUID" -H "x-api-key: $NK")
+          echo "Full signer status response: $RESP"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name  "github-actions[bot]"
+          echo "$RESP" > tipmaster-setup/signer_status.txt
+          git add tipmaster-setup/signer_status.txt
+          git commit -m "tipmaster-setup: signer status debug [skip ci]"
+          git push
+
       - name: "[P2] Poll until signer approved (every 20s, up to 15 min)"
         if: steps.state.outputs.phase == '2'
         id: poll
