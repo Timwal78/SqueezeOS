@@ -1,22 +1,78 @@
-name: Keep-Alive Ping
+name: Keep-Alive — Payment System 24/7
 
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '*/5 * * * *'   # every 5 min — Render spins down at 15 min idle
   workflow_dispatch:
 
 jobs:
   ping:
+    name: Ping payment services
     runs-on: ubuntu-latest
+
     steps:
+      # ── 402Proof — invoice + verify engine (Render) ──────────────
       - name: Ping 402Proof
-        run: curl -sf https://four02proof.onrender.com/v1/stats -o /dev/null || true
+        id: proof
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+            https://four02proof.onrender.com/v1/stats)
+          echo "status=$status" >> $GITHUB_OUTPUT
+          echo "402Proof /v1/stats → $status"
+          if [ "$status" != "200" ]; then
+            echo "FAIL: 402Proof returned $status" >&2
+            exit 1
+          fi
 
+      # ── Ghost Layer — private XRP routing engine (Render) ────────
       - name: Ping Ghost Layer
-        run: curl -sf https://ghost-layer.onrender.com/health -o /dev/null || true
+        id: ghost
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+            https://ghost-layer.onrender.com/health)
+          echo "status=$status" >> $GITHUB_OUTPUT
+          echo "Ghost Layer /health → $status"
+          if [ "$status" != "200" ]; then
+            echo "FAIL: Ghost Layer returned $status" >&2
+            exit 1
+          fi
 
-      - name: Ping SqueezeOS API
-        run: curl -sf https://squeezeos-api.onrender.com/api/status -o /dev/null || true
+      # ── SqueezeOS — market intelligence API (Railway) ────────────
+      - name: Ping SqueezeOS
+        id: squeezeos
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+            https://lively-fascination-production-41fa.up.railway.app/api/status)
+          echo "status=$status" >> $GITHUB_OUTPUT
+          echo "SqueezeOS /api/status → $status"
+          if [ "$status" != "200" ]; then
+            echo "FAIL: SqueezeOS returned $status" >&2
+            exit 1
+          fi
 
-      - name: Ping Ghost Layer Sovereign
-        run: curl -sf https://ghost-layer-sovereign.vercel.app/api/health -o /dev/null || true
+      # ── Discord alert on any failure ─────────────────────────────
+      - name: Alert Discord on failure
+        if: failure() && env.DISCORD_WEBHOOK_ALL != ''
+        env:
+          DISCORD_WEBHOOK_ALL: ${{ secrets.DISCORD_WEBHOOK_ALL }}
+        run: |
+          PROOF_STATUS="${{ steps.proof.outputs.status || 'TIMEOUT' }}"
+          GHOST_STATUS="${{ steps.ghost.outputs.status || 'TIMEOUT' }}"
+          SQ_STATUS="${{ steps.squeezeos.outputs.status || 'TIMEOUT' }}"
+
+          curl -s -X POST "$DISCORD_WEBHOOK_ALL" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"username\": \"SqueezeOS Sentinel\",
+              \"embeds\": [{
+                \"title\": \"🚨 Payment Service DOWN\",
+                \"color\": 15158332,
+                \"fields\": [
+                  {\"name\": \"402Proof\",   \"value\": \"$PROOF_STATUS\", \"inline\": true},
+                  {\"name\": \"Ghost Layer\", \"value\": \"$GHOST_STATUS\", \"inline\": true},
+                  {\"name\": \"SqueezeOS\",  \"value\": \"$SQ_STATUS\",   \"inline\": true}
+                ],
+                \"footer\": {\"text\": \"Render cold-start or outage — agents cannot pay\"},
+                \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
+              }]
+            }"
