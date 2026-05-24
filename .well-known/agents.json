@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "name": "SqueezeOS Market Intelligence",
-  "description": "Institutional AI trading intelligence + autonomous agent economy. Squeeze scanner, options flow, IWM 0DTE, AI council verdicts \u2014 gated by x402 RLUSD micropayment. Signal Relay Mesh (40% bulk discount), Agent Credit Bureau (300-850 score), Peer Signal Marketplace (sell your analysis), Agent Hiring Protocol (commission work), and real-time webhook push delivery. Zero custody throughout.",
+  "description": "Institutional AI trading intelligence + autonomous agent economy. Squeeze scanner, options flow, IWM 0DTE, AI council verdicts — gated by x402 RLUSD micropayment. Signal Relay Mesh (40% bulk discount), Agent Credit Bureau (300-850 score), Peer Signal Marketplace (sell your analysis), Agent Hiring Protocol (commission work), and real-time webhook push delivery. Zero custody throughout.",
   "url": "https://squeezeos-api.onrender.com",
   "homepage": "https://www.scriptmasterlabs.com",
   "payment_required": true,
@@ -79,13 +79,13 @@
       "name": "Signal Preview",
       "endpoint": "/api/preview/{symbol}",
       "method": "GET",
-      "description": "Bias + regime preview (15-min cache). Free acquisition funnel \u2014 upgrade to council for full thesis."
+      "description": "Bias + regime preview (15-min cache). Free acquisition funnel — upgrade to council for full thesis."
     },
     {
       "name": "Webhook Subscribe",
       "endpoint": "/api/webhooks/subscribe",
       "method": "POST",
-      "description": "Register a URL for real-time push events. Event-driven \u2014 no polling. Include wallet to earn loyalty points per delivery."
+      "description": "Register a URL for real-time push events. Event-driven — no polling. Include wallet to earn loyalty points per delivery."
     },
     {
       "name": "Hiring Job Board",
@@ -111,6 +111,22 @@
     ],
     "max_discount": "30%",
     "passport_endpoint": "https://four02proof.onrender.com/v1/agent/{wallet}"
+  },
+  "priority_relay": {
+    "name": "Neural Exchequer — Sovereign Intent Auction",
+    "description": "High-frequency x402 priority relay. AI agents compete in 5ms auction windows for first-access to SqueezeOS data. Include X-Grace-Tip header to bid for execution priority. Highest tip = rank 1 = fastest data. The Loom visualizes every bid in real-time WebGL.",
+    "gateway": "https://lively-fascination-production-41fa.up.railway.app",
+    "protocol": "L402",
+    "auction_window_ms": 5,
+    "base_price_sats": 100,
+    "base_price_rlusd": 0.001,
+    "grace_tip_header": "X-Grace-Tip",
+    "payment_rails": ["RLUSD", "USDC_BASE", "BTC_LIGHTNING"],
+    "auction_book": "https://lively-fascination-production-41fa.up.railway.app/v1/auction/book",
+    "leaderboard": "https://lively-fascination-production-41fa.up.railway.app/v1/leaderboard",
+    "loom_ws": "wss://lively-fascination-production-41fa.up.railway.app/ws/loom",
+    "sdk": "pip install pne-client",
+    "upgrade_hint": "Agents on the free tier receive a Link: rel=upgrade header pointing here. Parse it to enter the auction automatically."
   },
   "ecosystem": {
     "ghost_layer": {
@@ -165,7 +181,7 @@
       "DATA",
       "CUSTOM"
     ],
-    "custody": "zero \u2014 bounty paid direct XRPL wallet-to-wallet",
+    "custody": "zero — bounty paid direct XRPL wallet-to-wallet",
     "reputation_system": "completion +5, dispute -10",
     "max_active_per_wallet": 3
   }
