@@ -29,7 +29,7 @@
 
   COMPLIANCE:     POST https://four02proof.onrender.com/v1/verify
   AGENT PASSPORT: GET  https://four02proof.onrender.com/v1/agent/{wallet}
-  FREE DEMO:      GET  https://squeezeos-terminal.vercel.app/api/demo
+  FREE DEMO:      GET  https://squeezeos-api.onrender.com/api/demo
 
 -->
 
@@ -37,8 +37,8 @@
 > Machine-readable blueprint for autonomous agents. Follows llms.txt standard.
 > Brand: https://www.scriptmasterlabs.com
 > Terminal: https://www.scriptmasterlabs.com/terminal
-> OpenAPI: https://squeezeos-terminal.vercel.app/.well-known/openapi.json
-> MCP (20 tools): https://squeezeos-terminal.vercel.app/.well-known/mcp.json
+> OpenAPI: https://squeezeos-api.onrender.com/.well-known/openapi.json
+> MCP (20 tools): https://squeezeos-api.onrender.com/.well-known/mcp.json
 > Live Agent: rEmdJWrAWFtud1vFN8Zm8eWkgK4AVMWPiX (SML Autonomous Market Intelligence Agent)
 
 ---
@@ -47,10 +47,10 @@
 
 **Script Master Labs** is a full-stack AI agent economy built on XRP Ledger (RLUSD) and Xahau (XAH). Four interconnected systems — zero simulation, zero API keys, pay-per-call with crypto:
 
-- **SqueezeOS** — Institutional AI market intelligence. Real-time squeeze scanner, options flow, IWM 0DTE, AI council verdicts, options anomaly detection, peer signal marketplace, agent hiring protocol. Vercel. `https://squeezeos-terminal.vercel.app`
+- **SqueezeOS** — Institutional AI market intelligence. Real-time squeeze scanner, options flow, IWM 0DTE, AI council verdicts, options anomaly detection, peer signal marketplace, agent hiring protocol. Render. `https://squeezeos-api.onrender.com`
 - **402Proof** — x402/HTTP 402 payment compliance firewall + Agent Credit Bureau. The world's first AI agent reputation scoring system (300-850 FICO-style). Always-on on Render.
 - **Ghost Layer** — Dual-chain XRPL/Base transparent payment bridge + Cube Terminal dNFT minting. x402 payment gated. XAH/Xahau support. Render. `https://ghost-layer.onrender.com`
-- **Ghost Layer Sovereign** — Private XRP routing engine. MEV-proof execution, ZK-shielded transactions (XLS-372 + XLS-0096), The Sentinel MEV blocker, Sovereign Threshold circuit, EC-ElGamal BN254 encryption. 0.2% fee. No KYC. `https://ghost-layer-sovereign.vercel.app/dashboard`
+- **Ghost Layer Sovereign** — Private XRP routing engine. MEV-proof execution, ZK-shielded transactions (XLS-372 + XLS-0096), The Sentinel MEV blocker, Sovereign Threshold circuit, EC-ElGamal BN254 encryption. 0.2% fee. No KYC. `https://www.scriptmasterlabs.com/dashboard`
 - **SML Autonomous Agent** — Self-funding market intelligence agent. Pays its own signal costs in RLUSD, synthesizes with Claude Opus, lists on Signal Marketplace, pushes to webhook subscribers. Runs 5x/day Mon-Fri.
 
 ---
@@ -102,7 +102,7 @@ Step 5: Cache token — reuse for 1 hour to minimize spend
 
 ---
 
-## SqueezeOS API — Base: `https://squeezeos-terminal.vercel.app`
+## SqueezeOS API — Base: `https://squeezeos-api.onrender.com`
 
 ### Free Endpoints
 
@@ -239,7 +239,7 @@ Xahau Explorer: https://xahauexplorer.com
 
 | Service | MCP URL | server.json |
 |---------|---------|-------------|
-| SqueezeOS | https://squeezeos-terminal.vercel.app/mcp | /.well-known/server.json |
+| SqueezeOS | https://squeezeos-api.onrender.com/mcp | /.well-known/server.json |
 | 402Proof | https://four02proof.onrender.com/mcp | /.well-known/server.json |
 | Ghost Layer | https://ghost-layer.onrender.com/mcp | /.well-known/server.json |
 
@@ -266,11 +266,11 @@ Xahau Explorer: https://xahauexplorer.com
 | Terminal / Dashboard | https://www.scriptmasterlabs.com/terminal |
 | Harmonic Scanner (Rubics Cube) | https://www.scriptmasterlabs.com/sml_harmonic_scanner.html |
 | Command Center Oracle | https://www.scriptmasterlabs.com/SML_Command_Center_ORACLE.html |
-| SqueezeOS Free Demo | https://squeezeos-terminal.vercel.app/api/demo |
-| Signal Marketplace | https://squeezeos-terminal.vercel.app/api/marketplace |
+| SqueezeOS Free Demo | https://squeezeos-api.onrender.com/api/demo |
+| Signal Marketplace | https://squeezeos-api.onrender.com/api/marketplace |
 | Agent Passport Lookup | https://four02proof.onrender.com/v1/agent/{wallet} |
 | Loyalty Tier Lookup | https://four02proof.onrender.com/v1/loyalty/{wallet} |
 | Live Platform Stats | https://four02proof.onrender.com/v1/stats |
 | Ghost Layer Bridge | https://ghost-layer.onrender.com |
-| Live SSE Stream | https://squeezeos-terminal.vercel.app/api/events |
+| Live SSE Stream | https://squeezeos-api.onrender.com/api/events |
 | AI Crawler Permissions | https://www.scriptmasterlabs.com/robots.txt |

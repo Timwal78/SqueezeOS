@@ -456,14 +456,48 @@ Secrets: `AGENT_XRPL_SEED`, `AGENT_XRPL_ADDRESS`, `ANTHROPIC_API_KEY` (GitHub Ac
 
 ---
 
+## Deployment — Source of Truth
+
+> ⛔ STOP. Before touching any URL, service name, or deployment config — read this table first.
+> Railway is DEAD for this project. `squeeze-os` Vercel project was DELETED May 2026.
+> The only correct URLs are listed below. Do not guess. Do not use Railway URLs.
+
+| Service | Platform | Canonical URL | Config |
+|---------|----------|---------------|--------|
+| SqueezeOS API | **Render** | `https://squeezeos-api.onrender.com` | `render.yaml` |
+| Ghost Layer (bridge backend) | **Render** | `https://ghost-layer.onrender.com` | `ghost-layer/render.yaml` |
+| Ghost Layer Sovereign (frontend) | **Vercel** | `https://www.scriptmasterlabs.com` | project: `ghost-layer-sovereign` |
+| 402Proof | **Render** | `https://four02proof.onrender.com` | separate repo |
+| SML Rails (RLUSD Rails) | **Render** | `https://sml-rails.onrender.com` | `SML-XRPL-FEE-FORGE/rails/` |
+
+**SML-XRPL-FEE-FORGE repo** (`github.com/Timwal78/SML-XRPL-FEE-FORGE`, private) contains 4 products:
+
+| Directory | Product | Deployed URL | Status |
+|-----------|---------|-------------|--------|
+| `rails/` | RLUSD Rails™ | `https://sml-rails.onrender.com` | ✅ Live on Render |
+| `tiphawk/` | TipMaster™ | `https://tipmaster.onrender.com` | ⚠️ Service created on Render — needs secret env vars set in dashboard (NEYNAR_API_KEY, NEYNAR_WEBHOOK_SECRET, NEYNAR_BOT_SIGNER_UUID, TIPMASTER_BOT_FID, TIPMASTER_XRPL_SEED, TIPMASTER_XRPL_ADDRESS, TIPMASTER_TREASURY_ADDRESS). X.com API is paid/blocked — rebuilt for Farcaster (Neynar free tier). |
+| `copytrader/` | XRPL Copy-Trader Engine™ | unknown | ❓ check Render dashboard |
+| `launchpad/` | Memecoin Launchpad (Forge)™ | unknown | ❓ check Render dashboard |
+
+**echo-forge repo** (`github.com/Timwal78/echo-forge`, public) — historical pattern matching engine (Polygon.io + ML cosine similarity). Dockerized, NOT yet deployed to Render as of May 2026.
+
+**scriptmasterlabs.com products and their actual backends:**
+- Ghost Layer Sovereign → Ghost Layer backend (`ghost-layer.onrender.com`) + Vercel frontend
+- Xahau Hooks Intelligence → Ghost Layer's `xahau.go` URITokenMint (same service)
+- Xahau Remittance Rails → `sml-rails.onrender.com` (SML-XRPL-FEE-FORGE/rails)
+- Pulse-Verify™ Notary → 402Proof `/v1/verify` (same service)
+- XRPL Copy-Trader Engine → SML-XRPL-FEE-FORGE/copytrader (deployment TBD)
+- Memecoin Launchpad → SML-XRPL-FEE-FORGE/launchpad (deployment TBD)
+
 ## Ecosystem Services
 
-| Service | URL | Role |
-|---------|-----|------|
-| SqueezeOS | Railway | This repo — market intelligence API + MCP server |
-| 402Proof | Render (`four02proof.onrender.com`) | x402 payment firewall, invoice generation, XRPL payment verification, Agent Credit Bureau |
-| Ghost Layer | Render (`ghost-layer.onrender.com`) | Dual-chain XRPL+Base toll gateway (Go service, `ghost-layer/`) |
-| Script Master Labs | `scriptmasterlabs.com` | Operator homepage |
+| Service | Platform | URL | Role |
+|---------|----------|-----|------|
+| SqueezeOS | Render | `squeezeos-api.onrender.com` | This repo — market intelligence API + MCP server |
+| 402Proof | Render | `four02proof.onrender.com` | x402 payment firewall, invoice generation, XRPL payment verification, Agent Credit Bureau |
+| Ghost Layer | Render | `ghost-layer.onrender.com` | Dual-chain XRPL+Base toll gateway (Go service, `ghost-layer/`) |
+| SML Rails | Render | `sml-rails.onrender.com` | RLUSD Rails — XRP/Xahau remittance (SML-XRPL-FEE-FORGE/rails) |
+| Script Master Labs | Vercel | `scriptmasterlabs.com` | Operator homepage + Ghost Layer Sovereign frontend |
 
 ---
 

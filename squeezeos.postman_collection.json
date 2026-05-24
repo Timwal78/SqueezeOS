@@ -7,7 +7,7 @@
   },
   "variable": [
     {"key": "PROOF402_URL", "value": "https://four02proof.onrender.com"},
-    {"key": "SQUEEZEOS_URL", "value": "https://squeezeos-terminal.vercel.app"},
+    {"key": "SQUEEZEOS_URL", "value": "https://squeezeos-api.onrender.com"},
     {"key": "AGENT_WALLET", "value": "rYOURXRPLWALLETHERE"},
     {"key": "PAYMENT_TOKEN", "value": ""},
     {"key": "INVOICE_ID", "value": ""}

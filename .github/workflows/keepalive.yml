@@ -50,6 +50,20 @@ jobs:
             exit 1
           fi
 
+
+      # ── SML Rails — RLUSD remittance engine (Render) ─────────────
+      - name: Ping SML Rails
+        id: rails
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+            https://sml-rails.onrender.com/health)
+          echo "status=$status" >> $GITHUB_OUTPUT
+          echo "SML Rails /health → $status"
+          if [ "$status" != "200" ] && [ "$status" != "404" ]; then
+            echo "WARN: SML Rails returned $status" >&2
+          fi
+
+
       # ── Ghost Layer Sovereign — frontend (Vercel, scriptmasterlabs.com) ──
       - name: Ping Ghost Layer Sovereign
         id: sovereign
@@ -71,6 +85,7 @@ jobs:
           PROOF_STATUS="${{ steps.proof.outputs.status || 'TIMEOUT' }}"
           GHOST_STATUS="${{ steps.ghost.outputs.status || 'TIMEOUT' }}"
           SQ_STATUS="${{ steps.squeezeos.outputs.status || 'TIMEOUT' }}"
+          RAILS_STATUS="${{ steps.rails.outputs.status || 'TIMEOUT' }}"
 
           curl -s -X POST "$DISCORD_WEBHOOK_ALL" \
             -H "Content-Type: application/json" \
@@ -82,7 +97,8 @@ jobs:
                 \"fields\": [
                   {\"name\": \"402Proof\",   \"value\": \"$PROOF_STATUS\", \"inline\": true},
                   {\"name\": \"Ghost Layer\", \"value\": \"$GHOST_STATUS\", \"inline\": true},
-                  {\"name\": \"SqueezeOS\",  \"value\": \"$SQ_STATUS\",   \"inline\": true}
+                  {\"name\": \"SqueezeOS\",  \"value\": \"$SQ_STATUS\",   \"inline\": true},
+                  {\"name\": \"SML Rails\",  \"value\": \"$RAILS_STATUS\", \"inline\": true}
                 ],
                 \"footer\": {\"text\": \"Render cold-start or outage — agents cannot pay\"},
                 \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
