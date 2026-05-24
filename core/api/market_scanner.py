@@ -15,6 +15,12 @@ import threading
 from squeeze_analyzer import SqueezeAnalyzer
 import core.signal_history as signal_history
 
+try:
+    from discord_alerts import DiscordAlerts
+    _discord = DiscordAlerts()
+except Exception:
+    _discord = None
+
 
 def _broadcast_sse(event: dict):
     """Push an event to all connected SSE clients."""
@@ -153,9 +159,11 @@ def _run_scan():
         ceo_triggers = []
         
         # A) Add Technical Squeezes (Score 80+)
+        squeeze_hits = []
         for r in technical_results:
             if r.get('squeeze_score', 0) >= 80:
                 ceo_triggers.append(r)
+                squeeze_hits.append(r)
                 evt = {
                     'type': 'SQUEEZE_ALERT',
                     'symbol': r['symbol'],
@@ -167,7 +175,14 @@ def _run_scan():
                 _broadcast_sse(evt)
                 signal_history.record(r['symbol'], 'SQUEEZE_ALERT', evt)
 
+        if squeeze_hits and _discord:
+            try:
+                _discord.fire_squeeze_alerts(squeeze_hits)
+            except Exception as _de:
+                logger.warning(f"[DISCORD] squeeze alert failed: {_de}")
+
         # B) Add High-Grade Options
+        flow_hits = []
         for p in options_picks:
             if p.get('score', 0) >= 80:  # Grade A or high B
                 ceo_triggers.append({
@@ -189,6 +204,30 @@ def _run_scan():
                 }
                 _broadcast_sse(sweep)
                 signal_history.record(p['symbol'], 'OPTIONS_SWEEP', sweep)
+                flow_hits.append({
+                    'symbol': p['symbol'],
+                    'unusual_score': p['score'],
+                    'strike': p['strike'],
+                    'type': p['type'].upper(),
+                    'expiry_formatted': p.get('expiration', ''),
+                    'days_to_expiry': p.get('dte', 0),
+                    'price': p.get('mid', 0),
+                    'bid': p.get('bid', 0),
+                    'ask': p.get('ask', 0),
+                    'volume': p.get('volume', 0),
+                    'open_interest': p.get('open_interest', 0),
+                    'implied_volatility': p.get('iv', 0),
+                    'sentiment': 'BULLISH' if p['type'] == 'call' else 'BEARISH',
+                    'is_sweep': p.get('grade') in ('A', 'A+'),
+                    'alert_priority': 'EXTREME' if p.get('score', 0) >= 90 else 'HIGH',
+                    'source': 'Tradier',
+                })
+
+        if flow_hits and _discord:
+            try:
+                _discord.fire_flow_alerts(flow_hits)
+            except Exception as _de:
+                logger.warning(f"[DISCORD] flow alert failed: {_de}")
                 
         if ceo_triggers:
             # Sort highest scores first

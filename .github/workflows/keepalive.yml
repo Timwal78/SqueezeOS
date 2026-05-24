@@ -78,7 +78,7 @@ jobs:
 
       # ── PNE Gateway — Neural Exchequer (Railway) ─────────────────
       - name: Ping PNE Gateway (Railway)
-        run: curl -sf https://lively-fascination-production-41fa.up.railway.app/api/status -o /dev/null || true
+        run: curl -sf https://lively-fascination-production-41fa.up.railway.app/v1/status -o /dev/null || true
 
       - name: Ping PNE Discovery
         run: curl -sf https://lively-fascination-production-41fa.up.railway.app/llms.txt -o /dev/null || true
