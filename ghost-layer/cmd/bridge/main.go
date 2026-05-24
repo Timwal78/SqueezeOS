@@ -866,9 +866,13 @@ func main() {
 
 	// POST /api/cube/state — receive 54-block payload, verify, store, broadcast
 	r.Post("/api/cube/state", func(w http.ResponseWriter, req *http.Request) {
+		// ── owner bypass — X-Owner-Key skips payment gate entirely ────────
+		ownerKey := os.Getenv("OWNER_API_KEY")
+		isOwner := ownerKey != "" && req.Header.Get("X-Owner-Key") == ownerKey
+
 		// ── x402 payment gate ─────────────────────────────────────────────
 		proof402Secret := os.Getenv("PROOF402_TOKEN_SECRET")
-		if proof402Secret != "" {
+		if proof402Secret != "" && !isOwner {
 			token := req.Header.Get("X-Payment-Token")
 			if token == "" {
 				inv, err := fetchCubeMintInvoice()
