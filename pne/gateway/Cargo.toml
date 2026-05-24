@@ -40,10 +40,6 @@ rmp-serde = "1"
 [dev-dependencies]
 criterion = { version = "0.5", features = ["async_tokio"] }
 
-[[bench]]
-name = "auction_overhead"
-harness = false
-
 [profile.release]
 opt-level = 3
 lto = true

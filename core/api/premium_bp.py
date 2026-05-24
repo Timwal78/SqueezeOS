@@ -13,6 +13,7 @@ import sys
 import os
 import time
 import logging
+import threading
 from flask import Blueprint, jsonify, request
 from core.legacy import get_service, clean_data
 from core.state import state, sse_queues
@@ -115,8 +116,31 @@ def council():
         'confidence': confidence,
         'ts':         time.time(),
     }
-    _broadcast_sse(council_evt)
-    signal_history.record(symbol, 'COUNCIL_VERDICT', council_evt)
+
+    # Signal Embargo Window — PNE rank-1 winners get exclusive access for N seconds.
+    # PNE gateway injects X-PNE-Embargo: <seconds> when the caller won rank-1.
+    # During embargo: verdict returns immediately to winner; SSE + history delayed for all others.
+    try:
+        embargo_secs = max(0, min(300, int(request.headers.get('X-PNE-Embargo', '0'))))
+    except (ValueError, TypeError):
+        embargo_secs = 0
+
+    if embargo_secs > 0:
+        pne_rank = request.headers.get('X-PNE-Rank', '?')
+        logger.info(f"[EMBARGO] {symbol} embargoed for {embargo_secs}s (PNE rank={pne_rank})")
+
+        def _deferred_publish(evt, sym, delay):
+            time.sleep(delay)
+            _broadcast_sse(evt)
+            signal_history.record(sym, 'COUNCIL_VERDICT', evt)
+
+        t = threading.Thread(target=_deferred_publish, args=(council_evt, symbol, embargo_secs), daemon=True)
+        t.start()
+
+        verdict["embargo"] = {"active": True, "seconds": embargo_secs, "pne_rank": pne_rank}
+    else:
+        _broadcast_sse(council_evt)
+        signal_history.record(symbol, 'COUNCIL_VERDICT', council_evt)
 
     return jsonify(verdict)
 

@@ -10,7 +10,7 @@ type HmacSha256 = Hmac<Sha256>;
 
 const MACAROON_TTL_SECS: u64 = 3600;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MacaroonClaims {
     pub jti: String,
     pub endpoint: String,
