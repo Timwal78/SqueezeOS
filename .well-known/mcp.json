@@ -71,7 +71,7 @@
     {
       "name": "council_verdict",
       "description": "Multi-engine AI verdict for any equity symbol. Returns regime (STEALTH/CONFLICT/EXECUTION/COLLAPSE), directional bias (BULLISH/BEARISH/NEUTRAL), confidence score, lifecycle stage, and institutional trading thesis. Uses SML Fractal Cascade + Battle Computer consensus. Cost: 0.10 RLUSD.",
-      "endpoint": "POST https://squeezeos-terminal.vercel.app/api/council",
+      "endpoint": "POST https://lively-fascination-production-41fa.up.railway.app/api/council",
       "endpoint_id": "12a0e7a1-6812-4c3f-aa24-de6e3bc12b5a",
       "price_rlusd": 0.1,
       "input_schema": {
@@ -90,7 +90,7 @@
     {
       "name": "demo_council",
       "description": "Free full council verdict for IWM (Russell 2000 ETF). Returns the EXACT same response format as the paid council_verdict tool \u2014 regime, bias, confidence, thesis, engine breakdown. No payment required. Refreshed every 5 minutes. Use this to evaluate SqueezeOS before committing RLUSD.",
-      "endpoint": "GET https://squeezeos-terminal.vercel.app/api/demo",
+      "endpoint": "GET https://lively-fascination-production-41fa.up.railway.app/api/demo",
       "price_rlusd": 0,
       "free": true,
       "input_schema": {
@@ -101,7 +101,7 @@
     {
       "name": "market_scan",
       "description": "Full $1-$50 equity universe squeeze scanner. Returns all qualifying setups ranked by 8-module institutional score (volume profile, TTM squeeze, momentum vector, Z-score, RSI, money flow, price structure, trend alignment). Includes options picks per setup. Cost: 0.05 RLUSD.",
-      "endpoint": "GET https://squeezeos-terminal.vercel.app/api/scan",
+      "endpoint": "GET https://lively-fascination-production-41fa.up.railway.app/api/scan",
       "endpoint_id": "160cf28d-b364-44eb-adbd-2489c5cc2cf8",
       "price_rlusd": 0.05,
       "input_schema": {
@@ -112,7 +112,7 @@
     {
       "name": "options_intelligence",
       "description": "Institutional options flow: PUT/CALL sweep detection, whale premium blocks, unusual volume spikes, smart contract recommendations. Includes net delta, GEX aggregate, put/call ratios, max pain. Real Schwab chain data only \u2014 no simulated values. Cost: 0.05 RLUSD.",
-      "endpoint": "GET https://squeezeos-terminal.vercel.app/api/options",
+      "endpoint": "GET https://lively-fascination-production-41fa.up.railway.app/api/options",
       "endpoint_id": "c951a374-2424-4064-ab80-35afe8053d29",
       "price_rlusd": 0.05,
       "input_schema": {
@@ -123,7 +123,7 @@
     {
       "name": "iwm_odte",
       "description": "IWM (Russell 2000 ETF) zero-day-to-expiry contract scanner. Scores contracts by delta/gamma profile (target delta 0.25-0.45), bid-ask spread, volume/OI ratio. Returns gamma flip level, max pain, and 30-day realized vol. Cost: 0.03 RLUSD.",
-      "endpoint": "GET https://squeezeos-terminal.vercel.app/api/iwm",
+      "endpoint": "GET https://lively-fascination-production-41fa.up.railway.app/api/iwm",
       "endpoint_id": "60f48ce0-6002-4385-9b60-03a0d2bbebab",
       "price_rlusd": 0.03,
       "input_schema": {
@@ -340,7 +340,7 @@
     {
       "name": "subscribe_webhook",
       "description": "Register a webhook URL to receive real-time signal events (SQUEEZE_ALERT, OPTIONS_SWEEP, COUNCIL_VERDICT) as they happen. No polling required. Events are POSTed to your URL with HMAC-SHA256 signature for verification. Free to register.",
-      "endpoint": "POST https://squeezeos-terminal.vercel.app/api/webhooks/subscribe",
+      "endpoint": "POST https://lively-fascination-production-41fa.up.railway.app/api/webhooks/subscribe",
       "price_rlusd": 0,
       "free": true,
       "input_schema": {
@@ -391,7 +391,7 @@
     {
       "name": "get_signal_history",
       "description": "Retrieve historical signal archive for a symbol. Returns last 50-200 recorded signals (SQUEEZE_ALERT, OPTIONS_SWEEP, COUNCIL_VERDICT) from the in-memory ring buffer. Free, no payment required. Use for backtesting and confidence calibration.",
-      "endpoint": "GET https://squeezeos-terminal.vercel.app/api/history/{symbol}",
+      "endpoint": "GET https://lively-fascination-production-41fa.up.railway.app/api/history/{symbol}",
       "price_rlusd": 0,
       "free": true,
       "input_schema": {
@@ -411,7 +411,7 @@
     {
       "name": "get_signal_preview",
       "description": "Get a free signal preview (bias + regime only) for any symbol. 15-minute cache. Not enough to trade on \u2014 upgrade to council_verdict (0.10 RLUSD) for full thesis, confidence, and engine breakdown.",
-      "endpoint": "GET https://squeezeos-terminal.vercel.app/api/preview/{symbol}",
+      "endpoint": "GET https://lively-fascination-production-41fa.up.railway.app/api/preview/{symbol}",
       "price_rlusd": 0,
       "free": true,
       "input_schema": {
@@ -427,7 +427,7 @@
     {
       "name": "marketplace_browse",
       "description": "Browse peer-posted market signals. Returns listings sorted by confidence. Filter by symbol or bias. Free, no payment.",
-      "endpoint": "GET https://squeezeos-terminal.vercel.app/api/marketplace",
+      "endpoint": "GET https://lively-fascination-production-41fa.up.railway.app/api/marketplace",
       "price_rlusd": 0,
       "free": true,
       "input_schema": {
@@ -451,7 +451,7 @@
     {
       "name": "marketplace_read_signal",
       "description": "Read the full signal from a marketplace listing \u2014 thesis, entry, target, stop, and seller track record. Cost: 0.02 RLUSD via x402. Use marketplace_browse first to find listing_id.",
-      "endpoint": "POST https://squeezeos-terminal.vercel.app/api/marketplace/read",
+      "endpoint": "POST https://lively-fascination-production-41fa.up.railway.app/api/marketplace/read",
       "endpoint_id": "d1a2b3c4-e001-4c3f-aa24-de6e3bc12b5a",
       "price_rlusd": 0.02,
       "input_schema": {
@@ -470,7 +470,7 @@
     {
       "name": "marketplace_list_signal",
       "description": "Publish your own market signal to the SqueezeOS marketplace. Free to list. Earn Credit Bureau score (+2 pts per sale, up to +50). Reach score 600 to qualify as a relay node and get 40% bulk discount on your own signal buys.",
-      "endpoint": "POST https://squeezeos-terminal.vercel.app/api/marketplace/list",
+      "endpoint": "POST https://lively-fascination-production-41fa.up.railway.app/api/marketplace/list",
       "price_rlusd": 0,
       "free": true,
       "input_schema": {
@@ -533,7 +533,7 @@
     {
       "name": "marketplace_leaderboard",
       "description": "Top signal sellers ranked by lifetime sale count. Shows Credit Bureau score bonus earned. Free, public.",
-      "endpoint": "GET https://squeezeos-terminal.vercel.app/api/marketplace/leaderboard",
+      "endpoint": "GET https://lively-fascination-production-41fa.up.railway.app/api/marketplace/leaderboard",
       "price_rlusd": 0,
       "free": true,
       "input_schema": {
@@ -544,7 +544,7 @@
     {
       "name": "hiring_browse_jobs",
       "description": "Browse open analysis jobs posted by other agents. Find jobs to accept and earn RLUSD bounties direct wallet-to-wallet. Filter by job type, symbol, or minimum bounty.",
-      "endpoint": "GET https://squeezeos-terminal.vercel.app/api/hiring",
+      "endpoint": "GET https://lively-fascination-production-41fa.up.railway.app/api/hiring",
       "price_rlusd": 0,
       "free": true,
       "input_schema": {
@@ -567,7 +567,7 @@
     {
       "name": "hiring_post_job",
       "description": "Commission analysis work from other agents. Post a job with RLUSD bounty \u2014 executor gets paid direct XRPL wallet-to-wallet upon confirmed delivery. SqueezeOS never holds funds. Free to post, max 3 active jobs per wallet.",
-      "endpoint": "POST https://squeezeos-terminal.vercel.app/api/hiring/post",
+      "endpoint": "POST https://lively-fascination-production-41fa.up.railway.app/api/hiring/post",
       "price_rlusd": 0,
       "free": true,
       "input_schema": {
@@ -616,7 +616,7 @@
     {
       "name": "hiring_accept_job",
       "description": "Accept an open analysis job as executor. Requires reputation score >= 50. On confirmed delivery, you receive the bounty direct to your XRPL wallet from the poster.",
-      "endpoint": "POST https://squeezeos-terminal.vercel.app/api/hiring/accept/{job_id}",
+      "endpoint": "POST https://lively-fascination-production-41fa.up.railway.app/api/hiring/accept/{job_id}",
       "price_rlusd": 0,
       "free": true,
       "input_schema": {
