@@ -1,5 +1,4 @@
-import React, { useEffect, useRef } from 'react'
-import { useAuctionStore, AuctionBid } from '../hooks/useAuction'
+import { useAuctionStore } from '../hooks/useAuction'
 
 const styles = {
   container: {

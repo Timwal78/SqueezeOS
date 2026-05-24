@@ -1,4 +1,3 @@
-import React from 'react'
 import { useAuctionStore } from '../hooks/useAuction'
 
 const styles = {
