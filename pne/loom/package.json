@@ -1,0 +1,30 @@
+{
+  "name": "pne-loom",
+  "version": "1.0.0",
+  "description": "PNE Sovereign Intent Auction — The Loom Visualizer",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "lint": "eslint src --ext .ts,.tsx"
+  },
+  "dependencies": {
+    "three": "^0.165.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^4.5.4",
+    "@msgpack/msgpack": "^3.0.0-beta2",
+    "postprocessing": "^6.36.3"
+  },
+  "devDependencies": {
+    "@types/three": "^0.165.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "typescript": "^5.5.3",
+    "vite": "^5.3.4",
+    "@vitejs/plugin-react": "^4.3.1",
+    "eslint": "^8.57.0"
+  }
+}
