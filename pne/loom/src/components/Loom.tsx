@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { useAuctionStore, ParticleState } from '../hooks/useAuction'
-import type { Particle } from '../hooks/useAuction'
 
 const PALETTE = {
   obsidian: 0x0a0a0f,
