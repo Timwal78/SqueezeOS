@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       BASE_URL: https://squeezeos-api.onrender.com
-      MAX_WAIT_SECONDS: "300"
+      MAX_WAIT_SECONDS: "600"
       RETRY_INTERVAL: "10"
     steps:
       - name: Wait for /api/status to be healthy
