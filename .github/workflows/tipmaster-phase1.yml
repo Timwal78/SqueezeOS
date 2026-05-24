@@ -1,0 +1,99 @@
+name: TipMaster Phase 1 — Create Bot Signer (DELETE AFTER USE)
+
+# Run this FIRST.
+# It creates a Farcaster bot signer and prints an approval URL.
+# You have unlimited time to tap the URL in Warpcast before running Phase 2.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  create-signer:
+    name: Create Neynar managed signer
+    runs-on: ubuntu-latest
+
+    env:
+      NK: '5E46E636-CC5C-4D02-AF62-042269DEC9B8'
+
+    steps:
+      - name: Mask API key
+        run: echo "::add-mask::$NK"
+
+      - name: Create Neynar managed signer
+        id: signer
+        run: |
+          RESP=$(curl -s -X POST "https://api.neynar.com/v2/farcaster/signer" \
+            -H "x-api-key: $NK" \
+            -H "Content-Type: application/json")
+
+          echo "Raw response: $RESP"
+
+          SIGNER_UUID=$(echo "$RESP" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+print(d.get('signer_uuid', ''))
+")
+          APPROVAL_URL=$(echo "$RESP" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+print(d.get('signer_approval_url', ''))
+")
+
+          if [ -z "$SIGNER_UUID" ]; then
+            echo "ERROR: Neynar did not return a signer_uuid. Response was:"
+            echo "$RESP"
+            exit 1
+          fi
+
+          echo "::add-mask::$SIGNER_UUID"
+          echo "signer_uuid=$SIGNER_UUID" >> "$GITHUB_OUTPUT"
+          echo "approval_url=$APPROVAL_URL" >> "$GITHUB_OUTPUT"
+
+          # Write to step summary so it shows prominently in the Actions UI
+          cat >> "$GITHUB_STEP_SUMMARY" <<SUMMARY
+## ⚡ TipMaster Bot — Action Required
+
+### Step 1 — Get Warpcast
+Install [Warpcast](https://warpcast.com) on your phone (iOS or Android) and create a **new** Farcaster account.
+This new account will become the TipMaster bot (@tipmaster or any username you choose).
+
+### Step 2 — Approve the bot signer
+Tap the link below on your phone **in the Warpcast app**:
+
+**[👉 TAP HERE TO APPROVE THE BOT]($APPROVAL_URL)**
+
+Or copy this URL:
+\`\`\`
+$APPROVAL_URL
+\`\`\`
+
+### Step 3 — Copy the Signer UUID
+After approving, run **TipMaster Phase 2** with this Signer UUID (from the Artifacts tab):
+\`\`\`
+$SIGNER_UUID
+\`\`\`
+
+---
+Take as long as you need. Phase 2 can be run any time after approval.
+SUMMARY
+
+          echo ""
+          echo "============================================================"
+          echo "  SIGNER UUID (copy this for Phase 2):"
+          echo "  $SIGNER_UUID"
+          echo ""
+          echo "  APPROVAL URL (tap this in Warpcast on your phone):"
+          echo "  $APPROVAL_URL"
+          echo "============================================================"
+
+      - name: Save signer UUID to artifact
+        run: |
+          mkdir -p /tmp/tipmaster-signer
+          echo "${{ steps.signer.outputs.signer_uuid }}" > /tmp/tipmaster-signer/signer_uuid.txt
+          echo "${{ steps.signer.outputs.approval_url }}" > /tmp/tipmaster-signer/approval_url.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tipmaster-signer
+          path: /tmp/tipmaster-signer/
+          retention-days: 7
