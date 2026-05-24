@@ -1,16 +1,15 @@
 name: TipMaster Phase 2 — Configure & Deploy (DELETE AFTER USE)
 
-# Run this AFTER tapping the approval URL from Phase 1 in Warpcast.
-# Polls until approval detected, then creates webhook + sets all Render env vars + redeploys.
+# Run AFTER tapping the approval URL from Phase 1 in Warpcast.
 
 on:
   workflow_dispatch:
     inputs:
       signer_uuid:
-        description: 'Signer UUID from Phase 1 (check Phase 1 logs or Artifacts)'
+        description: 'Signer UUID from Phase 1 Summary tab'
         required: true
       treasury_address:
-        description: 'Your XRPL cold/treasury wallet address (optional — leave blank to skip fee sweeps)'
+        description: 'XRPL cold/treasury wallet address (optional)'
         required: false
         default: ''
 
@@ -35,11 +34,7 @@ jobs:
         id: xrpl
         run: |
           pip install xrpl-py -q 2>&1 | grep -E "Successfully|already" || true
-          WALLET=$(python3 -c "
-from xrpl.wallet import Wallet
-w = Wallet.create()
-print(w.seed + '|' + w.classic_address)
-")
+          WALLET=$(python3 -c "from xrpl.wallet import Wallet; w=Wallet.create(); print(w.seed+'|'+w.classic_address)")
           SEED="${WALLET%%|*}"
           ADDR="${WALLET##*|}"
           echo "::add-mask::$SEED"
@@ -47,17 +42,16 @@ print(w.seed + '|' + w.classic_address)
           echo "address=$ADDR" >> "$GITHUB_OUTPUT"
           echo "XRPL gateway wallet: $ADDR"
 
-      - name: Poll until signer approved (checks every 20 s, up to 15 min)
+      - name: Poll until signer approved (every 20s, up to 15 min)
         id: poll
         run: |
           SIGNER_UUID="${{ github.event.inputs.signer_uuid }}"
           FID=""
           echo "Polling Neynar for signer approval..."
           for i in $(seq 1 45); do
-            RESP=$(curl -s "https://api.neynar.com/v2/farcaster/signer?signer_uuid=$SIGNER_UUID" \
-              -H "x-api-key: $NK")
+            RESP=$(curl -s "https://api.neynar.com/v2/farcaster/signer?signer_uuid=$SIGNER_UUID" -H "x-api-key: $NK")
             STATUS=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','error'))" 2>/dev/null)
-            FID=$(echo "$RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); fid=d.get('fid'); print(fid if fid else '')" 2>/dev/null)
+            FID=$(echo "$RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('fid') or '')" 2>/dev/null)
             echo "[$i/45] status=$STATUS"
             if [ "$STATUS" = "approved" ] && [ -n "$FID" ]; then
               echo "::add-mask::$FID"
@@ -69,8 +63,7 @@ print(w.seed + '|' + w.classic_address)
             sleep 20
           done
           if [ -z "$FID" ]; then
-            echo "TIMEOUT: signer not approved within 15 minutes."
-            echo "Please tap the approval URL in Warpcast then re-run this workflow."
+            echo "TIMEOUT: signer not approved. Tap the Phase 1 approval URL in Warpcast, then re-run."
             exit 1
           fi
 
@@ -81,50 +74,25 @@ print(w.seed + '|' + w.classic_address)
           RESP=$(curl -s -X POST "https://api.neynar.com/v2/farcaster/webhook" \
             -H "x-api-key: $NK" \
             -H "Content-Type: application/json" \
-            -d "{
-              \"name\": \"tipmaster\",
-              \"url\": \"https://tipmaster.onrender.com/webhook/cast\",
-              \"subscription\": {
-                \"cast.created\": {
-                  \"mentioned_fids\": [$BOT_FID]
-                }
-              }
-            }")
+            -d "{\"name\":\"tipmaster\",\"url\":\"https://tipmaster.onrender.com/webhook/cast\",\"subscription\":{\"cast.created\":{\"mentioned_fids\":[$BOT_FID]}}}")
           echo "Webhook response: $RESP"
-          SECRET=$(echo "$RESP" | python3 -c "
-import sys, json
-d = json.load(sys.stdin)
-# Neynar wraps the webhook under 'webhook' key
-wh = d.get('webhook', d)
-print(wh.get('secret', ''))
-")
-          if [ -z "$SECRET" ]; then
-            echo "WARNING: No webhook secret returned. Check response above."
-          fi
+          SECRET=$(echo "$RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); wh=d.get('webhook',d); print(wh.get('secret',''))")
           echo "::add-mask::$SECRET"
           echo "secret=$SECRET" >> "$GITHUB_OUTPUT"
-          echo "Webhook created successfully"
+          echo "Webhook created"
 
       - name: Find Render tipmaster service
         id: svc
         run: |
-          RESP=$(curl -s "https://api.render.com/v1/services?limit=20" \
-            -H "Authorization: Bearer $RK")
-          echo "Services response snippet: $(echo "$RESP" | python3 -c "import sys,json; data=json.load(sys.stdin); [print(item.get('service',item).get('name','?')) for item in data]" 2>/dev/null)"
-          SVC_ID=$(echo "$RESP" | python3 -c "
-import sys, json
-for item in json.load(sys.stdin):
-    svc = item.get('service', item)
-    if svc.get('name','').lower() == 'tipmaster':
-        print(svc['id'])
-        break
-")
+          RESP=$(curl -s "https://api.render.com/v1/services?limit=20" -H "Authorization: Bearer $RK")
+          SVC_ID=$(echo "$RESP" | python3 -c "import sys,json; r=[i.get('service',i)['id'] for i in json.load(sys.stdin) if i.get('service',i).get('name','').lower()=='tipmaster']; print(r[0] if r else '')")
           if [ -z "$SVC_ID" ]; then
-            echo "ERROR: tipmaster service not found in Render. Check that it was deployed."
+            echo "ERROR: tipmaster not found in Render. Full response:"
+            echo "$RESP"
             exit 1
           fi
           echo "service_id=$SVC_ID" >> "$GITHUB_OUTPUT"
-          echo "Render service ID: $SVC_ID"
+          echo "Render service: $SVC_ID"
 
       - name: Set all Render env vars
         env:
@@ -135,72 +103,43 @@ for item in json.load(sys.stdin):
           XRPL_SEED:      ${{ steps.xrpl.outputs.seed }}
           XRPL_ADDR:      ${{ steps.xrpl.outputs.address }}
           TREASURY:       ${{ github.event.inputs.treasury_address }}
-        run: |
-          python3 - <<'PYEOF'
-import json, subprocess, os
-
-svc = os.environ["SVC_ID"]
-rk  = os.environ["RK"]
-
-env_vars = [
-    {"key": "NEYNAR_API_KEY",             "value": os.environ["NK"]},
-    {"key": "NEYNAR_WEBHOOK_SECRET",      "value": os.environ["WEBHOOK_SECRET"]},
-    {"key": "NEYNAR_BOT_SIGNER_UUID",     "value": os.environ["SIGNER_UUID"]},
-    {"key": "TIPMASTER_BOT_FID",          "value": str(os.environ["BOT_FID"])},
-    {"key": "TIPMASTER_XRPL_SEED",        "value": os.environ["XRPL_SEED"]},
-    {"key": "TIPMASTER_XRPL_ADDRESS",     "value": os.environ["XRPL_ADDR"]},
-    {"key": "TIPMASTER_TREASURY_ADDRESS", "value": os.environ.get("TREASURY", "")},
-]
-
-r = subprocess.run(
-    ["curl", "-s", "-X", "PUT",
-     f"https://api.render.com/v1/services/{svc}/env-vars",
-     "-H", f"Authorization: Bearer {rk}",
-     "-H", "Content-Type: application/json",
-     "-d", json.dumps(env_vars)],
-    capture_output=True, text=True,
-)
-try:
-    resp = json.loads(r.stdout)
-    count = len(resp) if isinstance(resp, list) else "?"
-    print(f"Env vars set: {count}")
-except Exception:
-    print("Response:", r.stdout[:200])
-PYEOF
+          PY: |
+            import json, subprocess, os
+            svc = os.environ["SVC_ID"]
+            env_vars = [
+                {"key": "NEYNAR_API_KEY",             "value": os.environ["NK"]},
+                {"key": "NEYNAR_WEBHOOK_SECRET",      "value": os.environ["WEBHOOK_SECRET"]},
+                {"key": "NEYNAR_BOT_SIGNER_UUID",     "value": os.environ["SIGNER_UUID"]},
+                {"key": "TIPMASTER_BOT_FID",          "value": str(os.environ["BOT_FID"])},
+                {"key": "TIPMASTER_XRPL_SEED",        "value": os.environ["XRPL_SEED"]},
+                {"key": "TIPMASTER_XRPL_ADDRESS",     "value": os.environ["XRPL_ADDR"]},
+                {"key": "TIPMASTER_TREASURY_ADDRESS", "value": os.environ.get("TREASURY","")},
+            ]
+            r = subprocess.run(["curl","-s","-X","PUT",
+                f"https://api.render.com/v1/services/{svc}/env-vars",
+                "-H", f"Authorization: Bearer {os.environ['RK']}",
+                "-H","Content-Type: application/json",
+                "-d", json.dumps(env_vars)],
+                capture_output=True, text=True)
+            try:
+                resp = json.loads(r.stdout)
+                print(f"Env vars set: {len(resp) if isinstance(resp,list) else '?'}")
+            except Exception:
+                print("Response:", r.stdout[:300])
+        run: python3 -c "$PY"
 
       - name: Trigger Render redeploy
         run: |
           SVC="${{ steps.svc.outputs.service_id }}"
-          RESP=$(curl -s -X POST "https://api.render.com/v1/services/$SVC/deploys" \
+          curl -s -X POST "https://api.render.com/v1/services/$SVC/deploys" \
             -H "Authorization: Bearer $RK" \
             -H "Content-Type: application/json" \
-            -d '{"clearCache":"do_not_clear"}')
-          echo "Deploy response: $RESP"
+            -d '{"clearCache":"do_not_clear"}'
           echo "Redeploy triggered!"
 
-      - name: Summary
+      - name: Done
         run: |
-          cat >> "$GITHUB_STEP_SUMMARY" <<SUMMARY
-## ✅ TipMaster is LIVE
-
-| Item | Value |
-|------|-------|
-| URL | https://tipmaster.onrender.com |
-| Bot FID | ${{ steps.poll.outputs.fid }} |
-| Gateway wallet | ${{ steps.xrpl.outputs.address }} |
-| Webhook | https://tipmaster.onrender.com/webhook/cast |
-
-### Next steps
-1. **Fund the gateway wallet** — send RLUSD to \`${{ steps.xrpl.outputs.address }}\`
-2. **Set TrustSet** on the gateway wallet for RLUSD issuer \`rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De\`
-3. **Delete** the \`tipmaster-configure-oneshot\` branch
-
-Render will finish the deploy in ~3 minutes.
-SUMMARY
-          echo ""
-          echo "================================================"
-          echo "  TipMaster is LIVE"
-          echo "  URL:            https://tipmaster.onrender.com"
-          echo "  Bot FID:        ${{ steps.poll.outputs.fid }}"
-          echo "  Gateway wallet: ${{ steps.xrpl.outputs.address }}"
-          echo "================================================"
+          echo "TipMaster is LIVE — https://tipmaster.onrender.com"
+          echo "Bot FID: ${{ steps.poll.outputs.fid }}"
+          echo "Gateway wallet: ${{ steps.xrpl.outputs.address }}"
+          echo "Fund the gateway wallet with RLUSD to enable tipping."

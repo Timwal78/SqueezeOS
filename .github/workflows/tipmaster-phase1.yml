@@ -1,8 +1,6 @@
 name: TipMaster Phase 1 — Create Bot Signer (DELETE AFTER USE)
 
-# Run this FIRST.
-# It creates a Farcaster bot signer and prints an approval URL.
-# You have unlimited time to tap the URL in Warpcast before running Phase 2.
+# Run this FIRST. Prints an approval URL — tap it in Warpcast, then run Phase 2.
 
 on:
   workflow_dispatch:
@@ -19,95 +17,54 @@ jobs:
       - name: Mask API key
         run: echo "::add-mask::$NK"
 
-      - name: Verify Neynar API key (fetch a public user)
-        id: verify
+      - name: Verify Neynar API key
         run: |
-          echo "Testing Neynar API key..."
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             "https://api.neynar.com/v2/farcaster/user?fid=3" \
             -H "x-api-key: $NK")
-          echo "Neynar API key check → HTTP $STATUS"
+          echo "Neynar key check → HTTP $STATUS"
           if [ "$STATUS" != "200" ]; then
-            echo "ERROR: Neynar API key invalid or Neynar is down (HTTP $STATUS)"
-            echo "Full error response:"
-            curl -s "https://api.neynar.com/v2/farcaster/user?fid=3" \
-              -H "x-api-key: $NK"
+            echo "ERROR: Neynar API key is invalid (HTTP $STATUS)"
+            curl -s "https://api.neynar.com/v2/farcaster/user?fid=3" -H "x-api-key: $NK"
             exit 1
           fi
-          echo "API key is valid ✓"
+          echo "API key valid"
 
       - name: Create Neynar managed signer
         id: signer
         run: |
-          echo "Creating managed signer..."
-          RESP=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
+          RESP=$(curl -s -w "\nHTTP:%{http_code}" \
             -X POST "https://api.neynar.com/v2/farcaster/signer" \
             -H "x-api-key: $NK" \
             -H "Content-Type: application/json" \
             -d '{}')
-
-          HTTP_STATUS=$(echo "$RESP" | grep "HTTP_STATUS:" | cut -d: -f2)
-          BODY=$(echo "$RESP" | sed '/HTTP_STATUS:/d')
-
-          echo "HTTP status: $HTTP_STATUS"
-          echo "Response body: $BODY"
-
-          if [ "$HTTP_STATUS" != "200" ]; then
-            echo "ERROR: Signer creation failed with HTTP $HTTP_STATUS"
+          HTTP=$(echo "$RESP" | grep "HTTP:" | cut -d: -f2)
+          BODY=$(echo "$RESP" | sed '/HTTP:/d')
+          echo "HTTP $HTTP"
+          echo "Body: $BODY"
+          if [ "$HTTP" != "200" ]; then
+            echo "ERROR: signer creation failed"
             exit 1
           fi
-
-          SIGNER_UUID=$(echo "$BODY" | python3 -c "
-import sys, json
-d = json.load(sys.stdin)
-print(d.get('signer_uuid', ''))
-" 2>/dev/null)
-
-          APPROVAL_URL=$(echo "$BODY" | python3 -c "
-import sys, json
-d = json.load(sys.stdin)
-print(d.get('signer_approval_url', ''))
-" 2>/dev/null)
-
+          SIGNER_UUID=$(echo "$BODY" | python3 -c "import sys,json; print(json.load(sys.stdin).get('signer_uuid',''))")
+          APPROVAL_URL=$(echo "$BODY" | python3 -c "import sys,json; print(json.load(sys.stdin).get('signer_approval_url',''))")
           if [ -z "$SIGNER_UUID" ]; then
-            echo "ERROR: No signer_uuid in response. Full response:"
-            echo "$BODY"
+            echo "ERROR: no signer_uuid in response"
             exit 1
           fi
-
           echo "::add-mask::$SIGNER_UUID"
           echo "signer_uuid=$SIGNER_UUID" >> "$GITHUB_OUTPUT"
           echo "approval_url=$APPROVAL_URL" >> "$GITHUB_OUTPUT"
-
-          cat >> "$GITHUB_STEP_SUMMARY" <<SUMMARY
-## ⚡ TipMaster Bot — Action Required
-
-### 1 — Approve the bot signer in Warpcast
-Tap this link on your phone:
-
-**[👉 TAP HERE TO APPROVE THE BOT]($APPROVAL_URL)**
-
-Direct URL (copy if link doesn't work):
-\`\`\`
-$APPROVAL_URL
-\`\`\`
-
-### 2 — Copy the Signer UUID for Phase 2
-\`\`\`
-$SIGNER_UUID
-\`\`\`
-
-Take as long as you need — Phase 2 can run any time after you tap the link.
-SUMMARY
-
           echo ""
-          echo "============================================================"
-          echo "  APPROVAL URL — tap this in Warpcast:"
+          echo "======================================================"
+          echo "  TAP THIS IN WARPCAST:"
           echo "  $APPROVAL_URL"
           echo ""
-          echo "  SIGNER UUID — paste into Phase 2:"
+          echo "  SIGNER UUID (for Phase 2 input):"
           echo "  $SIGNER_UUID"
-          echo "============================================================"
+          echo "======================================================"
+          echo "APPROVAL_URL=$APPROVAL_URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "SIGNER_UUID=$SIGNER_UUID" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Save to artifact
         run: |
