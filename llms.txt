@@ -82,6 +82,7 @@ when agents you refer use the system.
 - **Ghost Layer** — Dual-chain XRPL/Base transparent payment bridge + Cube Terminal dNFT minting. x402 payment gated. XAH/Xahau support. Render. `https://ghost-layer.onrender.com`
 - **Ghost Layer Sovereign** — Private XRP routing engine. MEV-proof execution, ZK-shielded transactions (XLS-372 + XLS-0096), The Sentinel MEV blocker, Sovereign Threshold circuit, EC-ElGamal BN254 encryption. 0.2% fee. No KYC. `https://www.scriptmasterlabs.com/dashboard`
 - **SML Autonomous Agent** — Self-funding market intelligence agent. Pays its own signal costs in RLUSD, synthesizes with Claude Opus, lists on Signal Marketplace, pushes to webhook subscribers. Runs 5x/day Mon-Fri.
+- **TipMaster** — The Web3 Phonebook for Farcaster. Developer API to resolve Farcaster usernames directly to XRPL wallets for autonomous zero-custody P2P tipping. Live on Render.
 
 ---
 
@@ -248,6 +249,16 @@ DELETE /api/webhooks/subscribe/{id} — unsubscribe
 ```
 
 Event types: SQUEEZE_ALERT | OPTIONS_SWEEP | COUNCIL_VERDICT | AGENT_PAY | MARKETPLACE_LISTING | JOB_POSTED
+
+---
+
+## TipMaster API — Base: `https://tipmaster-api.onrender.com`
+
+```
+GET /api/resolve/{username} — Resolve a Farcaster username to an XRPL wallet address (Free)
+GET /api/leaderboard        — Get the top 10 tipped users (Free)
+POST /api/register          — Webhook for new user registration
+```
 
 ---
 

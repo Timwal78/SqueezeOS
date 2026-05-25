@@ -35,6 +35,8 @@ Allow: /api/marketplace/leaderboard
 Allow: /api/hiring
 Allow: /api/relay/nodes
 Allow: /api/status
+Allow: /api/resolve
+Allow: /api/leaderboard
 
 # ── AI Crawlers — Explicitly Permitted ──────────────────────────────────────
 
