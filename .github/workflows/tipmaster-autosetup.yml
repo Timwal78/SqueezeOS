@@ -16,7 +16,7 @@ jobs:
       RK: 'rnd_HwBcJWniVQM1oJI4R310AZeFqahJ'
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
