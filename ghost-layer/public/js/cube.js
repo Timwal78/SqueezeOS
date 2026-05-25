@@ -109,6 +109,13 @@ const renderer  = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 container.appendChild(renderer.domElement);
 
+// Add lighting for Lambert materials to show 3D depth and prevent flat bleeding
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+scene.add(ambientLight);
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+dirLight.position.set(5, 10, 7.5);
+scene.add(dirLight);
+
 function fitRenderer() {
   const w = container.clientWidth, h = container.clientHeight;
   renderer.setSize(w, h);
@@ -139,12 +146,12 @@ for (let x = -1; x <= 1; x++) {
     for (let z = -1; z <= 1; z++) {
       const p = PALETTES.default;
       const m = [
-        new THREE.MeshBasicMaterial({ color: x ===  1 ? p.px : 0x050505 }),
-        new THREE.MeshBasicMaterial({ color: x === -1 ? p.nx : 0x050505 }),
-        new THREE.MeshBasicMaterial({ color: y ===  1 ? p.py : 0x050505 }),
-        new THREE.MeshBasicMaterial({ color: y === -1 ? p.ny : 0x050505 }),
-        new THREE.MeshBasicMaterial({ color: z ===  1 ? p.pz : 0x050505 }),
-        new THREE.MeshBasicMaterial({ color: z === -1 ? p.nz : 0x050505 }),
+        new THREE.MeshLambertMaterial({ color: new THREE.Color(x ===  1 ? p.px : 0x050505) }),
+        new THREE.MeshLambertMaterial({ color: new THREE.Color(x === -1 ? p.nx : 0x050505) }),
+        new THREE.MeshLambertMaterial({ color: new THREE.Color(y ===  1 ? p.py : 0x050505) }),
+        new THREE.MeshLambertMaterial({ color: new THREE.Color(y === -1 ? p.ny : 0x050505) }),
+        new THREE.MeshLambertMaterial({ color: new THREE.Color(z ===  1 ? p.pz : 0x050505) }),
+        new THREE.MeshLambertMaterial({ color: new THREE.Color(z === -1 ? p.nz : 0x050505) }),
       ];
       const mesh = new THREE.Mesh(geo, m);
       mesh.position.set(x, y, z);
@@ -777,10 +784,22 @@ fetch('/api/config')
   .then(cfg => {
     bridgeCount = cfg.total_bridges ?? 0;
     if (countEl) countEl.textContent = bridgeCount;
-    makeSSE(cfg.sse_url ?? '/api/events', 'ghost');
+
+    // Prefer sovereign WebSocket stream; fall back to SSE if not available
+    if (cfg.ws_metrics_url) {
+      const wsBase = window.location.origin.replace(/^http/, 'ws');
+      connectMetricsWS(wsBase + cfg.ws_metrics_url);
+    } else {
+      makeSSE(cfg.sse_url ?? '/api/events', 'ghost');
+    }
+
+    // SqueezeOS feed always uses SSE
     if (cfg.squeezeos_sse) makeSSE(cfg.squeezeos_sse, 'squeezeos');
   })
-  .catch(() => makeSSE('/api/events', 'ghost'));
+  .catch(() => {
+    // Hard fallback: try WS first, then SSE
+    connectMetricsWS(window.location.origin.replace(/^http/, 'ws') + '/ws/metrics');
+  });
 
 // ── Animation loop ─────────────────────────────────────────────────────────────
 function animate() {
