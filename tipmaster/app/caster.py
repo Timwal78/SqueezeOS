@@ -32,6 +32,24 @@ async def reply_to_cast(parent_hash: str, text: str, channel_id: Optional[str] =
         resp.raise_for_status()
         return True
 
+async def publish_cast(text: str, channel_id: Optional[str] = None) -> bool:
+    if not NEYNAR_API_KEY or not NEYNAR_BOT_SIGNER_UUID:
+        raise RuntimeError("NEYNAR_API_KEY or NEYNAR_BOT_SIGNER_UUID is not set")
+    payload: dict = {
+        "signer_uuid": NEYNAR_BOT_SIGNER_UUID,
+        "text": text,
+    }
+    if channel_id:
+        payload["channel_id"] = channel_id
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.post(
+            NEYNAR_CAST_URL,
+            json=payload,
+            headers={"x-api-key": NEYNAR_API_KEY, "Content-Type": "application/json"},
+        )
+        resp.raise_for_status()
+        return True
+
 
 def tip_success_text(
     sender: str,

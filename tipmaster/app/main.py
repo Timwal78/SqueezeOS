@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from decimal import Decimal
 from typing import Any
 
-from fastapi import FastAPI, Request, Response, HTTPException
+from fastapi import FastAPI, Request, Response, HTTPException, Header
 from pydantic import BaseModel
 
 from .neynar import verify_webhook_signature
@@ -72,6 +72,52 @@ async def leaderboard(period: str = "week", limit: int = 10):
         entries = await get_weekly_leaderboard(limit)
         label = "this week"
     return {"period": label, "leaderboard": entries}
+
+
+@app.get("/api/resolve/{username}")
+async def api_resolve(username: str):
+    # Farcaster usernames are generally lowercase
+    wallet = await get_wallet_by_username(username.lower())
+    if not wallet:
+        raise HTTPException(status_code=404, detail="User has not registered a wallet")
+    return {"username": username.lower(), "wallet_address": wallet, "chain": "XRPL"}
+
+
+@app.get("/api/user/{fid}")
+async def api_get_user(fid: int):
+    wallet = await get_wallet_by_fid(fid)
+    if not wallet:
+        raise HTTPException(status_code=404, detail="User has not registered a wallet")
+    is_paid = await is_setup_fee_paid(fid)
+    return {
+        "fid": fid,
+        "wallet_address": wallet,
+        "is_setup_fee_paid": is_paid
+    }
+
+
+class BroadcastRequest(BaseModel):
+    channel_id: str | None = None
+    period: str = "week"
+
+
+@app.post("/api/admin/broadcast-leaderboard")
+async def api_broadcast_leaderboard(req: BroadcastRequest, authorization: str = Header(None)):
+    expected_secret = os.getenv("TIPMASTER_ADMIN_SECRET")
+    if not expected_secret or authorization != f"Bearer {expected_secret}":
+        raise HTTPException(status_code=401, detail="Unauthorized")
+        
+    if req.period == "alltime":
+        entries = await get_all_time_leaderboard(10)
+        label = "all time"
+    else:
+        entries = await get_weekly_leaderboard(10)
+        label = "this week"
+    
+    text = caster.leaderboard_text(entries, label)
+    success = await caster.publish_cast(text, channel_id=req.channel_id)
+    
+    return {"status": "success", "posted": success}
 
 
 @app.post("/webhook/cast")
