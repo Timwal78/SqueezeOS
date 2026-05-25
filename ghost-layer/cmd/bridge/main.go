@@ -28,6 +28,7 @@ import (
 	"ghost-layer-core/internal/crypto"
 	"ghost-layer-core/internal/router"
 	"ghost-layer-core/internal/toll"
+	"ghost-layer-core/internal/x402"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -111,6 +112,40 @@ var hub = &sseHub{clients: make(map[chan []byte]struct{})}
 // ── Sovereign WebSocket Metrics Hub + Agent Loyalty Ledger ────────────────────
 var metricsHub = router.NewMetricsHub()
 var agentLedger = toll.NewAgentLedger()
+
+// writeJSONErr writes a {"error": "<code>"} body with the given HTTP status.
+// Used by the x402 routes for consistent error envelopes.
+func writeJSONErr(w http.ResponseWriter, status int, code string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": code})
+}
+
+// ── X402 Native Vendor ───────────────────────────────────────────────────────
+var x402Registry = x402.NewRegistry()
+var x402Nonces = x402.NewNonceCache()
+var x402Dispensed atomic.Int64
+
+func init() {
+	x402Registry.Register(&x402.Product{
+		ID:        "routing.telemetry",
+		Name:      "Routing Telemetry (60s)",
+		BasePrice: 50000, // 0.05 RLUSD in drops
+		Dispatcher: func() (json.RawMessage, error) {
+			payload := map[string]interface{}{
+				"tps":             metricsHub.RollingTPS(),
+				"total_bridges":   metricsHub.TotalBridges(),
+				"accumulated_fee": metricsHub.AccumulatedFeeString(),
+				"snapshot_ts":     time.Now().Unix(),
+			}
+			return json.Marshal(payload)
+		},
+	})
+	// Reserved (disabled) entries — visible in catalog listing, not dispensable.
+	for _, id := range []string{"bridge.attestation", "bridge.priority", "cube.mint"} {
+		x402Registry.Register(&x402.Product{ID: id, Disabled: true, BasePrice: 100000})
+	}
+}
 
 func (h *sseHub) subscribe() chan []byte {
 	ch := make(chan []byte, 16)
@@ -424,6 +459,9 @@ func main() {
 	if os.Getenv("ADMIN_TOKEN") == "" {
 		log.Fatalf("[FATAL] ADMIN_TOKEN not set — admin endpoints cannot be secured. Set ADMIN_TOKEN in Render secrets.")
 	}
+	if os.Getenv("X402_TOKEN_SECRET") == "" {
+		log.Fatalf("[FATAL] X402_TOKEN_SECRET not set — x402 vendor cannot sign invoices. Set X402_TOKEN_SECRET in Render secrets.")
+	}
 
 	var xrplClient *chain.XRPLClient
 	if xrplKey != "" {
@@ -470,6 +508,7 @@ func main() {
 
 	engine := router.NewTransparentBridgeEngine(treasuryXRPL, treasuryETH, xrplClient, baseClient, &sweepWg)
 	log.Println("[SERVER] Agent Loyalty Matrix: ARMED | WebSocket Metrics Hub: LIVE")
+	log.Println("[SERVER] X402 Vendor: ARMED | Catalog: routing.telemetry | Endpoint: /v1/x402")
 
 	r := chi.NewRouter()
 	r.Use(corsMiddleware)
@@ -485,9 +524,10 @@ func main() {
 			"status":         "ok",
 			"xrpl_client":    status["xrpl"],
 			"base_client":    status["base"],
-			"xrpl_treasury":  treasuryXRPL,
-			"total_bridges":  metricsHub.TotalBridges(),
-			"ws_metrics_url": "/ws/metrics",
+			"xrpl_treasury":   treasuryXRPL,
+			"total_bridges":   metricsHub.TotalBridges(),
+			"ws_metrics_url":  "/ws/metrics",
+			"x402_dispensed":  x402Dispensed.Load(),
 		})
 	})
 
@@ -523,6 +563,8 @@ func main() {
 			"total_bridges":  metricsHub.TotalBridges(),
 			"x402_compliant": true,
 			"loyalty_matrix": true,
+			"x402_endpoint":  "/v1/x402",
+			"x402_products":  x402Registry.Listing(),
 		})
 	})
 
@@ -573,6 +615,91 @@ func main() {
 				return
 			}
 		}
+	})
+
+	// ── X402 NATIVE VENDOR ────────────────────────────────────────────────────
+
+	r.Get("/v1/x402/catalog", func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"products": x402Registry.Listing()})
+	})
+
+	r.Post("/v1/x402/quote", func(w http.ResponseWriter, req *http.Request) {
+		req.Body = http.MaxBytesReader(w, req.Body, 4096)
+		var body struct {
+			ProductID   string `json:"product_id"`
+			AgentWallet string `json:"agent_wallet"`
+		}
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			writeJSONErr(w, http.StatusBadRequest, "ERR_BAD_REQUEST")
+			return
+		}
+		product, err := x402Registry.Lookup(body.ProductID)
+		if err != nil {
+			writeJSONErr(w, http.StatusNotFound, err.Error())
+			return
+		}
+		tier := "BRONZE"
+		if body.AgentWallet != "" {
+			t, _ := agentLedger.AgentStats(body.AgentWallet)
+			tier = t
+		}
+		inv, err := x402.Issue(product.ID, body.AgentWallet, tier, product.BasePrice, treasuryXRPL, os.Getenv("X402_TOKEN_SECRET"))
+		if err != nil {
+			writeJSONErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(inv)
+	})
+
+	r.Get("/v1/x402/dispense/{pid}", func(w http.ResponseWriter, req *http.Request) {
+		pid := chi.URLParam(req, "pid")
+		token := req.Header.Get("X-Payment-Token")
+
+		if token == "" {
+			// HTTP 402 challenge — return a fresh invoice for the requested product.
+			product, err := x402Registry.Lookup(pid)
+			if err != nil {
+				writeJSONErr(w, http.StatusNotFound, err.Error())
+				return
+			}
+			inv, err := x402.Issue(pid, "", "BRONZE", product.BasePrice, treasuryXRPL, os.Getenv("X402_TOKEN_SECRET"))
+			if err != nil {
+				writeJSONErr(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			b, _ := json.Marshal(inv)
+			w.Header().Set("X-Payment-Required", string(b))
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusPaymentRequired)
+			_, _ = w.Write(b)
+			return
+		}
+
+		payload, err := x402.Verify(token, os.Getenv("X402_TOKEN_SECRET"))
+		if err != nil {
+			writeJSONErr(w, http.StatusUnauthorized, err.Error())
+			return
+		}
+		if payload.Pid != pid {
+			writeJSONErr(w, http.StatusUnauthorized, "ERR_PRODUCT_MISMATCH")
+			return
+		}
+		if !x402Nonces.Consume(payload.Iid, payload.Exp+60) {
+			writeJSONErr(w, http.StatusConflict, "ERR_REPLAY")
+			return
+		}
+		out, err := x402Registry.Dispatch(pid)
+		if err != nil {
+			writeJSONErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		x402Dispensed.Add(1)
+		metricsHub.BroadcastX402Dispensed(pid, payload.Wlt, payload.Tier)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(out)
 	})
 
 	// ── INSTITUTIONAL EXECUTION PATH ─────────────────────────────────────────
