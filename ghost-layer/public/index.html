@@ -249,6 +249,28 @@
         /* ── Dividers ── */
         .vdivider { width: 1px; height: 20px; background: #0a2020; flex-shrink: 0; }
 
+        /* ── X402 Badge ── */
+        .x402-badge {
+            font-size: 0.46rem;
+            letter-spacing: 0.12em;
+            color: #AA00FF;
+            border: 1px solid #AA00FF55;
+            padding: 1px 5px;
+            border-radius: 2px;
+            white-space: nowrap;
+            text-shadow: 0 0 8px #AA00FF66;
+            animation: liveDot 2.4s infinite;
+        }
+        .loyalty-badge {
+            font-size: 0.46rem;
+            letter-spacing: 0.10em;
+            color: #00FF88;
+            border: 1px solid #00FF8844;
+            padding: 1px 5px;
+            border-radius: 2px;
+            white-space: nowrap;
+        }
+
         /* ── 3×3 block grid ── */
         .grid-3x3 {
             display: grid;
@@ -362,12 +384,20 @@
           <span class="stat-val" id="gl-count">–</span>
         </div>
         <div class="stat-row">
+          <span class="stat-label">TPS</span>
+          <span class="stat-val" id="gl-tps" style="color:#AA00FF">0.000</span>
+        </div>
+        <div class="stat-row">
           <span class="stat-label">Chain</span>
           <span class="stat-val" id="gl-chain">–</span>
         </div>
         <div class="stat-row">
           <span class="stat-label">Last TX</span>
           <span class="stat-val" id="gl-tx" style="font-size:0.55rem">–</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Agent Tier</span>
+          <span class="stat-val" id="gl-tier" style="color:#FFD700">–</span>
         </div>
         <div class="stat-row">
           <span class="stat-label">Event</span>
@@ -524,14 +554,18 @@
     </div>
     <span style="font-size:0.56rem;color:#445566;white-space:nowrap" id="gl-speed-bar">0%</span>
     <div class="vdivider"></div>
+    <span style="font-size:0.56rem;color:#223344;white-space:nowrap">TPS</span>
+    <span style="font-size:0.58rem;color:#AA00FF;font-weight:bold;letter-spacing:0.04em" id="gl-tps-bar">0.000</span>
+    <div class="vdivider"></div>
     <span style="font-size:0.56rem;color:#223344;white-space:nowrap">STATE</span>
     <span style="font-size:0.58rem;color:#AA00FF;font-weight:bold;letter-spacing:0.06em" id="state-label">IDLE</span>
     <div class="vdivider"></div>
     <span style="font-size:0.56rem;color:#223344;white-space:nowrap">CUSTODY</span>
     <span style="font-size:0.58rem;color:#00FF88;font-weight:bold">ZERO</span>
     <div class="vdivider"></div>
-    <span style="font-size:0.56rem;color:#223344;white-space:nowrap">FACES</span>
-    <span style="font-size:0.58rem;color:#00FFCC;font-weight:bold">6 ARMED</span>
+    <span class="x402-badge">X402 ✓</span>
+    <div class="vdivider"></div>
+    <span class="loyalty-badge">LOYALTY MATRIX</span>
     <div class="vdivider"></div>
     <span style="font-size:0.56rem;color:#223344;white-space:nowrap">BLOCKS</span>
     <span style="font-size:0.58rem;color:#00FFCC;font-weight:bold">54 LIVE</span>

@@ -164,6 +164,9 @@ const speedEl     = document.getElementById('gl-speed');
 const speedBarEl  = document.getElementById('gl-speed-bar');
 const tachFill    = document.getElementById('tach-fill');
 const eventEl     = document.getElementById('gl-event');
+const tpsEl       = document.getElementById('gl-tps');
+const tpsBarEl    = document.getElementById('gl-tps-bar');
+const tierEl      = document.getElementById('gl-tier');
 const faceGridEl  = document.getElementById('face-grid');
 const faceDetailEl= document.getElementById('face-detail');
 const tokenHashEl  = document.getElementById('token-hash');
@@ -349,6 +352,7 @@ const EVENT_CFG = {
   OPTIONS_SWEEP:        { speed: 0.030, palette: 'squeeze', label: 'SWEEP',     face: 'px', edgeIdx: 3, delta:  3 },
   CUBE_STATE_COMMITTED:  { speed: 0.045, palette: 'verdict', label: 'COMMITTED'                                   },
   XAHAU_MINT_CONFIRMED:  { speed: 0.055, palette: 'verdict', label: 'ON-CHAIN'                                    },
+  HEARTBEAT:             { speed: 0,     palette: null,      label: null                                           },
 };
 
 let rotSpeed       = BASE_SPEED;
@@ -397,10 +401,10 @@ function resetFaceColors() {
   }
 }
 
-// ── SSE event handler ─────────────────────────────────────────────────────────
+// ── Unified event handler (handles both SSE and WebSocket frames) ─────────────
 function fireEvent(type, data) {
   const cfg = EVENT_CFG[type];
-  if (!cfg) return;
+  if (!cfg || type === 'HEARTBEAT') return;
 
   if (cfg.speed > rotSpeed) rotSpeed = cfg.speed;
   pulseIntensity = 1.0;
@@ -426,6 +430,19 @@ function fireEvent(type, data) {
     if (countEl) countEl.textContent = bridgeCount;
     if (chainEl) chainEl.textContent = (data.chain ?? '–').toUpperCase();
     if (txEl && data.tx_hash) txEl.textContent = data.tx_hash.slice(0, 14) + '…';
+    // Show agent tier badge if present
+    if (data.agent_tier) {
+      const tierColors = { DIAMOND: '#00FFFF', PLATINUM: '#AA00FF', GOLD: '#FFD700', SILVER: '#AAAAFF', BRONZE: '#FF8800' };
+      if (chainEl) {
+        const chain = (data.chain ?? '').toUpperCase();
+        chainEl.innerHTML = `${chain} <span style="color:${tierColors[data.agent_tier] ?? '#00FFCC'};font-size:0.5rem;margin-left:4px">[${data.agent_tier}]</span>`;
+      }
+      if (tierEl) {
+        const tierColors2 = { DIAMOND: '#00FFFF', PLATINUM: '#AA00FF', GOLD: '#FFD700', SILVER: '#AAAAFF', BRONZE: '#FF8800' };
+        tierEl.textContent = data.agent_tier;
+        tierEl.style.color = tierColors2[data.agent_tier] ?? '#00FFCC';
+      }
+    }
     totalFees += 0.001;
     if (revTotalEl) revTotalEl.textContent = totalFees.toFixed(4) + ' RLUSD';
     setState('SETTLING'); setTimeout(() => setState('IDLE'), 2000);
@@ -451,7 +468,71 @@ function fireEvent(type, data) {
 
 function setState(s) { if (stateLabelEl) stateLabelEl.textContent = s; }
 
-// ── SSE connection factory ────────────────────────────────────────────────────
+// ── Sovereign WebSocket Metrics Connection ────────────────────────────────────
+// Connects to /ws/metrics for live TPS, fee accumulation, and bridge events.
+// Falls back gracefully if WebSocket is unavailable.
+
+let wsMetrics    = null;
+let wsBackoff    = 1000;
+let wsOfflineTimer = null;
+let serverTPS    = 0; // live TPS from /ws/metrics
+
+function connectMetricsWS(url) {
+  if (wsMetrics) { try { wsMetrics.close(); } catch(_) {} }
+
+  const wsUrl = url.replace(/^http/, 'ws');
+  wsMetrics = new WebSocket(wsUrl);
+
+  wsMetrics.onopen = () => {
+    wsBackoff = 1000;
+    if (wsOfflineTimer) { clearTimeout(wsOfflineTimer); wsOfflineTimer = null; }
+    setStatus(true, 'WS');
+    console.log('[GHOST] WebSocket metrics stream connected:', wsUrl);
+  };
+
+  wsMetrics.onmessage = (e) => {
+    try {
+      const data = JSON.parse(e.data);
+
+      // Update live TPS — directly drives tachometer speed
+      if (typeof data.tps === 'number') {
+        serverTPS = data.tps;
+        // Map TPS to rotation speed: 0 TPS = BASE_SPEED, 1 TPS = max
+        const tpsSpeed = BASE_SPEED + Math.min(data.tps / 1.0, 1.0) * (0.060 - BASE_SPEED);
+        if (tpsSpeed > rotSpeed) rotSpeed = tpsSpeed;
+      }
+
+      // Sync cumulative bridge count
+      if (typeof data.total_bridges === 'number' && data.total_bridges > bridgeCount) {
+        bridgeCount = data.total_bridges;
+        if (countEl) countEl.textContent = bridgeCount;
+      }
+
+      // Fire visual events
+      if (data.type && data.type !== 'CONNECTED' && data.type !== 'HEARTBEAT') {
+        fireEvent(data.type, data);
+      } else if (data.type === 'CONNECTED') {
+        bridgeCount = data.total_bridges ?? bridgeCount;
+        if (countEl) countEl.textContent = bridgeCount;
+      }
+    } catch(_) {}
+  };
+
+  wsMetrics.onerror = () => {
+    console.warn('[GHOST] WebSocket error — will retry in', wsBackoff, 'ms');
+  };
+
+  wsMetrics.onclose = () => {
+    wsMetrics = null;
+    if (!wsOfflineTimer) {
+      wsOfflineTimer = setTimeout(() => { wsOfflineTimer = null; setStatus(false); }, 2500);
+    }
+    setTimeout(() => connectMetricsWS(url), wsBackoff);
+    wsBackoff = Math.min(wsBackoff * 2, 30000);
+  };
+}
+
+// ── Legacy SSE connection factory (kept for squeezeos feed) ──────────────────
 function makeSSE(url, label) {
   let es = null, backoff = 1000, offlineTimer = null;
   function connect() {
@@ -460,7 +541,8 @@ function makeSSE(url, label) {
     es.onopen = () => {
       if (label === 'ghost') {
         if (offlineTimer) { clearTimeout(offlineTimer); offlineTimer = null; }
-        setStatus(true);
+        // Don't override WS status if WS is live
+        if (!wsMetrics || wsMetrics.readyState !== WebSocket.OPEN) setStatus(true, 'SSE');
       }
       backoff = 1000;
     };
@@ -487,10 +569,16 @@ function makeSSE(url, label) {
   connect();
 }
 
-function setStatus(online) {
+function setStatus(online, transport) {
   if (!statusEl) return;
-  statusEl.textContent = online ? '● LIVE' : '○ OFFLINE';
-  statusEl.style.color = online ? '#00FFCC' : '#FF0055';
+  if (online) {
+    const label = transport === 'WS' ? '● LIVE [WS]' : '● LIVE [SSE]';
+    statusEl.textContent = label;
+    statusEl.style.color = '#00FFCC';
+  } else {
+    statusEl.textContent = '○ OFFLINE';
+    statusEl.style.color = '#FF0055';
+  }
 }
 
 // ── Buttons ───────────────────────────────────────────────────────────────────
@@ -720,6 +808,11 @@ function animate() {
   if (speedEl)    speedEl.textContent    = p + '%';
   if (speedBarEl) speedBarEl.textContent = p + '%';
   if (tachFill)   tachFill.style.width   = p + '%';
+
+  // Live TPS display — updated from serverTPS fed by WebSocket
+  const tpsDisplay = serverTPS.toFixed(3);
+  if (tpsEl)    tpsEl.textContent    = tpsDisplay;
+  if (tpsBarEl) tpsBarEl.textContent = tpsDisplay;
 
   renderer.render(scene, camera);
 }
