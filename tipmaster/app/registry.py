@@ -14,6 +14,16 @@ CREATE TABLE IF NOT EXISTS fid_wallet (
 );
 CREATE INDEX IF NOT EXISTS idx_fid_wallet_username ON fid_wallet(username);
 
+CREATE TABLE IF NOT EXISTS fid_wallet_multi (
+    fid        INTEGER,
+    chain      TEXT NOT NULL,
+    username   TEXT NOT NULL,
+    wallet     TEXT NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    PRIMARY KEY(fid, chain)
+);
+CREATE INDEX IF NOT EXISTS idx_fid_wallet_multi_username ON fid_wallet_multi(username);
+
 CREATE TABLE IF NOT EXISTS tips (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     sender_fid    INTEGER NOT NULL,
@@ -21,8 +31,10 @@ CREATE TABLE IF NOT EXISTS tips (
     recipient_fid INTEGER,
     recipient_user TEXT NOT NULL,
     amount        REAL NOT NULL,
+    currency      TEXT NOT NULL DEFAULT 'RLUSD',
     fee           REAL NOT NULL DEFAULT 0,
     boost         INTEGER NOT NULL DEFAULT 0,
+    is_internal   INTEGER NOT NULL DEFAULT 1,
     tx_hash       TEXT,
     cast_hash     TEXT,
     ts            INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
@@ -36,9 +48,20 @@ CREATE TABLE IF NOT EXISTS deposits (
     tx_hash       TEXT UNIQUE NOT NULL,
     sender_fid    INTEGER NOT NULL,
     amount        REAL NOT NULL,
+    currency      TEXT NOT NULL DEFAULT 'RLUSD',
     ts            INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
 );
 CREATE INDEX IF NOT EXISTS idx_deposits_fid ON deposits(sender_fid);
+
+CREATE TABLE IF NOT EXISTS withdrawals (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    tx_hash       TEXT UNIQUE NOT NULL,
+    fid           INTEGER NOT NULL,
+    amount        REAL NOT NULL,
+    currency      TEXT NOT NULL,
+    ts            INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+);
+CREATE INDEX IF NOT EXISTS idx_withdrawals_fid ON withdrawals(fid);
 """
 
 
@@ -48,33 +71,48 @@ async def init_db(db_path: str = DB_PATH) -> None:
             stmt = stmt.strip()
             if stmt:
                 await db.execute(stmt)
+        # Migrate old wallets to new multi-chain table
+        await db.execute(
+            "INSERT OR IGNORE INTO fid_wallet_multi (fid, chain, username, wallet, created_at) "
+            "SELECT fid, 'XRPL', username, wallet, created_at FROM fid_wallet"
+        )
+        # Add columns to existing tables if they don't exist
+        for table, col, default in [
+            ("tips", "currency", "'RLUSD'"),
+            ("tips", "is_internal", "0"), # Legacy tips were external
+            ("deposits", "currency", "'RLUSD'")
+        ]:
+            try:
+                await db.execute(f"ALTER TABLE {table} ADD COLUMN {col} TEXT NOT NULL DEFAULT {default}")
+            except aiosqlite.OperationalError:
+                pass
         await db.commit()
 
 
-async def register_wallet(fid: int, username: str, wallet: str, db_path: str = DB_PATH) -> None:
+async def register_wallet(fid: int, username: str, wallet: str, chain: str = "XRPL", db_path: str = DB_PATH) -> None:
     async with aiosqlite.connect(db_path) as db:
         await db.execute(
             """
-            INSERT INTO fid_wallet (fid, username, wallet)
-            VALUES (?, ?, ?)
-            ON CONFLICT(fid) DO UPDATE SET username = excluded.username, wallet = excluded.wallet
+            INSERT INTO fid_wallet_multi (fid, chain, username, wallet)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(fid, chain) DO UPDATE SET username = excluded.username, wallet = excluded.wallet
             """,
-            (fid, username.lower(), wallet),
+            (fid, chain.upper(), username.lower(), wallet),
         )
         await db.commit()
 
 
-async def get_wallet_by_fid(fid: int, db_path: str = DB_PATH) -> Optional[str]:
+async def get_wallet_by_fid(fid: int, chain: str = "XRPL", db_path: str = DB_PATH) -> Optional[str]:
     async with aiosqlite.connect(db_path) as db:
-        async with db.execute("SELECT wallet FROM fid_wallet WHERE fid = ?", (fid,)) as cur:
+        async with db.execute("SELECT wallet FROM fid_wallet_multi WHERE fid = ? AND chain = ?", (fid, chain.upper())) as cur:
             row = await cur.fetchone()
             return row[0] if row else None
 
 
-async def get_wallet_by_username(username: str, db_path: str = DB_PATH) -> Optional[str]:
+async def get_wallet_by_username(username: str, chain: str = "XRPL", db_path: str = DB_PATH) -> Optional[str]:
     async with aiosqlite.connect(db_path) as db:
         async with db.execute(
-            "SELECT wallet FROM fid_wallet WHERE username = ?", (username.lower(),)
+            "SELECT wallet FROM fid_wallet_multi WHERE username = ? AND chain = ?", (username.lower(), chain.upper())
         ) as cur:
             row = await cur.fetchone()
             return row[0] if row else None
@@ -108,6 +146,8 @@ async def record_tip(
     tx_hash: str,
     cast_hash: str,
     recipient_fid: Optional[int] = None,
+    currency: str = "RLUSD",
+    is_internal: bool = True,
     db_path: str = DB_PATH,
 ) -> None:
     async with aiosqlite.connect(db_path) as db:
@@ -115,11 +155,11 @@ async def record_tip(
             """
             INSERT INTO tips
               (sender_fid, sender_user, recipient_fid, recipient_user,
-               amount, fee, boost, tx_hash, cast_hash)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+               amount, currency, fee, boost, is_internal, tx_hash, cast_hash)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (sender_fid, sender_user.lower(), recipient_fid, recipient_user.lower(),
-             amount, fee, int(boost), tx_hash, cast_hash),
+             amount, currency.upper(), fee, int(boost), int(is_internal), tx_hash, cast_hash),
         )
         await db.commit()
 
@@ -184,16 +224,31 @@ async def get_all_time_leaderboard(limit: int = 10, db_path: str = DB_PATH) -> L
     ]
 
 
-async def record_deposit(tx_hash: str, sender_fid: int, amount: float, db_path: str = DB_PATH) -> bool:
+async def record_deposit(tx_hash: str, sender_fid: int, amount: float, currency: str = "RLUSD", db_path: str = DB_PATH) -> bool:
     """Returns True if inserted, False if duplicate tx_hash."""
     try:
         async with aiosqlite.connect(db_path) as db:
             await db.execute(
                 """
-                INSERT INTO deposits (tx_hash, sender_fid, amount)
-                VALUES (?, ?, ?)
+                INSERT INTO deposits (tx_hash, sender_fid, amount, currency)
+                VALUES (?, ?, ?, ?)
                 """,
-                (tx_hash, sender_fid, amount),
+                (tx_hash, sender_fid, amount, currency.upper()),
+            )
+            await db.commit()
+            return True
+    except aiosqlite.IntegrityError:
+        return False
+
+async def record_withdrawal(tx_hash: str, fid: int, amount: float, currency: str = "RLUSD", db_path: str = DB_PATH) -> bool:
+    try:
+        async with aiosqlite.connect(db_path) as db:
+            await db.execute(
+                """
+                INSERT INTO withdrawals (tx_hash, fid, amount, currency)
+                VALUES (?, ?, ?, ?)
+                """,
+                (tx_hash, fid, amount, currency.upper()),
             )
             await db.commit()
             return True
@@ -201,20 +256,35 @@ async def record_deposit(tx_hash: str, sender_fid: int, amount: float, db_path: 
         return False
 
 
-async def get_internal_balance(fid: int, db_path: str = DB_PATH) -> 'decimal.Decimal':
+async def get_internal_balance(fid: int, currency: str = "RLUSD", db_path: str = DB_PATH) -> 'decimal.Decimal':
     import decimal
     from .xrpl_client import BOOST_FEE
+    currency = currency.upper()
     async with aiosqlite.connect(db_path) as db:
-        async with db.execute("SELECT COALESCE(SUM(amount), 0) FROM deposits WHERE sender_fid = ?", (fid,)) as cur:
+        # 1. Sum deposits
+        async with db.execute("SELECT COALESCE(SUM(amount), 0) FROM deposits WHERE sender_fid = ? AND currency = ?", (fid, currency)) as cur:
             row = await cur.fetchone()
             deposits = decimal.Decimal(str(row[0])) if row else decimal.Decimal("0")
         
-        async with db.execute("SELECT amount, boost FROM tips WHERE sender_fid = ?", (fid,)) as cur:
+        # 2. Sum internal tips received
+        async with db.execute("SELECT COALESCE(SUM(amount), 0) FROM tips WHERE recipient_fid = ? AND currency = ? AND is_internal = 1", (fid, currency)) as cur:
+            row = await cur.fetchone()
+            tips_received = decimal.Decimal(str(row[0])) if row else decimal.Decimal("0")
+
+        # 3. Sum tips spent (both internal and external subtract from balance)
+        async with db.execute("SELECT amount, boost FROM tips WHERE sender_fid = ? AND currency = ?", (fid, currency)) as cur:
             rows = await cur.fetchall()
             tips_spent = decimal.Decimal("0")
             for r_amount, r_boost in rows:
                 tips_spent += decimal.Decimal(str(r_amount))
+                # Boost fees were traditionally RLUSD. If we allow boost on USDC, we deduct it here.
+                # Assuming boost is charged in the tip's currency for now.
                 if r_boost:
                     tips_spent += BOOST_FEE
+        
+        # 4. Sum withdrawals
+        async with db.execute("SELECT COALESCE(SUM(amount), 0) FROM withdrawals WHERE fid = ? AND currency = ?", (fid, currency)) as cur:
+            row = await cur.fetchone()
+            withdrawals = decimal.Decimal(str(row[0])) if row else decimal.Decimal("0")
 
-    return deposits - tips_spent
+    return deposits + tips_received - tips_spent - withdrawals

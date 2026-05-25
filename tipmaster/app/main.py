@@ -168,21 +168,21 @@ async def _handle_command(cmd, sender_fid: int, sender_username: str, cast_hash:
             await caster.reply_to_cast(cast_hash, caster.unknown_command_text())
 
     elif cmd.type == CommandType.REGISTER:
-        await register_wallet(sender_fid, sender_username, cmd.wallet_address)
-        await caster.reply_to_cast(cast_hash, caster.register_success_text(sender_username, cmd.wallet_address))
+        chain = getattr(cmd, "chain", None) or "XRPL"
+        await register_wallet(sender_fid, sender_username, cmd.wallet_address, chain)
+        await caster.reply_to_cast(cast_hash, f"@{sender_username} Successfully registered your {chain} wallet: {cmd.wallet_address}")
 
     elif cmd.type == CommandType.BALANCE:
-        wallet = await get_wallet_by_fid(sender_fid)
-        if not wallet:
-            await caster.reply_to_cast(cast_hash, caster.balance_no_wallet_text(sender_username))
-            return
-        ext_balance = await get_rlusd_balance(wallet)
-        int_balance = await get_internal_balance(sender_fid)
+        currency = getattr(cmd, "currency", "RLUSD")
+        int_balance = await get_internal_balance(sender_fid, currency)
         await caster.reply_to_cast(
             cast_hash, 
-            f"@{sender_username} Your TipMaster internal balance: {int_balance} RLUSD.\\n"
-            f"(External wallet {wallet[:8]}... balance: {ext_balance} RLUSD)"
+            f"@{sender_username} Your TipMaster internal balance: {int_balance} {currency}. "
+            f"(To cash out to your wallet, cast `@tipmaster withdraw <amount> {currency}`)"
         )
+        
+    elif cmd.type == CommandType.WITHDRAW:
+        await _handle_withdraw(cmd, sender_fid, sender_username, cast_hash)
 
     elif cmd.type == CommandType.TIP:
         if not _TIPS_ENABLED:
@@ -196,70 +196,88 @@ async def _handle_command(cmd, sender_fid: int, sender_username: str, cast_hash:
         await _handle_tip(cmd, sender_fid, sender_username, cast_hash)
 
 
-async def _handle_tip(cmd, sender_fid: int, sender_username: str, cast_hash: str) -> None:
-    sender_wallet = await get_wallet_by_fid(sender_fid)
-    if not sender_wallet:
-        await caster.reply_to_cast(cast_hash, caster.tip_no_sender_wallet_text(sender_username))
-        return
-
-    recipient_wallet = await get_wallet_by_username(cmd.target_username)
-    if not recipient_wallet:
-        await caster.reply_to_cast(cast_hash, caster.tip_no_recipient_wallet_text(cmd.target_username))
-        return
-
-    if not await check_trust_line(recipient_wallet):
-        await caster.reply_to_cast(cast_hash, caster.tip_no_trust_line_text(cmd.target_username))
+async def _handle_withdraw(cmd, sender_fid: int, sender_username: str, cast_hash: str) -> None:
+    currency = getattr(cmd, "currency", "RLUSD")
+    chain = "BASE" if currency == "USDC" else "XRPL"
+    
+    wallet = await get_wallet_by_fid(sender_fid, chain=chain)
+    if not wallet:
+        await caster.reply_to_cast(
+            cast_hash, 
+            f"@{sender_username} You don't have a {chain} wallet registered for {currency} withdrawals. "
+            f"Cast `@tipmaster register <address>` to set one!"
+        )
         return
 
     amount = Decimal(str(cmd.amount))
-    boost = cmd.boost
-    total_needed = amount + (BOOST_FEE if boost else Decimal("0"))
-
-    internal_balance = await get_internal_balance(sender_fid)
-    if internal_balance < total_needed:
-        boost_note = f" (+ {BOOST_FEE} RLUSD boost fee)" if boost else ""
+    internal_balance = await get_internal_balance(sender_fid, currency)
+    if internal_balance < amount:
         await caster.reply_to_cast(
             cast_hash,
             f"@{sender_username} Insufficient internal balance. "
-            f"Need {total_needed} RLUSD{boost_note}, have {internal_balance}."
+            f"Need {amount} {currency}, have {internal_balance}."
         )
         return
 
-    ok, tx_hash, err, fee = await execute_custodial_tip(
-        recipient_wallet=recipient_wallet,
-        gross_amount=amount,
-        cast_hash=cast_hash,
-        boost=boost,
-    )
-
+    from .payment_router import execute_withdrawal
+    ok, tx_hash, err = await execute_withdrawal(wallet, amount, currency, chain)
+    
     if ok:
-        recipient_fid = await get_fid_by_username(cmd.target_username)
-        await record_tip(
-            sender_fid=sender_fid,
-            sender_user=sender_username,
-            recipient_user=cmd.target_username,
-            amount=float(amount),
-            fee=float(fee),
-            boost=boost,
-            tx_hash=tx_hash,
-            cast_hash=cast_hash,
-            recipient_fid=recipient_fid,
-        )
-
+        from .registry import record_withdrawal
+        await record_withdrawal(tx_hash, sender_fid, float(amount), currency)
         await caster.reply_to_cast(
             cast_hash,
-            caster.tip_success_text(
-                f"@{sender_username}", f"@{cmd.target_username}",
-                float(amount), tx_hash, boost=boost, fee=float(fee),
-            ),
+            f"@{sender_username} Successfully withdrew {amount} {currency} to {wallet[:8]}! 💸 tx: {tx_hash}"
         )
-
-        # Fire-and-forget: Credit Bureau push + treasury sweep
-        asyncio.create_task(_post_tip_side_effects(sender_wallet, float(amount), sender_fid))
-
     else:
-        log.error("Tip failed: %s", err)
-        await caster.reply_to_cast(cast_hash, caster.tip_failed_text(err))
+        await caster.reply_to_cast(cast_hash, f"@{sender_username} Withdrawal failed: {err}")
+
+
+async def _handle_tip(cmd, sender_fid: int, sender_username: str, cast_hash: str) -> None:
+    recipient_fid = await get_fid_by_username(cmd.target_username)
+    # Even if they don't have a wallet, they can receive internal tips!
+    amount = Decimal(str(cmd.amount))
+    currency = getattr(cmd, "currency", "RLUSD")
+    boost = cmd.boost
+    
+    # Internal tips are free, but boost fees still apply
+    total_needed = amount + (BOOST_FEE if boost else Decimal("0"))
+
+    internal_balance = await get_internal_balance(sender_fid, currency)
+    if internal_balance < total_needed:
+        boost_note = f" (+ {BOOST_FEE} {currency} boost fee)" if boost else ""
+        await caster.reply_to_cast(
+            cast_hash,
+            f"@{sender_username} Insufficient internal balance. "
+            f"Need {total_needed} {currency}{boost_note}, have {internal_balance}."
+        )
+        return
+
+    # Record internal tip
+    await record_tip(
+        sender_fid=sender_fid,
+        sender_user=sender_username,
+        recipient_user=cmd.target_username,
+        amount=float(amount),
+        fee=0.0,
+        boost=boost,
+        tx_hash="internal",
+        cast_hash=cast_hash,
+        recipient_fid=recipient_fid,
+        currency=currency,
+        is_internal=True
+    )
+
+    boost_msg = "🚀 (Boosted!)" if boost else ""
+    await caster.reply_to_cast(
+        cast_hash,
+        f"@{sender_username} instantly tipped {amount} {currency} to @{cmd.target_username}! 🎉 {boost_msg}"
+    )
+
+    # Fire-and-forget: Credit Bureau push (uses RLUSD stats traditionally, but we pass generic amount)
+    sender_wallet = await get_wallet_by_fid(sender_fid)
+    if sender_wallet:
+        asyncio.create_task(_post_tip_side_effects(sender_wallet, float(amount), sender_fid))
 
 
 async def _post_tip_side_effects(sender_wallet: str, amount: float, sender_fid: int) -> None:
