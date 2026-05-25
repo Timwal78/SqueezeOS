@@ -121,7 +121,7 @@ async def get_wallet_by_username(username: str, chain: str = "XRPL", db_path: st
 async def get_fid_by_username(username: str, db_path: str = DB_PATH) -> Optional[int]:
     async with aiosqlite.connect(db_path) as db:
         async with db.execute(
-            "SELECT fid FROM fid_wallet WHERE username = ?", (username.lower(),)
+            "SELECT fid FROM fid_wallet_multi WHERE username = ? LIMIT 1", (username.lower(),)
         ) as cur:
             row = await cur.fetchone()
             return row[0] if row else None
@@ -130,7 +130,7 @@ async def get_fid_by_username(username: str, db_path: str = DB_PATH) -> Optional
 async def get_fid_by_wallet(wallet: str, db_path: str = DB_PATH) -> Optional[int]:
     async with aiosqlite.connect(db_path) as db:
         async with db.execute(
-            "SELECT fid FROM fid_wallet WHERE wallet = ?", (wallet,)
+            "SELECT fid FROM fid_wallet_multi WHERE wallet = ? LIMIT 1", (wallet,)
         ) as cur:
             row = await cur.fetchone()
             return row[0] if row else None
