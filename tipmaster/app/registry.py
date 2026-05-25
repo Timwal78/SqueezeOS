@@ -66,6 +66,13 @@ CREATE INDEX IF NOT EXISTS idx_withdrawals_fid ON withdrawals(fid);
 
 
 async def init_db(db_path: str = DB_PATH) -> None:
+    parent = os.path.dirname(db_path)
+    if parent and not os.path.exists(parent):
+        try:
+            os.makedirs(parent, exist_ok=True)
+        except Exception as e:
+            print(f"Warning: could not create {parent}: {e}")
+            
     async with aiosqlite.connect(db_path) as db:
         for stmt in _DDL.strip().split(";"):
             stmt = stmt.strip()
