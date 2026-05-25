@@ -7,6 +7,7 @@ from decimal import Decimal
 from typing import Any
 
 from fastapi import FastAPI, Request, Response, HTTPException
+from pydantic import BaseModel
 
 from .neynar import verify_webhook_signature
 from .parser import parse_command, CommandType, MIN_TIP, MAX_TIP
@@ -14,10 +15,11 @@ from .registry import (
     init_db, register_wallet, get_wallet_by_fid, get_wallet_by_username,
     get_fid_by_username, record_tip, get_tip_stats,
     get_weekly_leaderboard, get_all_time_leaderboard,
+    get_internal_balance, record_deposit, get_fid_by_wallet
 )
 from .xrpl_client import (
-    check_trust_line, get_rlusd_balance, two_leg_tip, sweep_fees_to_treasury,
-    BOT_ADDRESS, BOOST_FEE,
+    check_trust_line, get_rlusd_balance, execute_custodial_tip, sweep_fees_to_treasury,
+    verify_deposit_tx, BOT_ADDRESS, BOOST_FEE,
 )
 from . import caster, bureau
 
@@ -28,13 +30,8 @@ _START_TIME = time.time()
 _processed_casts: set[str] = set()
 _MAX_DEDUP_CACHE = 2000
 
-# Safety flag — the current two_leg_tip implementation cannot debit from the
-# sender's external wallet (XRPL does not support delegated debits) and would
-# pay tips out of the bot's own wallet. Tipping stays off until the deposit/
-# custody flow is finalized. Other commands (register, balance, leaderboard,
-# stats, help) remain functional. Set TIPMASTER_TIPS_ENABLED=true to override
-# once the custody rebuild lands.
-_TIPS_ENABLED = os.getenv("TIPMASTER_TIPS_ENABLED", "false").lower() == "true"
+# Safety flag — the custody rebuild has landed. Tipping is enabled by default.
+_TIPS_ENABLED = os.getenv("TIPMASTER_TIPS_ENABLED", "true").lower() == "true"
 
 
 @asynccontextmanager
@@ -50,6 +47,26 @@ app = FastAPI(title="TipMaster", version="2.0.0", lifespan=lifespan)
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+class DepositWebhookPayload(BaseModel):
+    tx_hash: str
+
+@app.post("/webhook/deposit")
+async def webhook_deposit(payload: DepositWebhookPayload):
+    is_valid, sender_wallet, amount, err = await verify_deposit_tx(payload.tx_hash)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=f"Invalid deposit: {err}")
+        
+    sender_fid = await get_fid_by_wallet(sender_wallet)
+    if not sender_fid:
+        raise HTTPException(status_code=400, detail="Wallet not registered to any FID")
+        
+    inserted = await record_deposit(payload.tx_hash, sender_fid, float(amount))
+    if not inserted:
+        return {"status": "duplicate"}
+        
+    return {"status": "success", "credited_fid": sender_fid, "amount": float(amount)}
 
 
 @app.get("/api/status")
@@ -159,8 +176,13 @@ async def _handle_command(cmd, sender_fid: int, sender_username: str, cast_hash:
         if not wallet:
             await caster.reply_to_cast(cast_hash, caster.balance_no_wallet_text(sender_username))
             return
-        balance = await get_rlusd_balance(wallet)
-        await caster.reply_to_cast(cast_hash, caster.balance_text(sender_username, wallet, str(balance)))
+        ext_balance = await get_rlusd_balance(wallet)
+        int_balance = await get_internal_balance(sender_fid)
+        await caster.reply_to_cast(
+            cast_hash, 
+            f"@{sender_username} Your TipMaster internal balance: {int_balance} RLUSD.\\n"
+            f"(External wallet {wallet[:8]}... balance: {ext_balance} RLUSD)"
+        )
 
     elif cmd.type == CommandType.TIP:
         if not _TIPS_ENABLED:
@@ -193,18 +215,17 @@ async def _handle_tip(cmd, sender_fid: int, sender_username: str, cast_hash: str
     boost = cmd.boost
     total_needed = amount + (BOOST_FEE if boost else Decimal("0"))
 
-    sender_balance = await get_rlusd_balance(sender_wallet)
-    if sender_balance < total_needed:
+    internal_balance = await get_internal_balance(sender_fid)
+    if internal_balance < total_needed:
         boost_note = f" (+ {BOOST_FEE} RLUSD boost fee)" if boost else ""
         await caster.reply_to_cast(
             cast_hash,
-            f"@{sender_username} Insufficient balance. "
-            f"Need {total_needed} RLUSD{boost_note}, have {sender_balance}.",
+            f"@{sender_username} Insufficient internal balance. "
+            f"Need {total_needed} RLUSD{boost_note}, have {internal_balance}."
         )
         return
 
-    ok, tx_hash, err, fee = await two_leg_tip(
-        sender_wallet=sender_wallet,
+    ok, tx_hash, err, fee = await execute_custodial_tip(
         recipient_wallet=recipient_wallet,
         gross_amount=amount,
         cast_hash=cast_hash,

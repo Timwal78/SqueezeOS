@@ -125,17 +125,20 @@ def stats_text(username: str, stats: dict) -> str:
 
 
 def help_text() -> str:
+    from .xrpl_client import BOT_ADDRESS
+    bot_addr = BOT_ADDRESS if BOT_ADDRESS else "bot wallet"
     return (
-        "TipMaster — RLUSD tips on Farcaster ⚡\n\n"
-        "Commands:\n"
-        "  @tipmaster 5 @user         — tip 5 RLUSD\n"
-        "  @tipmaster boost 5 @user   — boosted tip (💎 badge + 0.05 RLUSD fee)\n"
-        "  @tipmaster register rXXX   — link your XRPL wallet\n"
-        "  @tipmaster balance         — check your RLUSD balance\n"
-        "  @tipmaster stats           — your tip history\n"
-        "  @tipmaster leaderboard     — top tippers this week\n"
-        "  @tipmaster help            — this message\n\n"
-        "Min: 0.10 RLUSD · Max: 100 RLUSD · 1% platform fee\n"
+        "TipMaster — RLUSD tips on Farcaster ⚡\\n\\n"
+        "Commands:\\n"
+        "  @tipmaster register rXXX   — link your XRPL wallet\\n"
+        f"  Deposit RLUSD to {bot_addr} to fund your balance!\\n"
+        "  @tipmaster balance         — check your tipping balance\\n"
+        "  @tipmaster 5 @user         — tip 5 RLUSD\\n"
+        "  @tipmaster boost 5 @user   — boosted tip (💎 badge + 0.05 RLUSD fee)\\n"
+        "  @tipmaster stats           — your tip history\\n"
+        "  @tipmaster leaderboard     — top tippers this week\\n"
+        "  @tipmaster help            — this message\\n\\n"
+        "Min: 0.10 RLUSD · Max: 100 RLUSD · 1% platform fee\\n"
         "Powered by XRPL + 402Proof"
     )
 

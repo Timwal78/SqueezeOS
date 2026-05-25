@@ -6,7 +6,7 @@ from typing import Optional, Tuple
 from xrpl.asyncio.clients import AsyncJsonRpcClient
 from xrpl.asyncio.transaction import submit_and_wait
 from xrpl.models.amounts import IssuedCurrencyAmount
-from xrpl.models.requests import AccountLines, AccountInfo
+from xrpl.models.requests import AccountLines, AccountInfo, Tx
 from xrpl.models.transactions import Memo, Payment
 from xrpl.wallet import Wallet
 
@@ -88,41 +88,65 @@ async def send_rlusd(
         return False, str(exc)
 
 
-async def two_leg_tip(
-    sender_wallet: str,
+async def verify_deposit_tx(tx_hash: str) -> Tuple[bool, str, Decimal, str]:
+    """
+    Verifies that an XRPL transaction is a successful deposit of RLUSD to the BOT_ADDRESS.
+    Returns (is_valid, sender_wallet, amount, error_message).
+    """
+    client = _make_client()
+    try:
+        req = Tx(transaction=tx_hash)
+        resp = await client.request(req)
+        tx = resp.result
+        meta = tx.get("meta", {})
+        if meta.get("TransactionResult") != "tesSUCCESS":
+            return False, "", Decimal("0"), "Transaction failed on ledger"
+        
+        if tx.get("TransactionType") != "Payment":
+            return False, "", Decimal("0"), "Not a Payment transaction"
+            
+        if tx.get("Destination") != BOT_ADDRESS:
+            return False, "", Decimal("0"), f"Destination is not BOT_ADDRESS"
+            
+        amount_obj = tx.get("Amount")
+        if not isinstance(amount_obj, dict):
+            return False, "", Decimal("0"), "Amount is not an issued currency"
+            
+        if amount_obj.get("currency") != RLUSD_CURRENCY or amount_obj.get("issuer") != RLUSD_ISSUER:
+            return False, "", Decimal("0"), "Currency is not RLUSD"
+            
+        amount_val = Decimal(amount_obj.get("value", "0"))
+        sender_wallet = tx.get("Account", "")
+        return True, sender_wallet, amount_val, ""
+    except Exception as exc:
+        return False, "", Decimal("0"), str(exc)
+
+
+async def execute_custodial_tip(
     recipient_wallet: str,
     gross_amount: Decimal,
     cast_hash: str,
     boost: bool = False,
 ) -> Tuple[bool, str, str, Decimal]:
     """
-    Two-leg routing: sender → bot (gross), bot → recipient (net after fee).
-    Returns (ok, delivery_tx_hash, error_message, fee_collected).
+    Custodial tip execution. Bot deducts from user's internal balance, then sends `net` to recipient.
+    Returns (ok, tx_hash, error_message, fee_collected).
     """
-    total_charge = gross_amount + (BOOST_FEE if boost else Decimal("0"))
     fee = (gross_amount * FEE_RATE).quantize(Decimal("0.000001"))
     net = gross_amount - fee
 
     memo_base = f"TipMaster:{cast_hash[:16]}"
 
-    ok1, result1 = await send_rlusd(
-        destination=BOT_ADDRESS,
-        amount=total_charge,
-        memo=memo_base + ":collect",
-    )
-    if not ok1:
-        return False, "", f"Collection leg failed: {result1}", Decimal("0")
-
-    ok2, result2 = await send_rlusd(
+    ok, tx_hash = await send_rlusd(
         destination=recipient_wallet,
         amount=net,
         memo=memo_base + ":deliver",
     )
-    if not ok2:
-        return False, result1, f"Delivery leg failed: {result2}", Decimal("0")
+    if not ok:
+        return False, "", f"Delivery leg failed: {tx_hash}", Decimal("0")
 
-    log.info("Tip settled: gross=%s fee=%s net=%s boost=%s tx=%s", gross_amount, fee, net, boost, result2)
-    return True, result2, "", fee
+    log.info("Custodial tip settled: gross=%s fee=%s net=%s boost=%s tx=%s", gross_amount, fee, net, boost, tx_hash)
+    return True, tx_hash, "", fee
 
 
 async def sweep_fees_to_treasury() -> Optional[str]:
