@@ -28,6 +28,14 @@ _START_TIME = time.time()
 _processed_casts: set[str] = set()
 _MAX_DEDUP_CACHE = 2000
 
+# Safety flag — the current two_leg_tip implementation cannot debit from the
+# sender's external wallet (XRPL does not support delegated debits) and would
+# pay tips out of the bot's own wallet. Tipping stays off until the deposit/
+# custody flow is finalized. Other commands (register, balance, leaderboard,
+# stats, help) remain functional. Set TIPMASTER_TIPS_ENABLED=true to override
+# once the custody rebuild lands.
+_TIPS_ENABLED = os.getenv("TIPMASTER_TIPS_ENABLED", "false").lower() == "true"
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -155,6 +163,14 @@ async def _handle_command(cmd, sender_fid: int, sender_username: str, cast_hash:
         await caster.reply_to_cast(cast_hash, caster.balance_text(sender_username, wallet, str(balance)))
 
     elif cmd.type == CommandType.TIP:
+        if not _TIPS_ENABLED:
+            await caster.reply_to_cast(
+                cast_hash,
+                f"@{sender_username} Tipping is temporarily disabled while the "
+                "deposit/custody flow is being finalized. `register`, `balance`, "
+                "`stats`, and `leaderboard` commands still work.",
+            )
+            return
         await _handle_tip(cmd, sender_fid, sender_username, cast_hash)
 
 
