@@ -30,6 +30,15 @@ CREATE TABLE IF NOT EXISTS tips (
 CREATE INDEX IF NOT EXISTS idx_tips_sender  ON tips(sender_fid, ts);
 CREATE INDEX IF NOT EXISTS idx_tips_recipient ON tips(recipient_fid, ts);
 CREATE INDEX IF NOT EXISTS idx_tips_ts      ON tips(ts);
+
+CREATE TABLE IF NOT EXISTS deposits (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    tx_hash       TEXT UNIQUE NOT NULL,
+    sender_fid    INTEGER NOT NULL,
+    amount        REAL NOT NULL,
+    ts            INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+);
+CREATE INDEX IF NOT EXISTS idx_deposits_fid ON deposits(sender_fid);
 """
 
 
@@ -75,6 +84,15 @@ async def get_fid_by_username(username: str, db_path: str = DB_PATH) -> Optional
     async with aiosqlite.connect(db_path) as db:
         async with db.execute(
             "SELECT fid FROM fid_wallet WHERE username = ?", (username.lower(),)
+        ) as cur:
+            row = await cur.fetchone()
+            return row[0] if row else None
+
+
+async def get_fid_by_wallet(wallet: str, db_path: str = DB_PATH) -> Optional[int]:
+    async with aiosqlite.connect(db_path) as db:
+        async with db.execute(
+            "SELECT fid FROM fid_wallet WHERE wallet = ?", (wallet,)
         ) as cur:
             row = await cur.fetchone()
             return row[0] if row else None
@@ -164,3 +182,39 @@ async def get_all_time_leaderboard(limit: int = 10, db_path: str = DB_PATH) -> L
         {"rank": i + 1, "username": row[0], "tip_count": row[1], "volume": round(float(row[2]), 4)}
         for i, row in enumerate(rows)
     ]
+
+
+async def record_deposit(tx_hash: str, sender_fid: int, amount: float, db_path: str = DB_PATH) -> bool:
+    """Returns True if inserted, False if duplicate tx_hash."""
+    try:
+        async with aiosqlite.connect(db_path) as db:
+            await db.execute(
+                """
+                INSERT INTO deposits (tx_hash, sender_fid, amount)
+                VALUES (?, ?, ?)
+                """,
+                (tx_hash, sender_fid, amount),
+            )
+            await db.commit()
+            return True
+    except aiosqlite.IntegrityError:
+        return False
+
+
+async def get_internal_balance(fid: int, db_path: str = DB_PATH) -> 'decimal.Decimal':
+    import decimal
+    from .xrpl_client import BOOST_FEE
+    async with aiosqlite.connect(db_path) as db:
+        async with db.execute("SELECT COALESCE(SUM(amount), 0) FROM deposits WHERE sender_fid = ?", (fid,)) as cur:
+            row = await cur.fetchone()
+            deposits = decimal.Decimal(str(row[0])) if row else decimal.Decimal("0")
+        
+        async with db.execute("SELECT amount, boost FROM tips WHERE sender_fid = ?", (fid,)) as cur:
+            rows = await cur.fetchall()
+            tips_spent = decimal.Decimal("0")
+            for r_amount, r_boost in rows:
+                tips_spent += decimal.Decimal(str(r_amount))
+                if r_boost:
+                    tips_spent += BOOST_FEE
+
+    return deposits - tips_spent
