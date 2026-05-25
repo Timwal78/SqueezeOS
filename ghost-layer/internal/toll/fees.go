@@ -14,8 +14,8 @@ func CalculateBasisPointFee(amountStr string, bps int64) (*big.Int, *big.Int, er
 	if len(amountStr) > MaxAmountLen {
 		return nil, nil, fmt.Errorf("amount string too long (max %d chars)", MaxAmountLen)
 	}
-	if bps < 0 || bps > MaxBPS {
-		return nil, nil, fmt.Errorf("fee_basis_points out of range [0, %d], got %d", MaxBPS, bps)
+	if bps <= 0 || bps > MaxBPS {
+		return nil, nil, fmt.Errorf("fee_basis_points out of range [1, %d], got %d", MaxBPS, bps)
 	}
 	amount, ok := new(big.Int).SetString(amountStr, 10)
 	if !ok {

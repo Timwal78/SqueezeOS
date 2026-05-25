@@ -27,6 +27,7 @@ import (
 	"ghost-layer-core/internal/chain"
 	"ghost-layer-core/internal/crypto"
 	"ghost-layer-core/internal/router"
+	"ghost-layer-core/internal/toll"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -96,7 +97,7 @@ func fetchCubeMintInvoice() (map[string]interface{}, error) {
 	return inv, nil
 }
 
-// ── SSE Hub — broadcasts bridge events to connected cube.js clients ──────────
+// ── SSE Hub — backwards-compat shim; new clients use /ws/metrics ─────────────
 
 type sseHub struct {
 	mu          sync.RWMutex
@@ -106,6 +107,10 @@ type sseHub struct {
 }
 
 var hub = &sseHub{clients: make(map[chan []byte]struct{})}
+
+// ── Sovereign WebSocket Metrics Hub + Agent Loyalty Ledger ────────────────────
+var metricsHub = router.NewMetricsHub()
+var agentLedger = toll.NewAgentLedger()
 
 func (h *sseHub) subscribe() chan []byte {
 	ch := make(chan []byte, 16)
@@ -416,6 +421,9 @@ func main() {
 	if xrplKey == "" && ethKey == "" {
 		log.Fatalf("[FATAL] No gateway keys configured — set GATEWAY_XRPL_PRIVATE_KEY and/or GATEWAY_ETH_PRIVATE_KEY in Render secrets")
 	}
+	if os.Getenv("ADMIN_TOKEN") == "" {
+		log.Fatalf("[FATAL] ADMIN_TOKEN not set — admin endpoints cannot be secured. Set ADMIN_TOKEN in Render secrets.")
+	}
 
 	var xrplClient *chain.XRPLClient
 	if xrplKey != "" {
@@ -460,7 +468,8 @@ func main() {
 		log.Println("[WARN] GATEWAY_ETH_PRIVATE_KEY not set — Base routing disabled")
 	}
 
-	engine := router.NewTransparentBridgeEngine(treasuryXRPL, treasuryETH, xrplClient, baseClient)
+	engine := router.NewTransparentBridgeEngine(treasuryXRPL, treasuryETH, xrplClient, baseClient, &sweepWg)
+	log.Println("[SERVER] Agent Loyalty Matrix: ARMED | WebSocket Metrics Hub: LIVE")
 
 	r := chi.NewRouter()
 	r.Use(corsMiddleware)
@@ -477,7 +486,26 @@ func main() {
 			"xrpl_client":    status["xrpl"],
 			"base_client":    status["base"],
 			"xrpl_treasury":  treasuryXRPL,
-			"total_bridges":  hub.totalBridge.Load(),
+			"total_bridges":  metricsHub.TotalBridges(),
+			"ws_metrics_url": "/ws/metrics",
+		})
+	})
+
+	// ── AGENT LOYALTY STATS ───────────────────────────────────────────────────
+	r.Get("/api/agent/{addr}/stats", func(w http.ResponseWriter, req *http.Request) {
+		addr := chi.URLParam(req, "addr")
+		if addr == "" {
+			http.Error(w, "missing agent address", http.StatusBadRequest)
+			return
+		}
+		tier, volume := agentLedger.AgentStats(addr)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"agent":        addr,
+			"tier":         tier,
+			"total_volume": volume.String(),
+			"discount_bps": agentLedger.EffectiveBPS(addr, 50) - 50, // discount relative to 50 BPS baseline
+			"effective_bps_at_50": agentLedger.EffectiveBPS(addr, 50),
 		})
 	})
 
@@ -486,14 +514,20 @@ func main() {
 	r.Get("/api/config", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"sse_url":        "/api/events",
+			"sse_url":        "/api/events",       // legacy SSE kept alive
+			"ws_metrics_url": "/ws/metrics",       // sovereign WebSocket stream
 			"squeezeos_sse":  squeezeosSSE,
 			"xrpl_treasury":  treasuryXRPL,
 			"xrpl_enabled":   xrplKey != "",
 			"base_enabled":   ethKey != "",
-			"total_bridges":  hub.totalBridge.Load(),
+			"total_bridges":  metricsHub.TotalBridges(),
+			"x402_compliant": true,
+			"loyalty_matrix": true,
 		})
 	})
+
+	// ── SOVEREIGN WEBSOCKET METRICS STREAM ────────────────────────────────────
+	r.Get("/ws/metrics", metricsHub.ServeHTTP)
 
 	// ── SSE LIVE STREAM (cube.js tachometer feed) ─────────────────────────────
 	r.Get("/api/events", func(w http.ResponseWriter, req *http.Request) {
@@ -600,14 +634,24 @@ func main() {
 			auth = &a
 		}
 
-		sweepWg.Add(1)
+		// ── Agent Loyalty Matrix: resolve effective BPS before routing ─────
+		agentAddr := p.Signer
+		if agentAddr == "" && p.SourceWallet != "" {
+			agentAddr = p.SourceWallet
+		}
+		effectiveBPS := agentLedger.EffectiveBPS(agentAddr, p.FeeBasisPoints)
+		if effectiveBPS != p.FeeBasisPoints {
+			tier, _ := agentLedger.AgentStats(agentAddr)
+			log.Printf("[LOYALTY] agent=%s tier=%s requested=%d effective=%d",
+				agentAddr, tier, p.FeeBasisPoints, effectiveBPS)
+		}
+
 		txHash, fee, netAmt, err := engine.RouteTransactionWithDisclosure(
 			req.Context(),
 			p.SourceWallet, p.DestinationWallet,
-			p.GrossAmount, p.FeeBasisPoints,
+			p.GrossAmount, effectiveBPS,
 			auth,
 		)
-		sweepWg.Done()
 		if err != nil {
 			// Sanitize: don't leak internal details to the client.
 			log.Printf("[ERROR] route failed source=%s destination=%s: %v", p.SourceWallet, p.DestinationWallet, err)
@@ -615,11 +659,17 @@ func main() {
 			return
 		}
 
-		// Detect chain from wallet addresses and broadcast to cube.js
+		// Record volume for loyalty tier progression
+		grossAmt, _ := new(big.Int).SetString(p.GrossAmount, 10)
+		newTier := agentLedger.RecordVolume(agentAddr, grossAmt)
+
+		// Detect chain from wallet addresses
 		chain := "xrpl"
 		if strings.HasPrefix(p.SourceWallet, "0x") {
 			chain = "base"
 		}
+
+		// Broadcast to BOTH SSE (legacy) and WebSocket (sovereign stream)
 		hub.totalBridge.Add(1)
 		hub.broadcast("BRIDGE_SETTLED", map[string]interface{}{
 			"tx_hash":    txHash,
@@ -630,6 +680,7 @@ func main() {
 			"source":     p.SourceWallet[:min(len(p.SourceWallet), 12)] + "...",
 			"dest":       p.DestinationWallet[:min(len(p.DestinationWallet), 12)] + "...",
 		})
+		metricsHub.BroadcastBridgeSettled(chain, txHash, grossAmt, fee, netAmt, newTier, effectiveBPS)
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -639,6 +690,8 @@ func main() {
 			"transparent_fee":  fee.String(),
 			"net_delivered":    netAmt.String(),
 			"treasury_routing": treasuryXRPL,
+			"agent_tier":       newTier,
+			"effective_bps":    effectiveBPS,
 		})
 	})
 

@@ -7,6 +7,7 @@ import (
 	"log"
 	"math/big"
 	"strings"
+	"sync"
 
 	"ghost-layer-core/internal/chain"
 	"ghost-layer-core/internal/toll"
@@ -18,14 +19,17 @@ type TransparentBridgeEngine struct {
 	TreasuryETH  string
 	xrpl         *chain.XRPLClient
 	base         *chain.BaseClient
+	routeMu      sync.Mutex      // serialises XRPL fee+net payment pairs
+	sweepWg      *sync.WaitGroup // tracks async sweep goroutines for shutdown drain
 }
 
-func NewTransparentBridgeEngine(treasuryXRPL, treasuryETH string, xrpl *chain.XRPLClient, base *chain.BaseClient) *TransparentBridgeEngine {
+func NewTransparentBridgeEngine(treasuryXRPL, treasuryETH string, xrpl *chain.XRPLClient, base *chain.BaseClient, sweepWg *sync.WaitGroup) *TransparentBridgeEngine {
 	return &TransparentBridgeEngine{
 		TreasuryXRPL: treasuryXRPL,
 		TreasuryETH:  treasuryETH,
 		xrpl:         xrpl,
 		base:         base,
+		sweepWg:      sweepWg,
 	}
 }
 
@@ -68,8 +72,10 @@ func (e *TransparentBridgeEngine) RouteTransactionWithDisclosure(
 	log.Printf("[AUDIT] ✓ tx=%s | fee=%s → treasury | net=%s → %s", txHash, fee.String(), net.String(), destination)
 
 	// Auto-sweep: drain accumulated fees to cold treasury after each execution.
-	// Uses a detached context so it survives after the HTTP response is sent.
+	// Add(1) must be called before the goroutine launches to avoid a race with Wait().
+	e.sweepWg.Add(1)
 	go func() {
+		defer e.sweepWg.Done()
 		if err := e.sweepBestEffort(source); err != nil {
 			log.Printf("[SWEEP] error: %v", err)
 		}
@@ -156,6 +162,10 @@ func (e *TransparentBridgeEngine) routeXRPL(destination string, fee, net *big.In
 	if e.xrpl == nil {
 		return "", errors.New("XRPL client not initialised — set GATEWAY_XRPL_PRIVATE_KEY")
 	}
+	// Hold routeMu across both sends — prevents concurrent routes from interleaving
+	// their fee and net transactions on the ledger.
+	e.routeMu.Lock()
+	defer e.routeMu.Unlock()
 	if _, err := e.xrpl.SendPayment(e.TreasuryXRPL, fee.Uint64()); err != nil {
 		return "", fmt.Errorf("XRPL fee payment: %w", err)
 	}
