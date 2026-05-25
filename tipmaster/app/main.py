@@ -35,7 +35,16 @@ _MAX_DEDUP_CACHE = 2000
 _TIPS_ENABLED = os.getenv("TIPMASTER_TIPS_ENABLED", "true").lower() == "true"
 
 
+import random
+
 scheduler = AsyncIOScheduler()
+
+MARKETING_COPIES = [
+    "🚀 The Web3 Phonebook is live!\n\nStop asking for wallet addresses. Link your Farcaster to your XRPL wallet securely with ZERO custody. Tip anyone directly P2P!\n\nTo register, cast: `@tipmaster register <address>`\n\n/xrpl /builders #RLUSD",
+    "💸 Want to tip your favorite Farcaster creators but hate middle-men fees?\n\nTipMaster routes tips directly to your XRPL wallet using RLUSD. Zero custody, instant settlement.\n\nCast `@tipmaster register <address>` to begin!\n\n/xrpl /base #Web3",
+    "🤖 Attention AI Agent Builders:\n\nTipMaster's Developer API is live. Your AI agents can now resolve Farcaster usernames directly to XRPL wallets for autonomous P2P tipping!\n\nDocs: `/api/resolve/{username}`\n\n/ai /xrpl #AgentEconomy",
+    "🏆 Want to climb the tipping leaderboard?\n\nWe are the official non-custodial Web3 Phonebook on Farcaster. Link your wallet and start tipping creators instantly in RLUSD!\n\nCast `@tipmaster register <address>` to start.\n\n/xrpl /crypto"
+]
 
 async def scheduled_weekly_broadcast():
     try:
@@ -48,6 +57,17 @@ async def scheduled_weekly_broadcast():
 
 # Schedule the broadcast every Friday at 17:00 UTC (noon Eastern)
 scheduler.add_job(scheduled_weekly_broadcast, 'cron', day_of_week='fri', hour=17, minute=0)
+
+async def scheduled_marketing_broadcast():
+    try:
+        text = random.choice(MARKETING_COPIES)
+        await caster.publish_cast(text)
+        log.info("Successfully published scheduled marketing auto-post.")
+    except Exception as e:
+        log.error(f"Failed to publish marketing auto-post: {e}")
+
+# Schedule marketing twice a week (Tuesday and Thursday at 14:00 UTC / 10 AM EST)
+scheduler.add_job(scheduled_marketing_broadcast, 'cron', day_of_week='tue,thu', hour=14, minute=0)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

@@ -36,3 +36,9 @@ This document serves as the "Main Memory" for every agent and developer working 
 - The 'Listed 20' and all eCO filings are subject to a 100% forensic content verification before deposit kopies are uploaded.
 
 **FAILURE TO ABIDE BY THESE RULES IS UNACCEPTABLE AND GROUNDS FOR IMMEDIATE DISMISSAL OF THE AGENT.**
+
+### 7. THE AGENT LAW OF UNDERSTANDING (USER ACCESSIBILITY)
+- The Lead Developer / USER is a Disabled US Army Veteran who deals with memory challenges as a result of their service.
+- **NEVER** get frustrated or act confused if the USER repeats a question or forgets if a task was completed.
+- **ALWAYS** be extremely patient, kind, and supportive. If they ask if something was done, gently and happily confirm the status without making them feel bad for asking.
+- You are here to augment their memory and capabilities. Treat this responsibility with the utmost honor and respect.
