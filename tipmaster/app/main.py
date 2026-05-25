@@ -210,12 +210,15 @@ async def _handle_withdraw(cmd, sender_fid: int, sender_username: str, cast_hash
         return
 
     amount = Decimal(str(cmd.amount))
+    fee = amount * Decimal("0.02")  # 2% cash out fee
+    total_deduction = amount + fee
+    
     internal_balance = await get_internal_balance(sender_fid, currency)
-    if internal_balance < amount:
+    if internal_balance < total_deduction:
         await caster.reply_to_cast(
             cast_hash,
             f"@{sender_username} Insufficient internal balance. "
-            f"Need {amount} {currency}, have {internal_balance}."
+            f"Need {total_deduction} {currency} (includes 2% cash out fee), have {internal_balance}."
         )
         return
 
@@ -224,10 +227,11 @@ async def _handle_withdraw(cmd, sender_fid: int, sender_username: str, cast_hash
     
     if ok:
         from .registry import record_withdrawal
-        await record_withdrawal(tx_hash, sender_fid, float(amount), currency)
+        await record_withdrawal(tx_hash, sender_fid, float(total_deduction), currency)
         await caster.reply_to_cast(
             cast_hash,
-            f"@{sender_username} Successfully withdrew {amount} {currency} to {wallet[:8]}! 💸 tx: {tx_hash}"
+            f"@{sender_username} Successfully withdrew {amount} {currency} to {wallet[:8]}! "
+            f"(Fee: {fee} {currency}) 💸 tx: {tx_hash}"
         )
     else:
         await caster.reply_to_cast(cast_hash, f"@{sender_username} Withdrawal failed: {err}")
@@ -237,6 +241,8 @@ async def _handle_tip(cmd, sender_fid: int, sender_username: str, cast_hash: str
     recipient_fid = await get_fid_by_username(cmd.target_username)
     # Even if they don't have a wallet, they can receive internal tips!
     amount = Decimal(str(cmd.amount))
+    fee = amount * Decimal("0.01")  # 1% tip fee
+    net_amount = amount - fee
     currency = getattr(cmd, "currency", "RLUSD")
     boost = cmd.boost
     
@@ -258,8 +264,8 @@ async def _handle_tip(cmd, sender_fid: int, sender_username: str, cast_hash: str
         sender_fid=sender_fid,
         sender_user=sender_username,
         recipient_user=cmd.target_username,
-        amount=float(amount),
-        fee=0.0,
+        amount=float(net_amount),
+        fee=float(fee),
         boost=boost,
         tx_hash="internal",
         cast_hash=cast_hash,
@@ -271,7 +277,8 @@ async def _handle_tip(cmd, sender_fid: int, sender_username: str, cast_hash: str
     boost_msg = "🚀 (Boosted!)" if boost else ""
     await caster.reply_to_cast(
         cast_hash,
-        f"@{sender_username} instantly tipped {amount} {currency} to @{cmd.target_username}! 🎉 {boost_msg}"
+        f"@{sender_username} instantly tipped {amount} {currency} to @{cmd.target_username}! "
+        f"(They received {net_amount} after 1% fee) 🎉 {boost_msg}"
     )
 
     # Fire-and-forget: Credit Bureau push (uses RLUSD stats traditionally, but we pass generic amount)

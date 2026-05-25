@@ -279,13 +279,12 @@ async def get_internal_balance(fid: int, currency: str = "RLUSD", db_path: str =
             tips_received = decimal.Decimal(str(row[0])) if row else decimal.Decimal("0")
 
         # 3. Sum tips spent (both internal and external subtract from balance)
-        async with db.execute("SELECT amount, boost FROM tips WHERE sender_fid = ? AND currency = ?", (fid, currency)) as cur:
+        async with db.execute("SELECT amount, fee, boost FROM tips WHERE sender_fid = ? AND currency = ?", (fid, currency)) as cur:
             rows = await cur.fetchall()
             tips_spent = decimal.Decimal("0")
-            for r_amount, r_boost in rows:
+            for r_amount, r_fee, r_boost in rows:
                 tips_spent += decimal.Decimal(str(r_amount))
-                # Boost fees were traditionally RLUSD. If we allow boost on USDC, we deduct it here.
-                # Assuming boost is charged in the tip's currency for now.
+                tips_spent += decimal.Decimal(str(r_fee))
                 if r_boost:
                     tips_spent += BOOST_FEE
         
