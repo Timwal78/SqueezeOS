@@ -8,6 +8,7 @@ from typing import Any
 
 from fastapi import FastAPI, Request, Response, HTTPException, Header
 from pydantic import BaseModel
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from .neynar import verify_webhook_signature
 from .parser import parse_command, CommandType, MIN_TIP, MAX_TIP
@@ -34,10 +35,25 @@ _MAX_DEDUP_CACHE = 2000
 _TIPS_ENABLED = os.getenv("TIPMASTER_TIPS_ENABLED", "true").lower() == "true"
 
 
+scheduler = AsyncIOScheduler()
+
+async def scheduled_weekly_broadcast():
+    try:
+        entries = await get_weekly_leaderboard(10)
+        text = caster.leaderboard_text(entries, "this week")
+        await caster.publish_cast(text)
+        log.info("Successfully published weekly leaderboard auto-post.")
+    except Exception as e:
+        log.error(f"Failed to publish weekly leaderboard auto-post: {e}")
+
+# Schedule the broadcast every Friday at 17:00 UTC (noon Eastern)
+scheduler.add_job(scheduled_weekly_broadcast, 'cron', day_of_week='fri', hour=17, minute=0)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
-    log.info("TipMaster ready")
+    scheduler.start()
+    log.info("TipMaster ready, APScheduler started")
     yield
 
 
