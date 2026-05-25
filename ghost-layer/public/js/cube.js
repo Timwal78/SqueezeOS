@@ -359,6 +359,7 @@ const EVENT_CFG = {
   OPTIONS_SWEEP:        { speed: 0.030, palette: 'squeeze', label: 'SWEEP',     face: 'px', edgeIdx: 3, delta:  3 },
   CUBE_STATE_COMMITTED:  { speed: 0.045, palette: 'verdict', label: 'COMMITTED'                                   },
   XAHAU_MINT_CONFIRMED:  { speed: 0.055, palette: 'verdict', label: 'ON-CHAIN'                                    },
+  X402_DISPENSED:        { speed: 0.040, palette: 'pay',     label: 'VEND',      face: 'pz', edgeIdx: 1, delta:  2 },
   HEARTBEAT:             { speed: 0,     palette: null,      label: null                                           },
 };
 
@@ -416,6 +417,14 @@ function fireEvent(type, data) {
   if (cfg.speed > rotSpeed) rotSpeed = cfg.speed;
   pulseIntensity = 1.0;
   activePalette  = (type === 'BRIDGE_SETTLED' && data.chain === 'base') ? 'base' : cfg.palette;
+
+  if (type === 'X402_DISPENSED') {
+    const badge = document.querySelector('.x402-badge');
+    if (badge) {
+      badge.classList.add('flash');
+      setTimeout(() => badge.classList.remove('flash'), 600);
+    }
+  }
 
   if (eventEl) {
     eventEl.textContent = cfg.label;

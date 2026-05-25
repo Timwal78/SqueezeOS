@@ -32,6 +32,9 @@ type MetricsFrame struct {
 	EffectiveBPS   int64   `json:"effective_bps,omitempty"`
 	// State-machine label for the cube.js tachometer
 	StateLabel string `json:"state_label,omitempty"`
+	// X402 dispense fields (only populated for X402_DISPENSED frames)
+	ProductID string `json:"product_id,omitempty"`
+	Wallet    string `json:"wallet,omitempty"`
 }
 
 // wsClient wraps a gorilla WebSocket connection with a send channel.
@@ -155,6 +158,29 @@ func (h *MetricsHub) BroadcastAgentProbe(agentAddr string) {
 
 // TotalBridges returns the lifetime bridge counter.
 func (h *MetricsHub) TotalBridges() int64 { return h.totalBridges.Load() }
+
+// RollingTPS returns the current rolling 60-second TPS reading.
+// Exported wrapper so callers outside the package (e.g. x402 dispatchers)
+// can snapshot the live tachometer reading.
+func (h *MetricsHub) RollingTPS() float64 { return h.rollingTPS() }
+
+// AccumulatedFeeString returns the lifetime accumulated fee as a base-10 string.
+// Safe for concurrent callers — uses the internal feeMu.
+func (h *MetricsHub) AccumulatedFeeString() string {
+	h.feeMu.Lock()
+	defer h.feeMu.Unlock()
+	return new(big.Int).Set(h.accumulatedFee).String()
+}
+
+// BroadcastX402Dispensed pushes an X402_DISPENSED frame to all WebSocket clients
+// after a successful native x402 vend. Mirrors BroadcastBridgeSettled but for
+// the catalog dispense path — product/wallet/tier ride in the dedicated fields.
+func (h *MetricsHub) BroadcastX402Dispensed(productID, wallet, tier string) {
+	frame := h.buildFrame("X402_DISPENSED", "VENDING", "", "", nil, nil, nil, 0, tier)
+	frame.ProductID = productID
+	frame.Wallet = wallet
+	h.broadcast(frame)
+}
 
 // ── internal ──────────────────────────────────────────────────────────────────
 
