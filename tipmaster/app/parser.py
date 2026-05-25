@@ -12,6 +12,7 @@ class CommandType(str, Enum):
     STATS = "stats"
     LEADERBOARD = "leaderboard"
     HELP = "help"
+    VERIFY = "verify"
     UNKNOWN = "unknown"
 
 
@@ -81,6 +82,9 @@ def parse_command(text: str) -> Command:
 
     if first == "help":
         return Command(type=CommandType.HELP, raw_text=text)
+
+    if first == "verify":
+        return Command(type=CommandType.VERIFY, raw_text=text)
 
     if first == "boost":
         rest = cleaned[len("boost"):].strip()

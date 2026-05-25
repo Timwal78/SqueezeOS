@@ -122,54 +122,40 @@ async def verify_deposit_tx(tx_hash: str) -> Tuple[bool, str, Decimal, str]:
         return False, "", Decimal("0"), str(exc)
 
 
-async def execute_custodial_tip(
-    recipient_wallet: str,
-    gross_amount: Decimal,
-    cast_hash: str,
-    boost: bool = False,
-) -> Tuple[bool, str, str, Decimal]:
-    """
-    Custodial tip execution. Bot deducts from user's internal balance, then sends `net` to recipient.
-    Returns (ok, tx_hash, error_message, fee_collected).
-    """
-    fee = (gross_amount * FEE_RATE).quantize(Decimal("0.000001"))
-    net = gross_amount - fee
-
-    memo_base = f"TipMaster:{cast_hash[:16]}"
-
-    ok, tx_hash = await send_rlusd(
-        destination=recipient_wallet,
-        amount=net,
-        memo=memo_base + ":deliver",
-    )
-    if not ok:
-        return False, "", f"Delivery leg failed: {tx_hash}", Decimal("0")
-
-    log.info("Custodial tip settled: gross=%s fee=%s net=%s boost=%s tx=%s", gross_amount, fee, net, boost, tx_hash)
-    return True, tx_hash, "", fee
-
-
-async def sweep_fees_to_treasury() -> Optional[str]:
-    """
-    Sweep RLUSD from bot gateway wallet to cold treasury when balance exceeds threshold.
-    Called in background after every tip — no-op if below threshold or treasury not set.
-    """
-    if not TREASURY_ADDRESS or TREASURY_ADDRESS == BOT_ADDRESS:
-        return None
+async def check_setup_fee_paid(destination_tag: int) -> bool:
+    """Checks if the treasury received >= 15 RLUSD with the given destination tag."""
+    from xrpl.models.requests import AccountTx
+    client = _make_client()
     try:
-        balance = await get_rlusd_balance(BOT_ADDRESS)
-        if balance < SWEEP_THRESHOLD:
-            return None
-        ok, tx_hash = await send_rlusd(
-            destination=TREASURY_ADDRESS,
-            amount=balance,
-            memo="TipMaster:fee_sweep",
-        )
-        if ok:
-            log.info("Fee sweep → treasury %s: %s RLUSD, tx=%s", TREASURY_ADDRESS, balance, tx_hash)
-            return tx_hash
-        log.warning("Fee sweep failed: %s", tx_hash)
-        return None
-    except Exception as exc:
-        log.warning("Fee sweep exception: %s", exc)
-        return None
+        tx_req = AccountTx(account=TREASURY_ADDRESS, limit=50)
+        resp = await client.request(tx_req)
+        
+        for tx_wrapper in resp.result.get("transactions", []):
+            tx = tx_wrapper.get("tx")
+            meta = tx_wrapper.get("meta", {})
+            if meta.get("TransactionResult") != "tesSUCCESS":
+                continue
+            if tx.get("TransactionType") != "Payment":
+                continue
+            if tx.get("Destination") != TREASURY_ADDRESS:
+                continue
+            if tx.get("DestinationTag") != destination_tag:
+                continue
+                
+            amount_obj = tx.get("Amount")
+            if isinstance(amount_obj, dict):
+                if amount_obj.get("currency") == RLUSD_CURRENCY and amount_obj.get("issuer") == RLUSD_ISSUER:
+                    val = Decimal(amount_obj.get("value", "0"))
+                    if val >= Decimal("15"):
+                        return True
+        return False
+    except Exception as e:
+        log.error(f"Error checking setup fee: {e}")
+        return False
+
+def generate_p2p_payment_link(recipient: str, amount: Decimal) -> str:
+    # A generic Xaman deep link for an IOU token
+    return f"https://xumm.app/detect/xumm:pay?to={recipient}&amount={amount}&currency={RLUSD_CURRENCY}&issuer={RLUSD_ISSUER}"
+
+def generate_setup_fee_link(destination_tag: int) -> str:
+    return f"https://xumm.app/detect/xumm:pay?to={TREASURY_ADDRESS}&amount=15&currency={RLUSD_CURRENCY}&issuer={RLUSD_ISSUER}&dt={destination_tag}"

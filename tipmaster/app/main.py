@@ -15,11 +15,11 @@ from .registry import (
     init_db, register_wallet, get_wallet_by_fid, get_wallet_by_username,
     get_fid_by_username, record_tip, get_tip_stats,
     get_weekly_leaderboard, get_all_time_leaderboard,
-    get_internal_balance, record_deposit, get_fid_by_wallet
+    get_destination_tag, is_setup_fee_paid, mark_setup_fee_paid
 )
 from .xrpl_client import (
-    check_trust_line, get_rlusd_balance, execute_custodial_tip, sweep_fees_to_treasury,
-    verify_deposit_tx, BOT_ADDRESS, BOOST_FEE,
+    check_trust_line, get_rlusd_balance, check_setup_fee_paid,
+    generate_p2p_payment_link, generate_setup_fee_link, BOT_ADDRESS, TREASURY_ADDRESS
 )
 from . import caster, bureau
 
@@ -48,25 +48,6 @@ app = FastAPI(title="TipMaster", version="2.0.0", lifespan=lifespan)
 async def health():
     return {"status": "ok"}
 
-
-class DepositWebhookPayload(BaseModel):
-    tx_hash: str
-
-@app.post("/webhook/deposit")
-async def webhook_deposit(payload: DepositWebhookPayload):
-    is_valid, sender_wallet, amount, err = await verify_deposit_tx(payload.tx_hash)
-    if not is_valid:
-        raise HTTPException(status_code=400, detail=f"Invalid deposit: {err}")
-        
-    sender_fid = await get_fid_by_wallet(sender_wallet)
-    if not sender_fid:
-        raise HTTPException(status_code=400, detail="Wallet not registered to any FID")
-        
-    inserted = await record_deposit(payload.tx_hash, sender_fid, float(amount))
-    if not inserted:
-        return {"status": "duplicate"}
-        
-    return {"status": "success", "credited_fid": sender_fid, "amount": float(amount)}
 
 
 @app.get("/api/status")
@@ -169,20 +150,30 @@ async def _handle_command(cmd, sender_fid: int, sender_username: str, cast_hash:
 
     elif cmd.type == CommandType.REGISTER:
         chain = getattr(cmd, "chain", None) or "XRPL"
-        await register_wallet(sender_fid, sender_username, cmd.wallet_address, chain)
-        await caster.reply_to_cast(cast_hash, f"@{sender_username} Successfully registered your {chain} wallet: {cmd.wallet_address}")
-
-    elif cmd.type == CommandType.BALANCE:
-        currency = getattr(cmd, "currency", "RLUSD")
-        int_balance = await get_internal_balance(sender_fid, currency)
+        dest_tag = await register_wallet(sender_fid, sender_username, cmd.wallet_address, chain)
+        fee_link = generate_setup_fee_link(dest_tag)
         await caster.reply_to_cast(
             cast_hash, 
-            f"@{sender_username} Your TipMaster internal balance: {int_balance} {currency}. "
-            f"(To cash out to your wallet, cast `@tipmaster withdraw <amount> {currency}`)"
+            f"@{sender_username} Wallet saved! To activate P2P tipping, please pay the one-time 15 RLUSD setup fee here: {fee_link} (Then cast `@tipmaster verify`)"
         )
+
+    elif cmd.type == CommandType.VERIFY:
+        dest_tag = await get_destination_tag(sender_fid)
+        if not dest_tag:
+            await caster.reply_to_cast(cast_hash, f"@{sender_username} You need to register a wallet first.")
+            return
+        already_marked = await is_setup_fee_paid(sender_fid)
+        if already_marked:
+            await caster.reply_to_cast(cast_hash, f"@{sender_username} Your account is already active! 🎉")
+            return
         
-    elif cmd.type == CommandType.WITHDRAW:
-        await _handle_withdraw(cmd, sender_fid, sender_username, cast_hash)
+        paid = await check_setup_fee_paid(dest_tag)
+        if paid:
+            await mark_setup_fee_paid(sender_fid)
+            await caster.reply_to_cast(cast_hash, f"@{sender_username} Setup fee verified! Your account is now active for unlimited P2P tipping. 🎉")
+        else:
+            fee_link = generate_setup_fee_link(dest_tag)
+            await caster.reply_to_cast(cast_hash, f"@{sender_username} We haven't received your 15 RLUSD setup fee yet. Pay here: {fee_link}")
 
     elif cmd.type == CommandType.TIP:
         if not _TIPS_ENABLED:
@@ -196,105 +187,28 @@ async def _handle_command(cmd, sender_fid: int, sender_username: str, cast_hash:
         await _handle_tip(cmd, sender_fid, sender_username, cast_hash)
 
 
-async def _handle_withdraw(cmd, sender_fid: int, sender_username: str, cast_hash: str) -> None:
-    currency = getattr(cmd, "currency", "RLUSD")
-    chain = "BASE" if currency == "USDC" else "XRPL"
-    
-    wallet = await get_wallet_by_fid(sender_fid, chain=chain)
-    if not wallet:
-        await caster.reply_to_cast(
-            cast_hash, 
-            f"@{sender_username} You don't have a {chain} wallet registered for {currency} withdrawals. "
-            f"Cast `@tipmaster register <address>` to set one!"
-        )
-        return
-
-    amount = Decimal(str(cmd.amount))
-    fee = amount * Decimal("0.02")  # 2% cash out fee
-    total_deduction = amount + fee
-    
-    internal_balance = await get_internal_balance(sender_fid, currency)
-    if internal_balance < total_deduction:
-        await caster.reply_to_cast(
-            cast_hash,
-            f"@{sender_username} Insufficient internal balance. "
-            f"Need {total_deduction} {currency} (includes 2% cash out fee), have {internal_balance}."
-        )
-        return
-
-    from .payment_router import execute_withdrawal
-    ok, tx_hash, err = await execute_withdrawal(wallet, amount, currency, chain)
-    
-    if ok:
-        from .registry import record_withdrawal
-        await record_withdrawal(tx_hash, sender_fid, float(total_deduction), currency)
-        await caster.reply_to_cast(
-            cast_hash,
-            f"@{sender_username} Successfully withdrew {amount} {currency} to {wallet[:8]}! "
-            f"(Fee: {fee} {currency}) 💸 tx: {tx_hash}"
-        )
-    else:
-        await caster.reply_to_cast(cast_hash, f"@{sender_username} Withdrawal failed: {err}")
-
-
 async def _handle_tip(cmd, sender_fid: int, sender_username: str, cast_hash: str) -> None:
-    recipient_fid = await get_fid_by_username(cmd.target_username)
-    # Even if they don't have a wallet, they can receive internal tips!
-    amount = Decimal(str(cmd.amount))
-    fee = amount * Decimal("0.01")  # 1% tip fee
-    net_amount = amount - fee
-    currency = getattr(cmd, "currency", "RLUSD")
-    boost = cmd.boost
-    
-    # Internal tips are free, but boost fees still apply
-    total_needed = amount + (BOOST_FEE if boost else Decimal("0"))
-
-    internal_balance = await get_internal_balance(sender_fid, currency)
-    if internal_balance < total_needed:
-        boost_note = f" (+ {BOOST_FEE} {currency} boost fee)" if boost else ""
-        await caster.reply_to_cast(
-            cast_hash,
-            f"@{sender_username} Insufficient internal balance. "
-            f"Need {total_needed} {currency}{boost_note}, have {internal_balance}."
-        )
+    if not await is_setup_fee_paid(sender_fid):
+        dest_tag = await get_destination_tag(sender_fid)
+        if dest_tag:
+            fee_link = generate_setup_fee_link(dest_tag)
+            msg = f"@{sender_username} You must pay the 15 RLUSD setup fee to tip. Pay here: {fee_link}"
+        else:
+            msg = f"@{sender_username} You must register and pay the setup fee first. Cast `@tipmaster register <address>`."
+        await caster.reply_to_cast(cast_hash, msg)
         return
 
-    # Record internal tip
-    await record_tip(
-        sender_fid=sender_fid,
-        sender_user=sender_username,
-        recipient_user=cmd.target_username,
-        amount=float(net_amount),
-        fee=float(fee),
-        boost=boost,
-        tx_hash="internal",
-        cast_hash=cast_hash,
-        recipient_fid=recipient_fid,
-        currency=currency,
-        is_internal=True
-    )
+    recipient_wallet = await get_wallet_by_username(cmd.target_username)
+    if not recipient_wallet:
+        await caster.reply_to_cast(cast_hash, f"@{sender_username} @{cmd.target_username} hasn't registered a wallet yet! They need to register first.")
+        return
 
-    boost_msg = "🚀 (Boosted!)" if boost else ""
+    amount = Decimal(str(cmd.amount))
+    currency = getattr(cmd, "currency", "RLUSD")
+    
+    pay_link = generate_p2p_payment_link(recipient_wallet, amount)
+    
     await caster.reply_to_cast(
         cast_hash,
-        f"@{sender_username} instantly tipped {amount} {currency} to @{cmd.target_username}! "
-        f"(They received {net_amount} after 1% fee) 🎉 {boost_msg}"
+        f"@{sender_username} Ready to tip @{cmd.target_username} {amount} {currency}! Click here to sign the P2P transaction: {pay_link}"
     )
-
-    # Fire-and-forget: Credit Bureau push (uses RLUSD stats traditionally, but we pass generic amount)
-    sender_wallet = await get_wallet_by_fid(sender_fid)
-    if sender_wallet:
-        asyncio.create_task(_post_tip_side_effects(sender_wallet, float(amount), sender_fid))
-
-
-async def _post_tip_side_effects(sender_wallet: str, amount: float, sender_fid: int) -> None:
-    """Non-critical background tasks after a successful tip."""
-    try:
-        stats = await get_tip_stats(sender_fid)
-        await bureau.push_tip_activity(sender_wallet, amount, stats["sent_count"])
-    except Exception as exc:
-        log.debug("Bureau push error: %s", exc)
-    try:
-        await sweep_fees_to_treasury()
-    except Exception as exc:
-        log.debug("Sweep error: %s", exc)
