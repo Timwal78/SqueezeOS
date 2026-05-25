@@ -1,6 +1,8 @@
 # compiled binaries (root-level only)
 /bridge
 /ghost-layer-core
+/x402probe
+/genpayload
 
 # build artifacts
 *.exe
