@@ -282,6 +282,7 @@ main{padding-bottom:60px}
         <input class="find-input" id="find-input" type="text" placeholder="FIND…" autocomplete="off" spellcheck="false" aria-label="Search live flow">
         <button class="find-clear" id="find-clear" title="Clear search">✕</button>
       </div>
+      <button id="beast-filter" title="Hide background telemetry noise">HIDE BEAST</button>
       <button id="pause" class="on">⏸ PAUSE</button>
       <button id="clear">CLEAR</button>
     </div>
@@ -317,6 +318,7 @@ const $$ = (s,r=document)=>r.querySelectorAll(s);
 
 const state = {
   paused: false,
+  hideBeast: true,
   events: [],
   findQuery: "",
   cards: { AMC:{ts:0}, GME:{ts:0}, IWM:{ts:0} },
@@ -625,12 +627,13 @@ function renderFeed(){
   if(state.events.length===0){feed.innerHTML='<div class="empty">Awaiting events from /api/events SSE stream...</div>';return;}
   const known = ["SQUEEZE_ALERT","OPTIONS_SWEEP","DARK_POOL","COUNCIL_VERDICT","AGENT_PROBE","AGENT_PAY","SETTLEMENT_COMPLETE","FUTURES_SETTLED","CONNECTED","HEARTBEAT","ERROR"];
   const q = (state.findQuery||"").trim().toLowerCase();
-  const visible = q
-    ? state.events.filter(e=>
-        (e.type||"").toLowerCase().includes(q)||
-        (e.sym||"").toLowerCase().includes(q)||
-        (e.body||"").toLowerCase().includes(q))
+  let visible = state.hideBeast
+    ? state.events.filter(e=> e.type !== "BEAST" && e.type !== "HEARTBEAT")
     : state.events;
+  if(q) visible = visible.filter(e=>
+    (e.type||"").toLowerCase().includes(q)||
+    (e.sym||"").toLowerCase().includes(q)||
+    (e.body||"").toLowerCase().includes(q));
 
   const countEl = $("#find-count");
   if(q){
@@ -676,6 +679,12 @@ function tickClock(){
 // Pause / clear
 $("#pause").addEventListener("click", ()=>{state.paused=!state.paused;const b=$("#pause");b.textContent=state.paused?"▶ PLAY":"⏸ PAUSE";b.classList.toggle("on",!state.paused);});
 $("#clear").addEventListener("click", ()=>{state.events=[];renderFeed();$("#evt-count").textContent="0";});
+
+// Beast filter toggle (on by default — hide noisy telemetry)
+const beastBtn = $("#beast-filter");
+function updateBeastBtn(){ beastBtn.textContent = state.hideBeast ? "SHOW BEAST" : "HIDE BEAST"; beastBtn.classList.toggle("on", !state.hideBeast); }
+updateBeastBtn();
+beastBtn.addEventListener("click", ()=>{ state.hideBeast=!state.hideBeast; updateBeastBtn(); renderFeed(); });
 
 // Find conversation
 const findInput = $("#find-input");
