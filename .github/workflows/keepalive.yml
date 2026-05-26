@@ -64,6 +64,18 @@ jobs:
           fi
 
 
+      # ── TipMaster — Farcaster RLUSD tipping bot (Render) ────────────
+      - name: Ping TipMaster
+        id: tipmaster
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
+            https://tipmaster.onrender.com/health)
+          echo "status=$status" >> $GITHUB_OUTPUT
+          echo "TipMaster /health → $status"
+          if [ "$status" != "200" ]; then
+            echo "WARN: TipMaster returned $status" >&2
+          fi
+
       # ── Ghost Layer Sovereign — frontend (Vercel, scriptmasterlabs.com) ──
       - name: Ping Ghost Layer Sovereign
         id: sovereign
@@ -86,6 +98,7 @@ jobs:
           GHOST_STATUS="${{ steps.ghost.outputs.status || 'TIMEOUT' }}"
           SQ_STATUS="${{ steps.squeezeos.outputs.status || 'TIMEOUT' }}"
           RAILS_STATUS="${{ steps.rails.outputs.status || 'TIMEOUT' }}"
+          TM_STATUS="${{ steps.tipmaster.outputs.status || 'TIMEOUT' }}"
 
           curl -s -X POST "$DISCORD_WEBHOOK_ALL" \
             -H "Content-Type: application/json" \
@@ -98,7 +111,8 @@ jobs:
                   {\"name\": \"402Proof\",   \"value\": \"$PROOF_STATUS\", \"inline\": true},
                   {\"name\": \"Ghost Layer\", \"value\": \"$GHOST_STATUS\", \"inline\": true},
                   {\"name\": \"SqueezeOS\",  \"value\": \"$SQ_STATUS\",   \"inline\": true},
-                  {\"name\": \"SML Rails\",  \"value\": \"$RAILS_STATUS\", \"inline\": true}
+                  {\"name\": \"SML Rails\",  \"value\": \"$RAILS_STATUS\", \"inline\": true},
+                  {\"name\": \"TipMaster\",  \"value\": \"$TM_STATUS\",   \"inline\": true}
                 ],
                 \"footer\": {\"text\": \"Render cold-start or outage — agents cannot pay\"},
                 \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
