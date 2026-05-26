@@ -7,7 +7,7 @@ from decimal import Decimal
 from typing import Any
 
 from fastapi import FastAPI, Request, Response, HTTPException, Header
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -83,7 +83,7 @@ app = FastAPI(title="TipMaster", version="2.0.0", lifespan=lifespan)
 
 @app.get("/", include_in_schema=False)
 async def index():
-    return FileResponse("static/index.html")
+    return RedirectResponse("https://www.scriptmasterlabs.com", status_code=301)
 
 @app.get("/sitemap.xml", include_in_schema=False)
 async def sitemap():
