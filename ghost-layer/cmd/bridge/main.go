@@ -604,6 +604,11 @@ func main() {
 	// ── SOVEREIGN WEBSOCKET METRICS STREAM ────────────────────────────────────
 	r.Get("/ws/metrics", metricsHub.ServeHTTP)
 
+	// ── SIGNAL AUCTION LOOM FEED (same hub, Loom-compatible path) ────────────
+	// The Loom frontend connects to /ws/loom. Ghost Layer translates its native
+	// MetricsFrame events into AuctionEvent format client-side (useAuction.ts).
+	r.Get("/ws/loom", metricsHub.ServeHTTP)
+
 	// ── SSE LIVE STREAM (cube.js tachometer feed) ─────────────────────────────
 	r.Get("/api/events", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")

@@ -148,6 +148,69 @@ const WS_URL = import.meta.env.VITE_GATEWAY_WS
   ? `${import.meta.env.VITE_GATEWAY_WS}/ws/loom`
   : `ws://${window.location.hostname}:8402/ws/loom`
 
+// Ghost Layer MetricsFrame — the native broadcast format from ghost-layer.onrender.com
+interface MetricsFrame {
+  type: string
+  ts: number
+  total_bridges: number
+  tps: number
+  accumulated_fee: string
+  chain?: string
+  tx_hash?: string
+  gross_amount?: string
+  fee_amount?: string
+  net_amount?: string
+  agent_tier?: string
+  effective_bps?: number
+  state_label?: string
+  product_id?: string
+  wallet?: string
+}
+
+// Translate Ghost Layer MetricsFrame → AuctionEvent so the Loom visualizer
+// works when connected to ghost-layer.onrender.com instead of a PNE gateway.
+function translateFrame(frame: MetricsFrame): AuctionEvent | null {
+  const requestId = frame.tx_hash || frame.product_id || `gl-${frame.ts}`
+  const tipAmount = parseInt(frame.fee_amount || frame.accumulated_fee || '0', 10)
+  const walletHash = frame.wallet || frame.agent_tier || 'anon'
+
+  switch (frame.type) {
+    case 'CONNECTED':
+    case 'HEARTBEAT':
+      return { type: 'CONNECTED', ts: frame.ts, message: 'Connected to Ghost Layer' }
+
+    case 'AGENT_PROBE':
+      return {
+        type: 'CHALLENGE_ISSUED',
+        ts: frame.ts,
+        request_id: requestId,
+        ip_hash: frame.tx_hash || 'probe',
+        endpoint: '/probe',
+      }
+
+    case 'X402_DISPENSED':
+      return {
+        type: 'BID_RECEIVED',
+        ts: frame.ts,
+        request_id: requestId,
+        tip_sats: tipAmount,
+        wallet_hash: walletHash,
+        endpoint: frame.product_id || '/x402',
+      }
+
+    case 'BRIDGE_SETTLED':
+      return {
+        type: 'AUCTION_RESOLVED',
+        ts: frame.ts,
+        window_id: frame.total_bridges,
+        results: [{ rank: 1, request_id: requestId, tip_sats: tipAmount, wallet_hash: walletHash }],
+      }
+
+    default:
+      return null
+  }
+}
+
 export function useAuctionWebSocket() {
   const addEvent = useAuctionStore(s => s.addEvent)
   const setConnected = useAuctionStore(s => s.setConnected)
@@ -170,8 +233,14 @@ export function useAuctionWebSocket() {
 
       ws.onmessage = (e) => {
         try {
-          const event = JSON.parse(e.data) as AuctionEvent
-          addEvent(event)
+          const raw = JSON.parse(e.data)
+          // Native PNE AuctionEvent has a known type enum; anything else is a
+          // Ghost Layer MetricsFrame that needs translation.
+          const knownTypes = new Set(['CONNECTED','CHALLENGE_ISSUED','BID_RECEIVED','AUCTION_RESOLVED','UPSTREAM_COMPLETE'])
+          const event: AuctionEvent | null = knownTypes.has(raw.type)
+            ? raw as AuctionEvent
+            : translateFrame(raw as MetricsFrame)
+          if (event) addEvent(event)
         } catch {
           // ignore malformed messages
         }

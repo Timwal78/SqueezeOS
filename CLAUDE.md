@@ -68,7 +68,7 @@ SqueezeOS is an **institutional-grade AI trading intelligence platform** exposed
 
 **GitHub:** `github.com/timwal78/squeezeos`  
 **Vercel (Loom):** `signal-auction-loom` project — `https://signal-auction-loom.vercel.app` (also reachable via legacy `squeeze-os.vercel.app`). Root dir: `pne/loom`.  
-**Railway (PNE Gateway):** project `signal-auction-gateway`, service `pne-gateway`. PENDING deployment — URL to be filled in once deployed.
+**Agent Kiosk backend:** PNE Gateway (Railway) was deleted. Signal Auction Loom now connects directly to Ghost Layer via `wss://ghost-layer.onrender.com/ws/loom`. Ghost Layer translates its `MetricsFrame` events into Loom-compatible `AuctionEvent` format client-side (`pne/loom/src/hooks/useAuction.ts`).
 
 ### scriptmasterlabs.com product catalog (what's live vs planned)
 
@@ -464,7 +464,7 @@ Secrets: `AGENT_XRPL_SEED`, `AGENT_XRPL_ADDRESS`, `ANTHROPIC_API_KEY` (GitHub Ac
 | Service | Platform | Canonical URL | Config |
 |---------|----------|---------------|--------|
 | SqueezeOS API | **Render** | `https://squeezeos-api.onrender.com` | `render.yaml` |
-| PNE Gateway | **Railway** | PENDING — project `signal-auction-gateway`, service `pne-gateway` | `pne/gateway/railway.toml` |
+| Agent Kiosk / PNE backend | **Ghost Layer** | `https://ghost-layer.onrender.com/ws/loom` | deleted Railway service — now routes through Ghost Layer |
 | Signal Auction Loom | **Vercel** | `https://signal-auction-loom.vercel.app` | project `signal-auction-loom`, root `pne/loom` |
 | Ghost Layer (bridge backend) | **Render** | `https://ghost-layer.onrender.com` | `ghost-layer/render.yaml` |
 | Ghost Layer Sovereign (frontend) | **Vercel** | `https://www.scriptmasterlabs.com` | project: `ghost-layer-sovereign` |
