@@ -1,0 +1,182 @@
+// © ScriptMasterLabs — SML Proprietary EMA Suite
+// ================================================================
+// ENGINE 1 — Tesla Sequence (1 · 24 · 578 · 963)
+//   Tracks elastic price stretch from macro baseline
+//   24x seed → 24x² ≈ 578 → macro anchor 963
+//   Tesla triad embedded in 963 (digits 9-6-3)
+//
+// ENGINE 3 — Lucas / Phi² Sequence (11 · 47 · 123 · 321)
+//   Digital roots: 2-2-6-6 mirror-symmetry containment field
+//   "As Above, So Below" — ignition bands (11/47) mirror macro (123/321)
+//   Phi² = 2.618 expansion: 47→123 = 2.617, 123→321 = 2.609
+//   Tracks algorithmic dark-pool volume accumulation
+// ================================================================
+//@version=5
+indicator("SML Proprietary EMA Suite [E1·E3]", shorttitle="SML·PropEMA", overlay=true)
+
+// ── Groups ───────────────────────────────────────────────────────
+grpE1  = "Engine 1 — Tesla Elastic Stretch (1·24·578·963)"
+grpE3  = "Engine 3 — Lucas Phi² Volume (11·47·123·321)"
+grpVol = "Engine 3 — Volume VMAs"
+grpVis = "Display"
+
+// ── Engine 1 inputs ──────────────────────────────────────────────
+show_e1          = input.bool(true,  "Show Engine 1",               group=grpE1)
+e1_stretch_alert = input.float(8.0, "Elastic Stretch Alert %",      group=grpE1, minval=1.0)
+
+// ── Engine 3 price inputs ────────────────────────────────────────
+show_e3          = input.bool(true,  "Show Engine 3",               group=grpE3)
+
+// ── Engine 3 volume inputs ───────────────────────────────────────
+show_vol         = input.bool(true,  "Show Volume VMAs",            group=grpVol)
+
+// ── Display ──────────────────────────────────────────────────────
+show_consensus   = input.bool(true,  "Show Consensus Label",        group=grpVis)
+show_signals     = input.bool(true,  "Show Signal Backgrounds",     group=grpVis)
+
+// ─────────────────────────────────────────────────────────────────
+// ENGINE 1 — Tesla Sequence EMAs on price
+// ─────────────────────────────────────────────────────────────────
+e1_ema24  = ta.ema(close, 24)
+e1_ema578 = ta.ema(close, 578)
+e1_ema963 = ta.ema(close, 963)
+
+e1_stretch_pct  = (close - e1_ema963) / e1_ema963 * 100
+e1_bull_stack   = close > e1_ema24 and e1_ema24 > e1_ema578 and e1_ema578 > e1_ema963
+e1_bear_stack   = close < e1_ema24 and e1_ema24 < e1_ema578 and e1_ema578 < e1_ema963
+e1_ignition     = math.abs(e1_stretch_pct) > e1_stretch_alert
+e1_compression  = math.abs(e1_stretch_pct) < 1.5
+
+// ─────────────────────────────────────────────────────────────────
+// ENGINE 3 — Lucas / Phi² Sequence EMAs on price
+// ─────────────────────────────────────────────────────────────────
+e3_ema11  = ta.ema(close, 11)
+e3_ema47  = ta.ema(close, 47)
+e3_ema123 = ta.ema(close, 123)
+e3_ema321 = ta.ema(close, 321)
+
+// Ignition band: price relative to 11/47 (digital roots 2-2)
+e3_ignition_bull = close > e3_ema11 and e3_ema11 > e3_ema47
+e3_ignition_bear = close < e3_ema11 and e3_ema11 < e3_ema47
+
+// Macro baseline: 123/321 (digital roots 6-6)
+e3_macro_bull = e3_ema123 > e3_ema321
+e3_macro_bear = e3_ema123 < e3_ema321
+
+// Mirror lock — "As Above, So Below"
+e3_mirror_bull = e3_ignition_bull and e3_macro_bull
+e3_mirror_bear = e3_ignition_bear and e3_macro_bear
+
+// ─────────────────────────────────────────────────────────────────
+// ENGINE 3 — Volume VMAs (Lucas / Phi²)
+// ─────────────────────────────────────────────────────────────────
+e3_vma11  = ta.ema(volume, 11)
+e3_vma47  = ta.ema(volume, 47)
+e3_vma123 = ta.ema(volume, 123)
+e3_vma321 = ta.ema(volume, 321)
+
+vol_above_11  = volume > e3_vma11
+vol_above_47  = volume > e3_vma47
+vol_above_123 = volume > e3_vma123
+vol_above_321 = volume > e3_vma321
+
+// Phi² expansion check: VMA47 / VMA11 ≈ 2.618
+phi_sq_ratio       = e3_vma47 / e3_vma11
+phi_expansion_live = phi_sq_ratio > 2.35 and phi_sq_ratio < 2.90
+
+// Dark-pool ceiling breach
+ceiling_breach = vol_above_321 and e3_mirror_bull
+
+// ─────────────────────────────────────────────────────────────────
+// CONSENSUS
+// ─────────────────────────────────────────────────────────────────
+bull_confluence = e1_bull_stack and e3_mirror_bull
+bear_confluence = e1_bear_stack and e3_mirror_bear
+
+// ─────────────────────────────────────────────────────────────────
+// PLOTS — Engine 1
+// ─────────────────────────────────────────────────────────────────
+plot(show_e1 ? e1_ema24  : na, "E1 · EMA 24",
+     color=color.new(color.yellow, 10), linewidth=1)
+plot(show_e1 ? e1_ema578 : na, "E1 · EMA 578",
+     color=color.new(color.orange, 20), linewidth=2)
+plot(show_e1 ? e1_ema963 : na, "E1 · EMA 963 (Macro Anchor)",
+     color=color.new(color.red, 10), linewidth=3)
+
+// ─────────────────────────────────────────────────────────────────
+// PLOTS — Engine 3 Price
+// ─────────────────────────────────────────────────────────────────
+plot(show_e3 ? e3_ema11  : na, "E3 · EMA 11  (Ignition Low)",
+     color=color.new(color.aqua, 20), linewidth=1)
+plot(show_e3 ? e3_ema47  : na, "E3 · EMA 47  (Ignition High)",
+     color=color.new(color.teal, 10), linewidth=1)
+plot(show_e3 ? e3_ema123 : na, "E3 · EMA 123 (Dark Pool Base)",
+     color=color.new(color.blue, 10), linewidth=2)
+plot(show_e3 ? e3_ema321 : na, "E3 · EMA 321 (Dark Pool Ceiling)",
+     color=color.new(color.purple, 5), linewidth=3)
+
+// ─────────────────────────────────────────────────────────────────
+// SIGNAL BACKGROUNDS
+// ─────────────────────────────────────────────────────────────────
+bullConfluenceColor = color.new(color.green,  88)
+bearConfluenceColor = color.new(color.red,    88)
+ignitionColor       = color.new(color.yellow, 80)
+ceilingColor        = color.new(color.purple, 75)
+compressionColor    = color.new(color.gray,   90)
+
+bgcolor(show_signals and ceiling_breach   ? ceilingColor        : na, title="Dark Pool Ceiling Breach")
+bgcolor(show_signals and bull_confluence  ? bullConfluenceColor : na, title="Bull Confluence")
+bgcolor(show_signals and bear_confluence  ? bearConfluenceColor : na, title="Bear Confluence")
+bgcolor(show_signals and e1_ignition and e1_bull_stack and not bull_confluence ? ignitionColor : na, title="E1 Ignition Bull")
+bgcolor(show_signals and e1_compression  ? compressionColor    : na, title="E1 Compression")
+
+// ─────────────────────────────────────────────────────────────────
+// CONSENSUS LABEL
+// ─────────────────────────────────────────────────────────────────
+var label consensus_lbl = na
+if show_consensus and barstate.islast
+    label.delete(consensus_lbl)
+    sig_txt = bull_confluence ? "BULL CONFLUENCE\nE1+E3 Aligned" :
+              bear_confluence ? "BEAR CONFLUENCE\nE1+E3 Aligned" :
+              ceiling_breach  ? "DARK POOL\nCEILING BREACH" :
+              e3_mirror_bull  ? "E3 Mirror Lock\n(Bull)" :
+              e3_mirror_bear  ? "E3 Mirror Lock\n(Bear)" :
+              e1_ignition     ? "E1 Elastic\nIgnition" :
+              e1_compression  ? "E1 Compression\n(Coiling)" : "NEUTRAL"
+    lbl_color = bull_confluence ? color.green :
+                bear_confluence ? color.red   :
+                ceiling_breach  ? color.purple :
+                e3_mirror_bull  ? color.teal  :
+                e3_mirror_bear  ? color.orange :
+                e1_ignition     ? color.yellow : color.gray
+    consensus_lbl := label.new(
+        bar_index, high * 1.002,
+        text=sig_txt,
+        color=lbl_color,
+        textcolor=color.white,
+        style=label.style_label_down,
+        size=size.normal
+    )
+
+// ─────────────────────────────────────────────────────────────────
+// ALERTS
+// ─────────────────────────────────────────────────────────────────
+alertcondition(bull_confluence,
+    title="SML Bull Confluence (E1+E3)",
+    message="{{ticker}} — BULL CONFLUENCE: Tesla stack + Lucas Phi² mirror lock active")
+
+alertcondition(bear_confluence,
+    title="SML Bear Confluence (E1+E3)",
+    message="{{ticker}} — BEAR CONFLUENCE: Tesla stack + Lucas Phi² mirror lock active")
+
+alertcondition(ceiling_breach,
+    title="SML Dark Pool Ceiling Breach (E3)",
+    message="{{ticker}} — DARK POOL CEILING BREACH: Volume above VMA321 with mirror lock")
+
+alertcondition(e1_ignition and e1_bull_stack,
+    title="SML Tesla Elastic Ignition Bull (E1)",
+    message="{{ticker}} — ELASTIC IGNITION BULL: Price stretched >" + str.tostring(e1_stretch_alert) + "% above EMA963")
+
+alertcondition(phi_expansion_live and vol_above_47,
+    title="SML Phi² Expansion Active (E3)",
+    message="{{ticker}} — PHI² EXPANSION: VMA47/VMA11 ratio = " + str.tostring(phi_sq_ratio, "#.###") + " (target 2.618)")

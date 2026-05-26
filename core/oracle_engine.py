@@ -194,6 +194,25 @@ class OracleEngine:
             logger.warning(f"[Oracle] MMLE unavailable for {symbol}: {e}")
             return {}
 
+    def _get_proprietary_ema(self, symbol: str) -> dict:
+        """Run Engine 1 (Tesla) + Engine 3 (Lucas/Phi²) against live bars."""
+        try:
+            from core.proprietary_ema_engine import run_proprietary_suite
+            dm = self._get_service("dm")
+            if not dm:
+                return {}
+            bars = dm.get_historical_bars(symbol, timeframe="1Day", limit=400)
+            if not bars:
+                return {}
+            closes  = [float(b.get("c") or b.get("close",  0)) for b in bars if b.get("c") or b.get("close")]
+            volumes = [float(b.get("v") or b.get("volume", 0)) for b in bars if b.get("v") or b.get("volume")]
+            if len(closes) < 11:
+                return {}
+            return run_proprietary_suite(closes, volumes, symbol=symbol)
+        except Exception as e:
+            logger.warning(f"[Oracle] Proprietary EMA unavailable for {symbol}: {e}")
+            return {}
+
     def _get_gamma_flow(self, symbol: str) -> dict:
         """Pull gamma flip signal from GammaFlowEngine."""
         try:
@@ -295,6 +314,7 @@ class OracleEngine:
         fractal = self._cached(f"fractal_{symbol}", lambda: self._get_fractal_signal(symbol, price))
         mmle = self._cached(f"mmle_{symbol}", lambda: self._get_mmle_signal(symbol))
         gflow = self._cached(f"gflow_{symbol}", lambda: self._get_gamma_flow(symbol))
+        prop_ema = self._cached(f"prop_ema_{symbol}", lambda: self._get_proprietary_ema(symbol))
 
         # 3. Composite scoring
         score = 0
@@ -309,6 +329,11 @@ class OracleEngine:
             score -= 15
         if mmle.get("axis_collapse"):
             score -= 20
+        # Engine 1 & 3 proprietary signal contribution
+        e1_contrib = prop_ema.get("engine_1", {}).get("score_contrib", 0)
+        e3_contrib = prop_ema.get("engine_3", {}).get("score_contrib", 0)
+        score += e1_contrib * 0.5  # weight: up to ±12.5 pts
+        score += e3_contrib * 0.5  # weight: up to ±10 pts
         score = max(0, min(100, score))
 
         # 4. Directive
@@ -362,6 +387,11 @@ class OracleEngine:
             "axis_collapse":    mmle.get("axis_collapse", False),
             "fractal_match":    fractal.get("fractal_match", "None"),
             "fractal_score":    round(fractal.get("fractal_score", 0)),
+            "proprietary_ema":  {
+                "consensus":    prop_ema.get("consensus", "NEUTRAL"),
+                "engine_1":     prop_ema.get("engine_1", {}),
+                "engine_3":     prop_ema.get("engine_3", {}),
+            },
         }
 
         logger.info(f"[Oracle] {symbol} → {directive} | Score: {round(score)} | {reason}")

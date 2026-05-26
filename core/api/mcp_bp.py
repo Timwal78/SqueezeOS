@@ -9,7 +9,7 @@ GET  /mcp  — server info (health check)
 
 Supported methods:
   initialize        — handshake + capabilities
-  tools/list        — all 23 tools
+  tools/list        — all 24 tools
   tools/call        — execute a tool (proxies to REST API)
   ping              — keepalive
   notifications/*   — silently acknowledged
@@ -32,7 +32,7 @@ PROOF402_BASE = "https://four02proof.onrender.com"
 
 _SERVER_INFO = {
     "name": "squeezeos",
-    "version": "3.0.0",
+    "version": "3.1.0",
     "description": "SqueezeOS — Institutional AI trading intelligence for autonomous agents",
 }
 
@@ -371,6 +371,26 @@ _TOOLS = [
         },
     },
     {
+        "name": "proprietary_ema_signal",
+        "description": (
+            "SML Proprietary EMA Suite — Engine 1 (Tesla Sequence 1-24-578-963) + "
+            "Engine 3 (Lucas/Phi² Sequence 11-47-123-321) run against live price and volume data. "
+            "Engine 1 detects elastic price stretch from the macro baseline (963-period anchor). "
+            "Engine 3 tracks dark-pool algorithmic volume accumulation using the 2-2-6-6 "
+            "mirror-symmetry containment field and Phi²=2.618 VMA expansion. "
+            "Returns: consensus (BULL_CONFLUENCE / BEAR_CONFLUENCE / DIVERGENT / NEUTRAL), "
+            "individual engine signals, Phi² ratio live check, dark-pool ceiling breach flag, "
+            "and combined_score (0-100) that feeds into council_verdict confidence. Free endpoint."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["symbol"],
+            "properties": {
+                "symbol": {"type": "string", "description": "US equity ticker (e.g. SPY, IWM, GME, NVDA)"},
+            },
+        },
+    },
+    {
         "name": "settlement_browse",
         "description": "Browse open conditional settlement contracts. Filter by symbol or creator wallet. Free.",
         "inputSchema": {
@@ -546,6 +566,10 @@ def _dispatch(name: str, args: dict, req_headers: dict) -> dict:
     if name == "settlement_trigger":
         contract_id = args.pop("contract_id", "")
         return _text(_proxy("POST", f"{sq}/api/settlement/trigger/{contract_id}", json_body=args))
+
+    if name == "proprietary_ema_signal":
+        symbol = (args.get("symbol") or "IWM").upper()
+        return _text(_proxy("GET", f"{sq}/api/ema/{symbol}"))
 
     return {
         "content": [{"type": "text", "text": json.dumps({"error": "ERR_UNKNOWN_TOOL", "tool": name})}],
