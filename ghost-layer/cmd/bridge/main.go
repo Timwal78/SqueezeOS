@@ -167,9 +167,12 @@ func init() {
 	})
 
 	// Reserved (disabled) entries — visible in catalog listing, not dispensable.
-	for _, id := range []string{"bridge.priority"} {
-		x402Registry.Register(&x402.Product{ID: id, Disabled: true, BasePrice: 100000})
-	}
+	x402Registry.Register(&x402.Product{
+		ID:        "bridge.priority",
+		Disabled:  true,
+		BasePrice: 100000,
+		Name:      "Priority Bridge Lane (Coming Soon)",
+	})
 }
 
 func (h *sseHub) subscribe() chan []byte {
@@ -659,7 +662,78 @@ func main() {
 
 	r.Get("/v1/x402/catalog", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{"products": x402Registry.Listing()})
+		w.Header().Set("Cache-Control", "public, max-age=30")
+
+		type CatalogProduct struct {
+			ID          string   `json:"id"`
+			Name        string   `json:"name"`
+			Description string   `json:"description"`
+			PriceDrops  int64    `json:"price_drops"`
+			PriceRLUSD  string   `json:"price_rlusd"`
+			Available   bool     `json:"available"`
+			Currency    string   `json:"currency"`
+			Chain       string   `json:"settlement_chain"`
+			Tags        []string `json:"tags"`
+		}
+
+		descriptions := map[string]struct {
+			desc string
+			tags []string
+		}{
+			"cube.mint": {
+				desc: "Mint a permanent Cube URIToken on Xahau. Encodes your 54-block state hash on-ledger as sovereign proof-of-compute. Non-fungible, non-custodial, tamper-evident.",
+				tags: []string{"nft", "xahau", "on-chain", "uri-token", "identity"},
+			},
+			"bridge.attestation": {
+				desc: "Institutional-grade cross-chain settlement receipt. Generates a secp256k1-signed attestation blob anchored to both the XRPL transaction hash and the Xahau mint hash. Compliant with MiCA audit trail requirements.",
+				tags: []string{"attestation", "compliance", "secp256k1", "mica", "institutional"},
+			},
+			"routing.telemetry": {
+				desc: "60-second live telemetry window into Ghost Layer routing state: active lanes, TPS, agent tier distribution, and gamma-wall settlement metrics. Ideal for AI agents performing market microstructure analysis.",
+				tags: []string{"telemetry", "real-time", "routing", "ai-agent", "metrics"},
+			},
+			"bridge.priority": {
+				desc: "Reserved fast-lane slot — sub-100ms guaranteed routing priority over standard agents. Coming soon: bid-based priority auction via Tipmaster integration.",
+				tags: []string{"priority", "fast-lane", "coming-soon", "auction"},
+			},
+		}
+
+		raw := x402Registry.Listing()
+		products := make([]CatalogProduct, 0, len(raw))
+		for _, p := range raw {
+			pid, _      := p["id"].(string)
+			pname, _    := p["name"].(string)
+			pdrops, _   := p["base_price_drops"].(int64)
+			pavail, _   := p["available"].(bool)
+			meta        := descriptions[pid]
+			priceRLUSD  := fmt.Sprintf("%.2f", float64(pdrops)/1_000_000.0)
+			products = append(products, CatalogProduct{
+				ID:          pid,
+				Name:        pname,
+				Description: meta.desc,
+				PriceDrops:  pdrops,
+				PriceRLUSD:  priceRLUSD + " RLUSD",
+				Available:   pavail,
+				Currency:    "RLUSD",
+				Chain:       "XRPL \u2192 Xahau",
+				Tags:        meta.tags,
+			})
+		}
+
+		resp := map[string]interface{}{
+			"gateway":  "Ghost Layer v2",
+			"protocol": "x402",
+			"network":  "XRPL mainnet → Xahau mainnet",
+			"quote_endpoint": "/v1/x402/quote",
+			"dispense_endpoint": "/v1/x402/dispense/{product_id}",
+			"pubkey_endpoint": "/v1/x402/attestation/pubkey",
+			"docs": "https://ghost-layer.onrender.com/.well-known/openapi.json",
+			"products": products,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		enc := json.NewEncoder(w)
+		enc.SetIndent("", "  ")
+		enc.Encode(resp)
 	})
 
 	r.Post("/v1/x402/quote", func(w http.ResponseWriter, req *http.Request) {
