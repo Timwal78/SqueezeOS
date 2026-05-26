@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "name": "ghost-layer-mcp",
   "display_name": "Ghost Layer — Dual-Chain Bridge + Execution Matrix MCP",
-  "description": "MCP server for Ghost Layer cross-chain bridge and on-chain Execution Matrix. Settle RLUSD (XRPL), XAH (Xahau), and USDC (Base/EVM) micropayments with full compliance receipts. Mint 54-block programmable routing state (LIQUIDITY, PRIVACY, SPEED, POOL, HOOKS, BASE) as URIToken on Xahau — server validates face centers, verifies state hash, broadcasts XAHAU_MINT_CONFIRMED SSE.",
+  "description": "MCP server for Ghost Layer cross-chain bridge and on-chain Execution Matrix. Settle RLUSD (XRPL), XAH (Xahau), and USDC (Base/EVM) micropayments synchronously with full compliance receipts. Mint 54-block programmable routing state.",
   "version": "2.2.0",
   "server_url": "https://ghost-layer.onrender.com",
   "mcp_endpoint": "https://ghost-layer.onrender.com/mcp",
@@ -17,40 +17,60 @@
   "tools": [
     {
       "name": "ghost_layer_bridge",
-      "description": "Initiate a cross-chain bridge transaction. Returns pay_to address and memo_hex for XRPL payment, or authorization parameters for EIP-3009 gasless USDC transfer.",
+      "description": "Execute a cross-chain bridge transaction synchronously. For XRPL, provide signer/signature. For Base, provide the nested eip3009 authorization object. Deducts a toll fee.",
+      "endpoint": "POST https://ghost-layer.onrender.com/v1/bridge/execute",
       "input_schema": {
         "type": "object",
         "properties": {
-          "amount": {"type": "string", "description": "Amount to bridge as decimal string"},
-          "asset": {"type": "string", "enum": ["RLUSD", "USDC"], "description": "Settlement asset"},
-          "from_chain": {"type": "string", "enum": ["xrpl", "base"], "description": "Source chain"},
-          "memo": {"type": "string", "description": "Invoice ID or endpoint reference"}
+          "source_wallet": {"type": "string"},
+          "destination_wallet": {"type": "string"},
+          "gross_amount": {"type": "string", "description": "Amount to bridge as decimal string"},
+          "fee_basis_points": {"type": "integer"},
+          "signer": {"type": "string"},
+          "signature": {"type": "string"},
+          "message_hash": {"type": "string"},
+          "eip3009": {
+            "type": "object",
+            "properties": {
+              "valid_after": {"type": "string"},
+              "valid_before": {"type": "string"},
+              "nonce": {"type": "string"},
+              "v": {"type": "integer"},
+              "r": {"type": "string"},
+              "s": {"type": "string"}
+            }
+          }
         },
-        "required": ["amount", "asset", "from_chain"]
+        "required": ["source_wallet", "destination_wallet", "gross_amount", "fee_basis_points"]
       }
     },
     {
-      "name": "ghost_bridge_status",
-      "description": "Check the settlement status of a bridge transaction.",
+      "name": "ghost_agent_loyalty",
+      "description": "Check the settlement loyalty tier and effective fee discount for an agent wallet.",
+      "endpoint": "GET https://ghost-layer.onrender.com/api/agent/{addr}/stats",
       "input_schema": {
         "type": "object",
         "properties": {
-          "bridge_id": {"type": "string", "description": "Bridge transaction ID returned by ghost_layer_bridge"}
+          "addr": {"type": "string", "description": "Agent wallet address"}
         },
-        "required": ["bridge_id"]
+        "required": ["addr"]
       }
     },
     {
-      "name": "ghost_audit_stats",
-      "description": "Retrieve public audit statistics: total bridge volume, chain breakdown, honeypot detection count.",
+      "name": "ghost_x402_dispense",
+      "description": "Fetch a premium product from the Ghost Layer X402 vending machine (e.g., routing.telemetry). The MCP client will automatically intercept the HTTP 402 Payment Required challenge, pay it, and retry.",
+      "endpoint": "GET https://ghost-layer.onrender.com/v1/x402/dispense/{pid}",
       "input_schema": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "pid": {"type": "string", "description": "Product ID to dispense (e.g., routing.telemetry)"}
+        },
+        "required": ["pid"]
       }
     },
     {
       "name": "cube_state_mint",
-      "description": "Mint the Ghost Layer Execution Matrix state as a URIToken on Xahau. Submit the full 54-block payload (6 faces × center + 4 edges + 4 corners). Server validates all face centers via the equation center=clamp(weighted_sum(edges)×coefficient(corners), min, max), verifies the CUBE-XXXXXXXX hash, then submits a real URITokenMint (tx type 45) with 6 HookParameters (face centers as hex) and a CUBE_STATE memo. Returns xahau_tx_hash on success. Fires XAHAU_MINT_CONFIRMED SSE event. View on-chain at https://xahauexplorer.com/tx/<hash>.",
+      "description": "Mint the Ghost Layer Execution Matrix state as a URIToken on Xahau. Submit the full 54-block payload. Server validates all face centers via the equation center=clamp(weighted_sum(edges)×coefficient(corners), min, max), verifies the CUBE-XXXXXXXX hash.",
       "endpoint": "POST https://ghost-layer.onrender.com/api/cube/state",
       "price_rlusd": 0,
       "input_schema": {
@@ -85,22 +105,6 @@
             }
           }
         }
-      }
-    },
-    {
-      "name": "eip3009_authorize",
-      "description": "Submit an EIP-3009 gasless USDC transfer authorization for Ghost Layer to execute on Base chain.",
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "from": {"type": "string", "description": "EVM wallet address (0x...)"},
-          "value": {"type": "string", "description": "USDC amount in 6-decimal units"},
-          "valid_after": {"type": "integer", "description": "Unix timestamp — valid after"},
-          "valid_before": {"type": "integer", "description": "Unix timestamp — expires before"},
-          "nonce": {"type": "string", "description": "32-byte random hex nonce"},
-          "signature": {"type": "string", "description": "EIP-712 signed authorization"}
-        },
-        "required": ["from", "value", "valid_before", "nonce", "signature"]
       }
     }
   ]

@@ -7,7 +7,6 @@
   "payment_required": true,
   "payment_protocol": "x402",
   "payment_assets": ["RLUSD/XRPL", "USDC/Base", "XAH/Xahau"],
-  "payment_gateway": "https://four02proof.onrender.com",
   "specs": {
     "openapi": "https://ghost-layer.onrender.com/.well-known/openapi.json",
     "mcp": "https://ghost-layer.onrender.com/.well-known/mcp.json",
@@ -16,19 +15,15 @@
   },
   "mcp_endpoint": "https://ghost-layer.onrender.com/mcp",
   "tools": [
-    {"name": "ghost_bridge_health", "cost": "free"},
-    {"name": "ghost_layer_bridge", "cost": "variable"},
-    {"name": "ghost_audit_stats", "cost": "free"},
+    {"name": "ghost_layer_bridge", "cost": "variable", "description": "Execute cross-chain bridge transaction synchronously. POST /v1/bridge/execute"},
+    {"name": "ghost_agent_loyalty", "cost": "free", "description": "Check loyalty tier and effective fee discount. GET /api/agent/{addr}/stats"},
+    {"name": "ghost_x402_dispense", "cost": "variable", "description": "Fetch premium products from X402 catalog. GET /v1/x402/dispense/{pid}"},
     {"name": "cube_state_mint", "cost": "free", "description": "Mint 54-block Execution Matrix state as URIToken on Xahau. POST /api/cube/state"}
   ],
-  "sse_events": ["BRIDGE_SETTLED", "XAHAU_MINT_CONFIRMED", "AGENT_PROBE", "AGENT_PAY"],
+  "sse_events": ["CONNECTED", "BRIDGE_SETTLED", "X402_DISPENSED", "XAHAU_MINT_CONFIRMED"],
   "networks": {
     "xrpl": {"rpc": "https://xrplcluster.com", "currency": "RLUSD", "issuer": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De"},
     "base": {"currency": "USDC", "contract": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"},
     "xahau": {"rpc": "https://xahau.network", "currency": "XAH", "native": true, "hooks_enabled": true}
-  },
-  "related_services": {
-    "squeezeos": "https://squeezeos-api.onrender.com/.well-known/agents.json",
-    "proof402": "https://four02proof.onrender.com/.well-known/agents.json"
   }
 }

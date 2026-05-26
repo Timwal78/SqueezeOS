@@ -3,7 +3,7 @@
   "name": "com.scriptmasterlabs/ghost-layer",
   "title": "Ghost Layer — Dual-Chain Transparent Toll Gateway",
   "description": "Neutral bridge between XRPL native RLUSD payments and Base/EVM gasless USDC authorization (EIP-3009). Enables autonomous AI agents to transact across both chains with a single unified settlement flow. XAH/Xahau support. Every bridge event immutably logged. Zero custody.",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "websiteUrl": "https://ghost-layer.onrender.com",
   "repository": {
     "type": "git",
@@ -38,14 +38,13 @@
   "payment": {
     "protocol": "x402",
     "assets": ["RLUSD/XRPL", "USDC/Base", "XAH/Xahau"],
-    "free_tools": ["ghost_bridge_health", "ghost_audit_stats"]
+    "free_tools": ["ghost_agent_loyalty"]
   },
   "_meta": {
     "io.modelcontextprotocol.registry/publisher-provided": {
       "operator": "Script Master Labs",
       "contact": "https://www.scriptmasterlabs.com",
       "payment_protocol": "x402",
-      "audit": "https://ghost-layer.onrender.com/api/ghost/audit",
       "llms_txt": "https://ghost-layer.onrender.com/llms.txt"
     }
   }

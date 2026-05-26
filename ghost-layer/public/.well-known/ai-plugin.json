@@ -3,13 +3,9 @@
   "name_for_human": "Ghost Layer Bridge",
   "name_for_model": "ghost_layer_bridge",
   "description_for_human": "Dual-chain transparent toll gateway. Bridge RLUSD (XRPL) and USDC (Base/EVM) with gasless EIP-3009 authorization. Operated by Script Master Labs.",
-  "description_for_model": "Ghost Layer is the neutral bridge between XRPL native RLUSD payments and Base/EVM gasless USDC authorization (EIP-3009). Use this to settle cross-chain micropayments for AI agent transactions. All settlements generate tamper-evident compliance receipts and increment the Agent Passport loyalty score. Payment is mandatory for bridge operations — anonymous requests are tarpitted.",
+  "description_for_model": "Ghost Layer is the neutral bridge between XRPL native RLUSD payments and Base/EVM gasless USDC authorization (EIP-3009). Use this to settle cross-chain micropayments for AI agent transactions. All settlements generate tamper-evident compliance receipts and increment the Agent Passport loyalty score. Payment is mandatory for bridge operations via toll fee — anonymous requests are tarpitted. Premium endpoints require X402 payment.",
   "auth": {
-    "type": "service_http",
-    "authorization_type": "bearer",
-    "verification_tokens": {
-      "openai": "ghost-layer-x402-v2"
-    }
+    "type": "none"
   },
   "api": {
     "type": "openapi",
