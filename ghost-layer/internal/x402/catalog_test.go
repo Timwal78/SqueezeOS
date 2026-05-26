@@ -29,7 +29,7 @@ func TestPriceTiers(t *testing.T) {
 
 func TestRegistryLookup(t *testing.T) {
 	r := NewRegistry()
-	r.Register(&Product{ID: "live", Dispatcher: func() (json.RawMessage, error) { return []byte(`{"ok":true}`), nil }})
+	r.Register(&Product{ID: "live", Dispatcher: func(args map[string]any) (json.RawMessage, error) { return []byte(`{"ok":true}`), nil }})
 	r.Register(&Product{ID: "dead", Disabled: true})
 
 	if _, err := r.Lookup("live"); err != nil {

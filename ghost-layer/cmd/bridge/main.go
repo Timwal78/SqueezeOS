@@ -24,8 +24,10 @@ import (
 	"syscall"
 	"time"
 
+	"crypto/ed25519"
 	"ghost-layer-core/internal/chain"
 	"ghost-layer-core/internal/crypto"
+	"ghost-layer-core/internal/ledger"
 	"ghost-layer-core/internal/router"
 	"ghost-layer-core/internal/toll"
 	"ghost-layer-core/internal/x402"
@@ -112,6 +114,8 @@ var hub = &sseHub{clients: make(map[chan []byte]struct{})}
 // ── Sovereign WebSocket Metrics Hub + Agent Loyalty Ledger ────────────────────
 var metricsHub = router.NewMetricsHub()
 var agentLedger = toll.NewAgentLedger()
+var bridgeLedger = ledger.NewLedger(10000)
+var attestationPrivKey ed25519.PrivateKey
 
 // writeJSONErr writes a {"error": "<code>"} body with the given HTTP status.
 // Used by the x402 routes for consistent error envelopes.
@@ -131,7 +135,7 @@ func init() {
 		ID:        "routing.telemetry",
 		Name:      "Routing Telemetry (60s)",
 		BasePrice: 50000, // 0.05 RLUSD in drops
-		Dispatcher: func() (json.RawMessage, error) {
+		Dispatcher: func(args map[string]any) (json.RawMessage, error) {
 			payload := map[string]interface{}{
 				"tps":             metricsHub.RollingTPS(),
 				"total_bridges":   metricsHub.TotalBridges(),
@@ -141,8 +145,30 @@ func init() {
 			return json.Marshal(payload)
 		},
 	})
+	
+	x402Registry.Register(&x402.Product{
+		ID:        "bridge.attestation",
+		Name:      "Institutional Settlement Attestation",
+		BasePrice: 100000, // 0.10 RLUSD
+		Dispatcher: func(args map[string]any) (json.RawMessage, error) {
+			txHash, ok := args["tx_hash"].(string)
+			if !ok || txHash == "" {
+				return nil, errors.New("ERR_MISSING_TX_HASH")
+			}
+			rec, ok := bridgeLedger.Lookup(txHash)
+			if !ok {
+				return nil, errors.New("ERR_TX_NOT_FOUND")
+			}
+			env, err := x402.BuildAndSign(rec, attestationPrivKey)
+			if err != nil {
+				return nil, err
+			}
+			return json.Marshal(env)
+		},
+	})
+
 	// Reserved (disabled) entries — visible in catalog listing, not dispensable.
-	for _, id := range []string{"bridge.attestation", "bridge.priority", "cube.mint"} {
+	for _, id := range []string{"bridge.priority", "cube.mint"} {
 		x402Registry.Register(&x402.Product{ID: id, Disabled: true, BasePrice: 100000})
 	}
 }
@@ -462,6 +488,16 @@ func main() {
 	if os.Getenv("X402_TOKEN_SECRET") == "" {
 		log.Fatalf("[FATAL] X402_TOKEN_SECRET not set — x402 vendor cannot sign invoices. Set X402_TOKEN_SECRET in Render secrets.")
 	}
+	
+	if keyHex := os.Getenv("ATTESTATION_PRIVATE_KEY"); keyHex != "" {
+		b, err := hex.DecodeString(keyHex)
+		if err != nil || len(b) != ed25519.PrivateKeySize {
+			log.Fatalf("[FATAL] ATTESTATION_PRIVATE_KEY is malformed (must be 64-byte hex)")
+		}
+		attestationPrivKey = ed25519.PrivateKey(b)
+	} else {
+		log.Fatalf("[FATAL] ATTESTATION_PRIVATE_KEY not set")
+	}
 
 	var xrplClient *chain.XRPLClient
 	if xrplKey != "" {
@@ -563,8 +599,9 @@ func main() {
 			"total_bridges":  metricsHub.TotalBridges(),
 			"x402_compliant": true,
 			"loyalty_matrix": true,
-			"x402_endpoint":  "/v1/x402",
-			"x402_products":  x402Registry.Listing(),
+			"x402_endpoint":      "/v1/x402",
+			"x402_products":      x402Registry.Listing(),
+			"attestation_pubkey": hex.EncodeToString(attestationPrivKey.Public().(ed25519.PublicKey)),
 		})
 	})
 
@@ -629,6 +666,7 @@ func main() {
 		var body struct {
 			ProductID   string `json:"product_id"`
 			AgentWallet string `json:"agent_wallet"`
+			TxHash      string `json:"tx_hash,omitempty"`
 		}
 		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
 			writeJSONErr(w, http.StatusBadRequest, "ERR_BAD_REQUEST")
@@ -644,7 +682,24 @@ func main() {
 			t, _ := agentLedger.AgentStats(body.AgentWallet)
 			tier = t
 		}
-		inv, err := x402.Issue(product.ID, body.AgentWallet, tier, product.BasePrice, treasuryXRPL, os.Getenv("X402_TOKEN_SECRET"))
+		
+		if product.ID == "bridge.attestation" {
+			if body.TxHash == "" {
+				writeJSONErr(w, http.StatusBadRequest, "ERR_MISSING_TX_HASH")
+				return
+			}
+			if _, ok := bridgeLedger.Lookup(body.TxHash); !ok {
+				writeJSONErr(w, http.StatusNotFound, "ERR_TX_NOT_FOUND")
+				return
+			}
+		}
+
+		args := map[string]any{}
+		if body.TxHash != "" {
+			args["tx_hash"] = body.TxHash
+		}
+		
+		inv, err := x402.Issue(product.ID, body.AgentWallet, tier, product.BasePrice, treasuryXRPL, os.Getenv("X402_TOKEN_SECRET"), args)
 		if err != nil {
 			writeJSONErr(w, http.StatusInternalServerError, err.Error())
 			return
@@ -664,7 +719,7 @@ func main() {
 				writeJSONErr(w, http.StatusNotFound, err.Error())
 				return
 			}
-			inv, err := x402.Issue(pid, "", "BRONZE", product.BasePrice, treasuryXRPL, os.Getenv("X402_TOKEN_SECRET"))
+			inv, err := x402.Issue(pid, "", "BRONZE", product.BasePrice, treasuryXRPL, os.Getenv("X402_TOKEN_SECRET"), nil)
 			if err != nil {
 				writeJSONErr(w, http.StatusInternalServerError, err.Error())
 				return
@@ -690,7 +745,7 @@ func main() {
 			writeJSONErr(w, http.StatusConflict, "ERR_REPLAY")
 			return
 		}
-		out, err := x402Registry.Dispatch(pid)
+		out, err := x402Registry.Dispatch(pid, payload.Args)
 		if err != nil {
 			writeJSONErr(w, http.StatusInternalServerError, err.Error())
 			return
@@ -700,6 +755,16 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(out)
+	})
+
+	r.Get("/v1/x402/attestation/pubkey", func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		pub := attestationPrivKey.Public().(ed25519.PublicKey)
+		json.NewEncoder(w).Encode(map[string]string{
+			"public_key": hex.EncodeToString(pub),
+			"alg":        "ed25519",
+			"issuer":     "ghost-layer.onrender.com",
+		})
 	})
 
 	// ── INSTITUTIONAL EXECUTION PATH ─────────────────────────────────────────
@@ -808,6 +873,20 @@ func main() {
 			"dest":       p.DestinationWallet[:min(len(p.DestinationWallet), 12)] + "...",
 		})
 		metricsHub.BroadcastBridgeSettled(chain, txHash, grossAmt, fee, netAmt, newTier, effectiveBPS)
+
+		bridgeLedger.Record(ledger.BridgeRecord{
+			BridgeID:          "",
+			TxHash:            txHash,
+			Chain:             chain,
+			SourceWallet:      p.SourceWallet,
+			DestinationWallet: p.DestinationWallet,
+			GrossAmount:       p.GrossAmount,
+			FeeAmount:         fee.String(),
+			NetAmount:         netAmt.String(),
+			EffectiveBPS:      effectiveBPS,
+			AgentTier:         newTier,
+			SettledAt:         time.Now().Unix(),
+		})
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{

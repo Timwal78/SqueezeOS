@@ -69,3 +69,22 @@ func TestVerifyMalformed(t *testing.T) {
 		t.Fatal("expected error for token with no dot")
 	}
 }
+
+func TestSignVerifyWithArgs(t *testing.T) {
+	p := Payload{
+		Pid: "bridge.attestation", Iid: "iid1",
+		Exp: time.Now().Add(time.Minute).Unix(),
+		Args: map[string]any{"tx_hash": "ABC123"},
+	}
+	tok, err := Sign(p, "s")
+	if err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+	got, err := Verify(tok, "s")
+	if err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+	if got.Args["tx_hash"] != "ABC123" {
+		t.Fatalf("args.tx_hash round-trip failed: got %v", got.Args["tx_hash"])
+	}
+}

@@ -24,13 +24,13 @@ const InvoiceTTL = 5 * time.Minute
 
 // Issue mints a new invoice for productID, signs the token, and returns the
 // full Invoice. Caller passes treasury address and HMAC secret from config.
-func Issue(productID, wallet, tier string, basePrice int64, treasury, secret string) (Invoice, error) {
+func Issue(productID, wallet, tier string, basePrice int64, treasury, secret string, args map[string]any) (Invoice, error) {
 	iid := newIID()
 	exp := time.Now().Add(InvoiceTTL).Unix()
 	price := Price(basePrice, tier)
 
 	tok, err := Sign(Payload{
-		Pid: productID, Wlt: wallet, Iid: iid, Exp: exp, Tier: tier,
+		Pid: productID, Wlt: wallet, Iid: iid, Exp: exp, Tier: tier, Args: args,
 	}, secret)
 	if err != nil {
 		return Invoice{}, err
