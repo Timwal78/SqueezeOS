@@ -102,6 +102,14 @@ body.owner .owner-only{display:block}
 .feed-hdr .ctrl{display:flex;gap:0.5rem;font-size:0.7rem}
 .feed-hdr .ctrl button{background:transparent;border:1px solid var(--line);color:var(--dim);padding:3px 8px;cursor:pointer;font-family:inherit;letter-spacing:1px}
 .feed-hdr .ctrl button.on{border-color:var(--green);color:var(--green);text-shadow:0 0 4px var(--green)}
+.find-wrap{position:relative;display:flex;align-items:center}
+.find-input{background:transparent;border:1px solid var(--line);color:var(--text);font-family:inherit;font-size:0.7rem;padding:3px 26px 3px 8px;width:140px;outline:none;letter-spacing:1px;transition:border-color 0.2s,width 0.2s}
+.find-input:focus{border-color:var(--blue);box-shadow:0 0 6px rgba(0,229,255,0.3);width:180px}
+.find-input::placeholder{color:var(--dim)}
+.find-clear{position:absolute;right:6px;background:none;border:none;color:var(--dim);cursor:pointer;font-size:0.75rem;padding:0;line-height:1;display:none}
+.find-clear.vis{display:block}
+.find-count{font-size:0.62rem;color:var(--blue);letter-spacing:1px;white-space:nowrap}
+mark.hit{background:rgba(0,229,255,0.25);color:var(--blue);border-radius:2px;padding:0 2px}
 .feed{padding:0.4rem 0;font-size:0.72rem}
 .evt{display:grid;grid-template-columns:auto 130px 80px 1fr;gap:0.6rem;padding:0.35rem 1rem;border-bottom:1px solid #0a0a0a;align-items:baseline}
 .evt:hover{background:#0a0a0a}
@@ -187,10 +195,10 @@ main{padding-bottom:60px}
 <div class="modal-bg" id="modal-bg">
   <div class="modal">
     <h2>OWNER MODE</h2>
-    <p>Paste your <code style="color:var(--orange)">OWNER_API_KEY</code> (the secret you set on the Railway env). The terminal will send it as <code style="color:var(--orange)">X-Owner-Key</code> on every request, unlocking the paid endpoints (Council, IWM 0DTE, Options Flow, Scan) at zero RLUSD cost.</p>
+    <p>Paste your <code style="color:var(--orange)">OWNER_API_KEY</code> (the secret you set in the Render env). The terminal will send it as <code style="color:var(--orange)">X-Owner-Key</code> on every request, unlocking the paid endpoints (Council, IWM 0DTE, Options Flow, Scan) at zero RLUSD cost.</p>
     <label>OWNER API KEY</label>
     <input type="password" id="owner-key-input" placeholder="paste here, then SAVE" autocomplete="off" spellcheck="false">
-    <p class="hint">Stored in this device's localStorage only. Never sent anywhere except your own Railway API.</p>
+    <p class="hint">Stored in this device's localStorage only. Never sent anywhere except your own Render API.</p>
     <div class="row">
       <button class="save" id="save-key">SAVE</button>
       <button class="clear" id="clear-key">CLEAR</button>
@@ -267,6 +275,11 @@ main{padding-bottom:60px}
   <div class="feed-hdr">
     <span class="title">▼ LIVE FLOW</span>
     <div class="ctrl">
+      <span class="find-count" id="find-count" style="display:none"></span>
+      <div class="find-wrap">
+        <input class="find-input" id="find-input" type="text" placeholder="FIND…" autocomplete="off" spellcheck="false" aria-label="Search live flow">
+        <button class="find-clear" id="find-clear" title="Clear search">✕</button>
+      </div>
       <button id="pause" class="on">⏸ PAUSE</button>
       <button id="clear">CLEAR</button>
     </div>
@@ -280,7 +293,7 @@ main{padding-bottom:60px}
   <span class="item"><span>EVENTS</span><b id="evt-count">0</b></span>
   <span class="item"><span>UPTIME</span><b id="uptime">—</b></span>
   <span class="item"><span>VERSION</span><b id="version">—</b></span>
-  <span class="item"><span>SOURCE</span><b style="color:var(--blue)">SqueezeOS · Railway</b></span>
+  <span class="item"><span>SOURCE</span><b style="color:var(--blue)">SqueezeOS · Render</b></span>
 </div>
 
 <script>
@@ -303,6 +316,7 @@ const $$ = (s,r=document)=>r.querySelectorAll(s);
 const state = {
   paused: false,
   events: [],
+  findQuery: "",
   cards: { AMC:{ts:0}, GME:{ts:0}, IWM:{ts:0} },
   flowAge: 0, scanAge: 0,
   apiOk: false, sseOk: false,
@@ -573,17 +587,45 @@ function pushEvent(e){
   $("#evt-count").textContent = state.events.length;
 }
 
+function highlight(text, query){
+  if(!query) return escapeHtml(text);
+  const escaped = escapeHtml(text);
+  const re = new RegExp("("+query.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+")","gi");
+  return escaped.replace(re,"<mark class='hit'>$1</mark>");
+}
+
 function renderFeed(){
   const feed = $("#feed");
   if(state.events.length===0){feed.innerHTML='<div class="empty">Awaiting events from /api/events SSE stream...</div>';return;}
   const known = ["SQUEEZE_ALERT","OPTIONS_SWEEP","DARK_POOL","COUNCIL_VERDICT","AGENT_PROBE","AGENT_PAY","SETTLEMENT_COMPLETE","FUTURES_SETTLED","CONNECTED","HEARTBEAT","ERROR"];
-  feed.innerHTML = state.events.slice(0,100).map((e,i)=>{
+  const q = (state.findQuery||"").trim().toLowerCase();
+  const visible = q
+    ? state.events.filter(e=>
+        (e.type||"").toLowerCase().includes(q)||
+        (e.sym||"").toLowerCase().includes(q)||
+        (e.body||"").toLowerCase().includes(q))
+    : state.events;
+
+  const countEl = $("#find-count");
+  if(q){
+    countEl.textContent = visible.length+" match"+(visible.length===1?"":"es");
+    countEl.style.display = "";
+  } else {
+    countEl.style.display = "none";
+  }
+
+  if(visible.length===0){
+    feed.innerHTML=`<div class="empty">No events match "${escapeHtml(q)}"</div>`;
+    return;
+  }
+  feed.innerHTML = visible.slice(0,100).map((e,i)=>{
     const cls = "type-" + (known.includes(e.type)?e.type:"DEFAULT");
-    return `<div class="evt ${i===0?"new":""}">
+    const isNew = !q && i===0;
+    return `<div class="evt ${isNew?"new":""}">
       <span class="ts">${fmtTs(e.ts)}</span>
-      <span class="type ${cls}">${e.type}</span>
-      <span class="sym">${e.sym||""}</span>
-      <span class="body">${escapeHtml(e.body)}</span>
+      <span class="type ${cls}">${highlight(e.type,q)}</span>
+      <span class="sym">${highlight(e.sym||"",q)}</span>
+      <span class="body">${highlight(e.body,q)}</span>
     </div>`;
   }).join("");
 }
@@ -605,6 +647,17 @@ function tickClock(){
 // Pause / clear
 $("#pause").addEventListener("click", ()=>{state.paused=!state.paused;const b=$("#pause");b.textContent=state.paused?"▶ PLAY":"⏸ PAUSE";b.classList.toggle("on",!state.paused);});
 $("#clear").addEventListener("click", ()=>{state.events=[];renderFeed();$("#evt-count").textContent="0";});
+
+// Find conversation
+const findInput = $("#find-input");
+const findClear = $("#find-clear");
+findInput.addEventListener("input", ()=>{
+  state.findQuery = findInput.value;
+  findClear.classList.toggle("vis", !!findInput.value);
+  renderFeed();
+});
+findInput.addEventListener("keydown", (ev)=>{ if(ev.key==="Escape"){findInput.value="";state.findQuery="";findClear.classList.remove("vis");renderFeed();} });
+findClear.addEventListener("click", ()=>{ findInput.value="";state.findQuery="";findClear.classList.remove("vis");findInput.focus();renderFeed(); });
 
 // Modal
 document.getElementById("logo-settings").addEventListener("click",()=>{$("#owner-key-input").value=state.ownerKey;$("#modal-bg").classList.add("open");});
