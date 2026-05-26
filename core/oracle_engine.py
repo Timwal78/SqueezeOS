@@ -108,16 +108,14 @@ class OracleEngine:
             walls = ee.get_gamma_walls(symbol)
             if not walls:
                 return {}
-            # Find nearest wall above and below current price
-            above = [w for w in walls if w.get("strike", 0) > price]
-            below = [w for w in walls if w.get("strike", 0) <= price]
-            nearest_above = min(above, key=lambda w: w["strike"] - price, default=None)
-            nearest_below = max(below, key=lambda w: w["strike"], default=None)
+            
+            # The execution_engine returns a single dict with call_wall, put_wall, total_gex, etc.
+            # Convert this to what oracle_engine expects.
             return {
-                "wall_above": nearest_above.get("strike") if nearest_above else None,
-                "wall_below": nearest_below.get("strike") if nearest_below else None,
-                "wall_strength_above": nearest_above.get("gex", 0) if nearest_above else 0,
-                "wall_strength_below": nearest_below.get("gex", 0) if nearest_below else 0,
+                "wall_above": walls.get("call_wall"),
+                "wall_below": walls.get("put_wall"),
+                "wall_strength_above": walls.get("total_gex", 0),  # Using total_gex as proxy
+                "wall_strength_below": walls.get("total_gex", 0),
             }
         except Exception as e:
             logger.warning(f"[Oracle] Gamma walls unavailable for {symbol}: {e}")
@@ -145,7 +143,20 @@ class OracleEngine:
             sml = self._get_service("sml")
             if not sml:
                 return {}
-            result = sml.compute_all(symbol)
+                
+            dm = self._get_service("dm")
+            market_history = {}
+            if dm:
+                for sym in ["SPY", "VIX", "TLT", "DXY", "QQQ", "IWM", "IJR", "XRT", symbol]:
+                    try:
+                        # Fallback to empty if get_historical_bars fails or returns None
+                        bars = dm.get_historical_bars(sym, timeframe="1Day", limit=100)
+                        if bars is not None:
+                            market_history[sym] = bars
+                    except Exception:
+                        pass
+                        
+            result = sml.compute_all(symbol, market_history=market_history)
             score = result.get("fractal_score", 0) if isinstance(result, dict) else 0
             anchors = FRACTAL_ANCHORS.get(symbol, [])
             best = max(anchors, key=lambda a: a["multiplier"] * score, default=None)
@@ -187,13 +198,28 @@ class OracleEngine:
         """Pull gamma flip signal from GammaFlowEngine."""
         try:
             from gamma_flow_engine import GammaFlowEngine
+            import asyncio
             dm = self._get_service("dm")
             if not dm:
                 return {}
             polygon = getattr(dm, 'polygon', None) or dm
             watchlist = [symbol]
             gfe = GammaFlowEngine(polygon=polygon, watchlist=watchlist)
-            result = gfe.process_ticker(symbol)
+            
+            # Execute async coroutine safely
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+                
+            if loop and loop.is_running():
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    # Run in a separate thread's new event loop
+                    result = pool.submit(lambda: asyncio.run(gfe.process_ticker(symbol))).result()
+            else:
+                result = asyncio.run(gfe.process_ticker(symbol))
+                
             if not result:
                 return {}
             return {
