@@ -19,6 +19,8 @@ services:
         sync: false
       - key: PROOF402_SERVER_URL
         value: https://four02proof.onrender.com
+      - key: OWNER_API_KEY
+        sync: false
       - key: PORT
         value: "8182"
     healthCheckPath: /api/status

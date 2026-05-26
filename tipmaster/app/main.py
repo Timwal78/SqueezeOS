@@ -282,6 +282,16 @@ async def _handle_command(cmd, sender_fid: int, sender_username: str, cast_hash:
         await _handle_tip(cmd, sender_fid, sender_username, cast_hash)
 
 
+async def _post_tip_side_effects(sender_fid: int, amount: float, recipient_fid: int) -> None:
+    try:
+        wallet = await get_wallet_by_fid(sender_fid)
+        if wallet:
+            stats = await get_tip_stats(sender_fid)
+            await bureau.push_tip_activity(wallet, amount, stats["sent_count"])
+    except Exception as exc:
+        log.debug("Side effects failed (non-critical): %s", exc)
+
+
 async def _handle_tip(cmd, sender_fid: int, sender_username: str, cast_hash: str) -> None:
     if not await is_setup_fee_paid(sender_fid):
         dest_tag = await get_destination_tag(sender_fid)
