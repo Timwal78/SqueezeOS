@@ -67,8 +67,9 @@ def proprietary_ema_signal(symbol):
         "bars_used": len(closes),
         "ema_suite": result,
         "meta": {
-            "engine_1": "Tesla Sequence 1-24-578-963 — Price Elastic Stretch",
-            "engine_3": "Lucas Phi² Sequence 11-47-123-321 — Dark-Pool Volume Accumulation",
+            "engine_1":   "Tesla Sequence 1-24-578-963 — Price dimension only",
+            "engine_3":   "Lucas Phi² Sequence 11-47-123-321 — Volume dimension only",
+            "dimensions": "ISOLATED: Engine 1 owns price. Engine 3 owns volume.",
         },
     }
 
