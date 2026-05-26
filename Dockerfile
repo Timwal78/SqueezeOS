@@ -12,4 +12,4 @@ RUN pip install --prefer-binary --no-cache-dir -r requirements.txt
 
 COPY . .
 EXPOSE 8182
-CMD ["gunicorn", "--bind", "0.0.0.0:8182", "--workers", "1", "--threads", "4", "--timeout", "120", "core.app:create_app()"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8182", "--workers", "1", "--threads", "4", "--timeout", "120", "--max-requests", "500", "--max-requests-jitter", "50", "--preload", "core.app:create_app()"]
