@@ -9,7 +9,7 @@ GET  /mcp  — server info (health check)
 
 Supported methods:
   initialize        — handshake + capabilities
-  tools/list        — all 24 tools
+  tools/list        — all 26 tools
   tools/call        — execute a tool (proxies to REST API)
   ping              — keepalive
   notifications/*   — silently acknowledged
@@ -32,7 +32,7 @@ PROOF402_BASE = "https://four02proof.onrender.com"
 
 _SERVER_INFO = {
     "name": "squeezeos",
-    "version": "3.1.0",
+    "version": "4.0.0",
     "description": "SqueezeOS — Institutional AI trading intelligence for autonomous agents",
 }
 
@@ -371,6 +371,38 @@ _TOOLS = [
         },
     },
     {
+        "name": "convergence_check",
+        "description": (
+            "Run all 5 proprietary engines simultaneously against a symbol and evaluate the Beastmode convergence gate. "
+            "Engine 1 (Tesla 1·24·578·963): price elasticity / suppression detection. "
+            "Engine 2 (T+13/C+35): FTD Settlement Clock — auto-stamps ignition when E3 fires, counts 72-hour Kill Zone. "
+            "Engine 3 (Lucas Phi² 11·47·123·321): kinetic volume void tracker — dark pool accumulation detection. "
+            "Engine 4 (Temporal Mirror): Feb-22-2026 pivot shadow — ≥70% Pearson correlation = temporal aligned. "
+            "Engine 5 (Gann 1·42·369·578): 42 EMA curl toward 369 macro frequency = Gann confirmation. "
+            "Also runs the Options Sniper: scans Tradier for 0-14 DTE calls/puts in the 0.35-0.45 delta range when convergence is high. "
+            "Signal levels: BEASTMODE (all 5) > HIGH_CONVERGENCE (4) > CONVERGENCE (3) > LIE_DETECTOR_ACTIVE > PARTIAL_ALIGNMENT. "
+            "Auto-fires Discord alert on BEASTMODE and HIGH_CONVERGENCE. Free endpoint."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["symbol"],
+            "properties": {
+                "symbol": {"type": "string", "description": "US equity ticker — best on high-manipulation assets (GME, AMC, MSTR, PLTR, HOOD)"},
+                "sniper": {"type": "boolean", "description": "Run Tradier options sniper (default true, only fires on HIGH_CONVERGENCE+)"},
+            },
+        },
+    },
+    {
+        "name": "beastmode_scan",
+        "description": (
+            "Scan the full Beastmode universe (GME AMC MSTR PLTR HOOD IWM SPY QQQ NVDA TSLA) for multi-engine convergence. "
+            "Returns only symbols at HIGH_CONVERGENCE or BEASTMODE signal level. "
+            "Includes options sniper output for each hit. Auto-fires Discord alerts for any Beastmode locks found. "
+            "Use this as the autonomous agent's primary market surveillance call. Free endpoint."
+        ),
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
         "name": "proprietary_ema_signal",
         "description": (
             "SML Proprietary EMA Suite — Engine 1 (Tesla Sequence 1-24-578-963) + "
@@ -566,6 +598,14 @@ def _dispatch(name: str, args: dict, req_headers: dict) -> dict:
     if name == "settlement_trigger":
         contract_id = args.pop("contract_id", "")
         return _text(_proxy("POST", f"{sq}/api/settlement/trigger/{contract_id}", json_body=args))
+
+    if name == "convergence_check":
+        symbol = (args.get("symbol") or "GME").upper()
+        sniper = "false" if args.get("sniper") is False else "true"
+        return _text(_proxy("GET", f"{sq}/api/convergence/{symbol}", params={"sniper": sniper}))
+
+    if name == "beastmode_scan":
+        return _text(_proxy("GET", f"{sq}/api/beastmode"))
 
     if name == "proprietary_ema_signal":
         symbol = (args.get("symbol") or "IWM").upper()
