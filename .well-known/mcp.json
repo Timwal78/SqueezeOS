@@ -3,8 +3,8 @@
   "name": "squeezeos",
   "display_name": "SqueezeOS Market Intelligence",
   "description": "Institutional AI trading intelligence tools for autonomous agents. Squeeze scanner, options flow, IWM 0DTE analysis, and AI council verdicts \u2014 all gated by x402 RLUSD micropayment on XRPL via 402Proof. No API keys required.",
-  "homepage": "https://scriptmasterlabs.com/terminal",
-  "openapi_spec": "https://scriptmasterlabs.com/openapi.json",
+  "homepage": "https://www.scriptmasterlabs.com",
+  "openapi_spec": "https://squeezeos-api.onrender.com/.well-known/openapi.json",
   "payment": {
     "standard": "x402",
     "description": "HTTP 402 micropayment standard. Agents pay RLUSD on XRPL per API call. No registration or API keys required.",
