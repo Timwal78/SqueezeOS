@@ -7,6 +7,7 @@ from decimal import Decimal
 from typing import Any
 
 from fastapi import FastAPI, Request, Response, HTTPException, Header
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -79,6 +80,18 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="TipMaster", version="2.0.0", lifespan=lifespan)
 
+
+@app.get("/", include_in_schema=False)
+async def index():
+    return FileResponse("static/index.html")
+
+@app.get("/sitemap.xml", include_in_schema=False)
+async def sitemap():
+    return FileResponse("static/sitemap.xml", media_type="application/xml")
+
+@app.get("/robots.txt", include_in_schema=False)
+async def robots():
+    return FileResponse("static/robots.txt", media_type="text/plain")
 
 @app.get("/health")
 async def health():
