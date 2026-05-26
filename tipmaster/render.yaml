@@ -23,13 +23,9 @@ services:
         value: /data/tipmaster.db
       - key: TIPMASTER_TREASURY_ADDRESS
         sync: false
-      # Safety gate — keep "false" until the deposit/custody flow lands.
-      # When false, tipping commands respond with a maintenance message
-      # and never invoke two_leg_tip (which would otherwise drain the bot
-      # wallet because XRPL does not support delegated debits). All other
-      # commands (register, balance, leaderboard, stats, help) work normally.
+      # Custody rebuild landed (PR #61) — P2P Xaman links, no wallet drain risk.
       - key: TIPMASTER_TIPS_ENABLED
-        value: "false"
+        value: "true"
       - key: XRPL_RPC_URL
         value: https://xrplcluster.com
       - key: PROOF402_BASE_URL

@@ -287,10 +287,29 @@ async def _handle_tip(cmd, sender_fid: int, sender_username: str, cast_hash: str
 
     amount = Decimal(str(cmd.amount))
     currency = getattr(cmd, "currency", "RLUSD")
-    
+
     pay_link = generate_p2p_payment_link(recipient_wallet, amount)
-    
+
     await caster.reply_to_cast(
         cast_hash,
         f"@{sender_username} Ready to tip @{cmd.target_username} {amount} {currency}! Click here to sign the P2P transaction: {pay_link}"
     )
+
+    # Record tip intent so leaderboard and stats reflect activity.
+    # The Xaman link is P2P — payment goes directly on-chain. We record
+    # here since there is no callback to confirm completion.
+    recipient_fid = await get_fid_by_username(cmd.target_username)
+    await record_tip(
+        sender_fid=sender_fid,
+        sender_user=sender_username,
+        recipient_user=cmd.target_username,
+        amount=float(amount),
+        fee=0.0,
+        boost=False,
+        tx_hash="",
+        cast_hash=cast_hash,
+        recipient_fid=recipient_fid,
+        currency=currency,
+        is_internal=False,
+    )
+    asyncio.create_task(_post_tip_side_effects(sender_fid, float(amount), sender_fid))
