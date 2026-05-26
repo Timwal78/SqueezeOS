@@ -3,6 +3,9 @@
   "outputDirectory": "dist",
   "installCommand": "npm install --legacy-peer-deps",
   "framework": "vite",
+  "env": {
+    "VITE_GATEWAY_WS": "wss://ghost-layer.onrender.com"
+  },
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ],
