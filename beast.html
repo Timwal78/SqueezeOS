@@ -110,13 +110,14 @@ body.owner .owner-only{display:block}
 .find-clear.vis{display:block}
 .find-count{font-size:0.62rem;color:var(--blue);letter-spacing:1px;white-space:nowrap}
 mark.hit{background:rgba(0,229,255,0.25);color:var(--blue);border-radius:2px;padding:0 2px}
-.feed{padding:0.4rem 0;font-size:0.72rem}
-.evt{display:grid;grid-template-columns:auto 130px 80px 1fr;gap:0.6rem;padding:0.35rem 1rem;border-bottom:1px solid #0a0a0a;align-items:baseline}
-.evt:hover{background:#0a0a0a}
-.evt .ts{color:var(--dim);font-size:0.65rem;font-variant-numeric:tabular-nums}
-.evt .type{font-weight:bold;letter-spacing:1px;font-size:0.65rem}
-.evt .sym{color:var(--blue);font-weight:bold;text-shadow:0 0 4px var(--blue)}
-.evt .body{color:var(--text);font-size:0.7rem;word-break:break-word;opacity:0.9}
+.feed{padding:0.4rem 0;font-size:0.72rem;min-height:calc(100vh - 320px)}
+.evt{display:flex;flex-direction:column;padding:0.45rem 1rem;border-bottom:1px solid #111}
+.evt:hover{background:#0c0c0c}
+.evt .evt-hdr{display:flex;gap:0.5rem;align-items:center;margin-bottom:0.25rem;flex-wrap:wrap}
+.evt .ts{color:var(--dim);font-size:0.62rem;font-variant-numeric:tabular-nums;white-space:nowrap}
+.evt .type{font-weight:bold;letter-spacing:1px;font-size:0.62rem;white-space:nowrap}
+.evt .sym{color:var(--blue);font-weight:bold;text-shadow:0 0 4px var(--blue);font-size:0.7rem}
+.evt .body{color:var(--text);font-size:0.75rem;word-break:break-word;line-height:1.45;opacity:0.92}
 .evt.new{animation:flash 0.6s}
 @keyframes flash{0%{background:rgba(57,255,20,0.2)}100%{background:transparent}}
 .type-SQUEEZE_ALERT{color:var(--green)}
@@ -167,9 +168,10 @@ main{padding-bottom:60px}
   .card .price{font-size:1.8rem}
   .card .dir{font-size:1.1rem}
   .cards,.flow-grid{gap:0.75rem;padding:0.75rem}
-  .evt{grid-template-columns:auto 160px 100px 1fr;font-size:0.8rem;padding:0.5rem 1.5rem}
-  .evt .ts{font-size:0.75rem}
-  .evt .body{font-size:0.78rem}
+  .evt{padding:0.5rem 1.5rem}
+  .evt .ts{font-size:0.68rem}
+  .evt .type{font-size:0.68rem}
+  .evt .body{font-size:0.8rem}
   .feed-hdr,.section-hdr{padding:0.8rem 1.5rem}
 }
 @media (min-width:1200px){
@@ -446,13 +448,26 @@ async function pullFlow(){
   state.flowAge = Date.now();
   $("#flow-age").textContent = "now";
   for(const sym of ["AMC","GME","IWM"]){
+    const card = $(`.flow[data-flow-sym="${sym}"]`);
     try{
       const r = await fetch(`${API_BASE}/api/options?symbol=${sym}`, {cache:'no-store', headers: authHeaders()});
-      const j = await r.json();
+      const text = await r.text();
+      let j;
+      try{ j = JSON.parse(text); }catch{
+        const msg = r.status===402 ? "payment required — set OWNER_API_KEY on server"
+                  : r.status===503 ? "engine offline"
+                  : `HTTP ${r.status} — server returned non-JSON`;
+        if(card) card.innerHTML = `<div class="sym">${sym}</div><div class="err">${escapeHtml(msg)}</div>`;
+        continue;
+      }
+      if(!r.ok){
+        const msg = j.error || j.message || `HTTP ${r.status}`;
+        if(card) card.innerHTML = `<div class="sym">${sym}</div><div class="err">${escapeHtml(msg)}</div>`;
+        continue;
+      }
       renderFlow(sym, j);
     }catch(e){
-      const card = $(`.flow[data-flow-sym="${sym}"]`);
-      if(card) card.innerHTML = `<div class="sym">${sym}</div><div class="err">err: ${escapeHtml(e.message)}</div>`;
+      if(card) card.innerHTML = `<div class="sym">${sym}</div><div class="err">${escapeHtml(e.message)}</div>`;
     }
   }
 }
@@ -486,8 +501,19 @@ async function pullScan(){
   if(!isOwner()) return;
   try{
     const r = await fetch(`${API_BASE}/api/scan`, {cache:'no-store', headers: authHeaders()});
-    if(!r.ok) throw new Error("HTTP "+r.status);
-    const j = await r.json();
+    const text = await r.text();
+    let j;
+    try{ j = JSON.parse(text); }catch{
+      const msg = r.status===402 ? "payment required — set OWNER_API_KEY on server"
+                : r.status===503 ? "engine offline"
+                : `HTTP ${r.status} — server returned non-JSON`;
+      $("#scan-list").innerHTML = `<div class="empty">${escapeHtml(msg)}</div>`;
+      return;
+    }
+    if(!r.ok){
+      $("#scan-list").innerHTML = `<div class="empty">${escapeHtml(j.error || j.message || "HTTP "+r.status)}</div>`;
+      return;
+    }
     state.scanAge = Date.now();
     $("#scan-age").textContent = j.cache_age_seconds!=null ? Math.round(j.cache_age_seconds)+"s old · "+(j.universe_size||0)+" tracked" : "fresh";
     renderScan(j);
@@ -621,11 +647,14 @@ function renderFeed(){
   feed.innerHTML = visible.slice(0,100).map((e,i)=>{
     const cls = "type-" + (known.includes(e.type)?e.type:"DEFAULT");
     const isNew = !q && i===0;
+    const symHtml = e.sym ? `<span class="sym">${highlight(e.sym,q)}</span>` : "";
     return `<div class="evt ${isNew?"new":""}">
-      <span class="ts">${fmtTs(e.ts)}</span>
-      <span class="type ${cls}">${highlight(e.type,q)}</span>
-      <span class="sym">${highlight(e.sym||"",q)}</span>
-      <span class="body">${highlight(e.body,q)}</span>
+      <div class="evt-hdr">
+        <span class="ts">${fmtTs(e.ts)}</span>
+        <span class="type ${cls}">${highlight(e.type,q)}</span>
+        ${symHtml}
+      </div>
+      <div class="body">${highlight(e.body,q)}</div>
     </div>`;
   }).join("");
 }
