@@ -111,6 +111,9 @@ func init() {
 		Name:      "Xahau Cube URIToken Mint",
 		BasePrice: 50000, // 0.05 RLUSD
 		Dispatcher: func(args map[string]any) (json.RawMessage, error) {
+			if _, ok := args["tx_hash"].(string); !ok {
+				return nil, errors.New("ERR_PAYMENT_REQUIRED")
+			}
 			if xahauClient == nil {
 				return nil, errors.New("ERR_XAHAU_NOT_CONFIGURED")
 			}
@@ -676,12 +679,7 @@ func main() {
 			tier = t
 		}
 		
-		if product.ID == "bridge.attestation" || product.ID == "cube.mint" {
-			if body.TxHash == "" {
-				writeJSONErr(w, http.StatusBadRequest, "ERR_MISSING_TX_HASH")
-				return
-			}
-			
+		if body.TxHash != "" {
 			if product.ID == "bridge.attestation" {
 				if _, ok := bridgeLedger.Lookup(body.TxHash); !ok {
 					writeJSONErr(w, http.StatusNotFound, "ERR_TX_NOT_FOUND")
