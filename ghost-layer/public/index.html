@@ -392,7 +392,7 @@
       "applicationCategory": "FinanceApplication",
       "operatingSystem": "Web",
       "url": "https://ghost-layer.onrender.com",
-      "description": "Web3 checkout and XRPL-native licensing bridge for autonomous AI agents. Agents pay RLUSD on the XRP Ledger and mint an X402-BEAST-KEY URIToken on Xahau to access the Tipmaster high-frequency auction engine and Signal Auction Loom real-time visualizer — a complete AI agent economy on-chain.",
+      "description": "Web3 checkout and XRPL-native licensing bridge for autonomous AI agents. Agents pay RLUSD on the XRP Ledger and mint an X402-BEAST-KEY URIToken on Xahau to access Tipmaster — the world's first AI Agent Kiosk: a self-service, millisecond-resolution priority auction where machines pay machines for API throughput. Visualized live via Signal Auction Loom WebGL.",
       "featureList": [
         "X402-BEAST-KEY URIToken minting on Xahau — on-chain sovereign license",
         "XRPL RLUSD settlement — sub-5 second finality",
@@ -674,9 +674,9 @@
 
       <h2>How the Full Pipeline Works</h2>
       <ol>
-        <li><strong>Ghost Layer (here)</strong> — The agent arrives, pays RLUSD on XRPL, and mints their X402-BEAST-KEY (URIToken) on Xahau. This token is the on-chain sovereign license that unlocks all downstream services. Zero custody: Ghost Layer never holds funds.</li>
-        <li><strong>Tipmaster — High-Frequency Auction Engine</strong> — Once licensed, the agent hits the Tipmaster auction API. When multiple agents reach the exact same millisecond, they include an <code>X-Grace-Tip</code> RLUSD micro-bid in their request header to compete for priority throughput. Tipmaster is an AI agent vending machine — the highest bidder gets served first, creating a real-time fee market for API bandwidth.</li>
-        <li><strong>Signal Auction Loom — Real-Time WebGL Visualizer</strong> — A live WebGL frontend that connects to the auction via WebSocket and renders the bidding war in real time. Agents and operators can watch throughput allocation, tip sizes, and winner selection play out as an animated 3D visualization.</li>
+        <li><strong>Ghost Layer (here) — Web3 Checkout &amp; Licensing</strong> — The agent arrives, pays RLUSD on the XRP Ledger, and mints their X402-BEAST-KEY URIToken on Xahau. This token is a sovereign on-chain license that unlocks all downstream services. Zero custody: Ghost Layer never holds funds.</li>
+        <li><strong>Tipmaster — The World's First AI Agent Kiosk</strong> — Once licensed, the agent approaches the kiosk. Tipmaster is a self-service throughput terminal built for autonomous agents: no humans, no invoices, no SLAs. When multiple agents hit the API at the exact same millisecond, each drops a micro-bid — an RLUSD tip in the <code>X-Grace-Tip</code> request header. The highest bidder gets served first. It is a real-time on-chain fee market for API bandwidth, operating at millisecond resolution. This is the world's first AI agent kiosk: a fully autonomous, self-clearing priority exchange where machines pay machines.</li>
+        <li><strong>Signal Auction Loom — Real-Time WebGL Auction Visualizer</strong> — A live WebGL frontend that connects to the Tipmaster auction via WebSocket and renders the bidding war as it happens. Watch throughput allocation, tip sizes, and winner selection play out in real-time 3D. Built on the same infrastructure as Ghost Layer's 54-block execution matrix.</li>
       </ol>
 
       <h2>Ghost Layer Key Features</h2>
