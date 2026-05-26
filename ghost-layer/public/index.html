@@ -392,18 +392,19 @@
       "applicationCategory": "FinanceApplication",
       "operatingSystem": "Web",
       "url": "https://ghost-layer.onrender.com",
-      "description": "Web3 checkout and XRPL-native licensing bridge for autonomous AI agents. Agents pay RLUSD on the XRP Ledger and mint an X402-BEAST-KEY URIToken on Xahau to access Tipmaster — the world's first AI Agent Kiosk: a self-service, millisecond-resolution priority auction where machines pay machines for API throughput. Visualized live via Signal Auction Loom WebGL.",
+      "description": "Ghost Layer is proprietary Web3 checkout and XRPL-native licensing infrastructure. Agents pay RLUSD on the XRP Ledger and mint an X402-BEAST-KEY URIToken on Xahau to unlock three products built on top: Agent Kiosk (world's first AI agent vending machine), Tipmaster (Farcaster tip bot), and Signal Auction Loom (real-time WebGL auction visualizer).",
       "featureList": [
-        "X402-BEAST-KEY URIToken minting on Xahau — on-chain sovereign license",
+        "Proprietary Web3 checkout and XRPL-native licensing infrastructure",
+        "X402-BEAST-KEY URIToken minting on Xahau — sovereign on-chain license",
         "XRPL RLUSD settlement — sub-5 second finality",
         "Base/EVM EIP-3009 gasless USDC authorization",
-        "Gateway to Tipmaster high-frequency AI agent auction engine",
-        "Signal Auction Loom WebGL visualizer integration via WebSocket",
+        "Powers Agent Kiosk — world's first AI agent vending machine",
+        "Powers Tipmaster — Farcaster RLUSD tip bot",
+        "Powers Signal Auction Loom — real-time WebGL auction visualizer",
         "Agent Passport loyalty tiers — Bronze through Diamond",
         "Tamper-evident compliance receipts with XRPL or EVM tx hash",
-        "Honeypot tarpit defense for unauthorized scanners",
         "HTTP 402 x402 payment protocol compliance",
-        "Admin KYB tier management for institutional agents"
+        "Honeypot tarpit defense for unauthorized scanners"
       ],
       "provider": {
         "@type": "Organization",
@@ -669,21 +670,26 @@
   <!-- Crawlable content for search engines / no-JS fallback -->
   <noscript>
     <div style="font-family:sans-serif;max-width:800px;margin:40px auto;padding:20px;color:#333;line-height:1.6">
-      <h1>Ghost Layer — Web3 Checkout &amp; Licensing Bridge for AI Agents</h1>
-      <p>Ghost Layer is the entry point of the Script Master Labs AI agent economy. It is a transparent toll gateway that handles Web3 checkout and XRPL-native licensing — any autonomous AI agent or human pays in RLUSD on the XRP Ledger and mints an X402-BEAST-KEY URIToken on Xahau to gain access to the platform's real-time APIs and auction infrastructure.</p>
+      <h1>Ghost Layer — Proprietary Web3 Checkout &amp; Licensing Infrastructure</h1>
+      <p>Ghost Layer is proprietary dual-chain infrastructure built by Script Master Labs. It is the foundation that three distinct products run on top of. Any autonomous AI agent or human pays RLUSD on the XRP Ledger and mints an X402-BEAST-KEY URIToken on Xahau — a sovereign on-chain license that grants access to the full ecosystem. Zero custody: Ghost Layer never holds funds.</p>
 
-      <h2>How the Full Pipeline Works</h2>
-      <ol>
-        <li><strong>Ghost Layer (here) — Web3 Checkout &amp; Licensing</strong> — The agent arrives, pays RLUSD on the XRP Ledger, and mints their X402-BEAST-KEY URIToken on Xahau. This token is a sovereign on-chain license that unlocks all downstream services. Zero custody: Ghost Layer never holds funds.</li>
-        <li><strong>Tipmaster — The World's First AI Agent Kiosk</strong> — Once licensed, the agent approaches the kiosk. Tipmaster is a self-service throughput terminal built for autonomous agents: no humans, no invoices, no SLAs. When multiple agents hit the API at the exact same millisecond, each drops a micro-bid — an RLUSD tip in the <code>X-Grace-Tip</code> request header. The highest bidder gets served first. It is a real-time on-chain fee market for API bandwidth, operating at millisecond resolution. This is the world's first AI agent kiosk: a fully autonomous, self-clearing priority exchange where machines pay machines.</li>
-        <li><strong>Signal Auction Loom — Real-Time WebGL Auction Visualizer</strong> — A live WebGL frontend that connects to the Tipmaster auction via WebSocket and renders the bidding war as it happens. Watch throughput allocation, tip sizes, and winner selection play out in real-time 3D. Built on the same infrastructure as Ghost Layer's 54-block execution matrix.</li>
-      </ol>
+      <h2>Three Products. One Foundation.</h2>
 
-      <h2>Ghost Layer Key Features</h2>
+      <h3>1. Agent Kiosk — The World's First AI Agent Vending Machine</h3>
+      <p>Agent Kiosk is a self-service throughput terminal built entirely for autonomous AI agents. No humans, no invoices, no SLAs. When multiple agents hit the API at the exact same millisecond, each drops a micro-bid — an RLUSD tip in the <code>X-Grace-Tip</code> request header. The highest bidder gets served first. This is a real-time on-chain fee market for API bandwidth operating at millisecond resolution: the world's first AI agent vending machine, where machines pay machines and the best tip wins.</p>
+
+      <h3>2. Tipmaster — Farcaster RLUSD Tip Bot</h3>
+      <p>Tipmaster is a social tipping bot for the Farcaster protocol. Users tip RLUSD to creators and community members directly on-chain. Powered by Neynar's Farcaster API, Tipmaster processes micropayments through Ghost Layer's XRPL settlement rails, giving every tip a tamper-evident on-chain receipt.</p>
+
+      <h3>3. Signal Auction Loom — Real-Time WebGL Auction Visualizer</h3>
+      <p>Signal Auction Loom is a live WebGL frontend that connects to the Agent Kiosk auction via WebSocket and renders the bidding war in real time. Watch throughput allocation, tip sizes, and winner selection play out as an animated 3D visualization — built on the same rendering infrastructure as Ghost Layer's 54-block execution matrix.</p>
+
+      <h2>Ghost Layer Infrastructure Features</h2>
       <ul>
+        <li>Proprietary XRPL-native Web3 checkout and licensing layer</li>
+        <li>X402-BEAST-KEY URIToken minting on Xahau — sovereign on-chain license</li>
         <li>XRPL RLUSD settlement with sub-5 second finality</li>
         <li>Base/EVM EIP-3009 gasless USDC authorization</li>
-        <li>X402-BEAST-KEY URIToken minting on Xahau for on-chain licensing</li>
         <li>Agent Passport loyalty tiers — Bronze through Diamond</li>
         <li>Tamper-evident compliance receipts with on-chain tx hash</li>
         <li>HTTP 402 x402 payment protocol compliance</li>
@@ -691,14 +697,13 @@
         <li>Dynamic NFT (dNFT) state tracking on Base and Xahau</li>
         <li>Zero-custody architecture — no funds ever held by Ghost Layer</li>
         <li>Honeypot tarpit defense for unauthorized scanners</li>
-        <li>Admin KYB tier management for institutional agents</li>
       </ul>
 
       <h2>MCP Integration</h2>
       <p>Ghost Layer exposes a Model Context Protocol (MCP) endpoint at <code>/mcp</code> for direct AI agent integration. Agents can query the x402 catalog, execute bridge payments, and verify compliance receipts programmatically without a browser.</p>
 
       <h2>Built by Script Master Labs</h2>
-      <p>Ghost Layer is part of the Script Master Labs AI-native financial infrastructure ecosystem: SqueezeOS market intelligence, 402Proof payment firewall, Tipmaster auction engine, Signal Auction Loom real-time visualizer, and SML Rails XRPL remittance rails.</p>
+      <p>Ghost Layer is the proprietary foundation of the Script Master Labs AI-native financial infrastructure stack: Agent Kiosk, Tipmaster, Signal Auction Loom, SqueezeOS market intelligence, 402Proof payment firewall, and SML Rails XRPL remittance.</p>
       <p>
         <a href="https://www.scriptmasterlabs.com">Script Master Labs</a> |
         <a href="https://signal-auction-loom.vercel.app">Signal Auction Loom</a> |
@@ -712,17 +717,15 @@
   <footer id="seo-footer">
     <a href="https://www.scriptmasterlabs.com" rel="noopener">Script Master Labs</a>
     <span class="footer-sep">·</span>
+    <a href="https://signal-auction-loom.vercel.app" rel="noopener">Agent Kiosk</a>
+    <span class="footer-sep">·</span>
+    <a href="https://tipmaster.onrender.com" rel="noopener">Tipmaster</a>
+    <span class="footer-sep">·</span>
     <a href="https://signal-auction-loom.vercel.app" rel="noopener">Signal Auction Loom</a>
     <span class="footer-sep">·</span>
     <a href="https://squeezeos-api.onrender.com" rel="noopener">SqueezeOS</a>
     <span class="footer-sep">·</span>
     <a href="https://four02proof.onrender.com" rel="noopener">402Proof</a>
-    <span class="footer-sep">·</span>
-    <a href="/.well-known/mcp.json">MCP Manifest</a>
-    <span class="footer-sep">·</span>
-    <a href="/llms.txt">LLMs.txt</a>
-    <span class="footer-sep">·</span>
-    <a href="/.well-known/openapi.json">OpenAPI</a>
     <span class="footer-sep">·</span>
     <a href="/sitemap.xml">Sitemap</a>
   </footer>
