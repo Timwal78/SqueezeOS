@@ -645,18 +645,17 @@ function applyMintSuccess(data) {
   setTimeout(() => { activePalette = 'default'; resetFaceColors(); }, 3000);
 }
 
-async function submitMint(payload, token) {
-  const headers = { 'Content-Type': 'application/json' };
-  if (token) headers['X-Payment-Token'] = token;
-  return fetch('/api/cube/state', { method: 'POST', headers, body: JSON.stringify(payload) });
+async function submitMint(payload) {
+  // Free state update, visual only. Broadcasts to all terminals.
+  return fetch('/api/cube/state', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
 }
 
 function showPayOverlay(invoice) {
   const overlay = document.getElementById('pay-overlay');
   if (!overlay) return;
-  document.getElementById('pay-addr').textContent  = invoice.pay_to  ?? '—';
-  document.getElementById('pay-amount').textContent = `${invoice.amount ?? '0.05'} ${invoice.asset ?? 'RLUSD'}`;
-  document.getElementById('pay-memo').textContent   = invoice.memo_hex ?? '—';
+  document.getElementById('pay-addr').textContent  = invoice.destination  ?? '—';
+  document.getElementById('pay-amount').textContent = `${(invoice.price_drops ?? 50000) / 1000000} ${invoice.currency ?? 'RLUSD'}`;
+  document.getElementById('pay-memo').textContent   = invoice.memo_required ?? '—';
   document.getElementById('pay-invoice-id').value   = invoice.invoice_id ?? '';
   document.getElementById('pay-status').textContent = '';
   document.getElementById('pay-tx-hash').value      = '';
@@ -678,41 +677,44 @@ document.getElementById('pay-cancel-btn')?.addEventListener('click', () => {
 document.getElementById('pay-verify-btn')?.addEventListener('click', async () => {
   const txHash  = document.getElementById('pay-tx-hash')?.value.trim();
   const wallet  = document.getElementById('pay-wallet')?.value.trim();
-  const invoiceId = document.getElementById('pay-invoice-id')?.value.trim();
   const statusEl = document.getElementById('pay-status');
 
-  if (!txHash || !wallet) {
-    if (statusEl) statusEl.textContent = 'Enter tx hash and wallet address.';
+  if (!txHash) {
+    if (statusEl) statusEl.textContent = 'Enter tx hash.';
     return;
   }
-  if (statusEl) { statusEl.textContent = 'Verifying…'; statusEl.style.color = '#FF8800'; }
+  if (statusEl) { statusEl.textContent = 'Verifying payment on XRPL…'; statusEl.style.color = '#FF8800'; }
 
   try {
-    const vRes  = await fetch('/api/cube/pay/verify', {
+    // 1. Re-quote WITH tx_hash to get the token (verifies payment on XRPL)
+    const qRes = await fetch('/v1/x402/quote', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ invoice_id: invoiceId, tx_hash: txHash, agent_wallet: wallet }),
+      body: JSON.stringify({ product_id: 'cube.mint', agent_wallet: wallet, tx_hash: txHash })
     });
-    const vData = await vRes.json();
-    if (!vRes.ok || !vData.access_token) {
-      if (statusEl) { statusEl.textContent = vData.error ?? 'Verification failed — check tx hash and wallet.'; statusEl.style.color = '#FF0055'; }
+    const qData = await qRes.json();
+    if (!qRes.ok) {
+      if (statusEl) { statusEl.textContent = qData.error || 'Verification failed — check tx hash.'; statusEl.style.color = '#FF0055'; }
       return;
     }
-    const token = vData.access_token;
-    sessionStorage.setItem('cube_mint_token', token);
-
+    const token = qData.token;
     if (statusEl) { statusEl.textContent = 'Payment verified. Minting…'; statusEl.style.color = '#00FF88'; }
-    hidePayOverlay();
 
-    const payload = buildMintPayload();
-    const res  = await submitMint(payload, token);
-    const data = await res.json();
-    if (res.ok && data.verified) {
-      applyMintSuccess(data);
+    // 2. Dispense (triggers Xahau Mint)
+    const dRes = await fetch('/v1/x402/dispense/cube.mint', {
+      method: 'GET',
+      headers: { 'X-Payment-Token': token }
+    });
+    const dData = await dRes.json();
+    
+    if (dRes.ok && dData.status === 'MINTED') {
+      hidePayOverlay();
+      applyMintSuccess({
+        state_hash: document.getElementById('state-hash')?.textContent,
+        xahau_tx_hash: dData.xahau_tx_hash
+      });
     } else {
-      if (tokenStatEl) { tokenStatEl.textContent = 'REJECTED'; tokenStatEl.style.color = '#FF0055'; }
-      setState('VERIFY_ERR');
-      setTimeout(() => setState('IDLE'), 3000);
+      if (statusEl) { statusEl.textContent = dData.error || 'Mint failed.'; statusEl.style.color = '#FF0055'; }
     }
   } catch (err) {
     if (statusEl) { statusEl.textContent = 'Network error. Try again.'; statusEl.style.color = '#FF4400'; }
@@ -738,41 +740,28 @@ document.getElementById('btn-mint')?.addEventListener('click', async () => {
   setState('MINTING');
 
   const payload = buildMintPayload();
-  const token   = sessionStorage.getItem('cube_mint_token') ?? undefined;
 
+  // 1. Post visual state (free)
+  fetch('/api/cube/state', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => {});
+
+  // 2. Fetch native quote for cube.mint
   try {
-    const res  = await submitMint(payload, token);
-    const data = await res.json();
+    const res = await fetch('/v1/x402/quote', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ product_id: 'cube.mint', agent_wallet: '' })
+    });
+    const inv = await res.json();
 
-    if (res.status === 402) {
-      setState('IDLE');
-      const inv = data.invoice ?? {};
-      if (!inv.pay_to) {
-        // 402proof still waking up — show status, no overlay needed
-        if (tokenStatEl) { tokenStatEl.textContent = data.message ?? 'PAYMENT SERVER STARTING — WAIT 30s'; tokenStatEl.style.color = '#FF8800'; }
-        return;
-      }
-      if (tokenStatEl) { tokenStatEl.textContent = 'PAY 0.05 RLUSD'; tokenStatEl.style.color = '#FF8800'; }
-      showPayOverlay(inv);
-      return;
-    }
-
-    if (res.status === 401) {
-      // Token expired or invalid — clear cache, re-click triggers fresh 402 with new invoice
-      sessionStorage.removeItem('cube_mint_token');
-      if (tokenStatEl) { tokenStatEl.textContent = 'TOKEN EXPIRED — CLICK MINT'; tokenStatEl.style.color = '#FF8800'; }
+    if (!res.ok) {
+      if (tokenStatEl) { tokenStatEl.textContent = inv.error || 'QUOTE FAILED'; tokenStatEl.style.color = '#FF0055'; }
       setState('IDLE');
       return;
     }
+    
+    if (tokenStatEl) { tokenStatEl.textContent = 'PAY ' + ((inv.price_drops ?? 50000) / 1000000) + ' ' + (inv.currency ?? 'RLUSD'); tokenStatEl.style.color = '#FF8800'; }
+    showPayOverlay(inv);
 
-    if (res.ok && data.verified) {
-      applyMintSuccess(data);
-    } else {
-      if (tokenStatEl) { tokenStatEl.textContent = 'REJECTED'; tokenStatEl.style.color = '#FF0055'; }
-      setState('VERIFY_ERR');
-      console.error('[CUBE] mint rejected:', data.error);
-      setTimeout(() => setState('IDLE'), 3000);
-    }
   } catch (err) {
     if (tokenStatEl) { tokenStatEl.textContent = 'OFFLINE'; tokenStatEl.style.color = '#FF4400'; }
     setState('NET_ERR');

@@ -1,16 +1,12 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base64"
+	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"math"
 	"math/big"
@@ -24,7 +20,6 @@ import (
 	"syscall"
 	"time"
 
-	"crypto/ed25519"
 	"ghost-layer-core/internal/chain"
 	"ghost-layer-core/internal/crypto"
 	"ghost-layer-core/internal/ledger"
@@ -36,69 +31,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 )
 
-// ── Cube Terminal x402 payment gate ──────────────────────────────────────────
 
-const (
-	cubeMintEndpointID = "c8b3e2f1-5a4d-4c3f-aa24-de6e3bc12b5a"
-	proof402BaseURL    = "https://four02proof.onrender.com"
-)
-
-// verifyPaymentToken validates a 402Proof HMAC token locally (zero network).
-// Mirrors proof402_integration.py _verify_token_local exactly.
-func verifyPaymentToken(token, endpointID, secret string) error {
-	if secret == "" {
-		return errors.New("ERR_SECRET_NOT_CONFIGURED")
-	}
-	dot := strings.LastIndex(token, ".")
-	if dot < 0 {
-		return errors.New("ERR_TOKEN_MALFORMED")
-	}
-	encoded, sig := token[:dot], token[dot+1:]
-
-	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write([]byte(encoded))
-	expected := hex.EncodeToString(mac.Sum(nil))
-	if !hmac.Equal([]byte(sig), []byte(expected)) {
-		return errors.New("ERR_TOKEN_INVALID")
-	}
-
-	pad := (4 - len(encoded)%4) % 4
-	decoded, err := base64.URLEncoding.DecodeString(encoded + strings.Repeat("=", pad))
-	if err != nil {
-		return errors.New("ERR_TOKEN_MALFORMED")
-	}
-	var payload struct {
-		Eid string `json:"eid"`
-		Exp int64  `json:"exp"`
-	}
-	if err := json.Unmarshal(decoded, &payload); err != nil {
-		return errors.New("ERR_TOKEN_MALFORMED")
-	}
-	if time.Now().Unix() > payload.Exp {
-		return errors.New("ERR_TOKEN_EXPIRED")
-	}
-	if payload.Eid != endpointID {
-		return errors.New("ERR_ENDPOINT_MISMATCH")
-	}
-	return nil
-}
-
-// fetchCubeMintInvoice requests a fresh payment invoice from 402Proof.
-// Uses a 8s timeout so a cold-start Render service doesn't hang the mint handler.
-func fetchCubeMintInvoice() (map[string]interface{}, error) {
-	body, _ := json.Marshal(map[string]string{"endpoint_id": cubeMintEndpointID})
-	client := &http.Client{Timeout: 8 * time.Second}
-	resp, err := client.Post(proof402BaseURL+"/v1/invoice", "application/json", bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	var inv map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&inv); err != nil {
-		return nil, err
-	}
-	return inv, nil
-}
 
 // ── SSE Hub — backwards-compat shim; new clients use /ws/metrics ─────────────
 
@@ -116,6 +49,12 @@ var metricsHub = router.NewMetricsHub()
 var agentLedger = toll.NewAgentLedger()
 var bridgeLedger = ledger.NewLedger(10000)
 var attestationPrivKey ed25519.PrivateKey
+
+var (
+	xrplClient  *chain.XRPLClient
+	xahauClient *chain.XahauClient
+	baseClient  *chain.BaseClient
+)
 
 // writeJSONErr writes a {"error": "<code>"} body with the given HTTP status.
 // Used by the x402 routes for consistent error envelopes.
@@ -167,8 +106,65 @@ func init() {
 		},
 	})
 
+	x402Registry.Register(&x402.Product{
+		ID:        "cube.mint",
+		Name:      "Xahau Cube URIToken Mint",
+		BasePrice: 50000, // 0.05 RLUSD
+		Dispatcher: func(args map[string]any) (json.RawMessage, error) {
+			if xahauClient == nil {
+				return nil, errors.New("ERR_XAHAU_NOT_CONFIGURED")
+			}
+			cubeStateMu.RLock()
+			state := lastCubeState
+			committed := lastCommitTime
+			cubeStateMu.RUnlock()
+
+			if state == nil {
+				return nil, errors.New("ERR_NO_CUBE_STATE")
+			}
+
+			hookParams := buildHookParams(state.Faces)
+			centers := make(map[string]interface{}, 6)
+			for _, key := range cubeKeys {
+				centers[key] = state.Faces[key].Center
+			}
+
+			memoObj := map[string]interface{}{
+				"state_hash": state.Hash,
+				"faces":      centers,
+				"committed":  committed.UTC().Format(time.RFC3339),
+			}
+			memoBytes, _ := json.Marshal(memoObj)
+
+			uriParams := make([]chain.URITokenHookParam, len(hookParams))
+			for i, hp := range hookParams {
+				uriParams[i] = chain.URITokenHookParam{
+					Name:  hp.HookParameterName,
+					Value: hp.HookParameterValue,
+				}
+			}
+
+			mintHash, mintErr := xahauClient.MintURIToken(state.Hash, uriParams, string(memoBytes))
+			if mintErr != nil {
+				log.Printf("[CUBE] Xahau mint failed via x402: %v", mintErr)
+				return nil, fmt.Errorf("ERR_MINT_FAILED: %v", mintErr)
+			}
+
+			log.Printf("[CUBE] Xahau URIToken minted via x402: %s", mintHash)
+			hub.broadcast("XAHAU_MINT_CONFIRMED", map[string]interface{}{
+				"state_hash": state.Hash,
+				"xahau_tx":   mintHash,
+			})
+
+			return json.Marshal(map[string]string{
+				"status":        "MINTED",
+				"xahau_tx_hash": mintHash,
+			})
+		},
+	})
+
 	// Reserved (disabled) entries — visible in catalog listing, not dispensable.
-	for _, id := range []string{"bridge.priority", "cube.mint"} {
+	for _, id := range []string{"bridge.priority"} {
 		x402Registry.Register(&x402.Product{ID: id, Disabled: true, BasePrice: 100000})
 	}
 }
@@ -499,7 +495,6 @@ func main() {
 		log.Fatalf("[FATAL] ATTESTATION_PRIVATE_KEY not set")
 	}
 
-	var xrplClient *chain.XRPLClient
 	if xrplKey != "" {
 		c, err := chain.NewXRPLClient(xrplRPC, xrplKey)
 		if err != nil {
@@ -516,7 +511,6 @@ func main() {
 	if xahauKey == "" {
 		xahauKey = xrplKey // fall back to XRPL key — same secp256k1 key format
 	}
-	var xahauClient *chain.XahauClient
 	if xahauKey != "" {
 		c, err := chain.NewXahauClient(xahauRPC, xahauKey)
 		if err != nil {
@@ -529,7 +523,6 @@ func main() {
 		log.Println("[WARN] No Xahau key configured — URIToken minting disabled")
 	}
 
-	var baseClient *chain.BaseClient
 	if ethKey != "" {
 		c, err := chain.NewBaseClient(baseRPC, ethKey, usdcAddr)
 		if err != nil {
@@ -683,14 +676,26 @@ func main() {
 			tier = t
 		}
 		
-		if product.ID == "bridge.attestation" {
+		if product.ID == "bridge.attestation" || product.ID == "cube.mint" {
 			if body.TxHash == "" {
 				writeJSONErr(w, http.StatusBadRequest, "ERR_MISSING_TX_HASH")
 				return
 			}
-			if _, ok := bridgeLedger.Lookup(body.TxHash); !ok {
-				writeJSONErr(w, http.StatusNotFound, "ERR_TX_NOT_FOUND")
-				return
+			
+			if product.ID == "bridge.attestation" {
+				if _, ok := bridgeLedger.Lookup(body.TxHash); !ok {
+					writeJSONErr(w, http.StatusNotFound, "ERR_TX_NOT_FOUND")
+					return
+				}
+			} else if product.ID == "cube.mint" {
+				if xrplClient != nil {
+					if err := xrplClient.VerifyPayment(body.TxHash, treasuryXRPL); err != nil {
+						writeJSONErr(w, http.StatusPaymentRequired, "ERR_PAYMENT_INVALID: "+err.Error())
+						return
+					}
+				} else {
+					log.Printf("[WARN] No XRPL client to verify cube.mint payment (tx %s)", body.TxHash)
+				}
 			}
 		}
 
@@ -1102,64 +1107,10 @@ func main() {
 	}
 
 	// ── CUBE EXECUTION MATRIX ─────────────────────────────────────────────────
-	// POST /api/cube/pay/verify — proxy to 402Proof /v1/verify (avoids CORS for browser clients)
-	r.Post("/api/cube/pay/verify", func(w http.ResponseWriter, req *http.Request) {
-		req.Body = http.MaxBytesReader(w, req.Body, 4*1024)
-		body, err := io.ReadAll(req.Body)
-		if err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
-			return
-		}
-		proxyResp, err := http.Post(proof402BaseURL+"/v1/verify", "application/json", bytes.NewReader(body))
-		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadGateway)
-			json.NewEncoder(w).Encode(map[string]string{"error": "402Proof unreachable"})
-			return
-		}
-		defer proxyResp.Body.Close()
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(proxyResp.StatusCode)
-		io.Copy(w, proxyResp.Body)
-	})
+
 
 	// POST /api/cube/state — receive 54-block payload, verify, store, broadcast
 	r.Post("/api/cube/state", func(w http.ResponseWriter, req *http.Request) {
-		// ── owner bypass — X-Owner-Key skips payment gate entirely ────────
-		ownerKey := os.Getenv("OWNER_API_KEY")
-		isOwner := ownerKey != "" && req.Header.Get("X-Owner-Key") == ownerKey
-
-		// ── x402 payment gate ─────────────────────────────────────────────
-		proof402Secret := os.Getenv("PROOF402_TOKEN_SECRET")
-		if proof402Secret != "" && !isOwner {
-			token := req.Header.Get("X-Payment-Token")
-			if token == "" {
-				inv, err := fetchCubeMintInvoice()
-				if err != nil || inv == nil {
-					// 402proof unreachable — fail open, cube mint is a free operation
-					log.Printf("[CUBE] invoice fetch failed — failing open for mint: %v", err)
-				} else if payTo, ok := inv["pay_to"].(string); !ok || payTo == "" {
-					// 402proof returned an error JSON (endpoint not registered, etc.) — fail open
-					log.Printf("[CUBE] invoice missing pay_to — failing open for mint: %v", inv)
-				} else {
-					w.Header().Set("Content-Type", "application/json")
-					w.WriteHeader(http.StatusPaymentRequired)
-					json.NewEncoder(w).Encode(map[string]interface{}{
-						"error":   "ERR_PAYMENT_REQUIRED",
-						"message": "Minting costs 0.05 RLUSD. Pay on XRPL to continue.",
-						"invoice": inv,
-					})
-					return
-				}
-			}
-			if err := verifyPaymentToken(token, cubeMintEndpointID, proof402Secret); err != nil {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusUnauthorized)
-				json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
-				return
-			}
-		}
-
 		req.Body = http.MaxBytesReader(w, req.Body, 64*1024)
 		var p CubeStatePayload
 		if err := json.NewDecoder(req.Body).Decode(&p); err != nil {
@@ -1195,35 +1146,6 @@ func main() {
 			"hook_count":   len(hookParams),
 		})
 
-		// ── Xahau URITokenMint ────────────────────────────────────────────────
-		var xahauTxHash string
-		if xahauClient != nil {
-			uriParams := make([]chain.URITokenHookParam, len(hookParams))
-			for i, hp := range hookParams {
-				uriParams[i] = chain.URITokenHookParam{
-					Name:  hp.HookParameterName,
-					Value: hp.HookParameterValue,
-				}
-			}
-			memoObj := map[string]interface{}{
-				"state_hash": hash,
-				"faces":      centers,
-				"committed":  committed.UTC().Format(time.RFC3339),
-			}
-			memoBytes, _ := json.Marshal(memoObj)
-			mintHash, mintErr := xahauClient.MintURIToken(hash, uriParams, string(memoBytes))
-			if mintErr != nil {
-				log.Printf("[CUBE] Xahau mint failed: %v", mintErr)
-			} else {
-				xahauTxHash = mintHash
-				log.Printf("[CUBE] Xahau URIToken minted: %s", mintHash)
-				hub.broadcast("XAHAU_MINT_CONFIRMED", map[string]interface{}{
-					"state_hash":   hash,
-					"xahau_tx":    mintHash,
-				})
-			}
-		}
-
 		log.Printf("[CUBE] committed hash=%s hooks=%d", hash, len(hookParams))
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(CubeStateResponse{
@@ -1232,7 +1154,6 @@ func main() {
 			Faces:       p.Faces,
 			HookParams:  hookParams,
 			CommittedAt: committed.UTC().Format(time.RFC3339),
-			XahauTxHash: xahauTxHash,
 		})
 	})
 

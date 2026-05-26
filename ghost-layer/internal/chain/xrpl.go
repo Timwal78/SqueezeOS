@@ -232,6 +232,46 @@ func (c *XRPLClient) submit(txHex string) (string, error) {
 	return res.TxJSON.Hash, nil
 }
 
+// VerifyPayment checks if an XRPL transaction is a successful payment to expectedDest.
+func (c *XRPLClient) VerifyPayment(txHash, expectedDest string) error {
+	result, err := c.call("tx", map[string]interface{}{
+		"transaction": txHash,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to fetch tx: %w", err)
+	}
+
+	var res struct {
+		TransactionType string `json:"TransactionType"`
+		Destination     string `json:"Destination"`
+		Meta            struct {
+			TransactionResult string `json:"TransactionResult"`
+		} `json:"meta"`
+		Validated bool `json:"validated"`
+		Error     string `json:"error"`
+	}
+	if err := json.Unmarshal(result, &res); err != nil {
+		return fmt.Errorf("failed to parse tx: %w", err)
+	}
+	if res.Error != "" {
+		return fmt.Errorf("tx not found or error: %s", res.Error)
+	}
+	if !res.Validated {
+		return errors.New("transaction not yet validated")
+	}
+	if res.Meta.TransactionResult != "tesSUCCESS" {
+		return fmt.Errorf("transaction failed: %s", res.Meta.TransactionResult)
+	}
+	if res.TransactionType != "Payment" {
+		return fmt.Errorf("not a Payment transaction (got %s)", res.TransactionType)
+	}
+	if res.Destination != expectedDest {
+		return fmt.Errorf("destination mismatch (expected %s, got %s)", expectedDest, res.Destination)
+	}
+
+	return nil
+}
+
 // ---- transaction building ----
 
 // fetchFeeDrops queries server_info for the current base fee in drops.
