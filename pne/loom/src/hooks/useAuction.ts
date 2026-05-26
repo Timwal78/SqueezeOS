@@ -146,7 +146,7 @@ export const useAuctionStore = create<AuctionStore>((set, get) => ({
 
 const WS_URL = import.meta.env.VITE_GATEWAY_WS
   ? `${import.meta.env.VITE_GATEWAY_WS}/ws/loom`
-  : `ws://${window.location.hostname}:8402/ws/loom`
+  : `wss://ghost-layer.onrender.com/ws/loom`
 
 // Ghost Layer MetricsFrame — the native broadcast format from ghost-layer.onrender.com
 interface MetricsFrame {
