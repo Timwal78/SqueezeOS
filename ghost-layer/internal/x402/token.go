@@ -15,11 +15,12 @@ import (
 // Mirrors proof402_integration.py field naming so a SqueezeOS-style
 // verifier can be reused unchanged on either side.
 type Payload struct {
-	Pid  string `json:"pid"`
-	Wlt  string `json:"wlt"`
-	Iid  string `json:"iid"`
-	Exp  int64  `json:"exp"`
-	Tier string `json:"tier"`
+	Pid  string         `json:"pid"`
+	Wlt  string         `json:"wlt"`
+	Iid  string         `json:"iid"`
+	Exp  int64          `json:"exp"`
+	Tier string         `json:"tier"`
+	Args map[string]any `json:"args,omitempty"`
 }
 
 // Sign returns "<base64url(payload)>.<hex(hmac_sha256(secret, base64url(payload)))>".

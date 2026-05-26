@@ -13,7 +13,7 @@ type Product struct {
 	Name       string                          `json:"name"`
 	BasePrice  int64                           `json:"base_price_drops"`
 	Disabled   bool                            `json:"-"`
-	Dispatcher func() (json.RawMessage, error) `json:"-"`
+	Dispatcher func(args map[string]any) (json.RawMessage, error) `json:"-"`
 }
 
 // TierDiscountPct maps a loyalty tier to a percent discount on catalog items.
@@ -88,7 +88,7 @@ var (
 )
 
 // Dispatch runs the product's dispatcher.
-func (r *Registry) Dispatch(id string) (json.RawMessage, error) {
+func (r *Registry) Dispatch(id string, args map[string]any) (json.RawMessage, error) {
 	p, err := r.Lookup(id)
 	if err != nil {
 		return nil, err
@@ -96,5 +96,5 @@ func (r *Registry) Dispatch(id string) (json.RawMessage, error) {
 	if p.Dispatcher == nil {
 		return nil, fmt.Errorf("ERR_NO_DISPATCHER")
 	}
-	return p.Dispatcher()
+	return p.Dispatcher(args)
 }
