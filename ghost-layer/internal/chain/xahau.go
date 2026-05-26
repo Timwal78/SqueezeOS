@@ -23,6 +23,7 @@ type URITokenHookParam struct {
 // Xahau is fully XRPL-protocol-compatible: same keys, addresses, RPC, and signing.
 type XahauClient struct {
 	*XRPLClient
+	NetworkID uint32
 }
 
 // NewXahauClient constructs a Xahau client from a secp256k1 private key hex string.
@@ -31,7 +32,11 @@ func NewXahauClient(rpcURL, privateKeyHex string) (*XahauClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &XahauClient{XRPLClient: base}, nil
+	netID := uint32(21337)
+	if strings.Contains(strings.ToLower(rpcURL), "test") {
+		netID = 21338
+	}
+	return &XahauClient{XRPLClient: base, NetworkID: netID}, nil
 }
 
 // MintURIToken submits a URITokenMint transaction to Xahau.
@@ -148,7 +153,7 @@ func (c *XahauClient) buildSignSubmitMint(
 	// Xahau requires URI to be hex-encoded bytes, not raw ASCII
 	uriBytes := []byte(strings.ToUpper(hex.EncodeToString([]byte(uri))))
 
-	signingBytes := buildURITokenMintTx(seq, currentLedger, feeDrops, c.pubKey, nil, srcAcct, uriBytes, hookParams, memoJSON, true)
+	signingBytes := buildURITokenMintTx(c.NetworkID, seq, currentLedger, feeDrops, c.pubKey, nil, srcAcct, uriBytes, hookParams, memoJSON, true)
 	hash := sha512Half(signingBytes)
 
 	compact, err := gocrypto.Sign(hash, c.privKey)
@@ -157,7 +162,7 @@ func (c *XahauClient) buildSignSubmitMint(
 	}
 	derSig := derEncodeSignature(compact[:64])
 
-	txBlob := buildURITokenMintTx(seq, currentLedger, feeDrops, c.pubKey, derSig, srcAcct, uriBytes, hookParams, memoJSON, false)
+	txBlob := buildURITokenMintTx(c.NetworkID, seq, currentLedger, feeDrops, c.pubKey, derSig, srcAcct, uriBytes, hookParams, memoJSON, false)
 	if len(txBlob) >= 8 {
 		txType := binary.BigEndian.Uint16(txBlob[1:3])
 		netID := binary.BigEndian.Uint32(txBlob[4:8])
@@ -181,6 +186,7 @@ func (c *XahauClient) buildSignSubmitMint(
 //
 // Xahau mainnet NetworkID=21337 is mandatory — nodes reject transactions without it.
 func buildURITokenMintTx(
+	networkID uint32,
 	seq, currentLedger uint32,
 	feeDrops uint64,
 	signingPubKey, txnSig []byte,
@@ -202,9 +208,9 @@ func buildURITokenMintTx(
 	binary.Write(&buf, binary.BigEndian, uint16(45))
 
 	// ── UInt32 (type=2) ─────────────────────────────────────────────────────
-	// NetworkID = 21337 (Xahau mainnet) [field 1 → 0x21] — MUST come before Flags
+	// NetworkID [field 1 → 0x21] — MUST come before Flags
 	buf.WriteByte(0x21)
-	binary.Write(&buf, binary.BigEndian, uint32(21337))
+	binary.Write(&buf, binary.BigEndian, networkID)
 
 	// Flags = 1 (tfBurnable) [field 2 → 0x22]
 	buf.WriteByte(0x22)
