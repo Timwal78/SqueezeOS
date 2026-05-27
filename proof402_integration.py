@@ -24,6 +24,10 @@ ENDPOINTS = {
     '/api/options':          'c951a374-2424-4064-ab80-35afe8053d29',  # 0.05 RLUSD
     '/api/iwm':              '60f48ce0-6002-4385-9b60-03a0d2bbebab',  # 0.03 RLUSD
     '/api/marketplace/read': 'd1a2b3c4-e001-4c3f-aa24-de6e3bc12b5a',  # 0.02 RLUSD
+    # Oracle routes use path params so payment is verified inline in oracle_data_bp.py:
+    # '/api/oracle/latest/<feed>'  → ORACLE_READ_ENDPOINT_ID   e7f8a9b0-...  0.02 RLUSD
+    # '/api/oracle/query'          → ORACLE_READ_ENDPOINT_ID   e7f8a9b0-...  0.02 RLUSD
+    # '/api/oracle/stream'         → ORACLE_STREAM_ENDPOINT_ID f8a9b0c1-...  0.05 RLUSD
 }
 
 

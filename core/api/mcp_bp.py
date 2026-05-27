@@ -32,8 +32,8 @@ PROOF402_BASE = "https://four02proof.onrender.com"
 
 _SERVER_INFO = {
     "name": "squeezeos",
-    "version": "3.0.0",
-    "description": "SqueezeOS — Institutional AI trading intelligence for autonomous agents",
+    "version": "3.1.0",
+    "description": "SqueezeOS — Institutional AI trading intelligence + Real-World Data Oracle for autonomous agents",
 }
 
 _TOOLS = [
@@ -398,6 +398,46 @@ _TOOLS = [
             },
         },
     },
+
+    # ── Real-World Data Oracle ─────────────────────────────────────────────────
+    {
+        "name": "oracle_feeds",
+        "description": (
+            "Free catalog of all available Real-World Data Oracle feeds. Returns feed names, "
+            "descriptions, current event buffer counts, poll intervals, and per-call pricing. "
+            "Available feeds: sec_8k (SEC Form 8-K material events), sec_s1 (IPO filings), "
+            "fda (FDA NDA/BLA drug approvals), patents (USPTO patent grants). "
+            "Use this before calling oracle_query to see what data is available and how many "
+            "events are buffered. No payment required."
+        ),
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "oracle_query",
+        "description": (
+            "Premium (0.02 RLUSD) — search or retrieve events from the Real-World Data Oracle. "
+            "Covers four regulatory data feeds: sec_8k (8-K material events), sec_s1 (IPO filings), "
+            "fda (FDA drug approvals), patents (USPTO patent grants). "
+            "Returns machine-readable JSON events with timestamps, source URLs, and structured fields. "
+            "Sub-second delivery vs Bloomberg's 5–10 minute lag — agents that catch the 8-K or FDA "
+            "approval first win the trade. "
+            "Pass feeds=[] to query all feeds. Pass keyword to text-search events. "
+            "Pass since_ts (Unix timestamp) to get only recent events. "
+            "Cost: 0.02 RLUSD per call. Pass payment_token from verify_payment."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "feeds":        {"type": "array",  "items": {"type": "string"},
+                                 "description": "Feed keys to query: sec_8k, sec_s1, fda, patents (default: all)"},
+                "keyword":      {"type": "string", "description": "Case-insensitive keyword to filter events"},
+                "since_ts":     {"type": "number", "description": "Unix timestamp — only return events after this time"},
+                "limit":        {"type": "integer","description": "Max events to return (default 50, max 200)"},
+                "payment_token":{"type": "string", "description": "JWT from verify_payment (0.02 RLUSD)"},
+                "agent_wallet": {"type": "string", "description": "Your XRPL wallet address"},
+            },
+        },
+    },
 ]
 
 # Endpoint IDs for helpful 402 error messages
@@ -546,6 +586,14 @@ def _dispatch(name: str, args: dict, req_headers: dict) -> dict:
     if name == "settlement_trigger":
         contract_id = args.pop("contract_id", "")
         return _text(_proxy("POST", f"{sq}/api/settlement/trigger/{contract_id}", json_body=args))
+
+    # ── Real-World Data Oracle ────────────────────────────────────────────────
+    if name == "oracle_feeds":
+        return _text(_proxy("GET", f"{sq}/api/oracle/feeds"))
+
+    if name == "oracle_query":
+        if not payment_token: return _need_token(name)
+        return _text(_proxy("POST", f"{sq}/api/oracle/query", headers=ph, json_body=args))
 
     return {
         "content": [{"type": "text", "text": json.dumps({"error": "ERR_UNKNOWN_TOOL", "tool": name})}],
