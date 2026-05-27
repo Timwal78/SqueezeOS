@@ -48,6 +48,19 @@ for PAIR in "squeezeos:developer-tools/squeezeos" "ghost-layer:payments/ghost-la
   cp -r "$SCRIPT_DIR/$SRC/." "$DST/"
 done
 
+echo "▶ Patching module paths to library canonical form …"
+for TRIPLE in \
+  "library/developer-tools/squeezeos:github.com/timwal78/squeezeos-pp-cli:github.com/mvanhorn/printing-press-library/developer-tools/squeezeos" \
+  "library/payments/ghost-layer:github.com/timwal78/ghost-layer-pp-cli:github.com/mvanhorn/printing-press-library/payments/ghost-layer" \
+  "library/social-and-messaging/tipmaster:github.com/timwal78/tipmaster-pp-cli:github.com/mvanhorn/printing-press-library/social-and-messaging/tipmaster"; do
+  DIR="${TRIPLE%%:*}"
+  REST="${TRIPLE#*:}"
+  OLD="${REST%%:*}"
+  NEW="${REST#*:}"
+  sed -i "s|^module ${OLD}$|module ${NEW}|" "$DIR/go.mod"
+  find "$DIR" -name "*.go" -exec sed -i "s|\"${OLD}/|\"|${NEW}/|g" {} \;
+done
+
 MIT_LICENSE="MIT License\n\nCopyright (c) 2026 Timothy Walton / Script Master Labs\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE."
 
 printf '%b\n' "$MIT_LICENSE" > library/developer-tools/squeezeos/LICENSE
@@ -200,7 +213,7 @@ GIT_COMMITTER_EMAIL="timothy.walton45@gmail.com" \
 echo "▶ Pushing …"
 git push -q "https://$GH_TOKEN@github.com/$FORK.git" "$BRANCH" --force
 
-echo "▶ Opening PR …"
+echo "▶ Opening PR (no-op if already exists) …"
 PR=$(curl -s -X POST "${AUTH[@]}" \
   "$API/repos/$UPSTREAM/pulls" \
   -d '{"title":"feat: add squeezeos, ghost-layer, tipmaster CLIs (Script Master Labs)","head":"Timwal78:add-sml-clis","base":"main","body":"Three CLI Printing Press Go/Cobra CLIs for the Script Master Labs product stack.\n\n- `library/developer-tools/squeezeos` — institutional AI market intelligence, pay-per-call via 402Proof RLUSD\n- `library/payments/ghost-layer` — dual-chain XRPL/Base toll gateway\n- `library/social-and-messaging/tipmaster` — Farcaster RLUSD tip bot, username→wallet resolver\n\nAll three pass `go build ./...`."}' 2>/dev/null || echo '{}')
