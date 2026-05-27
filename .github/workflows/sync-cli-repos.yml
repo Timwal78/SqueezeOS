@@ -1,0 +1,41 @@
+name: Sync CLI repos
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - cli/squeezeos/**
+      - cli/ghost-layer/**
+      - cli/tipmaster/**
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - dir: cli/squeezeos
+            repo: squeezeos-pp-cli
+          - dir: cli/ghost-layer
+            repo: ghost-layer-pp-cli
+          - dir: cli/tipmaster
+            repo: tipmaster-pp-cli
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Push ${{ matrix.dir }} → ${{ matrix.repo }}
+        env:
+          GH_TOKEN: ${{ secrets.CLI_PUSH_TOKEN }}
+        run: |
+          TMP=$(mktemp -d)
+          cp -r ${{ matrix.dir }}/. "$TMP/"
+          cd "$TMP"
+          git init
+          git checkout -b main
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: sync from squeezeos/${{ matrix.dir }}"
+          git remote add origin "https://$GH_TOKEN@github.com/Timwal78/${{ matrix.repo }}.git"
+          git push -u origin main --force
