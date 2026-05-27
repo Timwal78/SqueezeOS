@@ -272,6 +272,189 @@ func (c *XRPLClient) VerifyPayment(txHash, expectedDest string) error {
 	return nil
 }
 
+// SubmitEscrowFinish fires an EscrowFinish signed by the Ghost Layer gateway wallet.
+// owner is the buyer's XRPL address (who created the EscrowCreate); offerSeq is
+// the sequence number of that tx. Funds flow escrow → seller directly; Ghost Layer
+// only pays the tiny network fee from its own wallet.
+func (c *XRPLClient) SubmitEscrowFinish(owner string, offerSeq uint32, condition, fulfillment []byte) (string, error) {
+	seq, err := c.nextSeq()
+	if err != nil {
+		return "", fmt.Errorf("get sequence: %w", err)
+	}
+	txHash, err := c.buildSignSubmitEscrowFinish(owner, offerSeq, condition, fulfillment, seq)
+	if err != nil {
+		if isSeqError(err) {
+			c.invalidateSeq()
+			seq, err2 := c.nextSeq()
+			if err2 != nil {
+				return "", fmt.Errorf("sequence refresh: %w", err2)
+			}
+			return c.buildSignSubmitEscrowFinish(owner, offerSeq, condition, fulfillment, seq)
+		}
+		return "", err
+	}
+	return txHash, nil
+}
+
+// SubmitEscrowCancel fires an EscrowCancel, returning funds to the buyer. Called
+// when the CancelAfter TTL has passed without delivery confirmation.
+func (c *XRPLClient) SubmitEscrowCancel(owner string, offerSeq uint32) (string, error) {
+	seq, err := c.nextSeq()
+	if err != nil {
+		return "", fmt.Errorf("get sequence: %w", err)
+	}
+	txHash, err := c.buildSignSubmitEscrowCancel(owner, offerSeq, seq)
+	if err != nil {
+		if isSeqError(err) {
+			c.invalidateSeq()
+			seq, err2 := c.nextSeq()
+			if err2 != nil {
+				return "", fmt.Errorf("sequence refresh: %w", err2)
+			}
+			return c.buildSignSubmitEscrowCancel(owner, offerSeq, seq)
+		}
+		return "", err
+	}
+	return txHash, nil
+}
+
+func (c *XRPLClient) buildSignSubmitEscrowFinish(owner string, offerSeq uint32, condition, fulfillment []byte, seq uint32) (string, error) {
+	gatewayAcct, err := decodeXRPLAddress(c.GatewayAddress)
+	if err != nil {
+		return "", fmt.Errorf("decode gateway address: %w", err)
+	}
+	ownerAcct, err := decodeXRPLAddress(owner)
+	if err != nil {
+		return "", fmt.Errorf("decode owner address: %w", err)
+	}
+	feeDrops := c.fetchFeeDrops()
+	if feeDrops == 0 {
+		return "", fmt.Errorf("XRPL network fee exceeds safety ceiling (%d drops)", xrplMaxFeeDrops)
+	}
+	signingBytes := buildEscrowFinishTx(seq, offerSeq, feeDrops, c.pubKey, nil, gatewayAcct, ownerAcct, condition, fulfillment, true)
+	hash := sha512Half(signingBytes)
+	compact, err := gocrypto.Sign(hash, c.privKey)
+	if err != nil {
+		return "", fmt.Errorf("sign: %w", err)
+	}
+	sig := derEncodeSignature(compact[:64])
+	txBlob := buildEscrowFinishTx(seq, offerSeq, feeDrops, c.pubKey, sig, gatewayAcct, ownerAcct, condition, fulfillment, false)
+	return c.submit(strings.ToUpper(hex.EncodeToString(txBlob)))
+}
+
+func (c *XRPLClient) buildSignSubmitEscrowCancel(owner string, offerSeq uint32, seq uint32) (string, error) {
+	gatewayAcct, err := decodeXRPLAddress(c.GatewayAddress)
+	if err != nil {
+		return "", fmt.Errorf("decode gateway address: %w", err)
+	}
+	ownerAcct, err := decodeXRPLAddress(owner)
+	if err != nil {
+		return "", fmt.Errorf("decode owner address: %w", err)
+	}
+	feeDrops := c.fetchFeeDrops()
+	if feeDrops == 0 {
+		return "", fmt.Errorf("XRPL network fee exceeds safety ceiling (%d drops)", xrplMaxFeeDrops)
+	}
+	signingBytes := buildEscrowCancelTx(seq, offerSeq, feeDrops, c.pubKey, nil, gatewayAcct, ownerAcct, true)
+	hash := sha512Half(signingBytes)
+	compact, err := gocrypto.Sign(hash, c.privKey)
+	if err != nil {
+		return "", fmt.Errorf("sign: %w", err)
+	}
+	sig := derEncodeSignature(compact[:64])
+	txBlob := buildEscrowCancelTx(seq, offerSeq, feeDrops, c.pubKey, sig, gatewayAcct, ownerAcct, false)
+	return c.submit(strings.ToUpper(hex.EncodeToString(txBlob)))
+}
+
+// buildEscrowFinishTx encodes an EscrowFinish (tx type 2) in XRPL canonical binary.
+// Fields sorted by (typeCode, fieldCode) ascending — required by the ledger.
+//
+//	(1,2)  TransactionType  0x12 0x0002
+//	(2,2)  Flags            0x22 0x00000000
+//	(2,4)  Sequence         0x24 <u32>
+//	(2,25) OfferSequence    0x20 0x19 <u32>
+//	(6,8)  Fee              0x68 <drops>
+//	(7,3)  SigningPubKey    0x73 <vl>
+//	(7,4)  TxnSignature     0x74 <vl>  (omit during signing)
+//	(7,24) Condition        0x70 0x18 <vl>
+//	(7,25) Fulfillment      0x70 0x19 <vl>
+//	(8,1)  Account          0x81 <vl>
+//	(8,2)  Owner            0x82 <vl>
+func buildEscrowFinishTx(seq, offerSeq uint32, feeDrops uint64, signingPubKey, txnSig, gatewayAcct, ownerAcct, condition, fulfillment []byte, forSigning bool) []byte {
+	var buf bytes.Buffer
+	if forSigning {
+		buf.Write([]byte{0x53, 0x54, 0x58, 0x00})
+	}
+	buf.WriteByte(0x12)
+	binary.Write(&buf, binary.BigEndian, uint16(2)) // EscrowFinish
+	buf.WriteByte(0x22)
+	binary.Write(&buf, binary.BigEndian, uint32(0))
+	buf.WriteByte(0x24)
+	binary.Write(&buf, binary.BigEndian, seq)
+	buf.WriteByte(0x20)
+	buf.WriteByte(0x19) // OfferSequence: type 2 field 25 — extended field encoding
+	binary.Write(&buf, binary.BigEndian, offerSeq)
+	buf.WriteByte(0x68)
+	buf.Write(xrpDropsBytes(feeDrops))
+	buf.WriteByte(0x73)
+	buf.Write(vlEncode(signingPubKey))
+	if !forSigning && len(txnSig) > 0 {
+		buf.WriteByte(0x74)
+		buf.Write(vlEncode(txnSig))
+	}
+	buf.WriteByte(0x70)
+	buf.WriteByte(0x18) // Condition: type 7 field 24
+	buf.Write(vlEncode(condition))
+	buf.WriteByte(0x70)
+	buf.WriteByte(0x19) // Fulfillment: type 7 field 25
+	buf.Write(vlEncode(fulfillment))
+	buf.WriteByte(0x81)
+	buf.Write(vlEncode(gatewayAcct))
+	buf.WriteByte(0x82)
+	buf.Write(vlEncode(ownerAcct))
+	return buf.Bytes()
+}
+
+// buildEscrowCancelTx encodes an EscrowCancel (tx type 4) in XRPL canonical binary.
+//
+//	(1,2)  TransactionType  0x12 0x0004
+//	(2,2)  Flags            0x22 0x00000000
+//	(2,4)  Sequence         0x24 <u32>
+//	(2,25) OfferSequence    0x20 0x19 <u32>
+//	(6,8)  Fee              0x68 <drops>
+//	(7,3)  SigningPubKey    0x73 <vl>
+//	(7,4)  TxnSignature     0x74 <vl>  (omit during signing)
+//	(8,1)  Account          0x81 <vl>
+//	(8,2)  Owner            0x82 <vl>
+func buildEscrowCancelTx(seq, offerSeq uint32, feeDrops uint64, signingPubKey, txnSig, gatewayAcct, ownerAcct []byte, forSigning bool) []byte {
+	var buf bytes.Buffer
+	if forSigning {
+		buf.Write([]byte{0x53, 0x54, 0x58, 0x00})
+	}
+	buf.WriteByte(0x12)
+	binary.Write(&buf, binary.BigEndian, uint16(4)) // EscrowCancel
+	buf.WriteByte(0x22)
+	binary.Write(&buf, binary.BigEndian, uint32(0))
+	buf.WriteByte(0x24)
+	binary.Write(&buf, binary.BigEndian, seq)
+	buf.WriteByte(0x20)
+	buf.WriteByte(0x19)
+	binary.Write(&buf, binary.BigEndian, offerSeq)
+	buf.WriteByte(0x68)
+	buf.Write(xrpDropsBytes(feeDrops))
+	buf.WriteByte(0x73)
+	buf.Write(vlEncode(signingPubKey))
+	if !forSigning && len(txnSig) > 0 {
+		buf.WriteByte(0x74)
+		buf.Write(vlEncode(txnSig))
+	}
+	buf.WriteByte(0x81)
+	buf.Write(vlEncode(gatewayAcct))
+	buf.WriteByte(0x82)
+	buf.Write(vlEncode(ownerAcct))
+	return buf.Bytes()
+}
+
 // ---- transaction building ----
 
 // fetchFeeDrops queries server_info for the current base fee in drops.

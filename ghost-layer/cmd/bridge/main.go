@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"ghost-layer-core/internal/chain"
+	"ghost-layer-core/internal/credit"
 	"ghost-layer-core/internal/crypto"
 	"ghost-layer-core/internal/ledger"
 	"ghost-layer-core/internal/router"
@@ -56,6 +57,8 @@ var (
 	xahauClient *chain.XahauClient
 	baseClient  *chain.BaseClient
 )
+
+var creditMarketplace *credit.Marketplace
 
 // notaryGrade maps a product ID to its human-readable grade string.
 func notaryGrade(pid string) string {
@@ -579,8 +582,41 @@ func main() {
 	}
 
 	engine := router.NewTransparentBridgeEngine(treasuryXRPL, treasuryETH, xrplClient, baseClient, &sweepWg)
+
+	// ── Agent Credit Marketplace — zero-custody XRPL escrow matchmaker ────────
+	creditMarketplace = credit.NewMarketplace(
+		func(wallet string) string {
+			tier, _ := agentLedger.AgentStats(wallet)
+			return tier
+		},
+		func(owner string, offerSeq uint32, condition, fulfillment []byte) (string, error) {
+			if xrplClient == nil {
+				return "", errors.New("ERR_XRPL_NOT_CONFIGURED")
+			}
+			return xrplClient.SubmitEscrowFinish(owner, offerSeq, condition, fulfillment)
+		},
+		func(owner string, offerSeq uint32) (string, error) {
+			if xrplClient == nil {
+				return "", errors.New("ERR_XRPL_NOT_CONFIGURED")
+			}
+			return xrplClient.SubmitEscrowCancel(owner, offerSeq)
+		},
+		func(wallet string, drops uint64) {
+			agentLedger.RecordVolume(wallet, new(big.Int).SetUint64(drops))
+		},
+	)
+	// Background goroutine fires EscrowCancel on TTL-expired unfinalised escrows.
+	go func() {
+		ticker := time.NewTicker(60 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			creditMarketplace.CleanupExpired()
+		}
+	}()
+
 	log.Println("[SERVER] Agent Loyalty Matrix: ARMED | WebSocket Metrics Hub: LIVE")
 	log.Println("[SERVER] X402 Vendor: ARMED | Catalog: routing.telemetry | Endpoint: /v1/x402")
+	log.Println("[SERVER] Agent Credit Marketplace: ARMED | XRPL escrow | Endpoint: /v1/credit")
 
 	r := chi.NewRouter()
 	r.Use(corsMiddleware)
@@ -967,6 +1003,221 @@ func main() {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(resp)
+	})
+
+	// ── AGENT CREDIT MARKETPLACE ─────────────────────────────────────────────
+	// Zero-custody XRPL escrow matchmaker. Ghost Layer is credit oracle +
+	// condition fulfiller. Funds move escrow → seller directly on XRPL ledger.
+
+	// POST /v1/credit/listing — seller posts a service offer
+	r.Post("/v1/credit/listing", func(w http.ResponseWriter, req *http.Request) {
+		req.Body = http.MaxBytesReader(w, req.Body, 8192)
+		var body struct {
+			SellerWallet string `json:"seller_wallet"`
+			Description  string `json:"description"`
+			PriceDrops   uint64 `json:"price_drops"`
+			MinBuyerTier string `json:"min_buyer_tier"`
+			TTLSeconds   int    `json:"ttl_seconds"`
+		}
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			writeJSONErr(w, http.StatusBadRequest, "ERR_BAD_REQUEST")
+			return
+		}
+		listing, err := creditMarketplace.PostListing(
+			body.SellerWallet, body.Description,
+			body.PriceDrops, body.MinBuyerTier, body.TTLSeconds,
+		)
+		if err != nil {
+			writeJSONErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(listing)
+	})
+
+	// GET /v1/credit/listings — browse active listings (optional ?wallet= for tier filter)
+	r.Get("/v1/credit/listings", func(w http.ResponseWriter, req *http.Request) {
+		buyerWallet := req.URL.Query().Get("wallet")
+		buyerTier := ""
+		if buyerWallet != "" {
+			buyerTier, _ = agentLedger.AgentStats(buyerWallet)
+		}
+		listings := creditMarketplace.GetListings(buyerTier)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"listings": listings,
+			"count":    len(listings),
+		})
+	})
+
+	// POST /v1/credit/quote — buyer requests escrow params (tier-gated)
+	r.Post("/v1/credit/quote", func(w http.ResponseWriter, req *http.Request) {
+		req.Body = http.MaxBytesReader(w, req.Body, 4096)
+		var body struct {
+			ListingID   string `json:"listing_id"`
+			BuyerWallet string `json:"buyer_wallet"`
+		}
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			writeJSONErr(w, http.StatusBadRequest, "ERR_BAD_REQUEST")
+			return
+		}
+		quote, err := creditMarketplace.Quote(body.ListingID, body.BuyerWallet)
+		if err != nil {
+			status := http.StatusBadRequest
+			if err.Error() == "ERR_LISTING_NOT_FOUND" {
+				status = http.StatusNotFound
+			}
+			writeJSONErr(w, status, err.Error())
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(quote)
+	})
+
+	// POST /v1/credit/escrow/register — buyer registers on-chain EscrowCreate sequence
+	r.Post("/v1/credit/escrow/register", func(w http.ResponseWriter, req *http.Request) {
+		req.Body = http.MaxBytesReader(w, req.Body, 4096)
+		var body struct {
+			EscrowID     string `json:"escrow_id"`
+			OfferSequence uint32 `json:"offer_sequence"`
+		}
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			writeJSONErr(w, http.StatusBadRequest, "ERR_BAD_REQUEST")
+			return
+		}
+		if err := creditMarketplace.RegisterEscrow(body.EscrowID, body.OfferSequence); err != nil {
+			writeJSONErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		rec, _ := creditMarketplace.GetEscrow(body.EscrowID)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status": "ESCROWED",
+			"escrow": rec,
+		})
+	})
+
+	// POST /v1/credit/escrow/{id}/deliver — seller marks delivery done
+	r.Post("/v1/credit/escrow/{id}/deliver", func(w http.ResponseWriter, req *http.Request) {
+		escrowID := chi.URLParam(req, "id")
+		req.Body = http.MaxBytesReader(w, req.Body, 4096)
+		var body struct {
+			SellerWallet  string `json:"seller_wallet"`
+			DeliveryProof string `json:"delivery_proof"`
+		}
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			writeJSONErr(w, http.StatusBadRequest, "ERR_BAD_REQUEST")
+			return
+		}
+		if err := creditMarketplace.MarkDelivered(escrowID, body.SellerWallet, body.DeliveryProof); err != nil {
+			writeJSONErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		rec, _ := creditMarketplace.GetEscrow(escrowID)
+		hub.broadcast("CREDIT_DELIVERED", map[string]interface{}{
+			"escrow_id":     escrowID,
+			"seller_wallet": body.SellerWallet,
+			"delivery_proof": body.DeliveryProof,
+		})
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"status": "DELIVERED", "escrow": rec})
+	})
+
+	// POST /v1/credit/escrow/{id}/release — buyer confirms → Ghost Layer fires EscrowFinish
+	r.Post("/v1/credit/escrow/{id}/release", func(w http.ResponseWriter, req *http.Request) {
+		escrowID := chi.URLParam(req, "id")
+		req.Body = http.MaxBytesReader(w, req.Body, 4096)
+		var body struct {
+			BuyerWallet string `json:"buyer_wallet"`
+		}
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			writeJSONErr(w, http.StatusBadRequest, "ERR_BAD_REQUEST")
+			return
+		}
+		txHash, err := creditMarketplace.Release(escrowID, body.BuyerWallet)
+		if err != nil {
+			writeJSONErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		rec, _ := creditMarketplace.GetEscrow(escrowID)
+		hub.broadcast("CREDIT_RELEASED", map[string]interface{}{
+			"escrow_id":    escrowID,
+			"release_tx":   txHash,
+			"buyer_wallet": body.BuyerWallet,
+			"amount_drops": rec.AmountDrops,
+		})
+		log.Printf("[CREDIT] EscrowFinish: %s → seller %s amount %d drops tx=%s",
+			escrowID, rec.SellerWallet, rec.AmountDrops, txHash)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":       "RELEASED",
+			"release_tx":   txHash,
+			"verify_url":   "https://livenet.xrpl.org/transactions/" + txHash,
+			"escrow":       rec,
+		})
+	})
+
+	// POST /v1/credit/escrow/{id}/cancel — cancel escrow → Ghost Layer fires EscrowCancel
+	r.Post("/v1/credit/escrow/{id}/cancel", func(w http.ResponseWriter, req *http.Request) {
+		escrowID := chi.URLParam(req, "id")
+		req.Body = http.MaxBytesReader(w, req.Body, 4096)
+		var body struct {
+			CallerWallet string `json:"caller_wallet"`
+		}
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			writeJSONErr(w, http.StatusBadRequest, "ERR_BAD_REQUEST")
+			return
+		}
+		txHash, err := creditMarketplace.Cancel(escrowID, body.CallerWallet)
+		if err != nil {
+			writeJSONErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		hub.broadcast("CREDIT_CANCELLED", map[string]interface{}{
+			"escrow_id":     escrowID,
+			"cancel_tx":     txHash,
+			"caller_wallet": body.CallerWallet,
+		})
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":    "CANCELLED",
+			"cancel_tx": txHash,
+		})
+	})
+
+	// GET /v1/credit/escrow/{id} — get escrow status
+	r.Get("/v1/credit/escrow/{id}", func(w http.ResponseWriter, req *http.Request) {
+		escrowID := chi.URLParam(req, "id")
+		rec, ok := creditMarketplace.GetEscrow(escrowID)
+		if !ok {
+			writeJSONErr(w, http.StatusNotFound, "ERR_ESCROW_NOT_FOUND")
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(rec)
+	})
+
+	// GET /api/agent/{addr}/credit — full credit profile (tier + marketplace context)
+	r.Get("/api/agent/{addr}/credit", func(w http.ResponseWriter, req *http.Request) {
+		addr := chi.URLParam(req, "addr")
+		if addr == "" {
+			writeJSONErr(w, http.StatusBadRequest, "ERR_MISSING_ADDRESS")
+			return
+		}
+		tier, volume := agentLedger.AgentStats(addr)
+		effectiveBPS := agentLedger.EffectiveBPS(addr, 50)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"agent":          addr,
+			"credit_tier":    tier,
+			"total_volume":   volume.String(),
+			"effective_bps":  effectiveBPS,
+			"marketplace_access": map[string]interface{}{
+				"can_list":           true,
+				"accessible_tiers":   accessibleTiers(tier),
+				"upgrade_threshold":  nextTierThreshold(tier),
+			},
+		})
 	})
 
 	// ── INSTITUTIONAL EXECUTION PATH ─────────────────────────────────────────
@@ -1518,6 +1769,35 @@ func parseEIP3009(p *eip3009Payload) (chain.EIP3009Auth, error) {
 		R:           rBytes,
 		S:           sBytes,
 	}, nil
+}
+
+// accessibleTiers returns all listing tier gates a given tier can access.
+func accessibleTiers(tier string) []string {
+	order := []string{"BRONZE", "SILVER", "GOLD", "PLATINUM", "DIAMOND"}
+	ranks := map[string]int{"BRONZE": 0, "SILVER": 1, "GOLD": 2, "PLATINUM": 3, "DIAMOND": 4}
+	agentRank := ranks[tier]
+	var out []string
+	for _, t := range order {
+		if ranks[t] <= agentRank {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// nextTierThreshold returns the volume (in drops) needed to reach the next tier.
+func nextTierThreshold(tier string) string {
+	thresholds := map[string]string{
+		"BRONZE":   "1000000000000 drops (1M RLUSD) for SILVER",
+		"SILVER":   "10000000000000 drops (10M RLUSD) for GOLD",
+		"GOLD":     "100000000000000 drops (100M RLUSD) for PLATINUM",
+		"PLATINUM": "1000000000000000 drops (1B RLUSD) for DIAMOND",
+		"DIAMOND":  "MAX — already at highest tier",
+	}
+	if t, ok := thresholds[tier]; ok {
+		return t
+	}
+	return "unknown"
 }
 
 func decode32(s string) ([32]byte, error) {
