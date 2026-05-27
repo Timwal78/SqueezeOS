@@ -3,7 +3,7 @@
   "name": "ghost-layer-mcp",
   "display_name": "Ghost Layer — Dual-Chain Bridge + Execution Matrix MCP",
   "description": "MCP server for Ghost Layer cross-chain bridge and on-chain Execution Matrix. Settle RLUSD (XRPL), XAH (Xahau), and USDC (Base/EVM) micropayments synchronously with full compliance receipts. Mint 54-block programmable routing state.",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "server_url": "https://ghost-layer.onrender.com",
   "mcp_endpoint": "https://ghost-layer.onrender.com/mcp",
   "payment_required": true,
@@ -87,6 +87,96 @@
           "model":        {"type": "string",  "description": "Model identifier (e.g., claude-sonnet-4-6)"},
           "agent_wallet": {"type": "string",  "description": "Your XRPL wallet address (for loyalty tier)"},
           "endpoint":     {"type": "string",  "description": "API endpoint that produced this decision"}
+        }
+      }
+    },
+    {
+      "name": "credit_post_listing",
+      "description": "Post a service offer to the Agent Credit Marketplace. Set min_buyer_tier to gate access by loyalty tier (BRONZE/SILVER/GOLD/PLATINUM/DIAMOND). Ghost Layer enforces the gate — buyers below the threshold cannot request a quote.",
+      "endpoint": "POST https://ghost-layer.onrender.com/v1/credit/listing",
+      "input_schema": {
+        "type": "object",
+        "required": ["seller_wallet", "description", "price_drops"],
+        "properties": {
+          "seller_wallet":  {"type": "string",  "description": "Your XRPL wallet address"},
+          "description":    {"type": "string",  "description": "Service description (max 500 chars)"},
+          "price_drops":    {"type": "integer", "description": "Price in RLUSD drops (1 RLUSD = 1,000,000 drops)"},
+          "min_buyer_tier": {"type": "string",  "description": "Minimum buyer tier: BRONZE/SILVER/GOLD/PLATINUM/DIAMOND"},
+          "ttl_seconds":    {"type": "integer", "description": "Listing TTL in seconds (default 3600, max 2592000)"}
+        }
+      }
+    },
+    {
+      "name": "credit_get_listings",
+      "description": "Browse active Agent Credit Marketplace listings. Pass wallet to filter by your credit tier — only listings your tier can access are returned.",
+      "endpoint": "GET https://ghost-layer.onrender.com/v1/credit/listings",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "wallet": {"type": "string", "description": "Your XRPL wallet address for tier-filtered results"}
+        }
+      }
+    },
+    {
+      "name": "credit_quote",
+      "description": "Get escrow parameters for a listing. Returns condition_hex to put in your XRPL EscrowCreate, plus amount and seller wallet. Ghost Layer enforces min_buyer_tier here — returns ERR_TIER_INSUFFICIENT if you don't qualify.",
+      "endpoint": "POST https://ghost-layer.onrender.com/v1/credit/quote",
+      "input_schema": {
+        "type": "object",
+        "required": ["listing_id", "buyer_wallet"],
+        "properties": {
+          "listing_id":   {"type": "string", "description": "ID from GET /v1/credit/listings"},
+          "buyer_wallet": {"type": "string", "description": "Your XRPL wallet address"}
+        }
+      }
+    },
+    {
+      "name": "credit_register_escrow",
+      "description": "After submitting EscrowCreate to XRPL, register the on-chain sequence number with Ghost Layer. Use the OfferSequence from your EscrowCreate transaction.",
+      "endpoint": "POST https://ghost-layer.onrender.com/v1/credit/escrow/register",
+      "input_schema": {
+        "type": "object",
+        "required": ["escrow_id", "offer_sequence"],
+        "properties": {
+          "escrow_id":      {"type": "string",  "description": "escrow_id from /v1/credit/quote"},
+          "offer_sequence": {"type": "integer", "description": "OfferSequence of your EscrowCreate tx"}
+        }
+      }
+    },
+    {
+      "name": "credit_release",
+      "description": "Confirm delivery and release escrow to seller. Ghost Layer fires EscrowFinish with the PREIMAGE-SHA-256 fulfillment — funds flow escrow → seller directly on XRPL. Both parties earn loyalty volume.",
+      "endpoint": "POST https://ghost-layer.onrender.com/v1/credit/escrow/{id}/release",
+      "input_schema": {
+        "type": "object",
+        "required": ["escrow_id", "buyer_wallet"],
+        "properties": {
+          "escrow_id":   {"type": "string", "description": "Escrow ID to release"},
+          "buyer_wallet":{"type": "string", "description": "Your XRPL wallet address (must match buyer)"}
+        }
+      }
+    },
+    {
+      "name": "credit_get_escrow",
+      "description": "Get the current state of an escrow: PENDING_ESCROW / ESCROWED / DELIVERED / RELEASED / CANCELLED.",
+      "endpoint": "GET https://ghost-layer.onrender.com/v1/credit/escrow/{id}",
+      "input_schema": {
+        "type": "object",
+        "required": ["escrow_id"],
+        "properties": {
+          "escrow_id": {"type": "string", "description": "Escrow ID to query"}
+        }
+      }
+    },
+    {
+      "name": "credit_profile",
+      "description": "Get your Agent Credit profile: loyalty tier, lifetime volume, effective BPS, accessible marketplace tiers, and upgrade threshold.",
+      "endpoint": "GET https://ghost-layer.onrender.com/api/agent/{addr}/credit",
+      "input_schema": {
+        "type": "object",
+        "required": ["addr"],
+        "properties": {
+          "addr": {"type": "string", "description": "XRPL wallet address"}
         }
       }
     },

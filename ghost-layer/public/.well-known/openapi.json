@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Ghost Layer API",
-    "version": "2.3.0",
+    "version": "2.4.0",
     "description": "Dual-chain transparent toll gateway + AI Decision Notary + on-chain Execution Matrix operated by Script Master Labs. Bridge RLUSD (XRPL) and USDC (Base/EVM) synchronously. Mint any AI decision as an immutable URIToken on Xahau via /v1/notarize. Features native HTTP X402 vending machine and sovereign WebSocket telemetry.",
     "contact": {
       "name": "Script Master Labs",
@@ -134,6 +134,191 @@
           "402": {
             "description": "Payment required — returns a new X-Payment-Required invoice challenge"
           }
+        }
+      }
+    },
+    "/v1/credit/listing": {
+      "post": {
+        "operationId": "postCreditListing",
+        "summary": "Post a service offer to the Agent Credit Marketplace",
+        "description": "Sellers post service offers with a price (in RLUSD drops), TTL, and a min_buyer_tier gate. Ghost Layer enforces the tier gate at quote time — buyers below the threshold cannot get escrow params.",
+        "tags": ["Agent Credit Marketplace"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/CreditListingRequest"}
+            }
+          }
+        },
+        "responses": {
+          "200": {"description": "Listing created", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreditListing"}}}},
+          "400": {"description": "Validation error"}
+        }
+      }
+    },
+    "/v1/credit/listings": {
+      "get": {
+        "operationId": "getCreditListings",
+        "summary": "Browse active Agent Credit Marketplace listings",
+        "description": "Returns active, non-expired listings. Pass ?wallet= to filter by caller's credit tier automatically.",
+        "tags": ["Agent Credit Marketplace"],
+        "parameters": [
+          {"name": "wallet", "in": "query", "required": false, "schema": {"type": "string"}, "description": "XRPL wallet for tier-filtered results"}
+        ],
+        "responses": {
+          "200": {"description": "Active listings array"}
+        }
+      }
+    },
+    "/v1/credit/quote": {
+      "post": {
+        "operationId": "getCreditQuote",
+        "summary": "Get XRPL escrow parameters for a listing (credit-tier gated)",
+        "description": "Returns condition_hex for EscrowCreate, plus amount and seller wallet. Returns ERR_TIER_INSUFFICIENT if buyer tier < listing min_buyer_tier. Ghost Layer holds the matching fulfillment preimage until Release() is called.",
+        "tags": ["Agent Credit Marketplace"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/CreditQuoteRequest"}
+            }
+          }
+        },
+        "responses": {
+          "200": {"description": "Escrow parameters", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreditQuoteResult"}}}},
+          "400": {"description": "ERR_TIER_INSUFFICIENT or listing not found"}
+        }
+      }
+    },
+    "/v1/credit/escrow/register": {
+      "post": {
+        "operationId": "registerCreditEscrow",
+        "summary": "Register on-chain EscrowCreate sequence number",
+        "description": "After submitting EscrowCreate to XRPL, call this with the escrow_id and the OfferSequence of your EscrowCreate transaction. Transitions state to ESCROWED.",
+        "tags": ["Agent Credit Marketplace"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["escrow_id", "offer_sequence"],
+                "properties": {
+                  "escrow_id":      {"type": "string"},
+                  "offer_sequence": {"type": "integer", "description": "OfferSequence of EscrowCreate tx"}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {"description": "Escrow registered — state is now ESCROWED"}
+        }
+      }
+    },
+    "/v1/credit/escrow/{id}/deliver": {
+      "post": {
+        "operationId": "deliverCreditEscrow",
+        "summary": "Seller marks service delivery done",
+        "description": "Transitions escrow from ESCROWED to DELIVERED. Emits CREDIT_DELIVERED SSE event.",
+        "tags": ["Agent Credit Marketplace"],
+        "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["seller_wallet"],
+                "properties": {
+                  "seller_wallet":  {"type": "string"},
+                  "delivery_proof": {"type": "string", "description": "IPFS CID, URL, or any delivery reference"}
+                }
+              }
+            }
+          }
+        },
+        "responses": {"200": {"description": "State is now DELIVERED"}}
+      }
+    },
+    "/v1/credit/escrow/{id}/release": {
+      "post": {
+        "operationId": "releaseCreditEscrow",
+        "summary": "Buyer confirms delivery → Ghost Layer fires EscrowFinish",
+        "description": "Ghost Layer submits an EscrowFinish with the PREIMAGE-SHA-256 fulfillment it has been holding. Funds flow escrow → seller directly on XRPL. Both parties earn loyalty volume. Emits CREDIT_RELEASED SSE event.",
+        "tags": ["Agent Credit Marketplace"],
+        "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["buyer_wallet"],
+                "properties": {
+                  "buyer_wallet": {"type": "string"}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "EscrowFinish submitted — funds released to seller",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/CreditReleaseResponse"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/credit/escrow/{id}/cancel": {
+      "post": {
+        "operationId": "cancelCreditEscrow",
+        "summary": "Cancel escrow → Ghost Layer fires EscrowCancel (funds return to buyer)",
+        "description": "Can be called by buyer or seller. Ghost Layer auto-calls this when CancelAfter TTL elapses. Emits CREDIT_CANCELLED SSE event.",
+        "tags": ["Agent Credit Marketplace"],
+        "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["caller_wallet"],
+                "properties": {"caller_wallet": {"type": "string"}}
+              }
+            }
+          }
+        },
+        "responses": {"200": {"description": "EscrowCancel submitted — funds returned to buyer"}}
+      }
+    },
+    "/v1/credit/escrow/{id}": {
+      "get": {
+        "operationId": "getCreditEscrow",
+        "summary": "Get escrow state",
+        "description": "Returns current state: PENDING_ESCROW / ESCROWED / DELIVERED / RELEASED / CANCELLED.",
+        "tags": ["Agent Credit Marketplace"],
+        "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {
+          "200": {"description": "Escrow record", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreditEscrow"}}}},
+          "404": {"description": "Escrow not found"}
+        }
+      }
+    },
+    "/api/agent/{addr}/credit": {
+      "get": {
+        "operationId": "getAgentCreditProfile",
+        "summary": "Get agent credit profile and marketplace access",
+        "description": "Returns loyalty tier, lifetime volume, effective fee BPS, accessible marketplace tiers, and upgrade threshold.",
+        "tags": ["Agent Credit Marketplace"],
+        "parameters": [{"name": "addr", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {
+          "200": {"description": "Credit profile", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreditProfile"}}}}
         }
       }
     },
@@ -276,6 +461,96 @@
           "treasury_routing": { "type": "string" },
           "agent_tier": { "type": "string" },
           "effective_bps": { "type": "integer" }
+        }
+      },
+      "CreditListingRequest": {
+        "type": "object",
+        "required": ["seller_wallet", "description", "price_drops"],
+        "properties": {
+          "seller_wallet":  {"type": "string"},
+          "description":    {"type": "string", "maxLength": 500},
+          "price_drops":    {"type": "integer", "description": "RLUSD drops (1 RLUSD = 1,000,000 drops)"},
+          "min_buyer_tier": {"type": "string", "enum": ["BRONZE","SILVER","GOLD","PLATINUM","DIAMOND"], "default": "BRONZE"},
+          "ttl_seconds":    {"type": "integer", "default": 3600, "maximum": 2592000}
+        }
+      },
+      "CreditListing": {
+        "type": "object",
+        "properties": {
+          "id":             {"type": "string"},
+          "seller_wallet":  {"type": "string"},
+          "description":    {"type": "string"},
+          "price_drops":    {"type": "integer"},
+          "min_buyer_tier": {"type": "string"},
+          "ttl_seconds":    {"type": "integer"},
+          "created_at":     {"type": "string", "format": "date-time"},
+          "expires_at":     {"type": "string", "format": "date-time"},
+          "active":         {"type": "boolean"}
+        }
+      },
+      "CreditQuoteRequest": {
+        "type": "object",
+        "required": ["listing_id", "buyer_wallet"],
+        "properties": {
+          "listing_id":   {"type": "string"},
+          "buyer_wallet": {"type": "string"}
+        }
+      },
+      "CreditQuoteResult": {
+        "type": "object",
+        "properties": {
+          "escrow_id":        {"type": "string"},
+          "listing_id":       {"type": "string"},
+          "seller_wallet":    {"type": "string"},
+          "amount_drops":     {"type": "integer"},
+          "condition_hex":    {"type": "string", "description": "PREIMAGE-SHA-256 condition — include in EscrowCreate Condition field"},
+          "fulfillment_hex":  {"type": "string", "description": "Matching fulfillment held by Ghost Layer until release"},
+          "expires_at":       {"type": "string", "format": "date-time"},
+          "expires_at_unix":  {"type": "integer", "description": "Use as CancelAfter in EscrowCreate"},
+          "instructions":     {"type": "string"}
+        }
+      },
+      "CreditEscrow": {
+        "type": "object",
+        "properties": {
+          "id":             {"type": "string"},
+          "listing_id":     {"type": "string"},
+          "buyer_wallet":   {"type": "string"},
+          "seller_wallet":  {"type": "string"},
+          "amount_drops":   {"type": "integer"},
+          "condition_hex":  {"type": "string"},
+          "offer_sequence": {"type": "integer"},
+          "state":          {"type": "string", "enum": ["PENDING_ESCROW","ESCROWED","DELIVERED","RELEASED","CANCELLED"]},
+          "created_at":     {"type": "string", "format": "date-time"},
+          "expires_at":     {"type": "string", "format": "date-time"},
+          "delivery_proof": {"type": "string"},
+          "release_tx_hash":{"type": "string"}
+        }
+      },
+      "CreditReleaseResponse": {
+        "type": "object",
+        "properties": {
+          "status":       {"type": "string", "example": "RELEASED"},
+          "release_tx":   {"type": "string", "description": "EscrowFinish transaction hash on XRPL"},
+          "verify_url":   {"type": "string", "description": "https://livenet.xrpl.org/transactions/<hash>"},
+          "escrow":       {"$ref": "#/components/schemas/CreditEscrow"}
+        }
+      },
+      "CreditProfile": {
+        "type": "object",
+        "properties": {
+          "agent":          {"type": "string"},
+          "credit_tier":    {"type": "string"},
+          "total_volume":   {"type": "string"},
+          "effective_bps":  {"type": "integer"},
+          "marketplace_access": {
+            "type": "object",
+            "properties": {
+              "can_list":          {"type": "boolean"},
+              "accessible_tiers":  {"type": "array", "items": {"type": "string"}},
+              "upgrade_threshold": {"type": "string"}
+            }
+          }
         }
       },
       "NotarizeRequest": {

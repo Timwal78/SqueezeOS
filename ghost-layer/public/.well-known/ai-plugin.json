@@ -2,8 +2,8 @@
   "schema_version": "v1",
   "name_for_human": "Ghost Layer Bridge",
   "name_for_model": "ghost_layer_bridge",
-  "description_for_human": "Dual-chain transparent toll gateway + AI Decision Notary. Bridge RLUSD (XRPL) and USDC (Base/EVM). Mint any AI decision as a tamper-proof URIToken on Xahau. Operated by Script Master Labs.",
-  "description_for_model": "Ghost Layer provides two core capabilities: (1) Cross-chain bridge between XRPL RLUSD and Base/EVM USDC (EIP-3009 gasless). All bridge settlements generate tamper-evident compliance receipts and increment Agent Passport loyalty score. (2) Decision Notary — mint any AI decision as an immutable URIToken on Xahau via POST /v1/notarize. Three tiers: STANDARD (0.001 RLUSD, URIToken + JSON memo), CERTIFIED (0.01 RLUSD, adds Ed25519 certificate signed by Ghost Layer), SOVEREIGN (0.05 RLUSD, highest grade + on-chain memo). Loyalty discounts (BRONZE 0% → DIAMOND 30%) apply automatically. Payment via X402 protocol. Anonymous requests are tarpitted.",
+  "description_for_human": "Dual-chain toll gateway + AI Decision Notary + Agent Credit Marketplace. Bridge RLUSD/USDC, notarize AI decisions on Xahau, and trade services peer-to-peer via zero-custody XRPL escrow. Operated by Script Master Labs.",
+  "description_for_model": "Ghost Layer provides three core capabilities: (1) Cross-chain bridge XRPL RLUSD ↔ Base USDC (EIP-3009 gasless) with transparent fee receipts and loyalty scoring. (2) Decision Notary — POST /v1/notarize mints any AI decision as an immutable URIToken on Xahau. Three tiers: STANDARD 0.001 RLUSD, CERTIFIED 0.01 RLUSD (Ed25519 certificate), SOVEREIGN 0.05 RLUSD. (3) Agent Credit Marketplace — POST /v1/credit/listing to sell services, GET /v1/credit/listings to browse, POST /v1/credit/quote to get XRPL EscrowCreate params (credit-tier gated), POST /v1/credit/escrow/{id}/release to confirm delivery (Ghost Layer fires EscrowFinish, funds go escrow→seller directly). Zero custody. All products loyalty-discounted: BRONZE 0% → DIAMOND 30%. Payment via X402 protocol. Anonymous requests are tarpitted.",
   "auth": {
     "type": "none"
   },
