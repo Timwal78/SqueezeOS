@@ -57,6 +57,18 @@ var (
 	baseClient  *chain.BaseClient
 )
 
+// notaryGrade maps a product ID to its human-readable grade string.
+func notaryGrade(pid string) string {
+	switch pid {
+	case "decision.notarize.sovereign":
+		return "SOVEREIGN"
+	case "decision.notarize.certified":
+		return "CERTIFIED"
+	default:
+		return "STANDARD"
+	}
+}
+
 // writeJSONErr writes a {"error": "<code>"} body with the given HTTP status.
 // Used by the x402 routes for consistent error envelopes.
 func writeJSONErr(w http.ResponseWriter, status int, code string) {
@@ -170,9 +182,26 @@ func init() {
 	x402Registry.Register(&x402.Product{
 		ID:        "decision.notarize",
 		Name:      "AI Decision Notary — Xahau URIToken",
-		BasePrice: 1000, // 0.001 RLUSD in drops
+		BasePrice: 1000, // 0.001 RLUSD — agent floor; loyalty discount applied at quote
 		Dispatcher: func(args map[string]any) (json.RawMessage, error) {
-			// Logic handled in POST /v1/notarize; this entry exists for catalog + quote.
+			return nil, errors.New("ERR_USE_NOTARIZE_ENDPOINT")
+		},
+	})
+
+	x402Registry.Register(&x402.Product{
+		ID:        "decision.notarize.certified",
+		Name:      "AI Decision Notary — Certified (Ed25519 Attested)",
+		BasePrice: 10000, // 0.01 RLUSD — enterprise compliance grade
+		Dispatcher: func(args map[string]any) (json.RawMessage, error) {
+			return nil, errors.New("ERR_USE_NOTARIZE_ENDPOINT")
+		},
+	})
+
+	x402Registry.Register(&x402.Product{
+		ID:        "decision.notarize.sovereign",
+		Name:      "AI Decision Notary — Sovereign (Priority + Full Certificate)",
+		BasePrice: 50000, // 0.05 RLUSD — regulatory / legal grade
+		Dispatcher: func(args map[string]any) (json.RawMessage, error) {
 			return nil, errors.New("ERR_USE_NOTARIZE_ENDPOINT")
 		},
 	})
@@ -788,11 +817,23 @@ func main() {
 
 	// ── DECISION NOTARY ───────────────────────────────────────────────────────
 	// POST /v1/notarize — mint any AI decision as a Xahau URIToken.
-	// Caller pays 0.001 RLUSD via X-Payment-Token (obtained from /v1/x402/quote).
-	// Returns an immutable receipt: decision hash + Xahau TX hash.
+	//
+	// Three tiers, all loyalty-discounted at quote time:
+	//   decision.notarize           0.001 RLUSD  — URIToken + JSON memo
+	//   decision.notarize.certified 0.010 RLUSD  — above + Ed25519 certificate
+	//   decision.notarize.sovereign 0.050 RLUSD  — certified + SOVEREIGN grade receipt
+	//
+	// All tiers: BRONZE 0% · SILVER 5% · GOLD 10% · PLATINUM 20% · DIAMOND 30%
 	r.Post("/v1/notarize", func(w http.ResponseWriter, req *http.Request) {
+		notaryProducts := map[string]bool{
+			"decision.notarize":           true,
+			"decision.notarize.certified": true,
+			"decision.notarize.sovereign": true,
+		}
+
 		token := req.Header.Get("X-Payment-Token")
 		if token == "" {
+			// Default 402 challenge returns the base tier invoice
 			product, err := x402Registry.Lookup("decision.notarize")
 			if err != nil {
 				writeJSONErr(w, http.StatusNotFound, err.Error())
@@ -816,7 +857,7 @@ func main() {
 			writeJSONErr(w, http.StatusUnauthorized, err.Error())
 			return
 		}
-		if tok.Pid != "decision.notarize" {
+		if !notaryProducts[tok.Pid] {
 			writeJSONErr(w, http.StatusUnauthorized, "ERR_PRODUCT_MISMATCH")
 			return
 		}
@@ -845,6 +886,10 @@ func main() {
 		if agentWallet == "" {
 			agentWallet = tok.Wlt
 		}
+		tier := tok.Tier
+		if tier == "" {
+			tier = "BRONZE"
+		}
 
 		ts := time.Now().UTC()
 		memo := map[string]interface{}{
@@ -852,6 +897,8 @@ func main() {
 			"model":        body.Model,
 			"agent_wallet": agentWallet,
 			"endpoint":     body.Endpoint,
+			"tier":         tier,
+			"grade":        notaryGrade(tok.Pid),
 			"ts":           ts.Unix(),
 		}
 		memoBytes, _ := json.Marshal(memo)
@@ -872,29 +919,54 @@ func main() {
 			return
 		}
 
-		log.Printf("[NOTARY] Notarized: hash=%s xahau_tx=%s agent=%s", decisionHash, xahauTx, agentWallet)
+		// Record volume for loyalty tracking — 1 drop per call (notarize is flat-fee)
+		agentLedger.RecordVolume(agentWallet, big.NewInt(1))
+
+		log.Printf("[NOTARY] %s: hash=%s xahau_tx=%s agent=%s tier=%s",
+			notaryGrade(tok.Pid), decisionHash, xahauTx, agentWallet, tier)
 
 		hub.broadcast("DECISION_NOTARIZED", map[string]interface{}{
 			"decision_hash": decisionHash,
 			"xahau_tx":      xahauTx,
 			"agent_wallet":  agentWallet,
 			"model":         body.Model,
+			"grade":         notaryGrade(tok.Pid),
+			"tier":          tier,
 		})
-		metricsHub.BroadcastX402Dispensed("decision.notarize", agentWallet, tok.Tier)
+		metricsHub.BroadcastX402Dispensed(tok.Pid, agentWallet, tier)
 		x402Dispensed.Add(1)
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		grade := notaryGrade(tok.Pid)
+		resp := map[string]interface{}{
 			"status":        "NOTARIZED",
+			"grade":         grade,
 			"decision_hash": decisionHash,
 			"xahau_tx":      xahauTx,
 			"agent_wallet":  agentWallet,
+			"agent_tier":    tier,
 			"model":         body.Model,
 			"endpoint":      body.Endpoint,
 			"timestamp":     ts.Format(time.RFC3339),
 			"unix_ts":       ts.Unix(),
 			"verify_url":    "https://xahau.network/tx/" + xahauTx,
-		})
+		}
+
+		// Certified + Sovereign: add Ed25519 attestation certificate
+		if grade == "CERTIFIED" || grade == "SOVEREIGN" {
+			cert, certErr := x402.SignDecision(
+				decisionHash, xahauTx, agentWallet,
+				body.Model, body.Endpoint, tier, grade,
+				attestationPrivKey,
+			)
+			if certErr != nil {
+				log.Printf("[NOTARY] cert sign failed: %v", certErr)
+			} else {
+				resp["certificate"] = cert
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
 	})
 
 	// ── INSTITUTIONAL EXECUTION PATH ─────────────────────────────────────────
