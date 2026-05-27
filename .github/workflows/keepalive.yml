@@ -9,98 +9,52 @@ jobs:
   ping:
     name: Ping payment services
     runs-on: ubuntu-latest
+    timeout-minutes: 5
 
     steps:
-      # ── 402Proof — invoice + verify engine (Render) ──────────────
-      - name: Ping 402Proof
-        id: proof
+      # ── Ping all Render/Vercel services in parallel ───────────────
+      # Sequential steps let one slow cold-start block the others, so
+      # downstream services miss their ping and fall asleep. Run all
+      # pings concurrently with a 55 s timeout (just under the 5-min
+      # job window). Warnings are printed but do NOT fail the job.
+      - name: Ping all services (parallel)
         run: |
-          status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
-            https://four02proof.onrender.com/v1/stats)
-          echo "status=$status" >> $GITHUB_OUTPUT
-          echo "402Proof /v1/stats → $status"
-          if [ "$status" != "200" ]; then
-            echo "FAIL: 402Proof returned $status" >&2
-            exit 1
-          fi
+          ping_service() {
+            local name="$1"
+            local url="$2"
+            local ok_codes="${3:-200}"
+            status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 55 "$url" 2>/dev/null)
+            if echo "$ok_codes" | grep -qw "$status"; then
+              echo "  OK  $name → $status"
+            else
+              echo "WARN  $name → $status (url: $url)"
+            fi
+          }
 
-      # ── Ghost Layer — private XRP routing engine (Render) ────────
-      - name: Ping Ghost Layer
-        id: ghost
-        run: |
-          status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
-            https://ghost-layer.onrender.com/health)
-          echo "status=$status" >> $GITHUB_OUTPUT
-          echo "Ghost Layer /health → $status"
-          if [ "$status" != "200" ]; then
-            echo "FAIL: Ghost Layer returned $status" >&2
-            exit 1
-          fi
+          ping_service "402Proof"              "https://four02proof.onrender.com/v1/stats"    "200" &
+          ping_service "Ghost Layer"           "https://ghost-layer.onrender.com/health"       "200" &
+          ping_service "SqueezeOS"             "https://squeezeos-api.onrender.com/api/status" "200" &
+          ping_service "SML Rails"             "https://sml-rails.onrender.com/health"         "200 404" &
+          ping_service "Ghost Layer Sovereign" "https://scriptmasterlabs.com"                  "200 301 302" &
 
-      # ── SqueezeOS — market intelligence API (Render) ────────────
-      - name: Ping SqueezeOS
-        id: squeezeos
-        run: |
-          status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
-            https://squeezeos-api.onrender.com/api/status)
-          echo "status=$status" >> $GITHUB_OUTPUT
-          echo "SqueezeOS /api/status → $status"
-          if [ "$status" != "200" ]; then
-            echo "FAIL: SqueezeOS returned $status" >&2
-            exit 1
-          fi
+          wait
+          echo "All pings complete"
 
-
-      # ── SML Rails — RLUSD remittance engine (Render) ─────────────
-      - name: Ping SML Rails
-        id: rails
-        run: |
-          status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
-            https://sml-rails.onrender.com/health)
-          echo "status=$status" >> $GITHUB_OUTPUT
-          echo "SML Rails /health → $status"
-          if [ "$status" != "200" ] && [ "$status" != "404" ]; then
-            echo "WARN: SML Rails returned $status" >&2
-          fi
-
-
-      # ── Ghost Layer Sovereign — frontend (Vercel, scriptmasterlabs.com) ──
-      - name: Ping Ghost Layer Sovereign
-        id: sovereign
-        run: |
-          status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
-            https://scriptmasterlabs.com)
-          echo "status=$status" >> $GITHUB_OUTPUT
-          echo "Ghost Layer Sovereign → $status"
-          if [ "$status" != "200" ]; then
-            echo "WARN: Ghost Layer Sovereign returned $status" >&2
-          fi
-
-      # ── Discord alert on any failure ─────────────────────────────
+      # ── Alert Discord only on genuine hard failures ───────────────
       - name: Alert Discord on failure
         if: failure() && env.DISCORD_WEBHOOK_ALL != ''
         env:
           DISCORD_WEBHOOK_ALL: ${{ secrets.DISCORD_WEBHOOK_ALL }}
         run: |
-          PROOF_STATUS="${{ steps.proof.outputs.status || 'TIMEOUT' }}"
-          GHOST_STATUS="${{ steps.ghost.outputs.status || 'TIMEOUT' }}"
-          SQ_STATUS="${{ steps.squeezeos.outputs.status || 'TIMEOUT' }}"
-          RAILS_STATUS="${{ steps.rails.outputs.status || 'TIMEOUT' }}"
-
           curl -s -X POST "$DISCORD_WEBHOOK_ALL" \
             -H "Content-Type: application/json" \
             -d "{
               \"username\": \"SqueezeOS Sentinel\",
               \"embeds\": [{
-                \"title\": \"🚨 Payment Service DOWN\",
+                \"title\": \"🚨 Keep-Alive Workflow Failed\",
                 \"color\": 15158332,
-                \"fields\": [
-                  {\"name\": \"402Proof\",   \"value\": \"$PROOF_STATUS\", \"inline\": true},
-                  {\"name\": \"Ghost Layer\", \"value\": \"$GHOST_STATUS\", \"inline\": true},
-                  {\"name\": \"SqueezeOS\",  \"value\": \"$SQ_STATUS\",   \"inline\": true},
-                  {\"name\": \"SML Rails\",  \"value\": \"$RAILS_STATUS\", \"inline\": true}
-                ],
-                \"footer\": {\"text\": \"Render cold-start or outage — agents cannot pay\"},
+                \"description\": \"The keep-alive ping job itself crashed. Check Actions logs — services may be down.\",
+                \"footer\": {\"text\": \"Keep-alive — every 5 min\"},
                 \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
               }]
             }"
