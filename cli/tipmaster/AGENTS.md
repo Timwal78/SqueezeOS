@@ -34,7 +34,7 @@ ghost-layer bridge --chain XRPL --recipient "$WALLET" --amount 1000000 ...
 ## Environment Variables
 
 | Variable | Default | Purpose |
-|----------|---------|---------|
+|----------|---------|----------|
 | `TIPMASTER_BASE_URL` | `https://tipmaster.onrender.com` | Override base URL |
 
 ## Related CLIs

@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>BEASTMODE | ScriptMaster Labs</title>
+<link rel="manifest" href="/manifest.json">
+<style>
+  :root {
+    --bg:       #000000;
+    --surface:  #0a0a0a;
+    --surface2: #111111;
+    --border:   #1a1a1a;
+    --green:    #00ff66;
+    --red:      #ff0055;
+    --blue:     #00aaff;
+    --orange:   #ff8800;
+    --purple:   #9900ff;
+    --white:    #f0f0f0;
+    --dim:      #555;
+    --font:     'JetBrains Mono', 'Courier New', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--white);
+    font-family: var(--font);
+    font-size: 13px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Header ── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--green);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .logo {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--green);
+    letter-spacing: 2px;
+  }
+  .logo span { color: var(--white); }
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 6px;
+    animation: pulse 2s infinite;
+  }
+  .dot-green  { background: var(--green); }
+  .dot-red    { background: var(--red); }
+  .dot-orange { background: var(--orange); }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.3; }
+  }
+
+  /* ── Layout ── */
+  .container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 12px;
+  }
+
+  /* ── Symbol selector ── */
+  .controls {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+    align-items: center;
+  }
+  .ticker-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--dim);
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: var(--font);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    transition: all 0.15s;
+  }
+  .ticker-btn:hover, .ticker-btn.active {
+    border-color: var(--green);
+    color: var(--green);
+    background: rgba(0,255,102,0.05);
+  }
+  .refresh-btn {
+    margin-left: auto;
+    background: transparent;
+    border: 1px solid var(--green);
+    color: var(--green);
+    padding: 6px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: var(--font);
+    font-size: 12px;
+  }
+  .refresh-btn:hover { background: rgba(0,255,102,0.1); }
+  .countdown {
+    color: var(--dim);
+    font-size: 11px;
+    margin-left: 8px;
+  }
+
+  /* ── BEASTMODE ALERT BANNER ── */
+  .beast-banner {
+    display: none;
+    background: linear-gradient(90deg, #0a0008, #120010, #0a0008);
+    border: 2px solid var(--purple);
+    border-radius: 6px;
+    padding: 16px;
+    margin-bottom: 12px;
+    text-align: center;
+    animation: beastpulse 1s infinite;
+  }
+  .beast-banner.visible { display: block; }
+  .beast-banner h2 {
+    color: var(--purple);
+    font-size: 20px;
+    letter-spacing: 4px;
+    text-shadow: 0 0 20px var(--purple);
+  }
+  .beast-banner p { color: var(--white); margin-top: 6px; font-size: 12px; }
+  @keyframes beastpulse {
+    0%, 100% { box-shadow: 0 0 15px rgba(153,0,255,0.3); }
+    50%       { box-shadow: 0 0 40px rgba(153,0,255,0.7); }
+  }
+
+  /* ── Signal badge ── */
+  .signal-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    border: 1px solid currentColor;
+  }
+  .sig-BEASTMODE         { color: var(--purple); border-color: var(--purple); }
+  .sig-HIGH_CONVERGENCE  { color: var(--green);  border-color: var(--green); }
+  .sig-CONVERGENCE       { color: var(--blue);   border-color: var(--blue); }
+  .sig-LIE_DETECTOR_ACTIVE { color: var(--orange); border-color: var(--orange); }
+  .sig-PARTIAL_ALIGNMENT { color: var(--dim);    border-color: var(--dim); }
+  .sig-NEUTRAL           { color: var(--dim);    border-color: #222; }
+
+  /* ── Engine grid ── */
+  .engine-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  @media (max-width: 900px) {
+    .engine-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (max-width: 480px) {
+    .engine-grid { grid-template-columns: 1fr 1fr; }
+  }
+
+  .engine-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+    transition: border-color 0.2s;
+  }
+  .engine-card.active   { border-color: var(--green); }
+  .engine-card.inactive { border-color: var(--border); }
+  .engine-card.warning  { border-color: var(--orange); }
+
+  .engine-num {
+    font-size: 10px;
+    color: var(--dim);
+    letter-spacing: 2px;
+    margin-bottom: 4px;
+  }
+  .engine-name {
+    font-size: 11px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--white);
+  }
+  .engine-status {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 2px;
+    display: inline-block;
+    font-weight: 700;
+  }
+  .status-on  { background: rgba(0,255,102,0.1); color: var(--green); }
+  .status-off { background: rgba(85,85,85,0.1);  color: var(--dim); }
+  .engine-detail { font-size: 10px; color: var(--dim); margin-top: 6px; line-height: 1.5; }
+  .engine-detail .val { color: var(--white); }
+
+  /* ── Options sniper ── */
+  .sniper-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+  .sniper-card.call-active { border-color: var(--green); }
+  .sniper-card.put-active  { border-color: var(--red); }
+
+  .sniper-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .sniper-title {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--white);
+  }
+  .sniper-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+  @media (max-width: 600px) {
+    .sniper-grid { grid-template-columns: 1fr 1fr; }
+  }
+  .sniper-item { }
+  .sniper-label { font-size: 10px; color: var(--dim); margin-bottom: 3px; letter-spacing: 1px; }
+  .sniper-value {
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .val-call { color: var(--green); }
+  .val-put  { color: var(--red); }
+  .val-neutral { color: var(--blue); }
+
+  /* ── Settlement clock ── */
+  .clock-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+  .clock-card.kill-zone { border-color: var(--red); animation: beastpulse 2s infinite; }
+  .clock-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 10px;
+  }
+  .clock-item { }
+  .clock-label { font-size: 10px; color: var(--dim); letter-spacing: 1px; margin-bottom: 4px; }
+  .clock-val   { font-size: 22px; font-weight: 700; }
+  .clock-sub   { font-size: 10px; color: var(--dim); margin-top: 2px; }
+
+  /* ── Score bar ── */
+  .score-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .score-label { font-size: 11px; color: var(--dim); width: 100px; flex-shrink: 0; }
+  .score-bar-wrap {
+    flex: 1;
+    height: 6px;
+    background: var(--surface2);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .score-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, var(--blue), var(--green));
+    transition: width 0.5s ease;
+  }
+  .score-bar-fill.high { background: linear-gradient(90deg, var(--orange), var(--red)); }
+  .score-number { font-size: 14px; font-weight: 700; color: var(--white); width: 40px; text-align: right; }
+
+  /* ── Section header ── */
+  .section-hdr {
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--dim);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* ── Error / loading ── */
+  .loading { color: var(--dim); font-size: 12px; padding: 20px; text-align: center; }
+  .err-msg { color: var(--red); font-size: 11px; padding: 10px; }
+
+  /* ── Footer ── */
+  footer {
+    text-align: center;
+    padding: 20px;
+    font-size: 10px;
+    color: var(--dim);
+    letter-spacing: 1px;
+    border-top: 1px solid var(--border);
+    margin-top: 20px;
+  }
+  footer a { color: var(--green); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">SCRIPT<span>MASTER</span> LABS · <span style="color:var(--purple)">BEASTMODE</span></div>
+  <div style="display:flex;align-items:center;gap:10px;font-size:11px">
+    <span class="status-dot dot-green" id="live-dot"></span>
+    <span id="live-status" style="color:var(--dim)">CONNECTING…</span>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Ticker bar -->
+  <div class="controls">
+    <button class="ticker-btn active" data-sym="GME">GME</button>
+    <button class="ticker-btn" data-sym="AMC">AMC</button>
+    <button class="ticker-btn" data-sym="MSTR">MSTR</button>
+    <button class="ticker-btn" data-sym="PLTR">PLTR</button>
+    <button class="ticker-btn" data-sym="HOOD">HOOD</button>
+    <button class="ticker-btn" data-sym="IWM">IWM</button>
+    <button class="ticker-btn" data-sym="NVDA">NVDA</button>
+    <button class="ticker-btn" data-sym="TSLA">TSLA</button>
+    <button class="refresh-btn" id="refresh-btn">↻ REFRESH</button>
+    <span class="countdown" id="countdown">—</span>
+  </div>
+
+  <!-- Beastmode banner -->
+  <div class="beast-banner" id="beast-banner">
+    <h2>⚡ BEASTMODE LOCKED ⚡</h2>
+    <p id="beast-detail">All 5 engines converged — executing options sniper</p>
+  </div>
+
+  <!-- Signal + score -->
+  <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px;flex-wrap:wrap">
+    <div style="font-size:20px;font-weight:700;letter-spacing:2px" id="sym-display">GME</div>
+    <div id="signal-badge"></div>
+    <div style="flex:1"></div>
+    <div class="score-row" style="margin:0;min-width:200px">
+      <div class="score-label">COMPOSITE</div>
+      <div class="score-bar-wrap"><div class="score-bar-fill" id="score-fill" style="width:0%"></div></div>
+      <div class="score-number" id="score-num">—</div>
+    </div>
+  </div>
+
+  <!-- Engine grid -->
+  <div class="section-hdr">ENGINE MATRIX</div>
+  <div class="engine-grid" id="engine-grid">
+    <div class="loading">Loading engines…</div>
+  </div>
+
+  <!-- Settlement clock -->
+  <div class="section-hdr">ENGINE 2 · SETTLEMENT CLOCK</div>
+  <div class="clock-card" id="clock-card">
+    <div class="loading" id="clock-loading">No ignition stamped — monitoring</div>
+    <div class="clock-grid" id="clock-grid" style="display:none"></div>
+  </div>
+
+  <!-- Options sniper -->
+  <div class="section-hdr">OPTIONS SNIPER · 0–14 DTE · Δ 0.35–0.45</div>
+  <div class="sniper-card" id="sniper-card">
+    <div class="sniper-header">
+      <div class="sniper-title" id="sniper-title">Awaiting convergence…</div>
+      <div id="sniper-type-badge"></div>
+    </div>
+    <div class="sniper-grid" id="sniper-grid"></div>
+  </div>
+
+  <!-- Lie detector -->
+  <div id="lie-detector-row" style="display:none;margin-bottom:12px">
+    <div style="background:rgba(255,136,0,0.07);border:1px solid var(--orange);border-radius:6px;padding:12px">
+      <span style="color:var(--orange);font-weight:700;letter-spacing:1px">🎯 LIE DETECTOR ACTIVE</span>
+      <span style="color:var(--dim);font-size:11px;margin-left:10px">Price suppressed · Volume exploding off-exchange</span>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  ScriptMaster Labs · SqueezeOS Convergence Engine ·
+  <a href="https://squeezeos-api.onrender.com">squeezeos-api.onrender.com</a>
+</footer>
+
+<script>
+const SYMBOLS   = ["GME","AMC","MSTR","PLTR","HOOD","IWM","NVDA","TSLA"];
+let   activeSym = "GME";
+let   refreshTimer, countdownTimer, secondsLeft = 45;
+
+// ── Engine config ──────────────────────────────────────────────────
+const ENGINES = [
+  { key: "e1_price_suppressed", num: "E1", name: "Price Elasticity\n1·24·578·963",   color: "green" },
+  { key: "e5_gann_curl",        num: "E5", name: "Gann Macro Filter\n42→369 Curl",    color: "orange" },
+  { key: "e3_volume_firing",    num: "E3", name: "Volume Kinetics\nVMA 11·47·123·321", color: "blue" },
+  { key: "e2_kill_zone",        num: "E2", name: "Settlement Clock\nKill Zone",        color: "red" },
+  { key: "e4_temporal_aligned", num: "E4", name: "Temporal Mirror\nFeb-22 Shadow",    color: "purple" },
+];
+
+// ── Utils ──────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+
+function setLive(ok) {
+  $("live-dot").className = "status-dot " + (ok ? "dot-green" : "dot-red");
+  $("live-status").textContent = ok ? "LIVE" : "ERROR";
+  $("live-status").style.color = ok ? "var(--green)" : "var(--red)";
+}
+
+function fmtVal(v, prefix="") {
+  if (v === null || v === undefined || v === "") return "—";
+  return prefix + v;
+}
+
+function buildBadge(signal) {
+  const el = document.createElement("div");
+  el.className = "signal-badge sig-" + signal;
+  el.textContent = signal.replace(/_/g, " ");
+  return el;
+}
+
+// ── Render data ────────────────────────────────────────────────────
+function render(data) {
+  const result = data.result || {};
+  const signal = result.signal || "NEUTRAL";
+  const score  = result.composite_score || 0;
+  const beast  = result.beastmode || false;
+  const lieDet = result.lie_detector || false;
+  const gate   = result.gate || {};
+  const engines= result.engines || {};
+  const sniper = result.options_sniper || null;
+  const e2     = engines.e2 || {};
+
+  // Symbol + signal
+  $("sym-display").textContent = activeSym;
+  const badge = $("signal-badge");
+  badge.innerHTML = "";
+  badge.appendChild(buildBadge(signal));
+
+  // Score bar
+  const fill = $("score-fill");
+  fill.style.width = score + "%";
+  fill.className = "score-bar-fill" + (score > 70 ? " high" : "");
+  $("score-num").textContent = score;
+
+  // Beastmode banner
+  const banner = $("beast-banner");
+  if (beast) {
+    banner.classList.add("visible");
+    $("beast-detail").textContent =
+      activeSym + " — All 5 engines converged | " +
+      (sniper && !sniper.error ? "Sniper: " + sniper.type + " " + sniper.strike + " @ $" + sniper.premium : "Sniper scanning…");
+  } else {
+    banner.classList.remove("visible");
+  }
+
+  // Lie detector
+  $("lie-detector-row").style.display = lieDet ? "block" : "none";
+
+  // Engine grid
+  const grid = $("engine-grid");
+  grid.innerHTML = "";
+  ENGINES.forEach(e => {
+    const entry  = gate[e.key] || {};
+    const active = typeof entry === "object" ? !!entry.active : !!entry;
+    const detail = typeof entry === "object" ? (entry.signal || entry.status || "") : "";
+    const nameLines = e.name.split("\n");
+
+    const card = document.createElement("div");
+    card.className = "engine-card " + (active ? "active" : "inactive");
+
+    card.innerHTML = `
+      <div class="engine-num">${e.num}</div>
+      <div class="engine-name">${nameLines[0]}<br><span style="color:var(--dim);font-size:9px">${nameLines[1] || ""}</span></div>
+      <div class="engine-status ${active ? "status-on" : "status-off"}">${active ? "ACTIVE" : "STANDBY"}</div>
+      ${detail ? `<div class="engine-detail"><span class="val">${detail}</span></div>` : ""}
+      ${renderEngineDetail(e.num, engines)}
+    `;
+    grid.appendChild(card);
+  });
+
+  // Settlement clock
+  renderClock(e2);
+
+  // Options sniper
+  renderSniper(sniper);
+}
+
+function renderEngineDetail(num, engines) {
+  const e1 = engines.e1 || {};
+  const e3 = engines.e3 || {};
+  const e4 = engines.e4 || {};
+  const e5 = engines.e5 || {};
+  const e2 = engines.e2 || {};
+
+  switch(num) {
+    case "E1": return `<div class="engine-detail">Stretch: <span class="val">${fmtVal(e1.stretch_pct, "")+ "%"}</span><br>EMA963: <span class="val">${fmtVal(e1.ema963)}</span></div>`;
+    case "E3": return `<div class="engine-detail">Phi² ratio: <span class="val">${fmtVal(e3.phi_sq_ratio)}</span><br>Ceiling: <span class="val" style="color:${e3.ceiling_breach ? "var(--red)" : "var(--dim)"}">${e3.ceiling_breach ? "BREACH" : "—"}</span></div>`;
+    case "E4": return `<div class="engine-detail">r = <span class="val">${fmtVal(e4.correlation)}</span><br>Pivot: <span class="val">Feb 22 2026</span></div>`;
+    case "E5": return `<div class="engine-detail">42 curl: <span class="val">${e5.curl_up_42 ? "YES" : "—"}</span><br>Slope42: <span class="val">${fmtVal(e5.slope_42)}</span></div>`;
+    case "E2": return `<div class="engine-detail">C+35: <span class="val">${fmtVal(e2.c35_calendar_days_left, "")}d</span><br>T+13: <span class="val">${fmtVal(e2.t13_trading_days_left, "")}d</span></div>`;
+    default:   return "";
+  }
+}
+
+function renderClock(e2) {
+  const card    = $("clock-card");
+  const loading = $("clock-loading");
+  const grid    = $("clock-grid");
+  const status  = e2.status || "NO_IGNITION";
+  const killZone= e2.in_kill_zone;
+
+  card.className = "clock-card" + (killZone ? " kill-zone" : "");
+
+  if (status === "NO_IGNITION" || status === "EXPIRED") {
+    loading.style.display = "block";
+    loading.textContent   = status === "EXPIRED" ? "Clock expired — window closed" : "No ignition — monitoring";
+    grid.style.display    = "none";
+    return;
+  }
+
+  loading.style.display = "none";
+  grid.style.display    = "grid";
+
+  grid.innerHTML = `
+    <div class="clock-item">
+      <div class="clock-label">T+13 (TRADING DAYS)</div>
+      <div class="clock-val" style="color:${(e2.t13_trading_days_left || 0) <= 3 ? "var(--red)" : "var(--orange)"}">${e2.t13_trading_days_left ?? "—"}</div>
+      <div class="clock-sub">Target: ${e2.t13_target || "—"}</div>
+      ${e2.t13_kill_zone ? '<div style="color:var(--red);font-size:10px;margin-top:4px">🔴 KILL ZONE</div>' : ""}
+    </div>
+    <div class="clock-item">
+      <div class="clock-label">C+35 (CALENDAR DAYS)</div>
+      <div class="clock-val" style="color:${(e2.c35_calendar_days_left || 0) <= 3 ? "var(--red)" : "var(--green)"}">${e2.c35_calendar_days_left ?? "—"}</div>
+      <div class="clock-sub">Target: ${e2.c35_target || "—"}</div>
+      ${e2.c35_kill_zone ? '<div style="color:var(--red);font-size:10px;margin-top:4px">🔴 KILL ZONE</div>' : ""}
+    </div>
+    <div class="clock-item">
+      <div class="clock-label">IGNITION (T+0)</div>
+      <div class="clock-val" style="font-size:14px;color:var(--blue)">${e2.t0_ignition || "—"}</div>
+    </div>
+    <div class="clock-item">
+      <div class="clock-label">STATUS</div>
+      <div class="clock-val" style="font-size:14px;color:${e2.in_kill_zone ? "var(--red)" : "var(--orange)"}">${status}</div>
+    </div>
+  `;
+}
+
+function renderSniper(sniper) {
+  const card  = $("sniper-card");
+  const title = $("sniper-title");
+  const tbadge= $("sniper-type-badge");
+  const grid  = $("sniper-grid");
+
+  if (!sniper || sniper.error) {
+    card.className = "sniper-card";
+    title.textContent = sniper?.error || "Awaiting HIGH_CONVERGENCE+ to engage sniper";
+    tbadge.innerHTML  = "";
+    grid.innerHTML    = "";
+    return;
+  }
+
+  const isCall = (sniper.type || "").toUpperCase() === "CALL";
+  card.className  = "sniper-card " + (isCall ? "call-active" : "put-active");
+  title.textContent = sniper.description || `${sniper.type} — ${sniper.symbol}`;
+
+  tbadge.innerHTML = `<span class="signal-badge" style="color:${isCall ? "var(--green)" : "var(--red)"};border-color:${isCall ? "var(--green)" : "var(--red)"};">${sniper.type}</span>`;
+
+  const cls = isCall ? "val-call" : "val-put";
+  grid.innerHTML = `
+    <div class="sniper-item">
+      <div class="sniper-label">STRIKE</div>
+      <div class="sniper-value ${cls}">$${sniper.strike ?? "—"}</div>
+    </div>
+    <div class="sniper-item">
+      <div class="sniper-label">EXPIRATION</div>
+      <div class="sniper-value val-neutral" style="font-size:13px">${sniper.expiration ?? "—"}</div>
+    </div>
+    <div class="sniper-item">
+      <div class="sniper-label">DELTA (Δ)</div>
+      <div class="sniper-value ${cls}">${sniper.delta ?? "—"}</div>
+    </div>
+    <div class="sniper-item">
+      <div class="sniper-label">PREMIUM</div>
+      <div class="sniper-value ${cls}">$${sniper.premium ?? "—"}</div>
+    </div>
+    <div class="sniper-item">
+      <div class="sniper-label">BID / ASK</div>
+      <div class="sniper-value" style="font-size:13px;color:var(--white)">${sniper.bid ?? "—"} / ${sniper.ask ?? "—"}</div>
+    </div>
+    <div class="sniper-item">
+      <div class="sniper-label">VOLUME</div>
+      <div class="sniper-value val-neutral" style="font-size:14px">${sniper.volume ?? "—"}</div>
+    </div>
+    <div class="sniper-item">
+      <div class="sniper-label">OPEN INTEREST</div>
+      <div class="sniper-value val-neutral" style="font-size:14px">${sniper.open_interest ?? "—"}</div>
+    </div>
+    <div class="sniper-item">
+      <div class="sniper-label">IV</div>
+      <div class="sniper-value" style="font-size:14px;color:var(--orange)">${sniper.iv != null ? (sniper.iv * 100).toFixed(1) + "%" : "—"}</div>
+    </div>
+  `;
+}
+
+// ── Data fetch ─────────────────────────────────────────────────────
+async function fetchData(sym) {
+  try {
+    $("live-status").textContent = "FETCHING…";
+    const resp = await fetch(`/api/convergence/${sym}?sniper=true`);
+    if (!resp.ok) throw new Error(resp.status);
+    const json = await resp.json();
+    render(json);
+    setLive(true);
+  } catch(e) {
+    setLive(false);
+    console.error(e);
+  }
+}
+
+// ── Countdown timer ────────────────────────────────────────────────
+function startCountdown() {
+  clearInterval(countdownTimer);
+  secondsLeft = 45;
+  updateCountdown();
+  countdownTimer = setInterval(() => {
+    secondsLeft--;
+    updateCountdown();
+    if (secondsLeft <= 0) {
+      fetchData(activeSym);
+      secondsLeft = 45;
+    }
+  }, 1000);
+}
+
+function updateCountdown() {
+  $("countdown").textContent = `auto-refresh in ${secondsLeft}s`;
+}
+
+// ── Init ───────────────────────────────────────────────────────────
+document.querySelectorAll(".ticker-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".ticker-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    activeSym = btn.dataset.sym;
+    $("sym-display").textContent = activeSym;
+    fetchData(activeSym);
+    startCountdown();
+  });
+});
+
+$("refresh-btn").addEventListener("click", () => {
+  fetchData(activeSym);
+  startCountdown();
+});
+
+// Boot
+fetchData(activeSym);
+startCountdown();
+</script>
+</body>
+</html>

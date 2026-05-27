@@ -53,9 +53,9 @@ def run_rotator():
                 score=score
             )
             
-            # Wait for a random interval to simulate "live" activity
-            # 2-8 seconds for high density
-            time.sleep(random.uniform(2.0, 8.0))
+            # Long interval — real signals (SQUEEZE_ALERT, COUNCIL_VERDICT, etc.)
+            # must be readable before telemetry pushes them down the feed.
+            time.sleep(random.uniform(45.0, 90.0))
             
         except Exception as e:
             logger.error(f"[ROTATOR] Error: {e}")

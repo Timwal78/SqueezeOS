@@ -8,198 +8,218 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="SML Beast">
 <meta name="mobile-web-app-capable" content="yes">
-<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23020202'/%3E%3Ctext x='50' y='62' font-family='Courier' font-size='40' fill='%2300e5ff' text-anchor='middle' font-weight='bold'%3ESML%3C/text%3E%3C/svg%3E">
 <title>SML BEAST · Live Terminal</title>
 <style>
 :root{
-  --bg:#020202; --panel:#0a0a0a; --line:#1a1a1a;
-  --green:#39ff14; --red:#ff073a; --blue:#00e5ff; --orange:#ff9900; --magenta:#ff00ff; --yellow:#ffd700;
-  --text:#fff; --dim:#888;
+  --bg:#020202;--panel:#0a0a0a;--line:#1c1c1c;
+  --green:#39ff14;--red:#ff073a;--blue:#00e5ff;--orange:#ff9900;--magenta:#ff00ff;--yellow:#ffd700;
+  --text:#fff;--dim:#666;
 }
 *{margin:0;padding:0;box-sizing:border-box;font-family:'JetBrains Mono','Courier New',monospace}
-html,body{background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;overflow-x:hidden}
-body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+body{display:flex;flex-direction:column;padding:env(safe-area-inset-top) 0 0 0}
 
-.hdr{display:flex;justify-content:space-between;align-items:center;padding:0.75rem 1rem;border-bottom:1px solid var(--blue);background:linear-gradient(180deg,#000,#0a0a0a)}
-.hdr h1{font-size:1.1rem;letter-spacing:2px;color:var(--blue);text-shadow:0 0 8px var(--blue)}
-.hdr .meta{font-size:0.75rem;color:var(--dim);display:flex;gap:0.6rem;align-items:center}
-.dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px}
-.dot.live{background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 1.5s infinite}
-.dot.dead{background:var(--red);box-shadow:0 0 8px var(--red)}
-.dot.warn{background:var(--orange);box-shadow:0 0 8px var(--orange)}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
-
-.tier{font-size:0.62rem;padding:2px 6px;border:1px solid var(--line);letter-spacing:1px;border-radius:2px}
+/* ── Header ── */
+.hdr{flex-shrink:0;display:flex;justify-content:space-between;align-items:center;
+     padding:0.5rem 0.75rem;border-bottom:1px solid var(--blue);background:#000}
+.hdr h1{font-size:1rem;letter-spacing:3px;color:var(--blue);text-shadow:0 0 8px var(--blue);cursor:pointer}
+.hdr h1 span{color:var(--magenta);text-shadow:0 0 8px var(--magenta)}
+.meta{font-size:0.68rem;color:var(--dim);display:flex;gap:0.5rem;align-items:center}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:3px;vertical-align:middle}
+.dot.live{background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 1.5s infinite}
+.dot.dead{background:var(--red);box-shadow:0 0 6px var(--red)}
+.dot.warn{background:var(--orange);box-shadow:0 0 6px var(--orange)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+.tier{font-size:0.58rem;padding:1px 5px;border:1px solid var(--line);letter-spacing:1px;border-radius:2px}
 .tier.free{color:var(--dim);border-color:var(--dim)}
-.tier.owner{color:var(--magenta);border-color:var(--magenta);text-shadow:0 0 4px var(--magenta);box-shadow:0 0 8px rgba(255,0,255,0.3)}
-.gear{background:var(--magenta);border:none;color:#000;cursor:pointer;font-size:0.8rem;padding:6px 10px;line-height:1;font-weight:bold;letter-spacing:1px;border-radius:3px;box-shadow:0 0 8px var(--magenta);font-family:inherit}
-.gear:hover{color:var(--magenta);text-shadow:0 0 6px var(--magenta)}
+.tier.owner{color:var(--magenta);border-color:var(--magenta);text-shadow:0 0 4px var(--magenta)}
+.gear{background:var(--magenta);border:none;color:#000;cursor:pointer;font-size:0.75rem;
+      padding:5px 8px;font-weight:bold;letter-spacing:1px;border-radius:3px;font-family:inherit;
+      box-shadow:0 0 8px var(--magenta)}
 
-/* Modal */
-.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.85);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:100;padding:1rem}
+/* ── Modal ── */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.88);backdrop-filter:blur(4px);
+          display:none;align-items:center;justify-content:center;z-index:100;padding:1rem}
 .modal-bg.open{display:flex}
-.modal{background:var(--panel);border:1px solid var(--blue);box-shadow:0 0 30px rgba(0,229,255,0.3);max-width:480px;width:100%;padding:1.5rem}
-.modal h2{color:var(--blue);font-size:1.1rem;letter-spacing:2px;margin-bottom:0.5rem;text-shadow:0 0 6px var(--blue)}
-.modal p{color:var(--dim);font-size:0.75rem;line-height:1.5;margin-bottom:1rem}
-.modal label{display:block;font-size:0.7rem;color:var(--dim);letter-spacing:1px;margin-bottom:0.3rem}
-.modal input[type=password],.modal input[type=text]{
-  width:100%;background:#000;color:var(--green);border:1px solid var(--line);padding:0.6rem;font-family:inherit;font-size:0.85rem;letter-spacing:1px;outline:none
-}
-.modal input:focus{border-color:var(--green);box-shadow:0 0 8px rgba(57,255,20,0.3)}
-.modal .row{display:flex;gap:0.5rem;margin-top:1rem}
-.modal button{flex:1;background:transparent;border:1px solid var(--blue);color:var(--blue);padding:0.65rem;font-family:inherit;letter-spacing:1px;cursor:pointer;text-transform:uppercase;font-size:0.75rem}
-.modal button.save{border-color:var(--green);color:var(--green)}
-.modal button.save:hover{background:var(--green);color:#000;box-shadow:0 0 12px var(--green)}
-.modal button.clear{border-color:var(--red);color:var(--red)}
-.modal button.clear:hover{background:var(--red);color:#000;box-shadow:0 0 12px var(--red)}
-.modal button.close:hover{background:var(--blue);color:#000;box-shadow:0 0 12px var(--blue)}
-.modal .hint{font-size:0.65rem;color:var(--dim);margin-top:0.3rem;font-family:inherit}
-.modal .hint code{color:var(--orange);background:#000;padding:1px 4px;border-radius:2px}
+.modal{background:var(--panel);border:1px solid var(--blue);box-shadow:0 0 30px rgba(0,229,255,0.25);
+       max-width:440px;width:100%;padding:1.25rem}
+.modal h2{color:var(--blue);font-size:1rem;letter-spacing:2px;margin-bottom:0.5rem;text-shadow:0 0 6px var(--blue)}
+.modal p{color:var(--dim);font-size:0.72rem;line-height:1.5;margin-bottom:0.75rem}
+.modal label{display:block;font-size:0.65rem;color:var(--dim);letter-spacing:1px;margin-bottom:0.25rem}
+.modal input[type=password]{width:100%;background:#000;color:var(--green);border:1px solid var(--line);
+  padding:0.55rem;font-family:inherit;font-size:0.82rem;letter-spacing:1px;outline:none}
+.modal input:focus{border-color:var(--green);box-shadow:0 0 6px rgba(57,255,20,0.3)}
+.modal .hint{font-size:0.62rem;color:var(--dim);margin-top:0.25rem}
+.modal .hint code{color:var(--orange);background:#000;padding:1px 3px}
+.modal .btns{display:flex;gap:0.4rem;margin-top:0.9rem}
+.modal .btns button{flex:1;background:transparent;border:1px solid var(--blue);color:var(--blue);
+  padding:0.55rem;font-family:inherit;letter-spacing:1px;cursor:pointer;font-size:0.7rem}
+.modal .btns .b-save{border-color:var(--green);color:var(--green)}
+.modal .btns .b-save:active{background:var(--green);color:#000}
+.modal .btns .b-clear{border-color:var(--red);color:var(--red)}
+.modal .btns .b-clear:active{background:var(--red);color:#000}
 
-/* Cards */
-.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;padding:0.5rem}
-.card{background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--dim);padding:0.6rem;position:relative;transition:border-top-color 0.3s}
-.card.buy,.card.bullish{border-top-color:var(--green);box-shadow:0 0 16px rgba(57,255,20,0.15)}
-.card.sell,.card.bearish{border-top-color:var(--red);box-shadow:0 0 16px rgba(255,7,58,0.15)}
-.card.hold,.card.neutral{border-top-color:var(--yellow)}
+/* ── Cards ── */
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;padding:3px}
+.card{background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--dim);
+      padding:0.4rem;position:relative;transition:border-top-color 0.3s}
+.card.buy{border-top-color:var(--green);box-shadow:0 0 10px rgba(57,255,20,0.12)}
+.card.sell{border-top-color:var(--red);box-shadow:0 0 10px rgba(255,7,58,0.12)}
+.card.hold{border-top-color:var(--yellow)}
 .card.shield{border-top-color:var(--dim)}
-.card.ignition{border-top-color:var(--magenta);box-shadow:0 0 24px rgba(255,0,255,0.3);animation:ignite 1.2s infinite}
-@keyframes ignite{0%,100%{box-shadow:0 0 16px rgba(255,0,255,0.3)}50%{box-shadow:0 0 32px rgba(255,0,255,0.6)}}
-
-.card .sym{font-size:1.4rem;font-weight:bold;letter-spacing:1px;color:var(--text)}
-.card .tag{display:inline-block;font-size:0.55rem;background:var(--line);color:var(--dim);padding:1px 5px;margin-left:4px;vertical-align:middle;letter-spacing:1px;border-radius:2px}
-.card .price{font-size:1.5rem;font-weight:bold;margin-top:0.15rem}
-.card .dir{font-size:0.9rem;font-weight:bold;margin-top:0.3rem;letter-spacing:1px}
-.card .dir.buy,.card .dir.bullish{color:var(--green);text-shadow:0 0 6px var(--green)}
-.card .dir.sell,.card .dir.bearish{color:var(--red);text-shadow:0 0 6px var(--red)}
-.card .dir.hold,.card .dir.neutral{color:var(--yellow)}
+.card.ignition{border-top-color:var(--magenta);box-shadow:0 0 20px rgba(255,0,255,0.25);animation:ignite 1.2s infinite}
+@keyframes ignite{0%,100%{box-shadow:0 0 16px rgba(255,0,255,0.25)}50%{box-shadow:0 0 28px rgba(255,0,255,0.55)}}
+.card .age{position:absolute;top:3px;right:4px;font-size:0.48rem;color:var(--dim)}
+.card .sym{font-size:1rem;font-weight:bold;letter-spacing:1px}
+.card .tag{font-size:0.48rem;background:var(--line);color:var(--dim);padding:1px 3px;
+           margin-left:3px;vertical-align:middle;letter-spacing:1px;border-radius:2px}
+.card .price{font-size:1.05rem;font-weight:bold;margin-top:0.05rem}
+.card .dir{font-size:0.68rem;font-weight:bold;margin-top:0.12rem;letter-spacing:1px}
+.card .dir.buy{color:var(--green);text-shadow:0 0 5px var(--green)}
+.card .dir.sell{color:var(--red);text-shadow:0 0 5px var(--red)}
+.card .dir.hold{color:var(--yellow)}
 .card .dir.shield{color:var(--dim)}
-.card .dir.ignition{color:var(--magenta);text-shadow:0 0 8px var(--magenta)}
-.card .conf{font-size:0.7rem;color:var(--dim);margin-top:0.1rem}
-.card .conf b{color:var(--blue);text-shadow:0 0 4px var(--blue)}
-.card .regime{font-size:0.6rem;color:var(--orange);letter-spacing:1px;margin-top:0.2rem}
-.card .targets{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-top:0.45rem;font-size:0.65rem;border-top:1px solid var(--line);padding-top:0.4rem}
+.card .dir.ignition{color:var(--magenta);text-shadow:0 0 6px var(--magenta)}
+.card .conf{font-size:0.56rem;color:var(--dim);margin-top:0.04rem}
+.card .conf b{color:var(--blue)}
+.card .regime{font-size:0.5rem;color:var(--orange);letter-spacing:1px;margin-top:0.06rem}
+.card .targets{display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px;
+               margin-top:0.25rem;font-size:0.55rem;border-top:1px solid var(--line);padding-top:0.22rem}
 .card .t{display:flex;flex-direction:column}
-.card .t .lbl{color:var(--dim);font-size:0.55rem;letter-spacing:1px}
-.card .t .v{color:var(--text);font-weight:bold}
+.card .t .lbl{color:var(--dim);font-size:0.46rem;letter-spacing:1px}
+.card .t .v{font-weight:bold}
 .card .t.tp1 .v,.card .t.tp2 .v{color:var(--green)}
 .card .t.stop .v{color:var(--red)}
-.card .council{font-size:0.6rem;margin-top:0.3rem;border-top:1px dashed var(--magenta);padding-top:0.3rem;color:var(--dim);letter-spacing:1px}
+.card .council{font-size:0.54rem;margin-top:0.2rem;border-top:1px dashed var(--magenta);
+               padding-top:0.18rem;color:var(--dim);letter-spacing:0.5px;line-height:1.3}
 .card .council.has{color:var(--magenta);text-shadow:0 0 3px var(--magenta)}
 .card .council b{color:var(--text)}
-.card .ftd{font-size:0.6rem;color:var(--orange);margin-top:0.3rem;letter-spacing:1px;border-top:1px dashed var(--line);padding-top:0.3rem}
-.card .iwm-best{font-size:0.62rem;margin-top:0.3rem;border-top:1px dashed var(--yellow);padding-top:0.3rem;color:var(--yellow);letter-spacing:0.5px}
+.card .iwm-best{font-size:0.54rem;margin-top:0.15rem;border-top:1px dashed var(--yellow);
+                padding-top:0.15rem;color:var(--yellow);line-height:1.3}
 .card .iwm-best b{color:var(--text)}
-.card .age{position:absolute;top:4px;right:6px;font-size:0.55rem;color:var(--dim)}
 
-/* Owner-only sections */
+/* ── Owner-only ── */
 .owner-only{display:none}
 body.owner .owner-only{display:block}
 
-/* Feed */
-.feed-hdr{display:flex;justify-content:space-between;align-items:center;padding:0.6rem 1rem;border-top:1px solid var(--line);border-bottom:1px solid var(--blue);background:#050505;position:sticky;top:0;z-index:10}
-.feed-hdr .title{font-size:0.85rem;color:var(--blue);letter-spacing:2px;text-shadow:0 0 6px var(--blue)}
-.feed-hdr .ctrl{display:flex;gap:0.5rem;font-size:0.7rem}
-.feed-hdr .ctrl button{background:transparent;border:1px solid var(--line);color:var(--dim);padding:3px 8px;cursor:pointer;font-family:inherit;letter-spacing:1px}
-.feed-hdr .ctrl button.on{border-color:var(--green);color:var(--green);text-shadow:0 0 4px var(--green)}
-.feed{padding:0.4rem 0;font-size:0.72rem}
-.evt{display:grid;grid-template-columns:auto 130px 80px 1fr;gap:0.6rem;padding:0.35rem 1rem;border-bottom:1px solid #0a0a0a;align-items:baseline}
-.evt:hover{background:#0a0a0a}
-.evt .ts{color:var(--dim);font-size:0.65rem;font-variant-numeric:tabular-nums}
-.evt .type{font-weight:bold;letter-spacing:1px;font-size:0.65rem}
-.evt .sym{color:var(--blue);font-weight:bold;text-shadow:0 0 4px var(--blue)}
-.evt .body{color:var(--text);font-size:0.7rem;word-break:break-word;opacity:0.9}
-.evt.new{animation:flash 0.6s}
-@keyframes flash{0%{background:rgba(57,255,20,0.2)}100%{background:transparent}}
-.type-SQUEEZE_ALERT{color:var(--green)}
-.type-OPTIONS_SWEEP,.type-DARK_POOL{color:var(--magenta)}
-.type-COUNCIL_VERDICT{color:var(--orange)}
-.type-AGENT_PROBE{color:var(--blue);opacity:0.6}
-.type-AGENT_PAY{color:var(--yellow);text-shadow:0 0 4px var(--yellow)}
-.type-SETTLEMENT_COMPLETE,.type-FUTURES_SETTLED{color:var(--yellow)}
-.type-CONNECTED,.type-HEARTBEAT{color:var(--dim)}
-.type-DEFAULT{color:var(--text)}
-.type-ERROR{color:var(--red);text-shadow:0 0 4px var(--red)}
+/* ── Section headers ── */
+.section-hdr{padding:0.45rem 0.75rem;border-bottom:1px solid var(--magenta);background:#050505;
+             font-size:0.72rem;color:var(--magenta);letter-spacing:2px;
+             text-shadow:0 0 5px var(--magenta);display:flex;justify-content:space-between}
+.section-hdr .age{color:var(--dim);font-size:0.6rem;letter-spacing:1px}
 
-.empty{padding:2rem 1rem;text-align:center;color:var(--dim);font-size:0.85rem;letter-spacing:1px}
-
-/* Options flow panel */
-.section-hdr{padding:0.6rem 1rem;border-top:1px solid var(--line);border-bottom:1px solid var(--magenta);background:#050505;font-size:0.85rem;color:var(--magenta);letter-spacing:2px;text-shadow:0 0 6px var(--magenta);display:flex;justify-content:space-between;align-items:center}
-.section-hdr .age{color:var(--dim);font-size:0.65rem;letter-spacing:1px}
-.flow-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;padding:0.5rem}
-.flow{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--magenta);padding:0.6rem}
-.flow .sym{font-size:1.1rem;font-weight:bold;color:var(--magenta);text-shadow:0 0 4px var(--magenta)}
-.flow .row{display:flex;justify-content:space-between;margin-top:0.3rem;font-size:0.7rem}
-.flow .row .k{color:var(--dim);letter-spacing:1px;font-size:0.6rem}
-.flow .row .v{color:var(--text);font-weight:bold}
+/* ── Options flow ── */
+.flow-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;padding:3px}
+.flow{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--magenta);padding:0.5rem}
+.flow .sym{font-size:0.9rem;font-weight:bold;color:var(--magenta)}
+.flow .row{display:flex;justify-content:space-between;margin-top:0.25rem;font-size:0.65rem}
+.flow .row .k{color:var(--dim);font-size:0.56rem;letter-spacing:1px}
+.flow .row .v{font-weight:bold}
 .flow .row .v.bull{color:var(--green)}
 .flow .row .v.bear{color:var(--red)}
-.flow .err{color:var(--dim);font-size:0.65rem;font-style:italic}
+.flow .err{color:var(--dim);font-size:0.6rem;font-style:italic;margin-top:0.2rem;line-height:1.4}
 
-/* Scan panel */
-.scan-list{padding:0.5rem 1rem}
-.scan-row{display:grid;grid-template-columns:60px 1fr 80px 80px 80px;gap:0.6rem;padding:0.4rem 0;border-bottom:1px solid #0a0a0a;font-size:0.72rem;align-items:baseline}
-.scan-row .sym{color:var(--blue);font-weight:bold;text-shadow:0 0 4px var(--blue);font-size:0.85rem}
-.scan-row .px{color:var(--text);font-weight:bold}
-.scan-row .ch{font-size:0.7rem}
+/* ── Scan ── */
+.scan-list{padding:0.3rem 0.75rem}
+.scan-row{display:grid;grid-template-columns:52px 1fr 68px 62px 60px;gap:0.4rem;
+          padding:0.3rem 0;border-bottom:1px solid var(--line);font-size:0.68rem;align-items:baseline}
+.scan-row .sym{color:var(--blue);font-weight:bold;font-size:0.78rem}
+.scan-row .px{font-weight:bold}
+.scan-row .ch{font-size:0.64rem}
 .scan-row .ch.bull{color:var(--green)}
 .scan-row .ch.bear{color:var(--red)}
-.scan-row .vol{color:var(--dim);font-size:0.65rem}
-.scan-row .meta{color:var(--orange);font-size:0.6rem;letter-spacing:1px}
+.scan-row .vol{color:var(--dim);font-size:0.6rem}
+.scan-row .meta{color:var(--orange);font-size:0.55rem;letter-spacing:0.5px}
 
-.status{position:fixed;bottom:0;left:0;right:0;background:#050505;border-top:1px solid var(--line);padding:0.4rem 1rem;font-size:0.62rem;color:var(--dim);display:flex;justify-content:space-between;gap:1rem;z-index:20;padding-bottom:calc(0.4rem + env(safe-area-inset-bottom))}
-.status .item{display:flex;gap:4px;align-items:center}
-.status .item b{color:var(--text);font-variant-numeric:tabular-nums}
+/* ── Main layout ── */
+main{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.top-panels{flex-shrink:0;overflow-y:auto;max-height:44vh}
+.feed-area{flex:1;display:flex;flex-direction:column;min-height:0}
 
-main{padding-bottom:60px}
+/* ── Feed header ── */
+.feed-hdr{flex-shrink:0;background:#050505;border-top:1px solid var(--line);border-bottom:1px solid var(--blue)}
+.feed-hdr-row1{display:flex;justify-content:space-between;align-items:center;padding:0.45rem 0.75rem}
+.feed-title{font-size:0.78rem;color:var(--blue);letter-spacing:2px;text-shadow:0 0 5px var(--blue)}
+.feed-btns{display:flex;gap:0.3rem;align-items:center}
+.feed-btns button{background:transparent;border:1px solid var(--line);color:var(--dim);
+                  padding:3px 8px;cursor:pointer;font-family:inherit;font-size:0.68rem;letter-spacing:1px;white-space:nowrap}
+.feed-btns button.active{border-color:var(--green);color:var(--green);text-shadow:0 0 4px var(--green)}
+.feed-btns button.beast-on{border-color:var(--orange);color:var(--orange)}
+.find-row{display:none;padding:0 0.75rem 0.4rem;gap:0.4rem;align-items:center}
+.find-row.open{display:flex}
+.find-input{flex:1;background:transparent;border:1px solid var(--line);color:var(--text);
+            font-family:inherit;font-size:0.72rem;padding:4px 8px;outline:none;letter-spacing:1px}
+.find-input:focus{border-color:var(--blue);box-shadow:0 0 4px rgba(0,229,255,0.3)}
+.find-input::placeholder{color:var(--dim)}
+.find-count{font-size:0.6rem;color:var(--blue);white-space:nowrap}
+mark.hit{background:rgba(0,229,255,0.2);color:var(--blue);border-radius:2px;padding:0 2px}
 
-@media (min-width:768px){
-  .hdr h1{font-size:1.4rem}
-  .card .sym{font-size:1.7rem}
-  .card .price{font-size:1.8rem}
-  .card .dir{font-size:1.1rem}
-  .cards,.flow-grid{gap:0.75rem;padding:0.75rem}
-  .evt{grid-template-columns:auto 160px 100px 1fr;font-size:0.8rem;padding:0.5rem 1.5rem}
-  .evt .ts{font-size:0.75rem}
-  .evt .body{font-size:0.78rem}
-  .feed-hdr,.section-hdr{padding:0.8rem 1.5rem}
-}
-@media (min-width:1200px){
-  .card .sym{font-size:2rem}
-  .card .price{font-size:2.2rem}
-  .card .dir{font-size:1.3rem}
-}
+/* ── Feed ── */
+.feed{flex:1;overflow-y:auto;min-height:0}
+.evt{padding:0.6rem 0.75rem;border-bottom:1px solid var(--line)}
+.evt:hover{background:#0c0c0c}
+.evt.new{animation:flash 0.5s}
+@keyframes flash{0%{background:rgba(57,255,20,0.15)}100%{background:transparent}}
+.evt-hdr{display:flex;gap:0.5rem;align-items:center;margin-bottom:0.28rem}
+.evt-ts{color:var(--dim);font-size:0.6rem;font-variant-numeric:tabular-nums;white-space:nowrap}
+.evt-type{font-weight:bold;font-size:0.6rem;letter-spacing:1px;white-space:nowrap}
+.evt-sym{font-weight:bold;font-size:0.68rem;color:var(--blue);text-shadow:0 0 4px var(--blue)}
+.evt-body{font-size:0.9rem;line-height:1.55;word-break:break-word;color:var(--text)}
+.t-SQUEEZE_ALERT{color:var(--green)}
+.t-OPTIONS_SWEEP,.t-DARK_POOL{color:var(--magenta)}
+.t-COUNCIL_VERDICT{color:var(--orange)}
+.t-AGENT_PROBE{color:var(--blue);opacity:0.6}
+.t-AGENT_PAY{color:var(--yellow)}
+.t-SETTLEMENT_COMPLETE,.t-FUTURES_SETTLED{color:var(--yellow)}
+.t-CONNECTED,.t-HEARTBEAT{color:var(--dim)}
+.t-ERROR{color:var(--red)}
+.t-DEFAULT{color:var(--text)}
+.empty{padding:2.5rem 1rem;text-align:center;color:var(--dim);font-size:0.82rem;letter-spacing:1px}
+
+/* ── Status bar ── */
+.statusbar{flex-shrink:0;background:#050505;border-top:1px solid var(--line);
+           padding:0.28rem 0.75rem;padding-bottom:calc(0.28rem + env(safe-area-inset-bottom));
+           font-size:0.58rem;color:var(--dim);display:flex;justify-content:space-between;gap:0.75rem}
+.statusbar .si{display:flex;gap:3px;align-items:center}
+.statusbar b{color:var(--text);font-variant-numeric:tabular-nums}
 </style>
 </head>
 <body>
 
+<!-- Header -->
 <header class="hdr">
-  <h1 id="logo-settings" style="cursor:pointer">SML <span style="color:var(--magenta);text-shadow:0 0 8px var(--magenta)">BEAST</span></h1>
+  <h1 id="logo-btn">SML <span>BEAST</span></h1>
   <div class="meta">
     <span class="tier free" id="tier">FREE</span>
-    <span><span class="dot" id="api-dot"></span><span id="api-status">API</span></span>
-    <span><span class="dot" id="sse-dot"></span><span id="sse-status">STREAM</span></span>
+    <span><span class="dot" id="api-dot"></span><span id="api-lbl">API</span></span>
+    <span><span class="dot" id="sse-dot"></span><span id="sse-lbl">SSE</span></span>
     <span id="clock">--:--:--</span>
-    <button class="gear" id="gear" title="Settings">⚙ SET</button>
+    <button class="gear" id="gear-btn">⚙</button>
   </div>
 </header>
 
+<!-- Settings modal -->
 <div class="modal-bg" id="modal-bg">
   <div class="modal">
     <h2>OWNER MODE</h2>
-    <p>Paste your <code style="color:var(--orange)">OWNER_API_KEY</code> (the secret you set on the Railway env). The terminal will send it as <code style="color:var(--orange)">X-Owner-Key</code> on every request, unlocking the paid endpoints (Council, IWM 0DTE, Options Flow, Scan) at zero RLUSD cost.</p>
+    <p>Set your <code style="color:var(--orange)">OWNER_API_KEY</code> from Render env. Sent as <code style="color:var(--orange)">X-Owner-Key</code> — unlocks Council, IWM 0DTE, Options Flow, and Scan at zero RLUSD cost.</p>
     <label>OWNER API KEY</label>
-    <input type="password" id="owner-key-input" placeholder="paste here, then SAVE" autocomplete="off" spellcheck="false">
-    <p class="hint">Stored in this device's localStorage only. Never sent anywhere except your own Railway API.</p>
-    <div class="row">
-      <button class="save" id="save-key">SAVE</button>
-      <button class="clear" id="clear-key">CLEAR</button>
-      <button class="close" id="close-modal">CLOSE</button>
+    <input type="password" id="owner-input" placeholder="paste key here…" autocomplete="off" spellcheck="false">
+    <p class="hint">Stored in localStorage only. Never sent anywhere except your Render API.</p>
+    <div class="btns">
+      <button class="b-save" id="btn-save">SAVE</button>
+      <button class="b-clear" id="btn-clear-key">CLEAR</button>
+      <button id="btn-close">CLOSE</button>
     </div>
   </div>
 </div>
 
 <main>
+
+<!-- Top panels: cards + owner-only sections -->
+<div class="top-panels">
+
+  <!-- Ticker cards -->
   <section class="cards" id="cards">
     <div class="card" data-sym="AMC">
       <div class="age" data-age></div>
@@ -213,8 +233,7 @@ main{padding-bottom:60px}
         <div class="t tp2"><span class="lbl">TP2</span><span class="v" data-field="tp2">—</span></div>
         <div class="t stop"><span class="lbl">STOP</span><span class="v" data-field="stop">—</span></div>
       </div>
-      <div class="council" data-field="council">COUNCIL: locked (owner mode)</div>
-      <div class="ftd" data-field="ftd">FTD —</div>
+      <div class="council" data-field="council">COUNCIL —</div>
     </div>
     <div class="card" data-sym="GME">
       <div class="age" data-age></div>
@@ -228,8 +247,7 @@ main{padding-bottom:60px}
         <div class="t tp2"><span class="lbl">TP2</span><span class="v" data-field="tp2">—</span></div>
         <div class="t stop"><span class="lbl">STOP</span><span class="v" data-field="stop">—</span></div>
       </div>
-      <div class="council" data-field="council">COUNCIL: locked (owner mode)</div>
-      <div class="ftd" data-field="ftd">FTD —</div>
+      <div class="council" data-field="council">COUNCIL —</div>
     </div>
     <div class="card" data-sym="IWM">
       <div class="age" data-age></div>
@@ -243,13 +261,14 @@ main{padding-bottom:60px}
         <div class="t tp2"><span class="lbl">TP2</span><span class="v" data-field="tp2">—</span></div>
         <div class="t stop"><span class="lbl">STOP</span><span class="v" data-field="stop">—</span></div>
       </div>
-      <div class="council" data-field="council">COUNCIL: locked (owner mode)</div>
-      <div class="iwm-best" data-field="iwm-best">0DTE: locked (owner mode)</div>
+      <div class="council" data-field="council">COUNCIL —</div>
+      <div class="iwm-best" data-field="iwm-best">0DTE —</div>
     </div>
   </section>
 
+  <!-- Options flow (owner only) -->
   <section class="owner-only">
-    <div class="section-hdr">▼ OPTIONS FLOW <span class="age" id="flow-age"></span></div>
+    <div class="section-hdr">OPTIONS FLOW<span class="age" id="flow-age"></span></div>
     <div class="flow-grid" id="flow-grid">
       <div class="flow" data-flow-sym="AMC"><div class="sym">AMC</div><div class="err">awaiting…</div></div>
       <div class="flow" data-flow-sym="GME"><div class="sym">GME</div><div class="err">awaiting…</div></div>
@@ -257,135 +276,200 @@ main{padding-bottom:60px}
     </div>
   </section>
 
+  <!-- Market scan (owner only) -->
   <section class="owner-only">
-    <div class="section-hdr">▼ MARKET SCAN <span class="age" id="scan-age"></span></div>
-    <div class="scan-list" id="scan-list">
-      <div class="empty">awaiting scan data…</div>
-    </div>
+    <div class="section-hdr">MARKET SCAN<span class="age" id="scan-age"></span></div>
+    <div class="scan-list" id="scan-list"><div class="empty">awaiting scan data…</div></div>
   </section>
 
+</div><!-- .top-panels -->
+
+<!-- Live flow terminal — fills all remaining height -->
+<div class="feed-area">
   <div class="feed-hdr">
-    <span class="title">▼ LIVE FLOW</span>
-    <div class="ctrl">
-      <button id="pause" class="on">⏸ PAUSE</button>
-      <button id="clear">CLEAR</button>
+    <div class="feed-hdr-row1">
+      <span class="feed-title">▼ LIVE FLOW</span>
+      <div class="feed-btns">
+        <span class="find-count" id="find-count" style="display:none"></span>
+        <button id="btn-find" title="Search feed">🔍</button>
+        <button id="btn-beast" title="Show/hide background telemetry">◉ BEAST</button>
+        <button id="btn-pause" class="active">⏸</button>
+        <button id="btn-clear">✕</button>
+      </div>
+    </div>
+    <div class="find-row" id="find-row">
+      <input class="find-input" id="find-input" type="text" placeholder="search type, symbol, or text…" autocomplete="off" spellcheck="false">
     </div>
   </div>
   <section class="feed" id="feed">
-    <div class="empty">Awaiting events from /api/events SSE stream...</div>
+    <div class="empty">Connecting to /api/events…</div>
   </section>
+</div><!-- .feed-area -->
+
 </main>
 
-<div class="status">
-  <span class="item"><span>EVENTS</span><b id="evt-count">0</b></span>
-  <span class="item"><span>UPTIME</span><b id="uptime">—</b></span>
-  <span class="item"><span>VERSION</span><b id="version">—</b></span>
-  <span class="item"><span>SOURCE</span><b style="color:var(--blue)">SqueezeOS · Railway</b></span>
+<!-- Status bar -->
+<div class="statusbar">
+  <span class="si"><span>EVT</span><b id="evt-count">0</b></span>
+  <span class="si"><span>UP</span><b id="uptime">—</b></span>
+  <span class="si"><span>VER</span><b id="version">—</b></span>
+  <span class="si"><b style="color:var(--blue)">SqueezeOS · Render</b></span>
 </div>
 
 <script>
 "use strict";
 
-const API_BASE = "";  // same-origin — page served by SqueezeOS Flask at /beast
+const API_BASE   = "";
 const ORACLE_MS  = 15000;
-const COUNCIL_MS = 60000;   // paid — slower poll, server caches anyway
+const COUNCIL_MS = 60000;
 const IWM_MS     = 30000;
 const OPTIONS_MS = 45000;
 const SCAN_MS    = 60000;
 const STATUS_MS  = 30000;
 const FTD_MS     = 300000;
-const MAX_EVENTS = 200;
-const LS_KEY = "sml_owner_key";
+const MAX_EVENTS = 300;
+const LS_KEY     = "sml_owner_key";
 
-const $ = (s,r=document)=>r.querySelector(s);
-const $$ = (s,r=document)=>r.querySelectorAll(s);
+const $  = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => r.querySelectorAll(s);
 
-const state = {
-  paused: false,
-  events: [],
-  cards: { AMC:{ts:0}, GME:{ts:0}, IWM:{ts:0} },
-  flowAge: 0, scanAge: 0,
-  apiOk: false, sseOk: false,
-  ownerKey: localStorage.getItem(LS_KEY) || "",
+const S = {
+  paused:    false,
+  showBeast: false,       // hidden by default — telemetry is noise
+  findOpen:  false,
+  findQuery: "",
+  events:    [],
+  cards:     { AMC:{ts:0}, GME:{ts:0}, IWM:{ts:0} },
+  flowAge:   0,
+  apiOk:     false,
+  sseOk:     false,
+  ownerKey:  localStorage.getItem(LS_KEY) || "",
 };
 
-function isOwner(){ return !!state.ownerKey; }
+const isOwner = () => !!S.ownerKey;
+const authH   = () => isOwner() ? {"X-Owner-Key": S.ownerKey} : {};
 
-function authHeaders(){
-  return isOwner() ? { "X-Owner-Key": state.ownerKey } : {};
+// ── Helpers ──────────────────────────────────────────────────────────────────
+const fmtPrice = p => (p == null || isNaN(p)) ? "—" : "$" + Number(p).toFixed(2);
+const fmtPct   = p => (p == null || isNaN(p)) ? "—" : Math.round(p) + "%";
+const fmtTs    = d => { const x = d instanceof Date ? d : new Date(d); return x.toTimeString().slice(0,8); };
+const ageStr   = ms => {
+  if(!ms) return "";
+  const s = Math.floor((Date.now()-ms)/1000);
+  return s < 2 ? "now" : s < 60 ? s+"s" : s < 3600 ? Math.floor(s/60)+"m" : Math.floor(s/3600)+"h";
+};
+const dirClass = d => {
+  if(!d) return "";
+  const s = d.toUpperCase();
+  if(s.includes("IGNITION")) return "ignition";
+  if(s.startsWith("BUY") || s === "BULLISH") return "buy";
+  if(s.startsWith("SELL") || s === "BEARISH") return "sell";
+  if(s.startsWith("HOLD") || s === "NEUTRAL") return "hold";
+  return "shield";
+};
+const esc = s => String(s).replace(/[&<>"']/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function highlight(text, q) {
+  if(!q) return esc(text);
+  const e = esc(text);
+  return e.replace(new RegExp("("+q.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+")","gi"),
+    "<mark class='hit'>$1</mark>");
 }
 
-function applyTierUI(){
+// Extract a readable body from any SSE event object
+function extractBody(e) {
+  if(e.body) return e.body;
+  if(e.msg)  return e.msg;
+  // Format known event types into readable sentences
+  const t = (e.type || "").toUpperCase();
+  if(t === "COUNCIL_VERDICT") {
+    const parts = [];
+    if(e.bias)       parts.push(e.bias.toUpperCase());
+    if(e.regime)     parts.push(e.regime);
+    if(e.confidence != null) parts.push("conf " + Math.round(e.confidence) + "%");
+    if(e.symbol)     parts.push("· " + e.symbol);
+    return parts.length ? parts.join("  ") : "verdict received";
+  }
+  if(t === "SQUEEZE_ALERT") {
+    const parts = [];
+    if(e.squeeze_type) parts.push(e.squeeze_type);
+    if(e.score != null) parts.push("score " + Math.round(e.score));
+    if(e.regime)       parts.push(e.regime);
+    return parts.length ? parts.join("  ") : "squeeze detected";
+  }
+  if(t === "AGENT_PAY") {
+    return "agent paid · wallet " + (e.wallet || e.wlt || "?") +
+           (e.amount ? " · " + e.amount + " RLUSD" : "");
+  }
+  if(t === "AGENT_PROBE") return "agent probe from " + (e.user_agent || "unknown");
+  if(t === "CONNECTED")   return "SSE stream connected";
+  if(t === "HEARTBEAT")   return "heartbeat";
+  if(e.score != null)     return "score " + e.score;
+  // Generic: list non-meta keys as key=value
+  const skip = new Set(["type","ts","timestamp","symbol","sym","body","msg","score"]);
+  const pairs = Object.entries(e)
+    .filter(([k]) => !skip.has(k))
+    .map(([k,v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`);
+  return pairs.length ? pairs.join("  ·  ") : "";
+}
+
+// ── Tier UI ──────────────────────────────────────────────────────────────────
+function applyTierUI() {
   const t = $("#tier");
-  if(isOwner()){
-    t.textContent = "OWNER MODE";
-    t.className = "tier owner";
+  if(isOwner()) {
+    t.textContent = "OWNER"; t.className = "tier owner";
     document.body.classList.add("owner");
   } else {
-    t.textContent = "FREE";
-    t.className = "tier free";
+    t.textContent = "FREE"; t.className = "tier free";
     document.body.classList.remove("owner");
-    // reset locked text
-    for(const sym of ["AMC","GME","IWM"]){
-      const c = $(`.card[data-sym="${sym}"] [data-field="council"]`);
-      if(c){ c.textContent = "COUNCIL: locked (owner mode)"; c.classList.remove("has"); }
+    for(const sym of ["AMC","GME","IWM"]) {
+      const el = $(`.card[data-sym="${sym}"] [data-field="council"]`);
+      if(el) { el.textContent = "COUNCIL —"; el.classList.remove("has"); }
     }
-    const ib = $(`.card[data-sym="IWM"] [data-field="iwm-best"]`);
-    if(ib) ib.textContent = "0DTE: locked (owner mode)";
+    const ib = $('.card[data-sym="IWM"] [data-field="iwm-best"]');
+    if(ib) ib.textContent = "0DTE —";
   }
 }
 
-// ───────── Helpers ─────────
-function fmtPrice(p){return(p==null||isNaN(p))?"—":"$"+Number(p).toFixed(2);}
-function fmtPct(p){return(p==null||isNaN(p))?"—":Math.round(p)+"%";}
-function fmtTs(d){const x=d instanceof Date?d:new Date(d);return x.toTimeString().slice(0,8);}
-function ageStr(ms){if(!ms)return"";const s=Math.floor((Date.now()-ms)/1000);if(s<2)return"now";if(s<60)return s+"s";if(s<3600)return Math.floor(s/60)+"m";return Math.floor(s/3600)+"h";}
-function dirClass(d){if(!d)return"";const s=d.toUpperCase();if(s.includes("IGNITION"))return"ignition";if(s.startsWith("BUY")||s==="BULLISH")return"buy";if(s.startsWith("SELL")||s==="BEARISH")return"sell";if(s.startsWith("HOLD")||s==="NEUTRAL")return"hold";return"shield";}
-function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-
-// ───────── Oracle (free) ─────────
-async function pullOracle(){
-  try{
-    const r = await fetch(`${API_BASE}/api/oracle`, {cache:'no-store', headers: authHeaders()});
+// ── Oracle ───────────────────────────────────────────────────────────────────
+async function pullOracle() {
+  try {
+    const r = await fetch(`${API_BASE}/api/oracle`, {cache:"no-store", headers: authH()});
     if(!r.ok) throw new Error("HTTP "+r.status);
     const j = await r.json();
-    state.apiOk = true; updateApiDot();
-    if(j.status==="success" && j.symbols){
-      for(const sym of ["AMC","GME","IWM"]){
-        const v = j.symbols[sym];
-        if(v) renderCard(sym, v);
+    S.apiOk = true; updateApiDot();
+    if(j.status === "success" && j.symbols) {
+      for(const sym of ["AMC","GME","IWM"]) {
+        if(j.symbols[sym]) renderCard(sym, j.symbols[sym]);
       }
     }
-  }catch(e){
-    state.apiOk = false; updateApiDot();
-    console.error("oracle pull failed", e);
-  }
+  } catch(e) { S.apiOk = false; updateApiDot(); }
 }
 
-function renderCard(sym, d){
+function renderCard(sym, d) {
   const card = $(`.card[data-sym="${sym}"]`);
   if(!card) return;
-  state.cards[sym].ts = Date.now();
+  S.cards[sym].ts = Date.now();
   const dir = d.directive || "SHIELD";
   const cls = dirClass(dir);
-  // preserve council class if it was set via bias
   card.className = "card " + cls;
   $('[data-field="price"]', card).textContent = fmtPrice(d.price);
-  const dirEl = $('[data-field="dir"]', card);
-  dirEl.textContent = dir;
-  dirEl.className = "dir "+cls;
-  $('[data-field="conf"]', card).textContent = fmtPct(d.confidence);
+  const de = $('[data-field="dir"]', card);
+  de.textContent = dir; de.className = "dir " + cls;
+  $('[data-field="conf"]',   card).textContent = fmtPct(d.confidence);
   $('[data-field="regime"]', card).textContent = d.regime || "—";
-  $('[data-field="tp1"]', card).textContent = fmtPrice(d.tp1);
-  $('[data-field="tp2"]', card).textContent = fmtPrice(d.tp2);
-  $('[data-field="stop"]', card).textContent = fmtPrice(d.stop);
+  $('[data-field="tp1"]',    card).textContent = fmtPrice(d.tp1);
+  $('[data-field="tp2"]',    card).textContent = fmtPrice(d.tp2);
+  $('[data-field="stop"]',   card).textContent = fmtPrice(d.stop);
 }
 
-// ───────── Council (paid, owner-only) ─────────
-async function pullCouncil(sym){
+// ── Council ──────────────────────────────────────────────────────────────────
+async function pullCouncil(sym) {
   if(!isOwner()) return;
-  try{
-    const r = await fetch(`${API_BASE}/api/council?symbol=${sym}`, {method:'POST', cache:'no-store', headers: authHeaders()});
+  try {
+    const r = await fetch(`${API_BASE}/api/council?symbol=${sym}`,
+      {method:"POST", cache:"no-store", headers: authH()});
     if(!r.ok) throw new Error("HTTP "+r.status);
     const j = await r.json();
     const v = j.verdict || {};
@@ -393,265 +477,329 @@ async function pullCouncil(sym){
     if(!el) return;
     el.classList.add("has");
     const bias = (v.bias||"—").toUpperCase();
-    const conf = v.confidence!=null ? Math.round(v.confidence)+"%" : "—";
-    el.innerHTML = `COUNCIL: <b>${escapeHtml(bias)}</b> · ${escapeHtml(conf)} · ${escapeHtml(v.regime||"—")}`;
-  }catch(e){
+    const conf = v.confidence != null ? Math.round(v.confidence)+"%" : "—";
+    el.innerHTML = `<b>${esc(bias)}</b> · ${esc(conf)} · ${esc(v.regime||"—")}`;
+  } catch(e) {
     const el = $(`.card[data-sym="${sym}"] [data-field="council"]`);
-    if(el) el.textContent = "COUNCIL: err — "+e.message;
+    if(el) el.textContent = "err " + e.message;
   }
 }
 
-// ───────── IWM 0DTE (paid, owner-only) ─────────
-async function pullIwm(){
+// ── IWM 0DTE ─────────────────────────────────────────────────────────────────
+async function pullIwm() {
   if(!isOwner()) return;
-  try{
-    const r = await fetch(`${API_BASE}/api/iwm`, {cache:'no-store', headers: authHeaders()});
+  try {
+    const r = await fetch(`${API_BASE}/api/iwm`, {cache:"no-store", headers: authH()});
     if(!r.ok) throw new Error("HTTP "+r.status);
     const j = await r.json();
     const top = (j.top_contracts||[])[0];
     const el = $('.card[data-sym="IWM"] [data-field="iwm-best"]');
     if(!el) return;
-    if(top){
-      const sym = top.symbol || top.contract || "—";
-      const score = top.score!=null ? Math.round(top.score) : "—";
-      const strike = top.strike!=null ? "$"+top.strike : "—";
-      const side = top.side || top.type || "";
-      el.innerHTML = `0DTE TOP: <b>${escapeHtml(side.toUpperCase())} ${escapeHtml(strike)}</b> · score ${escapeHtml(String(score))}<br><span style="opacity:0.7">${escapeHtml(sym)}</span>`;
+    if(top) {
+      const strike = top.strike != null ? "$"+top.strike : "—";
+      const score  = top.score  != null ? Math.round(top.score) : "—";
+      const side   = (top.side || top.type || "").toUpperCase();
+      el.innerHTML = `<b>${esc(side)} ${esc(strike)}</b> · score ${esc(String(score))}`;
     } else {
-      el.textContent = "0DTE: no contracts scored";
+      el.textContent = "0DTE: no contracts";
     }
-  }catch(e){
+  } catch(e) {
     const el = $('.card[data-sym="IWM"] [data-field="iwm-best"]');
-    if(el) el.textContent = "0DTE: err — "+e.message;
+    if(el) el.textContent = "0DTE err";
   }
 }
 
-// ───────── Options Flow (paid, owner-only) ─────────
-async function pullFlow(){
+// ── Options flow ─────────────────────────────────────────────────────────────
+async function pullFlow() {
   if(!isOwner()) return;
-  state.flowAge = Date.now();
+  S.flowAge = Date.now();
   $("#flow-age").textContent = "now";
-  for(const sym of ["AMC","GME","IWM"]){
-    try{
-      const r = await fetch(`${API_BASE}/api/options?symbol=${sym}`, {cache:'no-store', headers: authHeaders()});
-      const j = await r.json();
+  for(const sym of ["AMC","GME","IWM"]) {
+    const card = $(`.flow[data-flow-sym="${sym}"]`);
+    try {
+      const r    = await fetch(`${API_BASE}/api/options?symbol=${sym}`, {cache:"no-store", headers: authH()});
+      const text = await r.text();
+      let j;
+      try { j = JSON.parse(text); } catch {
+        const msg = r.status===402 ? "payment required — check OWNER_API_KEY"
+                  : r.status===503 ? "engine offline"
+                  : `server error (HTTP ${r.status})`;
+        if(card) card.innerHTML = `<div class="sym">${sym}</div><div class="err">${esc(msg)}</div>`;
+        continue;
+      }
+      if(!r.ok) {
+        if(card) card.innerHTML = `<div class="sym">${sym}</div><div class="err">${esc(j.error||j.message||"HTTP "+r.status)}</div>`;
+        continue;
+      }
       renderFlow(sym, j);
-    }catch(e){
-      const card = $(`.flow[data-flow-sym="${sym}"]`);
-      if(card) card.innerHTML = `<div class="sym">${sym}</div><div class="err">err: ${escapeHtml(e.message)}</div>`;
+    } catch(e) {
+      if(card) card.innerHTML = `<div class="sym">${sym}</div><div class="err">${esc(e.message)}</div>`;
     }
   }
 }
 
-function renderFlow(sym, j){
+function renderFlow(sym, j) {
   const card = $(`.flow[data-flow-sym="${sym}"]`);
   if(!card) return;
   const f = j.flow || {};
-  if(j.error){
-    card.innerHTML = `<div class="sym">${sym}</div><div class="err">${escapeHtml(j.error)}</div>`;
-    return;
-  }
-  const netDelta = f.net_delta!=null ? f.net_delta : (f.netDelta || null);
+  if(j.error) { card.innerHTML = `<div class="sym">${sym}</div><div class="err">${esc(j.error)}</div>`; return; }
+  const nd  = f.net_delta != null ? f.net_delta : (f.netDelta||null);
   const pcr = f.put_call_ratio || f.pcr || null;
   const gex = f.gex || f.GEX || null;
-  const maxPain = f.max_pain || null;
-  const sweeps = f.sweeps_count || f.sweep_count || (Array.isArray(f.sweeps)?f.sweeps.length:null);
-  const deltaCls = netDelta>0 ? "bull" : netDelta<0 ? "bear" : "";
+  const mp  = f.max_pain || null;
+  const sw  = f.sweeps_count || f.sweep_count || (Array.isArray(f.sweeps)?f.sweeps.length:null);
+  const dc  = nd > 0 ? "bull" : nd < 0 ? "bear" : "";
   card.innerHTML = `
     <div class="sym">${sym}</div>
-    <div class="row"><span class="k">NET Δ</span><span class="v ${deltaCls}">${netDelta!=null?Number(netDelta).toFixed(2):"—"}</span></div>
+    <div class="row"><span class="k">NET Δ</span><span class="v ${dc}">${nd!=null?Number(nd).toFixed(2):"—"}</span></div>
     <div class="row"><span class="k">P/C</span><span class="v">${pcr!=null?Number(pcr).toFixed(2):"—"}</span></div>
     <div class="row"><span class="k">GEX</span><span class="v">${gex!=null?Number(gex).toExponential(1):"—"}</span></div>
-    <div class="row"><span class="k">MAX PAIN</span><span class="v">${maxPain!=null?"$"+Number(maxPain).toFixed(2):"—"}</span></div>
-    <div class="row"><span class="k">SWEEPS</span><span class="v">${sweeps!=null?sweeps:"—"}</span></div>
-  `;
+    <div class="row"><span class="k">MAX PAIN</span><span class="v">${mp!=null?"$"+Number(mp).toFixed(2):"—"}</span></div>
+    <div class="row"><span class="k">SWEEPS</span><span class="v">${sw!=null?sw:"—"}</span></div>`;
 }
 
-// ───────── Scan (paid, owner-only) ─────────
-async function pullScan(){
+// ── Market scan ───────────────────────────────────────────────────────────────
+async function pullScan() {
   if(!isOwner()) return;
-  try{
-    const r = await fetch(`${API_BASE}/api/scan`, {cache:'no-store', headers: authHeaders()});
-    if(!r.ok) throw new Error("HTTP "+r.status);
-    const j = await r.json();
-    state.scanAge = Date.now();
-    $("#scan-age").textContent = j.cache_age_seconds!=null ? Math.round(j.cache_age_seconds)+"s old · "+(j.universe_size||0)+" tracked" : "fresh";
+  try {
+    const r    = await fetch(`${API_BASE}/api/scan`, {cache:"no-store", headers: authH()});
+    const text = await r.text();
+    let j;
+    try { j = JSON.parse(text); } catch {
+      const msg = r.status===402 ? "payment required — check OWNER_API_KEY"
+                : r.status===503 ? "engine offline"
+                : `server error (HTTP ${r.status})`;
+      $("#scan-list").innerHTML = `<div class="empty">${esc(msg)}</div>`; return;
+    }
+    if(!r.ok) { $("#scan-list").innerHTML = `<div class="empty">${esc(j.error||j.message||"HTTP "+r.status)}</div>`; return; }
+    const age = j.cache_age_seconds;
+    $("#scan-age").textContent = age != null ? Math.round(age)+"s · "+(j.universe_size||0)+" tracked" : "fresh";
     renderScan(j);
-  }catch(e){
-    $("#scan-list").innerHTML = `<div class="empty">scan err: ${escapeHtml(e.message)}</div>`;
+  } catch(e) {
+    $("#scan-list").innerHTML = `<div class="empty">scan err: ${esc(e.message)}</div>`;
   }
 }
 
-function renderScan(j){
+function renderScan(j) {
   const quotes = j.quotes || {};
-  const opts = j.options || [];
-  // Rank by options[].score if present, else by quotes change_pct
-  let rows = [];
-  if(opts.length){
-    rows = opts.slice(0, 12).map(o => {
-      const q = quotes[o.symbol] || {};
-      return {
-        sym: o.symbol,
-        price: q.last || q.price || o.underlying || null,
-        change: q.change_pct || q.changePct || null,
-        vol: q.volume || null,
-        meta: (o.grade ? "GRADE "+o.grade : "") + (o.score!=null ? " · "+Math.round(o.score) : ""),
-      };
-    });
-  } else {
-    rows = Object.entries(quotes).slice(0,12).map(([sym,q])=>({
-      sym, price: q.last||q.price||null, change: q.change_pct||q.changePct||null,
-      vol: q.volume||null, meta: "",
-    }));
-  }
-  if(rows.length === 0){
-    $("#scan-list").innerHTML = `<div class="empty">no scan rows yet</div>`;
+  const opts   = j.options || [];
+  let rows = opts.length
+    ? opts.slice(0,12).map(o => {
+        const q = quotes[o.symbol]||{};
+        return {sym:o.symbol, price:q.last||q.price||null, change:q.change_pct||null, vol:q.volume||null,
+                meta:(o.grade?"G"+o.grade:"")+(o.score!=null?" ·"+Math.round(o.score):"")};
+      })
+    : Object.entries(quotes).slice(0,12).map(([sym,q])=>({sym, price:q.last||q.price||null, change:q.change_pct||null, vol:q.volume||null, meta:""}));
+  if(!rows.length) { $("#scan-list").innerHTML = '<div class="empty">no scan rows yet</div>'; return; }
+  const fv = n => { const x=Number(n); if(isNaN(x))return"—"; if(x>=1e9)return(x/1e9).toFixed(1)+"B"; if(x>=1e6)return(x/1e6).toFixed(1)+"M"; if(x>=1e3)return(x/1e3).toFixed(0)+"K"; return x.toString(); };
+  $("#scan-list").innerHTML = rows.map(r => {
+    const cc = r.change>0?"bull":r.change<0?"bear":"";
+    const cs = r.change!=null?(r.change>0?"+":"")+Number(r.change).toFixed(2)+"%":"—";
+    return `<div class="scan-row"><span class="sym">${esc(r.sym)}</span><span class="meta">${esc(r.meta)}</span><span class="px">${r.price!=null?fmtPrice(r.price):"—"}</span><span class="ch ${cc}">${cs}</span><span class="vol">${fv(r.vol)}</span></div>`;
+  }).join("");
+}
+
+// ── FTD ──────────────────────────────────────────────────────────────────────
+async function pullFtd() {
+  try {
+    const r = await fetch(`${API_BASE}/api/ftd`, {cache:"no-store"});
+    if(!r.ok) return;
+    const j = await r.json();
+    // FTD data shown on cards if present; ftd field is now hidden so just silently update
+  } catch(e) {}
+}
+
+// ── Status ───────────────────────────────────────────────────────────────────
+async function pullStatus() {
+  try {
+    const r = await fetch(`${API_BASE}/api/status`, {cache:"no-store"});
+    if(!r.ok) return;
+    const j = await r.json();
+    $("#uptime").textContent  = j.uptime  ? Math.floor(j.uptime/60)+"m" : "—";
+    $("#version").textContent = j.version || "—";
+  } catch(e) {}
+}
+
+// ── SSE ──────────────────────────────────────────────────────────────────────
+let sseConn = null, sseRetry = 1000;
+
+function connectSse() {
+  if(sseConn) { try { sseConn.close(); } catch {} }
+  sseConn = new EventSource(`${API_BASE}/api/events`);
+  sseConn.onopen = () => {
+    S.sseOk = true; sseRetry = 1000; updateSseDot();
+    pushEvent({type:"CONNECTED", body:"SSE stream open"});
+  };
+  sseConn.onmessage = ev => {
+    try {
+      const data = JSON.parse(ev.data);
+      // Server sometimes sends the replay buffer as an array
+      if(Array.isArray(data)) { data.forEach(pushEvent); }
+      else                    { pushEvent(data); }
+    } catch { pushEvent({type:"DEFAULT", body: ev.data}); }
+  };
+  sseConn.onerror = () => {
+    S.sseOk = false; updateSseDot();
+    try { sseConn.close(); } catch {}
+    setTimeout(connectSse, sseRetry);
+    sseRetry = Math.min(sseRetry * 2, 30000);
+  };
+}
+
+function pushEvent(e) {
+  if(S.paused) return;
+  if(!e || typeof e !== "object") return;
+  const now = new Date();
+  S.events.unshift({
+    ts:   e.timestamp || e.ts || now.toISOString(),
+    type: (e.type || "DEFAULT").toUpperCase(),
+    sym:  e.symbol || e.sym || "",
+    body: extractBody(e),
+  });
+  if(S.events.length > MAX_EVENTS) S.events.length = MAX_EVENTS;
+  renderFeed();
+  $("#evt-count").textContent = S.events.length;
+}
+
+// ── Feed rendering ───────────────────────────────────────────────────────────
+const KNOWN_TYPES = new Set(["SQUEEZE_ALERT","OPTIONS_SWEEP","DARK_POOL","COUNCIL_VERDICT",
+  "AGENT_PROBE","AGENT_PAY","SETTLEMENT_COMPLETE","FUTURES_SETTLED","CONNECTED","HEARTBEAT","ERROR","BEAST"]);
+
+function renderFeed() {
+  const feed = $("#feed");
+  const q    = S.findQuery.trim().toLowerCase();
+
+  let visible = S.showBeast ? S.events
+    : S.events.filter(e => e.type !== "BEAST" && e.type !== "HEARTBEAT");
+
+  if(q) visible = visible.filter(e =>
+    e.type.toLowerCase().includes(q) ||
+    e.sym.toLowerCase().includes(q)  ||
+    e.body.toLowerCase().includes(q));
+
+  const countEl = $("#find-count");
+  if(q) { countEl.textContent = visible.length+" match"+(visible.length===1?"":"es"); countEl.style.display=""; }
+  else  { countEl.style.display = "none"; }
+
+  if(!visible.length) {
+    feed.innerHTML = q
+      ? `<div class="empty">No events match "${esc(q)}"</div>`
+      : `<div class="empty">No signals yet — waiting for market activity…</div>`;
     return;
   }
-  $("#scan-list").innerHTML = rows.map(r=>{
-    const chCls = r.change>0?"bull":r.change<0?"bear":"";
-    const chStr = r.change!=null ? (r.change>0?"+":"")+Number(r.change).toFixed(2)+"%" : "—";
-    const volStr = r.vol!=null ? fmtBigVol(r.vol) : "—";
-    return `<div class="scan-row">
-      <span class="sym">${escapeHtml(r.sym)}</span>
-      <span class="meta">${escapeHtml(r.meta)}</span>
-      <span class="px">${r.price!=null?fmtPrice(r.price):"—"}</span>
-      <span class="ch ${chCls}">${chStr}</span>
-      <span class="vol">${volStr}</span>
+
+  feed.innerHTML = visible.slice(0,100).map((e,i) => {
+    const tc = "t-" + (KNOWN_TYPES.has(e.type) ? e.type : "DEFAULT");
+    const isNew = !q && i === 0;
+    const symH = e.sym ? `<span class="evt-sym">${highlight(e.sym,q)}</span>` : "";
+    return `<div class="evt${isNew?" new":""}">
+      <div class="evt-hdr">
+        <span class="evt-ts">${fmtTs(e.ts)}</span>
+        <span class="evt-type ${tc}">${highlight(e.type,q)}</span>
+        ${symH}
+      </div>
+      <div class="evt-body">${highlight(e.body,q)}</div>
     </div>`;
   }).join("");
 }
 
-function fmtBigVol(n){const x=Number(n);if(isNaN(x))return"—";if(x>=1e9)return(x/1e9).toFixed(1)+"B";if(x>=1e6)return(x/1e6).toFixed(1)+"M";if(x>=1e3)return(x/1e3).toFixed(0)+"K";return x.toString();}
-
-// ───────── FTD ─────────
-async function pullFtd(){
-  try{
-    const r = await fetch(`${API_BASE}/api/ftd`, {cache:'no-store'});
-    if(!r.ok) return;
-    const j = await r.json();
-    if(j.gme){const el=$('.card[data-sym="GME"] [data-field="ftd"]');if(el)el.textContent="FTD: "+(j.gme.split("\n")[0]||"—").slice(0,40);}
-    if(j.amc){const el=$('.card[data-sym="AMC"] [data-field="ftd"]');if(el)el.textContent="FTD: "+(j.amc.split("\n")[0]||"—").slice(0,40);}
-  }catch(e){}
+// ── Dot indicators ───────────────────────────────────────────────────────────
+function updateApiDot() {
+  const d = $("#api-dot"), l = $("#api-lbl");
+  if(S.apiOk) { d.className="dot live"; l.textContent="API"; }
+  else         { d.className="dot dead"; l.textContent="API DOWN"; }
 }
-
-// ───────── Status ─────────
-async function pullStatus(){
-  try{
-    const r = await fetch(`${API_BASE}/api/status`, {cache:'no-store'});
-    if(!r.ok) return;
-    const j = await r.json();
-    $("#uptime").textContent = j.uptime ? Math.floor(j.uptime/60)+"m" : "—";
-    $("#version").textContent = j.version || "—";
-  }catch(e){}
+function updateSseDot() {
+  const d = $("#sse-dot"), l = $("#sse-lbl");
+  if(S.sseOk) { d.className="dot live"; l.textContent="SSE"; }
+  else         { d.className="dot warn"; l.textContent="SSE…"; }
 }
-
-// ───────── SSE ─────────
-let sseConn = null, sseRetry = 1000;
-function connectSse(){
-  try{
-    if(sseConn) try{sseConn.close()}catch{};
-    sseConn = new EventSource(`${API_BASE}/api/events`);
-    sseConn.onopen = ()=>{state.sseOk=true;sseRetry=1000;updateSseDot();pushEvent({type:"CONNECTED",body:"SSE stream open"});};
-    sseConn.onmessage = (ev)=>{try{pushEvent(JSON.parse(ev.data));}catch(e){pushEvent({type:"DEFAULT",body:ev.data});}};
-    sseConn.onerror = ()=>{state.sseOk=false;updateSseDot();try{sseConn.close()}catch{};setTimeout(connectSse,sseRetry);sseRetry=Math.min(sseRetry*2,30000);};
-  }catch(e){state.sseOk=false;updateSseDot();setTimeout(connectSse,sseRetry);}
-}
-
-function pushEvent(e){
-  if(state.paused) return;
-  const now = new Date();
-  const entry = {
-    ts: e.timestamp || now.toISOString(),
-    type: (e.type||"DEFAULT").toUpperCase(),
-    sym: e.symbol || e.sym || "",
-    body: e.body || e.msg || (e.score!=null?"score="+e.score:"") || JSON.stringify(e).slice(0,140),
-  };
-  state.events.unshift(entry);
-  if(state.events.length > MAX_EVENTS) state.events.length = MAX_EVENTS;
-  renderFeed();
-  $("#evt-count").textContent = state.events.length;
-}
-
-function renderFeed(){
-  const feed = $("#feed");
-  if(state.events.length===0){feed.innerHTML='<div class="empty">Awaiting events from /api/events SSE stream...</div>';return;}
-  const known = ["SQUEEZE_ALERT","OPTIONS_SWEEP","DARK_POOL","COUNCIL_VERDICT","AGENT_PROBE","AGENT_PAY","SETTLEMENT_COMPLETE","FUTURES_SETTLED","CONNECTED","HEARTBEAT","ERROR"];
-  feed.innerHTML = state.events.slice(0,100).map((e,i)=>{
-    const cls = "type-" + (known.includes(e.type)?e.type:"DEFAULT");
-    return `<div class="evt ${i===0?"new":""}">
-      <span class="ts">${fmtTs(e.ts)}</span>
-      <span class="type ${cls}">${e.type}</span>
-      <span class="sym">${e.sym||""}</span>
-      <span class="body">${escapeHtml(e.body)}</span>
-    </div>`;
-  }).join("");
-}
-
-// ───────── UI bits ─────────
-function updateApiDot(){const d=$("#api-dot"),s=$("#api-status");if(state.apiOk){d.className="dot live";s.textContent="API";}else{d.className="dot dead";s.textContent="API DOWN";}}
-function updateSseDot(){const d=$("#sse-dot"),s=$("#sse-status");if(state.sseOk){d.className="dot live";s.textContent="STREAM";}else{d.className="dot warn";s.textContent="STREAM…";}}
-function tickClock(){
+function tickClock() {
   $("#clock").textContent = new Date().toTimeString().slice(0,8);
-  for(const sym of ["AMC","GME","IWM"]){
+  for(const sym of ["AMC","GME","IWM"]) {
     const el = $(`.card[data-sym="${sym}"] [data-age]`);
-    if(el) el.textContent = ageStr(state.cards[sym].ts);
+    if(el) el.textContent = ageStr(S.cards[sym].ts);
   }
-  if(isOwner()){
-    if(state.flowAge) $("#flow-age").textContent = ageStr(state.flowAge);
-  }
+  if(isOwner() && S.flowAge) $("#flow-age").textContent = ageStr(S.flowAge);
 }
 
-// Pause / clear
-$("#pause").addEventListener("click", ()=>{state.paused=!state.paused;const b=$("#pause");b.textContent=state.paused?"▶ PLAY":"⏸ PAUSE";b.classList.toggle("on",!state.paused);});
-$("#clear").addEventListener("click", ()=>{state.events=[];renderFeed();$("#evt-count").textContent="0";});
-
-// Modal
-document.getElementById("logo-settings").addEventListener("click",()=>{$("#owner-key-input").value=state.ownerKey;$("#modal-bg").classList.add("open");});
-$("#gear").addEventListener("click", ()=>{
-  $("#owner-key-input").value = state.ownerKey;
-  $("#modal-bg").classList.add("open");
+// ── Controls ─────────────────────────────────────────────────────────────────
+// Pause
+$("#btn-pause").addEventListener("click", () => {
+  S.paused = !S.paused;
+  const b = $("#btn-pause");
+  b.textContent = S.paused ? "▶" : "⏸";
+  b.classList.toggle("active", !S.paused);
 });
-$("#close-modal").addEventListener("click", ()=>$("#modal-bg").classList.remove("open"));
-$("#save-key").addEventListener("click", ()=>{
-  const v = $("#owner-key-input").value.trim();
-  state.ownerKey = v;
+
+// Clear
+$("#btn-clear").addEventListener("click", () => {
+  S.events = []; renderFeed();
+  $("#evt-count").textContent = "0";
+});
+
+// Beast toggle
+const bBtn = $("#btn-beast");
+function syncBeastBtn() {
+  bBtn.textContent = "◉ BEAST";
+  bBtn.classList.toggle("beast-on", S.showBeast);
+  bBtn.title = S.showBeast ? "Showing background telemetry (click to hide)" : "Background telemetry hidden (click to show)";
+}
+syncBeastBtn();
+bBtn.addEventListener("click", () => { S.showBeast = !S.showBeast; syncBeastBtn(); renderFeed(); });
+
+// Find / search
+const findRow   = $("#find-row");
+const findInput = $("#find-input");
+$("#btn-find").addEventListener("click", () => {
+  S.findOpen = !S.findOpen;
+  findRow.classList.toggle("open", S.findOpen);
+  if(S.findOpen) findInput.focus();
+  else { findInput.value = ""; S.findQuery = ""; renderFeed(); }
+  $("#btn-find").classList.toggle("active", S.findOpen);
+});
+findInput.addEventListener("input", () => { S.findQuery = findInput.value; renderFeed(); });
+findInput.addEventListener("keydown", ev => {
+  if(ev.key === "Escape") {
+    findInput.value = ""; S.findQuery = ""; S.findOpen = false;
+    findRow.classList.remove("open");
+    $("#btn-find").classList.remove("active");
+    renderFeed();
+  }
+});
+
+// Settings modal
+$("#logo-btn").addEventListener("click",  () => { $("#owner-input").value = S.ownerKey; $("#modal-bg").classList.add("open"); });
+$("#gear-btn").addEventListener("click",  () => { $("#owner-input").value = S.ownerKey; $("#modal-bg").classList.add("open"); });
+$("#btn-close").addEventListener("click", () => $("#modal-bg").classList.remove("open"));
+$("#btn-save").addEventListener("click", () => {
+  const v = $("#owner-input").value.trim();
+  S.ownerKey = v;
   if(v) localStorage.setItem(LS_KEY, v); else localStorage.removeItem(LS_KEY);
   applyTierUI();
   $("#modal-bg").classList.remove("open");
-  // immediately pull paid data if just unlocked
-  if(isOwner()){
+  if(isOwner()) {
     pullCouncil("AMC"); pullCouncil("GME"); pullCouncil("IWM");
     pullIwm(); pullFlow(); pullScan();
   }
 });
-$("#clear-key").addEventListener("click", ()=>{
-  state.ownerKey = "";
-  localStorage.removeItem(LS_KEY);
-  $("#owner-key-input").value = "";
-  applyTierUI();
+$("#btn-clear-key").addEventListener("click", () => {
+  S.ownerKey = ""; localStorage.removeItem(LS_KEY);
+  $("#owner-input").value = ""; applyTierUI();
 });
 
-// ───────── Boot ─────────
-applyTierUI();
-updateApiDot();
-updateSseDot();
-pullOracle();
-pullFtd();
-pullStatus();
-connectSse();
-if(isOwner()){
-  pullCouncil("AMC"); pullCouncil("GME"); pullCouncil("IWM");
-  pullIwm(); pullFlow(); pullScan();
-}
+// ── Boot ─────────────────────────────────────────────────────────────────────
+applyTierUI(); updateApiDot(); updateSseDot();
+pullOracle(); pullFtd(); pullStatus(); connectSse();
+if(isOwner()) { pullCouncil("AMC"); pullCouncil("GME"); pullCouncil("IWM"); pullIwm(); pullFlow(); pullScan(); }
 setInterval(pullOracle,  ORACLE_MS);
 setInterval(pullStatus,  STATUS_MS);
 setInterval(pullFtd,     FTD_MS);
 setInterval(tickClock,   1000);
-setInterval(()=>{ if(isOwner()){ pullCouncil("AMC"); pullCouncil("GME"); pullCouncil("IWM"); } }, COUNCIL_MS);
-setInterval(()=>{ if(isOwner()) pullIwm();   }, IWM_MS);
-setInterval(()=>{ if(isOwner()) pullFlow();  }, OPTIONS_MS);
-setInterval(()=>{ if(isOwner()) pullScan();  }, SCAN_MS);
+setInterval(() => { if(isOwner()) { pullCouncil("AMC"); pullCouncil("GME"); pullCouncil("IWM"); } }, COUNCIL_MS);
+setInterval(() => { if(isOwner()) pullIwm(); }, IWM_MS);
+setInterval(() => { if(isOwner()) pullFlow(); }, OPTIONS_MS);
+setInterval(() => { if(isOwner()) pullScan(); }, SCAN_MS);
 </script>
 </body>
 </html>

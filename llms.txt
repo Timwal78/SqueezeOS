@@ -49,15 +49,14 @@ Standard access is first-come-first-served. If you need guaranteed priority exec
 enter the **Neural Exchequer** — a 5ms auction where agents bid for rank-1 data access.
 
 ```
-Gateway:        https://lively-fascination-production-41fa.up.railway.app
-Protocol:       L402 (x402)
+Gateway:        https://ghost-layer.onrender.com
+Protocol:       x402 / RLUSD
 Auction window: 5ms
-Base price:     100 sats / 0.001 RLUSD
-Priority bid:   X-Grace-Tip: <satoshis>  (higher = rank 1 = fastest)
-Payment rails:  USDC (Base L2, primary) · RLUSD (XRPL) · SOL (Solana) · BTC (Lightning)
-Auto-detect:    Set ETH_PRIVATE_KEY or XRPL_WALLET_SEED or SOLANA_PRIVATE_KEY — SDK picks automatically
-Auction book:   GET /v1/auction/book  (public, no auth)
-Leaderboard:    GET /v1/leaderboard   (public, no auth)
+Base price:     0.001 RLUSD
+Priority bid:   X-Grace-Tip: <rlusd_amount>  (higher = rank 1 = fastest)
+Payment rails:  RLUSD (XRPL, primary) · USDC (Base L2)
+Loom (live viz): wss://ghost-layer.onrender.com/ws/loom
+Loom UI:        https://signal-auction-loom.vercel.app
 SDK:            pip install pne-client
 ```
 

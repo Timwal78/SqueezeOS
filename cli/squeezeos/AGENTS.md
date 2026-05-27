@@ -49,7 +49,7 @@ squeezeos preview IWM --compact | jq '.bias'
 ## Exit Codes
 
 | Code | Meaning |
-|------|---------|
+|------|----------|
 | 0 | Success |
 | 2 | Usage error (bad flags/args) |
 | 3 | Not found |
@@ -59,7 +59,7 @@ squeezeos preview IWM --compact | jq '.bias'
 ## Environment Variables
 
 | Variable | Default | Purpose |
-|----------|---------|---------|
+|----------|---------|----------|
 | `SQUEEZEOS_TOKEN` | (none) | Payment token for premium endpoints |
 | `SQUEEZEOS_BASE_URL` | `https://squeezeos-api.onrender.com` | Override API base |
 

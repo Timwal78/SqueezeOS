@@ -8,6 +8,7 @@ set -euo pipefail
 OWNER="Timwal78"
 UPSTREAM="mvanhorn/printing-press-library"
 FORK="$OWNER/printing-press-library"
+BRANCH="add-sml-clis"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 API="https://api.github.com"

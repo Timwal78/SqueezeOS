@@ -23,6 +23,8 @@ from core.api.webhook_bp import webhook_bp, start_webhook_engine
 from core.api.marketplace_bp import marketplace_bp
 from core.api.hiring_bp import hiring_bp
 from core.api.mcp_bp import mcp_bp
+from core.api.proprietary_ema_bp import proprietary_ema_bp
+from core.api.convergence_bp import convergence_bp
 from core.api.honeypot import honeypot_bp, honeypot_before_request
 from core.api.settlement_bp import settlement_bp
 from core.api.futures_bp import futures_bp
@@ -77,6 +79,8 @@ def create_app():
     app.register_blueprint(settlement_bp,  url_prefix='/api/settlement')
     app.register_blueprint(futures_bp,     url_prefix='/api/futures')
     app.register_blueprint(oracle_data_bp, url_prefix='/api/oracle')
+    app.register_blueprint(proprietary_ema_bp, url_prefix='/api')
+    app.register_blueprint(convergence_bp,     url_prefix='/api')
     app.register_blueprint(analytics_bp)
     app.register_blueprint(v2_bp, url_prefix='/api')
     app.register_blueprint(v2_bp, url_prefix='/api/v1', name='v2_bridge_v1')
@@ -123,6 +127,10 @@ def create_app():
     @app.route('/')
     def serve_index():
         return send_from_directory(app.static_folder, 'index.html')
+
+    @app.route('/beastmode')
+    def serve_beastmode():
+        return send_from_directory(app.static_folder, 'beastmode.html')
 
     @app.route('/terminal')
     def serve_terminal():
