@@ -20,7 +20,7 @@ var bridgeCmd = &cobra.Command{
 	Short: "Execute a dual-chain bridge settlement (XRPL RLUSD or Base USDC)",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if bridgeChain == "" || bridgeAmount == "" || bridgeRecipient == "" {
-			internal.Fatalf("--chain, --amount, and --recipient are required")
+			return fmt.Errorf("--chain, --amount, and --recipient are required")
 		}
 		body := map[string]any{
 			"chain":     bridgeChain,
@@ -30,16 +30,15 @@ var bridgeCmd = &cobra.Command{
 			"signature": bridgeSig,
 		}
 		if dryRun {
-			fmt.Printf("POST /v1/bridge/execute %+v\n", body)
+			fmt.Fprintf(cmd.OutOrStdout(), "POST /v1/bridge/execute %+v\n", body)
 			return nil
 		}
 		c := internal.NewClient()
 		res, err := c.Post("/v1/bridge/execute", body)
 		if err != nil {
-			internal.Fatalf("%v", err)
+			return err
 		}
-		internal.Print(res, compact)
-		return nil
+		return internal.Print(cmd.OutOrStdout(), res, compact)
 	},
 }
 
@@ -53,16 +52,15 @@ var x402CatalogCmd = &cobra.Command{
 	Short: "List all x402 products available for purchase",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if dryRun {
-			fmt.Println("GET /v1/x402/catalog")
+			fmt.Fprintln(cmd.OutOrStdout(), "GET /v1/x402/catalog")
 			return nil
 		}
 		c := internal.NewClient()
 		res, err := c.Get("/v1/x402/catalog")
 		if err != nil {
-			internal.Fatalf("%v", err)
+			return err
 		}
-		internal.Print(res, compact)
-		return nil
+		return internal.Print(cmd.OutOrStdout(), res, compact)
 	},
 }
 
@@ -76,20 +74,19 @@ var x402QuoteCmd = &cobra.Command{
 	Short: "Get a payment quote for a product",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if quoteProduct == "" || quoteWallet == "" {
-			internal.Fatalf("--product and --wallet are required")
+			return fmt.Errorf("--product and --wallet are required")
 		}
 		body := map[string]any{"product_id": quoteProduct, "agent_wallet": quoteWallet}
 		if dryRun {
-			fmt.Printf("POST /v1/x402/quote %+v\n", body)
+			fmt.Fprintf(cmd.OutOrStdout(), "POST /v1/x402/quote %+v\n", body)
 			return nil
 		}
 		c := internal.NewClient()
 		res, err := c.Post("/v1/x402/quote", body)
 		if err != nil {
-			internal.Fatalf("%v", err)
+			return err
 		}
-		internal.Print(res, compact)
-		return nil
+		return internal.Print(cmd.OutOrStdout(), res, compact)
 	},
 }
 
@@ -100,16 +97,15 @@ var x402DispenseCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path := "/v1/x402/dispense/" + args[0]
 		if dryRun {
-			fmt.Printf("GET %s\n", path)
+			fmt.Fprintf(cmd.OutOrStdout(), "GET %s\n", path)
 			return nil
 		}
 		c := internal.NewClient()
 		res, err := c.Get(path)
 		if err != nil {
-			internal.Fatalf("%v", err)
+			return err
 		}
-		internal.Print(res, compact)
-		return nil
+		return internal.Print(cmd.OutOrStdout(), res, compact)
 	},
 }
 
@@ -120,16 +116,15 @@ var agentCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path := "/api/agent/" + args[0] + "/stats"
 		if dryRun {
-			fmt.Printf("GET %s\n", path)
+			fmt.Fprintf(cmd.OutOrStdout(), "GET %s\n", path)
 			return nil
 		}
 		c := internal.NewClient()
 		res, err := c.Get(path)
 		if err != nil {
-			internal.Fatalf("%v", err)
+			return err
 		}
-		internal.Print(res, compact)
-		return nil
+		return internal.Print(cmd.OutOrStdout(), res, compact)
 	},
 }
 
@@ -143,16 +138,15 @@ var cubeStateCmd = &cobra.Command{
 	Short: "Current cube state snapshot",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if dryRun {
-			fmt.Println("GET /api/cube/state")
+			fmt.Fprintln(cmd.OutOrStdout(), "GET /api/cube/state")
 			return nil
 		}
 		c := internal.NewClient()
 		res, err := c.Get("/api/cube/state")
 		if err != nil {
-			internal.Fatalf("%v", err)
+			return err
 		}
-		internal.Print(res, compact)
-		return nil
+		return internal.Print(cmd.OutOrStdout(), res, compact)
 	},
 }
 
@@ -161,16 +155,15 @@ var statusCmd = &cobra.Command{
 	Short: "Ghost Layer health check",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if dryRun {
-			fmt.Println("GET /health")
+			fmt.Fprintln(cmd.OutOrStdout(), "GET /health")
 			return nil
 		}
 		c := internal.NewClient()
 		res, err := c.Get("/health")
 		if err != nil {
-			internal.Fatalf("%v", err)
+			return err
 		}
-		internal.Print(res, compact)
-		return nil
+		return internal.Print(cmd.OutOrStdout(), res, compact)
 	},
 }
 

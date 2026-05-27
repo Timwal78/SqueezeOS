@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"net/url"
 	"strconv"
 
 	"github.com/spf13/cobra"
@@ -14,12 +15,11 @@ var resolveCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		c := internal.NewClient()
-		res, err := c.Get("/api/resolve/" + args[0])
+		res, err := c.Get("/api/resolve/" + url.PathEscape(args[0]))
 		if err != nil {
-			internal.Fatalf("%v", err)
+			return err
 		}
-		internal.Print(res, compact)
-		return nil
+		return internal.Print(cmd.OutOrStdout(), res, compact)
 	},
 }
 
@@ -32,14 +32,15 @@ var leaderboardCmd = &cobra.Command{
 	Use:   "leaderboard",
 	Short: "Top tippers by RLUSD volume",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		path := fmt.Sprintf("/api/leaderboard?period=%s&limit=%d", lbPeriod, lbLimit)
+		q := url.Values{}
+		q.Set("period", lbPeriod)
+		q.Set("limit", strconv.Itoa(lbLimit))
 		c := internal.NewClient()
-		res, err := c.Get(path)
+		res, err := c.Get("/api/leaderboard?" + q.Encode())
 		if err != nil {
-			internal.Fatalf("%v", err)
+			return err
 		}
-		internal.Print(res, compact)
-		return nil
+		return internal.Print(cmd.OutOrStdout(), res, compact)
 	},
 }
 
@@ -50,15 +51,14 @@ var userCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		fid, err := strconv.Atoi(args[0])
 		if err != nil {
-			internal.Fatalf("FID must be a number, got %q", args[0])
+			return fmt.Errorf("FID must be a number, got %q", args[0])
 		}
 		c := internal.NewClient()
-		res, err2 := c.Get(fmt.Sprintf("/api/user/%d", fid))
-		if err2 != nil {
-			internal.Fatalf("%v", err2)
+		res, err := c.Get(fmt.Sprintf("/api/user/%d", fid))
+		if err != nil {
+			return err
 		}
-		internal.Print(res, compact)
-		return nil
+		return internal.Print(cmd.OutOrStdout(), res, compact)
 	},
 }
 
@@ -69,10 +69,9 @@ var statusCmd = &cobra.Command{
 		c := internal.NewClient()
 		res, err := c.Get("/api/status")
 		if err != nil {
-			internal.Fatalf("%v", err)
+			return err
 		}
-		internal.Print(res, compact)
-		return nil
+		return internal.Print(cmd.OutOrStdout(), res, compact)
 	},
 }
 

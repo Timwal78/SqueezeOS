@@ -17,16 +17,15 @@ var marketplaceBrowseCmd = &cobra.Command{
 	Short: "Browse all marketplace signal listings (free)",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if dryRun {
-			fmt.Println("GET /api/marketplace")
+			fmt.Fprintln(cmd.OutOrStdout(), "GET /api/marketplace")
 			return nil
 		}
 		c := internal.NewClient()
 		res, err := c.Get("/api/marketplace")
 		if err != nil {
-			internal.Fatalf("%v", err)
+			return err
 		}
-		internal.Print(res, compact)
-		return nil
+		return internal.Print(cmd.OutOrStdout(), res, compact)
 	},
 }
 
@@ -44,7 +43,7 @@ var marketplaceListCmd = &cobra.Command{
 	Example: `  squeezeos marketplace list --symbol NVDA --bias LONG --thesis "Gamma squeeze setup" --price 0.05 --wallet rXXX`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if listSymbol == "" || listBias == "" || listThesis == "" || listWallet == "" {
-			internal.Fatalf("--symbol, --bias, --thesis, and --wallet are required")
+			return fmt.Errorf("--symbol, --bias, --thesis, and --wallet are required")
 		}
 		body := map[string]any{
 			"symbol":        listSymbol,
@@ -54,16 +53,15 @@ var marketplaceListCmd = &cobra.Command{
 			"seller_wallet": listWallet,
 		}
 		if dryRun {
-			fmt.Printf("POST /api/marketplace/list %+v\n", body)
+			fmt.Fprintf(cmd.OutOrStdout(), "POST /api/marketplace/list %+v\n", body)
 			return nil
 		}
 		c := internal.NewClient()
 		res, err := c.Post("/api/marketplace/list", body)
 		if err != nil {
-			internal.Fatalf("%v", err)
+			return err
 		}
-		internal.Print(res, compact)
-		return nil
+		return internal.Print(cmd.OutOrStdout(), res, compact)
 	},
 }
 
@@ -73,19 +71,18 @@ var marketplaceReadCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if dryRun {
-			fmt.Printf("POST /api/marketplace/read {listing_id: %q}\n", args[0])
+			fmt.Fprintf(cmd.OutOrStdout(), "POST /api/marketplace/read {listing_id: %q}\n", args[0])
 			return nil
 		}
 		c := internal.NewClient()
 		if c.Token == "" {
-			internal.Fatalf("SQUEEZEOS_TOKEN is required to read full thesis")
+			return fmt.Errorf("SQUEEZEOS_TOKEN is required to read full thesis")
 		}
 		res, err := c.Post("/api/marketplace/read", map[string]string{"listing_id": args[0]})
 		if err != nil {
-			internal.Fatalf("%v", err)
+			return err
 		}
-		internal.Print(res, compact)
-		return nil
+		return internal.Print(cmd.OutOrStdout(), res, compact)
 	},
 }
 

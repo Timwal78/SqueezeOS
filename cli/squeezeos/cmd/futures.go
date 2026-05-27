@@ -17,16 +17,15 @@ var futuresBrowseCmd = &cobra.Command{
 	Short: "Browse open futures positions",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if dryRun {
-			fmt.Println("GET /api/futures")
+			fmt.Fprintln(cmd.OutOrStdout(), "GET /api/futures")
 			return nil
 		}
 		c := internal.NewClient()
 		res, err := c.Get("/api/futures")
 		if err != nil {
-			internal.Fatalf("%v", err)
+			return err
 		}
-		internal.Print(res, compact)
-		return nil
+		return internal.Print(cmd.OutOrStdout(), res, compact)
 	},
 }
 
@@ -35,16 +34,15 @@ var futuresLeaderCmd = &cobra.Command{
 	Short: "Top predictors by win rate and volume",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if dryRun {
-			fmt.Println("GET /api/futures/leaderboard")
+			fmt.Fprintln(cmd.OutOrStdout(), "GET /api/futures/leaderboard")
 			return nil
 		}
 		c := internal.NewClient()
 		res, err := c.Get("/api/futures/leaderboard")
 		if err != nil {
-			internal.Fatalf("%v", err)
+			return err
 		}
-		internal.Print(res, compact)
-		return nil
+		return internal.Print(cmd.OutOrStdout(), res, compact)
 	},
 }
 
@@ -61,7 +59,7 @@ var futuresCreateCmd = &cobra.Command{
 	Example: `  squeezeos futures create --symbol IWM --verdict BUY --stake 0.10 --wallet rXXX`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if futureSymbol == "" || futureVerdict == "" || futureWallet == "" {
-			internal.Fatalf("--symbol, --verdict, and --wallet are required")
+			return fmt.Errorf("--symbol, --verdict, and --wallet are required")
 		}
 		body := map[string]any{
 			"symbol":       futureSymbol,
@@ -70,16 +68,15 @@ var futuresCreateCmd = &cobra.Command{
 			"agent_wallet": futureWallet,
 		}
 		if dryRun {
-			fmt.Printf("POST /api/futures/create %+v\n", body)
+			fmt.Fprintf(cmd.OutOrStdout(), "POST /api/futures/create %+v\n", body)
 			return nil
 		}
 		c := internal.NewClient()
 		res, err := c.Post("/api/futures/create", body)
 		if err != nil {
-			internal.Fatalf("%v", err)
+			return err
 		}
-		internal.Print(res, compact)
-		return nil
+		return internal.Print(cmd.OutOrStdout(), res, compact)
 	},
 }
 
@@ -90,16 +87,15 @@ var futuresWalletCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path := "/api/futures/wallet/" + args[0]
 		if dryRun {
-			fmt.Printf("GET %s\n", path)
+			fmt.Fprintf(cmd.OutOrStdout(), "GET %s\n", path)
 			return nil
 		}
 		c := internal.NewClient()
 		res, err := c.Get(path)
 		if err != nil {
-			internal.Fatalf("%v", err)
+			return err
 		}
-		internal.Print(res, compact)
-		return nil
+		return internal.Print(cmd.OutOrStdout(), res, compact)
 	},
 }
 

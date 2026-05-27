@@ -16,8 +16,9 @@ var rootCmd = &cobra.Command{
 	Short: "Proprietary dual-chain XRPL/Base toll gateway for AI agents",
 	Long: `Ghost Layer CLI — Script Master Labs
 
-Agent-native CLI for Ghost Layer — the proprietary XRPL/Base toll gateway.
-Bridge RLUSD (XRPL) and USDC (Base/EVM), query the x402 product catalog.
+Agent-native CLI for Ghost Layer — the proprietary Web3 checkout and
+XRPL-native licensing infrastructure. Bridge RLUSD (XRPL) and USDC (Base/EVM),
+mint X402-BEAST-KEY URITokens on Xahau, and query the x402 product catalog.
 
 Environment:
   GHOST_LAYER_BASE_URL   override the base URL (default: https://ghost-layer.onrender.com)

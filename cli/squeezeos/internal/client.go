@@ -84,15 +84,10 @@ func decode(resp *http.Response) (map[string]any, error) {
 	return out, nil
 }
 
-func Print(v any, compact bool) {
-	enc := json.NewEncoder(os.Stdout)
+func Print(w io.Writer, v any, compact bool) error {
+	enc := json.NewEncoder(w)
 	if !compact {
 		enc.SetIndent("", "  ")
 	}
-	_ = enc.Encode(v)
-}
-
-func Fatalf(format string, a ...any) {
-	fmt.Fprintf(os.Stderr, "error: "+format+"\n", a...)
-	os.Exit(1)
+	return enc.Encode(v)
 }
