@@ -26,8 +26,12 @@ var bridgeCmd = &cobra.Command{
 			"chain":     bridgeChain,
 			"amount":    bridgeAmount,
 			"recipient": bridgeRecipient,
-			"signer":    bridgeSigner,
-			"signature": bridgeSig,
+		}
+		if bridgeSigner != "" {
+			body["signer"] = bridgeSigner
+		}
+		if bridgeSig != "" {
+			body["signature"] = bridgeSig
 		}
 		if dryRun {
 			fmt.Fprintf(cmd.OutOrStdout(), "POST /v1/bridge/execute %+v\n", body)
