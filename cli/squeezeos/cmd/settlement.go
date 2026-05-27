@@ -26,7 +26,6 @@ var settlementBrowseCmd = &cobra.Command{
 			return err
 		}
 		return internal.Print(cmd.OutOrStdout(), res, compact)
-		return nil
 	},
 }
 
@@ -46,7 +45,6 @@ var settlementGetCmd = &cobra.Command{
 			return err
 		}
 		return internal.Print(cmd.OutOrStdout(), res, compact)
-		return nil
 	},
 }
 
@@ -66,7 +64,6 @@ var settlementWalletCmd = &cobra.Command{
 			return err
 		}
 		return internal.Print(cmd.OutOrStdout(), res, compact)
-		return nil
 	},
 }
 
@@ -105,7 +102,6 @@ var settlementCreateCmd = &cobra.Command{
 			return err
 		}
 		return internal.Print(cmd.OutOrStdout(), res, compact)
-		return nil
 	},
 }
 

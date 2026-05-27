@@ -26,7 +26,6 @@ var marketplaceBrowseCmd = &cobra.Command{
 			return err
 		}
 		return internal.Print(cmd.OutOrStdout(), res, compact)
-		return nil
 	},
 }
 
@@ -63,7 +62,6 @@ var marketplaceListCmd = &cobra.Command{
 			return err
 		}
 		return internal.Print(cmd.OutOrStdout(), res, compact)
-		return nil
 	},
 }
 
@@ -85,7 +83,6 @@ var marketplaceReadCmd = &cobra.Command{
 			return err
 		}
 		return internal.Print(cmd.OutOrStdout(), res, compact)
-		return nil
 	},
 }
 

@@ -26,7 +26,6 @@ var futuresBrowseCmd = &cobra.Command{
 			return err
 		}
 		return internal.Print(cmd.OutOrStdout(), res, compact)
-		return nil
 	},
 }
 
@@ -44,7 +43,6 @@ var futuresLeaderCmd = &cobra.Command{
 			return err
 		}
 		return internal.Print(cmd.OutOrStdout(), res, compact)
-		return nil
 	},
 }
 
@@ -79,7 +77,6 @@ var futuresCreateCmd = &cobra.Command{
 			return err
 		}
 		return internal.Print(cmd.OutOrStdout(), res, compact)
-		return nil
 	},
 }
 
@@ -99,7 +96,6 @@ var futuresWalletCmd = &cobra.Command{
 			return err
 		}
 		return internal.Print(cmd.OutOrStdout(), res, compact)
-		return nil
 	},
 }
 
