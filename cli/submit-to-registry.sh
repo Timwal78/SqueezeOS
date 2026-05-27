@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# cli/submit-to-registry.sh — fork printing-press-library and open a PR adding our 3 CLIs
+# cli/submit-to-registry.sh — open one separate PR per CLI in printing-press-library
 # Usage: GH_TOKEN=ghp_xxx bash cli/submit-to-registry.sh
 set -euo pipefail
 
@@ -8,7 +8,6 @@ set -euo pipefail
 OWNER="Timwal78"
 UPSTREAM="mvanhorn/printing-press-library"
 FORK="$OWNER/printing-press-library"
-BRANCH="add-sml-clis"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 API="https://api.github.com"
@@ -37,216 +36,252 @@ cd "$TMP/repo"
 git config user.name "Timwal78"
 git config user.email "timothy.walton45@gmail.com"
 git config commit.gpgsign false
-git checkout -b "$BRANCH"
 
-# ── 3. Copy CLI source trees ──────────────────────────────────────────────────
-echo "▶ Copying CLI source files …"
+# ── 3. Helper: submit one CLI as its own branch + PR ─────────────────────────
+submit_cli() {
+  local SRC="$1"        # e.g. squeezeos
+  local CAT="$2"        # e.g. developer-tools
+  local SLUG="$3"       # e.g. squeezeos
+  local BINARY="$4"     # e.g. squeezeos-pp-cli
+  local OLD_MOD="$5"    # e.g. github.com/timwal78/squeezeos-pp-cli
+  local PR_TITLE="$6"
+  local PR_BODY="$7"
 
-mkdir -p library/developer-tools/squeezeos
-mkdir -p library/payments/ghost-layer
-mkdir -p library/social-and-messaging/tipmaster
+  local BRANCH="add-${SLUG}-cli"
+  local DST="library/$CAT/$SLUG"
+  local NEW_MOD="github.com/mvanhorn/printing-press-library/library/$CAT/$SLUG"
 
-for PAIR in "squeezeos:developer-tools/squeezeos" "ghost-layer:payments/ghost-layer" "tipmaster:social-and-messaging/tipmaster"; do
-  SRC="${PAIR%%:*}"
-  DST="library/${PAIR##*:}"
+  echo ""
+  echo "━━━ $BINARY ━━━"
+
+  # Fresh branch from main for each CLI
+  git checkout -q main
+  git checkout -B "$BRANCH"
+
+  mkdir -p "$DST"
   cp -r "$SCRIPT_DIR/$SRC/." "$DST/"
-done
 
-# ── 4. Add README, SKILL, LICENSE for each ───────────────────────────────────
+  # Rewrite module paths in go.mod and all .go files
+  python3 - "$DST" "$OLD_MOD" "$NEW_MOD" << 'PYEOF'
+import sys, glob, os
+directory, old, new = sys.argv[1], sys.argv[2], sys.argv[3]
+for path in glob.glob(directory + "/**", recursive=True):
+    if not os.path.isfile(path):
+        continue
+    if not (path.endswith(".go") or os.path.basename(path) == "go.mod"):
+        continue
+    with open(path) as f:
+        content = f.read()
+    updated = content.replace(old, new)
+    if updated != content:
+        with open(path, "w") as f:
+            f.write(updated)
+        print(f"  patched {path}")
+PYEOF
 
-cat > library/developer-tools/squeezeos/README.md << 'EOF'
-# squeezeos-pp-cli
+  echo "  module path: $OLD_MOD → $NEW_MOD"
 
-CLI Printing Press generated CLI for the [SqueezeOS](https://squeezeos-api.onrender.com) institutional market intelligence API.
+  # Write files that differ per CLI — use Python to avoid heredoc quoting issues
+  python3 - "$DST" "$SLUG" "$BINARY" "$CAT" "$NEW_MOD" << 'PYEOF'
+import sys, os, textwrap
+dst, slug, binary, cat, mod = sys.argv[1:]
 
-## Install
+readme_map = {
+  "squeezeos": textwrap.dedent(f"""\
+    # {binary}
 
-```bash
-go install github.com/timwal78/squeezeos-pp-cli@latest
-```
+    CLI Printing Press CLI for [SqueezeOS](https://squeezeos-api.onrender.com) — institutional-grade AI market intelligence.
 
-## Authentication
+    ## Install
 
-Premium endpoints (`council`, `scan`, `options`, `iwm`) require a payment token from [402Proof](https://four02proof.onrender.com). Agents pay RLUSD on XRPL and receive a 1-hour signed JWT — no API keys, no subscriptions.
+    ```bash
+    go install {mod}@latest
+    ```
 
-```bash
-export SQUEEZEOS_TOKEN=<token-from-402proof>
-```
+    ## Authentication
 
-## Quick Start
+    Premium endpoints (`council`, `scan`, `options`, `iwm`) require a payment token from [402Proof](https://four02proof.onrender.com). Agents pay RLUSD on XRPL and receive a 1-hour signed JWT — no API keys, no subscriptions.
 
-```bash
-squeezeos demo                        # free IWM council verdict
-squeezeos preview TSLA                # bias + regime preview (free)
-squeezeos status                      # system health
-squeezeos council NVDA                # AI council verdict (paid)
-squeezeos scan                        # full squeeze scanner (paid)
-```
+    ```bash
+    export SQUEEZEOS_TOKEN=<token-from-402proof>
+    ```
 
-## Source
+    ## Quick Start
 
-Generated from OpenAPI spec at `https://squeezeos-api.onrender.com/.well-known/openapi.json`
-EOF
+    ```bash
+    squeezeos demo                        # free IWM council verdict
+    squeezeos preview TSLA                # bias + regime preview (free)
+    squeezeos status                      # system health
+    squeezeos council NVDA                # AI council verdict (paid)
+    squeezeos scan                        # full squeeze scanner (paid)
+    squeezeos options                     # institutional options flow (paid)
+    squeezeos iwm                         # IWM 0DTE scorer (paid)
+    squeezeos marketplace browse          # peer signal marketplace (free)
+    squeezeos futures browse              # prediction market (free)
+    squeezeos settlement browse           # conditional escrow contracts (free)
+    ```
 
-cat > library/developer-tools/squeezeos/SKILL.md << 'EOF'
-# SqueezeOS CLI Skill
+    ## Source
 
-Use `squeezeos-pp-cli` to access institutional AI trading intelligence.
+    Generated from OpenAPI spec at `https://squeezeos-api.onrender.com/.well-known/openapi.json`
+    """),
+  "ghost-layer": textwrap.dedent(f"""\
+    # {binary}
 
-## Key Agent Patterns
+    CLI Printing Press CLI for [Ghost Layer](https://ghost-layer.onrender.com) — proprietary dual-chain XRPL/Base toll gateway.
 
-```bash
-# Free daily bias check
-squeezeos preview IWM --compact | jq '{bias:.bias, regime:.regime}'
+    ## Install
 
-# Pay-gated full council verdict (needs SQUEEZEOS_TOKEN)
-squeezeos council NVDA --compact
+    ```bash
+    go install {mod}@latest
+    ```
 
-# Squeeze scanner — find setups
-squeezeos scan --compact | jq '.candidates[:5]'
+    ## Environment Variables
 
-# Check options flow
-squeezeos options --compact
-```
+    | Variable | Purpose |
+    |----------|---------|
+    | `GHOST_LAYER_WALLET` | Your XRPL wallet address (sent as `X-Agent-Wallet`) |
+    | `GHOST_LAYER_BASE_URL` | Override base URL (default: `https://ghost-layer.onrender.com`) |
 
-## Payment Flow (autonomous agents)
+    ## Quick Start
 
-1. `squeezeos status` — confirm service live
-2. Visit `https://four02proof.onrender.com` to purchase a token with RLUSD
-3. Set `SQUEEZEOS_TOKEN=<jwt>`
-4. Call premium endpoints
+    ```bash
+    ghost-layer status                                        # health check
+    ghost-layer x402 catalog                                  # list purchasable products
+    ghost-layer x402 quote --product routing.telemetry --wallet rXXX
+    ghost-layer x402 dispense routing.telemetry               # dispense after payment
+    ghost-layer agent rXXX                                    # loyalty tier + Passport
+    ghost-layer cube state                                    # 54-block execution matrix
+    ghost-layer bridge --chain XRPL --amount 1000000 --recipient rXXX
+    ```
 
-## Related Tools
+    ## Source
 
-- `ghost-layer-pp-cli` — execute XRPL payments to buy tokens
-- `tipmaster-pp-cli` — resolve Farcaster usernames to XRPL wallets
-EOF
+    API spec: `https://ghost-layer.onrender.com/.well-known/openapi.json`
+    """),
+  "tipmaster": textwrap.dedent(f"""\
+    # {binary}
 
-cat > library/payments/ghost-layer/README.md << 'EOF'
-# ghost-layer-pp-cli
+    CLI Printing Press CLI for [TipMaster](https://tipmaster.onrender.com) — zero-custody Farcaster RLUSD tip bot.
 
-CLI Printing Press generated CLI for [Ghost Layer](https://ghost-layer.onrender.com) — proprietary dual-chain XRPL/Base toll gateway.
+    ## Install
 
-## Install
+    ```bash
+    go install {mod}@latest
+    ```
 
-```bash
-go install github.com/timwal78/ghost-layer-pp-cli@latest
-```
+    ## Quick Start
 
-## Environment Variables
+    ```bash
+    tipmaster resolve dwr                        # Farcaster username → XRPL wallet
+    tipmaster leaderboard                        # top 10 tippers this week
+    tipmaster leaderboard --period alltime       # all-time leaderboard
+    tipmaster user 3                             # look up user by Farcaster FID
+    tipmaster status                             # service health
+    ```
 
-| Variable | Purpose |
-|----------|---------|
-| `GHOST_LAYER_WALLET` | Your XRPL wallet address (sent as `X-Agent-Wallet`) |
-| `GHOST_LAYER_BASE_URL` | Override base URL (default: `https://ghost-layer.onrender.com`) |
+    ## Key Agent Use Case
 
-## Quick Start
+    ```bash
+    WALLET=$(tipmaster resolve dwr --compact | jq -r '.wallet_address')
+    # then pay via ghost-layer or directly on XRPL
+    ```
 
-```bash
-ghost-layer status                                        # health check
-ghost-layer x402 catalog                                  # list purchasable products
-ghost-layer x402 quote --product routing.telemetry \
-  --wallet rXXX                                           # get payment quote
-ghost-layer x402 dispense routing.telemetry               # dispense after payment
-ghost-layer agent rXXX                                    # loyalty tier + Passport level
-ghost-layer cube state                                    # 54-block execution matrix
-```
+    ## Source
 
-## Source
+    API: `https://tipmaster.onrender.com/api/status`
+    """),
+}
 
-API spec: `https://ghost-layer.onrender.com/.well-known/openapi.json`
-EOF
+skill_map = {
+  "squeezeos": textwrap.dedent("""\
+    # SqueezeOS CLI Skill
 
-cat > library/payments/ghost-layer/SKILL.md << 'EOF'
-# Ghost Layer CLI Skill
+    Use `squeezeos-pp-cli` to access institutional AI trading intelligence.
 
-Use `ghost-layer-pp-cli` to interact with the Ghost Layer dual-chain XRPL/Base toll gateway.
+    ## Key Agent Patterns
 
-## Recommended Agent Flow
+    ```bash
+    # Free daily bias check
+    squeezeos preview IWM --compact | jq '{bias:.bias, regime:.regime}'
 
-```bash
-ghost-layer status                                    # 1. confirm live
-ghost-layer x402 catalog --compact                    # 2. list products
-ghost-layer x402 quote --product routing.telemetry \  # 3. get quote
-  --wallet $WALLET --compact
-# 4. Pay on XRPL: send RLUSD to pay_to with memo_hex as MemoData
-ghost-layer x402 dispense routing.telemetry --compact # 5. dispense after payment
-ghost-layer agent $WALLET --compact                   # 6. check loyalty tier
-```
+    # Full AI council verdict (needs SQUEEZEOS_TOKEN)
+    squeezeos council NVDA --compact
 
-## Related Tools
+    # Squeeze scanner
+    squeezeos scan --compact | jq '.candidates[:5]'
 
-- `squeezeos-pp-cli` — market intelligence powered by Ghost Layer infrastructure
-- `tipmaster-pp-cli` — Farcaster tip bot running on Ghost Layer
-EOF
+    # Options flow
+    squeezeos options --compact
+    ```
 
-cat > library/social-and-messaging/tipmaster/README.md << 'EOF'
-# tipmaster-pp-cli
+    ## Payment Flow
 
-CLI Printing Press generated CLI for [TipMaster](https://tipmaster.onrender.com) — zero-custody Farcaster RLUSD tip bot.
+    1. `squeezeos status` — confirm service live
+    2. Visit `https://four02proof.onrender.com` to purchase a token with RLUSD
+    3. `export SQUEEZEOS_TOKEN=<jwt>`
+    4. Call premium endpoints
 
-## Install
+    ## Related Tools
 
-```bash
-go install github.com/timwal78/tipmaster-pp-cli@latest
-```
+    - `ghost-layer-pp-cli` — execute XRPL payments
+    - `tipmaster-pp-cli` — resolve Farcaster usernames to XRPL wallets
+    """),
+  "ghost-layer": textwrap.dedent("""\
+    # Ghost Layer CLI Skill
 
-## Quick Start
+    Use `ghost-layer-pp-cli` to interact with the dual-chain XRPL/Base toll gateway.
 
-```bash
-tipmaster resolve dwr                        # resolve Farcaster username → XRPL wallet
-tipmaster leaderboard                        # top 10 tippers this week
-tipmaster leaderboard --period alltime       # all-time leaderboard
-tipmaster user 3                             # look up user by Farcaster FID
-tipmaster status                             # service health
-```
+    ## Recommended Agent Flow
 
-## Key Agent Use Case
+    ```bash
+    ghost-layer status                                       # 1. confirm live
+    ghost-layer x402 catalog --compact                       # 2. list products
+    ghost-layer x402 quote --product routing.telemetry \\
+      --wallet $WALLET --compact                             # 3. get quote
+    # 4. Pay on XRPL: send RLUSD to pay_to with memo_hex as MemoData
+    ghost-layer x402 dispense routing.telemetry --compact    # 5. dispense
+    ghost-layer agent $WALLET --compact                      # 6. check loyalty tier
+    ```
 
-`resolve` lets any AI agent look up an XRPL wallet address by Farcaster username without asking the user for their wallet — enabling fully autonomous RLUSD tipping:
+    ## Related Tools
 
-```bash
-WALLET=$(tipmaster resolve dwr --compact | jq -r '.wallet_address')
-# then pay via ghost-layer or directly on XRPL
-```
+    - `squeezeos-pp-cli` — market intelligence powered by Ghost Layer
+    - `tipmaster-pp-cli` — Farcaster tip bot on Ghost Layer rails
+    """),
+  "tipmaster": textwrap.dedent("""\
+    # TipMaster CLI Skill
 
-## Source
+    Use `tipmaster-pp-cli` to resolve Farcaster usernames and browse the tip leaderboard.
 
-API: `https://tipmaster.onrender.com/api/status`
-EOF
+    ## Key Patterns
 
-cat > library/social-and-messaging/tipmaster/SKILL.md << 'EOF'
-# TipMaster CLI Skill
+    ```bash
+    # Resolve username to XRPL wallet
+    tipmaster resolve <username> --compact | jq -r '.wallet_address'
 
-Use `tipmaster-pp-cli` to resolve Farcaster usernames and interact with the RLUSD tip bot.
+    # Autonomous tip flow
+    WALLET=$(tipmaster resolve dwr --compact | jq -r '.wallet_address')
+    ghost-layer bridge --chain XRPL --recipient "$WALLET" --amount 1000000
 
-## Key Patterns
+    # Weekly leaderboard
+    tipmaster leaderboard --compact | jq '.top_tippers[:3]'
+    ```
 
-```bash
-# Resolve a Farcaster username to XRPL wallet
-tipmaster resolve <username> --compact | jq -r '.wallet_address'
+    ## Related Tools
 
-# Full autonomous tip flow (combine with ghost-layer)
-WALLET=$(tipmaster resolve dwr --compact | jq -r '.wallet_address')
-ghost-layer bridge --chain XRPL --recipient "$WALLET" --amount 1000000
+    - `ghost-layer-pp-cli` — execute XRPL payment after resolving wallet
+    - `squeezeos-pp-cli` — market signals to decide who/when to tip
+    """),
+}
 
-# Weekly leaderboard
-tipmaster leaderboard --compact | jq '.top_tippers[:3]'
-```
-
-## Related Tools
-
-- `ghost-layer-pp-cli` — execute the actual XRPL payment after resolving
-- `squeezeos-pp-cli` — market signals to decide who/when to tip
-EOF
-
-# MIT LICENSE for all three
-LICENSE_TEXT="MIT License
+mit_license = """\
+MIT License
 
 Copyright (c) 2026 Timothy Walton / Script Master Labs
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the \"Software\"), to deal
+of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights
 to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 copies of the Software, and to permit persons to whom the Software is
@@ -255,162 +290,168 @@ furnished to do so, subject to the following conditions:
 The above copyright notice and this permission notice shall be included in all
 copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE."
+SOFTWARE.
+"""
 
-echo "$LICENSE_TEXT" > library/developer-tools/squeezeos/LICENSE
-echo "$LICENSE_TEXT" > library/payments/ghost-layer/LICENSE
-echo "$LICENSE_TEXT" > library/social-and-messaging/tipmaster/LICENSE
+with open(os.path.join(dst, "README.md"), "w") as f:
+    f.write(readme_map[slug])
 
-# ── 5. Patch registry.json ────────────────────────────────────────────────────
-echo "▶ Patching registry.json …"
+with open(os.path.join(dst, "SKILL.md"), "w") as f:
+    f.write(skill_map[slug])
 
-python3 - << 'PYEOF'
-import json, sys
+with open(os.path.join(dst, "LICENSE"), "w") as f:
+    f.write(mit_license)
 
-with open("registry.json") as f:
-    reg = json.load(f)
-
-new_entries = [
-    {
-        "name": "squeezeos",
-        "category": "developer-tools",
-        "api": "SqueezeOS",
-        "description": "Institutional-grade AI trading intelligence — squeeze scanner, options flow, AI council verdicts, signal marketplace, futures market, and conditional settlement contracts. Pay-per-call with RLUSD on XRPL via 402Proof; free tier available.",
-        "search_terms": [
-            "squeezeos", "SqueezeOS", "squeezeos-pp-cli",
-            "market intelligence", "squeeze scanner", "options flow",
-            "AI trading", "RLUSD", "XRPL", "institutional trading",
-            "council verdict", "signal marketplace", "futures market",
-            "x402 payments", "Script Master Labs"
-        ],
-        "path": "library/developer-tools/squeezeos",
-        "printer": "timwal78",
-        "printer_name": "Timothy Walton",
-        "mcp": {
-            "binary": "squeezeos-pp-mcp",
-            "transports": ["stdio"],
-            "tool_count": 23,
-            "public_tool_count": 8,
-            "auth_type": "api_key",
-            "env_vars": ["SQUEEZEOS_TOKEN", "SQUEEZEOS_BASE_URL"],
-            "mcp_ready": "full",
-            "spec_format": "openapi3"
-        }
-    },
-    {
-        "name": "ghost-layer",
-        "category": "payments",
-        "api": "Ghost Layer",
-        "description": "Proprietary dual-chain XRPL/Base toll gateway. Purchase x402 products, execute cross-chain settlements, query agent loyalty tiers and Passport levels, and inspect the 54-block execution matrix.",
-        "search_terms": [
-            "ghost-layer", "Ghost Layer", "ghost-layer-pp-cli",
-            "XRPL", "Base chain", "cross-chain settlement", "x402",
-            "toll gateway", "RLUSD payments", "agent passport",
-            "URIToken", "Script Master Labs", "xrpl bridge"
-        ],
-        "path": "library/payments/ghost-layer",
-        "printer": "timwal78",
-        "printer_name": "Timothy Walton",
-        "mcp": {
-            "binary": "ghost-layer-pp-mcp",
-            "transports": ["stdio"],
-            "tool_count": 8,
-            "public_tool_count": 4,
-            "auth_type": "none",
-            "env_vars": ["GHOST_LAYER_WALLET", "GHOST_LAYER_BASE_URL"],
-            "mcp_ready": "full",
-            "spec_format": "openapi3"
-        }
-    },
-    {
-        "name": "tipmaster",
-        "category": "social-and-messaging",
-        "api": "TipMaster",
-        "description": "Zero-custody Farcaster RLUSD tip bot. Resolve Farcaster usernames to XRPL wallet addresses, browse weekly and all-time tipping leaderboards, and look up users by FID — enabling fully autonomous agent tipping flows.",
-        "search_terms": [
-            "tipmaster", "TipMaster", "tipmaster-pp-cli",
-            "Farcaster", "RLUSD", "XRPL", "tip bot",
-            "wallet resolver", "Farcaster FID", "leaderboard",
-            "autonomous tipping", "Script Master Labs", "social tipping"
-        ],
-        "path": "library/social-and-messaging/tipmaster",
-        "printer": "timwal78",
-        "printer_name": "Timothy Walton",
-        "mcp": {
-            "binary": "tipmaster-pp-mcp",
-            "transports": ["stdio"],
-            "tool_count": 5,
-            "public_tool_count": 5,
-            "auth_type": "none",
-            "env_vars": ["TIPMASTER_BASE_URL"],
-            "mcp_ready": "full",
-            "spec_format": "openapi3"
-        }
-    }
-]
-
-# Insert alphabetically by name
-entries = reg["entries"]
-for entry in new_entries:
-    # Remove if already exists
-    entries = [e for e in entries if e["name"] != entry["name"]]
-    # Find insert position
-    pos = next((i for i, e in enumerate(entries) if e["name"] > entry["name"]), len(entries))
-    entries.insert(pos, entry)
-
-reg["entries"] = entries
-
-with open("registry.json", "w") as f:
-    json.dump(reg, f, indent=2)
-    f.write("\n")
-
-print(f"  ✓ registry.json updated — {len(reg['entries'])} total entries")
+print(f"  wrote README.md, SKILL.md, LICENSE")
 PYEOF
 
-# ── 6. Commit and push ────────────────────────────────────────────────────────
-echo "▶ Committing …"
-git add -A
-GIT_CONFIG_NOSYSTEM=1 \
-GIT_AUTHOR_NAME="Timwal78" \
-GIT_AUTHOR_EMAIL="timothy.walton45@gmail.com" \
-GIT_COMMITTER_NAME="Timwal78" \
-GIT_COMMITTER_EMAIL="timothy.walton45@gmail.com" \
-  git -c commit.gpgsign=false commit -q -m \
-  "feat: add squeezeos, ghost-layer, tipmaster CLIs from Script Master Labs
+  echo "▶ Committing $BINARY …"
+  git add -A
+  GIT_CONFIG_NOSYSTEM=1 \
+  GIT_AUTHOR_NAME="Timwal78" \
+  GIT_AUTHOR_EMAIL="timothy.walton45@gmail.com" \
+  GIT_COMMITTER_NAME="Timwal78" \
+  GIT_COMMITTER_EMAIL="timothy.walton45@gmail.com" \
+    git -c commit.gpgsign=false commit -q -m \
+    "feat: add $BINARY ($CAT/$SLUG)
 
-Three CLI Printing Press compatible Go/Cobra CLIs for the SML product stack:
+CLI Printing Press CLI for the $BINARY API by Script Master Labs.
+Source: https://github.com/Timwal78/squeezeos (cli/$SRC/)
+Binary: $BINARY
+Module: $NEW_MOD"
 
-- developer-tools/squeezeos: institutional AI market intelligence, pay-per-call
-  via 402Proof RLUSD payments on XRPL (23 MCP tools)
-- payments/ghost-layer: dual-chain XRPL/Base toll gateway, x402 product catalog
-  and cross-chain settlement (8 MCP tools)
-- social-and-messaging/tipmaster: Farcaster RLUSD tip bot, username→wallet
-  resolver enabling autonomous agent tipping flows (5 MCP tools)
+  echo "▶ Pushing $BRANCH …"
+  git push -q "https://$GH_TOKEN@github.com/$FORK.git" "$BRANCH" --force
 
-All three pass go build ./... and go vet ./..."
+  echo "▶ Opening PR for $BINARY …"
+  PR=$(curl -s -X POST "${AUTH[@]}" \
+    "$API/repos/$UPSTREAM/pulls" \
+    -d "{
+      \"title\": \"$PR_TITLE\",
+      \"head\": \"$OWNER:$BRANCH\",
+      \"base\": \"main\",
+      \"body\": $(python3 -c "import json,sys; print(json.dumps(sys.argv[1]))" "$PR_BODY")
+    }")
 
-echo "▶ Pushing branch …"
-git push -q "https://$GH_TOKEN@github.com/$FORK.git" "$BRANCH"
+  # If PR already exists, update it
+  if echo "$PR" | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if 'html_url' in d else 1)" 2>/dev/null; then
+    PR_URL=$(echo "$PR" | python3 -c "import json,sys; print(json.load(sys.stdin)['html_url'])")
+    echo "  ✓ PR: $PR_URL"
+  else
+    ERR=$(echo "$PR" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('errors','already exists or other error'))" 2>/dev/null || echo "check response")
+    echo "  ↩ PR already exists or error: $ERR"
+  fi
+}
 
-# ── 7. Open PR ────────────────────────────────────────────────────────────────
-echo "▶ Opening PR …"
-PR=$(curl -s -X POST "${AUTH[@]}" \
-  "$API/repos/$UPSTREAM/pulls" \
-  -d "{
-    \"title\": \"feat: add squeezeos, ghost-layer, tipmaster CLIs (Script Master Labs)\",
-    \"head\": \"$OWNER:$BRANCH\",
-    \"base\": \"main\",
-    \"body\": \"## Summary\\n\\nThree CLI Printing Press compatible Go/Cobra CLIs for the [Script Master Labs](https://www.scriptmasterlabs.com) product stack.\\n\\n### squeezeos-pp-cli — \`library/developer-tools/squeezeos\`\\n\\nInstitutional-grade AI trading intelligence API. Squeeze scanner, options flow, AI council verdicts, signal marketplace, futures market, conditional settlement contracts. Pay-per-call with RLUSD on XRPL via [402Proof](https://four02proof.onrender.com) — no API keys, no subscriptions. Free tier available.\\n\\n- 23 MCP tools, \`auth_type: api_key\` (x402 JWT from 402Proof)\\n- Source: https://github.com/Timwal78/squeezeos-pp-cli\\n- API: https://squeezeos-api.onrender.com/.well-known/openapi.json\\n\\n### ghost-layer-pp-cli — \`library/payments/ghost-layer\`\\n\\nProprietary dual-chain XRPL/Base toll gateway. Purchase x402 products, execute cross-chain settlements, query agent loyalty tiers and Passport levels, inspect the 54-block execution matrix.\\n\\n- 8 MCP tools, \`auth_type: none\` (read endpoints public, bridge needs XRPL sig)\\n- Source: https://github.com/Timwal78/ghost-layer-pp-cli\\n- API: https://ghost-layer.onrender.com/.well-known/openapi.json\\n\\n### tipmaster-pp-cli — \`library/social-and-messaging/tipmaster\`\\n\\nZero-custody Farcaster RLUSD tip bot. Resolve Farcaster usernames to XRPL wallet addresses — the primary use case for autonomous agent tipping flows.\\n\\n- 5 MCP tools, \`auth_type: none\` (all public)\\n- Source: https://github.com/Timwal78/tipmaster-pp-cli\\n- API: https://tipmaster.onrender.com/api/status\\n\\n## Test plan\\n\\n- [ ] \`cd library/developer-tools/squeezeos && go build ./...\`\\n- [ ] \`cd library/payments/ghost-layer && go build ./...\`\\n- [ ] \`cd library/social-and-messaging/tipmaster && go build ./...\`\\n- [ ] Each binary responds to \`--help\` and \`--version\`\\n- [ ] registry.json entries are alphabetically inserted\\n\"
-  }")
+# ── 4. Submit each CLI separately ─────────────────────────────────────────────
 
-PR_URL=$(echo "$PR" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('html_url','(check response)'))")
+submit_cli \
+  "squeezeos" \
+  "developer-tools" \
+  "squeezeos" \
+  "squeezeos-pp-cli" \
+  "github.com/timwal78/squeezeos-pp-cli" \
+  "feat: add squeezeos-pp-cli (developer-tools)" \
+  "## squeezeos-pp-cli
+
+CLI Printing Press CLI for the [SqueezeOS](https://squeezeos-api.onrender.com) institutional AI market intelligence API by Script Master Labs.
+
+**Category:** developer-tools
+**Binary:** squeezeos-pp-cli
+**Base URL:** https://squeezeos-api.onrender.com
+**Auth:** Bearer token via SQUEEZEOS_TOKEN (x402 RLUSD payment via 402Proof)
+
+### Commands
+
+| Command | Cost | Description |
+|---------|------|-------------|
+| demo | Free | IWM AI council verdict |
+| preview \<symbol\> | Free | Bias + regime preview |
+| history [\<symbol\>] | Free | Signal history ring buffer |
+| status | Free | System health |
+| marketplace browse/list/read | Free/0.02 RLUSD | Peer signal marketplace |
+| futures browse/create/leaderboard/wallet | Free | Prediction market |
+| settlement browse/get/create/wallet | Free | Conditional escrow |
+| council \<symbol\> | 0.10 RLUSD | Multi-engine AI verdict |
+| scan | 0.05 RLUSD | Full squeeze scanner |
+| options | 0.05 RLUSD | Institutional options flow |
+| iwm | 0.03 RLUSD | IWM 0DTE scorer |
+
+### Build
+
+go build ./... and go vet ./... pass. All RunE handlers return errors — no os.Exit in command layer."
+
+submit_cli \
+  "ghost-layer" \
+  "payments" \
+  "ghost-layer" \
+  "ghost-layer-pp-cli" \
+  "github.com/timwal78/ghost-layer-pp-cli" \
+  "feat: add ghost-layer-pp-cli (payments)" \
+  "## ghost-layer-pp-cli
+
+CLI Printing Press CLI for [Ghost Layer](https://ghost-layer.onrender.com) — proprietary dual-chain XRPL/Base toll gateway by Script Master Labs.
+
+**Category:** payments
+**Binary:** ghost-layer-pp-cli
+**Base URL:** https://ghost-layer.onrender.com
+**Auth:** none (public catalog/status; bridge requires XRPL signature in request body)
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| bridge --chain --amount --recipient | XRPL RLUSD or Base USDC cross-chain settlement |
+| x402 catalog | List all x402 products |
+| x402 quote --product --wallet | Get payment quote |
+| x402 dispense \<product_id\> | Dispense product after payment |
+| agent \<wallet\> | Agent stats, loyalty tier (Bronze→Diamond), Passport |
+| cube state | 54-block execution matrix snapshot |
+| status | Ghost Layer health check |
+
+### Build
+
+go build ./... and go vet ./... pass. Optional signer/signature fields are omitted from the bridge request body when not provided."
+
+submit_cli \
+  "tipmaster" \
+  "social-and-messaging" \
+  "tipmaster" \
+  "tipmaster-pp-cli" \
+  "github.com/timwal78/tipmaster-pp-cli" \
+  "feat: add tipmaster-pp-cli (social-and-messaging)" \
+  "## tipmaster-pp-cli
+
+CLI Printing Press CLI for [TipMaster](https://tipmaster.onrender.com) — zero-custody Farcaster RLUSD tip bot by Script Master Labs.
+
+**Category:** social-and-messaging
+**Binary:** tipmaster-pp-cli
+**Base URL:** https://tipmaster.onrender.com
+**Auth:** none (all endpoints public)
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| resolve \<farcaster-username\> | Resolve Farcaster username → XRPL wallet address |
+| leaderboard --period --limit | Top tippers by RLUSD volume (week or alltime) |
+| user \<fid\> | Look up Farcaster user by FID |
+| status | TipMaster service health and feature flags |
+
+### Key Agent Use Case
+
+resolve enables fully autonomous agent tipping: look up any Farcaster user's XRPL wallet address without asking the user, then pay directly via ghost-layer-pp-cli.
+
+### Build
+
+go build ./... and go vet ./... pass."
+
 echo ""
-echo "✓ PR opened: $PR_URL"
-echo ""
+echo "✓ Done — three PRs submitted to $UPSTREAM"
 echo "IMPORTANT: Revoke your token at https://github.com/settings/tokens"
