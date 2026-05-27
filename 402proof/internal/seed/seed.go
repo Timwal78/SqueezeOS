@@ -32,6 +32,10 @@ const (
 
 	// Cube Terminal — Ghost Layer dNFT mint
 	CubeMintID = "c8b3e2f1-5a4d-4c3f-aa24-de6e3bc12b5a"
+
+	// Real-World Data Oracle — regulatory event feeds (SqueezeOS)
+	OracleReadID   = "e7f8a9b0-c001-4d2e-bb35-ef7f4cd23c6a"  // 0.02 RLUSD — latest + query
+	OracleStreamID = "f8a9b0c1-d002-4e3f-cc46-f0845de34d7b"  // 0.05 RLUSD — SSE stream
 )
 
 type EndpointSeed struct {
@@ -90,6 +94,23 @@ var GhostLayerEndpoints = []EndpointSeed{
 		Price:       "0.05",
 		Asset:       "RLUSD",
 		Description: "Cube Terminal dNFT mint — commit Rubik's Cube state as Xahau URIToken, permanent on-chain proof",
+	},
+}
+
+var OracleEndpoints = []EndpointSeed{
+	{
+		ID:          OracleReadID,
+		Path:        "/api/oracle/latest",
+		Price:       "0.02",
+		Asset:       "RLUSD",
+		Description: "Real-World Data Oracle — latest events from SEC 8-K, SEC S-1 IPO, FDA drug approvals, USPTO patents. Sub-second vs Bloomberg's 5-10 min lag.",
+	},
+	{
+		ID:          OracleStreamID,
+		Path:        "/api/oracle/stream",
+		Price:       "0.05",
+		Asset:       "RLUSD",
+		Description: "Real-World Data Oracle — real-time SSE stream of all regulatory events (SEC/FDA/USPTO). One-time payment per connection.",
 	},
 }
 
@@ -169,8 +190,8 @@ func Run(db *store.Memory, gatewayAddr string) {
 		log.Printf("[SEED] Merchant: %s id=%s", merchantName, MerchantID)
 	}
 
-	// Seed all endpoints: SML market + Bureau + Relay bulk + Marketplace + Ghost Layer
-	all := append(append(append(append(SMLEndpoints, BureauEndpoints...), RelayEndpoints...), MarketplaceEndpoints...), GhostLayerEndpoints...)
+	// Seed all endpoints: SML market + Bureau + Relay bulk + Marketplace + Ghost Layer + Oracle
+	all := append(append(append(append(append(SMLEndpoints, BureauEndpoints...), RelayEndpoints...), MarketplaceEndpoints...), GhostLayerEndpoints...), OracleEndpoints...)
 	for _, e := range all {
 		if _, ok := db.GetEndpoint(e.ID); !ok {
 			ep := &models.Endpoint{
@@ -188,7 +209,7 @@ func Run(db *store.Memory, gatewayAddr string) {
 		}
 	}
 
-	log.Printf("[SEED] Script Master Labs ready — 4 market + 3 bureau + 4 relay + 1 marketplace + 1 ghost-layer endpoints active")
+	log.Printf("[SEED] Script Master Labs ready — 4 market + 3 bureau + 4 relay + 1 marketplace + 1 ghost-layer + 2 oracle endpoints active")
 }
 
 func env(key, fallback string) string {
