@@ -17,15 +17,15 @@ var settlementBrowseCmd = &cobra.Command{
 	Short: "Browse open settlement contracts",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if dryRun {
-			fmt.Println("GET /api/settlement")
+			fmt.Fprintln(cmd.OutOrStdout(), "GET /api/settlement")
 			return nil
 		}
 		c := internal.NewClient()
 		res, err := c.Get("/api/settlement")
 		if err != nil {
-			internal.Fatalf("%v", err)
+			return err
 		}
-		internal.Print(res, compact)
+		return internal.Print(cmd.OutOrStdout(), res, compact)
 		return nil
 	},
 }
@@ -37,15 +37,15 @@ var settlementGetCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path := "/api/settlement/" + args[0]
 		if dryRun {
-			fmt.Printf("GET %s\n", path)
+			fmt.Fprintf(cmd.OutOrStdout(), "GET %s\n", path)
 			return nil
 		}
 		c := internal.NewClient()
 		res, err := c.Get(path)
 		if err != nil {
-			internal.Fatalf("%v", err)
+			return err
 		}
-		internal.Print(res, compact)
+		return internal.Print(cmd.OutOrStdout(), res, compact)
 		return nil
 	},
 }
@@ -57,15 +57,15 @@ var settlementWalletCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path := "/api/settlement/wallet/" + args[0]
 		if dryRun {
-			fmt.Printf("GET %s\n", path)
+			fmt.Fprintf(cmd.OutOrStdout(), "GET %s\n", path)
 			return nil
 		}
 		c := internal.NewClient()
 		res, err := c.Get(path)
 		if err != nil {
-			internal.Fatalf("%v", err)
+			return err
 		}
-		internal.Print(res, compact)
+		return internal.Print(cmd.OutOrStdout(), res, compact)
 		return nil
 	},
 }
@@ -85,7 +85,7 @@ var settlementCreateCmd = &cobra.Command{
 	Example: `  squeezeos settlement create --symbol IWM --condition confidence_above --threshold 80 --buyer rXXX --seller rYYY --amount 1.0`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if sSymbol == "" || sCondition == "" || sBuyer == "" || sSeller == "" {
-			internal.Fatalf("--symbol, --condition, --buyer, and --seller are required")
+			return fmt.Errorf("--symbol, --condition, --buyer, and --seller are required")
 		}
 		body := map[string]any{
 			"symbol":        sSymbol,
@@ -96,15 +96,15 @@ var settlementCreateCmd = &cobra.Command{
 			"amount_rlusd":  sAmount,
 		}
 		if dryRun {
-			fmt.Printf("POST /api/settlement/create %+v\n", body)
+			fmt.Fprintf(cmd.OutOrStdout(), "POST /api/settlement/create %+v\n", body)
 			return nil
 		}
 		c := internal.NewClient()
 		res, err := c.Post("/api/settlement/create", body)
 		if err != nil {
-			internal.Fatalf("%v", err)
+			return err
 		}
-		internal.Print(res, compact)
+		return internal.Print(cmd.OutOrStdout(), res, compact)
 		return nil
 	},
 }
