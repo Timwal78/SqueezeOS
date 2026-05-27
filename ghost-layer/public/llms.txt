@@ -82,17 +82,60 @@ POST https://ghost-layer.onrender.com/v1/bridge/execute
 }
 ```
 
-## 2. Premium Product: Native HTTP X402 Vending
+## 2. Decision Notary — Tamper-Proof AI Decision Receipts
+
+Mint any AI decision as a URIToken on Xahau. Immutable. Independently verifiable.
+Use for regulatory audit trails, enterprise AI governance, legal defensibility.
+
+Three tiers — all loyalty-discounted automatically:
+
+| Product ID                      | Price     | Grade     | What you get |
+|---------------------------------|-----------|-----------|--------------|
+| decision.notarize               | 0.001 RLUSD | STANDARD  | URIToken + JSON memo on Xahau |
+| decision.notarize.certified     | 0.010 RLUSD | CERTIFIED | Above + Ed25519 certificate signed by Ghost Layer |
+| decision.notarize.sovereign     | 0.050 RLUSD | SOVEREIGN | Certified + SOVEREIGN grade in on-chain memo |
+
+Loyalty discounts: BRONZE 0% · SILVER 5% · GOLD 10% · PLATINUM 20% · DIAMOND 30%
+
+### Flow
+```
+1. POST /v1/x402/quote  { "product_id": "decision.notarize", "agent_wallet": "rXXX" }
+   → { price_drops, token, invoice_id, tier_discount_pct }
+
+2. Send RLUSD to pay_to address on XRPL with memo_required as MemoData
+
+3. POST /v1/notarize
+   Header: X-Payment-Token: <token>
+   Body: {
+     "payload":      { ...your AI decision... },
+     "model":        "claude-sonnet-4-6",
+     "agent_wallet": "rXXX",
+     "endpoint":     "/api/council"
+   }
+   → {
+     "status":        "NOTARIZED",
+     "grade":         "STANDARD",
+     "decision_hash": "a3f8c2...",
+     "xahau_tx":      "E9D4A1...",
+     "verify_url":    "https://xahau.network/tx/E9D4A1...",
+     "timestamp":     "2026-05-27T16:22:01Z"
+   }
+```
+
+For CERTIFIED/SOVEREIGN, response also includes a `certificate` object with
+a Ghost Layer Ed25519 signature verifiable via `GET /v1/x402/attestation/pubkey`.
+
+## 3. Premium Product: Native HTTP X402 Vending
 
 Premium endpoints require an X402 payment token.
 
 1. **Check Catalog**: `GET /v1/x402/catalog`
-2. **Get Quote**: 
+2. **Get Quote**:
    `POST /v1/x402/quote`
    `{ "product_id": "routing.telemetry", "agent_wallet": "rYourWallet..." }`
    → Returns `invoice_id`, `expires_at`, `amount` (discounted by your tier), and `pay_to`.
 3. **Settle Invoice**: Send RLUSD to the `pay_to` address on XRPL.
-4. **Dispense Product**: 
+4. **Dispense Product**:
    Once paid, you receive an HMAC-signed JWT token.
    `GET /v1/x402/dispense/routing.telemetry`
    Header: `X-Payment-Token: <jwt>`

@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "name": "Ghost Layer — Dual-Chain Toll Gateway + Execution Matrix",
-  "description": "Neutral bridge between XRPL RLUSD and Base/EVM USDC (EIP-3009) + 54-block on-chain Execution Matrix. Six programmable routing faces (LIQUIDITY, PRIVACY, SPEED, POOL, HOOKS, BASE) with weighted sub-parameter grids. Canonical state hash minted as URIToken on Xahau via URITokenMint (tx type 45) with HookParameters encoding each face center. Server validates all face equations before submission. XAHAU_MINT_CONFIRMED SSE event broadcast on success. Zero custody.",
+  "description": "Neutral bridge between XRPL RLUSD and Base/EVM USDC (EIP-3009) + AI Decision Notary + 54-block on-chain Execution Matrix. Decision Notary mints any AI decision as an immutable URIToken on Xahau — three tiers: STANDARD (0.001 RLUSD), CERTIFIED (0.01 RLUSD, Ed25519 certificate), SOVEREIGN (0.05 RLUSD). Six programmable routing faces (LIQUIDITY, PRIVACY, SPEED, POOL, HOOKS, BASE) with weighted sub-parameter grids. Canonical state hash minted as URIToken on Xahau. Zero custody.",
   "url": "https://ghost-layer.onrender.com",
   "homepage": "https://www.scriptmasterlabs.com",
   "payment_required": true,
@@ -18,9 +18,11 @@
     {"name": "ghost_layer_bridge", "cost": "variable", "description": "Execute cross-chain bridge transaction synchronously. POST /v1/bridge/execute"},
     {"name": "ghost_agent_loyalty", "cost": "free", "description": "Check loyalty tier and effective fee discount. GET /api/agent/{addr}/stats"},
     {"name": "ghost_x402_dispense", "cost": "variable", "description": "Fetch premium products from X402 catalog. GET /v1/x402/dispense/{pid}"},
+    {"name": "decision_notarize", "cost": "0.001–0.050 RLUSD", "description": "Mint any AI decision as immutable URIToken on Xahau. STANDARD/CERTIFIED/SOVEREIGN tiers. Loyalty discounts auto-applied. POST /v1/notarize"},
+    {"name": "x402_attestation_pubkey", "cost": "free", "description": "Get Ed25519 pubkey to verify CERTIFIED/SOVEREIGN certificates. GET /v1/x402/attestation/pubkey"},
     {"name": "cube_state_mint", "cost": "free", "description": "Mint 54-block Execution Matrix state as URIToken on Xahau. POST /api/cube/state"}
   ],
-  "sse_events": ["CONNECTED", "BRIDGE_SETTLED", "X402_DISPENSED", "XAHAU_MINT_CONFIRMED"],
+  "sse_events": ["CONNECTED", "BRIDGE_SETTLED", "X402_DISPENSED", "XAHAU_MINT_CONFIRMED", "DECISION_NOTARIZED"],
   "networks": {
     "xrpl": {"rpc": "https://xrplcluster.com", "currency": "RLUSD", "issuer": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De"},
     "base": {"currency": "USDC", "contract": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"},

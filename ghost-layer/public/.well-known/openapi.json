@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Ghost Layer API",
-    "version": "2.2.0",
-    "description": "Dual-chain transparent toll gateway + on-chain Execution Matrix operated by Script Master Labs. Bridge RLUSD (XRPL) and USDC (Base/EVM) synchronously with unified EIP-3009 and signature support. Features Native HTTP X402 vending machine and sovereign WebSocket telemetry.",
+    "version": "2.3.0",
+    "description": "Dual-chain transparent toll gateway + AI Decision Notary + on-chain Execution Matrix operated by Script Master Labs. Bridge RLUSD (XRPL) and USDC (Base/EVM) synchronously. Mint any AI decision as an immutable URIToken on Xahau via /v1/notarize. Features native HTTP X402 vending machine and sovereign WebSocket telemetry.",
     "contact": {
       "name": "Script Master Labs",
       "url": "https://www.scriptmasterlabs.com",
@@ -137,6 +137,61 @@
         }
       }
     },
+    "/v1/notarize": {
+      "post": {
+        "operationId": "notarizeDecision",
+        "summary": "Mint an AI decision as an immutable URIToken on Xahau",
+        "description": "Pay via X402 using product_id 'decision.notarize' (0.001 RLUSD, STANDARD), 'decision.notarize.certified' (0.01 RLUSD, CERTIFIED + Ed25519 certificate), or 'decision.notarize.sovereign' (0.05 RLUSD, SOVEREIGN). Loyalty discounts applied automatically at quote time. Returns decision_hash, xahau_tx, verify_url, and for CERTIFIED/SOVEREIGN a signed DecisionCertificate object.",
+        "tags": ["Decision Notary"],
+        "security": [{"X-Payment-Token": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/NotarizeRequest"}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Decision notarized — URIToken minted on Xahau",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/NotarizeResponse"}
+              }
+            }
+          },
+          "402": {"description": "Payment required — returns X402 invoice challenge"},
+          "400": {"description": "Invalid payload"},
+          "401": {"description": "Payment token invalid or expired"}
+        }
+      }
+    },
+    "/v1/x402/attestation/pubkey": {
+      "get": {
+        "operationId": "getAttestationPubkey",
+        "summary": "Retrieve Ghost Layer's Ed25519 attestation public key",
+        "description": "Use this key to independently verify the Ed25519 signature on any CERTIFIED or SOVEREIGN DecisionCertificate.",
+        "tags": ["Decision Notary"],
+        "responses": {
+          "200": {
+            "description": "Ed25519 public key in hex",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "public_key": {"type": "string", "description": "Hex-encoded Ed25519 public key"},
+                    "algorithm":  {"type": "string", "example": "Ed25519"},
+                    "issuer":     {"type": "string", "example": "ghost-layer.scriptmasterlabs.com"}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/ws/metrics": {
       "get": {
         "operationId": "streamMetrics",
@@ -221,6 +276,49 @@
           "treasury_routing": { "type": "string" },
           "agent_tier": { "type": "string" },
           "effective_bps": { "type": "integer" }
+        }
+      },
+      "NotarizeRequest": {
+        "type": "object",
+        "required": ["payload", "agent_wallet"],
+        "properties": {
+          "payload":      {"type": "object",  "description": "The AI decision object to notarize (any JSON)"},
+          "model":        {"type": "string",  "description": "Model identifier (e.g., claude-sonnet-4-6)"},
+          "agent_wallet": {"type": "string",  "description": "Your XRPL wallet address — used for loyalty tier discount"},
+          "endpoint":     {"type": "string",  "description": "API endpoint that produced this decision"}
+        }
+      },
+      "NotarizeResponse": {
+        "type": "object",
+        "properties": {
+          "status":        {"type": "string", "example": "NOTARIZED"},
+          "grade":         {"type": "string", "enum": ["STANDARD", "CERTIFIED", "SOVEREIGN"]},
+          "decision_hash": {"type": "string", "description": "SHA-512 hex digest (first 32 bytes) of canonical memo JSON"},
+          "xahau_tx":      {"type": "string", "description": "Xahau transaction hash"},
+          "verify_url":    {"type": "string", "description": "https://xahau.network/tx/<hash>"},
+          "timestamp":     {"type": "string", "format": "date-time"},
+          "certificate":   {
+            "description": "Only present for CERTIFIED and SOVEREIGN grades",
+            "$ref": "#/components/schemas/DecisionCertificate"
+          }
+        }
+      },
+      "DecisionCertificate": {
+        "type": "object",
+        "description": "Ed25519-signed attestation receipt from Ghost Layer. Verify signature using GET /v1/x402/attestation/pubkey.",
+        "properties": {
+          "certificate_id": {"type": "string"},
+          "decision_hash":  {"type": "string"},
+          "xahau_tx":       {"type": "string"},
+          "agent_wallet":   {"type": "string"},
+          "model":          {"type": "string"},
+          "endpoint":       {"type": "string"},
+          "agent_tier":     {"type": "string"},
+          "grade":          {"type": "string", "enum": ["CERTIFIED", "SOVEREIGN"]},
+          "issued_at":      {"type": "integer", "description": "Unix timestamp"},
+          "issuer":         {"type": "string", "example": "ghost-layer.scriptmasterlabs.com"},
+          "signature_alg":  {"type": "string", "example": "Ed25519"},
+          "signature":      {"type": "string", "description": "Hex-encoded Ed25519 signature over canonical fields"}
         }
       },
       "AgentStats": {

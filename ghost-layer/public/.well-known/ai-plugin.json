@@ -2,8 +2,8 @@
   "schema_version": "v1",
   "name_for_human": "Ghost Layer Bridge",
   "name_for_model": "ghost_layer_bridge",
-  "description_for_human": "Dual-chain transparent toll gateway. Bridge RLUSD (XRPL) and USDC (Base/EVM) with gasless EIP-3009 authorization. Operated by Script Master Labs.",
-  "description_for_model": "Ghost Layer is the neutral bridge between XRPL native RLUSD payments and Base/EVM gasless USDC authorization (EIP-3009). Use this to settle cross-chain micropayments for AI agent transactions. All settlements generate tamper-evident compliance receipts and increment the Agent Passport loyalty score. Payment is mandatory for bridge operations via toll fee — anonymous requests are tarpitted. Premium endpoints require X402 payment.",
+  "description_for_human": "Dual-chain transparent toll gateway + AI Decision Notary. Bridge RLUSD (XRPL) and USDC (Base/EVM). Mint any AI decision as a tamper-proof URIToken on Xahau. Operated by Script Master Labs.",
+  "description_for_model": "Ghost Layer provides two core capabilities: (1) Cross-chain bridge between XRPL RLUSD and Base/EVM USDC (EIP-3009 gasless). All bridge settlements generate tamper-evident compliance receipts and increment Agent Passport loyalty score. (2) Decision Notary — mint any AI decision as an immutable URIToken on Xahau via POST /v1/notarize. Three tiers: STANDARD (0.001 RLUSD, URIToken + JSON memo), CERTIFIED (0.01 RLUSD, adds Ed25519 certificate signed by Ghost Layer), SOVEREIGN (0.05 RLUSD, highest grade + on-chain memo). Loyalty discounts (BRONZE 0% → DIAMOND 30%) apply automatically. Payment via X402 protocol. Anonymous requests are tarpitted.",
   "auth": {
     "type": "none"
   },
