@@ -1,9 +1,19 @@
 {
   "schema_version": 2,
+  "cli_name": "tipmaster-pp-cli",
+  "api_name": "tipmaster",
   "name": "tipmaster",
   "api": "TipMaster API",
   "description": "Zero-custody RLUSD tip bot for Farcaster. Resolve Farcaster usernames to XRPL wallet addresses, browse the weekly tipping leaderboard, and query account status. The agent-native Web3 phonebook for the Farcaster social graph.",
-  "category": "social",
+  "category": "social-and-messaging",
+  "printing_press_version": "2.0.0",
+  "run_id": "20260527-000000",
+  "novel_features": [
+    "resolve <farcaster-username> — resolve a Farcaster username to their XRPL wallet address",
+    "leaderboard --period --limit — top tippers by RLUSD volume (week or alltime)",
+    "user <fid> — look up a Farcaster user by FID",
+    "status — TipMaster service health and feature flags"
+  ],
   "search_terms": ["Farcaster", "RLUSD", "XRPL", "tip bot", "crypto tipping", "zero custody", "P2P payments", "Xaman", "social", "Web3", "leaderboard", "wallet resolution"],
   "printer": "timwal78",
   "printer_name": "Script Master Labs",
