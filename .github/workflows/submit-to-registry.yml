@@ -1,0 +1,15 @@
+name: Submit CLIs to printing-press-library
+
+on:
+  workflow_dispatch:
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run registry submission script
+        env:
+          GH_TOKEN: ${{ secrets.CLI_PUSH_TOKEN }}
+        run: bash cli/submit-to-registry.sh
