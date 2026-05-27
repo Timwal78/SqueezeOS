@@ -4,6 +4,7 @@
         xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9
         http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
 
+  <!-- ── HOMEPAGE ───────────────────────────────────────────────────────── -->
   <url>
     <loc>https://www.scriptmasterlabs.com/</loc>
     <changefreq>daily</changefreq>
@@ -19,30 +20,12 @@
     <changefreq>daily</changefreq>
     <priority>0.95</priority>
   </url>
-  <url>
-    <loc>https://www.scriptmasterlabs.com/sml_harmonic_scanner.html</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://www.scriptmasterlabs.com/SML_Command_Center_ORACLE.html</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.85</priority>
-  </url>
-  <url>
-    <loc>https://www.scriptmasterlabs.com/credit_repair.html</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
-  </url>
+
+  <!-- ── AI / AGENT DISCOVERY ───────────────────────────────────────────── -->
   <url>
     <loc>https://www.scriptmasterlabs.com/llms.txt</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
-  </url>
-  <url>
-    <loc>https://www.scriptmasterlabs.com/.well-known/server.json</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.95</priority>
   </url>
   <url>
     <loc>https://www.scriptmasterlabs.com/.well-known/mcp.json</loc>
@@ -65,10 +48,118 @@
     <priority>0.85</priority>
   </url>
   <url>
+    <loc>https://www.scriptmasterlabs.com/.well-known/server.json</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
     <loc>https://www.scriptmasterlabs.com/openapi.json</loc>
     <changefreq>weekly</changefreq>
     <priority>0.85</priority>
   </url>
+
+  <!-- ── GHOST LAYER — Bridge + Notary + Credit ─────────────────────────── -->
+  <url>
+    <loc>https://ghost-layer.onrender.com/</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+  </url>
+  <url>
+    <loc>https://ghost-layer.onrender.com/llms.txt</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://ghost-layer.onrender.com/v1/x402/catalog</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://ghost-layer.onrender.com/v1/x402/attestation/pubkey</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://ghost-layer.onrender.com/v1/credit/listings</loc>
+    <changefreq>always</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://ghost-layer.onrender.com/mcp</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://ghost-layer.onrender.com/.well-known/mcp.json</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://ghost-layer.onrender.com/.well-known/openapi.json</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://ghost-layer.onrender.com/.well-known/agents.json</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+
+  <!-- ── SQUEEZEOS — Market Intelligence API ───────────────────────────── -->
+  <url>
+    <loc>https://squeezeos-api.onrender.com/api/status</loc>
+    <changefreq>always</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://squeezeos-api.onrender.com/api/demo</loc>
+    <changefreq>always</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://squeezeos-api.onrender.com/api/marketplace</loc>
+    <changefreq>always</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://squeezeos-api.onrender.com/api/hiring</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://squeezeos-api.onrender.com/llms.txt</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://squeezeos-api.onrender.com/mcp</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://squeezeos-api.onrender.com/.well-known/openapi.json</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://squeezeos-api.onrender.com/.well-known/mcp.json</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+
+  <!-- ── 402PROOF — Payment Firewall ──────────────────────────────────── -->
+  <url>
+    <loc>https://four02proof.onrender.com/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://four02proof.onrender.com/v1/verify</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- ── TIPMASTER ───────────────────────────────────────────────────── -->
   <url>
     <loc>https://tipmaster.onrender.com/api/resolve</loc>
     <changefreq>weekly</changefreq>
@@ -78,6 +169,30 @@
     <loc>https://tipmaster.onrender.com/api/leaderboard</loc>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
+  </url>
+
+  <!-- ── SIGNAL AUCTION LOOM ─────────────────────────────────────────── -->
+  <url>
+    <loc>https://signal-auction-loom.vercel.app/</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.85</priority>
+  </url>
+
+  <!-- ── TOOLS & INDICATORS ──────────────────────────────────────────── -->
+  <url>
+    <loc>https://www.scriptmasterlabs.com/sml_harmonic_scanner.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://www.scriptmasterlabs.com/SML_Command_Center_ORACLE.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://www.scriptmasterlabs.com/credit_repair.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
   </url>
 
 </urlset>

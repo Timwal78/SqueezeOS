@@ -4,9 +4,20 @@ Allow: /.well-known/
 Allow: /.well-known/mcp.json
 Allow: /.well-known/server.json
 Allow: /.well-known/agents.json
+Allow: /.well-known/openapi.json
+Allow: /.well-known/ai-plugin.json
 Allow: /mcp
 Allow: /llms.txt
 Allow: /sitemap.xml
+Allow: /v1/x402/catalog
+Allow: /v1/x402/attestation/pubkey
+Allow: /v1/notarize
+Allow: /v1/credit/listings
+Allow: /v1/credit/listing
+Allow: /v1/credit/quote
+Allow: /api/agent/
+Allow: /api/config
+Allow: /health
 
 # AI Crawlers — full access to discovery files
 User-agent: GPTBot
