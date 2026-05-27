@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/sha512"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -163,6 +164,16 @@ func init() {
 				"status":        "MINTED",
 				"xahau_tx_hash": mintHash,
 			})
+		},
+	})
+
+	x402Registry.Register(&x402.Product{
+		ID:        "decision.notarize",
+		Name:      "AI Decision Notary — Xahau URIToken",
+		BasePrice: 1000, // 0.001 RLUSD in drops
+		Dispatcher: func(args map[string]any) (json.RawMessage, error) {
+			// Logic handled in POST /v1/notarize; this entry exists for catalog + quote.
+			return nil, errors.New("ERR_USE_NOTARIZE_ENDPOINT")
 		},
 	})
 
@@ -772,6 +783,117 @@ func main() {
 			"public_key": hex.EncodeToString(pub),
 			"alg":        "ed25519",
 			"issuer":     "ghost-layer.onrender.com",
+		})
+	})
+
+	// ── DECISION NOTARY ───────────────────────────────────────────────────────
+	// POST /v1/notarize — mint any AI decision as a Xahau URIToken.
+	// Caller pays 0.001 RLUSD via X-Payment-Token (obtained from /v1/x402/quote).
+	// Returns an immutable receipt: decision hash + Xahau TX hash.
+	r.Post("/v1/notarize", func(w http.ResponseWriter, req *http.Request) {
+		token := req.Header.Get("X-Payment-Token")
+		if token == "" {
+			product, err := x402Registry.Lookup("decision.notarize")
+			if err != nil {
+				writeJSONErr(w, http.StatusNotFound, err.Error())
+				return
+			}
+			inv, err := x402.Issue("decision.notarize", "", "BRONZE", product.BasePrice, treasuryXRPL, os.Getenv("X402_TOKEN_SECRET"), nil)
+			if err != nil {
+				writeJSONErr(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			b, _ := json.Marshal(inv)
+			w.Header().Set("X-Payment-Required", string(b))
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusPaymentRequired)
+			_, _ = w.Write(b)
+			return
+		}
+
+		tok, err := x402.Verify(token, os.Getenv("X402_TOKEN_SECRET"))
+		if err != nil {
+			writeJSONErr(w, http.StatusUnauthorized, err.Error())
+			return
+		}
+		if tok.Pid != "decision.notarize" {
+			writeJSONErr(w, http.StatusUnauthorized, "ERR_PRODUCT_MISMATCH")
+			return
+		}
+		if !x402Nonces.Consume(tok.Iid, tok.Exp+60) {
+			writeJSONErr(w, http.StatusConflict, "ERR_REPLAY")
+			return
+		}
+
+		req.Body = http.MaxBytesReader(w, req.Body, 64*1024)
+		var body struct {
+			Payload     json.RawMessage `json:"payload"`
+			Model       string          `json:"model,omitempty"`
+			AgentWallet string          `json:"agent_wallet,omitempty"`
+			Endpoint    string          `json:"endpoint,omitempty"`
+		}
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			writeJSONErr(w, http.StatusBadRequest, "ERR_BAD_REQUEST")
+			return
+		}
+		if len(body.Payload) == 0 {
+			writeJSONErr(w, http.StatusBadRequest, "ERR_PAYLOAD_REQUIRED")
+			return
+		}
+
+		agentWallet := body.AgentWallet
+		if agentWallet == "" {
+			agentWallet = tok.Wlt
+		}
+
+		ts := time.Now().UTC()
+		memo := map[string]interface{}{
+			"payload":      body.Payload,
+			"model":        body.Model,
+			"agent_wallet": agentWallet,
+			"endpoint":     body.Endpoint,
+			"ts":           ts.Unix(),
+		}
+		memoBytes, _ := json.Marshal(memo)
+
+		// SHA-512 first 32 bytes — same construction as XRPL signing hash
+		raw := sha512.Sum512(memoBytes)
+		decisionHash := hex.EncodeToString(raw[:32])
+
+		if xahauClient == nil {
+			writeJSONErr(w, http.StatusServiceUnavailable, "ERR_XAHAU_NOT_CONFIGURED")
+			return
+		}
+
+		xahauTx, err := xahauClient.MintURIToken(decisionHash, nil, string(memoBytes))
+		if err != nil {
+			log.Printf("[NOTARY] Xahau mint failed: %v", err)
+			writeJSONErr(w, http.StatusInternalServerError, "ERR_MINT_FAILED")
+			return
+		}
+
+		log.Printf("[NOTARY] Notarized: hash=%s xahau_tx=%s agent=%s", decisionHash, xahauTx, agentWallet)
+
+		hub.broadcast("DECISION_NOTARIZED", map[string]interface{}{
+			"decision_hash": decisionHash,
+			"xahau_tx":      xahauTx,
+			"agent_wallet":  agentWallet,
+			"model":         body.Model,
+		})
+		metricsHub.BroadcastX402Dispensed("decision.notarize", agentWallet, tok.Tier)
+		x402Dispensed.Add(1)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":        "NOTARIZED",
+			"decision_hash": decisionHash,
+			"xahau_tx":      xahauTx,
+			"agent_wallet":  agentWallet,
+			"model":         body.Model,
+			"endpoint":      body.Endpoint,
+			"timestamp":     ts.Format(time.RFC3339),
+			"unix_ts":       ts.Unix(),
+			"verify_url":    "https://xahau.network/tx/" + xahauTx,
 		})
 	})
 
