@@ -164,6 +164,9 @@ Step 5: Cache token — reuse for 1 hour to minimize spend
 | GET /api/options | 0.05 RLUSD | `c951a374-2424-4064-ab80-35afe8053d29` |
 | GET /api/iwm | 0.03 RLUSD | `60f48ce0-6002-4385-9b60-03a0d2bbebab` |
 | POST /api/marketplace/read | 0.02 RLUSD | `d1a2b3c4-e001-4c3f-aa24-de6e3bc12b5a` |
+| GET /api/oracle/latest/{feed} | 0.02 RLUSD | `e7f8a9b0-c001-4d2e-bb35-ef7f4cd23c6a` |
+| POST /api/oracle/query | 0.02 RLUSD | `e7f8a9b0-c001-4d2e-bb35-ef7f4cd23c6a` |
+| GET /api/oracle/stream (SSE) | 0.05 RLUSD | `f8a9b0c1-d002-4e3f-cc46-f0845de34d7b` |
 
 ### Relay Bulk Endpoints (40% off — score ≥ 600 required)
 
@@ -258,6 +261,38 @@ GET /api/resolve/{username} — Resolve a Farcaster username to an XRPL wallet a
 GET /api/leaderboard        — Get the top 10 tipped users (Free)
 POST /api/register          — Webhook for new user registration
 ```
+
+---
+
+## Real-World Data Oracle — Regulatory Event Feeds
+
+Agent-priced, machine-readable event data that moves markets before Bloomberg.
+Agents pay 0.02 RLUSD per call via x402. Sub-second delivery, per-call pricing.
+
+### Feeds
+
+| Feed Key | Description | Poll Interval | Endpoint ID |
+|----------|-------------|---------------|-------------|
+| `sec_8k` | SEC Form 8-K material events (earnings, M&A, executive changes) | 60 s | `e7f8a9b0-c001-4d2e-bb35-ef7f4cd23c6a` |
+| `sec_s1` | SEC Form S-1/S-1A IPO filings | 5 min | `e7f8a9b0-c001-4d2e-bb35-ef7f4cd23c6a` |
+| `fda`    | FDA NDA/BLA drug approval events | 5 min | `e7f8a9b0-c001-4d2e-bb35-ef7f4cd23c6a` |
+| `patents`| USPTO patent grant notifications | 1 hr | `e7f8a9b0-c001-4d2e-bb35-ef7f4cd23c6a` |
+
+### Agent Flow
+
+1. `GET /api/oracle/feeds` — free, inspect current buffer counts and pricing
+2. `POST four02proof.onrender.com/v1/invoice` with endpoint_id `e7f8a9b0-c001-4d2e-bb35-ef7f4cd23c6a`
+3. Pay RLUSD on XRPL, POST `/v1/verify` → receive `access_token`
+4. `GET /api/oracle/latest/sec_8k?limit=20` with `X-Payment-Token: <token>` — latest 8-K events
+5. Or `POST /api/oracle/query` with `{"feeds":["fda"],"keyword":"approval","limit":50}`
+6. For real-time stream: pay endpoint_id `f8a9b0c1-d002-4e3f-cc46-f0845de34d7b` (0.05 RLUSD), then `GET /api/oracle/stream` (SSE)
+
+### MCP Tools
+
+| Tool | Description |
+|------|-------------|
+| `oracle_feeds` | Free — list feeds, buffer counts, pricing |
+| `oracle_query` | Premium (0.02 RLUSD) — keyword/date search across feeds |
 
 ---
 

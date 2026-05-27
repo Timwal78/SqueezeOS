@@ -37,6 +37,10 @@ Allow: /api/relay/nodes
 Allow: /api/status
 Allow: /api/resolve
 Allow: /api/leaderboard
+Allow: /api/oracle/feeds
+Allow: /api/oracle/latest/
+Allow: /api/oracle/query
+Allow: /api/oracle/stream
 
 # ── AI Crawlers — Explicitly Permitted ──────────────────────────────────────
 

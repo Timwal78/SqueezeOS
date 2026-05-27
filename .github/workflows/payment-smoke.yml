@@ -9,13 +9,26 @@ jobs:
   smoke:
     name: End-to-end payment smoke test
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
-      # ── Step 1: Hit 402Proof /v1/stats and assert non-empty ──────
+      # ── Step 1: Wake all Render services in parallel ─────────────
+      # Render free tier sleeps after 15 min; cold start takes 30–50 s.
+      # Fire warm-up pings first so the real assertions don't time out.
+      - name: Warm up Render services
+        run: |
+          curl -s --max-time 60 https://four02proof.onrender.com/v1/stats    -o /dev/null &
+          curl -s --max-time 60 https://ghost-layer.onrender.com/health       -o /dev/null &
+          curl -s --max-time 60 https://squeezeos-api.onrender.com/api/status -o /dev/null &
+          wait
+          echo "Warm-up pings complete"
+
+      # ── Step 2: 402Proof /v1/stats ────────────────────────────────
       - name: 402Proof stats
         id: stats
         run: |
-          body=$(curl -sf --max-time 15 https://four02proof.onrender.com/v1/stats)
+          body=$(curl -sf --retry 3 --retry-delay 10 --retry-max-time 90 \
+            --max-time 60 https://four02proof.onrender.com/v1/stats)
           echo "body=$body"
           echo "$body" | python3 -c "
           import sys, json
@@ -25,11 +38,12 @@ jobs:
           print('  OK  402Proof stats reachable and parseable')
           "
 
-      # ── Step 2: Request an invoice for /api/council ───────────────
+      # ── Step 3: Request an invoice for /api/council ───────────────
       - name: Request invoice
         id: invoice
         run: |
-          body=$(curl -sf --max-time 15 \
+          body=$(curl -sf --retry 3 --retry-delay 10 --retry-max-time 90 \
+            --max-time 60 \
             -X POST https://four02proof.onrender.com/v1/invoice \
             -H "Content-Type: application/json" \
             -d '{"endpoint_id":"12a0e7a1-6812-4c3f-aa24-de6e3bc12b5a",
@@ -43,11 +57,12 @@ jobs:
           print('  OK  Invoice generated — pay_to and amount present')
           "
 
-      # ── Step 3: Ghost Layer health deep-check ────────────────────
+      # ── Step 4: Ghost Layer health deep-check ────────────────────
       - name: Ghost Layer health
         id: ghost_health
         run: |
-          body=$(curl -sf --max-time 15 https://ghost-layer.onrender.com/health)
+          body=$(curl -sf --retry 3 --retry-delay 10 --retry-max-time 90 \
+            --max-time 60 https://ghost-layer.onrender.com/health)
           echo "ghost_body=$body"
           echo "$body" | python3 -c "
           import sys, json
@@ -58,11 +73,12 @@ jobs:
           print('  OK  Ghost Layer healthy')
           " || echo "  WARN  Ghost Layer returned non-JSON — checking status code only"
 
-      # ── Step 4: SqueezeOS free demo (no payment needed) ──────────
+      # ── Step 5: SqueezeOS free demo (no payment needed) ──────────
       - name: SqueezeOS demo council
         id: demo
         run: |
-          body=$(curl -sf --max-time 20 \
+          body=$(curl -sf --retry 3 --retry-delay 10 --retry-max-time 120 \
+            --max-time 60 \
             https://squeezeos-api.onrender.com/api/demo/council)
           echo "$body" | python3 -c "
           import sys, json
