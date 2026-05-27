@@ -49,8 +49,8 @@ for PAIR in "squeezeos:developer-tools/squeezeos" "ghost-layer:payments/ghost-la
 done
 
 # Rewrite module paths so go.mod + all imports use the library canonical prefix.
-# We replace the bare module path string (no quote anchoring needed — the paths
-# are unique enough and contain no sed-special characters).
+# The canonical form is: github.com/mvanhorn/printing-press-library/library/<category>/<slug>
+# (note: /library/ is part of the path because submissions live under library/ in the repo).
 echo "▶ Patching module paths to library canonical form …"
 rewrite_module() {
   local dir="$1" old="$2" new="$3"
@@ -59,13 +59,13 @@ rewrite_module() {
 }
 rewrite_module library/developer-tools/squeezeos \
   github.com/timwal78/squeezeos-pp-cli \
-  github.com/mvanhorn/printing-press-library/developer-tools/squeezeos
+  github.com/mvanhorn/printing-press-library/library/developer-tools/squeezeos
 rewrite_module library/payments/ghost-layer \
   github.com/timwal78/ghost-layer-pp-cli \
-  github.com/mvanhorn/printing-press-library/payments/ghost-layer
+  github.com/mvanhorn/printing-press-library/library/payments/ghost-layer
 rewrite_module library/social-and-messaging/tipmaster \
   github.com/timwal78/tipmaster-pp-cli \
-  github.com/mvanhorn/printing-press-library/social-and-messaging/tipmaster
+  github.com/mvanhorn/printing-press-library/library/social-and-messaging/tipmaster
 
 MIT_LICENSE="MIT License\n\nCopyright (c) 2026 Timothy Walton / Script Master Labs\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE."
 
@@ -184,27 +184,9 @@ ghost-layer bridge --chain XRPL --recipient "$WALLET" --amount 1000000
 **Related:** `ghost-layer-pp-cli`, `squeezeos-pp-cli`
 MDEOF
 
-echo "▶ Patching registry.json …"
-python3 - << 'PYEOF'
-import json
-with open("registry.json") as f:
-    reg = json.load(f)
-new_entries = [
-    {"name":"ghost-layer","category":"payments","api":"Ghost Layer","description":"Proprietary dual-chain XRPL/Base toll gateway. Purchase x402 products, execute cross-chain settlements, query agent loyalty tiers.","search_terms":["ghost-layer","Ghost Layer","XRPL","Base chain","x402","cross-chain","toll gateway","RLUSD","Script Master Labs"],"path":"library/payments/ghost-layer","printer":"timwal78","printer_name":"Timothy Walton","mcp":{"binary":"ghost-layer-pp-mcp","transports":["stdio"],"tool_count":8,"public_tool_count":4,"auth_type":"none","env_vars":["GHOST_LAYER_WALLET","GHOST_LAYER_BASE_URL"],"mcp_ready":"full","spec_format":"openapi3"}},
-    {"name":"squeezeos","category":"developer-tools","api":"SqueezeOS","description":"Institutional-grade AI trading intelligence — squeeze scanner, options flow, AI council verdicts, signal marketplace, futures market. Pay-per-call with RLUSD on XRPL via 402Proof.","search_terms":["squeezeos","SqueezeOS","market intelligence","squeeze scanner","options flow","AI trading","RLUSD","XRPL","institutional trading","Script Master Labs"],"path":"library/developer-tools/squeezeos","printer":"timwal78","printer_name":"Timothy Walton","mcp":{"binary":"squeezeos-pp-mcp","transports":["stdio"],"tool_count":23,"public_tool_count":8,"auth_type":"api_key","env_vars":["SQUEEZEOS_TOKEN","SQUEEZEOS_BASE_URL"],"mcp_ready":"full","spec_format":"openapi3"}},
-    {"name":"tipmaster","category":"social-and-messaging","api":"TipMaster","description":"Zero-custody Farcaster RLUSD tip bot. Resolve Farcaster usernames to XRPL wallet addresses, browse tipping leaderboards — enabling autonomous agent tipping flows.","search_terms":["tipmaster","TipMaster","Farcaster","RLUSD","XRPL","tip bot","wallet resolver","Farcaster FID","Script Master Labs"],"path":"library/social-and-messaging/tipmaster","printer":"timwal78","printer_name":"Timothy Walton","mcp":{"binary":"tipmaster-pp-mcp","transports":["stdio"],"tool_count":5,"public_tool_count":5,"auth_type":"none","env_vars":["TIPMASTER_BASE_URL"],"mcp_ready":"full","spec_format":"openapi3"}}
-]
-entries = reg["entries"]
-for entry in new_entries:
-    entries = [e for e in entries if e["name"] != entry["name"]]
-    pos = next((i for i, e in enumerate(entries) if e["name"] > entry["name"]), len(entries))
-    entries.insert(pos, entry)
-reg["entries"] = entries
-with open("registry.json", "w") as f:
-    json.dump(reg, f, indent=2)
-    f.write("\n")
-print(f"  registry.json: {len(reg['entries'])} entries")
-PYEOF
+# NOTE: Do NOT patch registry.json.
+# It is auto-generated post-merge by generate-registry.yml / generate-skills.yml.
+# The .printing-press.json in each library entry is the source of truth.
 
 echo "▶ Committing …"
 git add -A
