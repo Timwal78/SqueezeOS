@@ -58,8 +58,8 @@ def convergence_signal(symbol):
     result = engine.analyze(symbol, closes, volumes,
                             bars_with_dates=bars, run_sniper=sniper)
 
-    # Auto-fire Discord on Beastmode or High Convergence
-    if result.get("signal") in ("BEASTMODE", "HIGH_CONVERGENCE"):
+    # Fire Discord on any signal above NEUTRAL
+    if result.get("signal") not in ("NEUTRAL", "INSUFFICIENT_DATA"):
         sniper_data = result.get("options_sniper") or {}
         trade_type  = sniper_data.get("type", "CALL").lower()
         fire_discord(result, trade_type=trade_type)
@@ -85,11 +85,10 @@ def beastmode_scan():
 
     hits = scan_beastmode_universe({"dm": dm})
 
-    # Fire Discord for any Beastmode hits
+    # Fire Discord for every convergence hit
     for hit in hits:
-        if hit.get("beastmode"):
-            sniper_data = hit.get("options_sniper") or {}
-            fire_discord(hit, trade_type=sniper_data.get("type", "CALL").lower())
+        sniper_data = hit.get("options_sniper") or {}
+        fire_discord(hit, trade_type=sniper_data.get("type", "CALL").lower())
 
     return jsonify(clean_data({
         "status":        "success",
