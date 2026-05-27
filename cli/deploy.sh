@@ -49,8 +49,12 @@ for DIR in squeezeos ghost-layer tipmaster; do
   cd "$TMP"
   git init -q
   git checkout -q -b main
+  git config user.name "github-actions[bot]"
+  git config user.email "github-actions[bot]@users.noreply.github.com"
+  git config commit.gpgsign false
   git add -A
-  git commit -q -m "feat: initial CLI Printing Press release"
+  GIT_CONFIG_NOSYSTEM=1 GIT_AUTHOR_NAME="github-actions[bot]" GIT_AUTHOR_EMAIL="github-actions[bot]@users.noreply.github.com" GIT_COMMITTER_NAME="github-actions[bot]" GIT_COMMITTER_EMAIL="github-actions[bot]@users.noreply.github.com" \
+    git -c commit.gpgsign=false commit -q -m "feat: initial CLI Printing Press release"
   git remote add origin "https://$GH_TOKEN@github.com/$OWNER/$REPO.git"
   git push -q -u origin main --force
   cd "$SCRIPT_DIR"
