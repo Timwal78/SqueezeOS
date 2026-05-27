@@ -7,8 +7,6 @@ import (
 	"github.com/timwal78/ghost-layer-pp-cli/internal"
 )
 
-// ── bridge ────────────────────────────────────────────────────────────────────
-
 var (
 	bridgeChain     string
 	bridgeAmount    string
@@ -20,18 +18,16 @@ var (
 var bridgeCmd = &cobra.Command{
 	Use:   "bridge",
 	Short: "Execute a dual-chain bridge settlement (XRPL RLUSD or Base USDC)",
-	Example: `  ghost-layer bridge --chain XRPL --amount 1000000 --recipient rXXX --signer rYYY --sig <hex>
-  ghost-layer bridge --chain Base --amount 1000000 --recipient 0xABC --signer 0xDEF --sig <eip3009>`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if bridgeChain == "" || bridgeAmount == "" || bridgeRecipient == "" {
 			internal.Fatalf("--chain, --amount, and --recipient are required")
 		}
 		body := map[string]any{
-			"chain":        bridgeChain,
-			"amount":       bridgeAmount,
-			"recipient":    bridgeRecipient,
-			"signer":       bridgeSigner,
-			"signature":    bridgeSig,
+			"chain":     bridgeChain,
+			"amount":    bridgeAmount,
+			"recipient": bridgeRecipient,
+			"signer":    bridgeSigner,
+			"signature": bridgeSig,
 		}
 		if dryRun {
 			fmt.Printf("POST /v1/bridge/execute %+v\n", body)
@@ -46,8 +42,6 @@ var bridgeCmd = &cobra.Command{
 		return nil
 	},
 }
-
-// ── x402 ─────────────────────────────────────────────────────────────────────
 
 var x402Cmd = &cobra.Command{
 	Use:   "x402",
@@ -80,15 +74,11 @@ var (
 var x402QuoteCmd = &cobra.Command{
 	Use:   "quote",
 	Short: "Get a payment quote for a product",
-	Example: `  ghost-layer x402 quote --product routing.telemetry --wallet rXXX`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if quoteProduct == "" || quoteWallet == "" {
 			internal.Fatalf("--product and --wallet are required")
 		}
-		body := map[string]any{
-			"product_id":   quoteProduct,
-			"agent_wallet": quoteWallet,
-		}
+		body := map[string]any{"product_id": quoteProduct, "agent_wallet": quoteWallet}
 		if dryRun {
 			fmt.Printf("POST /v1/x402/quote %+v\n", body)
 			return nil
@@ -105,7 +95,7 @@ var x402QuoteCmd = &cobra.Command{
 
 var x402DispenseCmd = &cobra.Command{
 	Use:   "dispense <product_id>",
-	Short: "Dispense a product after payment (requires X-Payment-Token header via env)",
+	Short: "Dispense a product after payment",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path := "/v1/x402/dispense/" + args[0]
@@ -123,13 +113,10 @@ var x402DispenseCmd = &cobra.Command{
 	},
 }
 
-// ── agent ─────────────────────────────────────────────────────────────────────
-
 var agentCmd = &cobra.Command{
 	Use:   "agent <wallet>",
 	Short: "Get agent stats, loyalty tier, and passport info",
 	Args:  cobra.ExactArgs(1),
-	Example: `  ghost-layer agent rXXXXXX`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path := "/api/agent/" + args[0] + "/stats"
 		if dryRun {
@@ -145,8 +132,6 @@ var agentCmd = &cobra.Command{
 		return nil
 	},
 }
-
-// ── cube ─────────────────────────────────────────────────────────────────────
 
 var cubeCmd = &cobra.Command{
 	Use:   "cube",
@@ -170,8 +155,6 @@ var cubeStateCmd = &cobra.Command{
 		return nil
 	},
 }
-
-// ── status ────────────────────────────────────────────────────────────────────
 
 var statusCmd = &cobra.Command{
 	Use:   "status",

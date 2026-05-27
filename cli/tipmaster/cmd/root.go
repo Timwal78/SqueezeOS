@@ -15,8 +15,7 @@ var rootCmd = &cobra.Command{
 
 Agent-native CLI for TipMaster — the zero-custody RLUSD tip bot for Farcaster.
 Resolve Farcaster usernames to XRPL wallet addresses, browse the weekly
-leaderboard, and query user account status. Ideal for AI agents that need to
-route RLUSD tips to creators programmatically.
+leaderboard, and query user account status.
 
 Environment:
   TIPMASTER_BASE_URL   override the base URL (default: https://tipmaster.onrender.com)

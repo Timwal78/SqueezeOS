@@ -7,13 +7,9 @@ import (
 	"github.com/timwal78/squeezeos-pp-cli/internal"
 )
 
-// ── demo ─────────────────────────────────────────────────────────────────────
-
 var demoCmd = &cobra.Command{
 	Use:   "demo",
 	Short: "Free IWM council verdict — no payment required",
-	Example: `  squeezeos demo
-  squeezeos demo --compact`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if dryRun {
 			fmt.Println("GET /api/demo/council")
@@ -29,22 +25,17 @@ var demoCmd = &cobra.Command{
 	},
 }
 
-// ── preview ───────────────────────────────────────────────────────────────────
-
 var previewCmd = &cobra.Command{
 	Use:   "preview <symbol>",
 	Short: "Bias + regime preview for any symbol (free, 15-min cache)",
 	Args:  cobra.ExactArgs(1),
-	Example: `  squeezeos preview IWM
-  squeezeos preview NVDA --compact`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		symbol := args[0]
 		if dryRun {
-			fmt.Printf("GET /api/preview/%s\n", symbol)
+			fmt.Printf("GET /api/preview/%s\n", args[0])
 			return nil
 		}
 		c := internal.NewClient()
-		res, err := c.Get("/api/preview/" + symbol)
+		res, err := c.Get("/api/preview/" + args[0])
 		if err != nil {
 			internal.Fatalf("%v", err)
 		}
@@ -53,25 +44,20 @@ var previewCmd = &cobra.Command{
 	},
 }
 
-// ── council ───────────────────────────────────────────────────────────────────
-
 var councilCmd = &cobra.Command{
 	Use:   "council <symbol>",
-	Short: "Multi-engine AI verdict for any symbol — 0.10 RLUSD (requires SQUEEZEOS_TOKEN)",
+	Short: "Multi-engine AI verdict — 0.10 RLUSD (requires SQUEEZEOS_TOKEN)",
 	Args:  cobra.ExactArgs(1),
-	Example: `  SQUEEZEOS_TOKEN=<token> squeezeos council SPY
-  squeezeos council TSLA --compact`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		symbol := args[0]
 		if dryRun {
-			fmt.Printf("POST /api/council {symbol: %q}\n", symbol)
+			fmt.Printf("POST /api/council {symbol: %q}\n", args[0])
 			return nil
 		}
 		c := internal.NewClient()
 		if c.Token == "" {
-			internal.Fatalf("SQUEEZEOS_TOKEN is required for premium endpoints\nGet a token at https://four02proof.onrender.com")
+			internal.Fatalf("SQUEEZEOS_TOKEN is required\nGet a token at https://four02proof.onrender.com")
 		}
-		res, err := c.Post("/api/council", map[string]string{"symbol": symbol})
+		res, err := c.Post("/api/council", map[string]string{"symbol": args[0]})
 		if err != nil {
 			internal.Fatalf("%v", err)
 		}
@@ -80,13 +66,9 @@ var councilCmd = &cobra.Command{
 	},
 }
 
-// ── scan ─────────────────────────────────────────────────────────────────────
-
 var scanCmd = &cobra.Command{
 	Use:   "scan",
 	Short: "Full $1-$50 squeeze scanner — 0.05 RLUSD (requires SQUEEZEOS_TOKEN)",
-	Example: `  SQUEEZEOS_TOKEN=<token> squeezeos scan
-  squeezeos scan --compact`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if dryRun {
 			fmt.Println("GET /api/scan")
@@ -94,7 +76,7 @@ var scanCmd = &cobra.Command{
 		}
 		c := internal.NewClient()
 		if c.Token == "" {
-			internal.Fatalf("SQUEEZEOS_TOKEN is required for premium endpoints")
+			internal.Fatalf("SQUEEZEOS_TOKEN is required")
 		}
 		res, err := c.Get("/api/scan")
 		if err != nil {
@@ -105,12 +87,9 @@ var scanCmd = &cobra.Command{
 	},
 }
 
-// ── options ───────────────────────────────────────────────────────────────────
-
 var optionsCmd = &cobra.Command{
 	Use:   "options",
 	Short: "Institutional options flow — 0.05 RLUSD (requires SQUEEZEOS_TOKEN)",
-	Example: `  SQUEEZEOS_TOKEN=<token> squeezeos options`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if dryRun {
 			fmt.Println("GET /api/options")
@@ -118,7 +97,7 @@ var optionsCmd = &cobra.Command{
 		}
 		c := internal.NewClient()
 		if c.Token == "" {
-			internal.Fatalf("SQUEEZEOS_TOKEN is required for premium endpoints")
+			internal.Fatalf("SQUEEZEOS_TOKEN is required")
 		}
 		res, err := c.Get("/api/options")
 		if err != nil {
@@ -129,12 +108,9 @@ var optionsCmd = &cobra.Command{
 	},
 }
 
-// ── iwm ───────────────────────────────────────────────────────────────────────
-
 var iwmCmd = &cobra.Command{
 	Use:   "iwm",
 	Short: "IWM 0DTE contract scorer — 0.03 RLUSD (requires SQUEEZEOS_TOKEN)",
-	Example: `  SQUEEZEOS_TOKEN=<token> squeezeos iwm`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if dryRun {
 			fmt.Println("GET /api/iwm")
@@ -142,7 +118,7 @@ var iwmCmd = &cobra.Command{
 		}
 		c := internal.NewClient()
 		if c.Token == "" {
-			internal.Fatalf("SQUEEZEOS_TOKEN is required for premium endpoints")
+			internal.Fatalf("SQUEEZEOS_TOKEN is required")
 		}
 		res, err := c.Get("/api/iwm")
 		if err != nil {
@@ -153,14 +129,10 @@ var iwmCmd = &cobra.Command{
 	},
 }
 
-// ── history ───────────────────────────────────────────────────────────────────
-
 var historyCmd = &cobra.Command{
 	Use:   "history [symbol]",
-	Short: "Signal history — all recent signals or per-symbol (free)",
+	Short: "Signal history — all recent or per-symbol (free)",
 	Args:  cobra.MaximumNArgs(1),
-	Example: `  squeezeos history
-  squeezeos history IWM`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path := "/api/history"
 		if len(args) == 1 {
@@ -179,8 +151,6 @@ var historyCmd = &cobra.Command{
 		return nil
 	},
 }
-
-// ── status ────────────────────────────────────────────────────────────────────
 
 var statusCmd = &cobra.Command{
 	Use:   "status",

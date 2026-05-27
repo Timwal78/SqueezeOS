@@ -8,21 +8,13 @@ import (
 	"github.com/timwal78/tipmaster-pp-cli/internal"
 )
 
-// ── resolve ───────────────────────────────────────────────────────────────────
-
 var resolveCmd = &cobra.Command{
 	Use:   "resolve <farcaster-username>",
 	Short: "Resolve a Farcaster username to their XRPL wallet address",
 	Args:  cobra.ExactArgs(1),
-	Example: `  tipmaster resolve vitalik
-  tipmaster resolve dwr --compact`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		path := "/api/resolve/" + args[0]
-		if _, err := fmt.Fprintf(cmd.OutOrStdout(), ""); err != nil {
-			return err
-		}
 		c := internal.NewClient()
-		res, err := c.Get(path)
+		res, err := c.Get("/api/resolve/" + args[0])
 		if err != nil {
 			internal.Fatalf("%v", err)
 		}
@@ -30,8 +22,6 @@ var resolveCmd = &cobra.Command{
 		return nil
 	},
 }
-
-// ── leaderboard ───────────────────────────────────────────────────────────────
 
 var (
 	lbPeriod string
@@ -41,8 +31,6 @@ var (
 var leaderboardCmd = &cobra.Command{
 	Use:   "leaderboard",
 	Short: "Top tippers by RLUSD volume",
-	Example: `  tipmaster leaderboard
-  tipmaster leaderboard --period alltime --limit 25`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path := fmt.Sprintf("/api/leaderboard?period=%s&limit=%d", lbPeriod, lbLimit)
 		c := internal.NewClient()
@@ -55,21 +43,17 @@ var leaderboardCmd = &cobra.Command{
 	},
 }
 
-// ── user ─────────────────────────────────────────────────────────────────────
-
 var userCmd = &cobra.Command{
 	Use:   "user <fid>",
-	Short: "Look up a Farcaster user by FID — returns wallet and activation status",
+	Short: "Look up a Farcaster user by FID",
 	Args:  cobra.ExactArgs(1),
-	Example: `  tipmaster user 12345`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		fid, err := strconv.Atoi(args[0])
 		if err != nil {
 			internal.Fatalf("FID must be a number, got %q", args[0])
 		}
-		path := fmt.Sprintf("/api/user/%d", fid)
 		c := internal.NewClient()
-		res, err2 := c.Get(path)
+		res, err2 := c.Get(fmt.Sprintf("/api/user/%d", fid))
 		if err2 != nil {
 			internal.Fatalf("%v", err2)
 		}
@@ -77,8 +61,6 @@ var userCmd = &cobra.Command{
 		return nil
 	},
 }
-
-// ── status ────────────────────────────────────────────────────────────────────
 
 var statusCmd = &cobra.Command{
 	Use:   "status",
