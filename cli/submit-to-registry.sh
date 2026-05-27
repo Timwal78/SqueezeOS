@@ -48,18 +48,24 @@ for PAIR in "squeezeos:developer-tools/squeezeos" "ghost-layer:payments/ghost-la
   cp -r "$SCRIPT_DIR/$SRC/." "$DST/"
 done
 
+# Rewrite module paths so go.mod + all imports use the library canonical prefix.
+# We replace the bare module path string (no quote anchoring needed — the paths
+# are unique enough and contain no sed-special characters).
 echo "▶ Patching module paths to library canonical form …"
-for TRIPLE in \
-  "library/developer-tools/squeezeos:github.com/timwal78/squeezeos-pp-cli:github.com/mvanhorn/printing-press-library/developer-tools/squeezeos" \
-  "library/payments/ghost-layer:github.com/timwal78/ghost-layer-pp-cli:github.com/mvanhorn/printing-press-library/payments/ghost-layer" \
-  "library/social-and-messaging/tipmaster:github.com/timwal78/tipmaster-pp-cli:github.com/mvanhorn/printing-press-library/social-and-messaging/tipmaster"; do
-  DIR="${TRIPLE%%:*}"
-  REST="${TRIPLE#*:}"
-  OLD="${REST%%:*}"
-  NEW="${REST#*:}"
-  sed -i "s|^module ${OLD}$|module ${NEW}|" "$DIR/go.mod"
-  find "$DIR" -name "*.go" -exec sed -i "s|\"${OLD}/|\"|${NEW}/|g" {} \;
-done
+rewrite_module() {
+  local dir="$1" old="$2" new="$3"
+  find "$dir" \( -name '*.go' -o -name 'go.mod' \) -print0 \
+    | xargs -0 sed -i "s|${old}|${new}|g"
+}
+rewrite_module library/developer-tools/squeezeos \
+  github.com/timwal78/squeezeos-pp-cli \
+  github.com/mvanhorn/printing-press-library/developer-tools/squeezeos
+rewrite_module library/payments/ghost-layer \
+  github.com/timwal78/ghost-layer-pp-cli \
+  github.com/mvanhorn/printing-press-library/payments/ghost-layer
+rewrite_module library/social-and-messaging/tipmaster \
+  github.com/timwal78/tipmaster-pp-cli \
+  github.com/mvanhorn/printing-press-library/social-and-messaging/tipmaster
 
 MIT_LICENSE="MIT License\n\nCopyright (c) 2026 Timothy Walton / Script Master Labs\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE."
 
