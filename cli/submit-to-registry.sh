@@ -48,9 +48,13 @@ for PAIR in "squeezeos:developer-tools/squeezeos" "ghost-layer:payments/ghost-la
   cp -r "$SCRIPT_DIR/$SRC/." "$DST/"
 done
 
-# Rewrite module paths so go.mod + all imports use the library canonical prefix.
-# The canonical form is: github.com/mvanhorn/printing-press-library/library/<category>/<slug>
-# (note: /library/ is part of the path because submissions live under library/ in the repo).
+# Canonical module paths for the library.
+# Format: github.com/mvanhorn/printing-press-library/library/<category>/<slug>
+# This is required by the supply-chain module_path_noncanonical check.
+SQ_MOD="github.com/mvanhorn/printing-press-library/library/developer-tools/squeezeos"
+GL_MOD="github.com/mvanhorn/printing-press-library/library/payments/ghost-layer"
+TM_MOD="github.com/mvanhorn/printing-press-library/library/social-and-messaging/tipmaster"
+
 echo "▶ Patching module paths to library canonical form …"
 rewrite_module() {
   local dir="$1" old="$2" new="$3"
@@ -58,14 +62,104 @@ rewrite_module() {
     | xargs -0 sed -i "s|${old}|${new}|g"
 }
 rewrite_module library/developer-tools/squeezeos \
-  github.com/timwal78/squeezeos-pp-cli \
-  github.com/mvanhorn/printing-press-library/library/developer-tools/squeezeos
+  github.com/timwal78/squeezeos-pp-cli "$SQ_MOD"
 rewrite_module library/payments/ghost-layer \
-  github.com/timwal78/ghost-layer-pp-cli \
-  github.com/mvanhorn/printing-press-library/library/payments/ghost-layer
+  github.com/timwal78/ghost-layer-pp-cli "$GL_MOD"
 rewrite_module library/social-and-messaging/tipmaster \
-  github.com/timwal78/tipmaster-pp-cli \
-  github.com/mvanhorn/printing-press-library/library/social-and-messaging/tipmaster
+  github.com/timwal78/tipmaster-pp-cli "$TM_MOD"
+
+# Rewrite .goreleaser.yaml to match the canonical module path.
+# The release target must be consistent with go.mod so tooling agrees on
+# where go install points.
+cat > library/developer-tools/squeezeos/.goreleaser.yaml << GOREOF
+version: 2
+project_name: squeezeos-pp-cli
+before:
+  hooks:
+    - go mod tidy
+builds:
+  - main: .
+    binary: squeezeos-pp-cli
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+archives:
+  - format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+checksum:
+  name_template: checksums.txt
+release:
+  github:
+    owner: mvanhorn
+    name: printing-press-library
+changelog:
+  sort: asc
+  filters:
+    exclude: ['^docs:', '^test:', Merge]
+GORELEOF
+
+cat > library/payments/ghost-layer/.goreleaser.yaml << GOREOF
+version: 2
+project_name: ghost-layer-pp-cli
+before:
+  hooks:
+    - go mod tidy
+builds:
+  - main: .
+    binary: ghost-layer-pp-cli
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+archives:
+  - format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+checksum:
+  name_template: checksums.txt
+release:
+  github:
+    owner: mvanhorn
+    name: printing-press-library
+changelog:
+  sort: asc
+  filters:
+    exclude: ['^docs:', '^test:', Merge]
+GORELEOF
+
+cat > library/social-and-messaging/tipmaster/.goreleaser.yaml << GOREOF
+version: 2
+project_name: tipmaster-pp-cli
+before:
+  hooks:
+    - go mod tidy
+builds:
+  - main: .
+    binary: tipmaster-pp-cli
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+archives:
+  - format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+checksum:
+  name_template: checksums.txt
+release:
+  github:
+    owner: mvanhorn
+    name: printing-press-library
+changelog:
+  sort: asc
+  filters:
+    exclude: ['^docs:', '^test:', Merge]
+GORELEOF
 
 MIT_LICENSE="MIT License\n\nCopyright (c) 2026 Timothy Walton / Script Master Labs\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE."
 
@@ -73,35 +167,36 @@ printf '%b\n' "$MIT_LICENSE" > library/developer-tools/squeezeos/LICENSE
 printf '%b\n' "$MIT_LICENSE" > library/payments/ghost-layer/LICENSE
 printf '%b\n' "$MIT_LICENSE" > library/social-and-messaging/tipmaster/LICENSE
 
-cat > library/developer-tools/squeezeos/README.md << 'MDEOF'
+# README install commands must match go.mod module paths exactly.
+cat > library/developer-tools/squeezeos/README.md << MDEOF
 # squeezeos-pp-cli
 
 CLI Printing Press generated CLI for [SqueezeOS](https://squeezeos-api.onrender.com) — institutional AI market intelligence.
 
 ## Install
 
-```bash
-go install github.com/timwal78/squeezeos-pp-cli@latest
-```
+\`\`\`bash
+go install ${SQ_MOD}@latest
+\`\`\`
 
 ## Quick Start
 
-```bash
+\`\`\`bash
 squeezeos demo                 # free IWM verdict
 squeezeos preview TSLA         # bias + regime (free)
 squeezeos status               # health check
 squeezeos council NVDA         # AI verdict (paid, needs SQUEEZEOS_TOKEN)
 squeezeos scan                 # squeeze scanner (paid)
-```
+\`\`\`
 
 ## Auth
 
 Premium endpoints require a JWT from [402Proof](https://four02proof.onrender.com).
 Agents pay RLUSD on XRPL — no API keys, no subscriptions.
 
-```bash
+\`\`\`bash
 export SQUEEZEOS_TOKEN=<token-from-402proof>
-```
+\`\`\`
 MDEOF
 
 cat > library/developer-tools/squeezeos/SKILL.md << 'MDEOF'
@@ -116,26 +211,26 @@ squeezeos scan --compact
 **Related:** `ghost-layer-pp-cli`, `tipmaster-pp-cli`
 MDEOF
 
-cat > library/payments/ghost-layer/README.md << 'MDEOF'
+cat > library/payments/ghost-layer/README.md << MDEOF
 # ghost-layer-pp-cli
 
 CLI Printing Press generated CLI for [Ghost Layer](https://ghost-layer.onrender.com) — dual-chain XRPL/Base toll gateway.
 
 ## Install
 
-```bash
-go install github.com/timwal78/ghost-layer-pp-cli@latest
-```
+\`\`\`bash
+go install ${GL_MOD}@latest
+\`\`\`
 
 ## Quick Start
 
-```bash
+\`\`\`bash
 ghost-layer status
 ghost-layer x402 catalog
 ghost-layer x402 quote --product routing.telemetry --wallet rXXX
 ghost-layer x402 dispense routing.telemetry
 ghost-layer agent rXXX
-```
+\`\`\`
 MDEOF
 
 cat > library/payments/ghost-layer/SKILL.md << 'MDEOF'
@@ -151,26 +246,26 @@ ghost-layer x402 dispense routing.telemetry --compact
 **Related:** `squeezeos-pp-cli`, `tipmaster-pp-cli`
 MDEOF
 
-cat > library/social-and-messaging/tipmaster/README.md << 'MDEOF'
+cat > library/social-and-messaging/tipmaster/README.md << MDEOF
 # tipmaster-pp-cli
 
 CLI Printing Press generated CLI for [TipMaster](https://tipmaster.onrender.com) — zero-custody Farcaster RLUSD tip bot.
 
 ## Install
 
-```bash
-go install github.com/timwal78/tipmaster-pp-cli@latest
-```
+\`\`\`bash
+go install ${TM_MOD}@latest
+\`\`\`
 
 ## Quick Start
 
-```bash
+\`\`\`bash
 tipmaster resolve dwr                  # Farcaster username → XRPL wallet
 tipmaster leaderboard                  # top 10 tippers this week
 tipmaster leaderboard --period alltime
 tipmaster user 3                       # look up by FID
 tipmaster status
-```
+\`\`\`
 MDEOF
 
 cat > library/social-and-messaging/tipmaster/SKILL.md << 'MDEOF'
@@ -186,7 +281,6 @@ MDEOF
 
 # NOTE: Do NOT patch registry.json.
 # It is auto-generated post-merge by generate-registry.yml / generate-skills.yml.
-# The .printing-press.json in each library entry is the source of truth.
 
 echo "▶ Committing …"
 git add -A
