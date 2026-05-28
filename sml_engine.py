@@ -539,7 +539,8 @@ class SMLEngine:
         # 1. Dependency Checks
         required = ["SPY", "VIX", "TLT", "DXY", "QQQ", "IWM", "IJR", "XRT", target_symbol]
         for s in required:
-            if s not in market_history or market_history[s].empty:
+            entry = market_history.get(s)
+            if entry is None or (isinstance(entry, pd.DataFrame) and entry.empty) or (not isinstance(entry, pd.DataFrame) and not entry):
                 logger.warning(f"[SML] Missing history for {s}")
                 return None
 

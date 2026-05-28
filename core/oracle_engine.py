@@ -17,6 +17,7 @@ import logging
 import time
 from datetime import datetime
 from typing import Optional
+import pandas as pd
 
 logger = logging.getLogger("Oracle")
 
@@ -149,10 +150,14 @@ class OracleEngine:
             if dm:
                 for sym in ["SPY", "VIX", "TLT", "DXY", "QQQ", "IWM", "IJR", "XRT", symbol]:
                     try:
-                        # Fallback to empty if get_historical_bars fails or returns None
                         bars = dm.get_historical_bars(sym, timeframe="1Day", limit=100)
-                        if bars is not None:
-                            market_history[sym] = bars
+                        if bars:
+                            df = pd.DataFrame(bars)
+                            # Alpaca returns 'c','o','h','l','v'; Tradier returns 'close' etc.
+                            rename_map = {'c': 'close', 'o': 'open', 'h': 'high', 'l': 'low', 'v': 'volume', 't': 'date'}
+                            df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns}, inplace=True)
+                            if 'close' in df.columns:
+                                market_history[sym] = df
                     except Exception:
                         pass
                         
