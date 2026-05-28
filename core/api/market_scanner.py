@@ -47,6 +47,7 @@ _scan_cache = {
     "scan_count": 0
 }
 _scan_lock = threading.Lock()
+_analyzer = None  # singleton — load once, reuse every cycle
 
 # ── FULL MARKET UNIVERSE ──
 # Tradier batch quotes = 1 API call for ALL of these. Zero reason to limit.
@@ -148,9 +149,11 @@ def _run_scan():
         state.audit["universe_size"] = len(sweet)
         
         # 4. Technical Pattern Analysis (Golden Cross, Double Bottom, Momentum)
+        global _analyzer
         try:
-            analyzer = SqueezeAnalyzer()
-            technical_results = analyzer.analyze_batch(sweet)
+            if _analyzer is None:
+                _analyzer = SqueezeAnalyzer()
+            technical_results = _analyzer.analyze_batch(sweet)
         except Exception as e:
             logger.error(f"[SCAN] SqueezeAnalyzer failed: {e}")
             technical_results = []
@@ -400,7 +403,11 @@ def start_market_scanner():
                 _run_scan()
             except Exception as e:
                 logger.error(f"[MARKET] Scan error: {e}")
-            time.sleep(3)  # Fast continuous refresh
+            # Back off to 30s when no data — avoids OOM spin on cold/empty Tradier
+            with _scan_lock:
+                symbol_count = len(_scan_cache.get("quotes", {}))
+            interval = 3 if symbol_count > 0 else 30
+            time.sleep(interval)
     _scanner_thread = threading.Thread(target=loop, daemon=True, name="SML-Market-Scanner")
     _scanner_thread.start()
 
