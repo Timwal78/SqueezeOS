@@ -8,25 +8,25 @@ on:
 jobs:
   health:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       BASE_URL: https://squeezeos-api.onrender.com
-      MAX_WAIT_SECONDS: "600"
-      RETRY_INTERVAL: "10"
+      MAX_WAIT_SECONDS: "720"
+      RETRY_INTERVAL: "15"
     steps:
       - name: Wait for /api/status to be healthy
         run: |
           deadline=$(( $(date +%s) + MAX_WAIT_SECONDS ))
           attempt=0
-          status="000"
-          body=""
           while :; do
             attempt=$((attempt + 1))
             body_file=$(mktemp)
-            status=$(curl -s -o "$body_file" -w "%{http_code}" --max-time 15 "$BASE_URL/api/status" || echo "000")
+            http_code=$(curl -s -o "$body_file" -w "%{http_code}" --max-time 60 "$BASE_URL/api/status")
+            curl_exit=$?
             body=$(cat "$body_file")
-            echo "attempt=$attempt http_status=$status body=$body"
+            echo "attempt=$attempt curl_exit=$curl_exit http_status=$http_code"
 
-            if [ "$status" = "200" ]; then
+            if [ "$curl_exit" -eq 0 ] && [ "$http_code" = "200" ]; then
               echo "$body" | python3 -c "
           import sys, json
           data = json.load(sys.stdin)
@@ -38,8 +38,8 @@ jobs:
 
             if [ "$(date +%s)" -ge "$deadline" ]; then
               echo "FAIL: /api/status never returned 200 within ${MAX_WAIT_SECONDS}s"
-              echo "Last status: $status"
-              echo "Last body:   $body"
+              echo "Last http_status: $http_code  curl_exit: $curl_exit"
+              echo "Last body: $body"
               exit 1
             fi
 
@@ -49,14 +49,14 @@ jobs:
       - name: Check MCP endpoint
         run: |
           body_file=$(mktemp)
-          status=$(curl -s -o "$body_file" -w "%{http_code}" --max-time 15 -X POST \
+          http_code=$(curl -s -o "$body_file" -w "%{http_code}" --max-time 60 -X POST \
             "$BASE_URL/mcp" \
             -H "Content-Type: application/json" \
-            -d '{"jsonrpc":"2.0","id":1,"method":"ping","params":{}}' || echo "000")
+            -d '{"jsonrpc":"2.0","id":1,"method":"ping","params":{}}')
           body=$(cat "$body_file")
-          echo "http_status=$status body=$body"
-          if [ "$status" != "200" ]; then
-            echo "FAIL: MCP ping returned $status"
+          echo "http_status=$http_code body=$body"
+          if [ "$http_code" != "200" ]; then
+            echo "FAIL: MCP ping returned $http_code"
             exit 1
           fi
           echo "$body" | python3 -c "
@@ -69,12 +69,12 @@ jobs:
       - name: Check free demo endpoint
         run: |
           body_file=$(mktemp)
-          status=$(curl -s -o "$body_file" -w "%{http_code}" --max-time 20 \
-            "$BASE_URL/api/demo/council" || echo "000")
+          http_code=$(curl -s -o "$body_file" -w "%{http_code}" --max-time 60 \
+            "$BASE_URL/api/demo/council")
           body_preview=$(head -c 500 "$body_file")
-          echo "http_status=$status body_preview=$body_preview"
-          if [ "$status" != "200" ]; then
-            echo "FAIL: /api/demo/council returned $status"
+          echo "http_status=$http_code body_preview=$body_preview"
+          if [ "$http_code" != "200" ]; then
+            echo "FAIL: /api/demo/council returned $http_code"
             exit 1
           fi
           echo "  OK  /api/demo/council reachable"

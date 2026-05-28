@@ -4,6 +4,13 @@
         xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9
         http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
 
+  <!-- ── COMMAND CENTER ────────────────────────────────────────────────── -->
+  <url>
+    <loc>https://squeeze-os-ochre.vercel.app/</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+  </url>
+
   <!-- ── HOMEPAGE ───────────────────────────────────────────────────────── -->
   <url>
     <loc>https://www.scriptmasterlabs.com/</loc>
