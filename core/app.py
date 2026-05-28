@@ -30,6 +30,7 @@ from core.api.settlement_bp import settlement_bp
 from core.api.futures_bp import futures_bp
 from core.api.oracle_data_bp import oracle_data_bp, start_oracle_pollers
 from core.api.agent_analytics import analytics_bp, before_analytics, after_analytics
+from core.api.stigmergy_bp import stigmergy_bp
 import core.signal_history as signal_history
 from core.legacy import start_whale_stalker, init_services, get_service, clean_data
 from core.market_graph import get_graph
@@ -79,6 +80,7 @@ def create_app():
     app.register_blueprint(settlement_bp,  url_prefix='/api/settlement')
     app.register_blueprint(futures_bp,     url_prefix='/api/futures')
     app.register_blueprint(oracle_data_bp, url_prefix='/api/oracle')
+    app.register_blueprint(stigmergy_bp,  url_prefix='/api/stigmergy')
     app.register_blueprint(proprietary_ema_bp, url_prefix='/api')
     app.register_blueprint(convergence_bp,     url_prefix='/api')
     app.register_blueprint(analytics_bp)
