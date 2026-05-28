@@ -17,7 +17,8 @@ from .registry import (
     init_db, register_wallet, get_wallet_by_fid, get_wallet_by_username,
     get_fid_by_username, record_tip, get_tip_stats,
     get_weekly_leaderboard, get_all_time_leaderboard,
-    get_destination_tag, is_setup_fee_paid, mark_setup_fee_paid
+    get_destination_tag, is_setup_fee_paid, mark_setup_fee_paid,
+    record_tip_intent, get_pending_intents_for_user, mark_intent_resolved
 )
 from .xrpl_client import (
     check_trust_line, get_rlusd_balance, check_setup_fee_paid,
@@ -266,6 +267,18 @@ async def _handle_command(cmd, sender_fid: int, sender_username: str, cast_hash:
         if paid:
             await mark_setup_fee_paid(sender_fid)
             await caster.reply_to_cast(cast_hash, f"@{sender_username} Setup fee verified! Your account is now active for unlimited P2P tipping. 🎉")
+            
+            # Resolve pending tip intents
+            intents = await get_pending_intents_for_user(sender_username)
+            if intents:
+                wallet = await get_wallet_by_fid(sender_fid)
+                for intent in intents:
+                    pay_link = generate_p2p_payment_link(wallet, Decimal(str(intent["amount"])))
+                    await caster.reply_to_cast(
+                        intent["cast_hash"],
+                        f"@{intent['sender_user']} @{sender_username} just registered their wallet! Click here to send the {intent['amount']} {intent['currency']} you promised: {pay_link}"
+                    )
+                    await mark_intent_resolved(intent["id"])
         else:
             fee_link = generate_setup_fee_link(dest_tag)
             await caster.reply_to_cast(cast_hash, f"@{sender_username} We haven't received your 15 RLUSD setup fee yet. Pay here: {fee_link}")
@@ -305,7 +318,13 @@ async def _handle_tip(cmd, sender_fid: int, sender_username: str, cast_hash: str
 
     recipient_wallet = await get_wallet_by_username(cmd.target_username)
     if not recipient_wallet:
-        await caster.reply_to_cast(cast_hash, f"@{sender_username} @{cmd.target_username} hasn't registered a wallet yet! They need to register first.")
+        amount = float(cmd.amount)
+        currency = getattr(cmd, "currency", "RLUSD")
+        await record_tip_intent(sender_fid, sender_username, cmd.target_username, amount, cast_hash, currency)
+        await caster.reply_to_cast(
+            cast_hash, 
+            f"@{cmd.target_username} @{sender_username} wants to tip you {amount} {currency}! Cast `@tipmaster register <wallet_address>` to claim it."
+        )
         return
 
     amount = Decimal(str(cmd.amount))

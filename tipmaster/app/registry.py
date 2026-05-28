@@ -64,6 +64,19 @@ CREATE TABLE IF NOT EXISTS withdrawals (
     ts            INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
 );
 CREATE INDEX IF NOT EXISTS idx_withdrawals_fid ON withdrawals(fid);
+
+CREATE TABLE IF NOT EXISTS tip_intents (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    sender_fid    INTEGER NOT NULL,
+    sender_user   TEXT NOT NULL,
+    recipient_user TEXT NOT NULL,
+    amount        REAL NOT NULL,
+    currency      TEXT NOT NULL DEFAULT 'RLUSD',
+    status        TEXT NOT NULL DEFAULT 'pending',
+    cast_hash     TEXT NOT NULL,
+    ts            INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+);
+CREATE INDEX IF NOT EXISTS idx_tip_intents_recipient ON tip_intents(recipient_user, status);
 """
 
 
@@ -288,4 +301,41 @@ async def record_withdrawal(tx_hash: str, fid: int, amount: float, currency: str
         return False
 
 
+async def record_tip_intent(sender_fid: int, sender_user: str, recipient_user: str, amount: float, cast_hash: str, currency: str = "RLUSD", db_path: str = DB_PATH) -> None:
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute(
+            """
+            INSERT INTO tip_intents (sender_fid, sender_user, recipient_user, amount, currency, cast_hash, status)
+            VALUES (?, ?, ?, ?, ?, ?, 'pending')
+            """,
+            (sender_fid, sender_user.lower(), recipient_user.lower(), amount, currency.upper(), cast_hash),
+        )
+        await db.commit()
 
+async def get_pending_intents_for_user(username: str, db_path: str = DB_PATH) -> List[Dict]:
+    async with aiosqlite.connect(db_path) as db:
+        async with db.execute(
+            """
+            SELECT id, sender_fid, sender_user, amount, currency, cast_hash
+            FROM tip_intents
+            WHERE recipient_user = ? AND status = 'pending'
+            """,
+            (username.lower(),)
+        ) as cur:
+            rows = await cur.fetchall()
+    return [
+        {
+            "id": row[0],
+            "sender_fid": row[1],
+            "sender_user": row[2],
+            "amount": float(row[3]),
+            "currency": row[4],
+            "cast_hash": row[5]
+        }
+        for row in rows
+    ]
+
+async def mark_intent_resolved(intent_id: int, db_path: str = DB_PATH) -> None:
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute("UPDATE tip_intents SET status = 'resolved' WHERE id = ?", (intent_id,))
+        await db.commit()
