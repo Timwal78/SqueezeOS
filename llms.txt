@@ -156,6 +156,20 @@ SqueezeOS is expanding its infrastructure to solve three fundamental problems in
 
 ---
 
+## SqueezeOS & TipMaster AI 🍊
+
+> "The autonomous AI trading council and zero-custody XRPL tipping engine."
+
+SqueezeOS is a fully autonomous AI trading system featuring a multi-agent council (Oracle, Sniper, Flow Analyst) that executes trades via a Ghost Layer bridging Base and XRPL. 
+It includes TipMaster, a zero-custody Farcaster tipping bot running natively on the XRP Ledger.
+
+- **GitHub:** https://github.com/Timwal78/SqueezeOS
+- **Live Command Center UI:** [YOUR_VERCEL_URL_HERE]
+- **Ghost Layer Endpoint:** `https://squeezeos-api.onrender.com`
+- **TipMaster Endpoint:** `https://tipmaster.onrender.com`
+
+---
+
 ## x402 Payment Flow (Required for Premium Endpoints)
 
 ```
