@@ -80,7 +80,7 @@ Keep it extremely concise, markdown format, with a sharp institutional tone.`;
         headers: {
           'Authorization': `Bearer ${OPENROUTER_KEY}`,
           'Content-Type': 'application/json',
-          'HTTP-Referer': 'http://localhost:3000',
+          'HTTP-Referer': 'https://www.scriptmasterlabs.com',
           'X-Title': 'SqueezeOS Command Center'
         },
         body: JSON.stringify({

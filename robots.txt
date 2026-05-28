@@ -12,7 +12,6 @@ Disallow: /402proof-secrets.html
 Disallow: /402proof-register.html
 Allow: /
 Allow: /sml_harmonic_scanner.html
-Allow: /SML_Command_Center_ORACLE.html
 Allow: /credit_repair.html
 Allow: /llms.txt
 Allow: /sitemap.xml

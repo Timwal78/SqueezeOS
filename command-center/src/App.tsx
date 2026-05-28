@@ -6,6 +6,7 @@ import './index.css';
 
 const PRIMARY_TICKERS = ['AMC', 'GME', 'IWM'];
 const API_URL = import.meta.env.VITE_API_URL || 'https://squeezeos-api.onrender.com';
+const TIPMASTER_URL = import.meta.env.VITE_TIPMASTER_URL || 'https://tipmaster.onrender.com';
 
 interface OracleData {
   symbol: string;
@@ -107,7 +108,7 @@ const BeastmodeTerminal = () => {
   useEffect(() => {
     const fetchTipMaster = async () => {
       try {
-        const res = await fetch('http://127.0.0.1:8080/api/leaderboard?period=alltime&limit=5');
+        const res = await fetch(`${TIPMASTER_URL}/api/leaderboard?period=alltime&limit=5`);
         if (res.ok) {
           const data = await res.json();
           if (data.leaderboard && data.leaderboard.length > 0) {
