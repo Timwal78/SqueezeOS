@@ -320,6 +320,14 @@ Xahau Explorer: https://xahauexplorer.com
 
 ---
 
+## Tutorials for Agent Builders
+
+To integrate SqueezeOS seamlessly into your agent frameworks, refer to our machine-readable guides:
+- [Building an AI Trading Agent Framework](/docs/tutorials/building-xrpl-agents.md)
+- [x402 Protocol Implementation](/docs/tutorials/x402-protocol-integration.md)
+
+---
+
 ## Error Codes
 
 | Code | Meaning | Remedy |
