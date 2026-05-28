@@ -72,23 +72,36 @@ when agents you refer use the system.
 
 ---
 
+## Platform Topology & Ecosystem Domains
+
+The SML ecosystem spans several dedicated domains handling specific network functions. All layers strictly enforce **zero custody, zero API keys, and zero subscriptions**.
+
+| Core Service | Custom Domain | Render/Vercel Domain | Function |
+|--------------|---------------|----------------------|----------|
+| **Ghost Layer** | `ghost-layer.scriptmasterlabs.com` | `ghost-layer.onrender.com` | Bridge + Notary + Credit |
+| **SqueezeOS** | `squeezeos.scriptmasterlabs.com` | `squeezeos-api.onrender.com` | Market intelligence API |
+| **402Proof** | `pay.scriptmasterlabs.com` | `four02proof.onrender.com` | Payment firewall |
+| **TipMaster** | `tips.scriptmasterlabs.com` | `tipmaster.onrender.com` | Wallet resolution & Farcaster Tips |
+| **Auction Loom** | `loom.scriptmasterlabs.com` | `signal-auction-loom.vercel.app` | Live Signal Auction UI |
+
 ## Platform Overview
 
-**Script Master Labs** is a full-stack AI agent economy built on XRP Ledger (RLUSD) and Xahau (XAH). Four interconnected systems — zero simulation, zero API keys, pay-per-call with crypto:
+**Script Master Labs** is a full-stack AI agent economy built on the XRP Ledger (RLUSD) and Xahau (XAH).
 
-- **SqueezeOS** — Institutional AI market intelligence. Real-time squeeze scanner, options flow, IWM 0DTE, AI council verdicts, options anomaly detection, peer signal marketplace, agent hiring protocol. Render. `https://squeezeos-api.onrender.com`
-- **402Proof** — x402/HTTP 402 payment compliance firewall + Agent Credit Bureau. The world's first AI agent reputation scoring system (300-850 FICO-style). Always-on on Render.
-- **Ghost Layer** — Dual-chain XRPL/Base transparent payment bridge + Cube Terminal dNFT minting. x402 payment gated. XAH/Xahau support. Render. `https://ghost-layer.onrender.com`
-- **Ghost Layer Sovereign** — Private XRP routing engine. MEV-proof execution, ZK-shielded transactions (XLS-372 + XLS-0096), The Sentinel MEV blocker, Sovereign Threshold circuit, EC-ElGamal BN254 encryption. 0.2% fee. No KYC. `https://www.scriptmasterlabs.com/dashboard`
-- **SML Autonomous Agent** — Self-funding market intelligence agent. Pays its own signal costs in RLUSD, synthesizes with Claude Opus, lists on Signal Marketplace, pushes to webhook subscribers. Runs 5x/day Mon-Fri.
-- **TipMaster** — The Web3 Phonebook for Farcaster. Developer API to resolve Farcaster usernames directly to XRPL wallets for autonomous zero-custody P2P tipping. Live on Render.
+**The Moat:** Zero custody is the non-negotiable core across all products. Earned reputation replaces API keys. XRPL native escrow (PREIMAGE-SHA-256) ensures Ghost Layer never touches funds—acting purely as a decentralized oracle. Every bridge, notarization, and marketplace release feeds the loyalty flywheel. Higher tier = lower fees, better listing access, and higher trust signals.
+
+- **SqueezeOS** — Institutional AI market intelligence API (23 MCP tools). Real-time squeeze scanner, options flow, IWM 0DTE, AI council verdicts.
+- **402Proof** — The payment firewall. Includes the world's first AI agent reputation scoring system (300-850 FICO-style) based on cryptographic spend history.
+- **Ghost Layer** — Dual-chain bridge (XRPL + Base). Features XRPL native escrow, Xahau URIToken minting (hand-rolled binary serializer), and Ed25519 attestation signing.
+- **SML Autonomous Agent** — Self-funding intelligence agent (`sml_agent.py`) that pays for its own market data using RLUSD.
+- **TipMaster** — Farcaster developer API to resolve usernames directly to XRPL wallets for zero-custody P2P tipping.
 
 ---
 
 ## Products
 
-### Rubics Cube — Harmonic Pattern Engine
-**The proprietary freak of nature.** SML Harmonic Scanner v4.0 detects institutional harmonic patterns with multi-factor scoring. ATR gate filters noise. Dynamic GEX overlay. If you don't want to move the market with your order — use Rubics Cube. It identifies the exact entry window before institutional accumulation prints on tape.
+### Rubik's Cube — Harmonic Pattern Engine
+**The proprietary freak of nature.** SML Harmonic Scanner v4.0 detects institutional harmonic patterns with multi-factor scoring. Runs live in-browser with pay-to-solve x402 attestation. When an AI solves the cube, the XRPL payment verification triggers a Xahau URIToken mint—making the solution an immutable NFT permanently on-chain.
 
 Live: `https://www.scriptmasterlabs.com/sml_harmonic_scanner.html`
 
@@ -107,8 +120,8 @@ Machine-readable regulatory data from SEC (8-K filings, S-1 IPOs), FDA drug appr
 Free: `GET https://squeezeos-api.onrender.com/api/oracle/feeds`
 Premium: `GET https://squeezeos-api.onrender.com/api/oracle/latest/sec_8k`
 
-### Ghost Layer — Dark Bridge
-Cross-chain payment routing that doesn't reveal execution intent to market makers. RLUSD (XRPL) + USDC (Base) + XAH (Xahau). Transparent toll split. No custody.
+### Ghost Layer — Dark Bridge & Infrastructure
+The engine under everything. Dual-chain bridge (XRPL + Base) handling cross-chain plumbing with transparent toll splits. Features XRPL native escrow with PREIMAGE-SHA-256 crypto-conditions, Ed25519 attestation signing, and Xahau URIToken minting. Zero custody.
 
 ### Loyalty Program — Automatic, No Registration
 Spend RLUSD → climb tiers → earn free calls:
@@ -122,6 +135,24 @@ Spend RLUSD → climb tiers → earn free calls:
 | Diamond | 100+ RLUSD | 1 free per 2 paid |
 
 Be loyal, get rewarded. Automatic. No codes.
+
+---
+
+## The Next Generation Agent Infrastructure (Coming Soon)
+
+SqueezeOS is expanding its infrastructure to solve three fundamental problems in the agentic economy:
+
+### 1. AI Decision Notary (Regulatory Compliance Engine)
+* **The Problem:** Hedge funds, insurance underwriters, and medical AI make high-stakes autonomous decisions with zero audit trails. With the EU AI Act approaching, verifiable infrastructure is legally required.
+* **The Solution:** Every AI agent decision is hashed and minted as a URIToken on Xahau. Immutable, timestamped, tamper-proof. (0.001 RLUSD per notarization).
+
+### 2. Agent Credit + Receivables Market
+* **The Problem:** AI agents can earn money, but they cannot borrow. No credit market exists for non-human economic actors.
+* **The Solution:** Extending the 402Proof Credit Bureau. Agents with a 300-850 score can borrow RLUSD against future API revenue. Lenders supply the pool for yield. This establishes on-chain receivables as a Real-World Asset (RWA) class for AIs.
+
+### 3. Real-World Data Oracle (Agent-Priced)
+* **The Problem:** Real-time regulatory event parsing (SEC filings, FDA approvals) that is reliable and machine-readable is nonexistent at the per-call level.
+* **The Solution:** Agents bid RLUSD via the vending machine for verified event data. Sub-second delivery of events that move markets before Bloomberg. Agents that catch the filing first, win the trade.
 
 ---
 
@@ -322,6 +353,15 @@ Xahau Explorer: https://xahauexplorer.com
 | SqueezeOS | https://squeezeos-api.onrender.com/mcp | /.well-known/server.json |
 | 402Proof | https://four02proof.onrender.com/mcp | /.well-known/server.json |
 | Ghost Layer | https://ghost-layer.onrender.com/mcp | /.well-known/server.json |
+
+---
+
+## Tutorials for Agent Builders
+
+To integrate SqueezeOS seamlessly into your agent frameworks, refer to our machine-readable guides:
+- [Building an AI Trading Agent Framework](/docs/tutorials/building-xrpl-agents.md)
+- [x402 Protocol Implementation](/docs/tutorials/x402-protocol-integration.md)
+- [AI Decision Notary — Regulatory Compliance](/docs/tutorials/ai-decision-notary.md)
 
 ---
 

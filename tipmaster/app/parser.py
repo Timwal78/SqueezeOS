@@ -31,6 +31,7 @@ class Command:
 _XRPL_ADDRESS_RE = re.compile(r"\br[1-9A-HJ-NP-Za-km-z]{24,34}\b")
 _EVM_ADDRESS_RE = re.compile(r"\b0x[a-fA-F0-9]{40}\b")
 _SOL_ADDRESS_RE = re.compile(r"\b[1-9A-HJ-NP-Za-km-z]{32,44}\b")
+_BNS_RE = re.compile(r"\b([a-zA-Z0-9.-]+(?:\.xrp|\.xah))\b", re.IGNORECASE)
 
 _USERNAME_RE = re.compile(r"@([A-Za-z0-9_.-]+)")
 _AMOUNT_RE = re.compile(r"\b(\d+(?:\.\d+)?)\b")
@@ -139,9 +140,18 @@ def _parse_tip(text: str, raw_text: str) -> Command:
 
     usernames = _USERNAME_RE.findall(text)
     targets = [u for u in usernames if u.lower() != "tipmaster"]
-
-    if not targets:
-        return Command(type=CommandType.UNKNOWN, raw_text=raw_text)
-
     currency = _parse_currency(text)
-    return Command(type=CommandType.TIP, amount=amount, currency=currency, target_username=targets[0], raw_text=raw_text)
+
+    if targets:
+        return Command(type=CommandType.TIP, amount=amount, currency=currency, target_username=targets[0], raw_text=raw_text)
+
+    # Fallback to direct address or BNS tipping if no username is found
+    bns_match = _BNS_RE.search(text)
+    if bns_match:
+        return Command(type=CommandType.TIP, amount=amount, currency=currency, wallet_address=bns_match.group(1), raw_text=raw_text)
+
+    xrpl_match = _XRPL_ADDRESS_RE.search(text)
+    if xrpl_match:
+        return Command(type=CommandType.TIP, amount=amount, currency=currency, wallet_address=xrpl_match.group(0), raw_text=raw_text)
+
+    return Command(type=CommandType.UNKNOWN, raw_text=raw_text)
