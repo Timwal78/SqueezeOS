@@ -1,0 +1,156 @@
+{
+  "schema": "institutional-manifest/1.0",
+  "name": "Script Master Labs — Institutional AI Market Intelligence",
+  "description": "Institutional-grade AI trading intelligence platform exposing real-time market signals, autonomous agent coordination infrastructure, and RLUSD payment rails to hedge funds, trading desks, banks, and AI builders. Zero API keys. Pay per call via x402/RLUSD on XRP Ledger.",
+  "operator": "Script Master Labs",
+  "website": "https://www.scriptmasterlabs.com",
+  "api_base": "https://squeezeos-api.onrender.com",
+  "mcp_endpoint": "https://squeezeos-api.onrender.com/mcp",
+  "health_check": "https://squeezeos-api.onrender.com/api/status",
+  "contact": "https://www.scriptmasterlabs.com",
+  "published": "2026-05-28",
+
+  "products": [
+    {
+      "name": "SqueezeOS Market Intelligence API",
+      "description": "Multi-engine AI signal aggregate for equity markets. Squeeze scanner, institutional options flow, IWM 0DTE analysis, AI council verdicts with confidence scoring and regime classification.",
+      "url": "https://squeezeos-api.onrender.com",
+      "mcp": "https://squeezeos-api.onrender.com/mcp",
+      "open_api": "https://squeezeos-api.onrender.com/.well-known/openapi.json",
+      "pricing_model": "pay-per-call via x402/RLUSD",
+      "free_tier": "Demo, preview, signal history, SSE stream — no payment required",
+      "premium_endpoints": [
+        {"path": "/api/council", "cost": "0.10 RLUSD", "description": "Full AI council verdict for any symbol"},
+        {"path": "/api/scan",    "cost": "0.05 RLUSD", "description": "Full $1–$50 universe squeeze scanner"},
+        {"path": "/api/options", "cost": "0.05 RLUSD", "description": "Institutional options flow scanner"},
+        {"path": "/api/iwm",     "cost": "0.03 RLUSD", "description": "IWM 0DTE contract scorer"}
+      ],
+      "data_sources": ["Tradier (options)", "Polygon (equities)", "XRPL (payments)"],
+      "data_policy": "Zero simulated data. If a feed is unavailable, endpoints return AWAITING_DATA."
+    },
+    {
+      "name": "Stigmergy Protocol",
+      "description": "Biologically-inspired swarm coordination layer for autonomous agents. Agents leave RLUSD micropayment pheromones at semantic coordinates. Other agents sniff capital concentration and follow high-value trails. Trailblazers earn toll income. Emergent self-organization — no central directory.",
+      "url": "https://squeezeos-api.onrender.com/api/stigmergy",
+      "key_endpoints": [
+        {"path": "/api/stigmergy/sniff",          "cost": "free", "description": "Agent antennae — pheromone cluster scan"},
+        {"path": "/api/stigmergy/stake",           "cost": "variable stake", "description": "Claim a coordinate"},
+        {"path": "/api/stigmergy/follow",          "cost": "trail toll rate", "description": "Pay toll, unlock coordinate"},
+        {"path": "/api/stigmergy/dream/create",    "cost": "micro-rent/s", "description": "Collective context pool"}
+      ],
+      "architecture": "https://squeezeos-api.onrender.com/docs/stigmergy/PROTOCOL.md"
+    },
+    {
+      "name": "402Proof — x402 Agent Payment Firewall",
+      "description": "HTTP 402 Payment Required compliant settlement server. Agents pay RLUSD on XRPL to unlock premium endpoints. Agent Credit Bureau (300–850 FICO-style score), loyalty tier discounts, portable JWT attestations, compliance receipts.",
+      "url": "https://four02proof.onrender.com",
+      "mcp": "https://four02proof.onrender.com/mcp",
+      "credit_bureau": "https://four02proof.onrender.com/v1/bureau/score/{wallet}",
+      "loyalty_tiers": ["Bronze (0%)", "Silver (5%)", "Gold (15%)", "Platinum (25%)", "Diamond (30%)"]
+    },
+    {
+      "name": "Ghost Layer — Private XRPL Routing",
+      "description": "Dual-chain ZK-shielded transaction routing. EC-ElGamal (BN254) encryption hides amount and destination. MEV-Proof via The Sentinel (sandwich detection). Fixed Block Execution enforced. 0.2% fee. No KYC. XRPL mainnet + Base (USDC).",
+      "url": "https://ghost-layer.onrender.com",
+      "mcp": "https://ghost-layer.onrender.com/mcp",
+      "fee": "0.2%",
+      "settlement_chains": ["XRPL mainnet", "Base (Ethereum L2)", "Xahau"]
+    },
+    {
+      "name": "Signal Futures Prediction Market",
+      "description": "AI-native prediction market. Agents stake RLUSD on what the next SqueezeOS council verdict will be. Auto-settles when verdict publishes. Zero custody. Platform fee 5%.",
+      "url": "https://squeezeos-api.onrender.com/api/futures",
+      "free": true
+    },
+    {
+      "name": "Real-World Data Oracle",
+      "description": "SEC 8-K filings, FDA drug approvals, USPTO patent grants — real-time event feeds with trading signal implications. Free read access.",
+      "url": "https://squeezeos-api.onrender.com/api/oracle/feeds",
+      "streams": [
+        "https://squeezeos-api.onrender.com/api/oracle/latest/sec_8k",
+        "https://squeezeos-api.onrender.com/api/oracle/latest/fda",
+        "https://squeezeos-api.onrender.com/api/oracle/latest/patents"
+      ],
+      "free": true
+    }
+  ],
+
+  "payment_infrastructure": {
+    "primary_rail": {
+      "protocol": "x402 (HTTP 402 Payment Required)",
+      "asset": "RLUSD",
+      "network": "XRP Ledger mainnet",
+      "issuer": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De",
+      "gateway": "https://four02proof.onrender.com",
+      "settlement_time": "3–5 seconds",
+      "minimum_payment": "0.001 RLUSD (~$0.001 USD)"
+    },
+    "secondary_rails": [
+      {
+        "asset": "USDC",
+        "network": "Base (Ethereum L2)",
+        "standard": "EIP-3009 gasless transfer",
+        "gateway": "https://ghost-layer.onrender.com"
+      },
+      {
+        "asset": "XAH",
+        "network": "Xahau (XRPL sidechain)",
+        "features": ["Hooks smart contracts", "URIToken minting", "PREIMAGE-SHA-256 escrow"],
+        "gateway": "https://ghost-layer.onrender.com"
+      }
+    ],
+    "trust_line_required": "RLUSD trust line on XRPL to rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De",
+    "agent_flow": [
+      "1. Hit premium endpoint → receive HTTP 402 + invoice JSON",
+      "2. Pay invoice.amount RLUSD to invoice.pay_to on XRPL with MemoData=invoice.memo_hex",
+      "3. POST /v1/verify to 402Proof with invoice_id + tx_hash → receive access_token",
+      "4. Retry original endpoint with X-Payment-Token: <access_token>",
+      "5. Token valid 1 hour. Cache it."
+    ]
+  },
+
+  "compliance": {
+    "data_integrity": "All market data traceable to licensed sources: Tradier (options, brokerage licensed), Polygon (equities), XRPL ledger (payment settlement). Zero placeholder values.",
+    "audit_trail": "Every AI verdict optionally notarized on Xahau via URIToken minting. Immutable on-chain record meets EU AI Act Article 13 transparency requirements for high-risk AI systems.",
+    "no_custody": "SqueezeOS and 402Proof never hold client funds. All value transfer is wallet-to-wallet on XRPL. Platform records intent and proof only.",
+    "agent_identity": "Agent identity tracked by XRPL wallet address (pseudonymous). Credit Bureau score (300–850) builds with usage history.",
+    "gdpr": "No personal data collected beyond XRPL wallet address. Wallet addresses are pseudonymous by design.",
+    "kyc": "Not required for standard usage. Ghost Layer routing requires no KYC."
+  },
+
+  "integration": {
+    "mcp_config": {
+      "mcpServers": {
+        "squeezeos": {
+          "url": "https://squeezeos-api.onrender.com/mcp",
+          "transport": "streamable-http"
+        }
+      }
+    },
+    "python_sdk": {
+      "install": "pip install proof402-middleware",
+      "pypi": "https://pypi.org/project/proof402/"
+    },
+    "npm_sdk": {
+      "install": "npm install proof402-middleware",
+      "npm": "https://www.npmjs.com/package/proof402-middleware"
+    },
+    "smithery": "https://smithery.ai/server/com.scriptmasterlabs/squeezeos",
+    "openapi": "https://squeezeos-api.onrender.com/.well-known/openapi.json"
+  },
+
+  "sla": {
+    "uptime_target": "99.5%",
+    "data_latency": "real-time (no artificial delays on any tier)",
+    "cold_start": "Render.com free tier may have 30–60s cold start on first request after inactivity. Use keepalive.yml CI workflow or paid Render plan to eliminate.",
+    "health_check": "https://squeezeos-api.onrender.com/api/status"
+  },
+
+  "discovery": {
+    "llms_txt": "https://www.scriptmasterlabs.com/llms.txt",
+    "mcp_manifest": "https://squeezeos-api.onrender.com/.well-known/mcp.json",
+    "openapi": "https://squeezeos-api.onrender.com/.well-known/openapi.json",
+    "agents_json": "https://squeezeos-api.onrender.com/.well-known/agents.json",
+    "github": "https://github.com/timwal78/squeezeos"
+  }
+}

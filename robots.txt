@@ -40,6 +40,14 @@ Allow: /api/oracle/feeds
 Allow: /api/oracle/latest/
 Allow: /api/oracle/query
 Allow: /api/oracle/stream
+Allow: /api/futures
+Allow: /api/futures/leaderboard
+Allow: /api/settlement
+Allow: /api/stigmergy/sniff
+Allow: /api/stigmergy/trails
+Allow: /api/stigmergy/leaderboard
+Allow: /api/stigmergy/dream
+Allow: /.well-known/institutional.json
 
 # ── AI Crawlers — Explicitly Permitted ──────────────────────────────────────
 
