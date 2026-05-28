@@ -619,16 +619,26 @@ class AlphaVantageProvider:
 # ============================================================
 class TradierProvider:
     def __init__(self):
-        self.live_mode = os.environ.get('TRADIER_LIVE', 'false').lower() == 'true'
+        # Determine mode: TRADIER_LIVE=true OR TRADIER_ENV=production (matches tradier_api.py)
+        self.live_mode = (
+            os.environ.get('TRADIER_LIVE', 'false').lower() == 'true'
+            or os.environ.get('TRADIER_ENV', 'sandbox').lower() == 'production'
+        )
         if self.live_mode:
-            self.api_key = os.environ.get('TRADIER_PRODUCTION_API_KEY', '')
-            self.account_id = os.environ.get('TRADIER_PRODUCTION_ACCOUNT', '') # Need to find this ID if not provided
+            self.api_key = (
+                os.environ.get('TRADIER_PRODUCTION_API_KEY') or
+                os.environ.get('TRADIER_API_KEY', '')
+            )
+            self.account_id = os.environ.get('TRADIER_PRODUCTION_ACCOUNT', '')
             self.base_url = 'https://api.tradier.com/v1'
         else:
-            self.api_key = os.environ.get('TRADIER_SANDBOX_API_KEY', '')
+            self.api_key = (
+                os.environ.get('TRADIER_SANDBOX_API_KEY') or
+                os.environ.get('TRADIER_API_KEY', '')
+            )
             self.account_id = os.environ.get('TRADIER_SANDBOX_ACCOUNT', '')
             self.base_url = 'https://sandbox.tradier.com/v1'
-            
+
         self.last_call = 0
         self.min_interval = 0.5
         if self.available:
@@ -638,7 +648,7 @@ class TradierProvider:
 
     @property
     def available(self):
-        return bool(self.api_key and self.account_id)
+        return bool(self.api_key)  # account_id only needed for trading orders, not market data
 
     def _headers(self):
         return {
