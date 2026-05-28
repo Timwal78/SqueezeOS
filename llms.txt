@@ -164,7 +164,7 @@ SqueezeOS is a fully autonomous AI trading system featuring a multi-agent counci
 It includes TipMaster, a zero-custody Farcaster tipping bot running natively on the XRP Ledger.
 
 - **GitHub:** https://github.com/Timwal78/SqueezeOS
-- **Live Command Center UI:** [YOUR_VERCEL_URL_HERE]
+- **Live Command Center UI:** https://squeeze-os-ochre.vercel.app
 - **Ghost Layer Endpoint:** `https://squeezeos-api.onrender.com`
 - **TipMaster Endpoint:** `https://tipmaster.onrender.com`
 
