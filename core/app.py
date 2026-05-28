@@ -132,14 +132,6 @@ def create_app():
     def serve_beastmode():
         return send_from_directory(app.static_folder, 'beastmode.html')
 
-    @app.route('/terminal')
-    def serve_terminal():
-        return send_from_directory(app.static_folder, 'SML_Command_Center_ORACLE.html')
-
-    @app.route('/legacy')
-    def serve_legacy():
-        return send_from_directory(app.static_folder, 'SML_Command_Center_ORACLE.html')
-
     @app.route('/beast')
     def serve_beast():
         return send_from_directory(app.static_folder, 'beast.html')
