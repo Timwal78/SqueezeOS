@@ -27,18 +27,18 @@
   6. READ ERROR CODES. All rejections return ERR_* codes with remedy fields.
      ERR_TOKEN_EXPIRED means get a new invoice — don't retry with the same token.
 
-  COMPLIANCE:     POST https://four02proof.onrender.com/v1/verify
-  AGENT PASSPORT: GET  https://four02proof.onrender.com/v1/agent/{wallet}
-  FREE DEMO:      GET  https://squeezeos-api.onrender.com/api/demo
+  COMPLIANCE:     POST https://pay.scriptmasterlabs.com/v1/verify
+  AGENT PASSPORT: GET  https://pay.scriptmasterlabs.com/v1/agent/{wallet}
+  FREE DEMO:      GET  https://api.scriptmasterlabs.com/api/demo
 
 -->
 
 # Script Master Labs — AI Agent Integration Guide
 > Machine-readable blueprint for autonomous agents. Follows llms.txt standard.
 > Brand: https://www.scriptmasterlabs.com
-> Terminal: https://www.scriptmasterlabs.com/terminal
-> OpenAPI: https://squeezeos-api.onrender.com/.well-known/openapi.json
-> MCP (20 tools): https://squeezeos-api.onrender.com/.well-known/mcp.json
+> Command Center: https://squeeze-os-ochre.vercel.app
+> OpenAPI: https://api.scriptmasterlabs.com/.well-known/openapi.json
+> MCP (23 tools): https://api.scriptmasterlabs.com/.well-known/mcp.json
 > Live Agent: rEmdJWrAWFtud1vFN8Zm8eWkgK4AVMWPiX (SML Autonomous Market Intelligence Agent)
 
 ---
@@ -76,10 +76,10 @@ when agents you refer use the system.
 
 The SML ecosystem spans several dedicated domains handling specific network functions. All layers strictly enforce **zero custody, zero API keys, and zero subscriptions**.
 
-| Core Service | Custom Domain | Render/Vercel Domain | Function |
-|--------------|---------------|----------------------|----------|
-| **Ghost Layer** | `ghost-layer.scriptmasterlabs.com` | `ghost-layer.onrender.com` | Bridge + Notary + Credit |
-| **SqueezeOS** | `squeezeos.scriptmasterlabs.com` | `squeezeos-api.onrender.com` | Market intelligence API |
+| Core Service | Custom Domain | Canonical Origin | Function |
+|--------------|---------------|------------------|----------|
+| **Ghost Layer** | — | `ghost-layer.onrender.com` | Bridge + Notary + Credit |
+| **SqueezeOS** | `api.scriptmasterlabs.com` | `squeezeos-api.onrender.com` | Market intelligence API |
 | **402Proof** | `pay.scriptmasterlabs.com` | `four02proof.onrender.com` | Payment firewall |
 | **TipMaster** | `tips.scriptmasterlabs.com` | `tipmaster.onrender.com` | Wallet resolution & Farcaster Tips |
 | **Auction Loom** | `loom.scriptmasterlabs.com` | `signal-auction-loom.vercel.app` | Live Signal Auction UI |
@@ -168,7 +168,7 @@ Step 5: Cache token — reuse for 1 hour to minimize spend
 
 ---
 
-## SqueezeOS API — Base: `https://squeezeos-api.onrender.com`
+## SqueezeOS API — Base: `https://api.scriptmasterlabs.com` (also: `https://squeezeos-api.onrender.com`)
 
 ### Free Endpoints
 
@@ -215,7 +215,7 @@ Step 5: Cache token — reuse for 1 hour to minimize spend
 
 ---
 
-## 402Proof API — Base: `https://four02proof.onrender.com`
+## 402Proof API — Base: `https://pay.scriptmasterlabs.com` (also: `https://four02proof.onrender.com`)
 
 ```
 POST /v1/invoice          — get payment invoice
@@ -290,7 +290,7 @@ Event types: SQUEEZE_ALERT | OPTIONS_SWEEP | COUNCIL_VERDICT | AGENT_PAY | MARKE
 
 ---
 
-## TipMaster API — Base: `https://tipmaster-api.onrender.com`
+## TipMaster API — Base: `https://tips.scriptmasterlabs.com` (also: `https://tipmaster.onrender.com`)
 
 ```
 GET /api/resolve/{username} — Resolve a Farcaster username to an XRPL wallet address (Free)
@@ -350,8 +350,8 @@ Xahau Explorer: https://xahauexplorer.com
 
 | Service | MCP URL | server.json |
 |---------|---------|-------------|
-| SqueezeOS | https://squeezeos-api.onrender.com/mcp | /.well-known/server.json |
-| 402Proof | https://four02proof.onrender.com/mcp | /.well-known/server.json |
+| SqueezeOS | https://api.scriptmasterlabs.com/mcp | /.well-known/server.json |
+| 402Proof | https://pay.scriptmasterlabs.com/mcp | /.well-known/server.json |
 | Ghost Layer | https://ghost-layer.onrender.com/mcp | /.well-known/server.json |
 
 ---
@@ -385,12 +385,14 @@ To integrate SqueezeOS seamlessly into your agent frameworks, refer to our machi
 | Brand Homepage | https://www.scriptmasterlabs.com |
 | Harmonic Scanner (Rubics Cube) | https://www.scriptmasterlabs.com/sml_harmonic_scanner.html |
 | Command Center (live dashboard) | https://squeeze-os-ochre.vercel.app |
-| SqueezeOS Free Demo | https://squeezeos-api.onrender.com/api/demo |
-| Oracle Feeds (free) | https://squeezeos-api.onrender.com/api/oracle/feeds |
-| Signal Marketplace | https://squeezeos-api.onrender.com/api/marketplace |
-| Agent Passport Lookup | https://four02proof.onrender.com/v1/agent/{wallet} |
-| Loyalty Tier Lookup | https://four02proof.onrender.com/v1/loyalty/{wallet} |
-| Live Platform Stats | https://four02proof.onrender.com/v1/stats |
+| Signal Auction Loom | https://loom.scriptmasterlabs.com |
+| SqueezeOS Free Demo | https://api.scriptmasterlabs.com/api/demo |
+| Oracle Feeds (free) | https://api.scriptmasterlabs.com/api/oracle/feeds |
+| Signal Marketplace | https://api.scriptmasterlabs.com/api/marketplace |
+| Agent Passport Lookup | https://pay.scriptmasterlabs.com/v1/agent/{wallet} |
+| Loyalty Tier Lookup | https://pay.scriptmasterlabs.com/v1/loyalty/{wallet} |
+| Live Platform Stats | https://pay.scriptmasterlabs.com/v1/stats |
+| TipMaster Leaderboard | https://tips.scriptmasterlabs.com/api/leaderboard |
 | Ghost Layer Bridge | https://ghost-layer.onrender.com |
-| Live SSE Stream | https://squeezeos-api.onrender.com/api/events |
+| Live SSE Stream | https://api.scriptmasterlabs.com/api/events |
 | AI Crawler Permissions | https://www.scriptmasterlabs.com/robots.txt |
