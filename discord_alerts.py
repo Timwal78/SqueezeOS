@@ -182,6 +182,53 @@ class DiscordAlerts:
         }
         self._post(url, payload)
 
+    def fire_payment_alert(self, wallet: str, endpoint: str,
+                           amount_rlusd: float, echolock_tier: int = 2):
+        """
+        Fire a real-time Discord notification for every incoming RLUSD agent payment.
+        No cooldown — every payment fires. Called from a daemon thread in proof402_integration.
+        Uses DISCORD_WEBHOOK_PAYMENTS if set, otherwise DISCORD_WEBHOOK_ALL.
+        """
+        url = (os.environ.get('DISCORD_WEBHOOK_PAYMENTS', '') or
+               self.webhook_all or self.webhook_squeeze)
+        if not url:
+            return
+
+        _tier_labels = {
+            0: 'T0 — SCRIPTED',
+            1: 'T1 — NAIVE',
+            2: 'T2 — ADAPTIVE',
+            3: 'T3 — STRATEGIC',
+            4: 'T4 — INSTITUTIONAL',
+        }
+        _tier_colors = {0: 0x555555, 1: 0xAAAAAA, 2: 0x00BFFF, 3: 0x00FF88, 4: 0xFFD700}
+        _depth_pcts  = {0: '20%',   1: '40%',    2: '60%',    3: '80%',    4: '100%'}
+        _ghost_bps   = {0: '0 BPS', 1: '5 BPS',  2: '10 BPS', 3: '20 BPS', 4: '30 BPS (DIAMOND)'}
+
+        tier_label = _tier_labels.get(echolock_tier, 'T2 — ADAPTIVE')
+        color      = _tier_colors.get(echolock_tier, 0x00BFFF)
+        depth      = _depth_pcts.get(echolock_tier, '60%')
+        ghost      = _ghost_bps.get(echolock_tier, '10 BPS')
+        wallet_display = f"{wallet[:6]}...{wallet[-4:]}" if len(wallet) > 10 else wallet
+
+        payload = {
+            "embeds": [{
+                "title": f"💰 AGENT PAID — {amount_rlusd:.2f} RLUSD",
+                "color": color,
+                "fields": [
+                    {"name": "Endpoint",        "value": f"`{endpoint}`",             "inline": True},
+                    {"name": "Amount",           "value": f"**{amount_rlusd} RLUSD**", "inline": True},
+                    {"name": "Wallet",           "value": f"`{wallet_display}`",       "inline": True},
+                    {"name": "ECHOLOCK Tier",    "value": tier_label,                  "inline": True},
+                    {"name": "Response Depth",   "value": depth,                       "inline": True},
+                    {"name": "Ghost Layer",      "value": ghost,                       "inline": True},
+                ],
+                "footer": {"text": f"ECHOLOCK-402™ | SqueezeOS | {datetime.now().strftime('%I:%M:%S %p ET')}"},
+                "timestamp": datetime.utcnow().isoformat(),
+            }]
+        }
+        self._post(url, payload)
+
     # ══════════════════════════════════════════════════════════
     # SQUEEZE ALERTS
     # ══════════════════════════════════════════════════════════

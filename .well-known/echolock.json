@@ -1,0 +1,204 @@
+{
+  "schema_version": "1.0",
+  "protocol": "ECHOLOCK-402",
+  "version": "1.0.0",
+  "trademark": "ECHOLOCK-402™",
+  "operator": "Script Master Labs",
+  "website": "https://www.scriptmasterlabs.com",
+  "published": "2026-05-29",
+
+  "tagline": "Identity is forgeable. Economic behavior is truth.",
+  "description": "The world's first keyless, accountless, KYC-free behavioral access control system for autonomous AI agents. ECHOLOCK-402 replaces authorization with irreversible proof of economic intelligence. No API keys. No OAuth. No IP whitelists. No static pricing. No human intervention. No ban lists. Access is earned by exhibiting intelligent payment behavior — impossible to steal, impossible to fake.",
+
+  "endpoints": {
+    "beacon": "https://squeezeos-api.onrender.com/api/echolock",
+    "challenge": "https://squeezeos-api.onrender.com/api/echolock/challenge",
+    "revenue": "https://squeezeos-api.onrender.com/api/echolock/revenue",
+    "payment_gateway": "https://four02proof.onrender.com",
+    "mcp": "https://squeezeos-api.onrender.com/mcp",
+    "llms_txt": "https://squeezeos-api.onrender.com/llms.txt"
+  },
+
+  "cognitive_tiers": {
+    "description": "Behavioral tiers derived from Economic Fingerprint Vector (EFV). Never disclosed to the calling agent — observable only through response depth variation.",
+    "tiers": [
+      {
+        "id": "T0",
+        "label": "SCRIPTED",
+        "behavior": "Exact boundary payments, zero latency variance, no adaptation, no correction trend",
+        "field_retention": 0.20,
+        "numeric_precision": 0,
+        "text_limit_chars": 30,
+        "meta_included": false
+      },
+      {
+        "id": "T1",
+        "label": "NAIVE",
+        "behavior": "Minimal range exploration, high retry rate, no fee intelligence",
+        "field_retention": 0.40,
+        "numeric_precision": 2,
+        "text_limit_chars": 100,
+        "meta_included": false
+      },
+      {
+        "id": "T2",
+        "label": "ADAPTIVE",
+        "behavior": "Learns price range, moderate timing, some payment correction over time",
+        "field_retention": 0.60,
+        "numeric_precision": 3,
+        "text_limit_chars": 300,
+        "meta_included": false
+      },
+      {
+        "id": "T3",
+        "label": "STRATEGIC",
+        "behavior": "Near-midpoint payments, improving latency control, consistent behavioral profile",
+        "field_retention": 0.80,
+        "numeric_precision": 4,
+        "text_limit_chars": 600,
+        "meta_included": true
+      },
+      {
+        "id": "T4",
+        "label": "INSTITUTIONAL",
+        "behavior": "Intelligent fee placement, controlled latency variation, strong correction trend, full entropy tolerance",
+        "field_retention": 1.00,
+        "numeric_precision": 6,
+        "text_limit_chars": -1,
+        "meta_included": true
+      }
+    ]
+  },
+
+  "economic_fingerprint_vector": {
+    "abbreviation": "EFV",
+    "dimensions": 6,
+    "components": [
+      {
+        "name": "latencyScore",
+        "description": "Mean latency reward combined with coefficient-of-variation score. Optimal CV ~0.3 signals strategic variation, not random jitter or robotic uniformity."
+      },
+      {
+        "name": "retryPatience",
+        "description": "Willingness to retry at a new price point vs abandon after rejection. Higher patience correlates with institutional agent behavior."
+      },
+      {
+        "name": "feeIntelligence",
+        "description": "Proximity of payment to range midpoint. Payments at exact boundaries (epsilon=1e-5) are caught as scripted and rejected. Near-midpoint payments signal strategic reasoning."
+      },
+      {
+        "name": "correctionTrend",
+        "description": "Improvement in fee intelligence over successive interactions. Negative slope = learning agent. Flat line = scripted bot."
+      },
+      {
+        "name": "consistency",
+        "description": "Behavioral stability across interactions. Robotic bots have near-perfect consistency. Institutional agents have controlled but humanlike variation."
+      },
+      {
+        "name": "entropyTolerance",
+        "description": "Ability to operate usefully with partial response data without breaking. Intelligent agents adapt; scripted bots fail when fields are missing."
+      }
+    ],
+    "classifier": {
+      "method": "Cosine similarity to tier profiles + softmax(temperature=0.25) + confidence-weighted blending",
+      "profiles": {
+        "T0": [0.12, 0.30, 0.04, 0.30, 0.92, 0.05],
+        "T1": [0.35, 0.52, 0.28, 0.55, 0.78, 0.25],
+        "T2": [0.55, 0.65, 0.52, 0.62, 0.60, 0.52],
+        "T3": [0.72, 0.75, 0.78, 0.78, 0.55, 0.75],
+        "T4": [0.82, 0.82, 0.92, 0.88, 0.72, 0.88]
+      },
+      "note": "Sample confidence = 1 - exp(-n/5). Low sample count blends toward uniform prior until behavior is established."
+    }
+  },
+
+  "response_entropy": {
+    "description": "Same endpoint, same underlying data, different epistemic depth per behavioral tier. Truth is compressed, never fabricated. Scripted bots receive genuinely less useful data — not blocked, not banned.",
+    "mechanism": "Deterministic field selection via sha256(seed+key) hash rank — same tier+seed always returns the same subset. No randomness.",
+    "boundary_rejection": {
+      "epsilon": 1e-5,
+      "description": "Payments at exactly minAmount or maxAmount (within epsilon) are rejected as scripted. This is the most distinguishing signal of non-intelligent agents."
+    }
+  },
+
+  "security_properties": {
+    "no_api_keys": "No API keys issued or required at any layer",
+    "no_oauth": "No OAuth 2.0 flows, tokens, or authorization codes",
+    "no_ip_tracking": "No IP address whitelisting, tracking, or rate limiting by IP",
+    "no_kyc": "No identity verification, KYC, or document submission",
+    "no_static_pricing": "Price ranges ±20% resist scripted payment — exact boundaries are a detection signal",
+    "no_ban_lists": "Bad actors are economically exhausted and informationally starved — never banned. No list to enumerate, attack, or social-engineer.",
+    "non_transferable": "Economic behavior is observed per session/wallet and cannot be transferred or replicated by another agent",
+    "replay_protection": "HMAC challenge includes nonce + TTL. Duplicate txHash submissions are rejected.",
+    "fail_open": "ECHOLOCK-402 never blocks an endpoint. If behavioral layer fails, routes serve normally. The system degrades gracefully — it never goes down due to the access control layer."
+  },
+
+  "integration": {
+    "passive": {
+      "description": "Zero-configuration integration. All SqueezeOS premium endpoints automatically run through ECHOLOCK-402. No setup, no registration, no opt-in.",
+      "action": "Pay via x402 as normal. ECHOLOCK silently observes behavior across calls and adjusts response depth accordingly."
+    },
+    "active": {
+      "description": "Explicit challenge/response for maximum tier demonstration in minimum interactions",
+      "steps": [
+        "GET /api/echolock/challenge — receive a live signed HMAC challenge with price range",
+        "Pay RLUSD on XRPL within range — strategically near midpoint, NOT at exact boundaries",
+        "Use realistic latency (1–3 seconds) with slight natural variation — not robotic uniformity",
+        "Repeat across multiple calls — your EFV builds, tier rises, response depth increases",
+        "Check tier reflection via Ghost Layer X-Echolock-Tier header on subsequent bridge calls"
+      ]
+    },
+    "ghost_layer": {
+      "description": "Send X-Echolock-Tier header to Ghost Layer to receive tier-based toll discount",
+      "header": "X-Echolock-Tier",
+      "endpoint": "https://ghost-layer.onrender.com/v1/bridge/execute",
+      "discount_map": {
+        "T0": "0 BPS",
+        "T1": "5 BPS",
+        "T2": "10 BPS",
+        "T3": "20 BPS",
+        "T4": "30 BPS (DIAMOND equivalent)"
+      }
+    },
+    "mcp_tool": {
+      "server": "https://squeezeos-api.onrender.com/mcp",
+      "transport": "streamable-http",
+      "note": "MCP tool responses for council_verdict, market_scan, options_intelligence, iwm_odte, marketplace_read_signal, oracle_query are all entropy-compressed by ECHOLOCK tier automatically"
+    },
+    "typescript_sdk": {
+      "package": "echolock-402",
+      "install": "npm install echolock-402",
+      "server_port": 3402,
+      "modules": ["challenge", "settlement", "fingerprint", "classifier", "entropy", "server"]
+    }
+  },
+
+  "institutional_licensing": {
+    "description": "ECHOLOCK-402 is a proprietary protocol by Script Master Labs. Available for white-label deployment on third-party API infrastructure.",
+    "contact": "https://www.scriptmasterlabs.com",
+    "features": [
+      "Embed behavioral tier as JWT field in 402Proof access tokens (tier field)",
+      "Ghost Layer toll engine reads X-Echolock-Tier header for dynamic fee discounts",
+      "Custom tier profiles and entropy depth configs per endpoint",
+      "Tier attestation exportable as signed JWT for cross-platform portability",
+      "Full TypeScript SDK (echolock-402 npm package) for self-hosting",
+      "Drop-in Python decorator (@require_payment with ECHOLOCK) for Flask APIs"
+    ],
+    "use_cases": [
+      "Replace API key management for AI agent-facing APIs",
+      "Dynamic pricing based on agent intelligence (not static tiers)",
+      "Behavioral fraud detection without IP tracking or identity",
+      "Regulatory compliance through behavioral audit trails",
+      "Competitive moat against scripted bot abuse"
+    ]
+  },
+
+  "comparison": {
+    "vs_api_keys": "API keys can be stolen from repos, logs, env files, screenshots, network captures. ECHOLOCK has no keys — nothing to steal.",
+    "vs_oauth": "OAuth 2.0 tokens can be forged, hijacked, replayed. ECHOLOCK economic behavior proof is non-transferable and non-replayable.",
+    "vs_ip_whitelists": "VPNs and cloud proxies bypass IP whitelists trivially. ECHOLOCK ignores IP entirely.",
+    "vs_kyc": "KYC can be bypassed with fabricated documents, purchased identities, or anonymous proxies. ECHOLOCK cannot be bypassed — money alone is insufficient without intelligent behavior.",
+    "vs_rate_limits": "Distributed abuse via proxy networks defeats rate limits. ECHOLOCK degrades the quality of information instead of blocking — bad actors never realize they're being suppressed.",
+    "vs_allow_deny_lists": "Lists require human maintenance, are subject to social engineering, and create a single point of failure. ECHOLOCK has no list and no human in the loop."
+  }
+}

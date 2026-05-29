@@ -72,6 +72,49 @@
         "https://squeezeos-api.onrender.com/api/oracle/latest/patents"
       ],
       "free": true
+    },
+    {
+      "name": "ECHOLOCK-402™ — Behavioral Access Control",
+      "flagship": true,
+      "description": "Proprietary behavioral access control system. The world's first keyless, accountless, KYC-free access control for AI agents and institutions. Replaces API keys, OAuth 2.0, IP whitelists, KYC, rate limits, and allow/deny lists with irreversible proof of economic intelligence. No attack surface — nothing to steal, forge, bypass, or social-engineer.",
+      "url": "https://squeezeos-api.onrender.com/api/echolock",
+      "discovery_manifest": "https://squeezeos-api.onrender.com/.well-known/echolock.json",
+      "challenge_endpoint": "https://squeezeos-api.onrender.com/api/echolock/challenge",
+      "how_it_works": [
+        "Agent hits premium endpoint → receives HTTP 402 with price range (±20%, not exact price)",
+        "Payment at exact boundary (epsilon=1e-5) is caught and rejected — scripted bots cannot pass",
+        "System observes: latency distribution, fee placement, retry patience, correction trend",
+        "6-dimensional Economic Fingerprint Vector (EFV) built from observed behavior",
+        "EFV maps to Cognition Tier T0–T4 — never disclosed to agent, observable only in response depth",
+        "Higher tier = more fields, higher precision, fuller thesis in every response"
+      ],
+      "competitive_displacement": {
+        "api_keys": "No keys exist — nothing to steal from repos, logs, or env files",
+        "oauth_2": "No tokens — economic behavior is non-transferable and non-replayable",
+        "ip_whitelists": "No IP tracking — VPN/proxy bypass is irrelevant",
+        "kyc_identity": "No identity required — economic intelligence cannot be faked with documents",
+        "rate_limits": "No block — bad actors receive degraded data quality, never know they're suppressed",
+        "allow_deny_lists": "No list — no human in the loop, no social engineering attack vector"
+      },
+      "institutional_use_cases": [
+        "Replace API key management for AI agent-facing hedge fund infrastructure",
+        "Dynamic data depth based on agent intelligence (not static subscription tiers)",
+        "Behavioral fraud detection without identity or IP tracking",
+        "Regulatory compliance through cryptographic behavioral audit trails",
+        "White-label deployment on institutional API infrastructure"
+      ],
+      "licensing": {
+        "model": "Proprietary — white-label available",
+        "contact": "https://www.scriptmasterlabs.com",
+        "features": [
+          "Tier embedded as JWT field in 402Proof access tokens",
+          "Ghost Layer toll discount via X-Echolock-Tier header (T4 = 30 BPS = DIAMOND)",
+          "TypeScript SDK (npm install echolock-402)",
+          "Python decorator (@require_payment with ECHOLOCK) for Flask APIs"
+        ]
+      },
+      "status": "live",
+      "free": true
     }
   ],
 
