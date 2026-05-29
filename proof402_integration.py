@@ -9,8 +9,45 @@ import hashlib
 import base64
 import json
 import time
+import threading
 from functools import wraps
 from flask import request, jsonify
+
+# ── Discord payment notification (lazy singleton) ─────────────────────────────
+_discord_alerts = None
+
+def _get_discord():
+    global _discord_alerts
+    if _discord_alerts is None:
+        try:
+            from discord_alerts import DiscordAlerts
+            _discord_alerts = DiscordAlerts()
+        except Exception:
+            pass
+    return _discord_alerts
+
+# ── Endpoint prices (for Discord notification) ────────────────────────────────
+_PAYMENT_PRICES = {
+    '/api/council':           0.10,
+    '/api/scan':              0.05,
+    '/api/options':           0.05,
+    '/api/iwm':               0.03,
+    '/api/marketplace/read':  0.02,
+}
+
+def _fire_payment_discord(wallet: str, path: str, tier: int) -> None:
+    """Non-blocking: fire Discord payment alert in a daemon thread."""
+    price = _PAYMENT_PRICES.get(path, 0.0)
+    if not price:
+        return
+    da = _get_discord()
+    if not da:
+        return
+    threading.Thread(
+        target=da.fire_payment_alert,
+        args=(wallet, path, price, tier),
+        daemon=True,
+    ).start()
 
 # ── Config (set these in your .env / environment) ────────────────────────────
 PROOF402_SERVER     = os.getenv('PROOF402_SERVER_URL', 'https://four02proof.onrender.com')
@@ -211,8 +248,10 @@ def require_payment(f):
                     _seed = _hl.sha256(f'{token_wallet}:{path}'.encode()).hexdigest()[:32]
                     _g.echolock_tier = _tier
                     _g.echolock_seed = _seed
+                    _fire_payment_discord(token_wallet, path, _tier)
                     return _apply_entropy(f(*args, **kwargs), _tier, _seed)
 
+                _fire_payment_discord(token_wallet, path, 2)
                 return f(*args, **kwargs)
 
             # Token present but invalid — give the agent the specific reason
