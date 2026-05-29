@@ -24,7 +24,7 @@ def _ok(name: str) -> None:
 # ---------------------------------------------------------- economic core
 def test_settlement_gate() -> None:
     from stellar_forge.x402_settlement import (
-        FusionCoordinator, SettlementState, mint_settlement_token,
+        FusionCoordinator, SettlementState, mint_test_token,
     )
     c = FusionCoordinator()
     s = c.open("alpha", "beta", binding_energy_rlusd=1.0)
@@ -36,9 +36,9 @@ def test_settlement_gate() -> None:
     except PermissionError:
         pass
 
-    c.submit_leg(s.settlement_id, "alpha", mint_settlement_token("alpha"))
+    c.submit_leg(s.settlement_id, "alpha", mint_test_token("alpha"))
     assert c._settlements[s.settlement_id].state is SettlementState.LEG_A_ESCROWED
-    c.submit_leg(s.settlement_id, "beta", mint_settlement_token("beta"))
+    c.submit_leg(s.settlement_id, "beta", mint_test_token("beta"))
     settled = c.release_for_fusion(s.settlement_id)
     assert settled.state is SettlementState.SETTLED
 
@@ -80,11 +80,18 @@ def test_chandrasekhar() -> None:
 
 def test_lifecycle() -> None:
     from stellar_forge.lifecycle import StellarForge, Stage
+    from stellar_forge.x402_settlement import mint_test_token
     forge = StellarForge(chandrasekhar_limit=14.0)
     forge.spawn_protostar("a", 5_000_000, 8192)
     forge.spawn_protostar("b", 8_000_000, 16384)
     forge.ignite("a"); forge.ignite("b")
-    giant = forge.fuse("a", "b", rlusd_a=0.6, rlusd_b=0.4, demo_tokens=True)
+
+    # Open a settlement, submit both legs explicitly (no bypass path).
+    sid = forge.coordinator.open("a", "b", 1.0).settlement_id
+    forge.coordinator.submit_leg(sid, "a", mint_test_token("a"))
+    forge.coordinator.submit_leg(sid, "b", mint_test_token("b"))
+    giant = forge.fuse("a", "b", rlusd_a=0.6, rlusd_b=0.4)
+
     assert giant.stage is Stage.BLUE_GIANT
     assert giant.parameter_count == 13_000_000
     # Illegal transition rejected.
@@ -99,7 +106,7 @@ def test_lifecycle() -> None:
 # ----------------------------------------------------------------- ML layer
 def test_fusion_engine() -> None:
     import torch
-    from stellar_forge.x402_settlement import FusionCoordinator, mint_settlement_token
+    from stellar_forge.x402_settlement import FusionCoordinator, mint_test_token
     from stellar_forge.fusion_engine import AgentWeights, FusionEngine, lora_compatibility
 
     torch.manual_seed(0)
@@ -114,8 +121,8 @@ def test_fusion_engine() -> None:
 
     c = FusionCoordinator()
     s = c.open("a", "b", 1.0)
-    c.submit_leg(s.settlement_id, "a", mint_settlement_token("a"))
-    c.submit_leg(s.settlement_id, "b", mint_settlement_token("b"))
+    c.submit_leg(s.settlement_id, "a", mint_test_token("a"))
+    c.submit_leg(s.settlement_id, "b", mint_test_token("b"))
 
     eng = FusionEngine(c)
     res = eng.fuse(s.settlement_id, a, b, rlusd_a=0.7, rlusd_b=0.3, min_compatibility=-1.0)
