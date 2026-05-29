@@ -64,6 +64,7 @@ def _verify_token_local(token: str) -> dict:
             'endpoint_id': payload.get('eid'),
             'wallet':      payload.get('wlt', ''),
             'invoice_id':  payload.get('iid'),
+            'tier':        payload.get('tier', None),   # ECHOLOCK tier if 402Proof embeds it
         }
     except Exception:
         return {'valid': False, 'reason': 'ERR_TOKEN_MALFORMED'}
@@ -86,6 +87,14 @@ def _issue_invoice(endpoint_id: str) -> dict:
 import logging as _logging
 from flask import g as _g
 
+# ── ECHOLOCK-402 behavioral tier engine ──────────────────────────────────────
+try:
+    from core import echolock as _echolock
+    _ECHOLOCK = True
+except ImportError:
+    _echolock = None  # type: ignore[assignment]
+    _ECHOLOCK = False
+
 # ── Structured error codes ────────────────────────────────────────────────────
 _ERROR_MESSAGES = {
     'ERR_PAYMENT_REQUIRED':     'Payment required — send RLUSD on XRPL to access this endpoint.',
@@ -102,6 +111,28 @@ _ERROR_MESSAGES = {
 # wallet than the one that paid. Defaults to soft-check (logs mismatch only)
 # so existing agents aren't broken during the v2 token rollout.
 _ENFORCE_WALLET_BINDING = os.getenv('ENFORCE_WALLET_BINDING', 'false').lower() == 'true'
+
+
+def verify_token_for_echolock(token: str) -> dict:
+    """Public shim: verify token and return {valid, wallet, tier} for ECHOLOCK use."""
+    r = _verify_token_local(token)
+    return {'valid': r.get('valid', False), 'wallet': r.get('wallet', ''), 'tier': r.get('tier')}
+
+
+def _apply_entropy(result, tier: int, seed: str):
+    """Compress a successful Flask JSON response to the depth earned by tier."""
+    if not _ECHOLOCK or tier >= 4:
+        return result
+    try:
+        # Only intercept plain 200 Response objects (all premium routes return jsonify(...))
+        if hasattr(result, 'get_data') and getattr(result, 'status_code', None) == 200:
+            import json as _j
+            raw = _j.loads(result.get_data(as_text=True))
+            compressed = _echolock.compress(raw, tier, seed)
+            return jsonify(compressed)
+    except Exception:
+        pass
+    return result
 
 
 def require_payment(f):
@@ -171,6 +202,17 @@ def require_payment(f):
 
                 _g.proof402_wallet      = token_wallet
                 _g.proof402_endpoint_id = endpoint_id
+
+                # ECHOLOCK: record access and derive behavioral tier
+                if _ECHOLOCK:
+                    _echolock.record_access(token_wallet, path)
+                    import hashlib as _hl
+                    _tier = _echolock.get_tier(token_wallet, jwt_tier=result.get('tier'))
+                    _seed = _hl.sha256(f'{token_wallet}:{path}'.encode()).hexdigest()[:32]
+                    _g.echolock_tier = _tier
+                    _g.echolock_seed = _seed
+                    return _apply_entropy(f(*args, **kwargs), _tier, _seed)
+
                 return f(*args, **kwargs)
 
             # Token present but invalid — give the agent the specific reason

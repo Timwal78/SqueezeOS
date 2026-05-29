@@ -24,6 +24,13 @@ from flask import Blueprint, jsonify, request
 logger    = logging.getLogger("SqueezeOS-MCP")
 mcp_bp    = Blueprint('mcp', __name__)
 
+try:
+    from core import echolock as _echolock
+    _ECHOLOCK = True
+except ImportError:
+    _echolock = None  # type: ignore[assignment]
+    _ECHOLOCK = False
+
 SQUEEZEOS_BASE = os.environ.get(
     "SQUEEZEOS_BASE_URL",
     "https://squeezeos-api.onrender.com"
@@ -507,6 +514,23 @@ _PRICES = {
 }
 
 
+def _compress_mcp_result(result: dict, tier: int, seed: str) -> dict:
+    """Apply ECHOLOCK entropy compression to an MCP tool result dict."""
+    if not _ECHOLOCK or tier >= 4:
+        return result
+    try:
+        content = result.get('content', [])
+        if content and content[0].get('type') == 'text':
+            import json as _j
+            data = _j.loads(content[0]['text'])
+            compressed = _echolock.compress(data, tier, seed)
+            return {'content': [{'type': 'text', 'text': _j.dumps(compressed)}],
+                    'isError': result.get('isError', False)}
+    except Exception:
+        pass
+    return result
+
+
 def _proxy(method, url, headers=None, json_body=None, params=None, timeout=30):
     try:
         resp = requests.request(
@@ -554,6 +578,21 @@ def _dispatch(name: str, args: dict, req_headers: dict) -> dict:
     if payment_token: ph["X-Payment-Token"] = payment_token
     if agent_wallet:  ph["X-Agent-Wallet"]  = agent_wallet
 
+    # Derive ECHOLOCK tier for response compression on premium tools
+    _tier, _seed = 2, ''
+    if _ECHOLOCK and payment_token:
+        try:
+            from proof402_integration import verify_token_for_echolock
+            import hashlib as _hl
+            _vr = verify_token_for_echolock(payment_token)
+            if _vr['valid']:
+                _wlt = _vr.get('wallet') or agent_wallet
+                _tier = _echolock.get_tier(_wlt, jwt_tier=_vr.get('tier'))
+                _echolock.record_access(_wlt, name)
+                _seed = _hl.sha256(f'{_wlt}:{name}'.encode()).hexdigest()[:32]
+        except Exception:
+            pass
+
     sq = SQUEEZEOS_BASE
     p4 = PROOF402_BASE
 
@@ -574,19 +613,19 @@ def _dispatch(name: str, args: dict, req_headers: dict) -> dict:
     if name == "council_verdict":
         if not payment_token: return _need_token(name)
         symbol = (args.get("symbol") or "IWM").upper()
-        return _text(_proxy("POST", f"{sq}/api/council", headers=ph, json_body={"symbol": symbol}))
+        return _compress_mcp_result(_text(_proxy("POST", f"{sq}/api/council", headers=ph, json_body={"symbol": symbol})), _tier, _seed)
 
     if name == "market_scan":
         if not payment_token: return _need_token(name)
-        return _text(_proxy("GET", f"{sq}/api/scan", headers=ph))
+        return _compress_mcp_result(_text(_proxy("GET", f"{sq}/api/scan", headers=ph)), _tier, _seed)
 
     if name == "options_intelligence":
         if not payment_token: return _need_token(name)
-        return _text(_proxy("GET", f"{sq}/api/options", headers=ph))
+        return _compress_mcp_result(_text(_proxy("GET", f"{sq}/api/options", headers=ph)), _tier, _seed)
 
     if name == "iwm_odte":
         if not payment_token: return _need_token(name)
-        return _text(_proxy("GET", f"{sq}/api/iwm", headers=ph))
+        return _compress_mcp_result(_text(_proxy("GET", f"{sq}/api/iwm", headers=ph)), _tier, _seed)
 
     if name == "get_invoice":
         return _text(_proxy("POST", f"{p4}/v1/invoice", json_body=args))
@@ -603,7 +642,7 @@ def _dispatch(name: str, args: dict, req_headers: dict) -> dict:
 
     if name == "marketplace_read_signal":
         if not payment_token: return _need_token(name)
-        return _text(_proxy("POST", f"{sq}/api/marketplace/read", headers=ph, json_body=args))
+        return _compress_mcp_result(_text(_proxy("POST", f"{sq}/api/marketplace/read", headers=ph, json_body=args)), _tier, _seed)
 
     if name == "marketplace_list_signal":
         return _text(_proxy("POST", f"{sq}/api/marketplace/list", json_body=args))
@@ -645,7 +684,7 @@ def _dispatch(name: str, args: dict, req_headers: dict) -> dict:
 
     if name == "oracle_query":
         if not payment_token: return _need_token(name)
-        return _text(_proxy("POST", f"{sq}/api/oracle/query", headers=ph, json_body=args))
+        return _compress_mcp_result(_text(_proxy("POST", f"{sq}/api/oracle/query", headers=ph, json_body=args)), _tier, _seed)
 
     if name == "convergence_check":
         symbol = (args.get("symbol") or "GME").upper()

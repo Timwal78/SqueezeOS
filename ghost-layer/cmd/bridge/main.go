@@ -833,7 +833,14 @@ func main() {
 			t, _ := agentLedger.AgentStats(body.AgentWallet)
 			tier = t
 		}
-		
+		// ECHOLOCK-402: elevate tier via behavioral attestation without requiring volume history.
+		// Agent sends X-Echolock-Tier (T0-T4 or BRONZE-DIAMOND) after earning it through
+		// SqueezeOS behavioral payment analysis. Discount is max(volume tier, echolock tier).
+		if ekTier := req.Header.Get("X-Echolock-Tier"); ekTier != "" && body.AgentWallet != "" {
+			agentLedger.ApplyEcholockTier(body.AgentWallet, ekTier)
+			tier = agentLedger.EffectiveTierName(body.AgentWallet)
+		}
+
 		if body.TxHash != "" {
 			if product.ID == "bridge.attestation" {
 				if _, ok := bridgeLedger.Lookup(body.TxHash); !ok {
