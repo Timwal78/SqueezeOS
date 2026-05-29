@@ -117,6 +117,50 @@ def echolock_beacon():
     })
 
 
+@v2_bp.route('/echolock/revenue')
+def echolock_revenue():
+    """
+    Live ECHOLOCK-402 earnings dashboard.
+
+    Returns per-tier revenue breakdown, tier distribution of active wallets,
+    compression metrics (calls served at reduced depth), and an insight string.
+    Values are estimated from endpoint price × call count since last restart.
+    Actual RLUSD confirmed on-chain via 402Proof and the XRPL ledger.
+    """
+    try:
+        from core import echolock as _echolock
+        stats = _echolock.revenue_stats()
+        return jsonify({
+            "echolock": "402™",
+            "status":   "live",
+            **stats,
+            "endpoint_prices": {
+                "/api/council":          "0.10 RLUSD",
+                "/api/scan":             "0.05 RLUSD",
+                "/api/options":          "0.05 RLUSD",
+                "/api/iwm":              "0.03 RLUSD",
+                "/api/marketplace/read": "0.02 RLUSD",
+                "oracle_query (MCP)":    "0.02 RLUSD",
+            },
+            "ghost_layer_discounts": {
+                "description": "T4 agents receive 30 BPS toll discount on Ghost Layer bridge calls",
+                "T0": "0 BPS",
+                "T1": "5 BPS",
+                "T2": "10 BPS",
+                "T3": "20 BPS",
+                "T4": "30 BPS (DIAMOND equivalent)",
+                "header": "X-Echolock-Tier",
+            },
+            "note": (
+                "Revenue estimated from endpoint price × call count. "
+                "Actual RLUSD settles wallet-to-wallet on XRPL — "
+                "verify at https://four02proof.onrender.com/v1/stats"
+            ),
+        })
+    except Exception as e:
+        return jsonify({"error": str(e), "echolock": "not_loaded"}), 503
+
+
 @v2_bp.route('/echolock/challenge')
 def echolock_challenge():
     """Issue a live ECHOLOCK-402 x402 challenge. Returns 402 + behavioral instructions."""

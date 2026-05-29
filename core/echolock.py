@@ -59,6 +59,35 @@ _WINDOW_TTL = 3600.0    # 1 hour
 _CLEANUP_INTERVAL = 300.0  # 5 minutes
 
 # ---------------------------------------------------------------------------
+# Endpoint price registry — used for per-tier revenue attribution
+# ---------------------------------------------------------------------------
+
+_ENDPOINT_PRICES: Dict[str, float] = {
+    '/api/council':             0.10,
+    '/api/scan':                0.05,
+    '/api/options':             0.05,
+    '/api/iwm':                 0.03,
+    '/api/marketplace/read':    0.02,
+    # MCP tool names
+    'council_verdict':          0.10,
+    'market_scan':              0.05,
+    'options_intelligence':     0.05,
+    'iwm_odte':                 0.03,
+    'marketplace_read_signal':  0.02,
+    'oracle_query':             0.02,
+}
+
+# ---------------------------------------------------------------------------
+# Revenue ledger — in-memory, resets on restart (by design)
+# ---------------------------------------------------------------------------
+
+_revenue_lock     = threading.Lock()
+_revenue_by_tier: Dict[int, Dict[str, float]] = {i: {'calls': 0.0, 'rlusd': 0.0} for i in range(5)}
+_revenue_total:   Dict[str, float] = {'calls': 0.0, 'rlusd': 0.0}
+
+_TIER_LABELS = {0: 'SCRIPTED', 1: 'NAIVE', 2: 'ADAPTIVE', 3: 'STRATEGIC', 4: 'INSTITUTIONAL'}
+
+# ---------------------------------------------------------------------------
 # Tier name → int mapping (case-insensitive via .upper() before lookup)
 # ---------------------------------------------------------------------------
 
@@ -294,16 +323,31 @@ def _parse_jwt_tier(jwt_tier: Any) -> Optional[int]:
 # Public API: record_access / get_tier
 # ---------------------------------------------------------------------------
 
-def record_access(wallet: str, endpoint: str) -> None:
+def record_access(wallet: str, endpoint: str,
+                  price_rlusd: Optional[float] = None) -> None:
     """
     Record a verified-payment access event for the given wallet.
 
     Call this once per successful payment verification (after @require_payment
     passes) to feed the behavioral engine.  Thread-safe.
+
+    price_rlusd is looked up from _ENDPOINT_PRICES when not supplied.
     """
     _start_cleanup_daemon()
-    _get_or_create_window(wallet).record(endpoint)
+    win = _get_or_create_window(wallet)
+    win.record(endpoint)
     _maybe_cleanup()
+
+    price = price_rlusd if price_rlusd is not None else _ENDPOINT_PRICES.get(endpoint, 0.0)
+    if price > 0:
+        tier = get_tier(wallet)
+        with _revenue_lock:
+            _revenue_by_tier[tier]['calls'] += 1
+            _revenue_by_tier[tier]['rlusd'] = round(
+                _revenue_by_tier[tier]['rlusd'] + price, 6
+            )
+            _revenue_total['calls'] += 1
+            _revenue_total['rlusd'] = round(_revenue_total['rlusd'] + price, 6)
 
 
 def get_tier(wallet: str, jwt_tier: Optional[Any] = None) -> int:
@@ -396,6 +440,97 @@ def compress(data: Any, tier: int, seed: str = "") -> Any:
         }
 
     return out
+
+
+def tier_name(tier: int) -> str:
+    return _TIER_LABELS.get(max(0, min(4, tier)), 'UNKNOWN')
+
+
+def revenue_stats() -> Dict[str, Any]:
+    """
+    Return ECHOLOCK income metrics aggregated since the last server restart.
+
+    Includes:
+    - Total and per-tier revenue (calls + RLUSD)
+    - Tier distribution of all active behavioral windows
+    - Average calls per wallet per tier (retention proxy)
+    - Compression metrics (calls served at reduced depth)
+    - Machine-readable insight string
+    """
+    with _revenue_lock:
+        total_calls = _revenue_total['calls']
+        total_rlusd = _revenue_total['rlusd']
+        tier_snap   = {i: dict(_revenue_by_tier[i]) for i in range(5)}
+
+    by_tier: Dict[str, Any] = {}
+    for i in range(5):
+        calls = tier_snap[i]['calls']
+        rlusd = tier_snap[i]['rlusd']
+        by_tier[f'T{i}'] = {
+            'label':       _TIER_LABELS[i],
+            'calls':       int(calls),
+            'rlusd':       round(rlusd, 4),
+            'pct_calls':   round(calls / total_calls * 100, 1) if total_calls > 0 else 0.0,
+            'pct_revenue': round(rlusd / total_rlusd * 100, 1) if total_rlusd > 0 else 0.0,
+        }
+
+    # Walk active windows to compute tier distribution + avg calls per wallet
+    with _registry_lock:
+        windows_snapshot = dict(_windows)
+
+    dist:         Dict[int, int]       = {i: 0 for i in range(5)}
+    wallet_calls: Dict[int, List[int]] = {i: [] for i in range(5)}
+    for _wallet, win in windows_snapshot.items():
+        events = win.snapshot()
+        if not events:
+            continue
+        t = _classify_tier(_compute_efv(events))
+        dist[t] += 1
+        wallet_calls[t].append(len(events))
+
+    tier_dist: Dict[str, Any] = {f'T{i}': dist[i] for i in range(5)}
+    tier_dist['active_wallets'] = sum(dist.values())
+
+    avg_calls_per_wallet: Dict[str, float] = {}
+    for i in range(5):
+        wc = wallet_calls[i]
+        avg_calls_per_wallet[f'T{i}'] = round(sum(wc) / len(wc), 1) if wc else 0.0
+
+    # Compression: T0–T3 received depth-compressed responses
+    compressed_calls = int(sum(tier_snap[i]['calls'] for i in range(4)))
+    full_depth_calls = int(tier_snap[4]['calls'])
+    compression_rate = round(compressed_calls / total_calls * 100, 1) if total_calls > 0 else 0.0
+
+    # Insight
+    if total_calls > 0:
+        t4 = by_tier['T4']
+        t0 = by_tier['T0']
+        insight = (
+            f"T4 institutional agents generate {t4['pct_revenue']}% of revenue "
+            f"from {t4['pct_calls']}% of calls — "
+            f"{compression_rate}% of responses were depth-compressed (T0–T3). "
+            f"T0 scripted agents: {t0['calls']} calls ({t0['pct_revenue']}% of revenue)."
+        )
+    else:
+        insight = (
+            "No ECHOLOCK-tracked revenue yet. "
+            "Premium endpoint calls will populate this dashboard."
+        )
+
+    return {
+        'period':                       'since_last_restart',
+        'total_rlusd':                  round(total_rlusd, 4),
+        'total_calls':                  int(total_calls),
+        'by_tier':                      by_tier,
+        'tier_distribution':            tier_dist,
+        'avg_calls_per_wallet_by_tier': avg_calls_per_wallet,
+        'compression': {
+            'compressed_calls':     compressed_calls,
+            'full_depth_calls':     full_depth_calls,
+            'compression_rate_pct': compression_rate,
+        },
+        'insight': insight,
+    }
 
 
 def _compress_node(node: Any, cfg: Dict[str, Any], seed: str) -> Any:

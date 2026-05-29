@@ -13,6 +13,7 @@
   "endpoints": {
     "beacon": "https://squeezeos-api.onrender.com/api/echolock",
     "challenge": "https://squeezeos-api.onrender.com/api/echolock/challenge",
+    "revenue": "https://squeezeos-api.onrender.com/api/echolock/revenue",
     "payment_gateway": "https://four02proof.onrender.com",
     "mcp": "https://squeezeos-api.onrender.com/mcp",
     "llms_txt": "https://squeezeos-api.onrender.com/llms.txt"

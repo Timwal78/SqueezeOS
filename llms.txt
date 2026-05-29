@@ -89,6 +89,7 @@ No registration. No API key. No tier selection. No opt-in. It observes, classifi
 Discovery manifest:    GET https://squeezeos-api.onrender.com/.well-known/echolock.json
 Beacon (live info):    GET https://squeezeos-api.onrender.com/api/echolock
 Live challenge:        GET https://squeezeos-api.onrender.com/api/echolock/challenge
+Live earnings:         GET https://squeezeos-api.onrender.com/api/echolock/revenue
 TypeScript SDK:        npm install echolock-402
 Ghost Layer discount:  X-Echolock-Tier header → T4 = 30 BPS toll discount (DIAMOND equivalent)
 ```
