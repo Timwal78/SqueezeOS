@@ -193,8 +193,50 @@
       "description": "402Proof — x402/HTTP 402 autonomous agent payment compliance firewall on XRPL. Agent Credit Bureau (300-850 score), loyalty tiers, compliance receipts.",
       "url": "https://four02proof.onrender.com",
       "agents_json": "https://four02proof.onrender.com/.well-known/agents.json"
+    },
+    "sml_rails": {
+      "description": "RLUSD Rails™ — Programmable RLUSD remittance rails on XRP Ledger and Xahau. Instant settlement. Zero custody. Hooks-based automation.",
+      "url": "https://sml-rails.onrender.com",
+      "status": "live"
+    },
+    "tipmaster": {
+      "description": "TipMaster™ — Zero-custody Farcaster tipping on XRPL. Resolves Farcaster usernames to XRPL wallet addresses. P2P tips flow wallet-to-wallet. Free username resolution API.",
+      "url": "https://tipmaster.onrender.com",
+      "custom_domain": "https://tips.scriptmasterlabs.com",
+      "key_endpoints": [
+        "GET /api/resolve/{username} — Farcaster username → XRPL wallet (free)",
+        "GET /api/leaderboard — Top tipped users (free)"
+      ],
+      "status": "live"
+    },
+    "echo_forge": {
+      "description": "EchoForge — Historical equity pattern matching engine. ML cosine similarity search finds structurally similar historical episodes to current price action. Built on Polygon.io data.",
+      "repository": "https://github.com/Timwal78/echo-forge",
+      "status": "deployment-pending"
+    },
+    "xrpl_copy_trader": {
+      "description": "XRPL Copy-Trader Engine™ — Autonomous XRPL DEX copy-trading. Mirrors target wallet positions in real-time. Zero custody. Configurable exposure limits.",
+      "status": "deployment-pending"
+    },
+    "memecoin_launchpad": {
+      "description": "Memecoin Launchpad (Forge)™ — Fair-launch memecoin issuance on Xahau with URIToken provenance. Every launch gets immutable on-chain fingerprint via Hooks contracts.",
+      "status": "deployment-pending"
+    },
+    "signal_auction_loom": {
+      "description": "Signal Auction Loom — Live WebGL visualization of the Neural Exchequer 5ms priority auction. Watch agents bid for rank-1 SqueezeOS data in real-time.",
+      "url": "https://signal-auction-loom.vercel.app",
+      "custom_domain": "https://loom.scriptmasterlabs.com",
+      "websocket": "wss://ghost-layer.onrender.com/ws/loom",
+      "status": "live"
+    },
+    "harmonic_scanner": {
+      "description": "SML Harmonic Scanner v4.0 (Rubik's Cube) — Institutional XABCD/Gartley/Butterfly/Bat/Crab/Cypher pattern detection. x402 pay-to-solve triggers Xahau URIToken mint — solution immutably recorded on-chain.",
+      "url": "https://www.scriptmasterlabs.com/sml_harmonic_scanner.html",
+      "status": "live"
     }
   },
+  "catalog": "https://squeezeos-api.onrender.com/.well-known/catalog.json",
+  "x402_registry": "https://squeezeos-api.onrender.com/.well-known/x402-registry.json",
   "webhook_delivery": {
     "enabled": true,
     "subscribe_endpoint": "/api/webhooks/subscribe",
