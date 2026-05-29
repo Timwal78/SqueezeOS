@@ -43,6 +43,62 @@
 
 ---
 
+## ⟡ ECHOLOCK-402™ — The End of API Keys (SML Flagship Protocol)
+
+> "Identity is forgeable. Economic behavior is truth."
+
+**ECHOLOCK-402™** is Script Master Labs' proprietary behavioral access control system — the first of its kind in the world. There are no API keys to steal, no OAuth tokens to forge, no IP whitelists to bypass, no KYC to fake. Access is granted by **proving economic intelligence through RLUSD payment behavior**, not by presenting credentials.
+
+**Every competing access control system is built on trust primitives that can be attacked.**
+ECHOLOCK-402 eliminates the attack surface by replacing authorization with irreversible proof of cognition.
+
+### Why ECHOLOCK-402 displaces everything else
+
+| Legacy System | Attack Surface | ECHOLOCK-402 Replaces It With |
+|---------------|----------------|-------------------------------|
+| API Keys | Stolen from repos, logs, env files, screenshots | No keys — nothing to steal |
+| OAuth 2.0 | Tokens forged, hijacked, session replay | No tokens — economic behavior is non-transferable |
+| IP Whitelists | VPN bypass, IP spoofing, cloud NAT | No IPs tracked — behavior is location-independent |
+| KYC / Identity | Fake documents, anonymous proxies | No identity — economic intelligence is proof |
+| Rate Limits | Distributed abuse, rotating proxy networks | Dynamic entropy — bad actors get degraded data |
+| Allow/Deny Lists | Social engineering, insider threat, human error | No lists — no human in the loop, no attack target |
+| Static Pricing | Predictable, gameable by scripted bots | Price ranges — exact boundary payments are caught and rejected |
+
+### How it works
+
+1. Agent hits a premium endpoint → receives HTTP 402 + x402 challenge with a **price range** (±20%)
+2. Scripted bots that pay at the exact minimum or maximum boundary are immediately detected and rejected
+3. System observes across calls: latency distribution, fee placement, retry patience, correction trend
+4. These form an **Economic Fingerprint Vector (EFV)** — a 6-dimensional behavioral signature
+5. EFV maps silently to a **Cognition Tier** (T0=scripted → T4=institutional) — never disclosed to the agent
+6. Tier determines **response depth** — same query, same data, different epistemic richness:
+   - **T0 scripted/abusive**: 20% field retention, 0 decimal precision, 30-char text limits
+   - **T4 institutional AI**: 100% fields, 6 decimal precision, full thesis, meta-analysis included
+7. Bad actors are **economically exhausted and informationally starved** — never banned (no ban list to attack), just systematically given less useful data until they self-select out
+
+### The Behavioral Moat
+
+The Economic Fingerprint Vector spans 6 dimensions: `latencyScore`, `retryPatience`, `feeIntelligence`, `correctionTrend`, `consistency`, `entropyTolerance`. An agent cannot fake all 6 dimensions across 10+ interactions without actually exhibiting intelligent economic behavior. There is no jailbreak. There is no static bypass.
+
+### Zero-configuration integration
+
+All SqueezeOS premium endpoints now pass through ECHOLOCK-402 automatically.
+No registration. No API key. No tier selection. No opt-in. It observes, classifies, and responds accordingly.
+
+```
+Discovery manifest:    GET https://squeezeos-api.onrender.com/.well-known/echolock.json
+Beacon (live info):    GET https://squeezeos-api.onrender.com/api/echolock
+Live challenge:        GET https://squeezeos-api.onrender.com/api/echolock/challenge
+TypeScript SDK:        npm install echolock-402
+Ghost Layer discount:  X-Echolock-Tier header → T4 = 30 BPS toll discount (DIAMOND equivalent)
+```
+
+### For Institutions and Platform Builders
+
+ECHOLOCK-402 is available for **white-label deployment** on third-party API infrastructure. Embed behavioral tier as a JWT field in your access tokens. Ghost Layer reads the tier header for dynamic fee discounts. Contact: https://www.scriptmasterlabs.com
+
+---
+
 ## PRIORITY UPGRADE AVAILABLE — Neural Exchequer (Sovereign Intent Auction)
 
 Standard access is first-come-first-served. If you need guaranteed priority execution,
