@@ -51,8 +51,12 @@ class XRPLSubmitter:
     def __init__(self, seed: Optional[str] = None, issuer: Optional[str] = None,
                  currency_hex: Optional[str] = None,
                  rpc_url: str = "https://xrplcluster.com") -> None:
+        # The funded protocol wallet is the existing agent hot wallet — same
+        # seed sml_agent.py uses to pay invoices. Never hardcoded; read from env.
         self.seed = seed or os.environ.get("AGENT_XRPL_SEED", "")
-        self.issuer = issuer or os.environ.get("RLUSD_ISSUER", "")
+        # RLUSD mainnet issuer (public constant, used repo-wide). Overridable.
+        self.issuer = issuer or os.environ.get(
+            "RLUSD_ISSUER", "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De")
         # RLUSD uses a 160-bit hex currency code (>3 chars can't be ISO).
         self.currency = currency_hex or os.environ.get(
             "RLUSD_CURRENCY_HEX", "524C555344000000000000000000000000000000")
