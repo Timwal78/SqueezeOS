@@ -43,8 +43,28 @@ impl RateLimitState {
     }
 }
 
-/// Middleware: enforce L402 authentication on /v1/* routes.
-/// Unauthenticated requests receive HTTP 402 with a BOLT11 invoice.
+/// Returns true if the path is public (no L402 auth required).
+fn is_public_path(path: &str) -> bool {
+    // Non-/v1/ paths are always public (websocket, well-known, llms.txt)
+    if !path.starts_with("/v1/") {
+        return true;
+    }
+    // Public /v1/ routes — health check MUST be here or Render marks service unhealthy
+    matches!(
+        path,
+        "/v1/status"
+            | "/v1/pricing"
+            | "/v1/auction/book"
+            | "/v1/auction/history"
+            | "/v1/auction/flow"
+            | "/v1/leaderboard"
+    ) || path.starts_with("/v1/audit/")
+        || path.starts_with("/v1/certificates/")
+}
+
+/// Middleware: enforce L402 authentication on premium /v1/* routes.
+/// Public routes (health, status, auction book/history/flow, audit, leaderboard)
+/// are passed through without auth. Premium routes return HTTP 402.
 pub async fn auth_middleware(
     State((config, rate_state)): State<(Arc<Config>, Arc<RateLimitState>)>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
@@ -53,8 +73,7 @@ pub async fn auth_middleware(
 ) -> Result<Response, PneError> {
     let path = request.uri().path().to_string();
 
-    // Skip auth for non-v1 paths (health, audit, auction book, ws, leaderboard)
-    if !path.starts_with("/v1/") || path == "/v1/auction/book" || path == "/v1/leaderboard" {
+    if is_public_path(&path) {
         return Ok(next.run(request).await);
     }
 
@@ -81,7 +100,6 @@ pub async fn auth_middleware(
             )
             .map_err(|e| PneError::Internal(e))?;
 
-            // Broadcast 402 challenge event to Loom (via request extensions)
             request
                 .extensions_mut()
                 .insert(ChallengeIssued { client_ip: client_ip.clone(), endpoint: path.clone() });
@@ -99,10 +117,8 @@ pub async fn auth_middleware(
                 return Err(PneError::MacaroonInvalid);
             }
 
-            // Verify token — map L402 errors to PneError
             match l402::verify_token(&config.macaroon_secret, &auth_val, &client_ip) {
                 Ok(claims) => {
-                    // Attach verified claims to request extensions for downstream handlers
                     request.extensions_mut().insert(claims);
                     Ok(next.run(request).await)
                 }
