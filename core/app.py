@@ -42,6 +42,32 @@ state.audit['uptime_start'] = time.time()
 # Serverless detection — skip background threads on Vercel (stateless per-request)
 _IS_SERVERLESS = os.environ.get('VERCEL') == '1'
 
+
+def _start_self_pinger():
+    """
+    Daemon thread that pings /api/status every 10 min.
+    Prevents Render free-tier cold-start spin-down independent of GitHub Actions keepalive.
+    Uses SQUEEZEOS_BASE_URL env var; falls back to the canonical Render URL.
+    """
+    import threading as _threading
+    import urllib.request as _urlreq
+
+    base = os.getenv('SQUEEZEOS_BASE_URL', 'https://squeezeos-api.onrender.com').rstrip('/')
+    url  = f"{base}/api/status"
+
+    def _loop():
+        time.sleep(90)           # give gunicorn time to finish startup
+        while True:
+            try:
+                _urlreq.urlopen(url, timeout=30)
+            except Exception:
+                pass             # failures are silent — GH Actions keepalive is the primary
+            time.sleep(600)      # 10-minute interval
+
+    t = _threading.Thread(target=_loop, daemon=True, name="self-pinger")
+    t.start()
+    logger.info("[self-pinger] Started — pinging %s every 10 min", url)
+
 # Configure Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("SqueezeOS-Core")
@@ -110,6 +136,9 @@ def create_app():
 
         # Start Real-World Data Oracle pollers (SEC EDGAR, FDA, USPTO)
         start_oracle_pollers()
+
+        # Self-pinger — keeps Render free-tier warm; pings own /api/status every 10 min
+        _start_self_pinger()
     
     @app.after_request
     def run_analytics(response):
