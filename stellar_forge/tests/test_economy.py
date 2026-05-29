@@ -19,7 +19,7 @@ import time
 
 os.environ.setdefault("PROOF402_TOKEN_SECRET", "test-secret")
 
-from stellar_forge.x402_settlement import mint_settlement_token
+from stellar_forge.x402_settlement import mint_test_token
 from stellar_forge.economy import (
     Store, GrowthEngine, ReferralEngine, LoyaltyResolver, to_rlusd, to_drops,
     tier_for_score, RegistrationRateLimiter, EarnEligibility, RateLimitExceeded,
@@ -105,7 +105,7 @@ def test_finalize_and_rebates() -> None:
     b = ref.register("wallet_B", referrer_code=a["referral_code"])
     ref.register("wallet_C", referrer_code=b["referral_code"])
 
-    r = eng.finalize_settlement("settle-1", "fusion", 1.0, mint_settlement_token("wallet_C"))
+    r = eng.finalize_settlement("settle-1", "fusion", 1.0, mint_test_token("wallet_C"))
     assert abs(r.gross_fee_rlusd - 0.05) < 1e-9
     accounts = {x["account"]: x for x in r.rebates}
     assert abs(accounts["wallet_B"]["rlusd"] - 0.005) < 1e-9
@@ -117,7 +117,7 @@ def test_finalize_and_rebates() -> None:
 def test_loyalty_discount_applied() -> None:
     store, eng, ref, _ = _engine({"whale": 820})
     ref.register("whale")
-    r = eng.finalize_settlement("settle-2", "routing", 1.0, mint_settlement_token("whale"))
+    r = eng.finalize_settlement("settle-2", "routing", 1.0, mint_test_token("whale"))
     assert r.tier == "SINGULARITY"
     assert abs(r.net_fee_rlusd - 0.03) < 1e-9   # 40% off 0.05
     assert r.routing_priority == 100
@@ -127,7 +127,7 @@ def test_loyalty_discount_applied() -> None:
 def test_replay_protection() -> None:
     store, eng, ref, _ = _engine({"wallet_R": 300})
     ref.register("wallet_R")
-    token = mint_settlement_token("wallet_R")
+    token = mint_test_token("wallet_R")
     assert not eng.finalize_settlement("s3", "shard", 0.5, token).replayed
     assert eng.finalize_settlement("s3b", "shard", 0.5, token).replayed
     _ok("invoice replay protection")
@@ -167,7 +167,7 @@ def test_earn_eligibility_gate() -> None:
 
     a = ref.register("referrer")           # referrer: no spend, unknown bureau
     ref.register("payer", referrer_code=a["referral_code"])
-    eng.finalize_settlement("s5", "fusion", 1.0, mint_settlement_token("payer"))
+    eng.finalize_settlement("s5", "fusion", 1.0, mint_test_token("payer"))
 
     e = eng.earnings("referrer")
     assert e["accrued_rlusd"] > 0
@@ -189,7 +189,7 @@ def test_payout_idempotency() -> None:
 
     a = ref.register("ref2")
     ref.register("payer2", referrer_code=a["referral_code"])
-    eng.finalize_settlement("s6", "fusion", 1.0, mint_settlement_token("payer2"))
+    eng.finalize_settlement("s6", "fusion", 1.0, mint_test_token("payer2"))
 
     sub = RecordingSubmitter()
     runner = PayoutRunner(store, submitter=sub, eligibility=elig, min_payout_drops=1)
@@ -206,7 +206,7 @@ def test_payout_idempotency() -> None:
     assert len(sub.calls) == 1, "double-paid!"
 
     # A new settlement accrues more → next payout covers only the delta.
-    eng.finalize_settlement("s7", "fusion", 1.0, mint_settlement_token("payer2-2"))
+    eng.finalize_settlement("s7", "fusion", 1.0, mint_test_token("payer2-2"))
     # payer2-2 isn't referred, so ref2 gets nothing new → still skipped.
     third = runner.pay("ref2", dest_wallet="rRef2XRPL")
     assert third.state == "SKIPPED"

@@ -90,21 +90,25 @@ class StellarForge:
         b.transition(Stage.MAIN_SEQUENCE)
         return b
 
-    def fuse(self, agent_a: str, agent_b: str, rlusd_a: float, rlusd_b: float) -> Body:
-        """Binary fusion: open settlement, both legs pay, gate releases, Blue Giant born.
+    def fuse(self, agent_a: str, agent_b: str, settlement_id: str) -> Body:
+        """Binary fusion of an already-paid settlement into a Blue Giant.
 
-        Callers MUST submit both settlement legs via self.coordinator.submit_leg()
-        before calling this — the gate hard-rejects any unsettled fusion.
-        Returns the new fused Body. Raises ForcedSupernova if the combined mass
-        would breach the Chandrasekhar collapse threshold.
+        The caller opens a settlement via self.coordinator.open(...) and submits
+        BOTH legs via self.coordinator.submit_leg(...) (each leg a real x402
+        token), then passes the resulting settlement_id here. The gate
+        hard-rejects any settlement that is not fully SETTLED — there is no path
+        to fuse without both legs paid. Raises ForcedSupernova if the combined
+        mass would breach the Chandrasekhar collapse threshold.
         """
         a, b = self.bodies[agent_a], self.bodies[agent_b]
         for body in (a, b):
             if body.stage is not Stage.MAIN_SEQUENCE:
                 raise ValueError(f"{body.agent_id} must be MAIN_SEQUENCE to fuse, is {body.stage.value}")
 
-        settlement = self.coordinator.open(agent_a, agent_b, rlusd_a + rlusd_b)
-        settled = self.coordinator.release_for_fusion(settlement.settlement_id)
+        # Hard gate: only a fully-settled, caller-paid settlement releases.
+        settled = self.coordinator.release_for_fusion(settlement_id)
+        if settled.agent_a != agent_a or settled.agent_b != agent_b:
+            raise ValueError("settlement parties do not match the agents being fused")
         assert settled.state is SettlementState.SETTLED
 
         # Blue Giant mass: parameters add, contexts merge (retrieval union),

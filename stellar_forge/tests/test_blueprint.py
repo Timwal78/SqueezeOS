@@ -29,7 +29,7 @@ def main() -> int:
         print("Stellar Forge blueprint test: SKIPPED (flask not installed)")
         return 0
 
-    from stellar_forge.x402_settlement import mint_settlement_token
+    from stellar_forge.x402_settlement import mint_test_token
     from stellar_forge.economy import (
         Store, LoyaltyResolver, ReferralEngine, GrowthEngine,
         RegistrationRateLimiter, EarnEligibility, PayoutRunner, to_drops,
@@ -83,7 +83,7 @@ def main() -> int:
     assert c.post("/api/forge/settle", json={"settlement_id": "x", "kind": "fusion",
                                              "amount_rlusd": 1.0}).status_code == 402
     # settle with a valid token
-    tok = mint_settlement_token("payer")
+    tok = mint_test_token("payer")
     r = c.post("/api/forge/settle",
                json={"settlement_id": "s1", "kind": "fusion", "amount_rlusd": 1.0},
                headers={"X-Payment-Token": tok})
