@@ -1,0 +1,20 @@
+{
+  "name": "echolock-402",
+  "version": "1.0.0",
+  "description": "Economic Cognition Hard-Lock — behavioral x402 access control",
+  "main": "dist/src/server.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/src/server.js",
+    "dev":   "ts-node src/server.ts",
+    "demo":  "ts-node demo/simulate.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "ts-node":     "^10.9.2",
+    "typescript":  "^5.4.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
