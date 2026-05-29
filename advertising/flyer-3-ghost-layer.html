@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Flyer 3 — Ghost Layer + Signal Loom</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { width:1200px; height:628px; background:#04000f; font-family:'Courier New',monospace; overflow:hidden; position:relative; }
+.grid { position:absolute; inset:0; background-image: linear-gradient(rgba(168,85,247,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(168,85,247,0.04) 1px, transparent 1px); background-size:42px 42px; }
+.orb1 { position:absolute; width:520px; height:520px; background:radial-gradient(circle, rgba(124,58,237,0.14) 0%, transparent 70%); top:-160px; right:-60px; border-radius:50%; }
+.orb2 { position:absolute; width:320px; height:320px; background:radial-gradient(circle, rgba(0,255,127,0.07) 0%, transparent 70%); bottom:-60px; left:200px; border-radius:50%; }
+.orb3 { position:absolute; width:200px; height:200px; background:radial-gradient(circle, rgba(168,85,247,0.08) 0%, transparent 70%); top:200px; left:400px; border-radius:50%; }
+.bottom-bar { position:absolute; bottom:0; left:0; right:0; height:3px; background:linear-gradient(90deg,#3b0080,#a855f7,#00ff7f,#a855f7,#3b0080); }
+.corner { position:absolute; width:22px; height:22px; border-color:rgba(168,85,247,0.25); border-style:solid; }
+.tl { top:12px; left:12px; border-width:1px 0 0 1px; } .tr { top:12px; right:12px; border-width:1px 1px 0 0; }
+.bl { bottom:12px; left:12px; border-width:0 0 1px 1px; } .br { bottom:12px; right:12px; border-width:0 1px 1px 0; }
+.wrap { position:relative; z-index:10; display:flex; height:100%; padding:34px 38px; gap:32px; }
+.left { flex:1; display:flex; flex-direction:column; gap:16px; }
+.top-row { display:flex; align-items:center; gap:10px; }
+.badge { background:#12003a; border:1px solid #a855f7; color:#a855f7; font-size:9px; font-weight:bold; letter-spacing:3px; padding:3px 9px; border-radius:2px; text-transform:uppercase; }
+.brand { font-size:10px; color:#1a0a30; letter-spacing:4px; text-transform:uppercase; }
+.headline { line-height:1.0; }
+.h1 { font-family:'Arial Black',sans-serif; font-size:44px; font-weight:900; color:#fff; letter-spacing:-1px; }
+.h2 { font-family:'Arial Black',sans-serif; font-size:46px; font-weight:900; color:#a855f7; letter-spacing:-1px; }
+.h3 { font-family:'Arial Black',sans-serif; font-size:30px; font-weight:900; color:#00ff7f; letter-spacing:-1px; }
+.tagline { font-size:12px; color:#201040; line-height:1.7; }
+.tagline strong { color:#7c3aed; }
+.bridge { display:flex; align-items:center; background:rgba(168,85,247,0.04); border:1px solid rgba(168,85,247,0.12); border-radius:6px; padding:14px 18px; }
+.chain { text-align:center; min-width:90px; }
+.chain-name { font-size:11px; font-weight:bold; letter-spacing:1px; margin-bottom:3px; }
+.chain-name.xrpl { color:#00ff7f; } .chain-name.base { color:#6366f1; }
+.chain-sub { font-size:8px; color:#201040; line-height:1.4; }
+.arrow-wrap { flex:1; text-align:center; padding:0 10px; }
+.arrow-line { height:2px; background:linear-gradient(90deg, #00ff7f, #a855f7, #6366f1); border-radius:1px; }
+.arrow-label { font-size:8px; color:#a855f7; margin-top:4px; letter-spacing:1px; text-transform:uppercase; }
+.arrow-sub { font-size:7px; color:#2a1040; margin-top:2px; }
+.loom-row { display:flex; align-items:flex-start; gap:12px; background:rgba(168,85,247,0.03); border:1px solid rgba(168,85,247,0.1); border-radius:6px; padding:12px 14px; }
+.loom-icon { font-size:28px; line-height:1; flex-shrink:0; }
+.loom-title { font-size:11px; font-weight:bold; color:#e879f9; margin-bottom:3px; }
+.loom-desc { font-size:9px; color:#201040; line-height:1.55; }
+.tags { display:flex; gap:5px; }
+.tags span { font-size:8px; padding:2px 6px; border-radius:2px; letter-spacing:1px; font-weight:bold; text-transform:uppercase; }
+.go { background:#0e1a10; color:#00ff7f; border:1px solid #00ff7f33; }
+.rust { background:#2a1a0e; color:#f97316; border:1px solid #f9731633; }
+.xrplt { background:#0a2820; color:#00ff7f; border:1px solid #00ff7f33; }
+.baset { background:#0e1733; color:#6366f1; border:1px solid #6366f133; }
+.react { background:#0e1f33; color:#38bdf8; border:1px solid #38bdf833; }
+.right { width:288px; display:flex; flex-direction:column; gap:14px; }
+.qr-card { background:rgba(168,85,247,0.03); border:1px solid rgba(168,85,247,0.12); border-radius:8px; padding:14px; display:flex; gap:12px; align-items:flex-start; }
+.qr-img-wrap { flex-shrink:0; background:#04000f; border:1px solid rgba(168,85,247,0.2); border-radius:6px; padding:6px; }
+.qr-name { font-size:10px; font-weight:bold; color:#d8b4fe; margin-bottom:3px; }
+.qr-what { font-size:8.5px; color:#201040; line-height:1.55; margin-bottom:5px; }
+.qr-who { font-size:8px; color:#a855f7; }
+.qr-who span { color:#7c3aed; }
+.divider { height:1px; background:rgba(168,85,247,0.08); }
+.stats { display:flex; justify-content:space-around; }
+.stat-num { font-size:22px; font-weight:bold; color:#a855f7; }
+.stat-lbl { font-size:7.5px; color:#1a0a30; letter-spacing:1.5px; text-transform:uppercase; text-align:center; }
+.footer-tag { position:absolute; bottom:10px; left:50%; transform:translateX(-50%); font-size:7px; color:#0d0020; letter-spacing:3px; text-transform:uppercase; white-space:nowrap; }
+</style>
+</head>
+<body>
+<div class="grid"></div><div class="orb1"></div><div class="orb2"></div><div class="orb3"></div>
+<div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+<div class="bottom-bar"></div>
+<div class="wrap">
+  <div class="left">
+    <div class="top-row"><span class="badge">⬤ CROSS-CHAIN LIVE</span><span class="brand">ScriptMaster Labs · Ghost Layer + Signal Loom</span></div>
+    <div class="headline"><div class="h1">BRIDGE</div><div class="h2">THE CHAINS.</div><div class="h3">Watch it happen in real-time.</div></div>
+    <p class="tagline">Two live systems. One mission: <strong>route value between XRPL and Base</strong> with zero friction,<br>then visualize every transaction as a living, breathing 3D auction particle.</p>
+    <div class="bridge">
+      <div class="chain"><div class="chain-name xrpl">XRPL</div><div class="chain-sub">URIToken minting<br>RLUSD settlement<br>XRP routing</div></div>
+      <div class="arrow-wrap"><div class="arrow-line"></div><div class="arrow-label">Ghost Layer</div><div class="arrow-sub">MEV routing · fee arbitrage<br>atomic bridge settlement</div></div>
+      <div class="chain"><div class="chain-name base">Base</div><div class="chain-sub">USDC payments<br>x402 settlement<br>EVM execution</div></div>
+    </div>
+    <div class="loom-row"><div class="loom-icon">◈</div><div><div class="loom-title">Signal Loom — The Cube</div><div class="loom-desc">3D real-time visualization of the sovereign intent auction. Watch AI agents bid for priority intelligence access. Each particle = one live request flowing through the system.</div></div></div>
+    <div class="tags"><span class="go">Go</span><span class="rust">Rust</span><span class="react">React / Three.js</span><span class="xrplt">XRPL</span><span class="baset">Base</span></div>
+  </div>
+  <div class="right">
+    <div class="qr-card">
+      <div class="qr-img-wrap"><img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://ghost-layer.onrender.com/health&bgcolor=04000f&color=00ff7f&margin=3" width="100" height="100" alt="Ghost Layer"></div>
+      <div><div class="qr-name">Ghost Layer Bridge</div><div class="qr-what">Live XRPL ↔ Base MEV routing engine. Routes USDC payments, mints URITokens, arbitrages bridge fees — all on-chain, all real.</div><div class="qr-who">For: <span>DeFi traders, MEV searchers, cross-chain arbitrageurs</span></div></div>
+    </div>
+    <div class="divider"></div>
+    <div class="qr-card">
+      <div class="qr-img-wrap"><img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://pne-gateway.onrender.com/v1/status&bgcolor=04000f&color=a855f7&margin=3" width="100" height="100" alt="Signal Loom"></div>
+      <div><div class="qr-name">PNE Gateway — Loom Engine</div><div class="qr-what">The Rust backend powering Signal Loom's auction. Every AI agent request enters a 5ms priority bid window — highest tip wins first execution.</div><div class="qr-who">For: <span>AI/DeFi developers, researchers, autonomous agent builders</span></div></div>
+    </div>
+    <div class="stats">
+      <div><div class="stat-num" style="color:#00ff7f;">5ms</div><div class="stat-lbl">auction window</div></div>
+      <div><div class="stat-num">2</div><div class="stat-lbl">chains bridged</div></div>
+      <div><div class="stat-num" style="color:#e879f9;">∞</div><div class="stat-lbl">particles live</div></div>
+    </div>
+  </div>
+</div>
+<div class="footer-tag">ScriptMaster Labs · Ghost Layer · Signal Loom · XRPL + Base · Sovereign Intent Auction</div>
+</body>
+</html>

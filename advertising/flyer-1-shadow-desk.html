@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Flyer 1 — Shadow Desk Alpha Feed</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { width:1200px; height:628px; background:#060003; font-family:'Courier New',monospace; overflow:hidden; position:relative; }
+.grid { position:absolute; inset:0; background-image: linear-gradient(rgba(255,50,50,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,50,50,0.04) 1px, transparent 1px); background-size:44px 44px; }
+.orb1 { position:absolute; width:480px; height:480px; background:radial-gradient(circle, rgba(220,30,30,0.16) 0%, transparent 70%); top:-120px; right:60px; border-radius:50%; }
+.orb2 { position:absolute; width:280px; height:280px; background:radial-gradient(circle, rgba(255,140,0,0.08) 0%, transparent 70%); bottom:-60px; left:260px; border-radius:50%; }
+.bottom-bar { position:absolute; bottom:0; left:0; right:0; height:3px; background:linear-gradient(90deg,#7c0000,#ff4040,#ff9000,#ff4040,#7c0000); }
+.corner { position:absolute; width:22px; height:22px; border-color:rgba(255,64,64,0.28); border-style:solid; }
+.tl { top:12px; left:12px; border-width:1px 0 0 1px; } .tr { top:12px; right:12px; border-width:1px 1px 0 0; }
+.bl { bottom:12px; left:12px; border-width:0 0 1px 1px; } .br { bottom:12px; right:12px; border-width:0 1px 1px 0; }
+.wrap { position:relative; z-index:10; display:flex; height:100%; padding:34px 38px; gap:32px; }
+.left { flex:1; display:flex; flex-direction:column; gap:18px; }
+.top-row { display:flex; align-items:center; gap:10px; }
+.badge { background:#2a0000; border:1px solid #ff4040; color:#ff4040; font-size:9px; font-weight:bold; letter-spacing:3px; padding:3px 9px; border-radius:2px; text-transform:uppercase; }
+.brand { font-size:10px; color:#3a1010; letter-spacing:4px; text-transform:uppercase; }
+.headline { line-height:1.0; }
+.h1 { font-family:'Arial Black',sans-serif; font-size:50px; font-weight:900; color:#fff; letter-spacing:-1px; }
+.h2 { font-family:'Arial Black',sans-serif; font-size:46px; font-weight:900; color:#ff4040; letter-spacing:-1px; }
+.h3 { font-family:'Arial Black',sans-serif; font-size:34px; font-weight:900; color:#ff9000; letter-spacing:-1px; }
+.tagline { font-size:12px; color:#4a2020; line-height:1.7; }
+.tagline strong { color:#cc3030; }
+.ep-box { background:rgba(255,64,64,0.05); border:1px solid rgba(255,64,64,0.18); border-left:3px solid #ff4040; border-radius:4px; padding:12px 16px; }
+.ep-label { font-size:8px; color:#ff4040; letter-spacing:3px; text-transform:uppercase; margin-bottom:5px; }
+.ep-url { font-size:10.5px; color:#ffcccc; word-break:break-all; margin-bottom:4px; }
+.ep-url .method { color:#ff9000; font-weight:bold; margin-right:6px; }
+.ep-note { font-size:9px; color:#4a1a1a; line-height:1.5; }
+.bottom-row { display:flex; align-items:center; gap:18px; }
+.price-pill { display:flex; align-items:center; gap:8px; background:#1a0000; border:1px solid #ff4040; border-radius:20px; padding:6px 16px; }
+.price { font-size:22px; font-weight:bold; color:#ff4040; }
+.per { font-size:9px; color:#5a2020; line-height:1.4; }
+.tags { display:flex; gap:5px; flex-wrap:wrap; }
+.tags span { font-size:8px; padding:2px 6px; border-radius:2px; letter-spacing:1px; font-weight:bold; text-transform:uppercase; }
+.t1 { background:#0e1a10; color:#00ff7f; border:1px solid #00ff7f33; }
+.t2 { background:#1a0010; color:#ff40cc; border:1px solid #ff40cc33; }
+.t3 { background:#0e1020; color:#6366f1; border:1px solid #6366f133; }
+.t4 { background:#001a10; color:#2563eb; border:1px solid #2563eb33; }
+.right { width:288px; display:flex; flex-direction:column; gap:14px; }
+.qr-card { background:rgba(255,255,255,0.02); border:1px solid rgba(255,64,64,0.15); border-radius:8px; padding:14px; display:flex; gap:12px; align-items:flex-start; }
+.qr-img-wrap { flex-shrink:0; background:#0a0003; border:1px solid rgba(255,64,64,0.2); border-radius:6px; padding:6px; }
+.qr-copy { flex:1; }
+.qr-name { font-size:10px; font-weight:bold; color:#ffcccc; margin-bottom:3px; letter-spacing:0.5px; }
+.qr-what { font-size:8.5px; color:#4a2020; line-height:1.55; margin-bottom:5px; }
+.qr-who { font-size:8px; color:#ff4040; letter-spacing:0.5px; }
+.qr-who span { color:#cc3030; }
+.divider { height:1px; background:rgba(255,64,64,0.1); }
+.stats { display:flex; justify-content:space-around; }
+.stat-item { text-align:center; }
+.stat-num { font-size:22px; font-weight:bold; color:#ff4040; }
+.stat-lbl { font-size:7.5px; color:#3a1010; letter-spacing:1.5px; text-transform:uppercase; }
+.footer-tag { position:absolute; bottom:10px; left:50%; transform:translateX(-50%); font-size:7px; color:#1a0505; letter-spacing:3px; text-transform:uppercase; white-space:nowrap; }
+</style>
+</head>
+<body>
+<div class="grid"></div><div class="orb1"></div><div class="orb2"></div>
+<div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+<div class="bottom-bar"></div>
+<div class="wrap">
+  <div class="left">
+    <div class="top-row"><span class="badge">⬤ LIVE NOW</span><span class="brand">ScriptMaster Labs · Shadow Desk</span></div>
+    <div class="headline"><div class="h1">ALPHA.</div><div class="h2">ON DEMAND.</div><div class="h3">Machine-Payable.</div></div>
+    <p class="tagline">Real-time institutional signals — <strong>gated by USDC micropayments</strong> on Base.<br>No API key. No subscription. Your AI agent pays per request and gets the signal.</p>
+    <div class="ep-box">
+      <div class="ep-label">⬡ Live Demo Endpoint</div>
+      <div class="ep-url"><span class="method">GET</span>shadow-desk.onrender.com/v1/alpha/stream?ticker=GME</div>
+      <div class="ep-note">No proof header → HTTP 402 challenge is returned with payment instructions.<br>Send $0.005 USDC on Base → retry → receive gamma walls, block flow, signal type.</div>
+    </div>
+    <div class="bottom-row">
+      <div class="price-pill"><span class="price">$0.005</span><span class="per">USDC<br>/ signal</span></div>
+      <div class="tags"><span class="t1">Go</span><span class="t2">x402</span><span class="t3">Base</span><span class="t4">USDC</span></div>
+    </div>
+  </div>
+  <div class="right">
+    <div class="qr-card">
+      <div class="qr-img-wrap"><img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://shadow-desk.onrender.com/v1/alpha/stream?ticker=GME&bgcolor=0a0003&color=ff4040&margin=3" width="100" height="100" alt="Alpha Stream"></div>
+      <div class="qr-copy"><div class="qr-name">Alpha Stream — GME</div><div class="qr-what">Institutional squeeze signal endpoint. Returns gamma walls, block flow, and directional bias for any ticker. Gated by $0.005 USDC per call.</div><div class="qr-who">For: <span>AI trading agents, quant funds, autonomous bots</span></div></div>
+    </div>
+    <div class="divider"></div>
+    <div class="qr-card">
+      <div class="qr-img-wrap"><img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://shadow-desk.onrender.com/.well-known/mcp.json&bgcolor=0a0003&color=ff9000&margin=3" width="100" height="100" alt="MCP Discovery"></div>
+      <div class="qr-copy"><div class="qr-name">MCP Auto-Discovery</div><div class="qr-what">Drop this URL into Claude, GPT, or any MCP-compatible agent. It self-configures — learns the API schema, payment terms, and how to fund requests autonomously.</div><div class="qr-who">For: <span>AI agent developers, Claude/GPT builders</span></div></div>
+    </div>
+    <div class="stats">
+      <div class="stat-item"><div class="stat-num">99%</div><div class="stat-lbl">to provider</div></div>
+      <div class="stat-item"><div class="stat-num">0</div><div class="stat-lbl">API keys needed</div></div>
+      <div class="stat-item"><div class="stat-num">∞</div><div class="stat-lbl">tickers</div></div>
+    </div>
+  </div>
+</div>
+<div class="footer-tag">ScriptMaster Labs · Shadow Desk · x402 Sovereign Alpha · Powered by Base Network USDC</div>
+</body>
+</html>
