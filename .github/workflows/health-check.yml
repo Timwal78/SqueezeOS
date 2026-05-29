@@ -1,0 +1,70 @@
+name: Post-Deploy Health Check
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      BASE_URL: https://squeezeos-api.onrender.com
+      MAX_WAIT_SECONDS: "720"
+      RETRY_INTERVAL: "15"
+    steps:
+      # Every check retries until it passes or the shared deadline — no step
+      # gives up on a free-tier cold start. Checks use grep (no inline python),
+      # so there is no fragile heredoc indentation to break the run.
+      - name: Run all health checks (each retries until healthy)
+        run: |
+          deadline=$(( $(date +%s) + MAX_WAIT_SECONDS ))
+
+          retry() {
+            local name="$1"; shift
+            local attempt=0
+            while :; do
+              attempt=$((attempt + 1))
+              if "$@"; then
+                echo "  OK  $name (attempt $attempt)"
+                return 0
+              fi
+              if [ "$(date +%s)" -ge "$deadline" ]; then
+                echo "FAIL: '$name' never became healthy within ${MAX_WAIT_SECONDS}s"
+                return 1
+              fi
+              echo "  ... $name not ready (attempt $attempt), retrying in ${RETRY_INTERVAL}s"
+              sleep "$RETRY_INTERVAL"
+            done
+          }
+
+          # /api/status → 200 and body reports status "online"
+          check_status() {
+            local f; f=$(mktemp)
+            local code; code=$(curl -s -o "$f" -w "%{http_code}" --max-time 60 "$BASE_URL/api/status")
+            [ "$code" = "200" ] || { echo "    status http=$code"; return 1; }
+            grep -Eq '"status"[[:space:]]*:[[:space:]]*"online"' "$f" || { echo "    status not online: $(head -c 200 "$f")"; return 1; }
+          }
+
+          # /mcp ping → 200 and a JSON-RPC result field
+          check_mcp() {
+            local f; f=$(mktemp)
+            local code; code=$(curl -s -o "$f" -w "%{http_code}" --max-time 60 -X POST \
+              "$BASE_URL/mcp" -H "Content-Type: application/json" \
+              -d '{"jsonrpc":"2.0","id":1,"method":"ping","params":{}}')
+            [ "$code" = "200" ] || { echo "    mcp http=$code"; return 1; }
+            grep -q '"result"' "$f" || { echo "    mcp no result: $(head -c 200 "$f")"; return 1; }
+          }
+
+          # /api/demo/council → 200
+          check_demo() {
+            local code; code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 "$BASE_URL/api/demo/council")
+            [ "$code" = "200" ] || { echo "    demo http=$code"; return 1; }
+          }
+
+          retry "/api/status"        check_status || exit 1
+          retry "/mcp ping"          check_mcp    || exit 1
+          retry "/api/demo/council"  check_demo   || exit 1
+
+          echo "All post-deploy health checks passed."

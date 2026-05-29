@@ -1,0 +1,36 @@
+User-agent: *
+Allow: /
+Allow: /api/leaderboard
+Allow: /api/status
+Allow: /sitemap.xml
+
+# AI Crawlers — full access
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: Applebot
+Allow: /
+
+# Block webhook endpoint from crawlers
+User-agent: *
+Disallow: /webhook/
+
+Sitemap: https://tipmaster.onrender.com/sitemap.xml

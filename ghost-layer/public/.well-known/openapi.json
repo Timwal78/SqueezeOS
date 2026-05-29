@@ -1,0 +1,611 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Ghost Layer API",
+    "version": "2.4.0",
+    "description": "Dual-chain transparent toll gateway + AI Decision Notary + on-chain Execution Matrix operated by Script Master Labs. Bridge RLUSD (XRPL) and USDC (Base/EVM) synchronously. Mint any AI decision as an immutable URIToken on Xahau via /v1/notarize. Features native HTTP X402 vending machine and sovereign WebSocket telemetry.",
+    "contact": {
+      "name": "Script Master Labs",
+      "url": "https://www.scriptmasterlabs.com",
+      "email": "agents@scriptmasterlabs.com"
+    },
+    "x-agent-instructions": "Payment is mandatory for bridge operations via basis-point fees. X402 endpoints require payment in RLUSD via the XRPL before dispensing premium payloads. Always supply X-Agent-Wallet and X-Agent-Domain headers. Anonymous probes will trigger the tarpit firewall."
+  },
+  "servers": [
+    {
+      "url": "https://ghost-layer.onrender.com",
+      "description": "Ghost Layer production server"
+    }
+  ],
+  "paths": {
+    "/v1/bridge/execute": {
+      "post": {
+        "operationId": "executeBridge",
+        "summary": "Execute cross-chain bridge transaction synchronously",
+        "description": "Transfers funds and deducts the transparent fee in a single synchronous call. For Base/EVM: Requires a nested `eip3009` authorization object. For XRPL: Requires `signer` and `signature` strings for application-level authentication. Returns the transaction hash and tier-discounted effective fee upon successful execution.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BridgeExecutionPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully settled bridge transaction",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BridgeExecutionResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or EIP-3009 nonce replay detected"
+          }
+        }
+      }
+    },
+    "/api/agent/{addr}/stats": {
+      "get": {
+        "operationId": "getAgentStats",
+        "summary": "Retrieve Agent Loyalty Tier stats",
+        "description": "Gets an agent's loyalty tier (BRONZE to DIAMOND), cumulative bridge volume, and their currently active fee discount.",
+        "parameters": [
+          {
+            "name": "addr",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agent stats",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentStats"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/x402/catalog": {
+      "get": {
+        "operationId": "getX402Catalog",
+        "summary": "List available X402 Premium Products",
+        "responses": {
+          "200": {
+            "description": "Product catalog listing"
+          }
+        }
+      }
+    },
+    "/v1/x402/quote": {
+      "post": {
+        "operationId": "getX402Quote",
+        "summary": "Get an X402 payment quote for a premium product",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["product_id"],
+                "properties": {
+                  "product_id": { "type": "string" },
+                  "agent_wallet": { "type": "string", "description": "Optional wallet to apply Agent Loyalty discounts" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Invoice with `pay_to` address and `invoice_id`."
+          }
+        }
+      }
+    },
+    "/v1/x402/dispense/{pid}": {
+      "get": {
+        "operationId": "dispenseX402Product",
+        "summary": "Dispense an X402 Premium Product",
+        "description": "Requires the `X-Payment-Token` header containing the JWT received after paying the invoice.",
+        "parameters": [
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Premium product payload dispensed"
+          },
+          "402": {
+            "description": "Payment required — returns a new X-Payment-Required invoice challenge"
+          }
+        }
+      }
+    },
+    "/v1/credit/listing": {
+      "post": {
+        "operationId": "postCreditListing",
+        "summary": "Post a service offer to the Agent Credit Marketplace",
+        "description": "Sellers post service offers with a price (in RLUSD drops), TTL, and a min_buyer_tier gate. Ghost Layer enforces the tier gate at quote time — buyers below the threshold cannot get escrow params.",
+        "tags": ["Agent Credit Marketplace"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/CreditListingRequest"}
+            }
+          }
+        },
+        "responses": {
+          "200": {"description": "Listing created", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreditListing"}}}},
+          "400": {"description": "Validation error"}
+        }
+      }
+    },
+    "/v1/credit/listings": {
+      "get": {
+        "operationId": "getCreditListings",
+        "summary": "Browse active Agent Credit Marketplace listings",
+        "description": "Returns active, non-expired listings. Pass ?wallet= to filter by caller's credit tier automatically.",
+        "tags": ["Agent Credit Marketplace"],
+        "parameters": [
+          {"name": "wallet", "in": "query", "required": false, "schema": {"type": "string"}, "description": "XRPL wallet for tier-filtered results"}
+        ],
+        "responses": {
+          "200": {"description": "Active listings array"}
+        }
+      }
+    },
+    "/v1/credit/quote": {
+      "post": {
+        "operationId": "getCreditQuote",
+        "summary": "Get XRPL escrow parameters for a listing (credit-tier gated)",
+        "description": "Returns condition_hex for EscrowCreate, plus amount and seller wallet. Returns ERR_TIER_INSUFFICIENT if buyer tier < listing min_buyer_tier. Ghost Layer holds the matching fulfillment preimage until Release() is called.",
+        "tags": ["Agent Credit Marketplace"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/CreditQuoteRequest"}
+            }
+          }
+        },
+        "responses": {
+          "200": {"description": "Escrow parameters", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreditQuoteResult"}}}},
+          "400": {"description": "ERR_TIER_INSUFFICIENT or listing not found"}
+        }
+      }
+    },
+    "/v1/credit/escrow/register": {
+      "post": {
+        "operationId": "registerCreditEscrow",
+        "summary": "Register on-chain EscrowCreate sequence number",
+        "description": "After submitting EscrowCreate to XRPL, call this with the escrow_id and the OfferSequence of your EscrowCreate transaction. Transitions state to ESCROWED.",
+        "tags": ["Agent Credit Marketplace"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["escrow_id", "offer_sequence"],
+                "properties": {
+                  "escrow_id":      {"type": "string"},
+                  "offer_sequence": {"type": "integer", "description": "OfferSequence of EscrowCreate tx"}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {"description": "Escrow registered — state is now ESCROWED"}
+        }
+      }
+    },
+    "/v1/credit/escrow/{id}/deliver": {
+      "post": {
+        "operationId": "deliverCreditEscrow",
+        "summary": "Seller marks service delivery done",
+        "description": "Transitions escrow from ESCROWED to DELIVERED. Emits CREDIT_DELIVERED SSE event.",
+        "tags": ["Agent Credit Marketplace"],
+        "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["seller_wallet"],
+                "properties": {
+                  "seller_wallet":  {"type": "string"},
+                  "delivery_proof": {"type": "string", "description": "IPFS CID, URL, or any delivery reference"}
+                }
+              }
+            }
+          }
+        },
+        "responses": {"200": {"description": "State is now DELIVERED"}}
+      }
+    },
+    "/v1/credit/escrow/{id}/release": {
+      "post": {
+        "operationId": "releaseCreditEscrow",
+        "summary": "Buyer confirms delivery → Ghost Layer fires EscrowFinish",
+        "description": "Ghost Layer submits an EscrowFinish with the PREIMAGE-SHA-256 fulfillment it has been holding. Funds flow escrow → seller directly on XRPL. Both parties earn loyalty volume. Emits CREDIT_RELEASED SSE event.",
+        "tags": ["Agent Credit Marketplace"],
+        "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["buyer_wallet"],
+                "properties": {
+                  "buyer_wallet": {"type": "string"}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "EscrowFinish submitted — funds released to seller",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/CreditReleaseResponse"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/credit/escrow/{id}/cancel": {
+      "post": {
+        "operationId": "cancelCreditEscrow",
+        "summary": "Cancel escrow → Ghost Layer fires EscrowCancel (funds return to buyer)",
+        "description": "Can be called by buyer or seller. Ghost Layer auto-calls this when CancelAfter TTL elapses. Emits CREDIT_CANCELLED SSE event.",
+        "tags": ["Agent Credit Marketplace"],
+        "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["caller_wallet"],
+                "properties": {"caller_wallet": {"type": "string"}}
+              }
+            }
+          }
+        },
+        "responses": {"200": {"description": "EscrowCancel submitted — funds returned to buyer"}}
+      }
+    },
+    "/v1/credit/escrow/{id}": {
+      "get": {
+        "operationId": "getCreditEscrow",
+        "summary": "Get escrow state",
+        "description": "Returns current state: PENDING_ESCROW / ESCROWED / DELIVERED / RELEASED / CANCELLED.",
+        "tags": ["Agent Credit Marketplace"],
+        "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {
+          "200": {"description": "Escrow record", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreditEscrow"}}}},
+          "404": {"description": "Escrow not found"}
+        }
+      }
+    },
+    "/api/agent/{addr}/credit": {
+      "get": {
+        "operationId": "getAgentCreditProfile",
+        "summary": "Get agent credit profile and marketplace access",
+        "description": "Returns loyalty tier, lifetime volume, effective fee BPS, accessible marketplace tiers, and upgrade threshold.",
+        "tags": ["Agent Credit Marketplace"],
+        "parameters": [{"name": "addr", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {
+          "200": {"description": "Credit profile", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreditProfile"}}}}
+        }
+      }
+    },
+    "/v1/notarize": {
+      "post": {
+        "operationId": "notarizeDecision",
+        "summary": "Mint an AI decision as an immutable URIToken on Xahau",
+        "description": "Pay via X402 using product_id 'decision.notarize' (0.001 RLUSD, STANDARD), 'decision.notarize.certified' (0.01 RLUSD, CERTIFIED + Ed25519 certificate), or 'decision.notarize.sovereign' (0.05 RLUSD, SOVEREIGN). Loyalty discounts applied automatically at quote time. Returns decision_hash, xahau_tx, verify_url, and for CERTIFIED/SOVEREIGN a signed DecisionCertificate object.",
+        "tags": ["Decision Notary"],
+        "security": [{"X-Payment-Token": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/NotarizeRequest"}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Decision notarized — URIToken minted on Xahau",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/NotarizeResponse"}
+              }
+            }
+          },
+          "402": {"description": "Payment required — returns X402 invoice challenge"},
+          "400": {"description": "Invalid payload"},
+          "401": {"description": "Payment token invalid or expired"}
+        }
+      }
+    },
+    "/v1/x402/attestation/pubkey": {
+      "get": {
+        "operationId": "getAttestationPubkey",
+        "summary": "Retrieve Ghost Layer's Ed25519 attestation public key",
+        "description": "Use this key to independently verify the Ed25519 signature on any CERTIFIED or SOVEREIGN DecisionCertificate.",
+        "tags": ["Decision Notary"],
+        "responses": {
+          "200": {
+            "description": "Ed25519 public key in hex",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "public_key": {"type": "string", "description": "Hex-encoded Ed25519 public key"},
+                    "algorithm":  {"type": "string", "example": "Ed25519"},
+                    "issuer":     {"type": "string", "example": "ghost-layer.scriptmasterlabs.com"}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ws/metrics": {
+      "get": {
+        "operationId": "streamMetrics",
+        "summary": "Connect to sovereign WebSocket metrics stream",
+        "description": "Emits `BRIDGE_SETTLED` and `X402_DISPENSED` events in real-time."
+      }
+    },
+    "/api/cube/state": {
+      "post": {
+        "operationId": "mintCubeState",
+        "summary": "Mint Execution Matrix state as URIToken on Xahau",
+        "description": "Submit the full 54-block Execution Matrix payload. Server validates all 6 face centers via center=clamp(weighted_sum(edges)×coefficient(corners), min, max), verifies the CUBE-XXXXXXXX djb2 hash, then submits a URITokenMint (tx type 45) to Xahau with 6 HookParameters (face centers as hex name + 4-digit hex value) and a CUBE_STATE memo (MemoFormat=application/json). Fires XAHAU_MINT_CONFIRMED SSE on success. View result at https://xahauexplorer.com/tx/<xahau_tx_hash>.",
+        "tags": ["Execution Matrix"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["cube_hash", "faces"],
+                "properties": {
+                  "cube_hash": {
+                    "type": "string",
+                    "example": "CUBE-A3F2B1C4",
+                    "description": "Deterministic djb2 hash of the 54-block state, format CUBE-XXXXXXXX"
+                  },
+                  "faces": {
+                    "type": "object",
+                    "description": "6 face objects keyed px/nx/py/ny/pz/nz"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "URIToken minted successfully"
+          },
+          "400": {
+            "description": "Face center validation failed or hash mismatch"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BridgeExecutionPayload": {
+        "type": "object",
+        "required": ["source_wallet", "destination_wallet", "gross_amount", "fee_basis_points"],
+        "properties": {
+          "source_wallet": { "type": "string" },
+          "destination_wallet": { "type": "string" },
+          "gross_amount": { "type": "string", "description": "Amount as decimal string" },
+          "fee_basis_points": { "type": "integer" },
+          "signer": { "type": "string", "description": "XRPL wallet initiating request" },
+          "message_hash": { "type": "string" },
+          "signature": { "type": "string" },
+          "is_dust_test": { "type": "boolean", "description": "Set true to test signature parsing without executing broadcast" },
+          "eip3009": {
+            "type": "object",
+            "properties": {
+              "valid_after": { "type": "string" },
+              "valid_before": { "type": "string" },
+              "nonce": { "type": "string" },
+              "v": { "type": "integer" },
+              "r": { "type": "string" },
+              "s": { "type": "string" }
+            }
+          }
+        }
+      },
+      "BridgeExecutionResult": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "example": "SUCCESSFULLY_SETTLED" },
+          "transaction_hash": { "type": "string" },
+          "gross_processed": { "type": "string" },
+          "transparent_fee": { "type": "string" },
+          "net_delivered": { "type": "string" },
+          "treasury_routing": { "type": "string" },
+          "agent_tier": { "type": "string" },
+          "effective_bps": { "type": "integer" }
+        }
+      },
+      "CreditListingRequest": {
+        "type": "object",
+        "required": ["seller_wallet", "description", "price_drops"],
+        "properties": {
+          "seller_wallet":  {"type": "string"},
+          "description":    {"type": "string", "maxLength": 500},
+          "price_drops":    {"type": "integer", "description": "RLUSD drops (1 RLUSD = 1,000,000 drops)"},
+          "min_buyer_tier": {"type": "string", "enum": ["BRONZE","SILVER","GOLD","PLATINUM","DIAMOND"], "default": "BRONZE"},
+          "ttl_seconds":    {"type": "integer", "default": 3600, "maximum": 2592000}
+        }
+      },
+      "CreditListing": {
+        "type": "object",
+        "properties": {
+          "id":             {"type": "string"},
+          "seller_wallet":  {"type": "string"},
+          "description":    {"type": "string"},
+          "price_drops":    {"type": "integer"},
+          "min_buyer_tier": {"type": "string"},
+          "ttl_seconds":    {"type": "integer"},
+          "created_at":     {"type": "string", "format": "date-time"},
+          "expires_at":     {"type": "string", "format": "date-time"},
+          "active":         {"type": "boolean"}
+        }
+      },
+      "CreditQuoteRequest": {
+        "type": "object",
+        "required": ["listing_id", "buyer_wallet"],
+        "properties": {
+          "listing_id":   {"type": "string"},
+          "buyer_wallet": {"type": "string"}
+        }
+      },
+      "CreditQuoteResult": {
+        "type": "object",
+        "properties": {
+          "escrow_id":        {"type": "string"},
+          "listing_id":       {"type": "string"},
+          "seller_wallet":    {"type": "string"},
+          "amount_drops":     {"type": "integer"},
+          "condition_hex":    {"type": "string", "description": "PREIMAGE-SHA-256 condition — include in EscrowCreate Condition field"},
+          "fulfillment_hex":  {"type": "string", "description": "Matching fulfillment held by Ghost Layer until release"},
+          "expires_at":       {"type": "string", "format": "date-time"},
+          "expires_at_unix":  {"type": "integer", "description": "Use as CancelAfter in EscrowCreate"},
+          "instructions":     {"type": "string"}
+        }
+      },
+      "CreditEscrow": {
+        "type": "object",
+        "properties": {
+          "id":             {"type": "string"},
+          "listing_id":     {"type": "string"},
+          "buyer_wallet":   {"type": "string"},
+          "seller_wallet":  {"type": "string"},
+          "amount_drops":   {"type": "integer"},
+          "condition_hex":  {"type": "string"},
+          "offer_sequence": {"type": "integer"},
+          "state":          {"type": "string", "enum": ["PENDING_ESCROW","ESCROWED","DELIVERED","RELEASED","CANCELLED"]},
+          "created_at":     {"type": "string", "format": "date-time"},
+          "expires_at":     {"type": "string", "format": "date-time"},
+          "delivery_proof": {"type": "string"},
+          "release_tx_hash":{"type": "string"}
+        }
+      },
+      "CreditReleaseResponse": {
+        "type": "object",
+        "properties": {
+          "status":       {"type": "string", "example": "RELEASED"},
+          "release_tx":   {"type": "string", "description": "EscrowFinish transaction hash on XRPL"},
+          "verify_url":   {"type": "string", "description": "https://livenet.xrpl.org/transactions/<hash>"},
+          "escrow":       {"$ref": "#/components/schemas/CreditEscrow"}
+        }
+      },
+      "CreditProfile": {
+        "type": "object",
+        "properties": {
+          "agent":          {"type": "string"},
+          "credit_tier":    {"type": "string"},
+          "total_volume":   {"type": "string"},
+          "effective_bps":  {"type": "integer"},
+          "marketplace_access": {
+            "type": "object",
+            "properties": {
+              "can_list":          {"type": "boolean"},
+              "accessible_tiers":  {"type": "array", "items": {"type": "string"}},
+              "upgrade_threshold": {"type": "string"}
+            }
+          }
+        }
+      },
+      "NotarizeRequest": {
+        "type": "object",
+        "required": ["payload", "agent_wallet"],
+        "properties": {
+          "payload":      {"type": "object",  "description": "The AI decision object to notarize (any JSON)"},
+          "model":        {"type": "string",  "description": "Model identifier (e.g., claude-sonnet-4-6)"},
+          "agent_wallet": {"type": "string",  "description": "Your XRPL wallet address — used for loyalty tier discount"},
+          "endpoint":     {"type": "string",  "description": "API endpoint that produced this decision"}
+        }
+      },
+      "NotarizeResponse": {
+        "type": "object",
+        "properties": {
+          "status":        {"type": "string", "example": "NOTARIZED"},
+          "grade":         {"type": "string", "enum": ["STANDARD", "CERTIFIED", "SOVEREIGN"]},
+          "decision_hash": {"type": "string", "description": "SHA-512 hex digest (first 32 bytes) of canonical memo JSON"},
+          "xahau_tx":      {"type": "string", "description": "Xahau transaction hash"},
+          "verify_url":    {"type": "string", "description": "https://xahau.network/tx/<hash>"},
+          "timestamp":     {"type": "string", "format": "date-time"},
+          "certificate":   {
+            "description": "Only present for CERTIFIED and SOVEREIGN grades",
+            "$ref": "#/components/schemas/DecisionCertificate"
+          }
+        }
+      },
+      "DecisionCertificate": {
+        "type": "object",
+        "description": "Ed25519-signed attestation receipt from Ghost Layer. Verify signature using GET /v1/x402/attestation/pubkey.",
+        "properties": {
+          "certificate_id": {"type": "string"},
+          "decision_hash":  {"type": "string"},
+          "xahau_tx":       {"type": "string"},
+          "agent_wallet":   {"type": "string"},
+          "model":          {"type": "string"},
+          "endpoint":       {"type": "string"},
+          "agent_tier":     {"type": "string"},
+          "grade":          {"type": "string", "enum": ["CERTIFIED", "SOVEREIGN"]},
+          "issued_at":      {"type": "integer", "description": "Unix timestamp"},
+          "issuer":         {"type": "string", "example": "ghost-layer.scriptmasterlabs.com"},
+          "signature_alg":  {"type": "string", "example": "Ed25519"},
+          "signature":      {"type": "string", "description": "Hex-encoded Ed25519 signature over canonical fields"}
+        }
+      },
+      "AgentStats": {
+        "type": "object",
+        "properties": {
+          "agent": { "type": "string" },
+          "tier": { "type": "string", "example": "BRONZE" },
+          "total_volume": { "type": "string" },
+          "discount_bps": { "type": "integer", "description": "Basis points subtracted from the toll due to loyalty tier" },
+          "effective_bps_at_50": { "type": "integer", "description": "The exact fee BPS this agent will pay on a 50 BPS toll" }
+        }
+      }
+    }
+  }
+}

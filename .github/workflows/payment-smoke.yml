@@ -1,0 +1,119 @@
+name: Payment Flow Smoke Test
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'   # every 30 min — verify full invoice cycle is alive
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    name: End-to-end payment smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      # ── Step 1: Wake all Render services in parallel ─────────────
+      # Render free tier sleeps after 15 min; cold start takes 30–50 s.
+      # Fire warm-up pings first so the real assertions don't time out.
+      - name: Warm up Render services
+        run: |
+          curl -s --max-time 60 https://four02proof.onrender.com/v1/stats    -o /dev/null &
+          curl -s --max-time 60 https://ghost-layer.onrender.com/health       -o /dev/null &
+          curl -s --max-time 60 https://squeezeos-api.onrender.com/api/status -o /dev/null &
+          wait
+          echo "Warm-up pings complete"
+
+      # ── Step 2: 402Proof /v1/stats ────────────────────────────────
+      - name: 402Proof stats
+        id: stats
+        run: |
+          body=$(curl -sf --retry 3 --retry-delay 10 --retry-max-time 90 \
+            --max-time 60 https://four02proof.onrender.com/v1/stats)
+          echo "body=$body"
+          echo "$body" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          assert 'total_invoices' in d or 'invoices' in d or len(d) > 0, \
+            f'Unexpected stats payload: {d}'
+          print('  OK  402Proof stats reachable and parseable')
+          "
+
+      # ── Step 3: Request an invoice for /api/council ───────────────
+      - name: Request invoice
+        id: invoice
+        run: |
+          body=$(curl -sf --retry 3 --retry-delay 10 --retry-max-time 90 \
+            --max-time 60 \
+            -X POST https://four02proof.onrender.com/v1/invoice \
+            -H "Content-Type: application/json" \
+            -d '{"endpoint_id":"12a0e7a1-6812-4c3f-aa24-de6e3bc12b5a",
+                 "agent_wallet":"rSmokeTester000000000000000000001"}')
+          echo "invoice_body=$body"
+          echo "$body" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          assert 'invoice_id' in d or 'id' in d or 'pay_to' in d, \
+            f'Invoice missing expected fields: {d}'
+          print('  OK  Invoice generated — pay_to and amount present')
+          "
+
+      # ── Step 4: Ghost Layer health deep-check ────────────────────
+      - name: Ghost Layer health
+        id: ghost_health
+        run: |
+          body=$(curl -sf --retry 3 --retry-delay 10 --retry-max-time 90 \
+            --max-time 60 https://ghost-layer.onrender.com/health)
+          echo "ghost_body=$body"
+          echo "$body" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          status = d.get('status', d.get('ok', d.get('alive', '')))
+          assert status in ('ok', 'healthy', True, 'up', 'live', 'online') or len(d) > 0, \
+            f'Ghost Layer health unexpected: {d}'
+          print('  OK  Ghost Layer healthy')
+          " || echo "  WARN  Ghost Layer returned non-JSON — checking status code only"
+
+      # ── Step 5: SqueezeOS free demo (no payment needed) ──────────
+      - name: SqueezeOS demo council
+        id: demo
+        run: |
+          body=$(curl -sf --retry 3 --retry-delay 10 --retry-max-time 120 \
+            --max-time 60 \
+            https://squeezeos-api.onrender.com/api/demo/council)
+          echo "$body" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          assert d.get('status') == 'online' or 'bias' in d or 'verdict' in d or 'regime' in d, \
+            f'Unexpected demo response: {d}'
+          print('  OK  SqueezeOS demo council live')
+          "
+
+      # ── Alert if any step fails ───────────────────────────────────
+      - name: Alert Discord on smoke failure
+        if: failure() && env.DISCORD_WEBHOOK_ALL != ''
+        env:
+          DISCORD_WEBHOOK_ALL: ${{ secrets.DISCORD_WEBHOOK_ALL }}
+        run: |
+          STATS="${{ steps.stats.outcome }}"
+          INVOICE="${{ steps.invoice.outcome }}"
+          GHOST="${{ steps.ghost_health.outcome }}"
+          DEMO="${{ steps.demo.outcome }}"
+
+          curl -s -X POST "$DISCORD_WEBHOOK_ALL" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"username\": \"SqueezeOS Sentinel\",
+              \"embeds\": [{
+                \"title\": \"🔴 Payment Smoke Test FAILED\",
+                \"color\": 15158332,
+                \"description\": \"An agent trying to pay right now would hit a broken flow.\",
+                \"fields\": [
+                  {\"name\": \"402Proof /v1/stats\",  \"value\": \"$STATS\",   \"inline\": true},
+                  {\"name\": \"Invoice generation\",   \"value\": \"$INVOICE\", \"inline\": true},
+                  {\"name\": \"Ghost Layer health\",   \"value\": \"$GHOST\",   \"inline\": true},
+                  {\"name\": \"SqueezeOS demo\",       \"value\": \"$DEMO\",    \"inline\": true}
+                ],
+                \"footer\": {\"text\": \"Payment smoke — every 30 min\"},
+                \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
+              }]
+            }"

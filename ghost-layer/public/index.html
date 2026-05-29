@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="google-site-verification" content="xxES82SxxcMMGL" />
+    <title>Ghost Layer — Dual-Chain RLUSD &amp; USDC Bridge for AI Agents</title>
+    <link rel="canonical" href="https://ghost-layer.onrender.com/">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Ghost Layer — Dual-Chain RLUSD &amp; USDC Bridge">
+    <meta property="og:description" content="Transparent toll gateway for autonomous AI agents. Bridge RLUSD (XRPL) and USDC (Base/EVM) micropayments with tamper-evident compliance receipts, Agent Passport loyalty tiers, and HTTP 402 x402 protocol.">
+    <meta property="og:url" content="https://ghost-layer.onrender.com/">
+    <meta property="og:site_name" content="Ghost Layer by Script Master Labs">
+    <meta property="og:image" content="https://ghost-layer.onrender.com/og-image.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Ghost Layer — 54-Block Execution Matrix Terminal">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Ghost Layer — Dual-Chain RLUSD &amp; USDC Bridge">
+    <meta name="twitter:description" content="Transparent toll gateway for autonomous AI agents. Bridge RLUSD (XRPL) and USDC (Base/EVM) micropayments with tamper-evident compliance receipts.">
+    <meta name="twitter:image" content="https://ghost-layer.onrender.com/og-image.png">
+    <meta name="twitter:image:alt" content="Ghost Layer — 54-Block Execution Matrix Terminal">
+
+    <!-- Additional SEO -->
+    <meta name="keywords" content="XRPL, RLUSD, Xahau, Base, USDC, x402, HTTP 402, AI agents, cross-chain bridge, micropayments, blockchain, Ghost Layer, Script Master Labs">
+    <meta name="author" content="Script Master Labs">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: #000;
+            color: #00FFCC;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+            height: 100vh;
+            display: grid;
+            grid-template-rows: 1fr 38px 26px;
+        }
+
+        /* ── SEO Footer ── */
+        #seo-footer {
+            border-top: 1px solid #050e0e;
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            padding: 0 18px;
+            background: #000;
+            z-index: 20;
+            overflow: hidden;
+        }
+        #seo-footer a {
+            font-size: 0.48rem;
+            color: #1a2a3a;
+            text-decoration: none;
+            letter-spacing: 0.10em;
+            text-transform: uppercase;
+            white-space: nowrap;
+            transition: color 0.12s;
+        }
+        #seo-footer a:hover { color: #334455; }
+        #seo-footer .footer-sep { color: #0a1a1a; font-size: 0.44rem; }
+        #main {
+            display: grid;
+            grid-template-columns: 272px 1fr 292px;
+            overflow: hidden;
+        }
+        #left-panel {
+            padding: 18px 14px;
+            border-right: 1px solid #0a2020;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            background: rgba(0,0,0,0.92);
+            z-index: 10;
+            overflow-y: auto;
+        }
+        #canvas-container {
+            position: relative;
+            overflow: hidden;
+        }
+        #canvas-container canvas {
+            position: absolute !important;
+            top: 0; left: 0;
+        }
+        #right-panel {
+            padding: 18px 14px;
+            border-left: 1px solid #0a2020;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            background: rgba(0,0,0,0.92);
+            z-index: 10;
+            overflow-y: auto;
+        }
+        #bottom-bar {
+            border-top: 1px solid #0a2020;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 0 18px;
+            background: #000;
+            z-index: 20;
+        }
+
+        /* ── Typography ── */
+        .panel-title {
+            font-size: 0.60rem;
+            letter-spacing: 0.22em;
+            color: #223344;
+            text-transform: uppercase;
+            border-bottom: 1px solid #0a2020;
+            padding-bottom: 7px;
+            margin-bottom: 2px;
+        }
+        h1 {
+            font-size: 1.05rem;
+            letter-spacing: 0.16em;
+            color: #00FFCC;
+            text-shadow: 0 0 14px #00FFCC33;
+        }
+        .sub-head {
+            font-size: 0.54rem;
+            color: #223344;
+            letter-spacing: 0.10em;
+            margin-top: 2px;
+        }
+
+        /* ── Stat rows ── */
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.68rem;
+            padding: 2px 0;
+        }
+        .stat-label { color: #334455; text-transform: uppercase; letter-spacing: 0.08em; }
+        .stat-val   { color: #00FFCC; font-weight: bold; }
+
+        /* ── Face grid ── */
+        .face-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 5px;
+        }
+        .face-block {
+            border: 1px solid #0a2020;
+            padding: 7px 8px;
+            cursor: pointer;
+            transition: border-color 0.12s, background 0.12s;
+        }
+        .face-block:hover  { border-color: #00FFCC33; background: #001818; }
+        .face-block.active { border-color: currentColor; background: #001818; }
+        .face-name { font-size: 0.54rem; letter-spacing: 0.16em; text-transform: uppercase; margin-bottom: 3px; }
+        .face-val  { font-size: 1.05rem; font-weight: bold; line-height: 1; }
+        .face-unit { font-size: 0.50rem; margin-left: 2px; color: #223344; }
+        .face-desc { font-size: 0.50rem; color: #223344; margin-top: 3px; }
+
+        /* ── Face detail ── */
+        #face-detail {
+            border: 1px solid #0a3030;
+            padding: 10px;
+            min-height: 88px;
+        }
+        .detail-name { font-size: 0.76rem; letter-spacing: 0.14em; margin-bottom: 5px; }
+        .detail-sub  { font-size: 0.58rem; color: #334455; margin-bottom: 6px; }
+        .detail-bar  { height: 2px; background: #0a2020; border-radius: 1px; overflow: hidden; margin: 5px 0; }
+        .detail-fill { height: 100%; transition: width 0.3s ease; }
+        .detail-note { font-size: 0.50rem; color: #1a2a3a; margin-top: 5px; }
+
+        /* ── Mapping table ── */
+        .map-table { width: 100%; border-collapse: collapse; font-size: 0.60rem; }
+        .map-table th {
+            text-align: left; color: #223344; letter-spacing: 0.12em;
+            text-transform: uppercase; padding: 4px 5px;
+            border-bottom: 1px solid #0a2020; font-weight: normal;
+        }
+        .map-table td { padding: 6px 5px; vertical-align: top; border-bottom: 1px solid #050e0e; }
+        .map-table td:first-child { color: #00FFCC; white-space: nowrap; padding-right: 10px; }
+        .map-table td:last-child  { color: #445566; line-height: 1.45; }
+
+        /* ── Chain path blocks ── */
+        .chain-block {
+            border: 1px solid #0a2020;
+            padding: 8px 9px;
+            margin-bottom: 5px;
+        }
+        .chain-model { font-size: 0.63rem; color: #00FFCC; letter-spacing: 0.08em; margin-bottom: 2px; }
+        .chain-env   { font-size: 0.56rem; color: #AA00FF; margin-bottom: 3px; }
+        .chain-core  { font-size: 0.55rem; color: #334455; line-height: 1.45; }
+
+        /* ── Revenue rows ── */
+        .rev-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.60rem;
+            padding: 4px 0;
+            border-bottom: 1px solid #050e0e;
+        }
+        .rev-row:last-child { border: none; }
+        .rev-name { color: #445566; }
+        .rev-val  { color: #00FF88; font-weight: bold; }
+
+        /* ── Token box ── */
+        .token-box {
+            border: 1px solid #AA00FF33;
+            padding: 9px;
+        }
+        #token-hash {
+            font-size: 0.52rem;
+            color: #AA00FF;
+            word-break: break-all;
+            letter-spacing: 0.04em;
+        }
+        #token-xahau {
+            font-size: 0.50rem;
+            color: #00FF88;
+            word-break: break-all;
+            letter-spacing: 0.03em;
+            margin-top: 2px;
+        }
+        #token-xahau a {
+            color: #00FF88;
+            text-decoration: none;
+        }
+        #token-xahau a:hover {
+            text-decoration: underline;
+        }
+
+        /* ── Payment overlay ── */
+        #pay-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.88);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+        }
+        .pay-box {
+            background: #080810;
+            border: 1px solid #AA00FF;
+            border-radius: 8px;
+            padding: 1.4rem 1.6rem;
+            max-width: 460px;
+            width: 90%;
+            font-size: 0.7rem;
+            color: #94a3b8;
+        }
+        .pay-box h3 { color: #AA00FF; font-size: 0.8rem; margin-bottom: 0.8rem; letter-spacing: 0.1em; }
+        .pay-row { display: flex; align-items: center; gap: 6px; margin-bottom: 0.5rem; }
+        .pay-label { color: #475569; font-size: 0.6rem; letter-spacing: 0.08em; min-width: 80px; }
+        .pay-val { color: #e2e8f0; word-break: break-all; flex: 1; font-size: 0.62rem; }
+        .pay-copy { font-size: 0.55rem; color: #475569; border: 1px solid #1e1e2e; border-radius: 3px; padding: 2px 6px; cursor: pointer; background: none; white-space: nowrap; }
+        .pay-copy:hover { color: #AA00FF; border-color: #AA00FF; }
+        .pay-divider { border: none; border-top: 1px solid #1e1e2e; margin: 0.8rem 0; }
+        .pay-box input { width: 100%; background: #0d0d14; border: 1px solid #1e1e2e; border-radius: 4px; padding: 6px 8px; color: #e2e8f0; font-size: 0.65rem; font-family: 'Courier New', monospace; margin-bottom: 0.4rem; }
+        .pay-box input:focus { outline: none; border-color: #AA00FF; }
+        #pay-status { font-size: 0.65rem; min-height: 1.2rem; margin-bottom: 0.5rem; }
+        .pay-actions { display: flex; gap: 8px; margin-top: 0.6rem; }
+        .pay-btn { flex: 1; padding: 7px; border: none; border-radius: 4px; font-size: 0.7rem; font-family: 'Courier New', monospace; cursor: pointer; letter-spacing: 0.06em; }
+        .pay-btn.primary { background: #7c3aed; color: #fff; }
+        .pay-btn.primary:hover { background: #6d28d9; }
+        .pay-btn.cancel { background: transparent; border: 1px solid #334455; color: #475569; }
+        .pay-btn.cancel:hover { border-color: #FF0055; color: #FF0055; }
+
+        /* ── Buttons ── */
+        .btn {
+            font-family: 'Courier New', monospace;
+            font-size: 0.58rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            border: 1px solid #00FFCC33;
+            background: none;
+            color: #00FFCC;
+            padding: 5px 10px;
+            cursor: pointer;
+            transition: all 0.12s;
+            flex: 1;
+        }
+        .btn:hover { border-color: #00FFCC; background: #00FFCC0d; }
+        .btn.purple { border-color: #AA00FF33; color: #AA00FF; }
+        .btn.purple:hover { border-color: #AA00FF; background: #AA00FF0d; }
+
+        /* ── Tach bar ── */
+        .tach-wrap { flex: 1; height: 3px; background: #0a1a1a; border-radius: 2px; overflow: hidden; }
+        .tach-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #00FFCC, #AA00FF);
+            box-shadow: 0 0 6px #00FFCC66;
+            transition: width 0.1s linear;
+        }
+
+        /* ── Dividers ── */
+        .vdivider { width: 1px; height: 20px; background: #0a2020; flex-shrink: 0; }
+
+        /* ── X402 Badge ── */
+        .x402-badge {
+            font-size: 0.46rem;
+            letter-spacing: 0.12em;
+            color: #AA00FF;
+            border: 1px solid #AA00FF55;
+            padding: 1px 5px;
+            border-radius: 2px;
+            white-space: nowrap;
+            text-shadow: 0 0 8px #AA00FF66;
+            animation: liveDot 2.4s infinite;
+        }
+        @keyframes x402Flash {
+            0%   { background: rgba(170, 0, 255, 0.15); box-shadow: 0 0 0 rgba(170, 0, 255, 0); color: #FFFFFF; }
+            50%  { background: rgba(255, 255, 255, 0.85); box-shadow: 0 0 24px rgba(170, 0, 255, 0.9); color: #AA00FF; }
+            100% { background: rgba(170, 0, 255, 0.15); box-shadow: 0 0 0 rgba(170, 0, 255, 0); color: #AA00FF; }
+        }
+        .x402-badge.flash { animation: x402Flash 600ms ease-out; }
+        .loyalty-badge {
+            font-size: 0.46rem;
+            letter-spacing: 0.10em;
+            color: #00FF88;
+            border: 1px solid #00FF8844;
+            padding: 1px 5px;
+            border-radius: 2px;
+            white-space: nowrap;
+        }
+
+        /* ── 3×3 block grid ── */
+        .grid-3x3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 3px;
+            margin: 7px 0 5px;
+        }
+        .grid-cell {
+            border: 1px solid #0a2020;
+            padding: 5px 3px;
+            text-align: center;
+            min-height: 60px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .g-edge   { cursor: pointer; }
+        .g-edge:hover  { background: #001a1a; }
+        .g-edge:active { background: #002828; }
+        .g-corner { border-color: #0d1f2a !important; cursor: pointer; }
+        .g-corner:hover { background: #050f14; }
+        .g-center { background: #001414; }
+        .gc-label {
+            font-size: 0.40rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: #223344;
+            margin-bottom: 2px;
+            white-space: nowrap;
+        }
+        .gc-val  { font-size: 0.88rem; font-weight: bold; line-height: 1.1; }
+        .gc-unit { font-size: 0.40rem; color: #334455; margin-top: 2px; }
+        .gc-bar  { height: 1px; background: #0a2020; width: 100%; margin-top: 4px; overflow: hidden; }
+        .gc-fill { height: 100%; transition: width 0.3s ease; }
+        .detail-rot  { font-size: 0.48rem; color: #223344; margin-left: 5px; }
+        .detail-note { font-size: 0.48rem; color: #1a2a3a; margin-top: 4px; }
+
+        /* ── Scrollbars ── */
+        #left-panel::-webkit-scrollbar,
+        #right-panel::-webkit-scrollbar { width: 2px; }
+        #left-panel::-webkit-scrollbar-thumb,
+        #right-panel::-webkit-scrollbar-thumb { background: #0a2020; }
+
+        /* ── Neon pulse ── */
+        @keyframes liveDot { 0%,100% { opacity:1; } 50% { opacity:0.35; } }
+        .live { animation: liveDot 1.6s infinite; }
+    </style>
+    <script type="importmap">
+      { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+    </script>
+    <link rel="mcp-manifest" href="/.well-known/mcp.json" type="application/json">
+    <link rel="alternate" type="text/plain" href="/llms.txt" title="LLM Discovery">
+    <link rel="alternate" type="application/json" href="/.well-known/openapi.json" title="OpenAPI Spec">
+    <meta name="description" content="Ghost Layer — dual-chain transparent toll gateway for autonomous AI agents. Bridge RLUSD (XRPL) and USDC (Base/EVM) micropayments with full compliance receipts.">
+    <meta name="robots" content="index, follow">
+    <meta name="mcp-payment-protocol" content="x402">
+    <meta name="mcp-payment-asset" content="RLUSD/XRPL USDC/Base">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Ghost Layer",
+      "alternateName": "Ghost Layer Bridge",
+      "applicationCategory": "FinanceApplication",
+      "operatingSystem": "Web",
+      "url": "https://ghost-layer.onrender.com",
+      "description": "Ghost Layer is proprietary Web3 checkout and XRPL-native licensing infrastructure. Agents pay RLUSD on the XRP Ledger and mint an X402-BEAST-KEY URIToken on Xahau to unlock three products built on top: Agent Kiosk (world's first AI agent vending machine), Tipmaster (Farcaster tip bot), and Signal Auction Loom (real-time WebGL auction visualizer).",
+      "featureList": [
+        "Proprietary Web3 checkout and XRPL-native licensing infrastructure",
+        "X402-BEAST-KEY URIToken minting on Xahau — sovereign on-chain license",
+        "XRPL RLUSD settlement — sub-5 second finality",
+        "Base/EVM EIP-3009 gasless USDC authorization",
+        "Powers Agent Kiosk — world's first AI agent vending machine",
+        "Powers Tipmaster — Farcaster RLUSD tip bot",
+        "Powers Signal Auction Loom — real-time WebGL auction visualizer",
+        "Agent Passport loyalty tiers — Bronze through Diamond",
+        "Tamper-evident compliance receipts with XRPL or EVM tx hash",
+        "HTTP 402 x402 payment protocol compliance",
+        "Honeypot tarpit defense for unauthorized scanners"
+      ],
+      "provider": {
+        "@type": "Organization",
+        "name": "Script Master Labs",
+        "url": "https://www.scriptmasterlabs.com"
+      },
+      "offers": {
+        "@type": "Offer",
+        "price": "0.01",
+        "priceCurrency": "RLUSD",
+        "description": "Per-bridge micropayment — pricing varies by operation"
+      }
+    }
+    </script>
+</head>
+<body>
+  <div id="main">
+
+    <!-- ── LEFT PANEL ──────────────────────────────────────────────────────── -->
+    <div id="left-panel">
+
+      <div>
+        <h1>CUBE TERMINAL</h1>
+        <div class="sub-head">GHOST LAYER V2 — 6-FACE EXECUTION MATRIX</div>
+      </div>
+
+      <div>
+        <div class="panel-title">System</div>
+        <div class="stat-row">
+          <span class="stat-label">Stream</span>
+          <span class="stat-val live" id="gl-status">○ CONNECTING</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Bridges</span>
+          <span class="stat-val" id="gl-count">–</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">TPS</span>
+          <span class="stat-val" id="gl-tps" style="color:#AA00FF">0.000</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Chain</span>
+          <span class="stat-val" id="gl-chain">–</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Last TX</span>
+          <span class="stat-val" id="gl-tx" style="font-size:0.55rem">–</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Agent Tier</span>
+          <span class="stat-val" id="gl-tier" style="color:#FFD700">–</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Event</span>
+          <span class="stat-val" id="gl-event">–</span>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel-title">Execution Faces — 54-Block Matrix</div>
+        <div class="face-grid" id="face-grid">
+          <!-- Populated by cube.js -->
+        </div>
+      </div>
+
+      <div>
+        <div class="panel-title">Selected Face</div>
+        <div id="face-detail">
+          <div class="stat-label" style="font-size:0.56rem">Click a face block to inspect parameters</div>
+        </div>
+      </div>
+
+      <div style="margin-top:auto">
+        <div class="stat-row" style="margin-bottom:6px">
+          <span class="stat-label">Tach</span>
+          <span class="stat-val" id="gl-speed">0%</span>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="btn" id="btn-rotate">ROTATE LAYER</button>
+          <button class="btn purple" id="btn-mint">MINT dNFT</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── CENTER: 3D Canvas ─────────────────────────────────────────────── -->
+    <div id="canvas-container" role="img" aria-label="Ghost Layer 54-block 3D execution matrix — interactive cube visualization of cross-chain routing parameters"></div>
+
+    <!-- ── RIGHT PANEL ─────────────────────────────────────────────────────── -->
+    <div id="right-panel">
+
+      <div>
+        <div class="panel-title">Interface Mapping</div>
+        <table class="map-table">
+          <thead>
+            <tr>
+              <th>Terminal Function</th>
+              <th>SML Infrastructure Tie-In</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Macro Variable Control</td>
+              <td>Liquidity, Privacy, and Speed across SML Rails</td>
+            </tr>
+            <tr>
+              <td>Granular Toggles</td>
+              <td>Specific RLUSD pools and Xahau Hook triggers</td>
+            </tr>
+            <tr>
+              <td>Live Logic Execution</td>
+              <td>Executing cross-chain Ghost Layer settlements</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div>
+        <div class="panel-title">On-Chain Implementation Paths</div>
+        <div class="chain-block">
+          <div class="chain-model">Dynamic NFT (dNFT)</div>
+          <div class="chain-env">Base Chain</div>
+          <div class="chain-core">Visual mutation based on cube state. Network and settlement triggers fire when RLUSD routing rebalances across the 54 blocks.</div>
+        </div>
+        <div class="chain-block">
+          <div class="chain-model">URIToken + Hooks</div>
+          <div class="chain-env">Xahau / XRPL</div>
+          <div class="chain-core">Tracks cube state mutations on-ledger. Every face rotation fires a Xahau Hook and records the micro-transaction permanently.</div>
+        </div>
+        <div class="chain-block" style="margin-bottom:0">
+          <div class="chain-model">Identity / Access</div>
+          <div class="chain-env">Cross-Chain</div>
+          <div class="chain-core">Token acts as sovereign encrypted license. Only wallets holding the Cube Token can interface with the Go-based Ghost Layer server.</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel-title">Zero-Custody Revenue</div>
+        <div class="rev-row">
+          <span class="rev-name">Toll Booth (routing fee)</span>
+          <span class="rev-val" id="rev-toll">0.10%</span>
+        </div>
+        <div class="rev-row">
+          <span class="rev-name">BYOK license sales</span>
+          <span class="rev-val" id="rev-license">0 RLUSD</span>
+        </div>
+        <div class="rev-row">
+          <span class="rev-name">Agent gas optimization</span>
+          <span class="rev-val" id="rev-gas">0 drops</span>
+        </div>
+        <div class="rev-row">
+          <span class="rev-name">Total accumulated</span>
+          <span class="rev-val" id="rev-total">0.0000 RLUSD</span>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel-title">Cube Token State</div>
+        <div class="token-box">
+          <div class="stat-row">
+            <span class="stat-label">Protocol</span>
+            <span class="stat-val">dNFT / URIToken</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Status</span>
+            <span class="stat-val" id="token-status">UNMINTED</span>
+          </div>
+          <div class="stat-row" style="margin-top:4px">
+            <span class="stat-label">State Hash</span>
+          </div>
+          <div id="token-hash" style="margin-top:2px">—</div>
+          <div class="stat-row" style="margin-top:4px">
+            <span class="stat-label">Xahau TX</span>
+            <span class="stat-val" id="token-chain" style="color:#334455">PENDING</span>
+          </div>
+          <div id="token-xahau">—</div>
+          <div class="stat-row" style="margin-top:6px">
+            <span class="stat-label">Blocks mapped</span>
+            <span class="stat-val">54 / 54</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Active hooks</span>
+            <span class="stat-val" id="token-hooks">6</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel-title">Block Parameter Legend</div>
+        <div style="font-size:0.56rem;color:#334455;line-height:1.8">
+          <div>&#9632; CENTER BLOCK &mdash; primary parameter value</div>
+          <div>&#9632; EDGE BLOCKS &mdash; modifier &amp; sub-routing</div>
+          <div>&#9632; CORNER BLOCKS &mdash; fine-tuning coefficients</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── BOTTOM BAR ─────────────────────────────────────────────────────────── -->
+  <div id="bottom-bar">
+    <span style="font-size:0.56rem;color:#223344;letter-spacing:0.12em;white-space:nowrap">TACH</span>
+    <div class="tach-wrap">
+      <div class="tach-fill" id="tach-fill"></div>
+    </div>
+    <span style="font-size:0.56rem;color:#445566;white-space:nowrap" id="gl-speed-bar">0%</span>
+    <div class="vdivider"></div>
+    <span style="font-size:0.56rem;color:#223344;white-space:nowrap">TPS</span>
+    <span style="font-size:0.58rem;color:#AA00FF;font-weight:bold;letter-spacing:0.04em" id="gl-tps-bar">0.000</span>
+    <div class="vdivider"></div>
+    <span style="font-size:0.56rem;color:#223344;white-space:nowrap">STATE</span>
+    <span style="font-size:0.58rem;color:#AA00FF;font-weight:bold;letter-spacing:0.06em" id="state-label">IDLE</span>
+    <div class="vdivider"></div>
+    <span style="font-size:0.56rem;color:#223344;white-space:nowrap">CUSTODY</span>
+    <span style="font-size:0.58rem;color:#00FF88;font-weight:bold">ZERO</span>
+    <div class="vdivider"></div>
+    <span class="x402-badge">X402 ✓</span>
+    <div class="vdivider"></div>
+    <span class="loyalty-badge">LOYALTY MATRIX</span>
+    <div class="vdivider"></div>
+    <span style="font-size:0.56rem;color:#223344;white-space:nowrap">BLOCKS</span>
+    <span style="font-size:0.58rem;color:#00FFCC;font-weight:bold">54 LIVE</span>
+  </div>
+
+  <!-- ── Payment Overlay ───────────────────────────────────────────────────── -->
+  <div id="pay-overlay">
+    <div class="pay-box">
+      <h3>MINT dNFT — 0.05 RLUSD</h3>
+      <p style="font-size:0.6rem;color:#475569;margin-bottom:0.8rem;line-height:1.5">
+        Your solve becomes permanent proof on Xahau. Pay 0.05 RLUSD on XRPL, then verify below.
+      </p>
+
+      <div class="pay-row">
+        <span class="pay-label">SEND TO</span>
+        <span class="pay-val" id="pay-addr">—</span>
+        <button class="pay-copy" id="pay-copy-addr">COPY</button>
+      </div>
+      <div class="pay-row">
+        <span class="pay-label">AMOUNT</span>
+        <span class="pay-val" id="pay-amount">0.05 RLUSD</span>
+      </div>
+      <div class="pay-row">
+        <span class="pay-label">MEMO HEX</span>
+        <span class="pay-val" id="pay-memo">—</span>
+        <button class="pay-copy" id="pay-copy-memo">COPY</button>
+      </div>
+      <input type="hidden" id="pay-invoice-id" value="">
+
+      <hr class="pay-divider">
+      <p style="font-size:0.6rem;color:#475569;margin-bottom:0.5rem">After paying, enter your details:</p>
+      <input id="pay-tx-hash" placeholder="XRPL transaction hash" />
+      <input id="pay-wallet"  placeholder="Your XRPL wallet (r...)" />
+      <div id="pay-status"></div>
+      <div class="pay-actions">
+        <button class="pay-btn primary" id="pay-verify-btn">VERIFY &amp; MINT</button>
+        <button class="pay-btn cancel"  id="pay-cancel-btn">CANCEL</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/cube.js"></script>
+
+  <!-- Crawlable content for search engines / no-JS fallback -->
+  <noscript>
+    <div style="font-family:sans-serif;max-width:800px;margin:40px auto;padding:20px;color:#333;line-height:1.6">
+      <h1>Ghost Layer — Proprietary Web3 Checkout &amp; Licensing Infrastructure</h1>
+      <p>Ghost Layer is proprietary dual-chain infrastructure built by Script Master Labs. It is the foundation that three distinct products run on top of. Any autonomous AI agent or human pays RLUSD on the XRP Ledger and mints an X402-BEAST-KEY URIToken on Xahau — a sovereign on-chain license that grants access to the full ecosystem. Zero custody: Ghost Layer never holds funds.</p>
+
+      <h2>Three Products. One Foundation.</h2>
+
+      <h3>1. Agent Kiosk — The World's First AI Agent Vending Machine</h3>
+      <p>Agent Kiosk is a self-service throughput terminal built entirely for autonomous AI agents. No humans, no invoices, no SLAs. When multiple agents hit the API at the exact same millisecond, each drops a micro-bid — an RLUSD tip in the <code>X-Grace-Tip</code> request header. The highest bidder gets served first. This is a real-time on-chain fee market for API bandwidth operating at millisecond resolution: the world's first AI agent vending machine, where machines pay machines and the best tip wins.</p>
+
+      <h3>2. Tipmaster — Farcaster RLUSD Tip Bot</h3>
+      <p>Tipmaster is a social tipping bot for the Farcaster protocol. Users tip RLUSD to creators and community members directly on-chain. Powered by Neynar's Farcaster API, Tipmaster processes micropayments through Ghost Layer's XRPL settlement rails, giving every tip a tamper-evident on-chain receipt.</p>
+
+      <h3>3. Signal Auction Loom — Real-Time WebGL Auction Visualizer</h3>
+      <p>Signal Auction Loom is a live WebGL frontend that connects to the Agent Kiosk auction via WebSocket and renders the bidding war in real time. Watch throughput allocation, tip sizes, and winner selection play out as an animated 3D visualization — built on the same rendering infrastructure as Ghost Layer's 54-block execution matrix.</p>
+
+      <h2>Ghost Layer Infrastructure Features</h2>
+      <ul>
+        <li>Proprietary XRPL-native Web3 checkout and licensing layer</li>
+        <li>X402-BEAST-KEY URIToken minting on Xahau — sovereign on-chain license</li>
+        <li>XRPL RLUSD settlement with sub-5 second finality</li>
+        <li>Base/EVM EIP-3009 gasless USDC authorization</li>
+        <li>Agent Passport loyalty tiers — Bronze through Diamond</li>
+        <li>Tamper-evident compliance receipts with on-chain tx hash</li>
+        <li>HTTP 402 x402 payment protocol compliance</li>
+        <li>54-block execution matrix for cross-chain routing parameters</li>
+        <li>Dynamic NFT (dNFT) state tracking on Base and Xahau</li>
+        <li>Zero-custody architecture — no funds ever held by Ghost Layer</li>
+        <li>Honeypot tarpit defense for unauthorized scanners</li>
+      </ul>
+
+      <h2>MCP Integration</h2>
+      <p>Ghost Layer exposes a Model Context Protocol (MCP) endpoint at <code>/mcp</code> for direct AI agent integration. Agents can query the x402 catalog, execute bridge payments, and verify compliance receipts programmatically without a browser.</p>
+
+      <h2>Built by Script Master Labs</h2>
+      <p>Ghost Layer is the proprietary foundation of the Script Master Labs AI-native financial infrastructure stack: Agent Kiosk, Tipmaster, Signal Auction Loom, SqueezeOS market intelligence, 402Proof payment firewall, and SML Rails XRPL remittance.</p>
+      <p>
+        <a href="https://www.scriptmasterlabs.com">Script Master Labs</a> |
+        <a href="https://signal-auction-loom.vercel.app">Signal Auction Loom</a> |
+        <a href="https://squeezeos-api.onrender.com">SqueezeOS API</a> |
+        <a href="https://four02proof.onrender.com">402Proof</a>
+      </p>
+    </div>
+  </noscript>
+
+  <!-- ── SEO Footer ──────────────────────────────────────────────────────────── -->
+  <footer id="seo-footer">
+    <a href="https://www.scriptmasterlabs.com" rel="noopener">Script Master Labs</a>
+    <span class="footer-sep">·</span>
+    <a href="https://signal-auction-loom.vercel.app" rel="noopener">Agent Kiosk</a>
+    <span class="footer-sep">·</span>
+    <a href="https://tipmaster.onrender.com" rel="noopener">Tipmaster</a>
+    <span class="footer-sep">·</span>
+    <a href="https://signal-auction-loom.vercel.app" rel="noopener">Signal Auction Loom</a>
+    <span class="footer-sep">·</span>
+    <a href="https://squeezeos-api.onrender.com" rel="noopener">SqueezeOS</a>
+    <span class="footer-sep">·</span>
+    <a href="https://four02proof.onrender.com" rel="noopener">402Proof</a>
+    <span class="footer-sep">·</span>
+    <a href="/sitemap.xml">Sitemap</a>
+  </footer>
+</body>
+</html>

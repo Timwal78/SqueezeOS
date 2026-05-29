@@ -1,0 +1,24 @@
+{
+  "name": "proof402-middleware",
+  "version": "1.2.0",
+  "description": "x402/HTTP 402 payment middleware for Express, Next.js, and Cloudflare Workers. Gate any API behind RLUSD (XRPL) or USDC (Base) micropayments via 402Proof. Sub-millisecond local HMAC verification. Zero API keys.",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "keywords": [
+    "x402", "xrpl", "rlusd", "payment", "ai-agents", "middleware",
+    "express", "nextjs", "cloudflare-workers", "mcp", "http-402",
+    "micropayment", "agent-economy", "402proof"
+  ],
+  "license": "MIT",
+  "engines": { "node": ">=18" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/timwal78/squeezeos",
+    "directory": "402proof/middleware/js"
+  },
+  "homepage": "https://four02proof.onrender.com",
+  "bugs": { "url": "https://github.com/timwal78/squeezeos/issues" },
+  "author": "Script Master Labs"
+}

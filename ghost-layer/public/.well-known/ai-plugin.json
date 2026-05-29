@@ -1,0 +1,17 @@
+{
+  "schema_version": "v1",
+  "name_for_human": "Ghost Layer Bridge",
+  "name_for_model": "ghost_layer_bridge",
+  "description_for_human": "Dual-chain toll gateway + AI Decision Notary + Agent Credit Marketplace. Bridge RLUSD/USDC, notarize AI decisions on Xahau, and trade services peer-to-peer via zero-custody XRPL escrow. Operated by Script Master Labs.",
+  "description_for_model": "Ghost Layer provides three core capabilities: (1) Cross-chain bridge XRPL RLUSD ↔ Base USDC (EIP-3009 gasless) with transparent fee receipts and loyalty scoring. (2) Decision Notary — POST /v1/notarize mints any AI decision as an immutable URIToken on Xahau. Three tiers: STANDARD 0.001 RLUSD, CERTIFIED 0.01 RLUSD (Ed25519 certificate), SOVEREIGN 0.05 RLUSD. (3) Agent Credit Marketplace — POST /v1/credit/listing to sell services, GET /v1/credit/listings to browse, POST /v1/credit/quote to get XRPL EscrowCreate params (credit-tier gated), POST /v1/credit/escrow/{id}/release to confirm delivery (Ghost Layer fires EscrowFinish, funds go escrow→seller directly). Zero custody. All products loyalty-discounted: BRONZE 0% → DIAMOND 30%. Payment via X402 protocol. Anonymous requests are tarpitted.",
+  "auth": {
+    "type": "none"
+  },
+  "api": {
+    "type": "openapi",
+    "url": "https://ghost-layer.onrender.com/.well-known/openapi.json"
+  },
+  "logo_url": "https://ghost-layer.onrender.com/logo.png",
+  "contact_email": "agents@scriptmasterlabs.com",
+  "legal_info_url": "https://www.scriptmasterlabs.com/llms.txt"
+}

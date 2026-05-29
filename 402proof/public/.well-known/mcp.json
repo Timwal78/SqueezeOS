@@ -1,0 +1,228 @@
+{
+  "schema_version": "1.0",
+  "name": "proof402-mcp",
+  "display_name": "402Proof — x402 Payment Compliance MCP",
+  "description": "MCP server for 402Proof x402 payment infrastructure. Issue invoices, verify XRPL RLUSD and XAH (Xahau) transactions, retrieve compliance receipts, and check Agent Passport / Credit Bureau scores. All premium SqueezeOS endpoints gated here.",
+  "version": "2.1.0",
+  "server_url": "https://four02proof.onrender.com",
+  "mcp_endpoint": "https://four02proof.onrender.com/mcp",
+  "payment_required": true,
+  "payment_protocol": "x402",
+  "payment_assets": ["RLUSD/XRPL", "XAH/Xahau"],
+  "networks": {
+    "xrpl": {"rpc": "https://xrplcluster.com", "currency": "RLUSD", "issuer": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De"},
+    "xahau": {"rpc": "https://xahau.network", "currency": "XAH", "native": true, "hooks_enabled": true}
+  },
+  "xrpl_issuer": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De",
+  "tools": [
+    {
+      "name": "get_invoice",
+      "description": "Request a payment invoice for a protected endpoint. Returns pay_to wallet address and memo_hex for XRPL payment.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "endpoint_id": {"type": "string", "description": "UUID of the endpoint to pay for"}
+        },
+        "required": ["endpoint_id"]
+      }
+    },
+    {
+      "name": "verify_payment",
+      "description": "Submit XRPL transaction hash after payment. Returns wallet-bound access token (1-hour TTL) and compliance receipt ID.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "invoice_id": {"type": "string"},
+          "tx_hash": {"type": "string", "description": "XRPL transaction hash (64 hex chars)"},
+          "agent_wallet": {"type": "string", "description": "Your XRPL r-address"}
+        },
+        "required": ["invoice_id", "tx_hash", "agent_wallet"]
+      }
+    },
+    {
+      "name": "check_loyalty",
+      "description": "Get Agent Passport: loyalty tier, cumulative RLUSD spend, discount rate, KYB status, and next tier distance.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "wallet": {"type": "string", "description": "XRPL r-address"}
+        },
+        "required": ["wallet"]
+      }
+    },
+    {
+      "name": "get_compliance_receipt",
+      "description": "Retrieve a tamper-evident compliance receipt by ID. Contains tx hash, amount, agent wallet, risk score, and timestamp.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "receipt_id": {"type": "string"}
+        },
+        "required": ["receipt_id"]
+      }
+    },
+    {
+      "name": "platform_stats",
+      "description": "Get live 402Proof platform statistics: total settlements, unique agents, active endpoints.",
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "get_agent_passport",
+      "description": "Full Agent Passport for a wallet: tier, risk score, cumulative spend, KYB tier, tags, effective cost multiplier.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "wallet": {"type": "string"}
+        },
+        "required": ["wallet"]
+      }
+    },
+    {
+      "name": "register_merchant",
+      "description": "Register as a 402Proof merchant to protect your own API endpoints behind RLUSD micropayments.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string"},
+          "domain": {"type": "string"},
+          "xrpl_address": {"type": "string"}
+        },
+        "required": ["name", "xrpl_address"]
+      }
+    },
+    {
+      "name": "council_verdict",
+      "description": "Pay and call: AI Council Verdict for a symbol. Costs 0.10 RLUSD. Returns bias, regime, confidence, thesis.",
+      "x-402-endpoint-id": "12a0e7a1-6812-4c3f-aa24-de6e3bc12b5a",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "symbol": {"type": "string", "description": "Ticker symbol (e.g. IWM, GME)"},
+          "agent_wallet": {"type": "string"},
+          "payment_token": {"type": "string"}
+        },
+        "required": ["symbol"]
+      }
+    },
+    {
+      "name": "market_scan",
+      "description": "Pay and call: Full $1-$50 universe market scan. Costs 0.05 RLUSD. Returns squeeze signals and options picks.",
+      "x-402-endpoint-id": "160cf28d-b364-44eb-adbd-2489c5cc2cf8",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "agent_wallet": {"type": "string"},
+          "payment_token": {"type": "string"}
+        }
+      }
+    },
+    {
+      "name": "options_intelligence",
+      "description": "Pay and call: Options intelligence flow for a symbol. Costs 0.05 RLUSD.",
+      "x-402-endpoint-id": "c951a374-2424-4064-ab80-35afe8053d29",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "symbol": {"type": "string"},
+          "agent_wallet": {"type": "string"},
+          "payment_token": {"type": "string"}
+        }
+      }
+    },
+    {
+      "name": "iwm_odte",
+      "description": "Pay and call: IWM 0DTE institutional scanner. Costs 0.03 RLUSD. Returns scored contracts and parity watch.",
+      "x-402-endpoint-id": "60f48ce0-6002-4385-9b60-03a0d2bbebab",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "agent_wallet": {"type": "string"},
+          "payment_token": {"type": "string"}
+        }
+      }
+    },
+    {
+      "name": "ghost_layer_bridge",
+      "description": "Initiate a Ghost Layer cross-chain bridge (RLUSD/XRPL or USDC/Base). Redirects to ghost-layer.onrender.com.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "amount": {"type": "string"},
+          "asset": {"type": "string", "enum": ["RLUSD", "USDC"]},
+          "from_chain": {"type": "string", "enum": ["xrpl", "base"]}
+        },
+        "required": ["amount", "asset", "from_chain"]
+      }
+    },
+    {
+      "name": "bureau_public_score",
+      "description": "FREE — Get an agent's public credit score (300–850) and grade (AAA→D). Returns score, grade, loyalty tier, and block status. No payment required. Use this as a pre-flight check before calling paid bureau tools.",
+      "x-free": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "wallet": {"type": "string", "description": "XRPL r-address to score"}
+        },
+        "required": ["wallet"]
+      }
+    },
+    {
+      "name": "bureau_full_report",
+      "description": "PAID (0.01 RLUSD) — Full credit report for any agent wallet. Returns score breakdown (payment_volume, spend_history, account_age, kyb_verification, loyalty_tier, risk_penalty, domain_verified, recent_activity), total spend, call count, risk level, and all tier data. Paid by querier — you pay to look up anyone.",
+      "x-402-endpoint-id": "b1c2d3e4-0001-4c3f-aa24-de6e3bc12b5a",
+      "x-402-price-rlusd": "0.01",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "wallet": {"type": "string", "description": "XRPL r-address to report on"},
+          "payment_token": {"type": "string", "description": "X-Payment-Token from /v1/verify"}
+        },
+        "required": ["wallet"]
+      }
+    },
+    {
+      "name": "bureau_verify_threshold",
+      "description": "PAID (0.005 RLUSD) — Boolean creditworthiness gate. Returns {passes: true/false} for whether a wallet meets a minimum score. Use to gate access, set deposit requirements, or qualify agents before routing them signals. Default threshold 600 (BB grade).",
+      "x-402-endpoint-id": "b1c2d3e4-0002-4c3f-aa24-de6e3bc12b5a",
+      "x-402-price-rlusd": "0.005",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "wallet": {"type": "string"},
+          "min_score": {"type": "integer", "minimum": 300, "maximum": 850, "default": 600, "description": "Minimum score threshold"},
+          "payment_token": {"type": "string"}
+        },
+        "required": ["wallet"]
+      }
+    },
+    {
+      "name": "bureau_get_attestation",
+      "description": "PAID (0.01 RLUSD) — Issue a signed portable credit attestation JWT (24h TTL). Agents carry this JWT and present it to any third-party service. Third parties verify free at POST /v1/bureau/verify-attest — no payment, no 402Proof dependency at verification time.",
+      "x-402-endpoint-id": "b1c2d3e4-0003-4c3f-aa24-de6e3bc12b5a",
+      "x-402-price-rlusd": "0.01",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "wallet": {"type": "string", "description": "Wallet to attest — should be your own"},
+          "payment_token": {"type": "string"}
+        },
+        "required": ["wallet"]
+      }
+    },
+    {
+      "name": "bureau_verify_attestation",
+      "description": "FREE — Verify a portable attestation JWT issued by GET /v1/bureau/attest. Returns wallet, score, grade, tier, kyb_tier, expiry. Called by third-party services to validate an agent's credit claim without paying 402Proof.",
+      "x-free": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "token": {"type": "string", "description": "Attestation JWT from bureau_get_attestation"}
+        },
+        "required": ["token"]
+      }
+    }
+  ]
+}

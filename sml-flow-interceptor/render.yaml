@@ -1,0 +1,56 @@
+services:
+  - type: worker
+    name: sml-flow-interceptor
+    env: docker
+    plan: starter
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    envVars:
+      # Required: WSS endpoint for Base mainnet RPC. Must support
+      # eth_subscribe newPendingTransactions with full-object payloads
+      # (Alchemy alchemy_pendingTransactions, Blocknative, QuickNode, etc.).
+      - key: BASE_WS_URL
+        sync: false
+
+      # Watchlist: comma-separated 0x contract addresses. Default includes
+      # USDC on Base mainnet. Add RLUSD / other tokens as their Base
+      # addresses are confirmed.
+      - key: WATCHED_CONTRACTS
+        value: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+
+      # Per-contract decimal overrides as `addr:decimals,addr:decimals`.
+      # USDC=6 is hardcoded as a default; only set this for other tokens.
+      - key: CONTRACT_DECIMALS
+        sync: false
+
+      # Optional: only emit transfers where sender OR recipient is on this
+      # list (bridges, CEX hot wallets, large vaults).
+      - key: WATCHED_COUNTERPARTIES
+        sync: false
+
+      # Minimum scaled transfer value to record (default: 1,000,000).
+      - key: MIN_TRANSFER_VALUE
+        value: "1000000"
+
+      # Coinbase Advanced Trade public market data feed.
+      - key: COINBASE_WS_URL
+        value: "wss://advanced-trade-ws.coinbase.com"
+      - key: CEX_PRODUCTS
+        value: "XRP-USD,SOL-USD"
+
+      # NDJSON event log path (mounted to a persistent disk).
+      - key: EVENT_LOG_PATH
+        value: "/var/data/events.ndjson"
+
+      # Optional: HUD webhook receiver URL. POSTed per Base mempool hit.
+      - key: HUD_WEBHOOK_URL
+        sync: false
+
+      # Discord webhook URL for rich embed alerts on large Base transfers.
+      # Discord: Server Settings → Integrations → Webhooks → New Webhook → Copy URL
+      - key: DISCORD_WEBHOOK_URL
+        sync: false
+    disk:
+      name: events
+      mountPath: /var/data
+      sizeGB: 10
