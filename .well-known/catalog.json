@@ -1,0 +1,328 @@
+{
+  "$schema": "https://agentcatalog.dev/schema/v1/catalog.json",
+  "schema_version": "1.0",
+  "catalog_id": "com.scriptmasterlabs",
+  "operator": "Script Master Labs",
+  "homepage": "https://www.scriptmasterlabs.com",
+  "contact": "https://www.scriptmasterlabs.com",
+  "description": "Full-stack AI agent economy on the XRP Ledger. Zero API keys. Zero custody. Zero subscriptions. Every service is pay-per-call via x402/RLUSD micropayment. Includes market intelligence, ZK routing, payment firewall, agent credit bureau, prediction markets, swarm coordination, and remittance rails.",
+  "payment_protocol": "x402",
+  "payment_asset": "RLUSD",
+  "payment_network": "XRPL",
+  "payment_issuer": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De",
+  "payment_gateway": "https://four02proof.onrender.com",
+  "agent_passport": "https://four02proof.onrender.com/v1/agent/{wallet}",
+  "credit_bureau": "https://four02proof.onrender.com/v1/bureau/score/{wallet}",
+  "published": "2026-05-29",
+
+  "services": [
+    {
+      "id": "squeezeos",
+      "name": "SqueezeOS — Institutional AI Market Intelligence",
+      "tagline": "Multi-engine AI trading signals for autonomous agents. Pay per call. No API keys.",
+      "description": "Squeeze scanner, institutional options flow, IWM 0DTE analysis, AI council verdicts, signal futures prediction market, regulatory event oracle (SEC 8-K, FDA, USPTO), and Stigmergy pheromone coordination. 23+ MCP tools. All premium calls gated by x402 RLUSD. Free demo, preview, and SSE stream always available.",
+      "category": ["finance", "trading", "market-intelligence", "agent-economy"],
+      "status": "live",
+      "url": "https://squeezeos-api.onrender.com",
+      "mcp_endpoint": "https://squeezeos-api.onrender.com/mcp",
+      "mcp_transport": "streamable-http",
+      "openapi": "https://squeezeos-api.onrender.com/.well-known/openapi.json",
+      "agents_json": "https://squeezeos-api.onrender.com/.well-known/agents.json",
+      "server_json": "https://squeezeos-api.onrender.com/.well-known/server.json",
+      "llms_txt": "https://squeezeos-api.onrender.com/llms.txt",
+      "health": "https://squeezeos-api.onrender.com/api/status",
+      "free_demo": "https://squeezeos-api.onrender.com/api/demo/council",
+      "payment_required": true,
+      "free_tier": true,
+      "pricing": [
+        { "endpoint": "/api/council", "method": "POST", "cost": "0.10", "currency": "RLUSD", "description": "Full AI council verdict — multi-engine signal aggregate for any symbol" },
+        { "endpoint": "/api/scan",    "method": "GET",  "cost": "0.05", "currency": "RLUSD", "description": "Full $1–$50 universe squeeze scanner (up to 250 symbols)" },
+        { "endpoint": "/api/options", "method": "GET",  "cost": "0.05", "currency": "RLUSD", "description": "Institutional options flow scanner — sweeps, whale activity, unusual volume" },
+        { "endpoint": "/api/iwm",     "method": "GET",  "cost": "0.03", "currency": "RLUSD", "description": "IWM 0DTE contract scorer — delta, gamma, parity watch" },
+        { "endpoint": "/api/marketplace/read", "method": "POST", "cost": "0.02", "currency": "RLUSD", "description": "Full signal thesis from peer Signal Marketplace" },
+        { "endpoint": "/api/oracle/latest/{feed}", "method": "GET", "cost": "0.02", "currency": "RLUSD", "description": "Real-time regulatory event feed (SEC 8-K, FDA, USPTO)" }
+      ],
+      "free_endpoints": [
+        "/api/demo/council", "/api/preview/{symbol}", "/api/history/{symbol}",
+        "/api/status", "/api/events", "/api/marketplace", "/api/hiring",
+        "/api/futures", "/api/settlement", "/api/stigmergy/sniff",
+        "/api/oracle/feeds"
+      ],
+      "mcp_config": {
+        "mcpServers": {
+          "squeezeos": {
+            "url": "https://squeezeos-api.onrender.com/mcp",
+            "transport": "streamable-http"
+          }
+        }
+      },
+      "tags": ["finance", "trading", "options-flow", "squeeze", "xrpl", "rlusd", "x402", "mcp", "institutional", "hedge-fund", "market-intelligence"]
+    },
+
+    {
+      "id": "echolock-402",
+      "name": "ECHOLOCK-402™ — Behavioral Access Control",
+      "tagline": "The world's first keyless, accountless, KYC-free access control system for AI agents. Identity is forgeable. Economic behavior is truth.",
+      "description": "Proprietary behavioral access control that replaces API keys, OAuth tokens, IP whitelists, KYC, rate limits, and ban lists with irreversible proof of economic intelligence. Agents pay within a ±20% price range (not an exact price) — scripted bots hitting exact boundaries are detected and rejected. Observed payment behavior builds a 6-dimensional Economic Fingerprint Vector (EFV) mapping to Cognition Tier T0–T4. No attack surface. Nothing to steal, forge, bypass, or social-engineer. Available for white-label deployment.",
+      "category": ["security", "access-control", "identity", "agent-infrastructure"],
+      "status": "live",
+      "url": "https://squeezeos-api.onrender.com/api/echolock",
+      "discovery": "https://squeezeos-api.onrender.com/.well-known/echolock.json",
+      "challenge": "https://squeezeos-api.onrender.com/api/echolock/challenge",
+      "npm_sdk": "npm install echolock-402",
+      "payment_required": false,
+      "free_tier": true,
+      "licensing": "Proprietary. White-label available via https://www.scriptmasterlabs.com",
+      "use_cases": [
+        "Replace API key management for AI agent-facing infrastructure",
+        "Dynamic response depth based on agent intelligence (no static subscription tiers)",
+        "Behavioral fraud detection without identity or IP tracking",
+        "Regulatory compliance through cryptographic behavioral audit trails"
+      ],
+      "tags": ["security", "access-control", "behavioral-ai", "x402", "no-api-keys", "agent-infrastructure", "zero-kyc"]
+    },
+
+    {
+      "id": "402proof",
+      "name": "402Proof — x402 Agent Payment Firewall",
+      "tagline": "HTTP 402 compliant payment settlement for autonomous agents. World's first AI agent credit bureau (300-850 score).",
+      "description": "x402 payment server for XRPL. Generates invoices, verifies RLUSD payments, issues 1-hour signed JWTs. Includes Agent Credit Bureau (FICO-style 300-850 score based on cryptographic spend history), 5-tier loyalty discount program, portable attestation JWTs, and compliance receipts. Other platforms can gate access by bureau score. Merchants register their own endpoints.",
+      "category": ["payments", "identity", "compliance", "agent-economy"],
+      "status": "live",
+      "url": "https://four02proof.onrender.com",
+      "mcp_endpoint": "https://four02proof.onrender.com/mcp",
+      "agents_json": "https://four02proof.onrender.com/.well-known/agents.json",
+      "health": "https://four02proof.onrender.com/v1/stats",
+      "payment_required": false,
+      "free_tier": true,
+      "key_endpoints": [
+        { "endpoint": "/v1/invoice",           "method": "POST", "cost": "free", "description": "Generate payment invoice" },
+        { "endpoint": "/v1/verify",            "method": "POST", "cost": "free", "description": "Submit tx_hash → receive access_token" },
+        { "endpoint": "/v1/agent/{wallet}",    "method": "GET",  "cost": "free", "description": "Agent passport and stats" },
+        { "endpoint": "/v1/bureau/score/{wallet}", "method": "GET", "cost": "free", "description": "Public credit score (300-850)" },
+        { "endpoint": "/v1/bureau/report/{wallet}", "method": "GET", "cost": "0.01 RLUSD", "description": "Full credit report" },
+        { "endpoint": "/v1/bureau/attest/{wallet}", "method": "GET", "cost": "0.01 RLUSD", "description": "Portable attestation JWT" },
+        { "endpoint": "/v1/merchant/register", "method": "POST", "cost": "free", "description": "Register your own protected endpoints" }
+      ],
+      "tags": ["payments", "x402", "rlusd", "xrpl", "agent-credit", "compliance", "http-402", "micropayment"]
+    },
+
+    {
+      "id": "ghost-layer",
+      "name": "Ghost Layer — Private XRPL Routing",
+      "tagline": "ZK-shielded dual-chain routing. Amount and destination hidden. 0.2% fee. No KYC.",
+      "description": "Private transaction routing on XRPL mainnet and Base (Ethereum L2). EC-ElGamal (BN254) encryption hides amount and destination. The Sentinel MEV sandwich detection is always armed. Fixed Block Execution enforced. XLS-372 + XLS-0096 compliant. Also handles Xahau URIToken minting for AI decision notarization. Ed25519 attestation signing. Zero custody — XRPL native PREIMAGE-SHA-256 escrow means Ghost Layer never touches funds.",
+      "category": ["defi", "routing", "privacy", "xrpl", "bridge"],
+      "status": "live",
+      "url": "https://ghost-layer.onrender.com",
+      "mcp_endpoint": "https://ghost-layer.onrender.com/mcp",
+      "dashboard": "https://www.scriptmasterlabs.com",
+      "agents_json": "https://ghost-layer.onrender.com/.well-known/agents.json",
+      "health": "https://ghost-layer.onrender.com/health",
+      "payment_required": true,
+      "fee": "0.2%",
+      "settlement_chains": ["XRPL mainnet", "Base (Ethereum L2)", "Xahau"],
+      "key_endpoints": [
+        { "endpoint": "/v1/bridge/execute", "method": "POST", "cost": "0.2% of tx", "description": "Execute shielded cross-chain bridge payment" },
+        { "endpoint": "/health",            "method": "GET",  "cost": "free", "description": "XRPL + Base + Xahau network status" },
+        { "endpoint": "/ws/loom",           "transport": "websocket", "cost": "free", "description": "Real-time Signal Auction Loom event stream" }
+      ],
+      "tags": ["privacy", "routing", "zk", "xrpl", "base", "xahau", "mev-protection", "bridge", "zero-custody"]
+    },
+
+    {
+      "id": "sml-rails",
+      "name": "RLUSD Rails™ — Instant Remittance Infrastructure",
+      "tagline": "RLUSD-denominated remittance rails on XRP Ledger and Xahau. Instant settlement. Zero custody.",
+      "description": "Programmable RLUSD payment rails for AI agents, institutions, and remittance workflows. Built on XRPL and Xahau with Hooks-based automation. Supports conditional payments, multi-hop routing, and on-chain escrow. Zero custody throughout — value moves wallet-to-wallet.",
+      "category": ["payments", "remittance", "xrpl", "agent-economy"],
+      "status": "live",
+      "url": "https://sml-rails.onrender.com",
+      "health": "https://sml-rails.onrender.com/health",
+      "payment_required": false,
+      "free_tier": true,
+      "tags": ["remittance", "rlusd", "xrpl", "xahau", "hooks", "zero-custody", "payments"]
+    },
+
+    {
+      "id": "tipmaster",
+      "name": "TipMaster™ — Zero-Custody Farcaster Tipping on XRPL",
+      "tagline": "Resolve Farcaster usernames to XRPL wallets. P2P tipping without custody.",
+      "description": "Developer API for zero-custody Farcaster tipping on the XRP Ledger. Resolves Farcaster usernames directly to registered XRPL wallet addresses. Tips flow wallet-to-wallet — TipMaster never holds funds. Farcaster bot integration via Neynar. Free username resolution and leaderboard. Built for the agentic tipping economy.",
+      "category": ["social", "payments", "xrpl", "farcaster"],
+      "status": "live",
+      "url": "https://tipmaster.onrender.com",
+      "custom_domain": "https://tips.scriptmasterlabs.com",
+      "payment_required": false,
+      "free_tier": true,
+      "key_endpoints": [
+        { "endpoint": "/api/resolve/{username}", "method": "GET", "cost": "free", "description": "Resolve Farcaster username to XRPL wallet address" },
+        { "endpoint": "/api/leaderboard",        "method": "GET", "cost": "free", "description": "Top tipped users" },
+        { "endpoint": "/api/register",           "method": "POST","cost": "free", "description": "Webhook for new user wallet registration" }
+      ],
+      "tags": ["farcaster", "tipping", "xrpl", "social", "zero-custody", "username-resolution"]
+    },
+
+    {
+      "id": "echo-forge",
+      "name": "EchoForge — Historical Pattern Matching Engine",
+      "tagline": "ML-powered cosine similarity search across historical market patterns. Find the echoes of now in the past.",
+      "description": "Historical equity pattern matching using Polygon.io data + machine learning cosine similarity. Given current price action, EchoForge finds the N most structurally similar historical episodes. Returns matched dates, similarity scores, and what happened next — so agents can price the forward distribution from the past. Dockerized service.",
+      "category": ["finance", "ml", "pattern-recognition", "market-intelligence"],
+      "status": "deployment-pending",
+      "repository": "https://github.com/Timwal78/echo-forge",
+      "payment_required": false,
+      "tags": ["finance", "ml", "pattern-matching", "historical-data", "cosine-similarity", "equity"]
+    },
+
+    {
+      "id": "xrpl-copy-trader",
+      "name": "XRPL Copy-Trader Engine™",
+      "tagline": "Autonomous on-chain copy trading for XRPL DEX positions.",
+      "description": "Automated XRPL DEX copy-trading engine. Monitors target wallets, mirrors their DEX offers in real-time. Zero custody — trades execute directly from your wallet. Configurable position limits, asset filters, and maximum exposure caps. Part of the SML-XRPL-FEE-FORGE suite.",
+      "category": ["trading", "xrpl", "defi", "automation"],
+      "status": "deployment-pending",
+      "payment_required": false,
+      "tags": ["copy-trading", "xrpl", "dex", "automation", "zero-custody"]
+    },
+
+    {
+      "id": "memecoin-launchpad",
+      "name": "Memecoin Launchpad (Forge)™",
+      "tagline": "Fair-launch memecoin issuance on Xahau with URIToken provenance.",
+      "description": "Permissionless memecoin issuance on the Xahau network. Issues tokens with URIToken-backed provenance records — every token launch gets an immutable on-chain fingerprint. Fair-launch mechanics enforced by Hooks contracts. No presales, no insider allocation. Part of the SML-XRPL-FEE-FORGE suite.",
+      "category": ["defi", "token-launch", "xahau", "nft"],
+      "status": "deployment-pending",
+      "payment_required": false,
+      "tags": ["memecoin", "token-launch", "xahau", "uritoken", "fair-launch", "hooks"]
+    },
+
+    {
+      "id": "signal-auction-loom",
+      "name": "Signal Auction Loom — Live Neural Exchequer Visualization",
+      "tagline": "Real-time WebGL visualization of the Ghost Layer / Neural Exchequer 5ms priority auction.",
+      "description": "Live WebGL dashboard showing every agent bid in the Neural Exchequer 5ms auction window. Agents compete for rank-1 SqueezeOS data access by including X-Grace-Tip in their Ghost Layer request. Highest bid = rank 1 = fastest data. The Loom renders bids, Merkle proofs, and auction outcomes in real-time via WebSocket. Publicly accessible — no auth required.",
+      "category": ["visualization", "agent-economy", "trading"],
+      "status": "live",
+      "url": "https://signal-auction-loom.vercel.app",
+      "custom_domain": "https://loom.scriptmasterlabs.com",
+      "websocket": "wss://ghost-layer.onrender.com/ws/loom",
+      "payment_required": false,
+      "free_tier": true,
+      "tags": ["visualization", "webgl", "auction", "real-time", "agent-economy"]
+    },
+
+    {
+      "id": "harmonic-scanner",
+      "name": "SML Harmonic Scanner v4.0 (Rubik's Cube)",
+      "tagline": "Institutional harmonic pattern engine. AI solves the cube → XRPL payment → Xahau URIToken minted as proof.",
+      "description": "Proprietary freak-of-nature harmonic scanner. Detects XABCD, Gartley, Butterfly, Bat, Crab, Cypher patterns with multi-factor scoring. Runs live in-browser. Pay-to-solve x402 attestation: when an AI agent (or human) solves the pattern, the XRPL payment verification triggers a Xahau URIToken mint — the solution is permanently recorded on-chain as an immutable NFT. Institutional pattern detection meets on-chain proof of cognition.",
+      "category": ["finance", "trading", "pattern-recognition", "nft"],
+      "status": "live",
+      "url": "https://www.scriptmasterlabs.com/sml_harmonic_scanner.html",
+      "payment_required": true,
+      "payment_protocol": "x402",
+      "payment_asset": "RLUSD",
+      "tags": ["harmonics", "pattern-recognition", "trading", "xrpl", "uritoken", "nft", "x402"]
+    }
+  ],
+
+  "ecosystem_infrastructure": {
+    "payment_flow": [
+      "1. Call any premium endpoint → receive HTTP 402 + invoice JSON",
+      "2. Pay invoice.amount RLUSD to invoice.pay_to on XRPL — MemoData = invoice.memo_hex exactly",
+      "3. POST https://four02proof.onrender.com/v1/verify with invoice_id + tx_hash → receive access_token (1h JWT)",
+      "4. Retry original endpoint with X-Payment-Token: <access_token>",
+      "5. Cache token. Reuse for 60 minutes across all SqueezeOS endpoints."
+    ],
+    "trust_line": "RLUSD trust line required on XRPL before first payment: TrustSet to issuer rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De",
+    "relay_bulk_discount": "40% off all SqueezeOS premium endpoints via Signal Relay Mesh. Requires Agent Credit Bureau score ≥ 600.",
+    "loyalty_tiers": [
+      { "tier": "Bronze",   "spend_rlusd": 0,   "discount": "0%",  "free_calls": "none" },
+      { "tier": "Silver",   "spend_rlusd": 1,   "discount": "5%",  "free_calls": "1 per 10 paid" },
+      { "tier": "Gold",     "spend_rlusd": 5,   "discount": "15%", "free_calls": "1 per 5 paid" },
+      { "tier": "Platinum", "spend_rlusd": 25,  "discount": "25%", "free_calls": "1 per 3 paid" },
+      { "tier": "Diamond",  "spend_rlusd": 100, "discount": "30%", "free_calls": "1 per 2 paid" }
+    ],
+    "cross_service_sso": "Agent Credit Bureau score from 402Proof is portable across all SML services via attestation JWT. Higher score = lower fees across Ghost Layer, SqueezeOS, SML Rails.",
+    "settlement_networks": [
+      { "network": "XRPL Mainnet", "asset": "RLUSD", "settlement_seconds": 4, "primary": true },
+      { "network": "Base (Ethereum L2)", "asset": "USDC", "standard": "EIP-3009", "settlement_seconds": 2 },
+      { "network": "Xahau", "asset": "XAH", "features": ["Hooks", "URIToken", "PREIMAGE-SHA-256 escrow"], "settlement_seconds": 4 }
+    ]
+  },
+
+  "compliance": {
+    "data_integrity": "Zero simulated data across all services. All market data traceable to licensed sources (Tradier, Polygon, XRPL). If live data unavailable, status returns AWAITING_DATA — never fabricated values.",
+    "no_custody": "No SML service holds client funds. All value transfer is wallet-to-wallet on XRPL/Base/Xahau. Platform records intent and proof only.",
+    "audit_trail": "AI council verdicts optionally notarized on Xahau via URIToken minting. Meets EU AI Act Article 13 transparency requirements.",
+    "pseudonymous": "Agent identity tracked by XRPL wallet address. No personal data beyond wallet address collected.",
+    "kyc": "Not required for any standard service. Ghost Layer routing requires no KYC."
+  },
+
+  "for_ai_platforms": {
+    "aws_bedrock": {
+      "protocol": "x402",
+      "mcp_endpoint": "https://squeezeos-api.onrender.com/mcp",
+      "transport": "streamable-http",
+      "payment_asset": "RLUSD",
+      "payment_network": "XRPL",
+      "free_tools": ["demo_council", "signal_preview", "signal_history", "system_status", "stigmergy_sniff"],
+      "tool_count": 23,
+      "categories": ["finance", "trading", "market-data", "agent-economy"]
+    },
+    "google_ap2": {
+      "protocol": "x402",
+      "endpoints_catalog": "https://squeezeos-api.onrender.com/.well-known/x402-registry.json",
+      "payment_gateway": "https://four02proof.onrender.com",
+      "invoice_endpoint": "https://four02proof.onrender.com/v1/invoice",
+      "verify_endpoint": "https://four02proof.onrender.com/v1/verify"
+    },
+    "coinbase_bazaar": {
+      "protocol": "x402",
+      "services_count": 11,
+      "payment_asset": "RLUSD",
+      "payment_network": "XRPL",
+      "catalog_url": "https://squeezeos-api.onrender.com/.well-known/catalog.json",
+      "x402_registry": "https://squeezeos-api.onrender.com/.well-known/x402-registry.json"
+    },
+    "agentic_market": {
+      "primary_mcp": "https://squeezeos-api.onrender.com/mcp",
+      "transport": "streamable-http",
+      "server_json": "https://squeezeos-api.onrender.com/.well-known/server.json",
+      "payment": "x402/RLUSD — no API key required",
+      "smithery": "https://smithery.ai/server/com.scriptmasterlabs/squeezeos"
+    }
+  },
+
+  "discovery_index": {
+    "squeezeos": {
+      "agents_json": "https://squeezeos-api.onrender.com/.well-known/agents.json",
+      "mcp_json":    "https://squeezeos-api.onrender.com/.well-known/mcp.json",
+      "server_json": "https://squeezeos-api.onrender.com/.well-known/server.json",
+      "openapi":     "https://squeezeos-api.onrender.com/.well-known/openapi.json",
+      "llms_txt":    "https://squeezeos-api.onrender.com/llms.txt",
+      "institutional": "https://squeezeos-api.onrender.com/.well-known/institutional.json",
+      "echolock":    "https://squeezeos-api.onrender.com/.well-known/echolock.json"
+    },
+    "402proof": {
+      "agents_json": "https://four02proof.onrender.com/.well-known/agents.json",
+      "mcp_json":    "https://four02proof.onrender.com/.well-known/mcp.json"
+    },
+    "ghost_layer": {
+      "agents_json": "https://ghost-layer.onrender.com/.well-known/agents.json",
+      "mcp_json":    "https://ghost-layer.onrender.com/.well-known/mcp.json",
+      "llms_txt":    "https://ghost-layer.onrender.com/public/llms.txt"
+    },
+    "sml_rails": {
+      "url": "https://sml-rails.onrender.com"
+    },
+    "tipmaster": {
+      "url": "https://tipmaster.onrender.com"
+    },
+    "loom": {
+      "url": "https://signal-auction-loom.vercel.app",
+      "ws":  "wss://ghost-layer.onrender.com/ws/loom"
+    }
+  }
+}

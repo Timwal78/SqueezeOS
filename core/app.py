@@ -227,6 +227,7 @@ def create_app():
         '/llms.txt', '/openapi.json', '/robots.txt',
         '/.well-known/mcp.json', '/.well-known/openapi.json', '/.well-known/ai-plugin.json',
         '/.well-known/server.json', '/.well-known/agents.json',
+        '/.well-known/catalog.json', '/.well-known/x402-registry.json',
     })
 
     def _broadcast_sse(event: dict):
@@ -317,6 +318,20 @@ def create_app():
     def serve_server_json():
         return send_from_directory(
             os.path.join(app.static_folder, '.well-known'), 'server.json',
+            mimetype='application/json'
+        )
+
+    @app.route('/.well-known/catalog.json')
+    def serve_catalog_json():
+        return send_from_directory(
+            os.path.join(app.static_folder, '.well-known'), 'catalog.json',
+            mimetype='application/json'
+        )
+
+    @app.route('/.well-known/x402-registry.json')
+    def serve_x402_registry():
+        return send_from_directory(
+            os.path.join(app.static_folder, '.well-known'), 'x402-registry.json',
             mimetype='application/json'
         )
 
