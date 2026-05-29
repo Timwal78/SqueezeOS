@@ -45,8 +45,8 @@ services:
     env: docker
     dockerfilePath: ./pne/gateway/Dockerfile
     dockerContext: ./pne/gateway
-    plan: free
-    healthCheckPath: /health
+    plan: starter
+    healthCheckPath: /v1/status
     autoDeploy: true
     envVars:
       - key: PORT
