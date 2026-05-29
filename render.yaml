@@ -31,14 +31,13 @@ services:
   # ---------------------------------------------------------------------------
   - type: redis
     name: pne-redis
-    plan: free
+    plan: starter
     maxmemoryPolicy: allkeys-lru
     ipAllowList: []
 
   # ---------------------------------------------------------------------------
   # pne-gateway — Signal Loom sovereign intent auction gateway (Rust/Axum)
   # L402 priority bidding over SqueezeOS API — formerly on Railway, now Render
-  # Required secret: MACAROON_SECRET (generate: openssl rand -hex 32)
   # ---------------------------------------------------------------------------
   - type: web
     name: pne-gateway
