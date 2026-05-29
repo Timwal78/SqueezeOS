@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "name": "SqueezeOS Market Intelligence",
-  "description": "Institutional AI trading intelligence + autonomous agent economy. Squeeze scanner, options flow, IWM 0DTE, AI council verdicts, Stigmergy Protocol pheromone coordination, Signal Futures prediction market — gated by x402 RLUSD micropayment. Signal Relay Mesh (40% bulk discount), Agent Credit Bureau (300-850 score), Peer Signal Marketplace, Agent Hiring Protocol, Dream Pool collective context leasing. 36 MCP tools. Three payment rails: XRPL (RLUSD), Base (USDC), Xahau (XAH). Zero custody throughout. Zero simulated data.",
+  "description": "Institutional AI trading intelligence + autonomous agent economy. Flagship: ECHOLOCK-402™ — the world's first keyless, accountless, KYC-free behavioral access control system (no API keys, no OAuth, no IP whitelists, no ban lists — access proven through economic intelligence). Squeeze scanner, options flow, IWM 0DTE, AI council verdicts, Stigmergy Protocol pheromone coordination, Signal Futures prediction market — gated by x402 RLUSD micropayment. Signal Relay Mesh (40% bulk discount), Agent Credit Bureau (300-850 score), Peer Signal Marketplace, Agent Hiring Protocol, Dream Pool collective context leasing. MCP tools. Three payment rails: XRPL (RLUSD), Base (USDC), Xahau (XAH). Zero custody throughout. Zero simulated data.",
   "url": "https://squeezeos-api.onrender.com",
   "homepage": "https://www.scriptmasterlabs.com",
   "payment_required": true,
@@ -85,6 +85,18 @@
       "currency": "RLUSD",
       "free": true,
       "description": "Browse and create prediction market positions on SqueezeOS council verdicts. Stake RLUSD on what the next verdict will be. Auto-settles. Zero custody."
+    },
+    {
+      "id": "echolock_402_beacon",
+      "name": "ECHOLOCK-402™ — Behavioral Access Control Beacon",
+      "endpoint": "/api/echolock",
+      "method": "GET",
+      "cost": "0",
+      "currency": "RLUSD",
+      "free": true,
+      "description": "SML flagship proprietary protocol. The world's first keyless, accountless, KYC-free behavioral access control system. No API keys, no OAuth, no IP whitelists, no KYC, no ban lists. Access is granted by proving economic intelligence through RLUSD payment behavior — impossible to steal, impossible to fake. All premium endpoints already use ECHOLOCK-402 automatically. Returns manifesto, cognitive tier map, and integration instructions.",
+      "discovery": "https://squeezeos-api.onrender.com/.well-known/echolock.json",
+      "challenge": "https://squeezeos-api.onrender.com/api/echolock/challenge"
     }
   ],
   "free_endpoints": [
