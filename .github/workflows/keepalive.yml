@@ -1,0 +1,61 @@
+name: Keep-Alive — Payment System 24/7
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'   # every 5 min — Render spins down at 15 min idle
+  workflow_dispatch:
+
+jobs:
+  ping:
+    name: Ping payment services
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      # ── Ping all Render/Vercel services in parallel ───────────────
+      # Sequential steps let one slow cold-start block the others, so
+      # downstream services miss their ping and fall asleep. Run all
+      # pings concurrently with a 55 s timeout (just under the 5-min
+      # job window). Warnings are printed but do NOT fail the job.
+      - name: Ping all services (parallel)
+        run: |
+          ping_service() {
+            local name="$1"
+            local url="$2"
+            local ok_codes="${3:-200}"
+            status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 55 "$url" 2>/dev/null)
+            if echo "$ok_codes" | grep -qw "$status"; then
+              echo "  OK  $name → $status"
+            else
+              echo "WARN  $name → $status (url: $url)"
+            fi
+          }
+
+          ping_service "402Proof"              "https://four02proof.onrender.com/v1/stats"    "200" &
+          ping_service "Ghost Layer"           "https://ghost-layer.onrender.com/health"       "200" &
+          ping_service "SqueezeOS"             "https://squeezeos-api.onrender.com/api/status" "200" &
+          ping_service "SML Rails"             "https://sml-rails.onrender.com/health"         "200 404" &
+          ping_service "TipMaster"             "https://tipmaster.onrender.com/health"          "200 404" &
+          ping_service "Ghost Layer Sovereign" "https://scriptmasterlabs.com"                  "200 301 302" &
+
+          wait
+          echo "All pings complete"
+
+      # ── Alert Discord only on genuine hard failures ───────────────
+      - name: Alert Discord on failure
+        if: failure() && env.DISCORD_WEBHOOK_ALL != ''
+        env:
+          DISCORD_WEBHOOK_ALL: ${{ secrets.DISCORD_WEBHOOK_ALL }}
+        run: |
+          curl -s -X POST "$DISCORD_WEBHOOK_ALL" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"username\": \"SqueezeOS Sentinel\",
+              \"embeds\": [{
+                \"title\": \"🚨 Keep-Alive Workflow Failed\",
+                \"color\": 15158332,
+                \"description\": \"The keep-alive ping job itself crashed. Check Actions logs — services may be down.\",
+                \"footer\": {\"text\": \"Keep-alive — every 5 min\"},
+                \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
+              }]
+            }"

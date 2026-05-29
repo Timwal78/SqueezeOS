@@ -1,0 +1,237 @@
+package chain
+
+import (
+	"context"
+	"crypto/ecdsa"
+	"fmt"
+	"log"
+	"math/big"
+	"strings"
+
+	ethereum "github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
+)
+
+const usdcABIJSON = `[
+	{
+		"name":"transferWithAuthorization","type":"function",
+		"inputs":[
+			{"name":"from","type":"address"},
+			{"name":"to","type":"address"},
+			{"name":"value","type":"uint256"},
+			{"name":"validAfter","type":"uint256"},
+			{"name":"validBefore","type":"uint256"},
+			{"name":"nonce","type":"bytes32"},
+			{"name":"v","type":"uint8"},
+			{"name":"r","type":"bytes32"},
+			{"name":"s","type":"bytes32"}
+		],
+		"outputs":[]
+	},
+	{
+		"name":"transfer","type":"function",
+		"inputs":[
+			{"name":"to","type":"address"},
+			{"name":"value","type":"uint256"}
+		],
+		"outputs":[{"name":"","type":"bool"}]
+	}
+]`
+
+// EIP3009Auth holds the transferWithAuthorization signature parameters.
+type EIP3009Auth struct {
+	ValidAfter  *big.Int
+	ValidBefore *big.Int
+	Nonce       [32]byte
+	V           uint8
+	R           [32]byte
+	S           [32]byte
+}
+
+// BaseClient executes USDC routing on Base L2.
+type BaseClient struct {
+	client         *ethclient.Client
+	privKey        *ecdsa.PrivateKey
+	gatewayAddress common.Address
+	usdcAddress    common.Address
+	parsedABI      abi.ABI
+}
+
+func NewBaseClient(rpcURL, privateKeyHex, usdcAddr string) (*BaseClient, error) {
+	client, err := ethclient.Dial(rpcURL)
+	if err != nil {
+		return nil, fmt.Errorf("connect to Base: %w", err)
+	}
+	privKey, err := crypto.HexToECDSA(strings.TrimPrefix(privateKeyHex, "0x"))
+	if err != nil {
+		return nil, fmt.Errorf("invalid ETH private key: %w", err)
+	}
+	usdcParsed, err := validateAddress(usdcAddr)
+	if err != nil {
+		return nil, fmt.Errorf("USDC contract address: %w", err)
+	}
+	parsedABI, err := abi.JSON(strings.NewReader(usdcABIJSON))
+	if err != nil {
+		return nil, fmt.Errorf("parse ABI: %w", err)
+	}
+	return &BaseClient{
+		client:         client,
+		privKey:        privKey,
+		gatewayAddress: crypto.PubkeyToAddress(privKey.PublicKey),
+		usdcAddress:    usdcParsed,
+		parsedABI:      parsedABI,
+	}, nil
+}
+
+// validateAddress verifies the address string is a well-formed 0x+40 hex string
+// and that HexToAddress round-trips it exactly. Prevents silent truncation/padding.
+func validateAddress(addr string) (common.Address, error) {
+	if !strings.HasPrefix(addr, "0x") || len(addr) != 42 {
+		return common.Address{}, fmt.Errorf("address %q must be 0x-prefixed and 42 chars", addr)
+	}
+	hex40 := strings.TrimPrefix(addr, "0x")
+	parsed := common.HexToAddress(addr)
+	if !strings.EqualFold(parsed.Hex()[2:], hex40) {
+		return common.Address{}, fmt.Errorf("address %q normalises differently after HexToAddress", addr)
+	}
+	return parsed, nil
+}
+
+// PullAndRoute executes an EIP-3009 pull from source to gateway, then transfers
+// netAmount to destination. The fee (gross − net) remains in the gateway wallet.
+// If the net transfer (Step 2) fails, a best-effort refund of gross is sent back
+// to source. Manual recovery is logged if the refund also fails.
+func (b *BaseClient) PullAndRoute(ctx context.Context, source, destination string, grossAmount, netAmount *big.Int, auth EIP3009Auth) (string, error) {
+	srcAddr, err := validateAddress(source)
+	if err != nil {
+		return "", fmt.Errorf("source address: %w", err)
+	}
+	dstAddr, err := validateAddress(destination)
+	if err != nil {
+		return "", fmt.Errorf("destination address: %w", err)
+	}
+
+	chainID, err := b.client.ChainID(ctx)
+	if err != nil {
+		return "", fmt.Errorf("get chain ID: %w", err)
+	}
+
+	// Step 1 — pull gross from source → gateway via EIP-3009 authorization
+	pullData, err := b.parsedABI.Pack("transferWithAuthorization",
+		srcAddr,
+		b.gatewayAddress,
+		grossAmount,
+		auth.ValidAfter,
+		auth.ValidBefore,
+		auth.Nonce,
+		auth.V,
+		auth.R,
+		auth.S,
+	)
+	if err != nil {
+		return "", fmt.Errorf("pack transferWithAuthorization: %w", err)
+	}
+	if _, err := b.sendTx(ctx, chainID, pullData); err != nil {
+		return "", fmt.Errorf("pull tx: %w", err)
+	}
+
+	// Step 2 — send net to destination
+	sendData, err := b.parsedABI.Pack("transfer", dstAddr, netAmount)
+	if err != nil {
+		return "", fmt.Errorf("pack transfer: %w", err)
+	}
+	txHash, err := b.sendTx(ctx, chainID, sendData)
+	if err != nil {
+		// Best-effort refund: return gross to source so user isn't left out-of-pocket.
+		refundData, packErr := b.parsedABI.Pack("transfer", srcAddr, grossAmount)
+		if packErr == nil {
+			if _, refundErr := b.sendTx(context.Background(), chainID, refundData); refundErr != nil {
+				log.Printf("[REFUND] CRITICAL: refund tx also failed: %v — manual recovery required for source=%s gross=%s", refundErr, source, grossAmount)
+			} else {
+				log.Printf("[REFUND] Step 2 failed; refunded gross %s to source %s", grossAmount, source)
+			}
+		}
+		return "", fmt.Errorf("send tx: %w", err)
+	}
+	return txHash, nil
+}
+
+// USDCBalance returns the gateway wallet's current USDC balance.
+func (b *BaseClient) USDCBalance(ctx context.Context) (*big.Int, error) {
+	balanceOfABI := `[{"name":"balanceOf","type":"function","inputs":[{"name":"account","type":"address"}],"outputs":[{"name":"","type":"uint256"}]}]`
+	parsed, err := abi.JSON(strings.NewReader(balanceOfABI))
+	if err != nil {
+		return nil, err
+	}
+	data, err := parsed.Pack("balanceOf", b.gatewayAddress)
+	if err != nil {
+		return nil, err
+	}
+	result, err := b.client.CallContract(ctx, ethereum.CallMsg{
+		To:   &b.usdcAddress,
+		Data: data,
+	}, nil)
+	if err != nil {
+		return nil, err
+	}
+	bal := new(big.Int).SetBytes(result)
+	return bal, nil
+}
+
+// SweepUSDCToTreasury transfers all USDC from the gateway wallet to treasuryAddr.
+// Returns the tx hash, or "" if the balance is zero.
+func (b *BaseClient) SweepUSDCToTreasury(ctx context.Context, treasuryAddr string) (string, error) {
+	tAddr, err := validateAddress(treasuryAddr)
+	if err != nil {
+		return "", fmt.Errorf("treasury address: %w", err)
+	}
+	bal, err := b.USDCBalance(ctx)
+	if err != nil {
+		return "", fmt.Errorf("balance check: %w", err)
+	}
+	if bal.Sign() == 0 {
+		return "", nil
+	}
+	chainID, err := b.client.ChainID(ctx)
+	if err != nil {
+		return "", err
+	}
+	data, err := b.parsedABI.Pack("transfer", tAddr, bal)
+	if err != nil {
+		return "", fmt.Errorf("pack sweep transfer: %w", err)
+	}
+	return b.sendTx(ctx, chainID, data)
+}
+
+func (b *BaseClient) sendTx(ctx context.Context, chainID *big.Int, data []byte) (string, error) {
+	nonce, err := b.client.PendingNonceAt(ctx, b.gatewayAddress)
+	if err != nil {
+		return "", err
+	}
+	gasPrice, err := b.client.SuggestGasPrice(ctx)
+	if err != nil {
+		return "", err
+	}
+	gasLimit, err := b.client.EstimateGas(ctx, ethereum.CallMsg{
+		From: b.gatewayAddress,
+		To:   &b.usdcAddress,
+		Data: data,
+	})
+	if err != nil {
+		gasLimit = 120_000 // safe fallback
+	}
+
+	tx := types.NewTransaction(nonce, b.usdcAddress, big.NewInt(0), gasLimit, gasPrice, data)
+	signed, err := types.SignTx(tx, types.NewEIP155Signer(chainID), b.privKey)
+	if err != nil {
+		return "", err
+	}
+	if err := b.client.SendTransaction(ctx, signed); err != nil {
+		return "", err
+	}
+	return signed.Hash().Hex(), nil
+}

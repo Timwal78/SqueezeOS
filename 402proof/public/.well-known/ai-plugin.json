@@ -1,0 +1,17 @@
+{
+  "schema_version": "v1",
+  "name_for_human": "402Proof — Script Master Labs",
+  "name_for_model": "proof402_scriptmasterlabs",
+  "description_for_human": "Pay-per-call market intelligence APIs. AI council verdicts, squeeze scanner, options flow, IWM 0DTE analysis. Pay with RLUSD on XRPL.",
+  "description_for_model": "402Proof provides premium financial market intelligence APIs gated by RLUSD micropayments on the XRP Ledger using the x402 protocol. To access: (1) call the endpoint, receive HTTP 402 with invoice, (2) pay RLUSD to pay_to address with memo_hex as XRPL MemoData, (3) POST /v1/verify with invoice_id and tx_hash to get access_token, (4) retry with X-Payment-Token header. Available endpoints: POST /api/council (0.10 RLUSD, AI market verdict), GET /api/scan (0.05 RLUSD, full market scanner), GET /api/options (0.05 RLUSD, options flow intelligence), GET /api/iwm (0.03 RLUSD, IWM 0DTE analysis). All data is live and dynamic, no simulated data.",
+  "auth": {
+    "type": "none"
+  },
+  "api": {
+    "type": "openapi",
+    "url": "https://four02proof.onrender.com/.well-known/openapi.json"
+  },
+  "logo_url": "https://four02proof.onrender.com/favicon.ico",
+  "contact_email": "scriptmasterlabs@proof402.ai",
+  "legal_info_url": "https://four02proof.onrender.com/"
+}

@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: 402proof
+    runtime: docker
+    dockerfilePath: ./402proof/Dockerfile
+    dockerContext: ./402proof
+    plan: starter
+    envVars:
+      - key: PORT
+        value: "9090"
+      - key: XRPL_RPC_URL
+        value: https://xrplcluster.com
+      - key: RLUSD_ISSUER
+        value: rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De
+      - key: SERVER_URL
+        sync: false
+      # Agent state persisted to Render Disk — survives all redeploys
+      - key: AGENT_STATE_PATH
+        value: /data/proof402_agents.json
+    disk:
+      name: proof402-state
+      mountPath: /data
+      sizeGB: 1
+      # ── SECRETS: set in Render dashboard, never here ──────────────────────────
+      # GATEWAY_XRPL_ADDRESS  — your 402Proof hot wallet (NOT your Xaman treasury)
+      # TOKEN_SECRET          — openssl rand -hex 32
+      # ADMIN_TOKEN           — openssl rand -hex 32
+      # ── Optional: email receipt delivery ─────────────────────────────────────
+      # SMTP_HOST             — e.g. smtp.sendgrid.net
+      # SMTP_PORT             — e.g. 587
+      # SMTP_USER             — SMTP username
+      # SMTP_PASS             — SMTP password / API key
+      # SMTP_FROM             — from address for receipt emails
+      # SMTP_TO               — merchant receipt destination
+      # ── Optional: wallet binding enforcement ─────────────────────────────────
+      # Hard-reject tokens used from a different wallet than the one that paid.
+      - key: ENFORCE_WALLET_BINDING
+        value: "true"

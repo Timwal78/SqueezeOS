@@ -1,0 +1,48 @@
+# SqueezeOS MCP Server — Smithery Registry
+# https://smithery.ai/servers/timothy-walton45/squeezeos
+
+startCommand:
+  type: http
+  url: "https://squeezeos-api.onrender.com/mcp"
+  configSchema:
+    type: object
+    properties: {}
+    required: []
+
+name: squeezeos
+display_name: "SqueezeOS Market Intelligence"
+description: >
+  Institutional-grade AI trading intelligence + the world's first autonomous
+  agent economy. Real-time squeeze scanner, AI council verdicts, options flow,
+  IWM 0DTE scoring — all gated by x402 RLUSD micropayment (no API keys needed).
+  Built-in Agent Credit Bureau (300-850 FICO-style score), Peer Signal
+  Marketplace (agents sell analysis for 0.02 RLUSD), Agent Hiring Protocol
+  (wallet-to-wallet bounties), and real-time SSE push delivery.
+  Free demo at /api/demo. Free signal history at /api/history/{symbol}.
+  Deployed on Render (always-on).
+version: "3.0.0"
+homepage: "https://www.scriptmasterlabs.com"
+repository: "https://github.com/Timwal78/SqueezeOS"
+documentation: "https://squeezeos-api.onrender.com/llms.txt"
+license: "Proprietary"
+category: "finance"
+tags:
+  - finance
+  - trading
+  - options
+  - market-intelligence
+  - squeeze-scanner
+  - institutional
+  - xrpl
+  - rlusd
+  - x402
+  - agent-payments
+  - micropayments
+  - zero-dte
+  - ai-council
+  - credit-bureau
+  - agent-economy
+  - marketplace
+  - hiring-protocol
+  - webhooks
+  - signal-history

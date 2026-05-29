@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#020202">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SML Beast">
+<meta name="mobile-web-app-capable" content="yes">
+<title>SML BEAST · Live Terminal</title>
+<style>
+:root{
+  --bg:#020202;--panel:#0a0a0a;--line:#1c1c1c;
+  --green:#39ff14;--red:#ff073a;--blue:#00e5ff;--orange:#ff9900;--magenta:#ff00ff;--yellow:#ffd700;
+  --text:#fff;--dim:#666;
+}
+*{margin:0;padding:0;box-sizing:border-box;font-family:'JetBrains Mono','Courier New',monospace}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+body{display:flex;flex-direction:column;padding:env(safe-area-inset-top) 0 0 0}
+
+/* ── Header ── */
+.hdr{flex-shrink:0;display:flex;justify-content:space-between;align-items:center;
+     padding:0.5rem 0.75rem;border-bottom:1px solid var(--blue);background:#000}
+.hdr h1{font-size:1rem;letter-spacing:3px;color:var(--blue);text-shadow:0 0 8px var(--blue);cursor:pointer}
+.hdr h1 span{color:var(--magenta);text-shadow:0 0 8px var(--magenta)}
+.meta{font-size:0.68rem;color:var(--dim);display:flex;gap:0.5rem;align-items:center}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:3px;vertical-align:middle}
+.dot.live{background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 1.5s infinite}
+.dot.dead{background:var(--red);box-shadow:0 0 6px var(--red)}
+.dot.warn{background:var(--orange);box-shadow:0 0 6px var(--orange)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+.tier{font-size:0.58rem;padding:1px 5px;border:1px solid var(--line);letter-spacing:1px;border-radius:2px}
+.tier.free{color:var(--dim);border-color:var(--dim)}
+.tier.owner{color:var(--magenta);border-color:var(--magenta);text-shadow:0 0 4px var(--magenta)}
+.gear{background:var(--magenta);border:none;color:#000;cursor:pointer;font-size:0.75rem;
+      padding:5px 8px;font-weight:bold;letter-spacing:1px;border-radius:3px;font-family:inherit;
+      box-shadow:0 0 8px var(--magenta)}
+
+/* ── Modal ── */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.88);backdrop-filter:blur(4px);
+          display:none;align-items:center;justify-content:center;z-index:100;padding:1rem}
+.modal-bg.open{display:flex}
+.modal{background:var(--panel);border:1px solid var(--blue);box-shadow:0 0 30px rgba(0,229,255,0.25);
+       max-width:440px;width:100%;padding:1.25rem}
+.modal h2{color:var(--blue);font-size:1rem;letter-spacing:2px;margin-bottom:0.5rem;text-shadow:0 0 6px var(--blue)}
+.modal p{color:var(--dim);font-size:0.72rem;line-height:1.5;margin-bottom:0.75rem}
+.modal label{display:block;font-size:0.65rem;color:var(--dim);letter-spacing:1px;margin-bottom:0.25rem}
+.modal input[type=password]{width:100%;background:#000;color:var(--green);border:1px solid var(--line);
+  padding:0.55rem;font-family:inherit;font-size:0.82rem;letter-spacing:1px;outline:none}
+.modal input:focus{border-color:var(--green);box-shadow:0 0 6px rgba(57,255,20,0.3)}
+.modal .hint{font-size:0.62rem;color:var(--dim);margin-top:0.25rem}
+.modal .hint code{color:var(--orange);background:#000;padding:1px 3px}
+.modal .btns{display:flex;gap:0.4rem;margin-top:0.9rem}
+.modal .btns button{flex:1;background:transparent;border:1px solid var(--blue);color:var(--blue);
+  padding:0.55rem;font-family:inherit;letter-spacing:1px;cursor:pointer;font-size:0.7rem}
+.modal .btns .b-save{border-color:var(--green);color:var(--green)}
+.modal .btns .b-save:active{background:var(--green);color:#000}
+.modal .btns .b-clear{border-color:var(--red);color:var(--red)}
+.modal .btns .b-clear:active{background:var(--red);color:#000}
+
+/* ── Cards ── */
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;padding:3px}
+.card{background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--dim);
+      padding:0.4rem;position:relative;transition:border-top-color 0.3s}
+.card.buy{border-top-color:var(--green);box-shadow:0 0 10px rgba(57,255,20,0.12)}
+.card.sell{border-top-color:var(--red);box-shadow:0 0 10px rgba(255,7,58,0.12)}
+.card.hold{border-top-color:var(--yellow)}
+.card.shield{border-top-color:var(--dim)}
+.card.ignition{border-top-color:var(--magenta);box-shadow:0 0 20px rgba(255,0,255,0.25);animation:ignite 1.2s infinite}
+@keyframes ignite{0%,100%{box-shadow:0 0 16px rgba(255,0,255,0.25)}50%{box-shadow:0 0 28px rgba(255,0,255,0.55)}}
+.card .age{position:absolute;top:3px;right:4px;font-size:0.48rem;color:var(--dim)}
+.card .sym{font-size:1rem;font-weight:bold;letter-spacing:1px}
+.card .tag{font-size:0.48rem;background:var(--line);color:var(--dim);padding:1px 3px;
+           margin-left:3px;vertical-align:middle;letter-spacing:1px;border-radius:2px}
+.card .price{font-size:1.05rem;font-weight:bold;margin-top:0.05rem}
+.card .dir{font-size:0.68rem;font-weight:bold;margin-top:0.12rem;letter-spacing:1px}
+.card .dir.buy{color:var(--green);text-shadow:0 0 5px var(--green)}
+.card .dir.sell{color:var(--red);text-shadow:0 0 5px var(--red)}
+.card .dir.hold{color:var(--yellow)}
+.card .dir.shield{color:var(--dim)}
+.card .dir.ignition{color:var(--magenta);text-shadow:0 0 6px var(--magenta)}
+.card .conf{font-size:0.56rem;color:var(--dim);margin-top:0.04rem}
+.card .conf b{color:var(--blue)}
+.card .regime{font-size:0.5rem;color:var(--orange);letter-spacing:1px;margin-top:0.06rem}
+.card .targets{display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px;
+               margin-top:0.25rem;font-size:0.55rem;border-top:1px solid var(--line);padding-top:0.22rem}
+.card .t{display:flex;flex-direction:column}
+.card .t .lbl{color:var(--dim);font-size:0.46rem;letter-spacing:1px}
+.card .t .v{font-weight:bold}
+.card .t.tp1 .v,.card .t.tp2 .v{color:var(--green)}
+.card .t.stop .v{color:var(--red)}
+.card .council{font-size:0.54rem;margin-top:0.2rem;border-top:1px dashed var(--magenta);
+               padding-top:0.18rem;color:var(--dim);letter-spacing:0.5px;line-height:1.3}
+.card .council.has{color:var(--magenta);text-shadow:0 0 3px var(--magenta)}
+.card .council b{color:var(--text)}
+.card .iwm-best{font-size:0.54rem;margin-top:0.15rem;border-top:1px dashed var(--yellow);
+                padding-top:0.15rem;color:var(--yellow);line-height:1.3}
+.card .iwm-best b{color:var(--text)}
+
+/* ── Owner-only ── */
+.owner-only{display:none}
+body.owner .owner-only{display:block}
+
+/* ── Section headers ── */
+.section-hdr{padding:0.45rem 0.75rem;border-bottom:1px solid var(--magenta);background:#050505;
+             font-size:0.72rem;color:var(--magenta);letter-spacing:2px;
+             text-shadow:0 0 5px var(--magenta);display:flex;justify-content:space-between}
+.section-hdr .age{color:var(--dim);font-size:0.6rem;letter-spacing:1px}
+
+/* ── Options flow ── */
+.flow-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;padding:3px}
+.flow{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--magenta);padding:0.5rem}
+.flow .sym{font-size:0.9rem;font-weight:bold;color:var(--magenta)}
+.flow .row{display:flex;justify-content:space-between;margin-top:0.25rem;font-size:0.65rem}
+.flow .row .k{color:var(--dim);font-size:0.56rem;letter-spacing:1px}
+.flow .row .v{font-weight:bold}
+.flow .row .v.bull{color:var(--green)}
+.flow .row .v.bear{color:var(--red)}
+.flow .err{color:var(--dim);font-size:0.6rem;font-style:italic;margin-top:0.2rem;line-height:1.4}
+
+/* ── Scan ── */
+.scan-list{padding:0.3rem 0.75rem}
+.scan-row{display:grid;grid-template-columns:52px 1fr 68px 62px 60px;gap:0.4rem;
+          padding:0.3rem 0;border-bottom:1px solid var(--line);font-size:0.68rem;align-items:baseline}
+.scan-row .sym{color:var(--blue);font-weight:bold;font-size:0.78rem}
+.scan-row .px{font-weight:bold}
+.scan-row .ch{font-size:0.64rem}
+.scan-row .ch.bull{color:var(--green)}
+.scan-row .ch.bear{color:var(--red)}
+.scan-row .vol{color:var(--dim);font-size:0.6rem}
+.scan-row .meta{color:var(--orange);font-size:0.55rem;letter-spacing:0.5px}
+
+/* ── Main layout ── */
+main{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.top-panels{flex-shrink:0;overflow-y:auto;max-height:44vh}
+.feed-area{flex:1;display:flex;flex-direction:column;min-height:0}
+
+/* ── Feed header ── */
+.feed-hdr{flex-shrink:0;background:#050505;border-top:1px solid var(--line);border-bottom:1px solid var(--blue)}
+.feed-hdr-row1{display:flex;justify-content:space-between;align-items:center;padding:0.45rem 0.75rem}
+.feed-title{font-size:0.78rem;color:var(--blue);letter-spacing:2px;text-shadow:0 0 5px var(--blue)}
+.feed-btns{display:flex;gap:0.3rem;align-items:center}
+.feed-btns button{background:transparent;border:1px solid var(--line);color:var(--dim);
+                  padding:3px 8px;cursor:pointer;font-family:inherit;font-size:0.68rem;letter-spacing:1px;white-space:nowrap}
+.feed-btns button.active{border-color:var(--green);color:var(--green);text-shadow:0 0 4px var(--green)}
+.feed-btns button.beast-on{border-color:var(--orange);color:var(--orange)}
+.find-row{display:none;padding:0 0.75rem 0.4rem;gap:0.4rem;align-items:center}
+.find-row.open{display:flex}
+.find-input{flex:1;background:transparent;border:1px solid var(--line);color:var(--text);
+            font-family:inherit;font-size:0.72rem;padding:4px 8px;outline:none;letter-spacing:1px}
+.find-input:focus{border-color:var(--blue);box-shadow:0 0 4px rgba(0,229,255,0.3)}
+.find-input::placeholder{color:var(--dim)}
+.find-count{font-size:0.6rem;color:var(--blue);white-space:nowrap}
+mark.hit{background:rgba(0,229,255,0.2);color:var(--blue);border-radius:2px;padding:0 2px}
+
+/* ── Feed ── */
+.feed{flex:1;overflow-y:auto;min-height:0}
+.evt{padding:0.6rem 0.75rem;border-bottom:1px solid var(--line)}
+.evt:hover{background:#0c0c0c}
+.evt.new{animation:flash 0.5s}
+@keyframes flash{0%{background:rgba(57,255,20,0.15)}100%{background:transparent}}
+.evt-hdr{display:flex;gap:0.5rem;align-items:center;margin-bottom:0.28rem}
+.evt-ts{color:var(--dim);font-size:0.6rem;font-variant-numeric:tabular-nums;white-space:nowrap}
+.evt-type{font-weight:bold;font-size:0.6rem;letter-spacing:1px;white-space:nowrap}
+.evt-sym{font-weight:bold;font-size:0.68rem;color:var(--blue);text-shadow:0 0 4px var(--blue)}
+.evt-body{font-size:0.9rem;line-height:1.55;word-break:break-word;color:var(--text)}
+.t-SQUEEZE_ALERT{color:var(--green)}
+.t-OPTIONS_SWEEP,.t-DARK_POOL{color:var(--magenta)}
+.t-COUNCIL_VERDICT{color:var(--orange)}
+.t-AGENT_PROBE{color:var(--blue);opacity:0.6}
+.t-AGENT_PAY{color:var(--yellow)}
+.t-SETTLEMENT_COMPLETE,.t-FUTURES_SETTLED{color:var(--yellow)}
+.t-CONNECTED,.t-HEARTBEAT{color:var(--dim)}
+.t-ERROR{color:var(--red)}
+.t-DEFAULT{color:var(--text)}
+.empty{padding:2.5rem 1rem;text-align:center;color:var(--dim);font-size:0.82rem;letter-spacing:1px}
+
+/* ── Status bar ── */
+.statusbar{flex-shrink:0;background:#050505;border-top:1px solid var(--line);
+           padding:0.28rem 0.75rem;padding-bottom:calc(0.28rem + env(safe-area-inset-bottom));
+           font-size:0.58rem;color:var(--dim);display:flex;justify-content:space-between;gap:0.75rem}
+.statusbar .si{display:flex;gap:3px;align-items:center}
+.statusbar b{color:var(--text);font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="hdr">
+  <h1 id="logo-btn">SML <span>BEAST</span></h1>
+  <div class="meta">
+    <span class="tier free" id="tier">FREE</span>
+    <span><span class="dot" id="api-dot"></span><span id="api-lbl">API</span></span>
+    <span><span class="dot" id="sse-dot"></span><span id="sse-lbl">SSE</span></span>
+    <span id="clock">--:--:--</span>
+    <button class="gear" id="gear-btn">⚙</button>
+  </div>
+</header>
+
+<!-- Settings modal -->
+<div class="modal-bg" id="modal-bg">
+  <div class="modal">
+    <h2>OWNER MODE</h2>
+    <p>Set your <code style="color:var(--orange)">OWNER_API_KEY</code> from Render env. Sent as <code style="color:var(--orange)">X-Owner-Key</code> — unlocks Council, IWM 0DTE, Options Flow, and Scan at zero RLUSD cost.</p>
+    <label>OWNER API KEY</label>
+    <input type="password" id="owner-input" placeholder="paste key here…" autocomplete="off" spellcheck="false">
+    <p class="hint">Stored in localStorage only. Never sent anywhere except your Render API.</p>
+    <div class="btns">
+      <button class="b-save" id="btn-save">SAVE</button>
+      <button class="b-clear" id="btn-clear-key">CLEAR</button>
+      <button id="btn-close">CLOSE</button>
+    </div>
+  </div>
+</div>
+
+<main>
+
+<!-- Top panels: cards + owner-only sections -->
+<div class="top-panels">
+
+  <!-- Ticker cards -->
+  <section class="cards" id="cards">
+    <div class="card" data-sym="AMC">
+      <div class="age" data-age></div>
+      <div><span class="sym">AMC</span></div>
+      <div class="price" data-field="price">—</div>
+      <div class="dir" data-field="dir">LOADING</div>
+      <div class="conf">conf <b data-field="conf">—</b></div>
+      <div class="regime" data-field="regime">—</div>
+      <div class="targets">
+        <div class="t tp1"><span class="lbl">TP1</span><span class="v" data-field="tp1">—</span></div>
+        <div class="t tp2"><span class="lbl">TP2</span><span class="v" data-field="tp2">—</span></div>
+        <div class="t stop"><span class="lbl">STOP</span><span class="v" data-field="stop">—</span></div>
+      </div>
+      <div class="council" data-field="council">COUNCIL —</div>
+    </div>
+    <div class="card" data-sym="GME">
+      <div class="age" data-age></div>
+      <div><span class="sym">GME</span></div>
+      <div class="price" data-field="price">—</div>
+      <div class="dir" data-field="dir">LOADING</div>
+      <div class="conf">conf <b data-field="conf">—</b></div>
+      <div class="regime" data-field="regime">—</div>
+      <div class="targets">
+        <div class="t tp1"><span class="lbl">TP1</span><span class="v" data-field="tp1">—</span></div>
+        <div class="t tp2"><span class="lbl">TP2</span><span class="v" data-field="tp2">—</span></div>
+        <div class="t stop"><span class="lbl">STOP</span><span class="v" data-field="stop">—</span></div>
+      </div>
+      <div class="council" data-field="council">COUNCIL —</div>
+    </div>
+    <div class="card" data-sym="IWM">
+      <div class="age" data-age></div>
+      <div><span class="sym">IWM</span><span class="tag">0DTE</span></div>
+      <div class="price" data-field="price">—</div>
+      <div class="dir" data-field="dir">LOADING</div>
+      <div class="conf">conf <b data-field="conf">—</b></div>
+      <div class="regime" data-field="regime">—</div>
+      <div class="targets">
+        <div class="t tp1"><span class="lbl">TP1</span><span class="v" data-field="tp1">—</span></div>
+        <div class="t tp2"><span class="lbl">TP2</span><span class="v" data-field="tp2">—</span></div>
+        <div class="t stop"><span class="lbl">STOP</span><span class="v" data-field="stop">—</span></div>
+      </div>
+      <div class="council" data-field="council">COUNCIL —</div>
+      <div class="iwm-best" data-field="iwm-best">0DTE —</div>
+    </div>
+  </section>
+
+  <!-- Options flow (owner only) -->
+  <section class="owner-only">
+    <div class="section-hdr">OPTIONS FLOW<span class="age" id="flow-age"></span></div>
+    <div class="flow-grid" id="flow-grid">
+      <div class="flow" data-flow-sym="AMC"><div class="sym">AMC</div><div class="err">awaiting…</div></div>
+      <div class="flow" data-flow-sym="GME"><div class="sym">GME</div><div class="err">awaiting…</div></div>
+      <div class="flow" data-flow-sym="IWM"><div class="sym">IWM</div><div class="err">awaiting…</div></div>
+    </div>
+  </section>
+
+  <!-- Market scan (owner only) -->
+  <section class="owner-only">
+    <div class="section-hdr">MARKET SCAN<span class="age" id="scan-age"></span></div>
+    <div class="scan-list" id="scan-list"><div class="empty">awaiting scan data…</div></div>
+  </section>
+
+</div><!-- .top-panels -->
+
+<!-- Live flow terminal — fills all remaining height -->
+<div class="feed-area">
+  <div class="feed-hdr">
+    <div class="feed-hdr-row1">
+      <span class="feed-title">▼ LIVE FLOW</span>
+      <div class="feed-btns">
+        <span class="find-count" id="find-count" style="display:none"></span>
+        <button id="btn-find" title="Search feed">🔍</button>
+        <button id="btn-beast" title="Show/hide background telemetry">◉ BEAST</button>
+        <button id="btn-pause" class="active">⏸</button>
+        <button id="btn-clear">✕</button>
+      </div>
+    </div>
+    <div class="find-row" id="find-row">
+      <input class="find-input" id="find-input" type="text" placeholder="search type, symbol, or text…" autocomplete="off" spellcheck="false">
+    </div>
+  </div>
+  <section class="feed" id="feed">
+    <div class="empty">Connecting to /api/events…</div>
+  </section>
+</div><!-- .feed-area -->
+
+</main>
+
+<!-- Status bar -->
+<div class="statusbar">
+  <span class="si"><span>EVT</span><b id="evt-count">0</b></span>
+  <span class="si"><span>UP</span><b id="uptime">—</b></span>
+  <span class="si"><span>VER</span><b id="version">—</b></span>
+  <span class="si"><b style="color:var(--blue)">SqueezeOS · Render</b></span>
+</div>
+
+<script>
+"use strict";
+
+const API_BASE   = "";
+const ORACLE_MS  = 15000;
+const COUNCIL_MS = 60000;
+const IWM_MS     = 30000;
+const OPTIONS_MS = 45000;
+const SCAN_MS    = 60000;
+const STATUS_MS  = 30000;
+const FTD_MS     = 300000;
+const MAX_EVENTS = 300;
+const LS_KEY     = "sml_owner_key";
+
+const $  = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => r.querySelectorAll(s);
+
+const S = {
+  paused:    false,
+  showBeast: false,       // hidden by default — telemetry is noise
+  findOpen:  false,
+  findQuery: "",
+  events:    [],
+  cards:     { AMC:{ts:0}, GME:{ts:0}, IWM:{ts:0} },
+  flowAge:   0,
+  apiOk:     false,
+  sseOk:     false,
+  ownerKey:  localStorage.getItem(LS_KEY) || "",
+};
+
+const isOwner = () => !!S.ownerKey;
+const authH   = () => isOwner() ? {"X-Owner-Key": S.ownerKey} : {};
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+const fmtPrice = p => (p == null || isNaN(p)) ? "—" : "$" + Number(p).toFixed(2);
+const fmtPct   = p => (p == null || isNaN(p)) ? "—" : Math.round(p) + "%";
+const fmtTs    = d => { const x = d instanceof Date ? d : new Date(d); return x.toTimeString().slice(0,8); };
+const ageStr   = ms => {
+  if(!ms) return "";
+  const s = Math.floor((Date.now()-ms)/1000);
+  return s < 2 ? "now" : s < 60 ? s+"s" : s < 3600 ? Math.floor(s/60)+"m" : Math.floor(s/3600)+"h";
+};
+const dirClass = d => {
+  if(!d) return "";
+  const s = d.toUpperCase();
+  if(s.includes("IGNITION")) return "ignition";
+  if(s.startsWith("BUY") || s === "BULLISH") return "buy";
+  if(s.startsWith("SELL") || s === "BEARISH") return "sell";
+  if(s.startsWith("HOLD") || s === "NEUTRAL") return "hold";
+  return "shield";
+};
+const esc = s => String(s).replace(/[&<>"']/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function highlight(text, q) {
+  if(!q) return esc(text);
+  const e = esc(text);
+  return e.replace(new RegExp("("+q.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+")","gi"),
+    "<mark class='hit'>$1</mark>");
+}
+
+// Extract a readable body from any SSE event object
+function extractBody(e) {
+  if(e.body) return e.body;
+  if(e.msg)  return e.msg;
+  // Format known event types into readable sentences
+  const t = (e.type || "").toUpperCase();
+  if(t === "COUNCIL_VERDICT") {
+    const parts = [];
+    if(e.bias)       parts.push(e.bias.toUpperCase());
+    if(e.regime)     parts.push(e.regime);
+    if(e.confidence != null) parts.push("conf " + Math.round(e.confidence) + "%");
+    if(e.symbol)     parts.push("· " + e.symbol);
+    return parts.length ? parts.join("  ") : "verdict received";
+  }
+  if(t === "SQUEEZE_ALERT") {
+    const parts = [];
+    if(e.squeeze_type) parts.push(e.squeeze_type);
+    if(e.score != null) parts.push("score " + Math.round(e.score));
+    if(e.regime)       parts.push(e.regime);
+    return parts.length ? parts.join("  ") : "squeeze detected";
+  }
+  if(t === "AGENT_PAY") {
+    return "agent paid · wallet " + (e.wallet || e.wlt || "?") +
+           (e.amount ? " · " + e.amount + " RLUSD" : "");
+  }
+  if(t === "AGENT_PROBE") return "agent probe from " + (e.user_agent || "unknown");
+  if(t === "CONNECTED")   return "SSE stream connected";
+  if(t === "HEARTBEAT")   return "heartbeat";
+  if(e.score != null)     return "score " + e.score;
+  // Generic: list non-meta keys as key=value
+  const skip = new Set(["type","ts","timestamp","symbol","sym","body","msg","score"]);
+  const pairs = Object.entries(e)
+    .filter(([k]) => !skip.has(k))
+    .map(([k,v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`);
+  return pairs.length ? pairs.join("  ·  ") : "";
+}
+
+// ── Tier UI ──────────────────────────────────────────────────────────────────
+function applyTierUI() {
+  const t = $("#tier");
+  if(isOwner()) {
+    t.textContent = "OWNER"; t.className = "tier owner";
+    document.body.classList.add("owner");
+  } else {
+    t.textContent = "FREE"; t.className = "tier free";
+    document.body.classList.remove("owner");
+    for(const sym of ["AMC","GME","IWM"]) {
+      const el = $(`.card[data-sym="${sym}"] [data-field="council"]`);
+      if(el) { el.textContent = "COUNCIL —"; el.classList.remove("has"); }
+    }
+    const ib = $('.card[data-sym="IWM"] [data-field="iwm-best"]');
+    if(ib) ib.textContent = "0DTE —";
+  }
+}
+
+// ── Oracle ───────────────────────────────────────────────────────────────────
+async function pullOracle() {
+  try {
+    const r = await fetch(`${API_BASE}/api/oracle`, {cache:"no-store", headers: authH()});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const j = await r.json();
+    S.apiOk = true; updateApiDot();
+    if(j.status === "success" && j.symbols) {
+      for(const sym of ["AMC","GME","IWM"]) {
+        if(j.symbols[sym]) renderCard(sym, j.symbols[sym]);
+      }
+    }
+  } catch(e) { S.apiOk = false; updateApiDot(); }
+}
+
+function renderCard(sym, d) {
+  const card = $(`.card[data-sym="${sym}"]`);
+  if(!card) return;
+  S.cards[sym].ts = Date.now();
+  const dir = d.directive || "SHIELD";
+  const cls = dirClass(dir);
+  card.className = "card " + cls;
+  $('[data-field="price"]', card).textContent = fmtPrice(d.price);
+  const de = $('[data-field="dir"]', card);
+  de.textContent = dir; de.className = "dir " + cls;
+  $('[data-field="conf"]',   card).textContent = fmtPct(d.confidence);
+  $('[data-field="regime"]', card).textContent = d.regime || "—";
+  $('[data-field="tp1"]',    card).textContent = fmtPrice(d.tp1);
+  $('[data-field="tp2"]',    card).textContent = fmtPrice(d.tp2);
+  $('[data-field="stop"]',   card).textContent = fmtPrice(d.stop);
+}
+
+// ── Council ──────────────────────────────────────────────────────────────────
+async function pullCouncil(sym) {
+  if(!isOwner()) return;
+  try {
+    const r = await fetch(`${API_BASE}/api/council?symbol=${sym}`,
+      {method:"POST", cache:"no-store", headers: authH()});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const j = await r.json();
+    const v = j.verdict || {};
+    const el = $(`.card[data-sym="${sym}"] [data-field="council"]`);
+    if(!el) return;
+    el.classList.add("has");
+    const bias = (v.bias||"—").toUpperCase();
+    const conf = v.confidence != null ? Math.round(v.confidence)+"%" : "—";
+    el.innerHTML = `<b>${esc(bias)}</b> · ${esc(conf)} · ${esc(v.regime||"—")}`;
+  } catch(e) {
+    const el = $(`.card[data-sym="${sym}"] [data-field="council"]`);
+    if(el) el.textContent = "err " + e.message;
+  }
+}
+
+// ── IWM 0DTE ─────────────────────────────────────────────────────────────────
+async function pullIwm() {
+  if(!isOwner()) return;
+  try {
+    const r = await fetch(`${API_BASE}/api/iwm`, {cache:"no-store", headers: authH()});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const j = await r.json();
+    const top = (j.top_contracts||[])[0];
+    const el = $('.card[data-sym="IWM"] [data-field="iwm-best"]');
+    if(!el) return;
+    if(top) {
+      const strike = top.strike != null ? "$"+top.strike : "—";
+      const score  = top.score  != null ? Math.round(top.score) : "—";
+      const side   = (top.side || top.type || "").toUpperCase();
+      el.innerHTML = `<b>${esc(side)} ${esc(strike)}</b> · score ${esc(String(score))}`;
+    } else {
+      el.textContent = "0DTE: no contracts";
+    }
+  } catch(e) {
+    const el = $('.card[data-sym="IWM"] [data-field="iwm-best"]');
+    if(el) el.textContent = "0DTE err";
+  }
+}
+
+// ── Options flow ─────────────────────────────────────────────────────────────
+async function pullFlow() {
+  if(!isOwner()) return;
+  S.flowAge = Date.now();
+  $("#flow-age").textContent = "now";
+  for(const sym of ["AMC","GME","IWM"]) {
+    const card = $(`.flow[data-flow-sym="${sym}"]`);
+    try {
+      const r    = await fetch(`${API_BASE}/api/options?symbol=${sym}`, {cache:"no-store", headers: authH()});
+      const text = await r.text();
+      let j;
+      try { j = JSON.parse(text); } catch {
+        const msg = r.status===402 ? "payment required — check OWNER_API_KEY"
+                  : r.status===503 ? "engine offline"
+                  : `server error (HTTP ${r.status})`;
+        if(card) card.innerHTML = `<div class="sym">${sym}</div><div class="err">${esc(msg)}</div>`;
+        continue;
+      }
+      if(!r.ok) {
+        if(card) card.innerHTML = `<div class="sym">${sym}</div><div class="err">${esc(j.error||j.message||"HTTP "+r.status)}</div>`;
+        continue;
+      }
+      renderFlow(sym, j);
+    } catch(e) {
+      if(card) card.innerHTML = `<div class="sym">${sym}</div><div class="err">${esc(e.message)}</div>`;
+    }
+  }
+}
+
+function renderFlow(sym, j) {
+  const card = $(`.flow[data-flow-sym="${sym}"]`);
+  if(!card) return;
+  const f = j.flow || {};
+  if(j.error) { card.innerHTML = `<div class="sym">${sym}</div><div class="err">${esc(j.error)}</div>`; return; }
+  const nd  = f.net_delta != null ? f.net_delta : (f.netDelta||null);
+  const pcr = f.put_call_ratio || f.pcr || null;
+  const gex = f.gex || f.GEX || null;
+  const mp  = f.max_pain || null;
+  const sw  = f.sweeps_count || f.sweep_count || (Array.isArray(f.sweeps)?f.sweeps.length:null);
+  const dc  = nd > 0 ? "bull" : nd < 0 ? "bear" : "";
+  card.innerHTML = `
+    <div class="sym">${sym}</div>
+    <div class="row"><span class="k">NET Δ</span><span class="v ${dc}">${nd!=null?Number(nd).toFixed(2):"—"}</span></div>
+    <div class="row"><span class="k">P/C</span><span class="v">${pcr!=null?Number(pcr).toFixed(2):"—"}</span></div>
+    <div class="row"><span class="k">GEX</span><span class="v">${gex!=null?Number(gex).toExponential(1):"—"}</span></div>
+    <div class="row"><span class="k">MAX PAIN</span><span class="v">${mp!=null?"$"+Number(mp).toFixed(2):"—"}</span></div>
+    <div class="row"><span class="k">SWEEPS</span><span class="v">${sw!=null?sw:"—"}</span></div>`;
+}
+
+// ── Market scan ───────────────────────────────────────────────────────────────
+async function pullScan() {
+  if(!isOwner()) return;
+  try {
+    const r    = await fetch(`${API_BASE}/api/scan`, {cache:"no-store", headers: authH()});
+    const text = await r.text();
+    let j;
+    try { j = JSON.parse(text); } catch {
+      const msg = r.status===402 ? "payment required — check OWNER_API_KEY"
+                : r.status===503 ? "engine offline"
+                : `server error (HTTP ${r.status})`;
+      $("#scan-list").innerHTML = `<div class="empty">${esc(msg)}</div>`; return;
+    }
+    if(!r.ok) { $("#scan-list").innerHTML = `<div class="empty">${esc(j.error||j.message||"HTTP "+r.status)}</div>`; return; }
+    const age = j.cache_age_seconds;
+    $("#scan-age").textContent = age != null ? Math.round(age)+"s · "+(j.universe_size||0)+" tracked" : "fresh";
+    renderScan(j);
+  } catch(e) {
+    $("#scan-list").innerHTML = `<div class="empty">scan err: ${esc(e.message)}</div>`;
+  }
+}
+
+function renderScan(j) {
+  const quotes = j.quotes || {};
+  const opts   = j.options || [];
+  let rows = opts.length
+    ? opts.slice(0,12).map(o => {
+        const q = quotes[o.symbol]||{};
+        return {sym:o.symbol, price:q.last||q.price||null, change:q.change_pct||null, vol:q.volume||null,
+                meta:(o.grade?"G"+o.grade:"")+(o.score!=null?" ·"+Math.round(o.score):"")};
+      })
+    : Object.entries(quotes).slice(0,12).map(([sym,q])=>({sym, price:q.last||q.price||null, change:q.change_pct||null, vol:q.volume||null, meta:""}));
+  if(!rows.length) { $("#scan-list").innerHTML = '<div class="empty">no scan rows yet</div>'; return; }
+  const fv = n => { const x=Number(n); if(isNaN(x))return"—"; if(x>=1e9)return(x/1e9).toFixed(1)+"B"; if(x>=1e6)return(x/1e6).toFixed(1)+"M"; if(x>=1e3)return(x/1e3).toFixed(0)+"K"; return x.toString(); };
+  $("#scan-list").innerHTML = rows.map(r => {
+    const cc = r.change>0?"bull":r.change<0?"bear":"";
+    const cs = r.change!=null?(r.change>0?"+":"")+Number(r.change).toFixed(2)+"%":"—";
+    return `<div class="scan-row"><span class="sym">${esc(r.sym)}</span><span class="meta">${esc(r.meta)}</span><span class="px">${r.price!=null?fmtPrice(r.price):"—"}</span><span class="ch ${cc}">${cs}</span><span class="vol">${fv(r.vol)}</span></div>`;
+  }).join("");
+}
+
+// ── FTD ──────────────────────────────────────────────────────────────────────
+async function pullFtd() {
+  try {
+    const r = await fetch(`${API_BASE}/api/ftd`, {cache:"no-store"});
+    if(!r.ok) return;
+    const j = await r.json();
+    // FTD data shown on cards if present; ftd field is now hidden so just silently update
+  } catch(e) {}
+}
+
+// ── Status ───────────────────────────────────────────────────────────────────
+async function pullStatus() {
+  try {
+    const r = await fetch(`${API_BASE}/api/status`, {cache:"no-store"});
+    if(!r.ok) return;
+    const j = await r.json();
+    $("#uptime").textContent  = j.uptime  ? Math.floor(j.uptime/60)+"m" : "—";
+    $("#version").textContent = j.version || "—";
+  } catch(e) {}
+}
+
+// ── SSE ──────────────────────────────────────────────────────────────────────
+let sseConn = null, sseRetry = 1000;
+
+function connectSse() {
+  if(sseConn) { try { sseConn.close(); } catch {} }
+  sseConn = new EventSource(`${API_BASE}/api/events`);
+  sseConn.onopen = () => {
+    S.sseOk = true; sseRetry = 1000; updateSseDot();
+    pushEvent({type:"CONNECTED", body:"SSE stream open"});
+  };
+  sseConn.onmessage = ev => {
+    try {
+      const data = JSON.parse(ev.data);
+      // Server sometimes sends the replay buffer as an array
+      if(Array.isArray(data)) { data.forEach(pushEvent); }
+      else                    { pushEvent(data); }
+    } catch { pushEvent({type:"DEFAULT", body: ev.data}); }
+  };
+  sseConn.onerror = () => {
+    S.sseOk = false; updateSseDot();
+    try { sseConn.close(); } catch {}
+    setTimeout(connectSse, sseRetry);
+    sseRetry = Math.min(sseRetry * 2, 30000);
+  };
+}
+
+function pushEvent(e) {
+  if(S.paused) return;
+  if(!e || typeof e !== "object") return;
+  const now = new Date();
+  S.events.unshift({
+    ts:   e.timestamp || e.ts || now.toISOString(),
+    type: (e.type || "DEFAULT").toUpperCase(),
+    sym:  e.symbol || e.sym || "",
+    body: extractBody(e),
+  });
+  if(S.events.length > MAX_EVENTS) S.events.length = MAX_EVENTS;
+  renderFeed();
+  $("#evt-count").textContent = S.events.length;
+}
+
+// ── Feed rendering ───────────────────────────────────────────────────────────
+const KNOWN_TYPES = new Set(["SQUEEZE_ALERT","OPTIONS_SWEEP","DARK_POOL","COUNCIL_VERDICT",
+  "AGENT_PROBE","AGENT_PAY","SETTLEMENT_COMPLETE","FUTURES_SETTLED","CONNECTED","HEARTBEAT","ERROR","BEAST"]);
+
+function renderFeed() {
+  const feed = $("#feed");
+  const q    = S.findQuery.trim().toLowerCase();
+
+  let visible = S.showBeast ? S.events
+    : S.events.filter(e => e.type !== "BEAST" && e.type !== "HEARTBEAT");
+
+  if(q) visible = visible.filter(e =>
+    e.type.toLowerCase().includes(q) ||
+    e.sym.toLowerCase().includes(q)  ||
+    e.body.toLowerCase().includes(q));
+
+  const countEl = $("#find-count");
+  if(q) { countEl.textContent = visible.length+" match"+(visible.length===1?"":"es"); countEl.style.display=""; }
+  else  { countEl.style.display = "none"; }
+
+  if(!visible.length) {
+    feed.innerHTML = q
+      ? `<div class="empty">No events match "${esc(q)}"</div>`
+      : `<div class="empty">No signals yet — waiting for market activity…</div>`;
+    return;
+  }
+
+  feed.innerHTML = visible.slice(0,100).map((e,i) => {
+    const tc = "t-" + (KNOWN_TYPES.has(e.type) ? e.type : "DEFAULT");
+    const isNew = !q && i === 0;
+    const symH = e.sym ? `<span class="evt-sym">${highlight(e.sym,q)}</span>` : "";
+    return `<div class="evt${isNew?" new":""}">
+      <div class="evt-hdr">
+        <span class="evt-ts">${fmtTs(e.ts)}</span>
+        <span class="evt-type ${tc}">${highlight(e.type,q)}</span>
+        ${symH}
+      </div>
+      <div class="evt-body">${highlight(e.body,q)}</div>
+    </div>`;
+  }).join("");
+}
+
+// ── Dot indicators ───────────────────────────────────────────────────────────
+function updateApiDot() {
+  const d = $("#api-dot"), l = $("#api-lbl");
+  if(S.apiOk) { d.className="dot live"; l.textContent="API"; }
+  else         { d.className="dot dead"; l.textContent="API DOWN"; }
+}
+function updateSseDot() {
+  const d = $("#sse-dot"), l = $("#sse-lbl");
+  if(S.sseOk) { d.className="dot live"; l.textContent="SSE"; }
+  else         { d.className="dot warn"; l.textContent="SSE…"; }
+}
+function tickClock() {
+  $("#clock").textContent = new Date().toTimeString().slice(0,8);
+  for(const sym of ["AMC","GME","IWM"]) {
+    const el = $(`.card[data-sym="${sym}"] [data-age]`);
+    if(el) el.textContent = ageStr(S.cards[sym].ts);
+  }
+  if(isOwner() && S.flowAge) $("#flow-age").textContent = ageStr(S.flowAge);
+}
+
+// ── Controls ─────────────────────────────────────────────────────────────────
+// Pause
+$("#btn-pause").addEventListener("click", () => {
+  S.paused = !S.paused;
+  const b = $("#btn-pause");
+  b.textContent = S.paused ? "▶" : "⏸";
+  b.classList.toggle("active", !S.paused);
+});
+
+// Clear
+$("#btn-clear").addEventListener("click", () => {
+  S.events = []; renderFeed();
+  $("#evt-count").textContent = "0";
+});
+
+// Beast toggle
+const bBtn = $("#btn-beast");
+function syncBeastBtn() {
+  bBtn.textContent = "◉ BEAST";
+  bBtn.classList.toggle("beast-on", S.showBeast);
+  bBtn.title = S.showBeast ? "Showing background telemetry (click to hide)" : "Background telemetry hidden (click to show)";
+}
+syncBeastBtn();
+bBtn.addEventListener("click", () => { S.showBeast = !S.showBeast; syncBeastBtn(); renderFeed(); });
+
+// Find / search
+const findRow   = $("#find-row");
+const findInput = $("#find-input");
+$("#btn-find").addEventListener("click", () => {
+  S.findOpen = !S.findOpen;
+  findRow.classList.toggle("open", S.findOpen);
+  if(S.findOpen) findInput.focus();
+  else { findInput.value = ""; S.findQuery = ""; renderFeed(); }
+  $("#btn-find").classList.toggle("active", S.findOpen);
+});
+findInput.addEventListener("input", () => { S.findQuery = findInput.value; renderFeed(); });
+findInput.addEventListener("keydown", ev => {
+  if(ev.key === "Escape") {
+    findInput.value = ""; S.findQuery = ""; S.findOpen = false;
+    findRow.classList.remove("open");
+    $("#btn-find").classList.remove("active");
+    renderFeed();
+  }
+});
+
+// Settings modal
+$("#logo-btn").addEventListener("click",  () => { $("#owner-input").value = S.ownerKey; $("#modal-bg").classList.add("open"); });
+$("#gear-btn").addEventListener("click",  () => { $("#owner-input").value = S.ownerKey; $("#modal-bg").classList.add("open"); });
+$("#btn-close").addEventListener("click", () => $("#modal-bg").classList.remove("open"));
+$("#btn-save").addEventListener("click", () => {
+  const v = $("#owner-input").value.trim();
+  S.ownerKey = v;
+  if(v) localStorage.setItem(LS_KEY, v); else localStorage.removeItem(LS_KEY);
+  applyTierUI();
+  $("#modal-bg").classList.remove("open");
+  if(isOwner()) {
+    pullCouncil("AMC"); pullCouncil("GME"); pullCouncil("IWM");
+    pullIwm(); pullFlow(); pullScan();
+  }
+});
+$("#btn-clear-key").addEventListener("click", () => {
+  S.ownerKey = ""; localStorage.removeItem(LS_KEY);
+  $("#owner-input").value = ""; applyTierUI();
+});
+
+// ── Boot ─────────────────────────────────────────────────────────────────────
+applyTierUI(); updateApiDot(); updateSseDot();
+pullOracle(); pullFtd(); pullStatus(); connectSse();
+if(isOwner()) { pullCouncil("AMC"); pullCouncil("GME"); pullCouncil("IWM"); pullIwm(); pullFlow(); pullScan(); }
+setInterval(pullOracle,  ORACLE_MS);
+setInterval(pullStatus,  STATUS_MS);
+setInterval(pullFtd,     FTD_MS);
+setInterval(tickClock,   1000);
+setInterval(() => { if(isOwner()) { pullCouncil("AMC"); pullCouncil("GME"); pullCouncil("IWM"); } }, COUNCIL_MS);
+setInterval(() => { if(isOwner()) pullIwm(); }, IWM_MS);
+setInterval(() => { if(isOwner()) pullFlow(); }, OPTIONS_MS);
+setInterval(() => { if(isOwner()) pullScan(); }, SCAN_MS);
+</script>
+</body>
+</html>

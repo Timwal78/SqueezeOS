@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+
+  <!-- Landing page -->
+  <url>
+    <loc>https://tipmaster.onrender.com/</loc>
+    <priority>1.0</priority>
+    <changefreq>weekly</changefreq>
+  </url>
+
+  <!-- Public API endpoints -->
+  <url>
+    <loc>https://tipmaster.onrender.com/api/leaderboard</loc>
+    <priority>0.8</priority>
+    <changefreq>daily</changefreq>
+  </url>
+  <url>
+    <loc>https://tipmaster.onrender.com/api/status</loc>
+    <priority>0.6</priority>
+    <changefreq>always</changefreq>
+  </url>
+
+  <!-- Health -->
+  <url>
+    <loc>https://tipmaster.onrender.com/health</loc>
+    <priority>0.4</priority>
+    <changefreq>always</changefreq>
+  </url>
+
+  <!-- Crawlables -->
+  <url>
+    <loc>https://tipmaster.onrender.com/robots.txt</loc>
+    <priority>0.3</priority>
+  </url>
+
+</urlset>

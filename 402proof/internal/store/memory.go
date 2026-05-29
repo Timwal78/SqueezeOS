@@ -1,0 +1,339 @@
+package store
+
+import (
+	"encoding/json"
+	"fmt"
+	"log"
+	"os"
+	"sort"
+	"sync"
+	"time"
+
+	"proof402/internal/models"
+)
+
+type Memory struct {
+	mu sync.RWMutex
+
+	invoices     map[string]*models.Invoice
+	receipts     map[string]*models.Receipt
+	agents       map[string]*models.Agent
+	endpoints    map[string]*models.Endpoint
+	policies     map[string]*models.Policy
+	merchants    map[string]*models.Merchant
+	usedTxHashes map[string]struct{}
+
+	dailyCalls map[string]int
+	dailyDate  string
+	totalCalls int64
+}
+
+func NewMemory() *Memory {
+	return &Memory{
+		invoices:     make(map[string]*models.Invoice),
+		receipts:     make(map[string]*models.Receipt),
+		agents:       make(map[string]*models.Agent),
+		endpoints:    make(map[string]*models.Endpoint),
+		policies:     make(map[string]*models.Policy),
+		merchants:    make(map[string]*models.Merchant),
+		usedTxHashes: make(map[string]struct{}),
+		dailyCalls:   make(map[string]int),
+		dailyDate:    time.Now().Format("2006-01-02"),
+	}
+}
+
+func (m *Memory) SaveInvoice(inv *models.Invoice) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.invoices[inv.ID] = inv
+}
+
+func (m *Memory) GetInvoice(id string) (*models.Invoice, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	inv, ok := m.invoices[id]
+	return inv, ok
+}
+
+func (m *Memory) MarkInvoicePaid(id, txHash, agentWallet string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if inv, ok := m.invoices[id]; ok {
+		now := time.Now()
+		inv.Status = "paid"
+		inv.PaidAt = &now
+		inv.TxHash = txHash
+		inv.AgentWallet = agentWallet
+	}
+}
+
+func (m *Memory) SaveReceipt(r *models.Receipt) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.receipts[r.ID] = r
+	m.totalCalls++
+}
+
+func (m *Memory) GetReceipt(id string) (*models.Receipt, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	r, ok := m.receipts[id]
+	return r, ok
+}
+
+func (m *Memory) ListRecentReceipts(limit int) []*models.Receipt {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	result := make([]*models.Receipt, 0, limit)
+	for _, r := range m.receipts {
+		result = append(result, r)
+		if len(result) >= limit {
+			break
+		}
+	}
+	return result
+}
+
+func (m *Memory) GetOrCreateAgent(wallet string) *models.Agent {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if a, ok := m.agents[wallet]; ok {
+		return a
+	}
+	a := &models.Agent{
+		Wallet:    wallet,
+		FirstSeen: time.Now(),
+		KYBTier:   "none",
+		Tags:      []string{},
+	}
+	m.agents[wallet] = a
+	return a
+}
+
+func (m *Memory) GetAgent(wallet string) (*models.Agent, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	a, ok := m.agents[wallet]
+	return a, ok
+}
+
+func (m *Memory) UpdateAgent(a *models.Agent) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.agents[a.Wallet] = a
+}
+
+func (m *Memory) SaveEndpoint(ep *models.Endpoint) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.endpoints[ep.ID] = ep
+}
+
+func (m *Memory) GetEndpoint(id string) (*models.Endpoint, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	ep, ok := m.endpoints[id]
+	return ep, ok
+}
+
+func (m *Memory) ListEndpoints(merchantID string) []*models.Endpoint {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	var result []*models.Endpoint
+	for _, ep := range m.endpoints {
+		if merchantID == "" || ep.MerchantID == merchantID {
+			result = append(result, ep)
+		}
+	}
+	return result
+}
+
+func (m *Memory) IncrEndpointCalls(id string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if ep, ok := m.endpoints[id]; ok {
+		ep.TotalCalls++
+	}
+}
+
+func (m *Memory) SavePolicy(p *models.Policy) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.policies[p.EndpointID] = p
+}
+
+func (m *Memory) GetPolicy(endpointID string) (*models.Policy, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	p, ok := m.policies[endpointID]
+	return p, ok
+}
+
+func (m *Memory) SaveMerchant(merchant *models.Merchant) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.merchants[merchant.ID] = merchant
+}
+
+func (m *Memory) GetMerchantByKey(apiKey string) (*models.Merchant, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, merchant := range m.merchants {
+		if merchant.APIKey == apiKey {
+			return merchant, true
+		}
+	}
+	return nil, false
+}
+
+func (m *Memory) GetMerchant(id string) (*models.Merchant, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	merchant, ok := m.merchants[id]
+	return merchant, ok
+}
+
+func (m *Memory) MarkTxUsed(txHash string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, seen := m.usedTxHashes[txHash]; seen {
+		return false
+	}
+	m.usedTxHashes[txHash] = struct{}{}
+	return true
+}
+
+func (m *Memory) dailyKey(endpointID, wallet string) string {
+	return fmt.Sprintf("%s|%s", endpointID, wallet)
+}
+
+func (m *Memory) checkDay() {
+	today := time.Now().Format("2006-01-02")
+	if today != m.dailyDate {
+		m.dailyCalls = make(map[string]int)
+		m.dailyDate = today
+	}
+}
+
+func (m *Memory) IncrDailyCall(endpointID, wallet string) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.checkDay()
+	key := m.dailyKey(endpointID, wallet)
+	m.dailyCalls[key]++
+	return m.dailyCalls[key]
+}
+
+func (m *Memory) DailyCallCount(endpointID, wallet string) int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.dailyCalls[m.dailyKey(endpointID, wallet)]
+}
+
+func (m *Memory) Stats() map[string]interface{} {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	totalRLUSD := 0.0
+	for _, a := range m.agents {
+		totalRLUSD += a.SpendFloat
+	}
+	return map[string]interface{}{
+		"total_calls":      m.totalCalls,
+		"total_receipts":   len(m.receipts),
+		"unique_agents":    len(m.agents),
+		"active_endpoints": len(m.endpoints),
+		"total_rlusd":      totalRLUSD,
+	}
+}
+
+// ListAgents returns all agents sorted by spend descending.
+func (m *Memory) ListAgents() []*models.Agent {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	result := make([]*models.Agent, 0, len(m.agents))
+	for _, a := range m.agents {
+		cp := *a
+		result = append(result, &cp)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].SpendFloat > result[j].SpendFloat
+	})
+	return result
+}
+
+// ListRecentReceiptsJSON returns the last N receipts sorted newest-first.
+func (m *Memory) ListRecentReceiptsJSON(limit int) []*models.Receipt {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	all := make([]*models.Receipt, 0, len(m.receipts))
+	for _, r := range m.receipts {
+		all = append(all, r)
+	}
+	sort.Slice(all, func(i, j int) bool {
+		return all[i].SettledAt.After(all[j].SettledAt)
+	})
+	if len(all) > limit {
+		all = all[:limit]
+	}
+	return all
+}
+
+// agentSnapshot is the serialisable form of the agents map.
+type agentSnapshot struct {
+	Agents     map[string]*models.Agent `json:"agents"`
+	TotalCalls int64                    `json:"total_calls"`
+	SavedAt    time.Time                `json:"saved_at"`
+}
+
+// FlushAgentsToDisk writes the agents map to path atomically (write-then-rename).
+// Call this periodically and on graceful shutdown so loyalty state survives restarts.
+// On Render free tier the filesystem persists within a running instance but resets
+// on redeploy; mount a persistent volume at AGENT_STATE_PATH for full durability.
+func (m *Memory) FlushAgentsToDisk(path string) error {
+	m.mu.RLock()
+	snap := agentSnapshot{
+		Agents:     make(map[string]*models.Agent, len(m.agents)),
+		TotalCalls: m.totalCalls,
+		SavedAt:    time.Now(),
+	}
+	for k, v := range m.agents {
+		a := *v // copy — don't expose pointer
+		snap.Agents[k] = &a
+	}
+	m.mu.RUnlock()
+
+	b, err := json.Marshal(snap)
+	if err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, b, 0600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path) // atomic on POSIX
+}
+
+// LoadAgentsFromDisk restores agent state saved by FlushAgentsToDisk.
+// Call once during startup before serving requests.
+func (m *Memory) LoadAgentsFromDisk(path string) error {
+	b, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil // first boot — no snapshot yet
+	}
+	if err != nil {
+		return err
+	}
+	var snap agentSnapshot
+	if err := json.Unmarshal(b, &snap); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for k, v := range snap.Agents {
+		m.agents[k] = v
+	}
+	m.totalCalls = snap.TotalCalls
+	log.Printf("[STORE] Restored %d agents from %s (saved %s ago)",
+		len(snap.Agents), path, time.Since(snap.SavedAt).Round(time.Second))
+	return nil
+}
