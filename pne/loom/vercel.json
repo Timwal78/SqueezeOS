@@ -4,8 +4,8 @@
   "installCommand": "npm install --legacy-peer-deps",
   "framework": "vite",
   "env": {
-    "VITE_GATEWAY_WS": "wss://pne-gateway.onrender.com",
-    "VITE_GATEWAY_URL": "https://pne-gateway.onrender.com"
+    "VITE_GATEWAY_WS": "wss://ghost-layer.onrender.com",
+    "VITE_GATEWAY_URL": "https://ghost-layer.onrender.com"
   },
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
