@@ -1,0 +1,74 @@
+{
+  "schema_version": "mcp/1.0",
+  "name": "SML Shadow Desk + Leviathan Matrix",
+  "description": "Institutional US equity squeeze signals for autonomous AI agents. Per-call alpha via x402 micropayments ($0.005 USDC/call on Base). 30-day subscriptions for real-time Leviathan Matrix state ($250/$1000 USDC). Ed25519-signed responses.",
+  "services": [
+    {
+      "id": "shadow-desk-alpha",
+      "url": "https://shadow-desk.onrender.com",
+      "payment": "x402",
+      "network": "base",
+      "asset": "USDC",
+      "wallet": "0x4e14B249D9A4c9c9352D780eCEB508A8eB7a7700",
+      "tools": [
+        {
+          "name": "get_alpha_stream",
+          "description": "Get real-time squeeze alpha signal for a US equity ticker. Costs $0.005 USDC per call on Base.",
+          "endpoint": "GET /v1/alpha/stream",
+          "params": {
+            "ticker": "US equity symbol e.g. GME, AMC, IWM, TSLA"
+          },
+          "price": "$0.005 USDC"
+        }
+      ]
+    },
+    {
+      "id": "leviathan-matrix",
+      "url": "https://sml-x402-signal-api.onrender.com",
+      "payment": "x402",
+      "network": "base",
+      "networks": [
+        "base",
+        "polygon",
+        "solana"
+      ],
+      "asset": "USDC",
+      "wallet": "0x4e14B249D9A4c9c9352D780eCEB508A8eB7a7700",
+      "tools": [
+        {
+          "name": "get_delayed_snapshot",
+          "description": "Free 65-minute delayed Leviathan Matrix snapshot for backtesting. No payment required.",
+          "endpoint": "GET /matrix/:feed/delayed",
+          "price": "free"
+        },
+        {
+          "name": "subscribe_standard",
+          "description": "Purchase 30-day real-time Leviathan Matrix bearer token. One-time $250 USDC payment on Base.",
+          "endpoint": "GET /matrix/subscribe/standard",
+          "price": "$250 USDC"
+        },
+        {
+          "name": "subscribe_vip",
+          "description": "Purchase 30-day VIP zero-hop Leviathan Matrix bearer token. One-time $1000 USDC payment.",
+          "endpoint": "GET /matrix/subscribe/vip",
+          "price": "$1000 USDC"
+        }
+      ],
+      "response_signing": "ed25519",
+      "loyalty": "tiered credits per wallet"
+    }
+  ],
+  "keywords": [
+    "short squeeze",
+    "GME",
+    "AMC",
+    "IWM",
+    "meme stock",
+    "equity signal",
+    "USDC",
+    "x402",
+    "micropayment",
+    "alpha",
+    "Leviathan Matrix"
+  ]
+}
