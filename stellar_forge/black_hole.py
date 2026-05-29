@@ -1,6 +1,15 @@
 """
 black_hole.py — Model singularities: adversarial accretion + gravitational lensing.
 
+STATUS: RESEARCH-ONLY. This module is NOT on the production growth path.
+  - The real, shippable version of "gravitational lensing" is
+    `stellar_forge/gateway/priority_router.py` — loyalty-tier priority
+    scheduling, a genuine QoS product. Use that, not the latency model below.
+  - `BlackHoleCore.accrete` distills on RANDOM probes, which only learns a toy
+    behavioral approximation. Real distillation needs a real task-data
+    distribution; this stays here as an experiment, not a product claim.
+Kept for completeness and as a sandbox; do not wire into live endpoints.
+
 Two mechanisms:
 
   1. ACCRETION (adversarial distillation). A Black Hole is a large multi-expert
