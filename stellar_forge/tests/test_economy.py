@@ -215,24 +215,34 @@ def test_payout_idempotency() -> None:
 
 
 def test_priority_router_ordering() -> None:
+    # Deterministic (no sleeps): the single worker is pinned inside `warmup` on
+    # an event until all other items are enqueued, so ordering is guaranteed by
+    # priority — high(100) > mid(30) > low(1) — not by timing.
+    import threading
     served: list[str] = []
+    started = threading.Event()   # set when the worker enters warmup
+    release = threading.Event()   # lets warmup finish once others are queued
 
     def handler(payload: dict):
-        time.sleep(0.02)
+        if payload["id"] == "warmup":
+            started.set()
+            release.wait(timeout=5)
         served.append(payload["id"])
         return payload["id"]
 
     router = PriorityRouter(handler, workers=1, max_queue=100)
     t0 = router.submit("warmup", {"id": "warmup"}, priority=1)
-    time.sleep(0.005)
+    assert started.wait(timeout=5), "worker never picked up warmup"
+    # Worker is now blocked in warmup; submit() enqueues synchronously, so all
+    # three are in the heap before we release.
     low = router.submit("low", {"id": "low"}, priority=1)
     high = router.submit("high", {"id": "high"}, priority=100)
     mid = router.submit("mid", {"id": "mid"}, priority=30)
+    release.set()
     for t in (t0, low, high, mid):
         t.wait(timeout=5)
     router.shutdown()
-    assert served[0] == "warmup"
-    assert served[1:] == ["high", "mid", "low"], served
+    assert served == ["warmup", "high", "mid", "low"], served
     _ok("priority router serves higher loyalty tier first under contention")
 
 
