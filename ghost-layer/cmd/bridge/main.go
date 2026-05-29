@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"crypto/sha512"
@@ -78,6 +79,99 @@ func writeJSONErr(w http.ResponseWriter, status int, code string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": code})
+}
+
+// fireDiscordBridgePayment fires a Discord embed for every bridge settlement.
+// Called in a goroutine — never blocks the request path.
+// Reads DISCORD_WEBHOOK_PAYMENTS first, falls back to DISCORD_WEBHOOK_ALL.
+func fireDiscordBridgePayment(chain, agentAddr, grossDrops, feeDrops, netDrops, tier string, effectiveBPS int64) {
+	webhook := os.Getenv("DISCORD_WEBHOOK_PAYMENTS")
+	if webhook == "" {
+		webhook = os.Getenv("DISCORD_WEBHOOK_ALL")
+	}
+	if webhook == "" {
+		return
+	}
+
+	// Convert drops (1e-6 RLUSD) to human-readable amount
+	dropsToRLUSD := func(drops string) string {
+		n, ok := new(big.Int).SetString(drops, 10)
+		if !ok {
+			return "?"
+		}
+		f, _ := new(big.Float).Quo(new(big.Float).SetInt(n), big.NewFloat(1_000_000)).Float64()
+		return fmt.Sprintf("%.6f RLUSD", f)
+	}
+
+	// Mask wallet: show first 6 + last 4 chars
+	masked := agentAddr
+	if len(agentAddr) > 10 {
+		masked = agentAddr[:6] + "…" + agentAddr[len(agentAddr)-4:]
+	}
+
+	// Tier colors (decimal — Discord embed color field)
+	color := 0xA0522D // BRONZE default
+	switch tier {
+	case "SILVER":
+		color = 0xAAAAAA
+	case "GOLD":
+		color = 0xFFD700
+	case "PLATINUM":
+		color = 0x00FF88
+	case "DIAMOND":
+		color = 0x00BFFF
+	}
+
+	type field struct {
+		Name   string `json:"name"`
+		Value  string `json:"value"`
+		Inline bool   `json:"inline"`
+	}
+	type footer struct {
+		Text string `json:"text"`
+	}
+	type embed struct {
+		Title  string  `json:"title"`
+		Color  int     `json:"color"`
+		Fields []field `json:"fields"`
+		Footer footer  `json:"footer"`
+	}
+	type payload struct {
+		Username string  `json:"username"`
+		Embeds   []embed `json:"embeds"`
+	}
+
+	em := embed{
+		Title: fmt.Sprintf("⚡ Bridge Settled — %s", strings.ToUpper(chain)),
+		Color: color,
+		Fields: []field{
+			{Name: "Agent Wallet",  Value: masked,                      Inline: true},
+			{Name: "Gross",         Value: dropsToRLUSD(grossDrops),    Inline: true},
+			{Name: "Fee Collected", Value: dropsToRLUSD(feeDrops),      Inline: true},
+			{Name: "Net Delivered", Value: dropsToRLUSD(netDrops),      Inline: true},
+			{Name: "Loyalty Tier",  Value: tier,                        Inline: true},
+			{Name: "Effective BPS", Value: fmt.Sprintf("%d", effectiveBPS), Inline: true},
+		},
+		Footer: footer{Text: "Ghost Layer — ZK XRPL+Base bridge"},
+	}
+
+	body, err := json.Marshal(payload{Username: "Ghost Layer", Embeds: []embed{em}})
+	if err != nil {
+		return
+	}
+
+	req, err := http.NewRequest(http.MethodPost, webhook, bytes.NewReader(body))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("[discord] bridge notify failed: %v", err)
+		return
+	}
+	resp.Body.Close()
 }
 
 // ── X402 Native Vendor ───────────────────────────────────────────────────────
@@ -1407,6 +1501,7 @@ func main() {
 			"dest":       p.DestinationWallet[:min(len(p.DestinationWallet), 12)] + "...",
 		})
 		metricsHub.BroadcastBridgeSettled(chain, txHash, grossAmt, fee, netAmt, newTier, effectiveBPS)
+		go fireDiscordBridgePayment(chain, agentAddr, p.GrossAmount, fee.String(), netAmt.String(), newTier, effectiveBPS)
 
 		bridgeLedger.Record(ledger.BridgeRecord{
 			BridgeID:          "",
