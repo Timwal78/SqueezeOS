@@ -11,6 +11,9 @@ from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+import httpx
+from datetime import datetime, timezone
+
 from .neynar import verify_webhook_signature
 from .parser import parse_command, CommandType, MIN_TIP, MAX_TIP
 from .registry import (
@@ -31,6 +34,29 @@ log = logging.getLogger("tipmaster")
 
 _START_TIME = time.time()
 _processed_casts: set[str] = set()
+
+
+async def _fire_payment_discord(wallet: str, product: str, endpoint: str, amount: str) -> None:
+    """Post a payment embed to DISCORD_WEBHOOK_PAYMENTS or DISCORD_WEBHOOK_ALL. Never raises."""
+    url = os.getenv("DISCORD_WEBHOOK_PAYMENTS") or os.getenv("DISCORD_WEBHOOK_ALL")
+    if not url:
+        return
+    masked = f"{wallet[:6]}...{wallet[-4:]}" if len(wallet) > 10 else wallet
+    try:
+        payload = {"embeds": [{"title": f"💰 PAYMENT RECEIVED — {product}", "color": 0x3FB950,
+            "fields": [
+                {"name": "Wallet",   "value": f"`{masked}`",  "inline": True},
+                {"name": "Product",  "value": product,         "inline": True},
+                {"name": "Endpoint", "value": f"`{endpoint}`", "inline": True},
+                {"name": "Amount",   "value": f"**{amount}**", "inline": True},
+            ],
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "footer": {"text": f"{product} • SML"},
+        }]}
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            await client.post(url, json=payload)
+    except Exception:
+        pass
 _MAX_DEDUP_CACHE = 2000
 
 # Safety flag — the custody rebuild has landed. Tipping is enabled by default.
@@ -267,11 +293,17 @@ async def _handle_command(cmd, sender_fid: int, sender_username: str, cast_hash:
         if paid:
             await mark_setup_fee_paid(sender_fid)
             await caster.reply_to_cast(cast_hash, f"@{sender_username} Setup fee verified! Your account is now active for unlimited P2P tipping. 🎉")
-            
+
+            wallet = await get_wallet_by_fid(sender_fid)
+            if wallet:
+                asyncio.create_task(_fire_payment_discord(
+                    wallet=wallet, product="TipMaster",
+                    endpoint="setup-fee", amount="15 RLUSD",
+                ))
+
             # Resolve pending tip intents
             intents = await get_pending_intents_for_user(sender_username)
             if intents:
-                wallet = await get_wallet_by_fid(sender_fid)
                 for intent in intents:
                     pay_link = generate_p2p_payment_link(wallet, Decimal(str(intent["amount"])))
                     await caster.reply_to_cast(
