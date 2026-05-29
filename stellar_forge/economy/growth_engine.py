@@ -62,12 +62,13 @@ class Receipt:
 class GrowthEngine:
     def __init__(self, store: Store, loyalty: LoyaltyResolver,
                  referrals: ReferralEngine, expected_eid: str | None = None,
-                 fee_bps: int = DEFAULT_FEE_BPS) -> None:
+                 fee_bps: int = DEFAULT_FEE_BPS, eligibility=None) -> None:
         self.store = store
         self.loyalty = loyalty
         self.referrals = referrals
         self.expected_eid = expected_eid
         self.fee_bps = fee_bps
+        self.eligibility = eligibility   # optional EarnEligibility (sybil step 3)
 
     def finalize_settlement(self, settlement_id: str, kind: str,
                             amount_rlusd: float, settlement_token: str) -> Receipt:
@@ -134,9 +135,15 @@ class GrowthEngine:
         )
 
     def earnings(self, wallet: str) -> dict:
-        """Withdrawable referral earnings + protocol-owed balance for a wallet."""
+        """Accrued referral earnings + whether they're withdrawable (sybil gate)."""
+        accrued = to_rlusd(self.store.balance(wallet))
+        withdrawable, reason = (True, "no eligibility gate configured")
+        if self.eligibility is not None:
+            withdrawable, reason = self.eligibility.is_withdrawable(wallet)
         return {
             "wallet": wallet,
-            "balance_rlusd": to_rlusd(self.store.balance(wallet)),
+            "accrued_rlusd": accrued,
+            "withdrawable": withdrawable,
+            "eligibility_reason": reason,
             "ledger": [dict(row) for row in self.store.ledger_for(wallet)],
         }

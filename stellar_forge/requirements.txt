@@ -1,0 +1,12 @@
+# Optional production deps for the Stellar Forge ECONOMY layer.
+# Kept separate from the repo's top-level requirements.txt — the economy core
+# (store/referral/loyalty/growth/router/payout LOGIC) runs on the stdlib alone,
+# which is why the test suite needs nothing installed. These are only needed
+# for the production backends:
+#
+#   pip install -r stellar_forge/requirements.txt
+#
+psycopg[binary]>=3.1   # economy/store.py Postgres backend (durable rebate ledger)
+xrpl-py>=2.5           # economy/payouts.py live RLUSD on-chain settlement
+#
+# ML / fusion layer deps are separate again — see requirements-ml.txt.

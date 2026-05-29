@@ -60,11 +60,13 @@ at 40% off ≥ 600 score, marketplace loyalty points) into one loop:
 
 | Component | File | Status |
 |-----------|------|--------|
-| Durable settlement (SQLite→Postgres) | `economy/store.py` | ✅ real, tested |
+| Durable store, **dual backend** (SQLite + Postgres) | `economy/store.py` | ✅ tested on **both** backends |
 | 402Proof client (invoices + bureau) | `economy/proof402_client.py` | ✅ real HTTP |
 | Referral / affiliate engine | `economy/referral.py` | ✅ real, tested |
 | Loyalty tiers from Credit Bureau | `economy/loyalty.py` | ✅ real, tested |
 | Growth engine (finalize + rebates) | `economy/growth_engine.py` | ✅ real, tested |
+| **Idempotent RLUSD payouts** (cursor-based, no double-pay) | `economy/payouts.py` | ✅ logic tested; ⏳ live submit needs wallet |
+| **Sybil resistance** (rate limit + earn-eligibility) | `economy/antisybil.py` | ✅ real, tested |
 | Priority inference routing (real "lensing") | `gateway/priority_router.py` | ✅ real, tested |
 | Atomic fusion settlement (escrow gate) | `x402_settlement.py` | ✅ real verify; in-mem escrow |
 | Supernova shard registry (Solidity) | `contracts/Supernova.sol` | ✅ written; ⏳ deploy is yours |
@@ -126,11 +128,32 @@ python -m stellar_forge.lifecycle --demo
 cd stellar_forge/contracts && forge install foundry-rs/forge-std --no-commit && forge test -vvv
 ```
 
-## Wiring into SqueezeOS (next step, not yet done)
+## Production prerequisites (done / remaining)
 
-The growth engine is built to surface as a Flask blueprint
-(`/api/forge/register`, `/api/forge/settle`, `/api/forge/earnings`,
-`/api/forge/route`) registered alongside the existing blueprints in
-`core/app.py`. It is intentionally **not** registered yet — it should ship
-behind the same `@require_payment` gate and a real Postgres DSN, which is a
-deliberate, reviewed deploy step rather than something to slip into a demo.
+The three things that must be true *before* this goes live with real money:
+
+1. **Durable ledger — DONE.** `economy/store.py` is a dual backend. Set
+   `STELLAR_FORGE_DB` to a managed Postgres DSN (Render Postgres) and the
+   rebate ledger survives redeploys. The full suite runs against **both**
+   SQLite and a real Postgres in CI-able tests, so portability is proven, not
+   assumed. SQLite-on-ephemeral-disk would lose who you owe — this prevents that.
+2. **Payout path — DONE (logic).** `economy/payouts.py` settles accrued rebates
+   on-chain via a real xrpl-py RLUSD Payment, with a `paid_through` cursor that
+   makes payouts **idempotent** (a crash or retry can never double-pay) and an
+   in-flight guard. Going live only needs a funded protocol wallet
+   (`AGENT_XRPL_SEED` + `RLUSD_ISSUER`); default is dry-run that submits nothing.
+3. **Sybil resistance — DONE.** `economy/antisybil.py` rate-limits registration
+   per source and gates *withdrawal* (not accrual) behind real skin-in-the-game:
+   a wallet must have lifetime settled spend or a real bureau score before it
+   can extract rebates. Farming is uneconomic.
+
+### Remaining (needs your hands, not a fake)
+
+- Register the Flask blueprint (`/api/forge/register|settle|earnings|route`) in
+  `core/app.py`, behind `@require_payment` + the Postgres DSN. Recommend a
+  feature flag, default off, until you flip it on deliberately.
+- Provision the Render Postgres instance + set `STELLAR_FORGE_DB`.
+- Fund the protocol XRPL wallet and switch `PayoutRunner` from `DryRunSubmitter`
+  to `XRPLSubmitter` (start on testnet).
+- Deploy `Supernova.sol` to Base (testnet → audit → mainnet).
+- Run a real `mergekit` merge (needs base model + adapter weights + compute).

@@ -52,19 +52,27 @@ class RebateEntry:
 class ReferralEngine:
     """Manages the referral graph and computes rebates. Backed by Store."""
 
-    def __init__(self, store) -> None:
+    def __init__(self, store, rate_limiter=None) -> None:
         self.store = store
+        self.rate_limiter = rate_limiter   # optional RegistrationRateLimiter (sybil step 3)
 
-    def register(self, wallet: str, referrer_code: str | None = None) -> dict:
+    def register(self, wallet: str, referrer_code: str | None = None,
+                 source: str | None = None) -> dict:
         """Register an agent, optionally attributing a referrer.
 
-        Returns {wallet, referral_code, referred_by}. Idempotent: re-registering
-        an existing wallet never changes its referrer (immutability invariant).
+        `source` (IP / fingerprint bucket) feeds the registration rate limiter
+        when one is configured. Raises RateLimitExceeded if the source is over
+        budget. Returns {wallet, referral_code, referred_by}. Idempotent:
+        re-registering an existing wallet never changes its referrer.
         """
         existing = self.store.agent(wallet)
         if existing:
             return {"wallet": wallet, "referral_code": existing["referral_code"],
                     "referred_by": existing["referred_by"], "new": False}
+
+        # Sybil rate limit only applies to genuinely new registrations.
+        if self.rate_limiter is not None:
+            self.rate_limiter.check_and_record(source or "")
 
         referred_by = None
         if referrer_code:
