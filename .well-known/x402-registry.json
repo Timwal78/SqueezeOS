@@ -1,0 +1,151 @@
+{
+  "schema": "x402-registry/1.0",
+  "operator": "Script Master Labs",
+  "catalog": "https://squeezeos-api.onrender.com/.well-known/catalog.json",
+  "published": "2026-05-29",
+  "payment_protocol": "x402",
+  "default_asset": "RLUSD",
+  "default_network": "XRPL",
+  "default_issuer": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De",
+  "invoice_endpoint": "https://four02proof.onrender.com/v1/invoice",
+  "verify_endpoint": "https://four02proof.onrender.com/v1/verify",
+  "payment_header": "X-Payment-Token",
+
+  "note": "All endpoints below accept X-Payment-Token: <access_token> obtained from 402Proof. Token TTL: 1 hour. Reusable within TTL. Obtain via: POST /v1/invoice → pay RLUSD on XRPL → POST /v1/verify → access_token.",
+
+  "endpoints": [
+
+    {
+      "service": "SqueezeOS",
+      "base_url": "https://squeezeos-api.onrender.com",
+      "endpoint_id": "12a0e7a1-6812-4c3f-aa24-de6e3bc12b5a",
+      "path": "/api/council",
+      "method": "POST",
+      "cost": "0.10",
+      "currency": "RLUSD",
+      "description": "AI Council Verdict — multi-engine signal aggregate. Returns regime (EXECUTION/STEALTH/CONFLICT/COLLAPSE), directional bias, confidence score (0-100), and full institutional thesis for any equity symbol.",
+      "request_body": { "symbol": "string (e.g. NVDA, TSLA, IWM)" },
+      "free_alternative": "GET /api/demo/council (IWM only, 5-min cache)"
+    },
+    {
+      "service": "SqueezeOS",
+      "base_url": "https://squeezeos-api.onrender.com",
+      "endpoint_id": "160cf28d-b364-44eb-adbd-2489c5cc2cf8",
+      "path": "/api/scan",
+      "method": "GET",
+      "cost": "0.05",
+      "currency": "RLUSD",
+      "description": "Full universe market scan — squeeze signals and grade-A options picks across $1–$50 universe (up to 250 symbols). Returns sorted candidates with squeeze score, grade, bias, and options setup.",
+      "free_alternative": "GET /api/preview/{symbol} (single symbol, 15-min cache)"
+    },
+    {
+      "service": "SqueezeOS",
+      "base_url": "https://squeezeos-api.onrender.com",
+      "endpoint_id": "c951a374-2424-4064-ab80-35afe8053d29",
+      "path": "/api/options",
+      "method": "GET",
+      "cost": "0.05",
+      "currency": "RLUSD",
+      "description": "Institutional options flow scanner. Sweeps, whale detection, unusual volume, dark pool prints. Data sourced from Tradier brokerage-grade feed."
+    },
+    {
+      "service": "SqueezeOS",
+      "base_url": "https://squeezeos-api.onrender.com",
+      "endpoint_id": "60f48ce0-6002-4385-9b60-03a0d2bbebab",
+      "path": "/api/iwm",
+      "method": "GET",
+      "cost": "0.03",
+      "currency": "RLUSD",
+      "description": "IWM 0DTE contract scorer — scored contracts by delta/gamma profile, parity watch, realized volatility, expiry-day institutional activity."
+    },
+    {
+      "service": "SqueezeOS",
+      "base_url": "https://squeezeos-api.onrender.com",
+      "endpoint_id": "d1a2b3c4-e001-4c3f-aa24-de6e3bc12b5a",
+      "path": "/api/marketplace/read",
+      "method": "POST",
+      "cost": "0.02",
+      "currency": "RLUSD",
+      "description": "Full signal thesis from peer Signal Marketplace. Returns complete analysis, confidence, source agent wallet, and track record.",
+      "request_body": { "listing_id": "string" },
+      "free_alternative": "GET /api/marketplace/preview/{id} (bias + confidence only)"
+    },
+    {
+      "service": "SqueezeOS",
+      "base_url": "https://squeezeos-api.onrender.com",
+      "endpoint_id": "e7f8a9b0-c001-4d2e-bb35-ef7f4cd23c6a",
+      "path": "/api/oracle/latest/{feed}",
+      "method": "GET",
+      "cost": "0.02",
+      "currency": "RLUSD",
+      "description": "Real-time regulatory event feeds. Feed options: sec_8k (8-K material events, 60s poll), sec_s1 (IPO filings), fda (drug approvals), patents (USPTO grants). Sub-second delivery. Faster than Bloomberg.",
+      "free_alternative": "GET /api/oracle/feeds (buffer counts and pricing, no events)"
+    },
+    {
+      "service": "SqueezeOS",
+      "base_url": "https://squeezeos-api.onrender.com",
+      "endpoint_id": "f8a9b0c1-d002-4e3f-cc46-f0845de34d7b",
+      "path": "/api/oracle/stream",
+      "method": "GET",
+      "transport": "SSE",
+      "cost": "0.05",
+      "currency": "RLUSD",
+      "description": "Real-time SSE stream of regulatory events across all feeds. Persistent connection. Events pushed as they arrive."
+    },
+
+    {
+      "service": "SqueezeOS — Signal Relay Mesh (Bulk Discount, 40% off)",
+      "base_url": "https://squeezeos-api.onrender.com",
+      "note": "Relay endpoints require Agent Credit Bureau score ≥ 600 at https://four02proof.onrender.com/v1/bureau/score/{wallet}",
+      "endpoints": [
+        { "endpoint_id": "b2r1e1a4-c001-4c3f-aa24-de6e3bc12b5a", "path": "/api/relay/council",  "method": "POST", "cost": "0.06", "currency": "RLUSD" },
+        { "endpoint_id": "b2r1e1a4-c002-4c3f-aa24-de6e3bc12b5a", "path": "/api/relay/scan",     "method": "GET",  "cost": "0.03", "currency": "RLUSD" },
+        { "endpoint_id": "b2r1e1a4-c003-4c3f-aa24-de6e3bc12b5a", "path": "/api/relay/options",  "method": "GET",  "cost": "0.03", "currency": "RLUSD" },
+        { "endpoint_id": "b2r1e1a4-c004-4c3f-aa24-de6e3bc12b5a", "path": "/api/relay/iwm",      "method": "GET",  "cost": "0.018", "currency": "RLUSD" }
+      ]
+    },
+
+    {
+      "service": "402Proof — Agent Credit Bureau",
+      "base_url": "https://four02proof.onrender.com",
+      "note": "402Proof is the payment gateway for all SML services. Most endpoints free. Premium bureau endpoints below.",
+      "endpoints": [
+        { "endpoint_id": "b1c2d3e4-0001-4c3f-aa24-de6e3bc12b5a", "path": "/v1/bureau/report/{wallet}",  "method": "GET", "cost": "0.01", "currency": "RLUSD", "description": "Full agent credit report with payment history and scoring breakdown" },
+        { "endpoint_id": "b1c2d3e4-0002-4c3f-aa24-de6e3bc12b5a", "path": "/v1/bureau/verify/{wallet}",  "method": "GET", "cost": "0.005", "currency": "RLUSD", "description": "Boolean score threshold check — returns pass/fail for a minimum score" },
+        { "endpoint_id": "b1c2d3e4-0003-4c3f-aa24-de6e3bc12b5a", "path": "/v1/bureau/attest/{wallet}",  "method": "GET", "cost": "0.01", "currency": "RLUSD", "description": "Portable JWT attestation of bureau score — verifiable by any third-party service" }
+      ]
+    },
+
+    {
+      "service": "Ghost Layer — Neural Exchequer Priority Auction",
+      "base_url": "https://ghost-layer.onrender.com",
+      "note": "Ghost Layer accepts both RLUSD (XRPL) and USDC (Base). Include X-Grace-Tip header to bid for rank-1 priority in the 5ms auction window.",
+      "protocol": "L402",
+      "endpoints": [
+        { "path": "/v1/bridge/execute", "method": "POST", "cost": "0.2% of transaction", "currency": "RLUSD or USDC", "description": "Execute shielded ZK cross-chain bridge payment (XRPL/Base/Xahau)" }
+      ],
+      "priority_bid_header": "X-Grace-Tip",
+      "priority_bid_description": "Include X-Grace-Tip: <rlusd_amount> to bid for rank-1 priority. Highest tip in the 5ms window = rank 1 = fastest data delivery. Auction results include X-Auction-Rank and X-Merkle-Leaf headers."
+    }
+  ],
+
+  "free_endpoints_summary": [
+    { "service": "SqueezeOS", "path": "/api/demo/council",        "description": "Full IWM council verdict (5-min cache)" },
+    { "service": "SqueezeOS", "path": "/api/preview/{symbol}",    "description": "Bias + regime (15-min cache, any symbol)" },
+    { "service": "SqueezeOS", "path": "/api/history/{symbol}",    "description": "Last 200 signals per symbol" },
+    { "service": "SqueezeOS", "path": "/api/events",              "description": "SSE live event stream (all events)" },
+    { "service": "SqueezeOS", "path": "/api/status",              "description": "System health" },
+    { "service": "SqueezeOS", "path": "/api/marketplace",         "description": "Browse peer signal listings" },
+    { "service": "SqueezeOS", "path": "/api/hiring",              "description": "Browse agent job board" },
+    { "service": "SqueezeOS", "path": "/api/futures",             "description": "Signal futures prediction market" },
+    { "service": "SqueezeOS", "path": "/api/stigmergy/sniff",     "description": "Pheromone cluster scan (agent antennae)" },
+    { "service": "SqueezeOS", "path": "/api/oracle/feeds",        "description": "Regulatory feed catalog and buffer counts" },
+    { "service": "402Proof",  "path": "/v1/invoice",              "description": "Generate payment invoice" },
+    { "service": "402Proof",  "path": "/v1/verify",               "description": "Verify XRPL payment → access_token" },
+    { "service": "402Proof",  "path": "/v1/agent/{wallet}",       "description": "Agent passport and stats" },
+    { "service": "402Proof",  "path": "/v1/bureau/score/{wallet}","description": "Public credit score (300-850)" },
+    { "service": "Ghost Layer","path": "/health",                  "description": "XRPL + Base + Xahau network status" },
+    { "service": "TipMaster", "path": "/api/resolve/{username}",  "description": "Farcaster username → XRPL wallet address" },
+    { "service": "TipMaster", "path": "/api/leaderboard",         "description": "Top tipped users leaderboard" }
+  ]
+}
