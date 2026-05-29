@@ -86,6 +86,14 @@ def create_app():
     app.register_blueprint(analytics_bp)
     app.register_blueprint(v2_bp, url_prefix='/api')
     app.register_blueprint(v2_bp, url_prefix='/api/v1', name='v2_bridge_v1')
+
+    # Stellar Forge growth engine — feature-flagged, dormant unless enabled.
+    # Registers the affiliate/loyalty/payout surface only when explicitly turned
+    # on (after a Postgres DSN + payout wallet are in place). Off by default.
+    if os.environ.get('STELLAR_FORGE_ENABLED', '').lower() == 'true':
+        from core.api.forge_bp import forge_bp
+        app.register_blueprint(forge_bp, url_prefix='/api/forge')
+        logging.getLogger('SqueezeOS').info('Stellar Forge blueprint ENABLED at /api/forge')
     
     if not _IS_SERVERLESS:
         # Start background market scanner

@@ -90,7 +90,7 @@ def test_lifecycle() -> None:
     sid = forge.coordinator.open("a", "b", 1.0).settlement_id
     forge.coordinator.submit_leg(sid, "a", mint_test_token("a"))
     forge.coordinator.submit_leg(sid, "b", mint_test_token("b"))
-    giant = forge.fuse("a", "b", rlusd_a=0.6, rlusd_b=0.4)
+    giant = forge.fuse("a", "b", sid)
 
     assert giant.stage is Stage.BLUE_GIANT
     assert giant.parameter_count == 13_000_000

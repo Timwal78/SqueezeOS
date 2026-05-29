@@ -1,0 +1,47 @@
+name: Stellar Forge — Economy Tests
+
+# Scoped CI: only runs when the stellar_forge module changes. Tests the REAL
+# growth engine (settlement, referral, loyalty, routing) on the stdlib alone —
+# no torch, so it stays fast and does not touch the production dependency set.
+
+on:
+  push:
+    paths:
+      - 'stellar_forge/**'
+      - 'core/api/forge_bp.py'
+      - '.github/workflows/stellar-forge.yml'
+  pull_request:
+    paths:
+      - 'stellar_forge/**'
+      - 'core/api/forge_bp.py'
+      - '.github/workflows/stellar-forge.yml'
+
+jobs:
+  economy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Economy + routing tests (stdlib only)
+        env:
+          PROOF402_TOKEN_SECRET: ci-test-secret
+        run: python -m stellar_forge.tests.test_economy
+
+      - name: Blueprint integration test
+        env:
+          PROOF402_TOKEN_SECRET: ci-test-secret
+        run: |
+          pip install --quiet --ignore-installed blinker flask
+          python -m stellar_forge.tests.test_blueprint
+
+      - name: Byte-compile module + blueprint
+        run: |
+          python -m py_compile \
+            stellar_forge/*.py \
+            stellar_forge/economy/*.py \
+            stellar_forge/gateway/*.py \
+            stellar_forge/tests/*.py \
+            core/api/forge_bp.py
