@@ -74,16 +74,17 @@ def verify_settlement_token(token: str, expected_eid: str = FUSION_ENDPOINT_ID) 
         return {"valid": False, "reason": "ERR_TOKEN_MALFORMED"}
 
 
-def mint_settlement_token(wallet: str, ttl: int = 300, eid: str = FUSION_ENDPOINT_ID) -> str:
-    """Mint a valid token (used in tests / local demos where no 402Proof server runs).
+def mint_test_token(wallet: str, ttl: int = 300, eid: str = FUSION_ENDPOINT_ID) -> str:
+    """Mint a locally-signed settlement token for use in unit tests ONLY.
 
-    In production the token comes from the 402Proof server after on-chain RLUSD
-    settlement; this helper exists so the demo is self-contained.
+    In production every token must originate from the 402Proof server after
+    a verified on-chain RLUSD payment — not from this function.
+    Calling this in production means payment verification is bypassed.
     """
     if not PROOF402_SECRET:
-        raise RuntimeError("PROOF402_TOKEN_SECRET not set; cannot mint demo token")
-    payload = {"eid": eid, "wlt": wallet, "iid": f"demo-{int(time.time()*1000)}",
-               "exp": int(time.time()) + ttl}
+        raise RuntimeError("PROOF402_TOKEN_SECRET not set")
+    iid = hashlib.sha256(f"test:{wallet}:{time.time_ns()}".encode()).hexdigest()[:32]
+    payload = {"eid": eid, "wlt": wallet, "iid": iid, "exp": int(time.time()) + ttl}
     encoded = base64.urlsafe_b64encode(json.dumps(payload).encode()).rstrip(b"=").decode()
     sig = hmac.new(PROOF402_SECRET.encode(), encoded.encode(), hashlib.sha256).hexdigest()
     return f"{encoded}.{sig}"

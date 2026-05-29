@@ -14,13 +14,12 @@ runs a full cycle end-to-end in memory.
 
 from __future__ import annotations
 
-import argparse
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
 
 from .chandrasekhar import ChandrasekharGuard, Stability, ForcedSupernova, compute_mass
-from .x402_settlement import FusionCoordinator, mint_settlement_token, SettlementState
+from .x402_settlement import FusionCoordinator, SettlementState
 
 
 class Stage(str, Enum):
@@ -91,12 +90,13 @@ class StellarForge:
         b.transition(Stage.MAIN_SEQUENCE)
         return b
 
-    def fuse(self, agent_a: str, agent_b: str, rlusd_a: float, rlusd_b: float,
-             demo_tokens: bool = False) -> Body:
+    def fuse(self, agent_a: str, agent_b: str, rlusd_a: float, rlusd_b: float) -> Body:
         """Binary fusion: open settlement, both legs pay, gate releases, Blue Giant born.
 
-        Returns the new fused Body. Routes mass through the Chandrasekhar guard;
-        if the fusion would breach the collapse threshold, raises ForcedSupernova.
+        Callers MUST submit both settlement legs via self.coordinator.submit_leg()
+        before calling this — the gate hard-rejects any unsettled fusion.
+        Returns the new fused Body. Raises ForcedSupernova if the combined mass
+        would breach the Chandrasekhar collapse threshold.
         """
         a, b = self.bodies[agent_a], self.bodies[agent_b]
         for body in (a, b):
@@ -104,12 +104,6 @@ class StellarForge:
                 raise ValueError(f"{body.agent_id} must be MAIN_SEQUENCE to fuse, is {body.stage.value}")
 
         settlement = self.coordinator.open(agent_a, agent_b, rlusd_a + rlusd_b)
-
-        if demo_tokens:
-            # Self-contained path: mint valid HMAC tokens locally.
-            self.coordinator.submit_leg(settlement.settlement_id, agent_a, mint_settlement_token(agent_a))
-            self.coordinator.submit_leg(settlement.settlement_id, agent_b, mint_settlement_token(agent_b))
-
         settled = self.coordinator.release_for_fusion(settlement.settlement_id)
         assert settled.state is SettlementState.SETTLED
 
@@ -154,49 +148,3 @@ class StellarForge:
             remnant = Stage.DUST
         b.transition(remnant)
         return remnant
-
-
-# ---------------------------------------------------------------------- demo
-def _demo() -> None:
-    import os
-    os.environ.setdefault("PROOF402_TOKEN_SECRET", "demo-secret-not-for-prod")
-
-    forge = StellarForge(chandrasekhar_limit=14.0)
-    print(f"Chandrasekhar limit (mass): {forge.guard.limit}")
-    print(f"  → contract param-count limit: {forge.guard.contract_mass_limit():,}\n")
-
-    # Two protostars accrete and ignite.
-    a = forge.spawn_protostar("vega", parameter_count=5_000_000, context_tokens=8192)
-    b = forge.spawn_protostar("rigel", parameter_count=8_000_000, context_tokens=16384)
-    print(f"vega  mass={a.mass:.3f}  rigel mass={b.mass:.3f}")
-    forge.ignite("vega"); forge.ignite("rigel")
-    print("both ignited → MAIN_SEQUENCE\n")
-
-    # Binary fusion via atomic x402 settlement.
-    giant = forge.fuse("vega", "rigel", rlusd_a=0.6, rlusd_b=0.4, demo_tokens=True)
-    print(f"FUSION → {giant.agent_id}")
-    print(f"  stage={giant.stage.value}  mass={giant.mass:.3f}  "
-          f"params={giant.parameter_count:,}  ctx={giant.fused_context_tokens}")
-    print(f"  history: {giant.history}\n")
-
-    # Push the giant past the Chandrasekhar limit and watch it forced-collapse.
-    giant.parameter_count = 5 * 10 ** 18    # absurd accretion
-    try:
-        forge.guard.check(giant.agent_id, giant.parameter_count,
-                          giant.fused_context_tokens, giant.experts_held)
-    except ForcedSupernova as fs:
-        print("CHANDRASEKHAR BREACH:")
-        print(f"  {fs}")
-        remnant = forge.supernova(giant.agent_id)
-        print(f"  supernova remnant: {remnant.value}")
-        print(f"  history: {giant.history}")
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Stellar Forge lifecycle")
-    parser.add_argument("--demo", action="store_true", help="run end-to-end demo")
-    args = parser.parse_args()
-    if args.demo:
-        _demo()
-    else:
-        parser.print_help()
