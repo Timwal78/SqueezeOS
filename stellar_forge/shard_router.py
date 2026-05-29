@@ -156,13 +156,17 @@ class ShardRouter:
 
 # ----------------------------------------------------------------- local impls
 class InMemoryShardStore:
-    """Content-addressed in-memory store for tests/demo (stands in for IPFS)."""
+    """Content-addressed in-memory shard store for tests (stands in for IPFS/Arweave).
+
+    In production replace with a real IPFS client (e.g. ipfshttpclient or web3.storage).
+    CID format here is keccak256-derived and NOT a valid CIDv1 — do not use in production.
+    """
 
     def __init__(self) -> None:
         self._data: dict[str, bytes] = {}
 
     def put(self, data: bytes) -> str:
-        cid = "bafy" + _keccak256(data).hex()[:46]   # fake CIDv1-ish handle
+        cid = "bafy" + _keccak256(data).hex()[:46]   # test handle: keccak256 of payload
         self._data[cid] = data
         return cid
 
