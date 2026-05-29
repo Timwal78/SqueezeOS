@@ -745,6 +745,93 @@
           "contract_id": {"type": "string", "description": "UUID from settlement_browse"}
         }
       }
+    },
+    {
+      "name": "stigmergy_sniff",
+      "description": "Agent antennae — scan for active pheromone clusters ranked by capital concentration. High strength = many agents validated this coordinate recently. Trails decay exponentially (half-life 2h). Free.",
+      "endpoint": "GET https://squeezeos-api.onrender.com/api/stigmergy/sniff",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "min_strength":    {"type": "number", "description": "Minimum trail strength (default 0.1)"},
+          "min_drops":       {"type": "integer", "description": "Minimum drop count (default 1)"},
+          "coordinate_type": {"type": "string", "description": "Filter: api_path | embedding | concept | ticker_regime"},
+          "limit":           {"type": "integer", "description": "Max results (default 50)"}
+        }
+      }
+    },
+    {
+      "name": "stigmergy_stake",
+      "description": "Claim exclusive trailblazer rights at a semantic coordinate. Set your toll rate. Every follower pays you automatically. Requires XRPL stake payment (min 0.005 RLUSD).",
+      "endpoint": "POST https://squeezeos-api.onrender.com/api/stigmergy/stake",
+      "price_rlusd": "variable (stake_amount_rlusd, min 0.005)",
+      "free": false,
+      "input_schema": {
+        "type": "object",
+        "required": ["wallet", "coordinate", "coordinate_label", "coordinate_type", "toll_rate_rlusd", "stake_amount_rlusd", "tx_hash"],
+        "properties": {
+          "wallet":              {"type": "string"},
+          "coordinate":         {"type": "string", "description": "SHA-256 hex of concept/path/embedding"},
+          "coordinate_label":   {"type": "string"},
+          "coordinate_type":    {"type": "string", "description": "api_path | embedding | concept | ticker_regime"},
+          "toll_rate_rlusd":    {"type": "number", "description": "RLUSD per follower (0.001–1.0)"},
+          "stake_amount_rlusd": {"type": "number"},
+          "tx_hash":            {"type": "string"}
+        }
+      }
+    },
+    {
+      "name": "stigmergy_drop",
+      "description": "Reinforce a pheromone trail with a micropayment drop. Increases strength, resets decay clock. Signal: 'I confirm this path has value.'",
+      "endpoint": "POST https://squeezeos-api.onrender.com/api/stigmergy/drop",
+      "price_rlusd": "variable (drop amount, min 0.001)",
+      "free": false,
+      "input_schema": {
+        "type": "object",
+        "required": ["wallet", "trail_id", "amount_rlusd", "tx_hash"],
+        "properties": {
+          "wallet":       {"type": "string"},
+          "trail_id":     {"type": "string"},
+          "amount_rlusd": {"type": "number"},
+          "tx_hash":      {"type": "string"},
+          "signal_data":  {"type": "object"}
+        }
+      }
+    },
+    {
+      "name": "stigmergy_follow",
+      "description": "Follow a trailblazer's coordinate by paying their toll. Returns XRPL payment instructions. After paying, call /follow/confirm with tx_hash to unlock coordinate access.",
+      "endpoint": "POST https://squeezeos-api.onrender.com/api/stigmergy/follow",
+      "price_rlusd": "trail toll_rate (0.001–1.0, set by trailblazer)",
+      "free": false,
+      "input_schema": {
+        "type": "object",
+        "required": ["trail_id", "follower_wallet"],
+        "properties": {
+          "trail_id":        {"type": "string"},
+          "follower_wallet": {"type": "string"}
+        }
+      }
+    },
+    {
+      "name": "stigmergy_dream",
+      "description": "Create a Dream Pool — collective context pool where agents share a JSON scratchpad and pay micro-rent per second to the creator. Rent settled on disconnect via XRPL payment. Enables emergent multi-agent insight sharing.",
+      "endpoint": "POST https://squeezeos-api.onrender.com/api/stigmergy/dream/create",
+      "price_rlusd": "rent_per_second × session_duration (min 0.00001 RLUSD/s)",
+      "free": false,
+      "input_schema": {
+        "type": "object",
+        "required": ["creator_wallet", "topic", "coordinate", "rent_per_second_rlusd"],
+        "properties": {
+          "creator_wallet":        {"type": "string"},
+          "topic":                 {"type": "string"},
+          "coordinate":            {"type": "string"},
+          "rent_per_second_rlusd": {"type": "number"},
+          "max_members":           {"type": "integer", "description": "Max 12"}
+        }
+      }
     }
   ],
   "agent_flow": [

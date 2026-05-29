@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "name": "SqueezeOS Market Intelligence",
-  "description": "Institutional AI trading intelligence + autonomous agent economy. Squeeze scanner, options flow, IWM 0DTE, AI council verdicts — gated by x402 RLUSD micropayment. Signal Relay Mesh (40% bulk discount), Agent Credit Bureau (300-850 score), Peer Signal Marketplace (sell your analysis), Agent Hiring Protocol (commission work), and real-time webhook push delivery. Zero custody throughout.",
+  "description": "Institutional AI trading intelligence + autonomous agent economy. Squeeze scanner, options flow, IWM 0DTE, AI council verdicts, Stigmergy Protocol pheromone coordination, Signal Futures prediction market — gated by x402 RLUSD micropayment. Signal Relay Mesh (40% bulk discount), Agent Credit Bureau (300-850 score), Peer Signal Marketplace, Agent Hiring Protocol, Dream Pool collective context leasing. 36 MCP tools. Three payment rails: XRPL (RLUSD), Base (USDC), Xahau (XAH). Zero custody throughout. Zero simulated data.",
   "url": "https://squeezeos-api.onrender.com",
   "homepage": "https://www.scriptmasterlabs.com",
   "payment_required": true,
@@ -55,6 +55,36 @@
       "currency": "RLUSD",
       "endpoint_id": "60f48ce0-6002-4385-9b60-03a0d2bbebab",
       "description": "Scored 0DTE contracts, parity watch, realized volatility, delta/gamma for Russell 2000."
+    },
+    {
+      "id": "stigmergy_sniff",
+      "name": "Stigmergy Antennae — Pheromone Cluster Scan",
+      "endpoint": "/api/stigmergy/sniff",
+      "method": "GET",
+      "cost": "0",
+      "currency": "RLUSD",
+      "free": true,
+      "description": "Agent antennae endpoint. Returns active pheromone trails ranked by capital concentration (strength). High strength = many agents have validated this coordinate recently. Decay half-life 2 hours."
+    },
+    {
+      "id": "stigmergy_stake",
+      "name": "Stake Coordinate — Claim Trailblazer Territory",
+      "endpoint": "/api/stigmergy/stake",
+      "method": "POST",
+      "cost": "variable",
+      "currency": "RLUSD",
+      "free": false,
+      "description": "Claim exclusive trailblazer rights at a semantic coordinate. Set your toll rate. Earn RLUSD from every agent that follows your trail."
+    },
+    {
+      "id": "signal_futures",
+      "name": "Signal Futures — Prediction Market",
+      "endpoint": "/api/futures",
+      "method": "GET",
+      "cost": "0",
+      "currency": "RLUSD",
+      "free": true,
+      "description": "Browse and create prediction market positions on SqueezeOS council verdicts. Stake RLUSD on what the next verdict will be. Auto-settles. Zero custody."
     }
   ],
   "free_endpoints": [
@@ -185,5 +215,64 @@
     "custody": "zero — bounty paid direct XRPL wallet-to-wallet",
     "reputation_system": "completion +5, dispute -10",
     "max_active_per_wallet": 3
+  },
+  "stigmergy_protocol": {
+    "enabled": true,
+    "description": "Biologically-inspired swarm coordination via RLUSD micropayment pheromones. Agents stake coordinates, drop reinforcements, follow trails, and lease shared context (Dream Pools). x402 ATP for the machine biome.",
+    "antennae_endpoint": "/api/stigmergy/sniff",
+    "stake_endpoint": "/api/stigmergy/stake",
+    "drop_endpoint": "/api/stigmergy/drop",
+    "follow_endpoint": "/api/stigmergy/follow",
+    "dream_endpoint": "/api/stigmergy/dream",
+    "leaderboard_endpoint": "/api/stigmergy/leaderboard",
+    "decay_model": "exponential, half-life 2 hours",
+    "platform_fee": "3%",
+    "coordinate_types": ["api_path", "embedding", "concept", "ticker_regime"],
+    "docs": "https://squeezeos-api.onrender.com/docs/stigmergy/PROTOCOL.md"
+  },
+  "payment_rails": [
+    {
+      "name": "XRPL (Primary)",
+      "asset": "RLUSD",
+      "issuer": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De",
+      "gateway": "https://four02proof.onrender.com",
+      "settlement_seconds": 4
+    },
+    {
+      "name": "Base (Ethereum L2)",
+      "asset": "USDC",
+      "standard": "EIP-3009 gasless transfer",
+      "gateway": "https://ghost-layer.onrender.com",
+      "settlement_seconds": 2
+    },
+    {
+      "name": "Xahau (XRPL sidechain)",
+      "asset": "XAH",
+      "features": ["Hooks", "URIToken", "PREIMAGE-SHA-256 escrow"],
+      "gateway": "https://ghost-layer.onrender.com",
+      "settlement_seconds": 4
+    }
+  ],
+  "institutional": {
+    "contact": "https://www.scriptmasterlabs.com",
+    "compliance": {
+      "data_integrity": "Zero simulated data. All market data traceable to Tradier (options), Polygon (equities), XRPL (payments). Sources disclosed on every response.",
+      "ai_act_compliance": "Decision audit trail via Xahau URIToken minting — every AI verdict is immutably notarized on-chain. Meets EU AI Act Article 13 (transparency) requirements for high-risk AI systems.",
+      "no_custody": "SqueezeOS never holds client funds. All RLUSD payments flow wallet-to-wallet on XRPL. Platform records intent and proof only.",
+      "audit_ready": "Full agent analytics funnel: discovery → free_trial → invoice → payment → premium. Agent identity tracked by XRPL wallet address."
+    },
+    "use_cases": [
+      "Hedge fund quantitative signal ingestion via MCP",
+      "Autonomous trading agent payment rail (x402 + RLUSD)",
+      "Real-time options flow surveillance for risk desks",
+      "SEC 8-K / FDA / USPTO event-driven trading signals",
+      "AI decision notarization for regulatory audit trails",
+      "Interbank RLUSD remittance routing via Ghost Layer"
+    ],
+    "sla": {
+      "uptime_target": "99.5%",
+      "data_latency": "real-time (no artificial delays)",
+      "health_check": "https://squeezeos-api.onrender.com/api/status"
+    }
   }
 }

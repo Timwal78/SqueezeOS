@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "com.scriptmasterlabs/squeezeos",
   "title": "SqueezeOS — Institutional AI Market Intelligence",
-  "description": "Institutional-grade AI trading intelligence for autonomous agents. Squeeze scanner, options flow, IWM 0DTE analysis, AI council verdicts, peer signal marketplace, and Agent Credit Bureau. All premium endpoints gated by x402 RLUSD micropayment on XRP Ledger via 402Proof. 16 MCP tools including free demo and preview endpoints.",
+  "description": "Institutional-grade AI trading intelligence for autonomous agents. Squeeze scanner, options flow, IWM 0DTE analysis, AI council verdicts, Signal Futures prediction market, Stigmergy Protocol pheromone coordination, and Agent Credit Bureau. All premium endpoints gated by x402 RLUSD micropayment on XRP Ledger via 402Proof. 36 MCP tools including free demo, preview, and antennae endpoints.",
   "version": "3.0.0",
   "websiteUrl": "https://www.scriptmasterlabs.com",
   "repository": {
@@ -32,7 +32,14 @@
     "x402",
     "micropayment",
     "agent-economy",
-    "mcp-paywall"
+    "mcp-paywall",
+    "stigmergy",
+    "pheromone-coordination",
+    "swarm-intelligence",
+    "signal-futures",
+    "institutional",
+    "hedge-fund",
+    "banks"
   ],
   "payment": {
     "protocol": "x402",
