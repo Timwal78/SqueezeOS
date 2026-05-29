@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Flyer 2 — The Intelligence Layer</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { width:1200px; height:628px; background:#010810; font-family:'Courier New',monospace; overflow:hidden; position:relative; }
+.grid { position:absolute; inset:0; background-image: linear-gradient(rgba(0,180,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(0,180,255,0.04) 1px, transparent 1px); background-size:40px 40px; }
+.orb1 { position:absolute; width:500px; height:500px; background:radial-gradient(circle, rgba(0,180,255,0.12) 0%, transparent 70%); top:-150px; left:-100px; border-radius:50%; }
+.orb2 { position:absolute; width:350px; height:350px; background:radial-gradient(circle, rgba(0,80,200,0.1) 0%, transparent 70%); bottom:-80px; right:100px; border-radius:50%; }
+.bottom-bar { position:absolute; bottom:0; left:0; right:0; height:3px; background:linear-gradient(90deg,#003080,#00d4ff,#0080ff,#00d4ff,#003080); }
+.corner { position:absolute; width:22px; height:22px; border-color:rgba(0,212,255,0.25); border-style:solid; }
+.tl { top:12px; left:12px; border-width:1px 0 0 1px; } .tr { top:12px; right:12px; border-width:1px 1px 0 0; }
+.bl { bottom:12px; left:12px; border-width:0 0 1px 1px; } .br { bottom:12px; right:12px; border-width:0 1px 1px 0; }
+.wrap { position:relative; z-index:10; display:flex; height:100%; padding:34px 38px; gap:32px; }
+.left { flex:1; display:flex; flex-direction:column; gap:16px; }
+.top-row { display:flex; align-items:center; gap:10px; }
+.badge { background:#001a30; border:1px solid #00d4ff; color:#00d4ff; font-size:9px; font-weight:bold; letter-spacing:3px; padding:3px 9px; border-radius:2px; text-transform:uppercase; }
+.brand { font-size:10px; color:#0a2a3a; letter-spacing:4px; text-transform:uppercase; }
+.headline { line-height:1.0; }
+.h1 { font-family:'Arial Black',sans-serif; font-size:46px; font-weight:900; color:#fff; letter-spacing:-1px; }
+.h2 { font-family:'Arial Black',sans-serif; font-size:44px; font-weight:900; color:#00d4ff; letter-spacing:-1px; }
+.h3 { font-family:'Arial Black',sans-serif; font-size:32px; font-weight:900; color:#0080ff; letter-spacing:-1px; }
+.tagline { font-size:12px; color:#1a3a4a; line-height:1.7; }
+.tagline strong { color:#007acc; }
+.tools-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; }
+.tool { background:rgba(0,212,255,0.04); border:1px solid rgba(0,212,255,0.1); border-radius:4px; padding:7px 10px; }
+.tool-name { font-size:8.5px; color:#00d4ff; font-weight:bold; letter-spacing:0.5px; margin-bottom:2px; }
+.tool-desc { font-size:7.5px; color:#1a3040; line-height:1.4; }
+.sources { display:flex; align-items:center; gap:8px; }
+.src-label { font-size:8px; color:#0a2030; letter-spacing:2px; text-transform:uppercase; }
+.src-chip { background:#001828; border:1px solid rgba(0,212,255,0.2); color:#005580; font-size:8px; padding:2px 7px; border-radius:2px; letter-spacing:1px; }
+.tags { display:flex; gap:5px; }
+.tags span { font-size:8px; padding:2px 6px; border-radius:2px; letter-spacing:1px; font-weight:bold; text-transform:uppercase; }
+.py { background:#1a1a2e; color:#a855f7; border:1px solid #a855f733; }
+.flask { background:#001a1a; color:#00d4ff; border:1px solid #00d4ff33; }
+.x402t { background:#1a0010; color:#ff40cc; border:1px solid #ff40cc33; }
+.mcp { background:#0e1020; color:#6366f1; border:1px solid #6366f133; }
+.right { width:288px; display:flex; flex-direction:column; gap:14px; }
+.qr-card { background:rgba(0,212,255,0.02); border:1px solid rgba(0,212,255,0.12); border-radius:8px; padding:14px; display:flex; gap:12px; align-items:flex-start; }
+.qr-img-wrap { flex-shrink:0; background:#010810; border:1px solid rgba(0,212,255,0.18); border-radius:6px; padding:6px; }
+.qr-name { font-size:10px; font-weight:bold; color:#99eeff; margin-bottom:3px; letter-spacing:0.5px; }
+.qr-what { font-size:8.5px; color:#1a3040; line-height:1.55; margin-bottom:5px; }
+.qr-who { font-size:8px; color:#00d4ff; letter-spacing:0.5px; }
+.qr-who span { color:#0080cc; }
+.divider { height:1px; background:rgba(0,212,255,0.08); }
+.stats { display:flex; justify-content:space-around; }
+.stat-item { text-align:center; }
+.stat-num { font-size:22px; font-weight:bold; color:#00d4ff; }
+.stat-lbl { font-size:7.5px; color:#0a2030; letter-spacing:1.5px; text-transform:uppercase; }
+.footer-tag { position:absolute; bottom:10px; left:50%; transform:translateX(-50%); font-size:7px; color:#020d18; letter-spacing:3px; text-transform:uppercase; white-space:nowrap; }
+</style>
+</head>
+<body>
+<div class="grid"></div><div class="orb1"></div><div class="orb2"></div>
+<div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+<div class="bottom-bar"></div>
+<div class="wrap">
+  <div class="left">
+    <div class="top-row"><span class="badge">⬤ 16 TOOLS LIVE</span><span class="brand">ScriptMaster Labs · SqueezeOS</span></div>
+    <div class="headline"><div class="h1">SEE THE</div><div class="h2">SQUEEZE</div><div class="h3">Before the crowd does.</div></div>
+    <p class="tagline">Institutional-grade market intelligence API. <strong>16 tools</strong> covering squeeze detection,<br>gamma walls, dark pool signals, and block flow — live data, no retail noise.</p>
+    <div class="tools-grid">
+      <div class="tool"><div class="tool-name">Squeeze Detector</div><div class="tool-desc">Identifies high short-interest + low float setups in real-time</div></div>
+      <div class="tool"><div class="tool-name">Gamma Wall Scanner</div><div class="tool-desc">Finds options strike clusters where dealers must hedge</div></div>
+      <div class="tool"><div class="tool-name">Dark Pool Signals</div><div class="tool-desc">Off-exchange block trade detection with directional bias</div></div>
+      <div class="tool"><div class="tool-name">Block Flow</div><div class="tool-desc">Unusual options activity — smart money positioning alerts</div></div>
+      <div class="tool"><div class="tool-name">Sector Rotation</div><div class="tool-desc">Institutional capital flow between sectors, live heat map</div></div>
+      <div class="tool"><div class="tool-name">+ 11 More Tools</div><div class="tool-desc">Full MCP-compatible endpoint for autonomous AI agents</div></div>
+    </div>
+    <div style="display:flex; align-items:center; gap:14px; justify-content:space-between;">
+      <div class="sources"><span class="src-label">Data:</span><span class="src-chip">Tradier</span><span class="src-chip">Polygon</span><span class="src-chip">Alpaca</span></div>
+      <div class="tags"><span class="py">Python</span><span class="flask">Flask MCP</span><span class="x402t">x402</span><span class="mcp">AI-Native</span></div>
+    </div>
+  </div>
+  <div class="right">
+    <div class="qr-card">
+      <div class="qr-img-wrap"><img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://squeezeos-api.onrender.com/api/status&bgcolor=010810&color=00d4ff&margin=3" width="100" height="100" alt="SqueezeOS API"></div>
+      <div><div class="qr-name">SqueezeOS API Status</div><div class="qr-what">Live status dashboard for all 16 tools. Shows active data sources, endpoint health, and real-time squeeze detection across the market. x402 payment-gated access available.</div><div class="qr-who">For: <span>Traders, quant funds, AI agent developers</span></div></div>
+    </div>
+    <div class="divider"></div>
+    <div class="qr-card">
+      <div class="qr-img-wrap"><img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://four02proof.onrender.com&bgcolor=010810&color=0080ff&margin=3" width="100" height="100" alt="402Proof"></div>
+      <div><div class="qr-name">402Proof — Payment Firewall</div><div class="qr-what">Every API call is x402-gated. No API key required — agents pay per request in USDC. A credit bureau for machine-to-machine payments. Drop-in middleware for any service.</div><div class="qr-who">For: <span>API builders, AI agent developers, SaaS platforms</span></div></div>
+    </div>
+    <div class="stats">
+      <div class="stat-item"><div class="stat-num">16</div><div class="stat-lbl">live tools</div></div>
+      <div class="stat-item"><div class="stat-num">3</div><div class="stat-lbl">data feeds</div></div>
+      <div class="stat-item"><div class="stat-num">0</div><div class="stat-lbl">subscriptions</div></div>
+    </div>
+  </div>
+</div>
+<div class="footer-tag">ScriptMaster Labs · SqueezeOS Intelligence API · x402 Payment-Gated · Real Data · No Retail Noise</div>
+</body>
+</html>

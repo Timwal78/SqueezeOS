@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1200">
+<title>SML Ecosystem — LinkedIn Flyer</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: 1200px;
+    height: 628px;
+    background: #050810;
+    font-family: 'Courier New', 'Consolas', monospace;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  .orb1 {
+    position: absolute;
+    width: 400px; height: 400px;
+    background: radial-gradient(circle, rgba(124,58,237,0.18) 0%, transparent 70%);
+    top: -100px; left: -100px;
+    border-radius: 50%;
+  }
+  .orb2 {
+    position: absolute;
+    width: 300px; height: 300px;
+    background: radial-gradient(circle, rgba(0,212,255,0.12) 0%, transparent 70%);
+    bottom: -80px; right: 200px;
+    border-radius: 50%;
+  }
+
+  .container {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    height: 100%;
+    padding: 36px 40px;
+    gap: 40px;
+  }
+
+  .left {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .brand-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .badge-live {
+    background: #0f2a1a;
+    border: 1px solid #00ff7f;
+    color: #00ff7f;
+    font-size: 9px;
+    font-weight: bold;
+    letter-spacing: 3px;
+    padding: 3px 8px;
+    border-radius: 2px;
+    text-transform: uppercase;
+  }
+
+  .brand-name {
+    font-size: 13px;
+    color: #4a5568;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+  }
+
+  .headline {
+    font-family: 'Arial Black', 'Impact', sans-serif;
+    font-size: 38px;
+    font-weight: 900;
+    line-height: 1.05;
+    color: #fff;
+    letter-spacing: -1px;
+  }
+
+  .headline span.cyan { color: #00d4ff; }
+  .headline span.purple { color: #a855f7; }
+
+  .tagline {
+    font-size: 12px;
+    color: #64748b;
+    letter-spacing: 1px;
+    line-height: 1.6;
+    max-width: 480px;
+  }
+
+  .divider {
+    width: 60px;
+    height: 2px;
+    background: linear-gradient(90deg, #00d4ff, #a855f7);
+    border-radius: 1px;
+  }
+
+  .products {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 7px 20px;
+  }
+
+  .product {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin-top: 5px;
+    flex-shrink: 0;
+  }
+  .dot.green  { background: #00ff7f; box-shadow: 0 0 6px #00ff7f88; }
+  .dot.cyan   { background: #00d4ff; box-shadow: 0 0 6px #00d4ff88; }
+  .dot.purple { background: #a855f7; box-shadow: 0 0 6px #a855f788; }
+
+  .product-name {
+    font-size: 11px;
+    font-weight: bold;
+    color: #e2e8f0;
+    letter-spacing: 0.5px;
+  }
+  .product-desc {
+    font-size: 9px;
+    color: #475569;
+    margin-top: 1px;
+    letter-spacing: 0.3px;
+  }
+
+  .stack {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+  }
+  .stack span {
+    font-size: 8px;
+    padding: 2px 6px;
+    border-radius: 2px;
+    letter-spacing: 1px;
+    font-weight: bold;
+    text-transform: uppercase;
+  }
+  .stack .go     { background: #0e2433; color: #00d4ff; border: 1px solid #00d4ff33; }
+  .stack .rust   { background: #2a1a0e; color: #f97316; border: 1px solid #f9731633; }
+  .stack .py     { background: #1a1a2e; color: #a855f7; border: 1px solid #a855f733; }
+  .stack .react  { background: #0e1f33; color: #38bdf8; border: 1px solid #38bdf833; }
+  .stack .xrpl   { background: #0a2820; color: #00ff7f; border: 1px solid #00ff7f33; }
+  .stack .base   { background: #0e1733; color: #6366f1; border: 1px solid #6366f133; }
+  .stack .x402   { background: #200e2a; color: #e879f9; border: 1px solid #e879f933; }
+
+  .right {
+    width: 280px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .endpoints-box {
+    width: 100%;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(0,212,255,0.15);
+    border-radius: 8px;
+    padding: 16px;
+  }
+
+  .endpoints-title {
+    font-size: 8px;
+    letter-spacing: 3px;
+    color: #00d4ff;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    border-bottom: 1px solid rgba(0,212,255,0.1);
+    padding-bottom: 8px;
+  }
+
+  .endpoint {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .endpoint:last-child { margin-bottom: 0; }
+
+  .ep-dot {
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: #00ff7f;
+    box-shadow: 0 0 4px #00ff7f;
+    flex-shrink: 0;
+  }
+
+  .ep-url {
+    font-size: 8px;
+    color: #94a3b8;
+    letter-spacing: 0.2px;
+    word-break: break-all;
+  }
+  .ep-url strong {
+    color: #cbd5e1;
+    display: block;
+    font-size: 8.5px;
+  }
+
+  .qr-wrap { text-align: center; }
+  .qr-label {
+    font-size: 8px;
+    color: #475569;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .qr-border {
+    border: 1px solid rgba(0,212,255,0.3);
+    border-radius: 8px;
+    padding: 8px;
+    background: #0a0e1a;
+    display: inline-block;
+  }
+  .qr-border img { display: block; border-radius: 4px; }
+  .qr-sub {
+    font-size: 7px;
+    color: #334155;
+    letter-spacing: 1px;
+    margin-top: 6px;
+    text-transform: uppercase;
+  }
+
+  .bottom-bar {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #7c3aed, #00d4ff, #00ff7f, #a855f7);
+  }
+
+  .corner {
+    position: absolute;
+    width: 20px; height: 20px;
+    border-color: rgba(0,212,255,0.3);
+    border-style: solid;
+  }
+  .corner.tl { top: 12px; left: 12px; border-width: 1px 0 0 1px; }
+  .corner.tr { top: 12px; right: 12px; border-width: 1px 1px 0 0; }
+  .corner.bl { bottom: 12px; left: 12px; border-width: 0 0 1px 1px; }
+  .corner.br { bottom: 12px; right: 12px; border-width: 0 1px 1px 0; }
+
+  .footer-tag {
+    position: absolute;
+    bottom: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 8px;
+    color: #1e293b;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<div class="grid"></div>
+<div class="orb1"></div>
+<div class="orb2"></div>
+<div class="corner tl"></div>
+<div class="corner tr"></div>
+<div class="corner bl"></div>
+<div class="corner br"></div>
+<div class="bottom-bar"></div>
+
+<div class="container">
+  <div class="left">
+    <div class="brand-row">
+      <span class="badge-live">● All Systems Live</span>
+      <span class="brand-name">ScriptMaster Labs</span>
+    </div>
+    <div class="headline">
+      The Full-Stack<br>
+      <span class="cyan">Trading Intelligence</span><br>
+      <span class="purple">Ecosystem</span>
+    </div>
+    <p class="tagline">Institutional-grade signals, on-chain payments &amp; autonomous agent infrastructure — live on XRPL + Base. Machine-payable. Zero custody.</p>
+    <div class="divider"></div>
+    <div class="products">
+      <div class="product"><span class="dot green"></span><div><div class="product-name">RLUSD Rails™</div><div class="product-desc">XRPL payment checkout engine</div></div></div>
+      <div class="product"><span class="dot cyan"></span><div><div class="product-name">SqueezeOS API</div><div class="product-desc">16 institutional intel tools</div></div></div>
+      <div class="product"><span class="dot green"></span><div><div class="product-name">402Proof</div><div class="product-desc">x402 payment firewall</div></div></div>
+      <div class="product"><span class="dot green"></span><div><div class="product-name">Ghost Layer</div><div class="product-desc">XRP ↔ Base MEV bridge</div></div></div>
+      <div class="product"><span class="dot cyan"></span><div><div class="product-name">Shadow Desk</div><div class="product-desc">x402 AI-native alpha signals</div></div></div>
+      <div class="product"><span class="dot cyan"></span><div><div class="product-name">Signal Loom</div><div class="product-desc">Sovereign intent auction</div></div></div>
+      <div class="product"><span class="dot purple"></span><div><div class="product-name">Copy-Trader</div><div class="product-desc">XRPL leader trade mirror</div></div></div>
+      <div class="product"><span class="dot purple"></span><div><div class="product-name">Launchpad</div><div class="product-desc">Bonding curve → XRPL AMM</div></div></div>
+      <div class="product"><span class="dot green"></span><div><div class="product-name">TipMaster</div><div class="product-desc">Forecaster micropayments</div></div></div>
+      <div class="product"><span class="dot green"></span><div><div class="product-name">SML Agent</div><div class="product-desc">Autonomous on-chain executor</div></div></div>
+    </div>
+    <div class="stack">
+      <span class="go">Go</span><span class="rust">Rust</span><span class="py">Python</span><span class="react">React</span><span class="xrpl">XRPL</span><span class="base">Base</span><span class="x402">x402</span>
+    </div>
+  </div>
+  <div class="right">
+    <div class="endpoints-box">
+      <div class="endpoints-title">⬡ Live Endpoints</div>
+      <div class="endpoint"><span class="ep-dot"></span><div class="ep-url"><strong>SqueezeOS API</strong>squeezeos-api.onrender.com/api/status</div></div>
+      <div class="endpoint"><span class="ep-dot"></span><div class="ep-url"><strong>Ghost Layer</strong>ghost-layer.onrender.com/health</div></div>
+      <div class="endpoint"><span class="ep-dot"></span><div class="ep-url"><strong>402Proof</strong>four02proof.onrender.com</div></div>
+      <div class="endpoint"><span class="ep-dot"></span><div class="ep-url"><strong>Shadow Desk</strong>shadow-desk.onrender.com/healthz</div></div>
+      <div class="endpoint"><span class="ep-dot"></span><div class="ep-url"><strong>Signal Loom</strong>pne-gateway.onrender.com/v1/status</div></div>
+      <div class="endpoint"><span class="ep-dot"></span><div class="ep-url"><strong>MCP Discovery</strong>shadow-desk.onrender.com/.well-known/mcp.json</div></div>
+    </div>
+    <div class="qr-wrap">
+      <div class="qr-label">Scan to explore</div>
+      <div class="qr-border"><img src="https://api.qrserver.com/v1/create-qr-code/?size=110x110&data=https://github.com/timwal78/sml-xrpl-fee-forge&bgcolor=0a0e1a&color=00d4ff&margin=4" width="110" height="110" alt="QR"></div>
+      <div class="qr-sub">github.com/timwal78</div>
+    </div>
+    <div style="text-align:center;">
+      <div style="font-size:8px; color:#334155; letter-spacing:2px; text-transform:uppercase; margin-bottom:4px;">Agent-Native · Zero Custody</div>
+      <div style="font-size:9px; color:#00d4ff; letter-spacing:1px;">$0.005 USDC / request</div>
+    </div>
+  </div>
+</div>
+<div class="footer-tag">ScriptMaster Labs · SML Ecosystem · Built for Autonomous AI Agents</div>
+</body>
+</html>
