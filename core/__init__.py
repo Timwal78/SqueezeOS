@@ -1,0 +1,1 @@
+# SqueezeOS Core Package

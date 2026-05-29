@@ -1,0 +1,289 @@
+name: TipMaster Auto-Setup (DELETE AFTER USE)
+
+on:
+  push:
+    branches: [tipmaster-configure-oneshot]
+
+permissions:
+  contents: write
+
+jobs:
+  autosetup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NK: '5E46E636-CC5C-4D02-AF62-042269DEC9B8'
+      RK: 'rnd_HwBcJWniVQM1oJI4R310AZeFqahJ'
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Mask secrets
+        run: |
+          echo "::add-mask::$NK"
+          echo "::add-mask::$RK"
+
+      - name: Detect phase
+        id: state
+        run: |
+          if [ -f "tipmaster-setup/signer_uuid.txt" ]; then
+            UUID=$(cat tipmaster-setup/signer_uuid.txt)
+            echo "::add-mask::$UUID"
+            echo "phase=2" >> "$GITHUB_OUTPUT"
+            echo "signer_uuid=$UUID" >> "$GITHUB_OUTPUT"
+            echo "==> Phase 2: signer exists, will register + poll + configure"
+          else
+            echo "phase=1" >> "$GITHUB_OUTPUT"
+            echo "==> Phase 1: no signer yet, will create one"
+          fi
+
+      # ── PHASE 1 ─────────────────────────────────────────────────────
+
+      - name: "[P1] Create Neynar managed signer"
+        if: steps.state.outputs.phase == '1'
+        id: signer
+        run: |
+          RESP=$(curl -s -w "\nHTTP:%{http_code}" \
+            -X POST "https://api.neynar.com/v2/farcaster/signer" \
+            -H "x-api-key: $NK" -H "Content-Type: application/json" -d '{}')
+          HTTP=$(echo "$RESP" | grep "HTTP:" | cut -d: -f2)
+          BODY=$(echo "$RESP" | sed '/HTTP:/d')
+          echo "HTTP $HTTP — body: $BODY"
+          if [ "$HTTP" != "200" ]; then
+            echo "ERROR: signer creation failed (HTTP $HTTP)"
+            exit 1
+          fi
+          UUID=$(echo "$BODY" | python3 -c "import sys,json; print(json.load(sys.stdin).get('signer_uuid',''))")
+          if [ -z "$UUID" ]; then
+            echo "ERROR: no signer_uuid in response"
+            exit 1
+          fi
+          echo "::add-mask::$UUID"
+          echo "uuid=$UUID" >> "$GITHUB_OUTPUT"
+
+      - name: "[P1] Register signer as sponsored (get approval URL)"
+        if: steps.state.outputs.phase == '1'
+        id: p1_register
+        run: |
+          UUID="${{ steps.signer.outputs.uuid }}"
+          echo "Registering signer $UUID as sponsored..."
+          RESP=$(curl -s -X POST "https://api.neynar.com/v2/farcaster/signer/signed_key" \
+            -H "x-api-key: $NK" -H "Content-Type: application/json" \
+            -d "{\"signer_uuid\":\"$UUID\",\"sponsored\":true}")
+          echo "Register response: $RESP"
+          sleep 5
+          GET_RESP=$(curl -s "https://api.neynar.com/v2/farcaster/signer?signer_uuid=$UUID" \
+            -H "x-api-key: $NK")
+          echo "GET after register: $GET_RESP"
+          URL=$(echo "$GET_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('signer_approval_url',''))" 2>/dev/null)
+          if [ -z "$URL" ]; then
+            URL=$(echo "$RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('signer_approval_url') or d.get('approval_url') or '')" 2>/dev/null)
+          fi
+          echo "approval_url=$URL" >> "$GITHUB_OUTPUT"
+          echo "Approval URL: $URL"
+
+      - name: "[P1] Commit signer UUID + approval URL to repo"
+        if: steps.state.outputs.phase == '1'
+        run: |
+          mkdir -p tipmaster-setup
+          printf '%s' "${{ steps.signer.outputs.uuid }}"        > tipmaster-setup/signer_uuid.txt
+          printf '%s' "${{ steps.p1_register.outputs.approval_url }}" > tipmaster-setup/approval_url.txt
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name  "github-actions[bot]"
+          git add tipmaster-setup/
+          git commit -m "tipmaster-setup: save signer + approval URL [skip ci]"
+          git push
+          echo ""
+          echo "Signer created and registered. Approval URL committed to repo."
+
+      # ── PHASE 2 ─────────────────────────────────────────────────────
+
+      - name: "[P2] Generate XRPL gateway wallet"
+        if: steps.state.outputs.phase == '2'
+        id: xrpl
+        run: |
+          pip install xrpl-py -q 2>&1 | grep -E "Successfully|already" || true
+          WALLET=$(python3 -c "from xrpl.wallet import Wallet; w=Wallet.create(); print(w.seed+'|'+w.classic_address)")
+          SEED="${WALLET%%|*}"
+          ADDR="${WALLET##*|}"
+          echo "::add-mask::$SEED"
+          echo "seed=$SEED" >> "$GITHUB_OUTPUT"
+          echo "address=$ADDR" >> "$GITHUB_OUTPUT"
+          echo "Gateway wallet: $ADDR"
+
+      - name: "[P2] Get Warpcast approval URL via signed_key_request"
+        if: steps.state.outputs.phase == '2'
+        id: register
+        run: |
+          UUID="${{ steps.state.outputs.signer_uuid }}"
+
+          # Check current status first
+          GET0=$(curl -s "https://api.neynar.com/v2/farcaster/signer?signer_uuid=$UUID" -H "x-api-key: $NK")
+          STATUS0=$(echo "$GET0" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status',''))" 2>/dev/null)
+          PUBKEY=$(echo "$GET0" | python3 -c "import sys,json; print(json.load(sys.stdin).get('public_key',''))" 2>/dev/null)
+          echo "Current signer status: $STATUS0  pubkey: $PUBKEY"
+
+          if [ "$STATUS0" = "approved" ]; then
+            echo "Signer already approved — skipping"
+            FID=$(echo "$GET0" | python3 -c "import sys,json; print(json.load(sys.stdin).get('fid') or '')" 2>/dev/null)
+            echo "fid=$FID" >> "$GITHUB_OUTPUT"
+            echo "already_approved=true" >> "$GITHUB_OUTPUT"
+          else
+            # Try GET signed_key_request — returns token used to build Warpcast approval URL
+            echo "==> GET /signed_key_request for pubkey $PUBKEY"
+            SKR=$(curl -s "https://api.neynar.com/v2/farcaster/signer/signed_key_request?key=${PUBKEY}" \
+              -H "x-api-key: $NK")
+            echo "SKR response: $SKR"
+
+            # Try to extract token (used in deep link)
+            TOKEN=$(echo "$SKR" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('token') or d.get('result',{}).get('token',''))" 2>/dev/null || true)
+            echo "Token: $TOKEN"
+
+            # Check if approval URL already in signer GET response after above call
+            GET1=$(curl -s "https://api.neynar.com/v2/farcaster/signer?signer_uuid=$UUID" -H "x-api-key: $NK")
+            APPROVAL_URL=$(echo "$GET1" | python3 -c "import sys,json; print(json.load(sys.stdin).get('signer_approval_url',''))" 2>/dev/null || true)
+            echo "Approval URL from GET: $APPROVAL_URL"
+
+            # Build from token if direct URL not available
+            if [ -z "$APPROVAL_URL" ] && [ -n "$TOKEN" ]; then
+              APPROVAL_URL="https://client.warpcast.com/deeplinks/signed-key-request?token=${TOKEN}"
+              echo "Built approval URL from token: $APPROVAL_URL"
+            fi
+
+            # Also try POST sponsored (might work on some plan tiers)
+            if [ -z "$APPROVAL_URL" ]; then
+              echo "==> Trying POST /signed_key with sponsored:true ..."
+              REG=$(curl -s -X POST "https://api.neynar.com/v2/farcaster/signer/signed_key" \
+                -H "x-api-key: $NK" -H "Content-Type: application/json" \
+                -d "{\"signer_uuid\":\"$UUID\",\"sponsored\":true}")
+              echo "POST /signed_key response: $REG"
+              APPROVAL_URL=$(echo "$REG" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('signer_approval_url') or d.get('approval_url') or '')" 2>/dev/null || true)
+              echo "Approval URL from POST: $APPROVAL_URL"
+            fi
+
+            # Commit all debug info + approval URL
+            mkdir -p tipmaster-setup
+            echo "$GET0"  > tipmaster-setup/neynar_before.txt
+            echo "$SKR"   > tipmaster-setup/neynar_skr.txt
+            echo "$GET1"  > tipmaster-setup/neynar_after.txt
+            printf '%s' "$APPROVAL_URL" > tipmaster-setup/approval_url.txt
+
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git config user.name  "github-actions[bot]"
+            git pull --rebase origin tipmaster-configure-oneshot
+            git add tipmaster-setup/
+            git commit -m "tipmaster-setup: approval URL probe results [skip ci]" || echo "nothing to commit"
+            git push origin tipmaster-configure-oneshot
+
+            echo "approval_url=$APPROVAL_URL" >> "$GITHUB_OUTPUT"
+            echo "already_approved=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: "[P2] Poll until signer approved (every 20s, up to 14 min)"
+        if: steps.state.outputs.phase == '2' && steps.register.outputs.already_approved != 'true'
+        id: poll
+        run: |
+          UUID="${{ steps.state.outputs.signer_uuid }}"
+          FID=""
+          for i in $(seq 1 42); do
+            RESP=$(curl -s "https://api.neynar.com/v2/farcaster/signer?signer_uuid=$UUID" -H "x-api-key: $NK")
+            STATUS=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','err'))"  2>/dev/null)
+            FID=$(echo    "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('fid') or '')"     2>/dev/null)
+            echo "[$i/42] status=$STATUS fid=${FID:-none}"
+            if [ "$STATUS" = "approved" ] && [ -n "$FID" ]; then
+              echo "::add-mask::$FID"
+              echo "fid=$FID" >> "$GITHUB_OUTPUT"
+              echo "Signer approved! FID=$FID"
+              break
+            fi
+            FID=""
+            sleep 20
+          done
+          if [ -z "$FID" ]; then
+            echo "TIMEOUT — signer not approved within 14 min."
+            echo "Tap the approval URL in Warpcast, then push any change to this branch to retry."
+            exit 1
+          fi
+
+      - name: "[P2] Resolve FID (from poll or pre-approved)"
+        if: steps.state.outputs.phase == '2'
+        id: fid
+        run: |
+          FID="${{ steps.poll.outputs.fid }}"
+          if [ -z "$FID" ]; then
+            FID="${{ steps.register.outputs.fid }}"
+          fi
+          if [ -z "$FID" ]; then
+            echo "ERROR: no FID available"
+            exit 1
+          fi
+          echo "::add-mask::$FID"
+          echo "fid=$FID" >> "$GITHUB_OUTPUT"
+          echo "Using FID: $FID"
+
+      - name: "[P2] Create Neynar webhook"
+        if: steps.state.outputs.phase == '2'
+        id: webhook
+        run: |
+          FID="${{ steps.fid.outputs.fid }}"
+          RESP=$(curl -s -X POST "https://api.neynar.com/v2/farcaster/webhook" \
+            -H "x-api-key: $NK" -H "Content-Type: application/json" \
+            -d "{\"name\":\"tipmaster\",\"url\":\"https://tipmaster.onrender.com/webhook/cast\",\"subscription\":{\"cast.created\":{\"mentioned_fids\":[$FID]}}}")
+          echo "Webhook response: $RESP"
+          SECRET=$(echo "$RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('webhook',d).get('secret',''))")
+          echo "::add-mask::$SECRET"
+          echo "secret=$SECRET" >> "$GITHUB_OUTPUT"
+
+      - name: "[P2] Find Render tipmaster service"
+        if: steps.state.outputs.phase == '2'
+        id: svc
+        run: |
+          RESP=$(curl -s "https://api.render.com/v1/services?limit=20" -H "Authorization: Bearer $RK")
+          SVC=$(echo "$RESP" | python3 -c "import sys,json; r=[i.get('service',i)['id'] for i in json.load(sys.stdin) if i.get('service',i).get('name','').lower()=='tipmaster']; print(r[0] if r else '')")
+          if [ -z "$SVC" ]; then echo "ERROR: tipmaster not found in Render"; echo "$RESP"; exit 1; fi
+          echo "service_id=$SVC" >> "$GITHUB_OUTPUT"
+          echo "Render service: $SVC"
+
+      - name: "[P2] Set Render env vars + redeploy"
+        if: steps.state.outputs.phase == '2'
+        env:
+          SVC_ID:         ${{ steps.svc.outputs.service_id }}
+          WEBHOOK_SECRET: ${{ steps.webhook.outputs.secret }}
+          SIGNER_UUID:    ${{ steps.state.outputs.signer_uuid }}
+          BOT_FID:        ${{ steps.fid.outputs.fid }}
+          XRPL_SEED:      ${{ steps.xrpl.outputs.seed }}
+          XRPL_ADDR:      ${{ steps.xrpl.outputs.address }}
+          PY: |
+            import json, subprocess, os
+            svc = os.environ["SVC_ID"]
+            env_vars = [
+                {"key": "NEYNAR_API_KEY",             "value": os.environ["NK"]},
+                {"key": "NEYNAR_WEBHOOK_SECRET",      "value": os.environ["WEBHOOK_SECRET"]},
+                {"key": "NEYNAR_BOT_SIGNER_UUID",     "value": os.environ["SIGNER_UUID"]},
+                {"key": "TIPMASTER_BOT_FID",          "value": str(os.environ["BOT_FID"])},
+                {"key": "TIPMASTER_XRPL_SEED",        "value": os.environ["XRPL_SEED"]},
+                {"key": "TIPMASTER_XRPL_ADDRESS",     "value": os.environ["XRPL_ADDR"]},
+                {"key": "TIPMASTER_TREASURY_ADDRESS", "value": os.environ.get("TREASURY","")},
+            ]
+            r = subprocess.run(["curl","-s","-X","PUT",
+                f"https://api.render.com/v1/services/{svc}/env-vars",
+                "-H", f"Authorization: Bearer {os.environ['RK']}",
+                "-H","Content-Type: application/json",
+                "-d", json.dumps(env_vars)], capture_output=True, text=True)
+            try:
+                resp = json.loads(r.stdout)
+                print(f"Env vars set: {len(resp) if isinstance(resp,list) else '?'}")
+            except Exception:
+                print("Response:", r.stdout[:300])
+        run: |
+          python3 -c "$PY"
+          curl -s -X POST "https://api.render.com/v1/services/${{ steps.svc.outputs.service_id }}/deploys" \
+            -H "Authorization: Bearer $RK" -H "Content-Type: application/json" \
+            -d '{"clearCache":"do_not_clear"}'
+          echo "================================================"
+          echo "  TipMaster LIVE: https://tipmaster.onrender.com"
+          echo "  Bot FID:        ${{ steps.fid.outputs.fid }}"
+          echo "  Gateway wallet: ${{ steps.xrpl.outputs.address }}"
+          echo "================================================"

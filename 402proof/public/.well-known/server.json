@@ -1,0 +1,53 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "com.scriptmasterlabs/402proof",
+  "title": "402Proof — x402 Agent Payment Compliance Firewall",
+  "description": "MCP server for the 402Proof x402 payment infrastructure. Issue RLUSD and XAH invoices, verify XRPL and Xahau transactions, retrieve compliance receipts, check Agent Passport loyalty tiers, and run Agent Credit Bureau scoring (300-850 FICO-style). All premium SqueezeOS endpoints gated here. 11 tools — 2 free, 9 paid.",
+  "version": "2.1.0",
+  "websiteUrl": "https://four02proof.onrender.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/timwal78/squeezeos"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://four02proof.onrender.com/mcp"
+    }
+  ],
+  "capabilities": {
+    "tools": true,
+    "resources": false,
+    "prompts": false,
+    "sampling": false
+  },
+  "tags": [
+    "payment",
+    "x402",
+    "xrpl",
+    "rlusd",
+    "xahau",
+    "xah",
+    "micropayment",
+    "agent-economy",
+    "compliance",
+    "credit-bureau",
+    "loyalty",
+    "agent-passport",
+    "finance"
+  ],
+  "payment": {
+    "protocol": "x402",
+    "assets": ["RLUSD/XRPL", "XAH/Xahau"],
+    "free_tools": ["bureau_public_score", "bureau_verify_attestation", "platform_stats"]
+  },
+  "_meta": {
+    "io.modelcontextprotocol.registry/publisher-provided": {
+      "operator": "Script Master Labs",
+      "contact": "https://www.scriptmasterlabs.com",
+      "payment_protocol": "x402",
+      "stats": "https://four02proof.onrender.com/v1/stats",
+      "llms_txt": "https://four02proof.onrender.com/llms.txt"
+    }
+  }
+}
