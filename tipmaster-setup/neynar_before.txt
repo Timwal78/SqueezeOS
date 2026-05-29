@@ -1,0 +1,1 @@
+{"signer_uuid":"3fb9ec3f-383a-4cd6-9bad-1cdae6c5f73b","public_key":"0x77ab331f9e46d09234554d7ef1ba417f979225c045c291c80aa7076602db7ede","status":"generated"}

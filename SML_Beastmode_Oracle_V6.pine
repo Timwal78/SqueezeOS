@@ -1,0 +1,299 @@
+//@version=6
+// ╔══════════════════════════════════════════════════════════════════════╗
+// ║  SML COMMAND CENTER — ORACLE BEASTMODE V6                          ║
+// ║  Codename: ORACLE  |  Proprietary Fractal/Gamma Alignment System   ║
+// ║  Target: GME · AMC · IWM  |  0DTE Sweet Spot: $1–$60              ║
+// ║  Backend: SqueezeOS Core (localhost:8182/api/oracle)               ║
+// ╚══════════════════════════════════════════════════════════════════════╝
+indicator("SML Oracle Beastmode V6", overlay=true, max_labels_count=500, max_lines_count=200)
+
+// ─────────────────────────────────────────────────────────────────────
+// SECTION 1 — COLOR PALETTE (Full Shield Philosophy)
+// ─────────────────────────────────────────────────────────────────────
+var color COL_BUY         = #00FF41   // Neon Green  — Alpha Expansion
+var color COL_SELL        = #FF3131   // Neon Red    — Macro Collapse
+var color COL_HOLD        = #FFD700   // Gold        — Staging
+var color COL_SHIELD      = #888888   // Gray        — Stand Aside
+var color COL_VWAP        = #62E6FF   // Cyan        — Institutional Floor
+var color COL_GAMMA_ABOVE = #FF9F1C   // Orange      — Wall Above
+var color COL_GAMMA_BELOW = #9B5CFF   // Purple      — Wall Below
+var color COL_BG          = #000000   // Jet Black   — Shield Background
+var color COL_FRACTAL_HI  = #00FF41   // Sep2020 echo high
+var color COL_FRACTAL_LO  = #FF3131   // Fractal low echo
+var color TRANSP_BUY      = color.new(#00FF41, 80)
+var color TRANSP_SELL     = color.new(#FF3131, 80)
+var color TRANSP_HOLD     = color.new(#FFD700, 85)
+
+// ─────────────────────────────────────────────────────────────────────
+// SECTION 2 — INPUTS
+// ─────────────────────────────────────────────────────────────────────
+grp_core   = "Oracle Core"
+grp_gamma  = "Gamma Walls"
+grp_frac   = "Fractal Engine"
+grp_vpin   = "VPIN / Flow"
+grp_alert  = "Alerts"
+grp_visual = "Visuals"
+
+// Sweet spot filter
+i_ssMin     = input.float(1.0,   "Sweet Spot Min ($)",  group=grp_core)
+i_ssMax     = input.float(60.0,  "Sweet Spot Max ($)",  group=grp_core)
+i_showOnly  = input.bool(true,   "Filter: Only label in Sweet Spot", group=grp_core)
+
+// Manual gamma wall overrides (auto-populated via alert webhooks)
+i_wallAbove = input.float(0.0,  "Gamma Wall ABOVE (0=auto)", group=grp_gamma)
+i_wallBelow = input.float(0.0,  "Gamma Wall BELOW (0=auto)", group=grp_gamma)
+
+// VPIN window
+i_vpinLen   = input.int(50, "VPIN Volume Window", minval=10, maxval=500, group=grp_vpin)
+
+// Fractal parameters
+i_fracLen   = input.int(21,  "Fractal Pivot Length",     minval=5,  group=grp_frac)
+i_echoLen   = input.int(252, "Echo Lookback (bars)",     minval=50, group=grp_frac)
+i_echoTol   = input.float(0.05, "Echo Tolerance (%)",   minval=0.01, maxval=0.2, group=grp_frac, step=0.01)
+
+// RSI / momentum
+i_rsiLen    = input.int(14, "RSI Length", group=grp_vpin)
+i_rsiOB     = input.int(60, "RSI Bull Threshold", group=grp_vpin)
+i_rsiOS     = input.int(40, "RSI Bear Threshold",  group=grp_vpin)
+
+// Visuals
+i_showVwap   = input.bool(true, "Show VWAP",          group=grp_visual)
+i_showBands  = input.bool(true, "Show VWAP Bands",    group=grp_visual)
+i_showLabels = input.bool(true, "Show BUY/SELL Labels", group=grp_visual)
+i_showFrac   = input.bool(true, "Show Fractal Pivots", group=grp_visual)
+i_showGamma  = input.bool(true, "Show Gamma Walls",   group=grp_visual)
+i_showBg     = input.bool(true, "Show Regime Background", group=grp_visual)
+
+// Alerts
+i_alertBuy   = input.bool(true, "Alert on BUY",   group=grp_alert)
+i_alertSell  = input.bool(true, "Alert on SELL",  group=grp_alert)
+i_alertFlip  = input.bool(true, "Alert on Gamma Flip", group=grp_alert)
+
+// ─────────────────────────────────────────────────────────────────────
+// SECTION 3 — VWAP + BANDS (v6 compliant — no transp)
+// ─────────────────────────────────────────────────────────────────────
+[vwap_val, vwap_upper, vwap_lower] = ta.vwap(hlc3, false, 1)
+vwap_upper2 = vwap_val + 2 * ta.stdev(hlc3, 20)
+vwap_lower2 = vwap_val - 2 * ta.stdev(hlc3, 20)
+
+p_vwap   = plot(i_showVwap ? vwap_val : na, "VWAP (Institutional Floor)", COL_VWAP, 2)
+p_vb1u   = plot(i_showBands ? vwap_upper : na, "VWAP +1σ", color.new(COL_VWAP, 75), 1)
+p_vb1l   = plot(i_showBands ? vwap_lower : na, "VWAP -1σ", color.new(COL_VWAP, 75), 1)
+p_vb2u   = plot(i_showBands ? vwap_upper2 : na, "VWAP +2σ", color.new(COL_BUY, 80), 1, plot.style_circles)
+p_vb2l   = plot(i_showBands ? vwap_lower2 : na, "VWAP -2σ", color.new(COL_SELL, 80), 1, plot.style_circles)
+fill(p_vb1u, p_vb1l, color.new(COL_VWAP, 95))
+
+// ─────────────────────────────────────────────────────────────────────
+// SECTION 4 — VPIN PROXY (Volume-synchronized Probability of Informed Trading)
+// Proxy: buyer-initiated vs seller-initiated volume imbalance
+// ─────────────────────────────────────────────────────────────────────
+buyVol  = close > open ? volume : close == open ? volume * 0.5 : 0.0
+sellVol = close < open ? volume : close == open ? volume * 0.5 : 0.0
+vpinRaw = math.abs(buyVol - sellVol) / math.max(volume, 1)
+vpin    = ta.sma(vpinRaw, i_vpinLen)
+vpinHigh = vpin > 0.65  // > 65% order toxicity = informed flow
+
+// ─────────────────────────────────────────────────────────────────────
+// SECTION 5 — RSI + MOMENTUM
+// ─────────────────────────────────────────────────────────────────────
+rsi        = ta.rsi(close, i_rsiLen)
+rsiAboveVwap = close > vwap_val
+rsiBull    = rsi > i_rsiOB and rsiAboveVwap
+rsiBear    = rsi < i_rsiOS and not rsiAboveVwap
+
+// EMA stack (21/55/200 — institutional standard)
+ema21  = ta.ema(close, 21)
+ema55  = ta.ema(close, 55)
+ema200 = ta.ema(close, 200)
+emaStackBull = ema21 > ema55 and ema55 > ema200
+emaStackBear = ema21 < ema55 and ema55 < ema200
+
+// ─────────────────────────────────────────────────────────────────────
+// SECTION 6 — FRACTAL PIVOT DETECTION
+// Williams fractal (pivot high/low over i_fracLen bars)
+// ─────────────────────────────────────────────────────────────────────
+pivotHi = ta.pivothigh(high, i_fracLen, i_fracLen)
+pivotLo = ta.pivotlow(low,  i_fracLen, i_fracLen)
+
+// Mark fractal pivots
+if i_showFrac and not na(pivotHi)
+    label.new(bar_index[i_fracLen], pivotHi, "▼", 
+              color=color.new(COL_FRACTAL_LO, 60), 
+              textcolor=COL_FRACTAL_LO, 
+              style=label.style_label_down, size=size.tiny)
+
+if i_showFrac and not na(pivotLo)
+    label.new(bar_index[i_fracLen], pivotLo, "▲", 
+              color=color.new(COL_FRACTAL_HI, 60), 
+              textcolor=COL_FRACTAL_HI, 
+              style=label.style_label_up, size=size.tiny)
+
+// ─────────────────────────────────────────────────────────────────────
+// SECTION 7 — FRACTAL ECHO DETECTION (Sep2020 / Squeeze Pattern Match)
+// Detects when current bar's high/low ratio mirrors a historical pivot
+// ─────────────────────────────────────────────────────────────────────
+fractalRatio = high / math.max(low, 0.01)  // Current bar H/L ratio
+
+// Compute historical H/L ratio at echo lookback point
+echoRatio    = high[i_echoLen] / math.max(low[i_echoLen], 0.01)
+echoMatch    = math.abs(fractalRatio - echoRatio) / math.max(echoRatio, 0.01) < i_echoTol
+
+// Volume echo: current vol surge matches echo bar vol
+volEchoMatch = volume > volume[i_echoLen] * 0.85
+
+fractalEcho  = echoMatch and volEchoMatch
+
+// ─────────────────────────────────────────────────────────────────────
+// SECTION 8 — GAMMA WALL LEVELS
+// Manual override inputs + auto-detection via nearest round numbers
+// ─────────────────────────────────────────────────────────────────────
+// Auto-detect nearest round $ levels as proxy gamma walls
+roundLevel(p) =>
+    math.round(p)
+
+nearestRound = roundLevel(close)
+autoWallAbove = float(nearestRound) + (close > nearestRound ? 1.0 : 0.0)
+autoWallBelow = float(nearestRound) - (close < nearestRound ? 1.0 : 0.0)
+
+wallAbove = i_wallAbove > 0 ? i_wallAbove : autoWallAbove
+wallBelow = i_wallBelow > 0 ? i_wallBelow : autoWallBelow
+
+// Gamma flip: price crosses through a wall level
+gammaFlipUp   = ta.crossover(close, wallAbove)
+gammaFlipDown = ta.crossunder(close, wallBelow)
+gammaFlip     = gammaFlipUp or gammaFlipDown
+
+if i_showGamma
+    line.new(bar_index - 10, wallAbove, bar_index, wallAbove, 
+             color=COL_GAMMA_ABOVE, width=1, style=line.style_dashed)
+    line.new(bar_index - 10, wallBelow, bar_index, wallBelow, 
+             color=COL_GAMMA_BELOW, width=1, style=line.style_dashed)
+
+// ─────────────────────────────────────────────────────────────────────
+// SECTION 9 — SWEET SPOT FILTER
+// ─────────────────────────────────────────────────────────────────────
+sweetSpot = close >= i_ssMin and close <= i_ssMax
+labelOk   = not i_showOnly or sweetSpot
+
+// ─────────────────────────────────────────────────────────────────────
+// SECTION 10 — COMPOSITE ORACLE SIGNAL
+// BUY / SELL / HOLD / SHIELD logic
+// ─────────────────────────────────────────────────────────────────────
+// Score components (0–100 proxy)
+scoreBase   = rsi / 100 * 30
+scoreVpin   = vpinHigh ? 25 : 0
+scoreFrac   = fractalEcho ? 20 : 0
+scoreEma    = emaStackBull ? 15 : emaStackBear ? -15 : 0
+scoreVwap   = rsiAboveVwap ? 10 : -10
+compositeScore = scoreBase + scoreVpin + scoreFrac + scoreEma + scoreVwap
+
+// Primary directive
+oracleBuy    = compositeScore >= 60 and (gammaFlipUp or rsiBull or fractalEcho)
+oracleSell   = compositeScore <= 25 or (gammaFlipDown and rsiBear)
+oracleShield = compositeScore < 15
+oracleHold   = not oracleBuy and not oracleSell and not oracleShield
+
+// Directive string
+directiveStr = oracleBuy ? "BUY" : oracleSell ? "SELL" : oracleShield ? "SHIELD" : "HOLD"
+directiveCol = oracleBuy ? COL_BUY : oracleSell ? COL_SELL : oracleShield ? COL_SHIELD : COL_HOLD
+
+// ─────────────────────────────────────────────────────────────────────
+// SECTION 11 — REGIME BACKGROUND
+// ─────────────────────────────────────────────────────────────────────
+bgColor = oracleBuy    ? TRANSP_BUY  :
+          oracleSell   ? TRANSP_SELL :
+          oracleHold   ? TRANSP_HOLD : na
+
+bgcolor(i_showBg ? bgColor : na)
+
+// ─────────────────────────────────────────────────────────────────────
+// SECTION 12 — LABELS: Driver/Navigator Format
+// ACTION | PRICE | TARGET | STOP | REASON
+// ─────────────────────────────────────────────────────────────────────
+tp1  = oracleBuy  ? close * 1.15 : oracleSell ? close * 0.88 : na
+tp2  = oracleBuy  ? close * 1.30 : oracleSell ? close * 0.80 : na
+stop = oracleBuy  ? close * 0.94 : oracleSell ? close * 1.04 : na
+
+reasonStr =
+  gammaFlipUp   ? "Gamma flip above wall — momentum confirmed" :
+  gammaFlipDown ? "Gamma flip below wall — collapse risk" :
+  fractalEcho   ? "Fractal echo match — historical pattern replay" :
+  vpinHigh      ? "VPIN elevated — informed flow detected" :
+  rsiBull       ? "RSI bull momentum above VWAP" :
+  rsiBear       ? "RSI bear momentum below VWAP" :
+  "Composite score threshold crossed"
+
+labelText =
+  "ACTION: " + directiveStr +
+  "\nPRICE: "  + str.tostring(close, "#.##") +
+  (not na(tp1) ? "\nTARGET: " + str.tostring(tp1, "#.##") : "") +
+  (not na(stop) ? "\nSTOP: "  + str.tostring(stop, "#.##") : "") +
+  "\nSCORE: "  + str.tostring(math.round(compositeScore)) +
+  "\nREASON: " + reasonStr
+
+if i_showLabels and labelOk and barstate.isconfirmed
+    if oracleBuy
+        label.new(bar_index, low * 0.998, labelText,
+                  color=COL_BUY, textcolor=COL_BG,
+                  style=label.style_label_up, size=size.small)
+    else if oracleSell
+        label.new(bar_index, high * 1.002, labelText,
+                  color=COL_SELL, textcolor=color.white,
+                  style=label.style_label_down, size=size.small)
+    else if oracleShield
+        label.new(bar_index, close, "SHIELD",
+                  color=COL_SHIELD, textcolor=color.white,
+                  style=label.style_label_center, size=size.tiny)
+
+// Gamma flip marker
+if i_showGamma and gammaFlip and barstate.isconfirmed
+    label.new(bar_index, gammaFlipUp ? low : high,
+              gammaFlipUp ? "⚡ FLIP UP" : "⚡ FLIP DN",
+              color=gammaFlipUp ? COL_GAMMA_ABOVE : COL_GAMMA_BELOW,
+              textcolor=COL_BG,
+              style=gammaFlipUp ? label.style_label_up : label.style_label_down,
+              size=size.small)
+
+// Fractal echo marker
+if i_showFrac and fractalEcho and barstate.isconfirmed
+    label.new(bar_index, high * 1.003, "◈ ECHO",
+              color=color.new(COL_FRACTAL_HI, 40),
+              textcolor=color.white,
+              style=label.style_label_down, size=size.small)
+
+// ─────────────────────────────────────────────────────────────────────
+// SECTION 13 — DATA WINDOW OUTPUT
+// ─────────────────────────────────────────────────────────────────────
+plot(compositeScore, "Oracle Score (0-100)", color.new(directiveCol, 0), display=display.data_window)
+plot(vpin * 100,     "VPIN %",               color.new(COL_VWAP, 0),     display=display.data_window)
+plot(rsi,            "RSI",                  color.new(COL_HOLD, 0),     display=display.data_window)
+plot(wallAbove,      "Gamma Wall Above",      color.new(COL_GAMMA_ABOVE, 0), display=display.data_window)
+plot(wallBelow,      "Gamma Wall Below",      color.new(COL_GAMMA_BELOW, 0), display=display.data_window)
+
+// ─────────────────────────────────────────────────────────────────────
+// SECTION 14 — ALERTS (Driver/Navigator Protocol)
+// ─────────────────────────────────────────────────────────────────────
+alertcondition(oracleBuy  and labelOk and barstate.isconfirmed, "ORACLE BUY",   "SML Oracle BUY Signal")
+alertcondition(oracleSell and labelOk and barstate.isconfirmed, "ORACLE SELL",  "SML Oracle SELL Signal")
+alertcondition(gammaFlip  and barstate.isconfirmed,             "GAMMA FLIP",   "SML Oracle Gamma Flip")
+alertcondition(fractalEcho and barstate.isconfirmed,            "FRACTAL ECHO", "SML Oracle Fractal Echo Detected")
+
+// Full Driver/Navigator alert string
+fullAlert =
+    "ACTION: " + directiveStr +
+    " | PRICE: " + str.tostring(close, "#.##") +
+    (not na(tp1) ? " | TARGET: " + str.tostring(tp1, "#.##") : "") +
+    (not na(tp2) ? " | TP2: "    + str.tostring(tp2, "#.##") : "") +
+    (not na(stop) ? " | STOP: "  + str.tostring(stop, "#.##") : "") +
+    " | SCORE: " + str.tostring(math.round(compositeScore)) +
+    " | REASON: " + reasonStr +
+    " | SWEET_SPOT: " + str.tostring(sweetSpot)
+
+if i_alertBuy and oracleBuy and labelOk and barstate.isconfirmed
+    alert(fullAlert, alert.freq_once_per_bar)
+
+if i_alertSell and oracleSell and labelOk and barstate.isconfirmed
+    alert(fullAlert, alert.freq_once_per_bar)
+
+if i_alertFlip and gammaFlip and barstate.isconfirmed
+    alert("GAMMA FLIP | " + (gammaFlipUp ? "UP" : "DOWN") + " | PRICE: " + str.tostring(close, "#.##") + " | WALL: " + str.tostring(gammaFlipUp ? wallAbove : wallBelow, "#.##"), alert.freq_once_per_bar)

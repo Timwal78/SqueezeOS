@@ -1,0 +1,90 @@
+name: Smoke Test — Import Check
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**.py'
+      - 'requirements.txt'
+  pull_request:
+    branches: [main]
+    paths:
+      - '**.py'
+      - 'requirements.txt'
+
+jobs:
+  imports:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install --prefer-binary -r requirements.txt
+
+      - name: Core engine imports
+        run: |
+          python -c "
+          import sys
+          failures = []
+
+          checks = [
+              ('data_providers',         'DataManager'),
+              ('sml_engine',             'SMLEngine'),
+              ('execution_engine',       'ExecutionEngine'),
+              ('options_intelligence',   'OptionsIntelligence'),
+              ('iwm_odte_engine',        'IwmOdteEngine'),
+              ('gamma_flow_engine',      'GammaFlowEngine'),
+              ('mm_liquidity_engine',    'MMLiquidityEngine'),
+              ('whale_stalker_engine',   'WhaleStalkerEngine'),
+              ('discord_alerts',         'DiscordAlerts'),
+              ('forced_move_engine',     'ForcedMoveEngine'),
+              ('proof402_integration',   'require_payment'),
+          ]
+
+          for module, symbol in checks:
+              try:
+                  mod = __import__(module)
+                  getattr(mod, symbol)
+                  print(f'  OK  {module}.{symbol}')
+              except Exception as e:
+                  failures.append(f'FAIL {module}.{symbol}: {e}')
+                  print(f'FAIL {module}.{symbol}: {e}', file=sys.stderr)
+
+          if failures:
+              sys.exit(1)
+          "
+
+      - name: Core app imports
+        run: |
+          python -c "
+          import sys, os
+          os.environ.setdefault('PROOF402_TOKEN_SECRET', 'ci-placeholder')
+
+          failures = []
+          checks = [
+              ('core.state',          'GlobalState'),
+              ('core.legacy',         'get_service'),
+              ('core.oracle_engine',  'OracleEngine'),
+              ('core.rdt_engine',     'RecurrentDepthTransformer'),
+              ('core.market_graph',   'get_graph'),
+              ('core.signal_history', 'record'),
+          ]
+
+          for module, symbol in checks:
+              try:
+                  import importlib
+                  mod = importlib.import_module(module)
+                  getattr(mod, symbol)
+                  print(f'  OK  {module}.{symbol}')
+              except Exception as e:
+                  failures.append(f'FAIL {module}.{symbol}: {e}')
+                  print(f'FAIL {module}.{symbol}: {e}', file=sys.stderr)
+
+          if failures:
+              sys.exit(1)
+          "

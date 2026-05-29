@@ -1,0 +1,35 @@
+__pycache__/
+*.pyc
+*.log
+*.env
+.env.*
+schwab_tokens.json
+schwab_debug.json
+performance_log.json
+trade_log.json
+simulation_report.json
+upgrade_temp/
+logs/
+node_modules/
+
+# explicit override — never commit live secrets
+.env
+.env.*
+schwab_tokens.json
+schwab_debug.json
+performance_log.json
+trade_log.json
+simulation_report.json
+upgrade_temp/
+logs/
+node_modules/
+*.log
+*.pyc
+__pycache__/
+402proof-secrets.html
+402proof-register.html
+402proof-setup.html
+
+# Rust build artifacts
+target/
+pne/gateway/target/

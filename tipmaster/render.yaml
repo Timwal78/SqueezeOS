@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: tipmaster
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: "8080"
+      - key: NEYNAR_API_KEY
+        sync: false
+      - key: NEYNAR_WEBHOOK_SECRET
+        sync: false
+      - key: NEYNAR_BOT_SIGNER_UUID
+        sync: false
+      - key: TIPMASTER_BOT_FID
+        sync: false
+      - key: TIPMASTER_XRPL_SEED
+        sync: false
+      - key: TIPMASTER_XRPL_ADDRESS
+        sync: false
+      - key: TIPMASTER_DB_PATH
+        value: /data/tipmaster.db
+      - key: TIPMASTER_TREASURY_ADDRESS
+        sync: false
+      # Custody rebuild landed (PR #61) — P2P Xaman links, no wallet drain risk.
+      - key: TIPMASTER_TIPS_ENABLED
+        value: "true"
+      - key: XRPL_RPC_URL
+        value: https://xrplcluster.com
+      - key: PROOF402_BASE_URL
+        value: https://four02proof.onrender.com
+    disk:
+      name: tipmaster-data
+      mountPath: /data
+      sizeGB: 1

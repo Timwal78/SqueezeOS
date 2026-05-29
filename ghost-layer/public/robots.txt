@@ -1,0 +1,68 @@
+User-agent: *
+Allow: /
+Allow: /.well-known/
+Allow: /.well-known/mcp.json
+Allow: /.well-known/server.json
+Allow: /.well-known/agents.json
+Allow: /.well-known/openapi.json
+Allow: /.well-known/ai-plugin.json
+Allow: /mcp
+Allow: /llms.txt
+Allow: /sitemap.xml
+Allow: /v1/x402/catalog
+Allow: /v1/x402/attestation/pubkey
+Allow: /v1/notarize
+Allow: /v1/credit/listings
+Allow: /v1/credit/listing
+Allow: /v1/credit/quote
+Allow: /api/agent/
+Allow: /api/config
+Allow: /health
+
+# AI Crawlers — full access to discovery files
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+User-agent: YouBot
+Allow: /
+
+User-agent: cohere-ai
+Allow: /
+
+User-agent: DuckAssistBot
+Allow: /
+
+User-agent: ByteSpider
+Allow: /
+
+User-agent: Applebot
+Allow: /
+
+User-agent: Amazonbot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+Sitemap: https://ghost-layer.onrender.com/sitemap.xml

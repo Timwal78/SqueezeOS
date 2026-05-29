@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+
+  <!-- ── MAIN UI ─────────────────────────────────────────────────────── -->
+  <url>
+    <loc>https://ghost-layer.onrender.com/</loc>
+    <priority>1.0</priority>
+    <changefreq>daily</changefreq>
+  </url>
+
+  <!-- ── AI / AGENT DISCOVERY ──────────────────────────────────────── -->
+  <url>
+    <loc>https://ghost-layer.onrender.com/llms.txt</loc>
+    <priority>1.0</priority>
+    <changefreq>weekly</changefreq>
+  </url>
+  <url>
+    <loc>https://ghost-layer.onrender.com/.well-known/openapi.json</loc>
+    <priority>0.95</priority>
+    <changefreq>weekly</changefreq>
+  </url>
+  <url>
+    <loc>https://ghost-layer.onrender.com/.well-known/mcp.json</loc>
+    <priority>0.95</priority>
+    <changefreq>weekly</changefreq>
+  </url>
+  <url>
+    <loc>https://ghost-layer.onrender.com/.well-known/agents.json</loc>
+    <priority>0.9</priority>
+    <changefreq>weekly</changefreq>
+  </url>
+  <url>
+    <loc>https://ghost-layer.onrender.com/.well-known/ai-plugin.json</loc>
+    <priority>0.85</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://ghost-layer.onrender.com/.well-known/server.json</loc>
+    <priority>0.85</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://ghost-layer.onrender.com/mcp</loc>
+    <priority>0.95</priority>
+    <changefreq>weekly</changefreq>
+  </url>
+
+  <!-- ── X402 PRODUCT CATALOG ──────────────────────────────────────── -->
+  <url>
+    <loc>https://ghost-layer.onrender.com/v1/x402/catalog</loc>
+    <priority>0.95</priority>
+    <changefreq>weekly</changefreq>
+  </url>
+  <url>
+    <loc>https://ghost-layer.onrender.com/v1/x402/attestation/pubkey</loc>
+    <priority>0.8</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+
+  <!-- ── BRIDGE ────────────────────────────────────────────────────── -->
+  <url>
+    <loc>https://ghost-layer.onrender.com/v1/bridge/execute</loc>
+    <priority>0.9</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+
+  <!-- ── DECISION NOTARY ───────────────────────────────────────────── -->
+  <url>
+    <loc>https://ghost-layer.onrender.com/v1/notarize</loc>
+    <priority>0.95</priority>
+    <changefreq>weekly</changefreq>
+  </url>
+
+  <!-- ── AGENT CREDIT MARKETPLACE ─────────────────────────────────── -->
+  <url>
+    <loc>https://ghost-layer.onrender.com/v1/credit/listings</loc>
+    <priority>0.95</priority>
+    <changefreq>always</changefreq>
+  </url>
+  <url>
+    <loc>https://ghost-layer.onrender.com/v1/credit/listing</loc>
+    <priority>0.9</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://ghost-layer.onrender.com/v1/credit/quote</loc>
+    <priority>0.9</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+
+  <!-- ── AGENT LOYALTY ─────────────────────────────────────────────── -->
+  <url>
+    <loc>https://ghost-layer.onrender.com/api/agent</loc>
+    <priority>0.85</priority>
+    <changefreq>always</changefreq>
+  </url>
+
+  <!-- ── EXECUTION MATRIX ──────────────────────────────────────────── -->
+  <url>
+    <loc>https://ghost-layer.onrender.com/api/cube/state</loc>
+    <priority>0.7</priority>
+    <changefreq>always</changefreq>
+  </url>
+  <url>
+    <loc>https://ghost-layer.onrender.com/api/cube/payload</loc>
+    <priority>0.7</priority>
+    <changefreq>always</changefreq>
+  </url>
+
+  <!-- ── HEALTH / CONFIG ───────────────────────────────────────────── -->
+  <url>
+    <loc>https://ghost-layer.onrender.com/health</loc>
+    <priority>0.5</priority>
+    <changefreq>always</changefreq>
+  </url>
+  <url>
+    <loc>https://ghost-layer.onrender.com/api/config</loc>
+    <priority>0.6</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+
+</urlset>
