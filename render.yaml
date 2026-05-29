@@ -3,7 +3,7 @@ services:
     name: squeezeos-api
     runtime: docker
     dockerfilePath: ./Dockerfile
-    plan:  starter
+    plan: starter
     envVars:
       - key: TRADIER_API_KEY
         sync: false
@@ -25,3 +25,48 @@ services:
         value: "8182"
     healthCheckPath: /api/status
     autoDeploy: true
+
+  # ---------------------------------------------------------------------------
+  # pne-redis — Redis for the PNE sovereign intent auction gateway
+  # ---------------------------------------------------------------------------
+  - type: redis
+    name: pne-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: []
+
+  # ---------------------------------------------------------------------------
+  # pne-gateway — Signal Loom sovereign intent auction gateway (Rust/Axum)
+  # L402 priority bidding over SqueezeOS API — formerly on Railway, now Render
+  # Required secret: MACAROON_SECRET (generate: openssl rand -hex 32)
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: pne-gateway
+    env: docker
+    dockerfilePath: ./pne/gateway/Dockerfile
+    dockerContext: ./pne/gateway
+    plan: free
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: "8402"
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: pne-redis
+          property: connectionString
+      - key: UPSTREAM_BASE_URL
+        value: "https://squeezeos-api.onrender.com"
+      - key: MACAROON_SECRET
+        sync: false
+      - key: RATE_LIMIT_UNAUTH
+        value: "100"
+      - key: AUCTION_WINDOW_MS
+        value: "5"
+      - key: PLATFORM_FEE_PCT
+        value: "1.0"
+      - key: BASE_PRICE_SATS
+        value: "100"
+      - key: CORS_ORIGINS
+        value: "https://signal-loom.vercel.app,https://n-exchequer.io"
