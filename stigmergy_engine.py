@@ -57,6 +57,7 @@ _trails:          dict = {}   # trail_id  -> trail dict
 _dream_pools:     dict = {}   # pool_id   -> pool dict
 _pending_follows: dict = {}   # follow_id -> follow dict
 _leaderboard:     dict = {}   # wallet    -> stats dict
+_used_tx_hashes:  set  = set()  # anti-replay: consumed XRPL tx hashes
 _lock = threading.Lock()
 
 
@@ -68,6 +69,13 @@ def _now() -> float:
 
 def _new_id() -> str:
     return str(uuid.uuid4())
+
+
+def _claim_tx_hash(tx_hash: str) -> None:
+    """Atomically mark a tx_hash as consumed. Raises if already used."""
+    if tx_hash in _used_tx_hashes:
+        raise ValueError(f"Transaction {tx_hash[:12]}… has already been applied — replay rejected")
+    _used_tx_hashes.add(tx_hash)
 
 
 def _trail_strength(trail: dict, at_time: Optional[float] = None) -> float:
@@ -109,6 +117,8 @@ def stake_coordinate(
     Returns the new trail dict.
     """
     with _lock:
+        _claim_tx_hash(tx_hash)
+
         if len(_trails) >= MAX_TRAILS:
             raise ValueError("Global trail limit reached")
 
@@ -182,6 +192,8 @@ def drop_pheromone(
     Returns updated trail.
     """
     with _lock:
+        _claim_tx_hash(tx_hash)
+
         trail = _trails.get(trail_id)
         if not trail:
             raise ValueError("Trail not found")
@@ -324,6 +336,8 @@ def confirm_follow(follow_id: str, tx_hash: str) -> dict:
     Grants follower access, credits trailblazer earnings, reinforces trail.
     """
     with _lock:
+        _claim_tx_hash(tx_hash)
+
         follow = _pending_follows.get(follow_id)
         if not follow:
             raise ValueError("Follow record not found")
@@ -479,6 +493,8 @@ def leave_dream_pool(pool_id: str, wallet: str, tx_hash: str) -> dict:
     creator_wallet on XRPL with tx_hash as proof before calling this.
     """
     with _lock:
+        _claim_tx_hash(tx_hash)
+
         pool = _dream_pools.get(pool_id)
         if not pool:
             raise ValueError("Pool not found")
@@ -564,6 +580,55 @@ def read_scratchpad(pool_id: str, wallet: str) -> dict:
         if wallet not in pool["members"]:
             raise ValueError("Not a pool member — join to access scratchpad")
         return dict(pool["scratchpad"])
+
+
+# ── Pre-verification helpers (used by blueprint before committing state) ──────
+
+def peek_pending_follow(follow_id: str) -> Optional[dict]:
+    """
+    Return a copy of a pending follow record for payment pre-verification.
+    Returns None if not found or already expired.
+    Does NOT modify any state.
+    """
+    with _lock:
+        follow = _pending_follows.get(follow_id)
+        if not follow:
+            return None
+        if _now() > follow["expires_at"]:
+            follow["status"] = "EXPIRED"
+            return None
+        return dict(follow)
+
+
+def estimate_leave_cost(pool_id: str, wallet: str) -> dict:
+    """
+    Calculate the rent a member owes right now, without modifying pool state.
+    Used by the blueprint to know the expected XRPL payment amount before
+    calling leave_dream_pool().
+    """
+    with _lock:
+        pool = _dream_pools.get(pool_id)
+        if not pool:
+            raise ValueError("Pool not found")
+        if wallet not in pool["members"]:
+            raise ValueError("Not a pool member")
+        if wallet == pool["creator_wallet"]:
+            raise ValueError("Creator cannot leave — use /dream/close")
+        member = pool["members"][wallet]
+        now = _now()
+        duration = max(0.0, now - member["joined_at"])
+        rent_owed = round(duration * pool["rent_per_second_rlusd"], 8)
+        platform  = round(rent_owed * PLATFORM_FEE_PCT, 8)
+        return {
+            "pool_id":          pool_id,
+            "wallet":           wallet,
+            "creator_wallet":   pool["creator_wallet"],
+            "rent_per_second":  pool["rent_per_second_rlusd"],
+            "duration_seconds": round(duration, 2),
+            "rent_owed":        rent_owed,
+            "platform_fee":     platform,
+            "creator_net":      round(rent_owed - platform, 8),
+        }
 
 
 def get_dream_pools(status: str = "OPEN", limit: int = 20) -> list:

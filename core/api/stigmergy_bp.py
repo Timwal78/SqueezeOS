@@ -36,13 +36,16 @@ from flask import Blueprint, jsonify, request
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 import stigmergy_engine as eng
+import xrpl_verify
 from core.legacy import clean_data
 
 logger = logging.getLogger("SqueezeOS-Stigmergy")
 stigmergy_bp = Blueprint("stigmergy", __name__)
 
-_SQUEEZEOS_BASE = os.getenv("SQUEEZEOS_BASE_URL", "https://squeezeos-api.onrender.com")
-_PROOF402_BASE  = os.getenv("PROOF402_SERVER_URL",  "https://four02proof.onrender.com")
+_SQUEEZEOS_BASE    = os.getenv("SQUEEZEOS_BASE_URL",       "https://squeezeos-api.onrender.com")
+_PROOF402_BASE     = os.getenv("PROOF402_SERVER_URL",       "https://four02proof.onrender.com")
+_OPERATOR_WALLET   = os.getenv("SQUEEZEOS_OPERATOR_WALLET", "")
+_OWNER_API_KEY     = os.getenv("OWNER_API_KEY",             "")
 
 RLUSD_ISSUER   = "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De"
 RLUSD_CURRENCY = "524C555344000000000000000000000000000000"
@@ -59,6 +62,31 @@ def _require(*fields):
     if missing:
         return None, _err(f"Missing required fields: {', '.join(missing)}")
     return body, None
+
+
+def _owner_bypass() -> bool:
+    """Return True if the request carries a valid owner key (skips XRPL verification)."""
+    return bool(_OWNER_API_KEY and request.headers.get("X-Owner-Key") == _OWNER_API_KEY)
+
+
+def _verify_payment(tx_hash: str, destination: str, amount: float, tolerance: float = 0.0001):
+    """
+    Verify an XRPL RLUSD payment against the ledger.
+    Returns (None, error_response) on failure, (paid_amount, None) on success.
+    Owner key skips verification for operator testing.
+    """
+    if _owner_bypass():
+        return amount, None
+    try:
+        paid = xrpl_verify.verify_rlusd_payment(
+            tx_hash=tx_hash,
+            expected_destination=destination,
+            expected_amount_rlusd=amount,
+            tolerance_rlusd=tolerance,
+        )
+        return paid, None
+    except ValueError as e:
+        return None, _err(f"XRPL payment verification failed: {e}", 402)
 
 
 # ── Coordinate staking ────────────────────────────────────────────────────────
@@ -82,12 +110,21 @@ def stake_coordinate():
 
     Returns: trail object with trail_id and initial strength.
     """
+    if not _OPERATOR_WALLET and not _owner_bypass():
+        return _err("SQUEEZEOS_OPERATOR_WALLET not configured on this server", 503)
+
     body, err = _require(
         "wallet", "coordinate", "coordinate_label",
         "coordinate_type", "toll_rate_rlusd", "stake_amount_rlusd", "tx_hash"
     )
     if err:
         return err
+
+    stake_amount = float(body["stake_amount_rlusd"])
+
+    _, verr = _verify_payment(body["tx_hash"], _OPERATOR_WALLET, stake_amount)
+    if verr:
+        return verr
 
     try:
         trail = eng.stake_coordinate(
@@ -96,7 +133,7 @@ def stake_coordinate():
             coordinate_label   = body["coordinate_label"],
             coordinate_type    = body["coordinate_type"],
             toll_rate_rlusd    = float(body["toll_rate_rlusd"]),
-            stake_amount_rlusd = float(body["stake_amount_rlusd"]),
+            stake_amount_rlusd = stake_amount,
             tx_hash            = body["tx_hash"],
         )
     except ValueError as e:
@@ -115,7 +152,8 @@ def stake_coordinate():
         "payment_info": {
             "rlusd_issuer":   RLUSD_ISSUER,
             "rlusd_currency": RLUSD_CURRENCY,
-            "note": "Stake payment should be sent to SqueezeOS operator wallet on XRPL.",
+            "pay_to":         _OPERATOR_WALLET,
+            "note": "Stake payment must be sent to SqueezeOS operator wallet on XRPL before calling this endpoint.",
         },
     })), 201
 
@@ -136,15 +174,24 @@ def drop_pheromone():
       tx_hash       str   — XRPL tx hash of your payment
       signal_data   dict  — optional metadata to attach to this drop
     """
+    if not _OPERATOR_WALLET and not _owner_bypass():
+        return _err("SQUEEZEOS_OPERATOR_WALLET not configured on this server", 503)
+
     body, err = _require("wallet", "trail_id", "amount_rlusd", "tx_hash")
     if err:
         return err
+
+    drop_amount = float(body["amount_rlusd"])
+
+    _, verr = _verify_payment(body["tx_hash"], _OPERATOR_WALLET, drop_amount)
+    if verr:
+        return verr
 
     try:
         trail = eng.drop_pheromone(
             wallet       = body["wallet"],
             trail_id     = body["trail_id"],
-            amount_rlusd = float(body["amount_rlusd"]),
+            amount_rlusd = drop_amount,
             tx_hash      = body["tx_hash"],
             signal_data  = body.get("signal_data"),
         )
@@ -318,6 +365,20 @@ def confirm_follow():
     body, err = _require("follow_id", "tx_hash")
     if err:
         return err
+
+    # Peek at the pending follow to know expected destination + amount before
+    # hitting the ledger — avoid modifying state until payment is confirmed.
+    pending = eng.peek_pending_follow(body["follow_id"])
+    if not pending:
+        return _err("Follow record not found or expired — call /follow to start again", 404)
+
+    _, verr = _verify_payment(
+        tx_hash     = body["tx_hash"],
+        destination = pending["trailblazer_wallet"],
+        amount      = pending["toll_amount_rlusd"],
+    )
+    if verr:
+        return verr
 
     try:
         proof = eng.confirm_follow(
@@ -552,6 +613,24 @@ def leave_dream():
     body, err = _require("pool_id", "wallet", "tx_hash")
     if err:
         return err
+
+    # Calculate the bill snapshot before verifying so we know what to expect.
+    # Allow a 30-second tolerance buffer: the member checked their bill, sent
+    # the XRPL tx, and called this endpoint — that takes a few seconds.
+    try:
+        cost = eng.estimate_leave_cost(body["pool_id"], body["wallet"])
+    except ValueError as e:
+        return _err(str(e))
+
+    tolerance = max(0.0001, cost["rent_per_second"] * 30)
+    _, verr = _verify_payment(
+        tx_hash     = body["tx_hash"],
+        destination = cost["creator_wallet"],
+        amount      = cost["rent_owed"],
+        tolerance   = tolerance,
+    )
+    if verr:
+        return verr
 
     try:
         settlement = eng.leave_dream_pool(
