@@ -55,6 +55,11 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
+      - name: Bump targetSdkVersion to 35
+        run: |
+          sed -i 's/targetSdkVersion = 34/targetSdkVersion = 35/' android/variables.gradle
+          sed -i 's/compileSdkVersion = 34/compileSdkVersion = 35/' android/variables.gradle
+
       # ── Keystore: use stored secret or auto-generate one ───────────────────
       - name: Prepare keystore
         run: |
