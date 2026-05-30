@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<title>NEURAL_OS | Node Health</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<style>
+  @keyframes pulse-cyan { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:0.5;transform:scale(1.1);} }
+  .glow-sm { text-shadow: 0 0 10px rgba(0,219,233,0.5); }
+  .glass-card { background: rgba(255,255,255,0.05); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); }
+  .node-line { background: linear-gradient(90deg,#00dbe9 0%,transparent 100%); height:1px; width:100%; opacity:0.3; }
+  .status-pulse { width:8px; height:8px; border-radius:50%; display:inline-block; }
+  .status-healthy { background-color:#00fb40; box-shadow:0 0 8px #00fb40; animation:pulse-cyan 2s infinite; }
+  .status-warning { background-color:#ebb2ff; box-shadow:0 0 8px #ebb2ff; }
+  .status-critical { background-color:#ffb4ab; box-shadow:0 0 8px #ffb4ab; }
+  ::-webkit-scrollbar{width:4px;} ::-webkit-scrollbar-track{background:#0A0A0C;} ::-webkit-scrollbar-thumb{background:#353437;border-radius:2px;}
+  nav a { text-decoration: none; }
+</style>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: { extend: {
+      "colors": {
+        "on-surface-variant": "#b9cacb", "inverse-surface": "#e5e1e4", "surface-dim": "#131315",
+        "outline-variant": "#3b494b", "surface-container-lowest": "#0e0e10", "primary": "#dbfcff",
+        "primary-container": "#00f0ff", "secondary-fixed-dim": "#ebb2ff", "inverse-on-surface": "#313032",
+        "tertiary-container": "#00fb40", "on-secondary": "#520072", "on-tertiary-fixed": "#002203",
+        "surface-tint": "#00dbe9", "surface": "#131315", "on-error": "#690005",
+        "surface-container": "#201f21", "on-background": "#e5e1e4", "tertiary-fixed": "#72ff70",
+        "tertiary": "#ddffd3", "surface-container-high": "#2a2a2c",
+        "on-secondary-fixed-variant": "#74009f", "on-error-container": "#ffdad6",
+        "surface-variant": "#353437", "on-primary-container": "#006970", "on-primary": "#00363a",
+        "on-surface": "#e5e1e4", "on-secondary-container": "#fff6fc", "secondary-fixed": "#f8d8ff",
+        "outline": "#849495", "on-secondary-fixed": "#320047", "inverse-primary": "#006970",
+        "error-container": "#93000a", "on-tertiary-fixed-variant": "#00530e",
+        "on-tertiary-container": "#006e16", "primary-fixed": "#7df4ff",
+        "surface-container-low": "#1c1b1d", "secondary": "#ebb2ff", "tertiary-fixed-dim": "#00e639",
+        "secondary-container": "#b600f8", "background": "#131315", "on-tertiary": "#003907",
+        "primary-fixed-dim": "#00dbe9", "error": "#ffb4ab", "on-primary-fixed": "#002022",
+        "surface-bright": "#39393b", "on-primary-fixed-variant": "#004f54",
+        "surface-container-highest": "#353437"
+      },
+      "borderRadius": { "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem" },
+      "spacing": { "margin-mobile": "20px", "lg": "40px", "md": "24px", "xs": "8px", "xl": "64px", "gutter": "16px", "sm": "16px", "base": "4px" },
+      "fontFamily": { "body-md": ["Geist"], "headline-lg-mobile": ["Space Grotesk"], "label-sm": ["JetBrains Mono"], "headline-lg": ["Space Grotesk"], "display-lg": ["Space Grotesk"] },
+      "fontSize": {
+        "body-md": ["16px",{"lineHeight":"24px","fontWeight":"400"}],
+        "headline-lg-mobile": ["24px",{"lineHeight":"32px","fontWeight":"600"}],
+        "label-sm": ["12px",{"lineHeight":"16px","letterSpacing":"0.05em","fontWeight":"500"}],
+        "headline-lg": ["32px",{"lineHeight":"40px","letterSpacing":"-0.01em","fontWeight":"600"}],
+        "display-lg": ["48px",{"lineHeight":"56px","letterSpacing":"-0.02em","fontWeight":"700"}]
+      }
+    }}
+  }
+</script>
+<style>body { background-color: #0A0A0C; min-height: max(884px, 100dvh); }</style>
+</head>
+<body class="bg-background text-on-surface font-body-md antialiased overflow-x-hidden pb-24">
+
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-margin-mobile h-16 bg-surface/10 backdrop-blur-xl border-b border-white/10 shadow-[0_0_20px_rgba(0,219,233,0.1)]">
+  <div class="flex items-center gap-2">
+    <span class="material-symbols-outlined text-primary-fixed-dim" style="font-variation-settings:'FILL' 1;">terminal</span>
+    <span class="font-display-lg font-bold text-primary-fixed-dim tracking-tighter" style="font-size:1.25rem;line-height:1.25rem;">NEURAL_OS // PROTOCOL_ACTIVE</span>
+  </div>
+  <button id="hdr-wallet-btn" class="flex items-center gap-2 hover:opacity-80 transition-opacity active:scale-95">
+    <span class="font-label-sm text-label-sm uppercase tracking-widest text-primary-fixed-dim bg-primary/10 px-3 py-1 rounded" data-nos="eth-balance">--</span>
+    <span class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors duration-300">notifications_active</span>
+  </button>
+</header>
+
+<main class="mt-20 px-margin-mobile md:px-lg max-w-7xl mx-auto space-y-lg">
+  <section class="flex flex-col md:flex-row justify-between items-end gap-sm">
+    <div>
+      <h1 class="font-headline-lg text-headline-lg-mobile md:text-headline-lg text-primary-fixed-dim glow-sm">Agent Cluster Health</h1>
+      <p class="font-label-sm text-label-sm text-on-surface-variant opacity-70">NODE MONITORING // X402-AIXBT REDUNDANCY GRID</p>
+    </div>
+    <div class="flex gap-4">
+      <div class="glass-card px-4 py-2 rounded-xl border border-primary/20 flex flex-col items-center">
+        <span class="font-label-sm text-[10px] text-on-surface-variant uppercase">Global Uptime</span>
+        <span class="font-display-lg text-headline-lg-mobile text-tertiary-fixed-dim">99.998%</span>
+      </div>
+      <div class="glass-card px-4 py-2 rounded-xl border border-primary/20 flex flex-col items-center">
+        <span class="font-label-sm text-[10px] text-on-surface-variant uppercase">Network Load</span>
+        <span class="font-display-lg text-headline-lg-mobile text-primary-fixed-dim">12.4 TB/s</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="grid grid-cols-1 md:grid-cols-3 gap-gutter">
+    <div class="glass-card p-sm rounded-xl relative overflow-hidden group">
+      <div class="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity"><span class="material-symbols-outlined text-[4rem]">encrypted</span></div>
+      <h3 class="font-label-sm text-label-sm text-on-surface-variant uppercase mb-2">ZK-Proof Latency</h3>
+      <div class="flex items-baseline gap-2"><span class="font-display-lg text-[40px] text-primary">142</span><span class="font-label-sm text-on-surface-variant">ms</span></div>
+      <div class="node-line my-4"></div>
+      <div class="flex items-center gap-2"><span class="status-pulse status-healthy"></span><span class="text-[10px] font-label-sm text-tertiary-fixed-dim">OPTIMIZED DATA PIPELINE</span></div>
+    </div>
+    <div class="glass-card p-sm rounded-xl relative overflow-hidden group">
+      <div class="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity"><span class="material-symbols-outlined text-[4rem]">memory</span></div>
+      <h3 class="font-label-sm text-label-sm text-on-surface-variant uppercase mb-2">Compute Efficiency</h3>
+      <div class="flex items-baseline gap-2"><span class="font-display-lg text-[40px] text-primary">88.4</span><span class="font-label-sm text-on-surface-variant">%</span></div>
+      <div class="node-line my-4"></div>
+      <div class="flex items-center gap-2"><span class="status-pulse status-warning"></span><span class="text-[10px] font-label-sm text-secondary">LOAD BALANCING ACTIVE</span></div>
+    </div>
+    <div class="glass-card p-sm rounded-xl relative overflow-hidden group">
+      <div class="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity"><span class="material-symbols-outlined text-[4rem]">security</span></div>
+      <h3 class="font-label-sm text-label-sm text-on-surface-variant uppercase mb-2">Slashing Risk</h3>
+      <div class="flex items-baseline gap-2"><span class="font-display-lg text-[40px] text-primary">0.02</span><span class="font-label-sm text-on-surface-variant">%</span></div>
+      <div class="node-line my-4"></div>
+      <div class="flex items-center gap-2"><span class="status-pulse status-healthy"></span><span class="text-[10px] font-label-sm text-tertiary-fixed-dim">COLLATERAL SECURE</span></div>
+    </div>
+  </section>
+
+  <section class="glass-card rounded-xl overflow-hidden">
+    <div class="px-sm py-4 border-b border-white/5 flex justify-between items-center bg-white/5">
+      <h2 class="font-headline-lg text-body-md font-bold uppercase tracking-widest">Active Node Cluster</h2>
+      <div class="flex gap-2">
+        <button class="bg-primary text-on-primary-fixed font-label-sm text-[10px] px-3 py-1 rounded active:scale-95 transition-transform">EXPORT AUDIT</button>
+        <button class="bg-white/5 border border-white/10 text-on-surface font-label-sm text-[10px] px-3 py-1 rounded active:scale-95 transition-transform">REFRESH</button>
+      </div>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left font-label-sm text-label-sm">
+        <thead><tr class="text-on-surface-variant opacity-60 border-b border-white/5">
+          <th class="px-sm py-4">NODE_ID</th><th class="px-sm py-4">UPTIME_CHART</th><th class="px-sm py-4">THROUGHPUT</th><th class="px-sm py-4">LATENCY</th><th class="px-sm py-4">STATUS</th>
+        </tr></thead>
+        <tbody class="divide-y divide-white/5">
+          <tr class="hover:bg-white/5 transition-colors">
+            <td class="px-sm py-6"><div class="flex flex-col"><span class="font-bold text-primary">#X402-ALPHA-01</span><span class="text-[10px] opacity-50">SHARD_ID: 0x921A...F4</span></div></td>
+            <td class="px-sm py-6"><div class="flex items-end gap-1 h-8"><div class="w-1 bg-tertiary-fixed-dim" style="height:50%"></div><div class="w-1 bg-tertiary-fixed-dim" style="height:75%"></div><div class="w-1 bg-tertiary-fixed-dim" style="height:100%"></div><div class="w-1 bg-tertiary-fixed-dim" style="height:87%"></div><div class="w-1 bg-tertiary-fixed-dim" style="height:100%"></div><div class="w-1 bg-tertiary-fixed-dim" style="height:75%"></div><div class="w-1 bg-tertiary-fixed-dim" style="height:100%"></div></div></td>
+            <td class="px-sm py-6">4,120 req/s</td><td class="px-sm py-6">12ms</td>
+            <td class="px-sm py-6"><span class="bg-tertiary/10 text-tertiary-fixed-dim border border-tertiary-fixed-dim/20 px-2 py-1 rounded text-[10px] flex items-center gap-2 w-fit"><span class="status-pulse status-healthy"></span> HEALTHY</span></td>
+          </tr>
+          <tr class="hover:bg-white/5 transition-colors">
+            <td class="px-sm py-6"><div class="flex flex-col"><span class="font-bold text-primary">#X402-BETA-09</span><span class="text-[10px] opacity-50">SHARD_ID: 0x44B2...E1</span></div></td>
+            <td class="px-sm py-6"><div class="flex items-end gap-1 h-8"><div class="w-1 bg-tertiary-fixed-dim" style="height:100%"></div><div class="w-1 bg-tertiary-fixed-dim" style="height:100%"></div><div class="w-1 bg-secondary-fixed-dim" style="height:37%"></div><div class="w-1 bg-tertiary-fixed-dim" style="height:75%"></div><div class="w-1 bg-tertiary-fixed-dim" style="height:100%"></div><div class="w-1 bg-tertiary-fixed-dim" style="height:100%"></div><div class="w-1 bg-tertiary-fixed-dim" style="height:87%"></div></div></td>
+            <td class="px-sm py-6">2,840 req/s</td><td class="px-sm py-6">45ms</td>
+            <td class="px-sm py-6"><span class="bg-secondary/10 text-secondary-fixed-dim border border-secondary-fixed-dim/20 px-2 py-1 rounded text-[10px] flex items-center gap-2 w-fit"><span class="status-pulse status-warning"></span> WARNING</span></td>
+          </tr>
+          <tr class="hover:bg-white/5 transition-colors">
+            <td class="px-sm py-6"><div class="flex flex-col"><span class="font-bold text-primary">#X402-GAMMA-12</span><span class="text-[10px] opacity-50">SHARD_ID: 0xFD33...02</span></div></td>
+            <td class="px-sm py-6"><div class="flex items-end gap-1 h-8"><div class="w-1 bg-tertiary-fixed-dim" style="height:87%"></div><div class="w-1 bg-tertiary-fixed-dim" style="height:100%"></div><div class="w-1 bg-tertiary-fixed-dim" style="height:87%"></div><div class="w-1 bg-tertiary-fixed-dim" style="height:100%"></div><div class="w-1 bg-tertiary-fixed-dim" style="height:100%"></div><div class="w-1 bg-tertiary-fixed-dim" style="height:100%"></div><div class="w-1 bg-tertiary-fixed-dim" style="height:100%"></div></div></td>
+            <td class="px-sm py-6">6,021 req/s</td><td class="px-sm py-6">8ms</td>
+            <td class="px-sm py-6"><span class="bg-tertiary/10 text-tertiary-fixed-dim border border-tertiary-fixed-dim/20 px-2 py-1 rounded text-[10px] flex items-center gap-2 w-fit"><span class="status-pulse status-healthy"></span> HEALTHY</span></td>
+          </tr>
+          <tr class="hover:bg-white/5 transition-colors">
+            <td class="px-sm py-6"><div class="flex flex-col"><span class="font-bold text-primary">#X402-DELTA-04</span><span class="text-[10px] opacity-50">SHARD_ID: 0x9E21...CC</span></div></td>
+            <td class="px-sm py-6"><div class="flex items-end gap-1 h-8"><div class="w-1 bg-error" style="height:25%"></div><div class="w-1 bg-error" style="height:12%"></div><div class="w-1 bg-error" style="height:25%"></div><div class="w-1 bg-error" style="height:37%"></div><div class="w-1 bg-error" style="height:25%"></div><div class="w-1 bg-error" style="height:12%"></div><div class="w-1 bg-error" style="height:25%"></div></div></td>
+            <td class="px-sm py-6">120 req/s</td><td class="px-sm py-6">950ms</td>
+            <td class="px-sm py-6"><span class="bg-error/10 text-error border border-error/20 px-2 py-1 rounded text-[10px] flex items-center gap-2 w-fit"><span class="status-pulse status-critical"></span> CRITICAL</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="grid grid-cols-1 md:grid-cols-2 gap-gutter pb-xl">
+    <div class="glass-card rounded-xl p-0 overflow-hidden relative min-h-[300px]">
+      <img alt="Neural Data Visualization" class="w-full h-full object-cover opacity-50" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDYO0XPwRaW1aw9zGUSBK44fUESqFsFBVfkF2t5udofsDT5gTXqKradocIgKgsc0z-Db4E9dVTEm5-4sNz-yTx7NLkimcpoijR7O9yLbRaovmwIVcADxR7AupMiRTQ7e0hb6ZwnqHR47OFtSohynwMXSl4hEcFT3JTTbbw9WfEOxe9hPP-4RUgE5l03rlFSVGxN7dAHz-aOKdWlnDxsHO3LeB4nuVYGMJ26bQvPb8UFwBECmLK8MUHuuLyhijdIDzm9G1xkxnlE"/>
+      <div class="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent"></div>
+      <div class="absolute bottom-4 left-4 p-4">
+        <h4 class="font-headline-lg text-body-md text-primary">Real-time Shard Distribution</h4>
+        <p class="text-on-surface-variant text-[12px] max-w-xs">X402 agents automatically re-route compute resources when latency spikes are detected in specific geographical zones.</p>
+      </div>
+    </div>
+    <div class="glass-card p-lg rounded-xl flex flex-col justify-center space-y-md border border-primary/10">
+      <div class="space-y-2">
+        <span class="font-label-sm text-tertiary text-[10px] uppercase">Audit Intelligence</span>
+        <h3 class="font-headline-lg text-headline-lg-mobile text-primary-fixed-dim">Institutional Transparency</h3>
+        <p class="text-on-surface-variant text-body-md">This dashboard provides a verifiable ZK-Proof trail for all AI agent operations. Every heartbeat is signed by the node operator and logged on-chain for complete cryptographic auditability.</p>
+      </div>
+      <div class="flex flex-col gap-sm">
+        <div class="flex justify-between items-center p-sm bg-white/5 rounded-lg border-l-2 border-primary"><span class="font-label-sm">Active Audit Session</span><span class="text-primary font-bold">LIVE</span></div>
+        <div class="flex justify-between items-center p-sm bg-white/5 rounded-lg border-l-2 border-tertiary"><span class="font-label-sm">Compliance Check</span><span class="text-tertiary font-bold">PASSED</span></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<nav class="fixed bottom-0 w-full z-50 bg-surface/10 backdrop-blur-xl border-t border-white/10 flex justify-around items-center h-20 px-4">
+  <a href="discover.html" class="flex flex-col items-center justify-center text-on-surface-variant opacity-60 hover:opacity-100 transition-opacity"><span class="material-symbols-outlined">explore</span><span class="font-label-sm text-label-sm">Discover</span></a>
+  <a href="agents.html" class="flex flex-col items-center justify-center text-on-surface-variant opacity-60 hover:opacity-100 transition-opacity"><span class="material-symbols-outlined">smart_toy</span><span class="font-label-sm text-label-sm">Agents</span></a>
+  <a href="wallet.html" class="flex flex-col items-center justify-center text-on-surface-variant opacity-60 hover:opacity-100 transition-opacity"><span class="material-symbols-outlined">account_balance_wallet</span><span class="font-label-sm text-label-sm">Wallet</span></a>
+  <a href="node-health.html" class="flex flex-col items-center justify-center text-primary-fixed-dim font-bold bg-primary/10 rounded-xl px-3 py-1"><span class="material-symbols-outlined">settings_input_component</span><span class="font-label-sm text-label-sm">Config</span></a>
+</nav>
+
+<script src="/js/neural-os.iife.js"></script>
+<script>
+document.getElementById('hdr-wallet-btn').addEventListener('click', async () => {
+  if (!window.NOS) return
+  if (NOS.Wallet.isConnected()) { window.location.href = 'wallet.html' }
+  else { try { await NOS.Wallet.connect() } catch(e) {} }
+})
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('tbody tr').forEach(row => {
+    row.addEventListener('mouseenter', () => { const s = row.querySelector('.status-pulse'); if(s) s.classList.add('scale-150') })
+    row.addEventListener('mouseleave', () => { const s = row.querySelector('.status-pulse'); if(s) s.classList.remove('scale-150') })
+  })
+  setInterval(() => {
+    document.querySelectorAll('.h-8 div').forEach(bar => {
+      const h = parseInt(bar.style.height) || 50
+      const jitter = Math.floor(Math.random() * 10) - 5
+      bar.style.height = Math.max(10, Math.min(100, h + jitter)) + '%'
+      bar.style.transition = 'height 0.8s ease-in-out'
+    })
+  }, 1000)
+})
+</script>
+</body></html>

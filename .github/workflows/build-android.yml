@@ -1,0 +1,102 @@
+name: Build Neural_OS APK
+
+on:
+  push:
+    branches: [claude/google-stitch-integration-LR0Y0, main]
+    paths: [mobile/**]
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type (debug or release)'
+        required: false
+        default: 'debug'
+        type: choice
+        options: [debug, release]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Vite bundle
+        run: npm run build
+        env:
+          VITE_WC_PROJECT_ID: ${{ secrets.VITE_WC_PROJECT_ID }}
+          VITE_ALCHEMY_KEY: ${{ secrets.VITE_ALCHEMY_KEY }}
+          VITE_STRIPE_PK: ${{ secrets.VITE_STRIPE_PK }}
+          VITE_BILLING_WALLET: ${{ secrets.VITE_BILLING_WALLET }}
+
+      - name: Add Android platform
+        run: npx cap add android
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
+
+      - name: Build debug APK
+        if: ${{ github.event.inputs.build_type != 'release' }}
+        run: cd android && ./gradlew assembleDebug --no-daemon
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+
+      # ── Release (signed) APK ───────────────────────────────────────────────
+      # To enable: add these GitHub Secrets:
+      #   KEYSTORE_BASE64   – base64-encoded .jks keystore
+      #   KEYSTORE_PASSWORD – storePassword
+      #   KEY_ALIAS         – keyAlias
+      #   KEY_PASSWORD      – keyPassword
+      - name: Decode keystore
+        if: ${{ github.event.inputs.build_type == 'release' }}
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/neural-os-release.jks
+
+      - name: Build release APK
+        if: ${{ github.event.inputs.build_type == 'release' }}
+        run: |
+          cd android && ./gradlew assembleRelease --no-daemon \
+            -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/mobile/android/app/neural-os-release.jks" \
+            -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
+            -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
+            -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD }}"
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+
+      - name: Upload debug APK
+        if: ${{ github.event.inputs.build_type != 'release' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: neural-os-debug-${{ github.run_number }}
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
+
+      - name: Upload release APK
+        if: ${{ github.event.inputs.build_type == 'release' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: neural-os-release-${{ github.run_number }}
+          path: mobile/android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 90

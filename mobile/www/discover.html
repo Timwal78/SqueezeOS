@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<title>NEURAL_OS | Discover</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&family=JetBrains+Mono:wght@100..800&family=Inter:wght@100..900&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: { extend: {
+      "colors": {
+        "inverse-on-surface": "#313032", "secondary-fixed-dim": "#ebb2ff", "on-tertiary-container": "#006e16",
+        "secondary-fixed": "#f8d8ff", "on-tertiary": "#003907", "surface-bright": "#39393b",
+        "surface-container-lowest": "#0e0e10", "primary-fixed-dim": "#00dbe9", "on-background": "#e5e1e4",
+        "surface-container-low": "#1c1b1d", "primary-fixed": "#7df4ff", "surface-tint": "#00dbe9",
+        "on-primary": "#00363a", "primary": "#dbfcff", "on-secondary": "#520072",
+        "on-tertiary-fixed-variant": "#00530e", "secondary": "#ebb2ff", "surface-container-high": "#2a2a2c",
+        "on-secondary-fixed-variant": "#74009f", "background": "#131315", "on-primary-fixed": "#002022",
+        "inverse-surface": "#e5e1e4", "surface": "#131315", "tertiary-fixed": "#72ff70",
+        "tertiary-container": "#00fb40", "on-surface": "#e5e1e4", "on-error": "#690005",
+        "on-surface-variant": "#b9cacb", "secondary-container": "#b600f8", "outline": "#849495",
+        "on-tertiary-fixed": "#002203", "primary-container": "#00f0ff", "surface-dim": "#131315",
+        "outline-variant": "#3b494b", "on-error-container": "#ffdad6", "on-primary-fixed-variant": "#004f54",
+        "on-secondary-container": "#fff6fc", "surface-container-highest": "#353437",
+        "on-primary-container": "#006970", "error": "#ffb4ab", "on-secondary-fixed": "#320047",
+        "tertiary": "#ddffd3", "error-container": "#93000a", "surface-variant": "#353437",
+        "inverse-primary": "#006970", "tertiary-fixed-dim": "#00e639", "surface-container": "#201f21"
+      },
+      "borderRadius": { "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem" },
+      "spacing": { "xs": "8px", "lg": "40px", "margin-mobile": "20px", "sm": "16px", "md": "24px", "xl": "64px", "gutter": "16px", "base": "4px" },
+      "fontFamily": { "display-lg": ["Space Grotesk"], "label-sm": ["JetBrains Mono"], "body-md": ["Inter"], "headline-lg-mobile": ["Space Grotesk"], "headline-lg": ["Space Grotesk"] },
+      "fontSize": {
+        "display-lg": ["48px",{"lineHeight":"56px","letterSpacing":"-0.02em","fontWeight":"700"}],
+        "label-sm": ["12px",{"lineHeight":"16px","letterSpacing":"0.05em","fontWeight":"500"}],
+        "body-md": ["16px",{"lineHeight":"24px","fontWeight":"400"}],
+        "headline-lg-mobile": ["24px",{"lineHeight":"32px","fontWeight":"600"}],
+        "headline-lg": ["32px",{"lineHeight":"40px","letterSpacing":"-0.01em","fontWeight":"600"}]
+      }
+    }}
+  }
+</script>
+<style>
+  .glass { background: rgba(255,255,255,0.05); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); }
+  .glow-primary { box-shadow: 0 0 20px rgba(0,219,233,0.15); }
+  .glow-line { background: linear-gradient(90deg,#00dbe9 0%,transparent 100%); height:1px; width:100%; }
+  .pulsing-dot { animation: pdot 2s infinite; }
+  @keyframes pdot { 0%{transform:scale(0.95);opacity:0.5;} 50%{transform:scale(1.1);opacity:1;} 100%{transform:scale(0.95);opacity:0.5;} }
+  @keyframes tickerScroll { 0%{transform:translateX(0);} 100%{transform:translateX(-50%);} }
+  .ticker-inner { display:flex; animation: tickerScroll 30s linear infinite; width:max-content; }
+  .ticker-inner:hover { animation-play-state: paused; }
+  body { background-color: #0A0A0C; color: #e5e1e4; min-height: max(884px, 100dvh); }
+  nav a { text-decoration: none; }
+  .signal-card { border-left: 3px solid #00dbe9; }
+  .signal-card.bearish { border-left-color: #ff6b6b; }
+  .signal-card.neutral { border-left-color: #849495; }
+  @keyframes swarmPulse { 0%{opacity:0.4;} 50%{opacity:1;} 100%{opacity:0.4;} }
+  .swarm-live { animation: swarmPulse 1.5s ease-in-out infinite; }
+</style>
+</head>
+<body class="font-body-md overflow-x-hidden">
+
+<header class="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-xl border-b border-white/10 shadow-[0_0_20px_rgba(0,219,233,0.1)] flex justify-between items-center px-margin-mobile h-16">
+  <div class="flex items-center gap-3">
+    <span class="font-display-lg text-headline-lg-mobile tracking-tighter text-primary">NEURAL_OS</span>
+    <span class="font-label-sm text-[10px] text-outline border border-outline-variant px-2 py-0.5 rounded-full">DISCOVER</span>
+  </div>
+  <button id="hdr-wallet-btn" class="glass px-3 py-1 rounded-full flex items-center gap-2 border border-primary-container/20 hover:border-primary/40 transition-colors active:scale-95">
+    <span class="material-symbols-outlined text-primary text-[18px]">account_balance_wallet</span>
+    <span class="font-label-sm text-label-sm text-primary" data-nos="eth-balance">--</span>
+  </button>
+</header>
+
+<!-- Live market ticker strip -->
+<div class="fixed top-16 w-full z-40 bg-surface-container-lowest/90 backdrop-blur-sm border-b border-outline-variant overflow-hidden h-8">
+  <div class="ticker-inner h-full items-center flex" id="ticker-inner">
+    <!-- populated by JS -->
+    <span class="font-label-sm text-label-sm text-outline px-4">LOADING MARKET DATA...</span>
+  </div>
+</div>
+
+<main class="pt-32 pb-32 px-margin-mobile max-w-7xl mx-auto">
+
+  <!-- Swarm activity banner -->
+  <section class="mb-gutter glass rounded-xl p-4 flex items-center justify-between border border-primary-container/20">
+    <div class="flex items-center gap-3">
+      <div class="w-3 h-3 rounded-full bg-primary-container swarm-live"></div>
+      <div>
+        <div class="font-label-sm text-label-sm text-primary-container uppercase">AI SWARM ACTIVE</div>
+        <div class="font-label-sm text-[10px] text-outline"><span id="swarm-agents">—</span> agents · <span id="swarm-hits">—</span> sessions · $<span id="swarm-vol">—</span> USDC paid</div>
+      </div>
+    </div>
+    <div class="text-right">
+      <div class="font-label-sm text-label-sm text-primary-container" id="gas-price">— Gwei</div>
+      <div class="font-label-sm text-[10px] text-outline">GAS</div>
+    </div>
+  </section>
+
+  <!-- AIXBT Intelligence Feed -->
+  <section class="mb-lg">
+    <div class="flex justify-between items-center mb-md">
+      <div>
+        <h2 class="font-display-lg text-headline-lg-mobile text-on-background">AIXBT_SIGNALS</h2>
+        <p class="text-outline font-label-sm text-label-sm uppercase tracking-widest">Live market intelligence</p>
+      </div>
+      <div class="glass px-3 py-1.5 rounded-full flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-tertiary-container pulsing-dot"></span>
+        <span class="font-label-sm text-[10px] text-tertiary-container">$AIXBT <span id="aixbt-price">—</span></span>
+        <span class="font-label-sm text-[10px]" id="aixbt-change">—</span>
+      </div>
+    </div>
+    <div class="space-y-2" id="signals-feed">
+      <!-- populated by JS -->
+      <div class="glass rounded-xl p-4 flex items-center justify-center h-32">
+        <span class="font-label-sm text-outline">FETCHING SIGNALS...</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Search + Filters -->
+  <section class="mb-lg">
+    <div class="mb-md">
+      <h1 class="font-display-lg text-headline-lg-mobile text-on-background mb-base">AGENT_MARKETPLACE</h1>
+      <div class="glow-line mb-sm opacity-30"></div>
+    </div>
+    <div class="flex flex-col gap-md">
+      <div class="relative group">
+        <div class="absolute inset-y-0 left-4 flex items-center pointer-events-none"><span class="material-symbols-outlined text-outline group-focus-within:text-primary transition-colors">search</span></div>
+        <input id="agent-search" class="w-full bg-surface-container-lowest border border-outline-variant focus:border-primary-container text-on-surface font-label-sm py-4 pl-12 pr-4 rounded-lg focus:ring-0 transition-all outline-none" placeholder="QUERY NEURAL NETWORK..." type="text"/>
+      </div>
+      <div class="flex gap-xs overflow-x-auto pb-2" id="filter-tabs">
+        <button data-filter="all" class="filter-btn glass px-6 py-2 rounded-full border-primary text-primary font-label-sm whitespace-nowrap active:scale-95 transition-transform">ALL_NODES</button>
+        <button data-filter="signal" class="filter-btn glass px-6 py-2 rounded-full border-outline-variant text-outline font-label-sm whitespace-nowrap hover:border-primary/50 hover:text-primary transition-all">SIGNAL</button>
+        <button data-filter="sovereign" class="filter-btn glass px-6 py-2 rounded-full border-outline-variant text-outline font-label-sm whitespace-nowrap hover:border-primary/50 hover:text-primary transition-all">SOVEREIGN</button>
+        <button data-filter="institutional" class="filter-btn glass px-6 py-2 rounded-full border-outline-variant text-outline font-label-sm whitespace-nowrap hover:border-primary/50 hover:text-primary transition-all">INSTITUTIONAL</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Agent Cards -->
+  <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter mb-lg" id="agent-grid">
+    <!-- populated by JS -->
+  </section>
+
+  <!-- Network load card -->
+  <section class="glass rounded-xl p-md mb-lg">
+    <div class="flex justify-between items-center mb-md">
+      <h3 class="font-display-lg text-headline-lg-mobile text-secondary">NETWORK_INTELLIGENCE</h3>
+      <span class="font-label-sm text-[10px] text-outline">LIVE</span>
+    </div>
+    <div class="grid grid-cols-2 gap-gutter">
+      <div class="bg-surface-container-lowest rounded-lg p-sm">
+        <div class="font-label-sm text-[10px] text-outline uppercase mb-1">ETH PRICE</div>
+        <div class="font-display-lg text-[20px] text-primary" id="eth-price">—</div>
+        <div class="font-label-sm text-[10px]" id="eth-change">—</div>
+      </div>
+      <div class="bg-surface-container-lowest rounded-lg p-sm">
+        <div class="font-label-sm text-[10px] text-outline uppercase mb-1">BTC PRICE</div>
+        <div class="font-display-lg text-[20px] text-secondary" id="btc-price">—</div>
+        <div class="font-label-sm text-[10px]" id="btc-change">—</div>
+      </div>
+      <div class="bg-surface-container-lowest rounded-lg p-sm">
+        <div class="font-label-sm text-[10px] text-outline uppercase mb-1">XRP PRICE</div>
+        <div class="font-display-lg text-[20px] text-tertiary-fixed" id="xrp-price">—</div>
+        <div class="font-label-sm text-[10px]" id="xrp-change">—</div>
+      </div>
+      <div class="bg-surface-container-lowest rounded-lg p-sm">
+        <div class="font-label-sm text-[10px] text-outline uppercase mb-1">GAS (FAST)</div>
+        <div class="font-display-lg text-[20px] text-on-surface" id="gas-fast">—</div>
+        <div class="font-label-sm text-[10px] text-outline">Gwei</div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<nav class="fixed bottom-0 left-0 w-full z-50 bg-background/80 backdrop-blur-xl border-t border-white/10 flex justify-around items-center h-20 pb-safe px-4">
+  <a class="flex flex-col items-center justify-center text-primary fill-current transition-transform active:scale-90" href="discover.html"><span class="material-symbols-outlined">explore</span><span class="font-label-sm text-label-sm">Discover</span></a>
+  <a class="flex flex-col items-center justify-center text-outline opacity-50 hover:text-primary-fixed-dim transition-colors active:scale-90" href="agents.html"><span class="material-symbols-outlined">memory</span><span class="font-label-sm text-label-sm">Agents</span></a>
+  <a class="flex flex-col items-center justify-center text-outline opacity-50 hover:text-primary-fixed-dim transition-colors active:scale-90" href="wallet.html"><span class="material-symbols-outlined">account_balance_wallet</span><span class="font-label-sm text-label-sm">Wallet</span></a>
+  <a class="flex flex-col items-center justify-center text-outline opacity-50 hover:text-primary-fixed-dim transition-colors active:scale-90" href="subscription.html"><span class="material-symbols-outlined">settings_input_component</span><span class="font-label-sm text-label-sm">Config</span></a>
+</nav>
+
+<script src="/js/neural-os.iife.js"></script>
+<script>
+// ── Wallet header ──────────────────────────────────────────────────────────
+document.getElementById('hdr-wallet-btn').addEventListener('click', async () => {
+  if (!window.NOS) return
+  if (NOS.Wallet.isConnected()) { window.location.href = 'wallet.html' }
+  else { try { await NOS.Wallet.connect() } catch(e) {} }
+})
+const si = document.getElementById('agent-search')
+si.addEventListener('focus', () => si.parentElement.classList.add('glow-primary'))
+si.addEventListener('blur', () => si.parentElement.classList.remove('glow-primary'))
+
+// ── Market prices ──────────────────────────────────────────────────────────
+async function loadPrices() {
+  try {
+    const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum,bitcoin,ripple,aixbt-by-virtuals&vs_currencies=usd&include_24hr_change=true')
+    const d = await r.json()
+    const fmt = (n) => n >= 1000 ? '$' + n.toLocaleString('en-US', {maximumFractionDigits:0}) : '$' + n.toLocaleString('en-US', {maximumFractionDigits:4})
+    const chg = (n) => {
+      const s = n >= 0 ? '+' : ''
+      return `<span style="color:${n>=0?'#00fb40':'#ff6b6b'}">${s}${n?.toFixed(2)}%</span>`
+    }
+
+    if (d.ethereum) {
+      document.getElementById('eth-price').textContent = fmt(d.ethereum.usd)
+      document.getElementById('eth-change').innerHTML = chg(d.ethereum.usd_24h_change)
+    }
+    if (d.bitcoin) {
+      document.getElementById('btc-price').textContent = fmt(d.bitcoin.usd)
+      document.getElementById('btc-change').innerHTML = chg(d.bitcoin.usd_24h_change)
+    }
+    if (d.ripple) {
+      document.getElementById('xrp-price').textContent = fmt(d.ripple.usd)
+      document.getElementById('xrp-change').innerHTML = chg(d.ripple.usd_24h_change)
+    }
+    if (d['aixbt-by-virtuals']) {
+      const p = d['aixbt-by-virtuals']
+      document.getElementById('aixbt-price').textContent = '$' + p.usd.toFixed(4)
+      document.getElementById('aixbt-change').innerHTML = chg(p.usd_24h_change)
+    }
+
+    // Build ticker strip (doubled for seamless loop)
+    const items = []
+    if (d.ethereum) items.push({ sym:'ETH', price:fmt(d.ethereum.usd), chg:d.ethereum.usd_24h_change })
+    if (d.bitcoin)  items.push({ sym:'BTC', price:fmt(d.bitcoin.usd), chg:d.bitcoin.usd_24h_change })
+    if (d.ripple)   items.push({ sym:'XRP', price:fmt(d.ripple.usd), chg:d.ripple.usd_24h_change })
+    if (d['aixbt-by-virtuals']) items.push({ sym:'$AIXBT', price:'$'+d['aixbt-by-virtuals'].usd.toFixed(4), chg:d['aixbt-by-virtuals'].usd_24h_change })
+
+    const mkItem = (it) => {
+      const c = it.chg >= 0 ? '#00fb40' : '#ff6b6b'
+      const arrow = it.chg >= 0 ? '▲' : '▼'
+      return `<span class="font-label-sm text-label-sm px-6 whitespace-nowrap flex items-center gap-2">
+        <span class="text-outline">${it.sym}</span>
+        <span class="text-on-surface">${it.price}</span>
+        <span style="color:${c}">${arrow} ${Math.abs(it.chg).toFixed(2)}%</span>
+        <span class="text-outline-variant mx-2">·</span>
+      </span>`
+    }
+    const html = [...items,...items].map(mkItem).join('')
+    document.getElementById('ticker-inner').innerHTML = html
+  } catch(e) {}
+}
+loadPrices()
+setInterval(loadPrices, 60_000)
+
+// ── Gas price ──────────────────────────────────────────────────────────────
+async function loadGas() {
+  try {
+    const RPC_ETH = 'https://eth-mainnet.g.alchemy.com/v2/xR7Tl0576BmgNMvF4q_Y8'
+    const r = await fetch(RPC_ETH, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({id:1,jsonrpc:'2.0',method:'eth_gasPrice',params:[]})
+    })
+    const d = await r.json()
+    if (d.result) {
+      const gwei = Math.round(parseInt(d.result, 16) / 1e9)
+      document.getElementById('gas-price').textContent = gwei + ' Gwei'
+      document.getElementById('gas-fast').textContent = gwei
+    }
+  } catch(e) {}
+}
+loadGas()
+setInterval(loadGas, 15_000)
+
+// ── AIXBT signals ──────────────────────────────────────────────────────────
+async function loadSignals() {
+  const feed = document.getElementById('signals-feed')
+  try {
+    const signals = await window.NOS?.AIXBT?.getSignals?.(6)
+    if (!signals || !signals.length) throw new Error('no signals')
+    feed.innerHTML = signals.map(s => {
+      const bullish = s.sentiment > 0 || s.type === 'bullish'
+      const cls = bullish ? '' : (s.sentiment < 0 ? 'bearish' : 'neutral')
+      const dot = bullish ? '#00fb40' : (cls === 'bearish' ? '#ff6b6b' : '#849495')
+      const timeAgo = s.timestamp ? (() => {
+        const d = (Date.now() - new Date(s.timestamp).getTime()) / 1000
+        if (d < 60) return Math.round(d) + 's ago'
+        if (d < 3600) return Math.round(d/60) + 'm ago'
+        return Math.round(d/3600) + 'h ago'
+      })() : ''
+      return `<div class="glass rounded-xl p-4 signal-card ${cls}">
+        <div class="flex justify-between items-start mb-2">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full" style="background:${dot};box-shadow:0 0 6px ${dot}"></span>
+            <span class="font-label-sm text-label-sm text-primary-container">${s.token || s.symbol || 'SIGNAL'}</span>
+          </div>
+          <span class="font-label-sm text-[10px] text-outline">${timeAgo}</span>
+        </div>
+        <p class="font-body-md text-[13px] text-on-surface-variant line-clamp-2">${s.content || s.insight || s.summary || 'Intelligence signal'}</p>
+        ${s.confidence ? `<div class="mt-2 flex items-center gap-2"><div class="flex-grow bg-surface-container-highest h-1 rounded-full"><div class="h-full rounded-full" style="width:${Math.min(100,s.confidence)}%;background:${dot}"></div></div><span class="font-label-sm text-[10px] text-outline">${Math.round(s.confidence)}%</span></div>` : ''}
+      </div>`
+    }).join('')
+  } catch(e) {
+    feed.innerHTML = `<div class="glass rounded-xl p-4 text-center">
+      <span class="font-label-sm text-outline text-label-sm">SIGNALS REQUIRE WALLET CONNECTION</span>
+      <p class="font-label-sm text-[11px] text-outline mt-1">Connect wallet to access AIXBT intelligence feed</p>
+    </div>`
+  }
+}
+setTimeout(() => { if (window.NOS) loadSignals() }, 1200)
+setInterval(loadSignals, 30_000)
+document.addEventListener('nos:account', loadSignals)
+
+// ── Swarm stats ────────────────────────────────────────────────────────────
+function loadSwarm() {
+  try {
+    const s = window.NOS?.AgentRuntime?.getSwarmStats?.() || { uniqueAgents: 0, totalHits: 0, totalVolume: 0 }
+    document.getElementById('swarm-agents').textContent = s.uniqueAgents || '0'
+    document.getElementById('swarm-hits').textContent = s.totalHits || '0'
+    document.getElementById('swarm-vol').textContent = (s.totalVolume || 0).toFixed(2)
+  } catch(e) {}
+}
+setTimeout(() => { if (window.NOS) loadSwarm() }, 500)
+document.addEventListener('nos:agent-session', loadSwarm)
+
+// ── Agent cards ────────────────────────────────────────────────────────────
+const AGENTS_CATALOG = [
+  {
+    id:'aixbt-watcher', name:'AIXBT Watcher', tier:'signal', icon:'psychology',
+    color:'#00dbe9', desc:'Live AIXBT market intelligence. Fires alerts on high-confidence signals from Virtuals Protocol.',
+    price:'1.00 USDC/hr', tags:['signal','market_signals']
+  },
+  {
+    id:'alpha-scanner', name:'Alpha Scanner', tier:'sovereign', icon:'radar',
+    color:'#b600f8', desc:'Scans 5 EVM chains for institutional alpha — whale accumulation, liquidity anomalies, on-chain flows.',
+    price:'2.50 USDC/hr', tags:['sovereign','onchain_flow']
+  },
+  {
+    id:'wallet-guard', name:'Wallet Guard', tier:'signal', icon:'security',
+    color:'#00dbe9', desc:'Real-time wallet protection. Monitors approvals, phishing contracts, and drain patterns.',
+    price:'0.50 USDC/hr', tags:['signal','security']
+  },
+  {
+    id:'synt-01', name:'SYNT-01', tier:'institutional', icon:'auto_graph',
+    color:'#00fb40', desc:'Synthetic data generator for RWA risk modeling. Monte Carlo stress testing for institutional positions.',
+    price:'3.00 USDC/hr', tags:['institutional','risk_modeling']
+  },
+  {
+    id:'aegis-x', name:'AEGIS-X', tier:'institutional', icon:'verified_user',
+    color:'#00fb40', desc:'Compliance agent. Counterparty KYC screening, sanctions list checks, AML heuristics.',
+    price:'5.00 USDC/hr', tags:['institutional','compliance']
+  },
+  {
+    id:'cron-b', name:'CRON-B', tier:'sovereign', icon:'schedule',
+    color:'#b600f8', desc:'Scheduled execution engine. Recurring DCA, rebalancing, and limit orders on any supported chain.',
+    price:'1.50 USDC/hr', tags:['sovereign','automation']
+  },
+  {
+    id:'sync-mesh', name:'SYNC-MESH', tier:'sovereign', icon:'hub',
+    color:'#b600f8', desc:'Cross-agent coordination layer. Routes tasks between agents, manages inter-agent payments and state.',
+    price:'2.00 USDC/hr', tags:['sovereign','coordination']
+  },
+  {
+    id:'commerce-strategist', name:'COMMERCE_STRATEGIST', tier:'sovereign', icon:'trending_up',
+    color:'#b600f8', desc:'Autonomous liquidity provision and arb across EVM chains. High-precision execution with AIXBT integration.',
+    price:'4.00 USDC/hr', tags:['sovereign','arb','liquidity']
+  },
+]
+
+const tierBadge = {
+  signal: 'text-primary-container border-primary-container/30',
+  sovereign: 'text-secondary border-secondary/30',
+  institutional: 'text-tertiary-fixed border-tertiary-fixed/30',
+}
+
+function renderAgents(list) {
+  const grid = document.getElementById('agent-grid')
+  if (!list.length) {
+    grid.innerHTML = '<div class="col-span-full text-center py-12 text-outline font-label-sm">NO AGENTS MATCH FILTER</div>'
+    return
+  }
+  grid.innerHTML = list.map(a => `
+    <div class="glass p-md rounded-xl hover:border-primary/50 transition-all group agent-card" data-id="${a.id}" data-tier="${a.tier}">
+      <div class="flex justify-between items-start mb-md">
+        <div class="w-12 h-12 rounded-lg bg-surface-container-high flex items-center justify-center border border-white/10 group-hover:border-primary/40" style="box-shadow:0 0 12px ${a.color}22">
+          <span class="material-symbols-outlined" style="color:${a.color}">${a.icon}</span>
+        </div>
+        <span class="font-label-sm text-[10px] border px-2 py-0.5 rounded-full uppercase ${tierBadge[a.tier]||'text-outline border-outline-variant'}">${a.tier}</span>
+      </div>
+      <h4 class="font-headline-lg-mobile text-on-background mb-xs uppercase text-[16px]">${a.name}</h4>
+      <p class="text-on-surface-variant text-[13px] mb-md line-clamp-2">${a.desc}</p>
+      <div class="flex justify-between items-center pt-md border-t border-white/5">
+        <div class="font-label-sm text-[11px] text-primary">${a.price}</div>
+        <button class="hire-btn font-label-sm text-[11px] px-3 py-1.5 rounded-lg active:scale-95 transition-transform" style="background:${a.color}22;color:${a.color};border:1px solid ${a.color}44" data-id="${a.id}">HIRE</button>
+      </div>
+    </div>`).join('')
+
+  document.querySelectorAll('.hire-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const id = e.currentTarget.dataset.id
+      const agent = AGENTS_CATALOG.find(a => a.id === id)
+      if (!agent) return
+      if (!window.NOS?.Wallet?.isConnected()) {
+        alert('Connect your wallet to hire agents')
+        return
+      }
+      const tier = window.NOS?.Subscription?.getTier?.() || 'free'
+      const tierOrder = ['free','signal','sovereign','institutional']
+      if (tierOrder.indexOf(tier) < tierOrder.indexOf(agent.tier)) {
+        alert(`${agent.name} requires ${agent.tier.toUpperCase()} tier. Upgrade in Config.`)
+        return
+      }
+      const agentId = agent.id
+      try {
+        window.NOS?.Agents?.deploy?.(agentId)
+        window.location.href = 'agents.html'
+      } catch(err) { alert('Deploy failed: ' + err.message) }
+    })
+  })
+}
+
+let activeFilter = 'all'
+let searchQuery = ''
+function applyFilter() {
+  let list = AGENTS_CATALOG
+  if (activeFilter !== 'all') list = list.filter(a => a.tier === activeFilter)
+  if (searchQuery) list = list.filter(a => a.name.toLowerCase().includes(searchQuery) || a.desc.toLowerCase().includes(searchQuery))
+  renderAgents(list)
+}
+
+document.getElementById('filter-tabs').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-filter]')
+  if (!btn) return
+  activeFilter = btn.dataset.filter
+  document.querySelectorAll('.filter-btn').forEach(b => {
+    b.classList.toggle('text-primary', b.dataset.filter === activeFilter)
+    b.classList.toggle('border-primary', b.dataset.filter === activeFilter)
+    b.classList.toggle('text-outline', b.dataset.filter !== activeFilter)
+    b.classList.toggle('border-outline-variant', b.dataset.filter !== activeFilter)
+  })
+  applyFilter()
+})
+
+si.addEventListener('input', (e) => {
+  searchQuery = e.target.value.toLowerCase().trim()
+  applyFilter()
+})
+
+applyFilter()
+</script>
+</body></html>

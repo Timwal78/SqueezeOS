@@ -1,0 +1,124 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Neural_OS RWA Intelligence API",
+    "description": "Institutional-grade RWA settlement and market intelligence. All premium endpoints require an x402 USDC payment on Base before access is granted. Payment flow: POST to /api/invoice → pay USDC to billing_wallet → include X-Session-Token header on premium requests.",
+    "version": "1.0.0",
+    "contact": { "url": "https://neuralOS.app" }
+  },
+  "servers": [{ "url": "https://neuralOS.app/api", "description": "Production" }],
+  "paths": {
+    "/invoice": {
+      "post": {
+        "summary": "Request a payment invoice",
+        "description": "Returns USDC amount and billing wallet address. Pay on Base chain, then call /session with proof.",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": {
+            "type": "object", "required": ["endpoint", "agent_wallet"],
+            "properties": {
+              "endpoint": { "type": "string", "enum": ["rwa/alpha","rwa/deep","rwa/council","agents/hire","agents/swarm","market/sentiment","xrpl/settlement"] },
+              "agent_wallet": { "type": "string", "description": "EVM address of the calling agent" }
+            }
+          }}}
+        },
+        "responses": {
+          "200": { "description": "Invoice ready", "content": { "application/json": { "schema": {
+            "type": "object",
+            "properties": {
+              "billing_wallet": { "type": "string" },
+              "amount_usdc": { "type": "number" },
+              "chain": { "type": "string", "example": "base" },
+              "expires_at": { "type": "number" }
+            }
+          }}}}
+        }
+      }
+    },
+    "/session": {
+      "post": {
+        "summary": "Exchange payment proof for session token",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": {
+            "type": "object", "required": ["tx_hash", "agent_wallet", "endpoint"],
+            "properties": {
+              "tx_hash": { "type": "string", "description": "Base chain USDC transfer tx hash" },
+              "agent_wallet": { "type": "string" },
+              "endpoint": { "type": "string" }
+            }
+          }}}
+        },
+        "responses": {
+          "200": { "description": "Session token issued", "content": { "application/json": { "schema": {
+            "type": "object",
+            "properties": {
+              "token": { "type": "string" },
+              "exp": { "type": "number" },
+              "endpoint": { "type": "string" }
+            }
+          }}}}
+        }
+      }
+    },
+    "/rwa/alpha": {
+      "get": {
+        "summary": "RWA Alpha Signals",
+        "description": "Live institutional opportunity scores. Requires X-Session-Token header from /session. Cost: 0.50 USDC.",
+        "parameters": [
+          { "name": "chain", "in": "query", "schema": { "type": "string", "enum": ["eth","base","zksync","zeta","hyperliquid"] } }
+        ],
+        "security": [{ "x402Session": [] }],
+        "responses": {
+          "200": { "description": "Alpha signals array" },
+          "402": { "description": "Payment required — call /invoice first" }
+        }
+      }
+    },
+    "/rwa/council": {
+      "post": {
+        "summary": "Full Council Verdict",
+        "description": "Multi-engine AI consensus. Cost: 5.00 USDC. Institutional tier only.",
+        "security": [{ "x402Session": [] }],
+        "responses": {
+          "200": { "description": "Council verdict" },
+          "402": { "description": "Payment required" },
+          "403": { "description": "Institutional tier required" }
+        }
+      }
+    },
+    "/agents/swarm": {
+      "post": {
+        "summary": "Swarm Registration Ping",
+        "description": "Register as an active swarm node. Receive network load, gas, and optimal execution window. Cost: 0.25 USDC.",
+        "security": [{ "x402Session": [] }],
+        "responses": {
+          "200": { "description": "Swarm state" },
+          "402": { "description": "Payment required" }
+        }
+      }
+    },
+    "/xrpl/settlement": {
+      "post": {
+        "summary": "XRPL Settlement Route",
+        "description": "Optimal cross-chain RWA settlement via XRP Ledger. Cost: 0.75 USDC. Sovereign+ tier required.",
+        "security": [{ "x402Session": [] }],
+        "responses": {
+          "200": { "description": "Settlement path and escrow details" },
+          "402": { "description": "Payment required" },
+          "403": { "description": "Sovereign tier required" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "x402Session": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Session-Token",
+        "description": "Token obtained from /session after paying the invoice on Base chain"
+      }
+    }
+  }
+}
