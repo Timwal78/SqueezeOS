@@ -3,7 +3,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const WC_PROJECT_ID   = import.meta.env.VITE_WC_PROJECT_ID   || 'REPLACE_WALLETCONNECT_PROJECT_ID'
-export const ALCHEMY_KEY     = import.meta.env.VITE_ALCHEMY_KEY     || 'REPLACE_ALCHEMY_API_KEY'
+export const ALCHEMY_KEY     = import.meta.env.VITE_ALCHEMY_KEY     || 'kR7Tl0576BmgNMvF4q_Y8'
 export const STRIPE_PK       = import.meta.env.VITE_STRIPE_PK       || 'pk_live_51S07wtQL50L4TFzsw97jG66buYDIPAO1C4LVPO30GbTCsUiq2nG257s138hpPaP2lxduzaYfUWStb1k2L3O9bGnX00SkdNCnct'
 
 // Recipient wallet for crypto subscription payments
