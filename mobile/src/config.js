@@ -46,9 +46,10 @@ export const USDC_ADDRESS = {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Subscription tiers (USDC, 6 decimals)
+// Subscription tiers (USDC, 6 decimals) — see src/subscription.js for full defs
 // ─────────────────────────────────────────────────────────────────────────────
 export const TIERS = {
-  sovereign:    { monthly: 64_000_000n,   annual: 614_400_000n  },  // $64/mo  · $512/yr
-  institutional: { monthly: 256_000_000n, annual: 2_457_600_000n }, // $256/mo · $2,048/yr
+  signal:        { monthly: 49_000_000n,  annual: 490_000_000n  },  // $49/mo  · $490/yr
+  sovereign:     { monthly: 199_000_000n, annual: 1_990_000_000n }, // $199/mo · $1,990/yr
+  institutional: { monthly: 749_000_000n, annual: 7_490_000_000n }, // $749/mo · $7,490/yr
 }
