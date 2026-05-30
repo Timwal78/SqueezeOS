@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<title>NEURAL_OS | Protocol Wallet</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;family=Geist:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .glass-panel { background: rgba(255,255,255,0.05); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); }
+        .glow-cyan { box-shadow: 0 0 20px rgba(0,219,233,0.15); }
+        .glow-line { background: linear-gradient(90deg,#00dbe9 0%,transparent 100%); height:1px; width:100%; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        body { background-color: #0A0A0C; color: #e5e1e4; }
+        .pulsing-dot { animation: pulse 2s cubic-bezier(0.4,0,0.6,1) infinite; }
+        @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.4;} }
+        nav a { text-decoration: none; }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary-container": "#fff6fc", "surface-dim": "#131315", "surface-variant": "#353437",
+                        "error-container": "#93000a", "on-surface": "#e5e1e4", "error": "#ffb4ab",
+                        "inverse-surface": "#e5e1e4", "surface-tint": "#00dbe9", "on-secondary-fixed": "#320047",
+                        "on-error": "#690005", "tertiary-fixed": "#72ff70", "inverse-primary": "#006970",
+                        "tertiary": "#ddffd3", "on-primary": "#00363a", "secondary": "#ebb2ff",
+                        "primary-fixed": "#7df4ff", "on-primary-fixed": "#002022", "on-background": "#e5e1e4",
+                        "on-primary-container": "#006970", "background": "#131315", "on-tertiary-container": "#006e16",
+                        "on-error-container": "#ffdad6", "on-tertiary-fixed": "#002203", "surface": "#131315",
+                        "outline-variant": "#3b494b", "inverse-on-surface": "#313032", "secondary-container": "#b600f8",
+                        "on-surface-variant": "#b9cacb", "tertiary-fixed-dim": "#00e639",
+                        "surface-container-lowest": "#0e0e10", "surface-container-low": "#1c1b1d",
+                        "secondary-fixed-dim": "#ebb2ff", "primary": "#dbfcff", "surface-container-high": "#2a2a2c",
+                        "on-tertiary-fixed-variant": "#00530e", "secondary-fixed": "#f8d8ff",
+                        "surface-container": "#201f21", "on-tertiary": "#003907", "surface-bright": "#39393b",
+                        "primary-fixed-dim": "#00dbe9", "primary-container": "#00f0ff", "outline": "#849495",
+                        "on-primary-fixed-variant": "#004f54", "tertiary-container": "#00fb40",
+                        "surface-container-highest": "#353437", "on-secondary-fixed-variant": "#74009f",
+                        "on-secondary": "#520072"
+                    },
+                    "borderRadius": { "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem" },
+                    "spacing": { "margin-mobile": "20px", "base": "4px", "xl": "64px", "sm": "16px", "md": "24px", "lg": "40px", "gutter": "16px", "xs": "8px" },
+                    "fontFamily": { "body-md": ["Geist"], "headline-lg": ["Space Grotesk"], "display-lg": ["Space Grotesk"], "label-sm": ["JetBrains Mono"], "headline-lg-mobile": ["Space Grotesk"] },
+                    "fontSize": {
+                        "body-md": ["16px",{"lineHeight":"24px","fontWeight":"400"}],
+                        "headline-lg": ["32px",{"lineHeight":"40px","letterSpacing":"-0.01em","fontWeight":"600"}],
+                        "display-lg": ["48px",{"lineHeight":"56px","letterSpacing":"-0.02em","fontWeight":"700"}],
+                        "label-sm": ["12px",{"lineHeight":"16px","letterSpacing":"0.05em","fontWeight":"500"}],
+                        "headline-lg-mobile": ["24px",{"lineHeight":"32px","fontWeight":"600"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+    body { min-height: max(884px, 100dvh); }
+</style>
+</head>
+<body class="font-body-md text-on-surface selection:bg-primary-container selection:text-on-primary-container">
+<header class="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-xl border-b border-white/10 flex justify-between items-center px-margin-mobile h-16 shadow-[0_0_20px_rgba(0,219,233,0.1)]">
+<div class="flex items-center gap-xs">
+<span class="material-symbols-outlined text-primary text-2xl">memory</span>
+<h1 class="font-display-lg text-headline-lg-mobile tracking-tighter text-primary">NEURAL_OS</h1>
+</div>
+<div class="flex items-center gap-sm">
+<div class="flex flex-col items-end">
+<span class="font-label-sm text-[10px] text-outline uppercase tracking-widest">Network_Live</span>
+<span class="font-label-sm text-primary">0.84 ETH</span>
+</div>
+<div class="w-10 h-10 rounded-full border border-primary/20 overflow-hidden glass-panel flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">account_circle</span>
+</div>
+</div>
+</header>
+<main class="pt-24 pb-32 px-margin-mobile max-w-5xl mx-auto space-y-lg">
+<section class="space-y-md">
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-md">
+<div>
+<h2 class="font-label-sm text-outline uppercase tracking-[0.2em] mb-xs">Aggregate_Capital</h2>
+<div class="flex items-baseline gap-xs">
+<span class="font-display-lg text-primary text-5xl md:text-7xl">0.84</span>
+<span class="font-headline-lg text-primary/60">ETH</span>
+</div>
+<p class="font-label-sm text-on-surface-variant mt-2">≈ $2,451.92 USD <span class="text-tertiary-fixed-dim ml-2">+1.2%</span></p>
+</div>
+<div class="flex gap-sm">
+<button class="flex-1 md:flex-none h-12 px-8 bg-primary text-surface-dim font-bold rounded-lg flex items-center justify-center gap-xs active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-[20px]">north_east</span> SEND
+</button>
+<button class="flex-1 md:flex-none h-12 px-8 glass-panel border-primary-container/30 text-primary font-bold rounded-lg flex items-center justify-center gap-xs active:scale-95 transition-transform hover:bg-primary/10 transition-colors">
+<span class="material-symbols-outlined text-[20px]">south_west</span> RECEIVE
+</button>
+</div>
+</div>
+<div class="glow-line"></div>
+</section>
+<section class="grid grid-cols-1 md:grid-cols-12 gap-gutter">
+<div class="md:col-span-7 glass-panel rounded-xl p-md flex flex-col justify-between">
+<div>
+<h3 class="font-label-sm text-primary mb-md flex items-center gap-xs">
+<span class="material-symbols-outlined text-[18px]">bar_chart</span> PROTOCOL_FEE_BREAKDOWN
+</h3>
+<div class="space-y-sm">
+<div class="space-y-1">
+<div class="flex justify-between font-label-sm"><span class="text-on-surface-variant">X402 Protocol (Relay)</span><span class="text-on-surface">42%</span></div>
+<div class="h-2 bg-white/5 rounded-full overflow-hidden"><div class="h-full bg-primary-container w-[42%]"></div></div>
+</div>
+<div class="space-y-1">
+<div class="flex justify-between font-label-sm"><span class="text-on-surface-variant">AIXBT Neural Relay</span><span class="text-on-surface">35%</span></div>
+<div class="h-2 bg-white/5 rounded-full overflow-hidden"><div class="h-full bg-secondary-container w-[35%]"></div></div>
+</div>
+<div class="space-y-1">
+<div class="flex justify-between font-label-sm"><span class="text-on-surface-variant">ZK Compute Proofs</span><span class="text-on-surface">23%</span></div>
+<div class="h-2 bg-white/5 rounded-full overflow-hidden"><div class="h-full bg-tertiary-fixed-dim w-[23%]"></div></div>
+</div>
+</div>
+</div>
+<div class="mt-lg pt-md border-t border-white/10 flex justify-between items-center">
+<span class="font-label-sm text-outline">Total Fees (24h)</span>
+<span class="font-label-sm text-primary">0.0142 ETH</span>
+</div>
+</div>
+<div class="md:col-span-5 glass-panel rounded-xl p-md">
+<h3 class="font-label-sm text-primary mb-md flex items-center gap-xs">
+<span class="material-symbols-outlined text-[18px]">hub</span> AGENT_NODE_DRAIN
+</h3>
+<div class="space-y-md">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-sm">
+<div class="w-1.5 h-1.5 bg-tertiary-fixed-dim pulsing-dot rounded-full"></div>
+<div><p class="font-label-sm text-on-surface">Commerce_Strategist_Pro</p><p class="text-[10px] text-outline font-label-sm">NODE_ID: 0x92...f2</p></div>
+</div>
+<span class="font-label-sm text-primary">0.002 <span class="text-[10px] opacity-60">ETH/hr</span></span>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-sm">
+<div class="w-1.5 h-1.5 bg-tertiary-fixed-dim pulsing-dot rounded-full"></div>
+<div><p class="font-label-sm text-on-surface">Yield_Optimizer_v4</p><p class="text-[10px] text-outline font-label-sm">NODE_ID: 0x3a...11</p></div>
+</div>
+<span class="font-label-sm text-primary">0.0008 <span class="text-[10px] opacity-60">ETH/hr</span></span>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-sm">
+<div class="w-1.5 h-1.5 bg-outline rounded-full"></div>
+<div><p class="font-label-sm text-on-surface-variant">Arbitrage_Bot_Main</p><p class="text-[10px] text-outline font-label-sm">STATUS: STANDBY</p></div>
+</div>
+<span class="font-label-sm text-outline">0.000 <span class="text-[10px] opacity-60">ETH/hr</span></span>
+</div>
+</div>
+<button class="w-full mt-lg h-10 glass-panel border-white/5 hover:border-primary/20 text-outline hover:text-primary font-label-sm transition-all flex items-center justify-center gap-xs">
+ORCHESTRATE_NODES <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</button>
+</div>
+</section>
+<section class="space-y-md">
+<h3 class="font-label-sm text-outline tracking-widest uppercase">Protocol_Assets</h3>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-gutter">
+<div class="glass-panel p-md rounded-lg flex items-center justify-between hover:border-primary/30 transition-colors">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 flex items-center justify-center bg-white/5 rounded-lg border border-white/10"><span class="material-symbols-outlined text-primary">token</span></div>
+<div><p class="font-label-sm text-on-surface">Ethereum</p><p class="text-[10px] text-outline font-label-sm">ETH</p></div>
+</div>
+<div class="text-right"><p class="font-label-sm text-on-surface">0.421</p><p class="text-[10px] text-outline font-label-sm">$1,102.12</p></div>
+</div>
+<div class="glass-panel p-md rounded-lg flex items-center justify-between hover:border-primary/30 transition-colors">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 flex items-center justify-center bg-white/5 rounded-lg border border-white/10"><span class="material-symbols-outlined text-secondary">layers</span></div>
+<div><p class="font-label-sm text-on-surface">X402 Governance</p><p class="text-[10px] text-outline font-label-sm">X402</p></div>
+</div>
+<div class="text-right"><p class="font-label-sm text-on-surface">1,240.00</p><p class="text-[10px] text-outline font-label-sm">$842.10</p></div>
+</div>
+<div class="glass-panel p-md rounded-lg flex items-center justify-between hover:border-primary/30 transition-colors">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 flex items-center justify-center bg-white/5 rounded-lg border border-white/10"><span class="material-symbols-outlined text-tertiary-fixed-dim">neurology</span></div>
+<div><p class="font-label-sm text-on-surface">AIXBT Staked</p><p class="text-[10px] text-outline font-label-sm">sAIXBT</p></div>
+</div>
+<div class="text-right"><p class="font-label-sm text-on-surface">42.50</p><p class="text-[10px] text-outline font-label-sm">$507.70</p></div>
+</div>
+</div>
+</section>
+<section class="glass-panel rounded-xl overflow-hidden">
+<div class="p-md border-b border-white/10 flex justify-between items-center">
+<h3 class="font-label-sm text-primary flex items-center gap-xs"><span class="material-symbols-outlined text-[18px]">receipt_long</span> LEDGER_INTERACTIONS</h3>
+<div class="flex gap-sm">
+<span class="font-label-sm text-outline-variant cursor-pointer hover:text-primary transition-colors">Filter</span>
+<span class="font-label-sm text-outline-variant cursor-pointer hover:text-primary transition-colors">Export</span>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left">
+<thead><tr class="font-label-sm text-outline border-b border-white/5">
+<th class="p-md font-normal">TYPE_IDENTIFIER</th>
+<th class="p-md font-normal">AGENT / PROTOCOL</th>
+<th class="p-md font-normal text-right">VALUE_ETH</th>
+<th class="p-md font-normal text-right">STATUS</th>
+</tr></thead>
+<tbody class="font-label-sm">
+<tr class="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+<td class="p-md flex items-center gap-sm"><span class="material-symbols-outlined text-tertiary-fixed-dim text-[18px]">task_alt</span> TASK_REWARD</td>
+<td class="p-md text-on-surface-variant">Commerce_Strategist_Pro</td>
+<td class="p-md text-right text-tertiary-fixed-dim">+0.0125</td>
+<td class="p-md text-right text-outline">SUCCESS</td>
+</tr>
+<tr class="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+<td class="p-md flex items-center gap-sm"><span class="material-symbols-outlined text-error text-[18px]">payments</span> FEE_SETTLEMENT</td>
+<td class="p-md text-on-surface-variant">AIXBT Relay Cluster</td>
+<td class="p-md text-right text-error">-0.0004</td>
+<td class="p-md text-right text-outline">SETTLED</td>
+</tr>
+<tr class="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+<td class="p-md flex items-center gap-sm"><span class="material-symbols-outlined text-primary text-[18px]">sync_alt</span> STAKE_LOCK</td>
+<td class="p-md text-on-surface-variant">X402 Liquidity Pool</td>
+<td class="p-md text-right">-0.0500</td>
+<td class="p-md text-right text-outline">SUCCESS</td>
+</tr>
+<tr class="hover:bg-white/[0.02] transition-colors">
+<td class="p-md flex items-center gap-sm"><span class="material-symbols-outlined text-tertiary-fixed-dim text-[18px]">task_alt</span> TASK_REWARD</td>
+<td class="p-md text-on-surface-variant">Yield_Optimizer_v4</td>
+<td class="p-md text-right text-tertiary-fixed-dim">+0.0084</td>
+<td class="p-md text-right text-outline">SUCCESS</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="p-sm text-center border-t border-white/10">
+<button class="font-label-sm text-outline hover:text-primary transition-colors py-2 px-md">LOAD_ARCHIVED_BLOCKS</button>
+</div>
+</section>
+</main>
+<nav class="fixed bottom-0 left-0 w-full z-50 bg-background/80 backdrop-blur-xl border-t border-white/10 flex justify-around items-center h-20 pb-safe px-4">
+<a class="flex flex-col items-center justify-center text-outline opacity-50 hover:text-primary-fixed-dim transition-colors active:scale-90" href="discover.html">
+<span class="material-symbols-outlined">explore</span>
+<span class="font-label-sm text-label-sm">Discover</span>
+</a>
+<a class="flex flex-col items-center justify-center text-outline opacity-50 hover:text-primary-fixed-dim transition-colors active:scale-90" href="agents.html">
+<span class="material-symbols-outlined">memory</span>
+<span class="font-label-sm text-label-sm">Agents</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary fill-current active:scale-90 transition-transform" href="wallet.html">
+<span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1;">account_balance_wallet</span>
+<span class="font-label-sm text-label-sm">Wallet</span>
+</a>
+<a class="flex flex-col items-center justify-center text-outline opacity-50 hover:text-primary-fixed-dim transition-colors active:scale-90" href="subscription.html">
+<span class="material-symbols-outlined">settings_input_component</span>
+<span class="font-label-sm text-label-sm">Config</span>
+</a>
+</nav>
+<div class="fixed top-[-10%] right-[-10%] w-[50%] h-[50%] bg-primary/5 blur-[120px] rounded-full pointer-events-none -z-10"></div>
+<div class="fixed bottom-[-10%] left-[-10%] w-[40%] h-[40%] bg-secondary/5 blur-[120px] rounded-full pointer-events-none -z-10"></div>
+</body></html>
