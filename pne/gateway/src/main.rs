@@ -60,6 +60,8 @@ async fn main() -> anyhow::Result<()> {
         .allow_headers(Any);
 
     let app = Router::new()
+        // Root index
+        .route("/", get(routes::index))
         // Health & discovery (no auth)
         .route("/v1/status", get(routes::status))
         .route("/v1/pricing", get(routes::pricing))
