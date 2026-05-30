@@ -1,6 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Credentials — override with .env before `npm run build`
-// NOTE: Alchemy app must have Ethereum Mainnet + Base networks enabled
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const WC_PROJECT_ID   = import.meta.env.VITE_WC_PROJECT_ID   || 'REPLACE_WALLETCONNECT_PROJECT_ID'
@@ -13,15 +12,19 @@ export const BILLING_WALLET  = import.meta.env.VITE_BILLING_WALLET  || '0x000000
 // ─────────────────────────────────────────────────────────────────────────────
 // Chain IDs
 // ─────────────────────────────────────────────────────────────────────────────
-export const CHAIN_ETH  = 1
-export const CHAIN_BASE = 8453
+export const CHAIN_ETH         = 1
+export const CHAIN_BASE        = 8453
+export const CHAIN_ZKSYNC      = 324
+export const CHAIN_HYPERLIQUID = 999
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RPC endpoints (Alchemy)
 // ─────────────────────────────────────────────────────────────────────────────
 export const RPC = {
-  [CHAIN_ETH]:  `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
-  [CHAIN_BASE]: `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
+  [CHAIN_ETH]:         `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
+  [CHAIN_BASE]:        `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
+  [CHAIN_ZKSYNC]:      `https://zksync-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
+  [CHAIN_HYPERLIQUID]: `https://hyperliquid-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -33,8 +36,10 @@ export const XRPL_RPC = 'https://s1.ripple.com:51234/'
 // USDC contract addresses
 // ─────────────────────────────────────────────────────────────────────────────
 export const USDC_ADDRESS = {
-  [CHAIN_ETH]:  '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-  [CHAIN_BASE]: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+  [CHAIN_ETH]:         '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+  [CHAIN_BASE]:        '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+  [CHAIN_ZKSYNC]:      '0x1d17CBcF0D6D143135aE902365D2E5e2A16538D4',
+  [CHAIN_HYPERLIQUID]: null, // HyperEVM USDC — fill in contract address when available
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

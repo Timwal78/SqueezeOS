@@ -1,6 +1,10 @@
 import { EthereumProvider } from '@walletconnect/ethereum-provider'
 import { BrowserProvider, formatEther, parseEther, Contract, formatUnits } from 'ethers'
-import { WC_PROJECT_ID, RPC, CHAIN_ETH, CHAIN_BASE, USDC_ADDRESS } from './config.js'
+import {
+  WC_PROJECT_ID, RPC,
+  CHAIN_ETH, CHAIN_BASE, CHAIN_ZKSYNC, CHAIN_HYPERLIQUID,
+  USDC_ADDRESS,
+} from './config.js'
 
 const ERC20_ABI = [
   'function balanceOf(address owner) view returns (uint256)',
@@ -20,7 +24,7 @@ async function initProvider() {
   _wc = await EthereumProvider.init({
     projectId: WC_PROJECT_ID,
     chains: [CHAIN_ETH],
-    optionalChains: [CHAIN_BASE],
+    optionalChains: [CHAIN_BASE, CHAIN_ZKSYNC, CHAIN_HYPERLIQUID],
     showQrModal: true,
     qrModalOptions: {
       themeMode: 'dark',
@@ -80,7 +84,9 @@ export const Wallet = {
 
   getUsdcBalance: async (address, chainId = CHAIN_ETH) => {
     if (!_ep) return null
-    const token = new Contract(USDC_ADDRESS[chainId], ERC20_ABI, _ep)
+    const usdcAddr = USDC_ADDRESS[chainId]
+    if (!usdcAddr) return null
+    const token = new Contract(usdcAddr, ERC20_ABI, _ep)
     const [bal, dec] = await Promise.all([token.balanceOf(address ?? _wc.accounts[0]), token.decimals()])
     return parseFloat(formatUnits(bal, dec)).toFixed(2)
   },
@@ -95,8 +101,10 @@ export const Wallet = {
 
   sendUsdc: async (to, amountUsdc, chainId = CHAIN_ETH) => {
     if (!_ep) throw new Error('Wallet not connected')
+    const usdcAddr = USDC_ADDRESS[chainId]
+    if (!usdcAddr) throw new Error(`USDC not configured for chain ${chainId}`)
     const signer = await _ep.getSigner()
-    const token = new Contract(USDC_ADDRESS[chainId], ERC20_ABI, signer)
+    const token = new Contract(usdcAddr, ERC20_ABI, signer)
     const dec = await token.decimals()
     const amount = BigInt(Math.round(Number(amountUsdc) * 10 ** Number(dec)))
     const tx = await token.transfer(to, amount)
@@ -111,6 +119,14 @@ export const Wallet = {
       params: [{ chainId: `0x${chainId.toString(16)}` }],
     })
   },
+
+  /** Returns chain name string for UI display */
+  getChainName: (chainId) => ({
+    [CHAIN_ETH]:         'Ethereum',
+    [CHAIN_BASE]:        'Base',
+    [CHAIN_ZKSYNC]:      'zkSync',
+    [CHAIN_HYPERLIQUID]: 'HyperEVM',
+  })[chainId] ?? `Chain ${chainId}`,
 
   /** Fetch EVM asset transfer history via Alchemy getAssetTransfers */
   getTransfers: async (address, limit = 10) => {
