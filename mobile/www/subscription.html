@@ -80,6 +80,24 @@
     <span id="current-tier-label" class="font-label-sm text-[12px] text-primary uppercase"></span>
   </div>
 
+  <!-- FREE tier -->
+  <div class="glass rounded-xl p-5 mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border border-white/5">
+    <div class="flex items-center gap-4">
+      <span class="material-symbols-outlined text-outline text-2xl">explore</span>
+      <div>
+        <h3 class="font-display-lg text-[16px] text-on-surface">FREE — Discovery</h3>
+        <p class="font-label-sm text-[10px] text-outline uppercase mt-0.5">ETH only · 1% tx fee · No agents · No BYOK · Loyalty still accrues</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-3 shrink-0">
+      <div class="text-right">
+        <span class="font-display-lg text-[22px] text-outline">$0</span>
+        <p class="font-label-sm text-[9px] text-outline uppercase">Forever free</p>
+      </div>
+      <span class="font-label-sm text-[10px] uppercase px-3 py-1.5 rounded-lg border border-white/10 text-outline">Current</span>
+    </div>
+  </div>
+
   <!-- Tier cards -->
   <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
 
@@ -166,6 +184,58 @@
         <button onclick="showPayModal('institutional','usdc')" class="py-2.5 rounded-lg font-label-sm text-[11px] uppercase active:scale-95 transition-all text-black" style="background:#00fb40">USDC</button>
         <button onclick="showPayModal('institutional','stripe')" class="py-2.5 rounded-lg font-label-sm text-[11px] uppercase active:scale-95 transition-all border" style="border-color:rgba(0,251,64,0.4);color:#00fb40">Card</button>
       </div>
+    </div>
+  </div>
+
+
+  <!-- Loyalty Progress -->
+  <div id="loyalty-panel" class="glass rounded-xl p-6 mb-6">
+    <div class="flex items-center gap-3 mb-4">
+      <span class="material-symbols-outlined text-primary">military_tech</span>
+      <div>
+        <h3 class="font-display-lg text-[16px]">Loyalty Status</h3>
+        <p class="font-label-sm text-[10px] text-outline uppercase">Cumulative transaction volume — stacks on your subscription fee</p>
+      </div>
+    </div>
+    <div class="flex flex-wrap gap-6 mb-4">
+      <div>
+        <span class="font-label-sm text-[10px] text-outline uppercase block mb-1">Current Tier</span>
+        <span id="loyalty-tier-label" class="font-label-sm text-[14px] uppercase" style="color:#849495">MEMBER</span>
+      </div>
+      <div>
+        <span class="font-label-sm text-[10px] text-outline uppercase block mb-1">Volume</span>
+        <span id="loyalty-volume" class="font-label-sm text-[14px] text-on-surface">$0</span>
+      </div>
+      <div>
+        <span class="font-label-sm text-[10px] text-outline uppercase block mb-1">Transactions</span>
+        <span id="loyalty-txcount" class="font-label-sm text-[14px] text-on-surface">0</span>
+      </div>
+      <div>
+        <span class="font-label-sm text-[10px] text-outline uppercase block mb-1">Fee Discount</span>
+        <span id="loyalty-discount" class="font-label-sm text-[14px] text-tertiary-fixed-dim">0 bps</span>
+      </div>
+      <div>
+        <span class="font-label-sm text-[10px] text-outline uppercase block mb-1">Effective Fee</span>
+        <span id="loyalty-effective-fee" class="font-label-sm text-[14px] text-primary">1.00%</span>
+      </div>
+    </div>
+    <div id="loyalty-progress-wrap">
+      <div class="flex justify-between font-label-sm text-[10px] text-outline uppercase mb-1">
+        <span id="loyalty-progress-label">Progress to SILVER</span>
+        <span id="loyalty-progress-pct">0%</span>
+      </div>
+      <div class="h-2 bg-surface-container-highest rounded-full overflow-hidden">
+        <div id="loyalty-bar" class="h-full rounded-full transition-all duration-700" style="width:0%;background:#849495"></div>
+      </div>
+      <p id="loyalty-next-msg" class="font-label-sm text-[10px] text-outline mt-1"></p>
+    </div>
+    <!-- Tier ladder -->
+    <div class="grid grid-cols-5 gap-1 mt-4">
+      <div class="text-center"><div class="w-6 h-6 rounded-full mx-auto mb-1 bg-outline/30 flex items-center justify-center"><span class="text-[8px]">M</span></div><span class="font-label-sm text-[8px] text-outline block">MEMBER</span><span class="font-label-sm text-[8px] text-outline block">0%</span></div>
+      <div class="text-center"><div class="w-6 h-6 rounded-full mx-auto mb-1 bg-white/20 flex items-center justify-center"><span class="text-[8px]">S</span></div><span class="font-label-sm text-[8px] text-outline block">SILVER</span><span class="font-label-sm text-[8px] text-outline block">-5bps</span></div>
+      <div class="text-center"><div class="w-6 h-6 rounded-full mx-auto mb-1 flex items-center justify-center" style="background:#FFD70030"><span class="text-[8px]" style="color:#FFD700">G</span></div><span class="font-label-sm text-[8px] text-outline block">GOLD</span><span class="font-label-sm text-[8px] text-outline block">-10bps</span></div>
+      <div class="text-center"><div class="w-6 h-6 rounded-full mx-auto mb-1 bg-primary/20 flex items-center justify-center"><span class="text-[8px] text-primary">P</span></div><span class="font-label-sm text-[8px] text-outline block">PLATINUM</span><span class="font-label-sm text-[8px] text-outline block">-20bps</span></div>
+      <div class="text-center"><div class="w-6 h-6 rounded-full mx-auto mb-1 bg-secondary/20 flex items-center justify-center"><span class="text-[8px] text-secondary">E</span></div><span class="font-label-sm text-[8px] text-outline block">ELITE</span><span class="font-label-sm text-[8px] text-outline block">-30bps</span></div>
     </div>
   </div>
 
@@ -383,5 +453,37 @@ document.getElementById('hdr-wallet-btn').addEventListener('click', async () => 
 
 updatePrices()
 updateCurrentTier()
+updateLoyalty()
+// ─── Loyalty display ──────────────────────────────────────────────────────────
+function updateLoyalty() {
+  if (!window.NOS) return
+  const status = NOS.Loyalty.getStatus()
+  const tier   = status.tier
+
+  document.getElementById('loyalty-tier-label').textContent  = tier.label
+  document.getElementById('loyalty-tier-label').style.color  = tier.color
+  document.getElementById('loyalty-volume').textContent      = '$' + status.volume.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})
+  document.getElementById('loyalty-txcount').textContent     = status.txCount
+  document.getElementById('loyalty-discount').textContent    = tier.discountBps + ' bps'
+  document.getElementById('loyalty-effective-fee').textContent = (NOS.Loyalty.effectiveFeeBps() / 100).toFixed(2) + '%'
+
+  if (status.next) {
+    document.getElementById('loyalty-progress-label').textContent = 'Progress to ' + status.next.label
+    document.getElementById('loyalty-progress-pct').textContent   = status.progressToNext.toFixed(1) + '%'
+    document.getElementById('loyalty-bar').style.width            = status.progressToNext + '%'
+    document.getElementById('loyalty-bar').style.background       = tier.color
+    document.getElementById('loyalty-next-msg').textContent       = '$' + status.volumeToNext.toLocaleString() + ' more volume to unlock ' + status.next.label + ' (−' + status.next.discountBps + ' bps)'
+  } else {
+    document.getElementById('loyalty-progress-label').textContent = 'ELITE — Maximum Loyalty'
+    document.getElementById('loyalty-progress-pct').textContent   = '100%'
+    document.getElementById('loyalty-bar').style.width            = '100%'
+    document.getElementById('loyalty-bar').style.background       = tier.color
+    document.getElementById('loyalty-next-msg').textContent       = 'You have reached the highest loyalty tier.'
+  }
+}
+
+document.addEventListener('nos:loyalty', updateLoyalty)
+
+
 </script>
 </body></html>
