@@ -612,7 +612,7 @@ pub async fn well_known_mcp() -> impl IntoResponse {
     (
         StatusCode::OK,
         [("Content-Type", "application/json")],
-        include_str!("../../../.well-known/mcp.json"),
+        include_str!("../.well-known/mcp.json"),
     )
 }
 
