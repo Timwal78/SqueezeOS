@@ -177,7 +177,7 @@ pub struct MarketDataQuery {
 
 pub async fn proxy_market_data(
     State(state): State<AppState>,
-    ConnectInfo(_addr): ConnectInfo<SocketAddr>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     Extension(_claims): Extension<MacaroonClaims>,
     Query(q): Query<MarketDataQuery>,
@@ -266,7 +266,7 @@ const EMBARGO_SECS: u64 = 30;
 
 pub async fn proxy_council(
     State(state): State<AppState>,
-    ConnectInfo(_addr): ConnectInfo<SocketAddr>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     Extension(_claims): Extension<MacaroonClaims>,
     body: Bytes,
@@ -475,22 +475,22 @@ pub async fn latency_certificate(
 
 pub async fn proxy_options(
     State(state): State<AppState>,
-    ConnectInfo(_addr): ConnectInfo<SocketAddr>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     Extension(_claims): Extension<MacaroonClaims>,
     Query(q): Query<HashMap<String, String>>,
 ) -> Result<Response, PneError> {
-    proxy_get(state, "/api/options", q, &headers, _addr).await
+    proxy_get(state, "/api/options", q, &headers, addr).await
 }
 
 pub async fn proxy_scan(
     State(state): State<AppState>,
-    ConnectInfo(_addr): ConnectInfo<SocketAddr>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     Extension(_claims): Extension<MacaroonClaims>,
     Query(q): Query<HashMap<String, String>>,
 ) -> Result<Response, PneError> {
-    proxy_get(state, "/api/scan", q, &headers, _addr).await
+    proxy_get(state, "/api/scan", q, &headers, addr).await
 }
 
 async fn proxy_get(
@@ -498,7 +498,7 @@ async fn proxy_get(
     path: &str,
     params: HashMap<String, String>,
     headers: &HeaderMap,
-    _addr: SocketAddr,
+    addr: SocketAddr,
 ) -> Result<Response, PneError> {
     let grace_tip = parse_grace_tip(headers);
     let wallet_hash = headers
