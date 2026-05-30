@@ -2,7 +2,7 @@
 // Credentials — override with .env before `npm run build`
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const WC_PROJECT_ID   = import.meta.env.VITE_WC_PROJECT_ID   || 'REPLACE_WALLETCONNECT_PROJECT_ID'
+export const WC_PROJECT_ID   = import.meta.env.VITE_WC_PROJECT_ID   || '4c6399222d72daa6e53904504334501b'
 export const ALCHEMY_KEY     = import.meta.env.VITE_ALCHEMY_KEY     || 'xR7Tl0576BmgNMvF4q_Y8'
 export const STRIPE_PK       = import.meta.env.VITE_STRIPE_PK       || 'pk_live_51S07wtQL50L4TFzsw97jG66buYDIPAO1C4LVPO30GbTCsUiq2nG257s138hpPaP2lxduzaYfUWStb1k2L3O9bGnX00SkdNCnct'
 
