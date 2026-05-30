@@ -4,202 +4,187 @@
 <meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
 <title>NEURAL_OS | Agent Marketplace</title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&amp;family=JetBrains+Mono:wght@100..800&amp;family=Inter:wght@100..900&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&family=JetBrains+Mono:wght@100..800&family=Inter:wght@100..900&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 <script id="tailwind-config">
-      tailwind.config = {
-        darkMode: "class",
-        theme: {
-          extend: {
-            "colors": {
-                "inverse-on-surface": "#313032", "secondary-fixed-dim": "#ebb2ff", "on-tertiary-container": "#006e16",
-                "secondary-fixed": "#f8d8ff", "on-tertiary": "#003907", "surface-bright": "#39393b",
-                "surface-container-lowest": "#0e0e10", "primary-fixed-dim": "#00dbe9", "on-background": "#e5e1e4",
-                "surface-container-low": "#1c1b1d", "primary-fixed": "#7df4ff", "surface-tint": "#00dbe9",
-                "on-primary": "#00363a", "primary": "#dbfcff", "on-secondary": "#520072",
-                "on-tertiary-fixed-variant": "#00530e", "secondary": "#ebb2ff", "surface-container-high": "#2a2a2c",
-                "on-secondary-fixed-variant": "#74009f", "background": "#131315", "on-primary-fixed": "#002022",
-                "inverse-surface": "#e5e1e4", "surface": "#131315", "tertiary-fixed": "#72ff70",
-                "tertiary-container": "#00fb40", "on-surface": "#e5e1e4", "on-error": "#690005",
-                "on-surface-variant": "#b9cacb", "secondary-container": "#b600f8", "outline": "#849495",
-                "on-tertiary-fixed": "#002203", "primary-container": "#00f0ff", "surface-dim": "#131315",
-                "outline-variant": "#3b494b", "on-error-container": "#ffdad6", "on-primary-fixed-variant": "#004f54",
-                "on-secondary-container": "#fff6fc", "surface-container-highest": "#353437",
-                "on-primary-container": "#006970", "error": "#ffb4ab", "on-secondary-fixed": "#320047",
-                "tertiary": "#ddffd3", "error-container": "#93000a", "surface-variant": "#353437",
-                "inverse-primary": "#006970", "tertiary-fixed-dim": "#00e639", "surface-container": "#201f21"
-            },
-            "borderRadius": { "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem" },
-            "spacing": { "xs": "8px", "lg": "40px", "margin-mobile": "20px", "sm": "16px", "md": "24px", "xl": "64px", "gutter": "16px", "base": "4px" },
-            "fontFamily": { "display-lg": ["Space Grotesk"], "label-sm": ["JetBrains Mono"], "body-md": ["Inter"], "headline-lg-mobile": ["Space Grotesk"], "headline-lg": ["Space Grotesk"] },
-            "fontSize": {
-                "display-lg": ["48px",{"lineHeight":"56px","letterSpacing":"-0.02em","fontWeight":"700"}],
-                "label-sm": ["12px",{"lineHeight":"16px","letterSpacing":"0.05em","fontWeight":"500"}],
-                "body-md": ["16px",{"lineHeight":"24px","fontWeight":"400"}],
-                "headline-lg-mobile": ["24px",{"lineHeight":"32px","fontWeight":"600"}],
-                "headline-lg": ["32px",{"lineHeight":"40px","letterSpacing":"-0.01em","fontWeight":"600"}]
-            }
-          }
-        }
+  tailwind.config = {
+    darkMode: "class",
+    theme: { extend: {
+      "colors": {
+        "inverse-on-surface": "#313032", "secondary-fixed-dim": "#ebb2ff", "on-tertiary-container": "#006e16",
+        "secondary-fixed": "#f8d8ff", "on-tertiary": "#003907", "surface-bright": "#39393b",
+        "surface-container-lowest": "#0e0e10", "primary-fixed-dim": "#00dbe9", "on-background": "#e5e1e4",
+        "surface-container-low": "#1c1b1d", "primary-fixed": "#7df4ff", "surface-tint": "#00dbe9",
+        "on-primary": "#00363a", "primary": "#dbfcff", "on-secondary": "#520072",
+        "on-tertiary-fixed-variant": "#00530e", "secondary": "#ebb2ff", "surface-container-high": "#2a2a2c",
+        "on-secondary-fixed-variant": "#74009f", "background": "#131315", "on-primary-fixed": "#002022",
+        "inverse-surface": "#e5e1e4", "surface": "#131315", "tertiary-fixed": "#72ff70",
+        "tertiary-container": "#00fb40", "on-surface": "#e5e1e4", "on-error": "#690005",
+        "on-surface-variant": "#b9cacb", "secondary-container": "#b600f8", "outline": "#849495",
+        "on-tertiary-fixed": "#002203", "primary-container": "#00f0ff", "surface-dim": "#131315",
+        "outline-variant": "#3b494b", "on-error-container": "#ffdad6", "on-primary-fixed-variant": "#004f54",
+        "on-secondary-container": "#fff6fc", "surface-container-highest": "#353437",
+        "on-primary-container": "#006970", "error": "#ffb4ab", "on-secondary-fixed": "#320047",
+        "tertiary": "#ddffd3", "error-container": "#93000a", "surface-variant": "#353437",
+        "inverse-primary": "#006970", "tertiary-fixed-dim": "#00e639", "surface-container": "#201f21"
+      },
+      "borderRadius": { "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem" },
+      "spacing": { "xs": "8px", "lg": "40px", "margin-mobile": "20px", "sm": "16px", "md": "24px", "xl": "64px", "gutter": "16px", "base": "4px" },
+      "fontFamily": { "display-lg": ["Space Grotesk"], "label-sm": ["JetBrains Mono"], "body-md": ["Inter"], "headline-lg-mobile": ["Space Grotesk"], "headline-lg": ["Space Grotesk"] },
+      "fontSize": {
+        "display-lg": ["48px",{"lineHeight":"56px","letterSpacing":"-0.02em","fontWeight":"700"}],
+        "label-sm": ["12px",{"lineHeight":"16px","letterSpacing":"0.05em","fontWeight":"500"}],
+        "body-md": ["16px",{"lineHeight":"24px","fontWeight":"400"}],
+        "headline-lg-mobile": ["24px",{"lineHeight":"32px","fontWeight":"600"}],
+        "headline-lg": ["32px",{"lineHeight":"40px","letterSpacing":"-0.01em","fontWeight":"600"}]
       }
-    </script>
+    }}
+  }
+</script>
 <style>
-      .glass { background: rgba(255,255,255,0.05); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); }
-      .glow-primary { box-shadow: 0 0 20px rgba(0,219,233,0.15); }
-      .glow-line { background: linear-gradient(90deg,#00dbe9 0%,transparent 100%); height:1px; width:100%; }
-      .pulsing-dot { animation: pulse 2s infinite; }
-      @keyframes pulse { 0%{transform:scale(0.95);opacity:0.5;} 50%{transform:scale(1.1);opacity:1;} 100%{transform:scale(0.95);opacity:0.5;} }
-      body { background-color: #0A0A0C; color: #e5e1e4; }
-      nav a { text-decoration: none; }
-    </style>
-<style>
-    body { min-height: max(884px, 100dvh); }
+  .glass { background: rgba(255,255,255,0.05); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); }
+  .glow-primary { box-shadow: 0 0 20px rgba(0,219,233,0.15); }
+  .glow-line { background: linear-gradient(90deg,#00dbe9 0%,transparent 100%); height:1px; width:100%; }
+  .pulsing-dot { animation: pulse 2s infinite; }
+  @keyframes pulse { 0%{transform:scale(0.95);opacity:0.5;} 50%{transform:scale(1.1);opacity:1;} 100%{transform:scale(0.95);opacity:0.5;} }
+  body { background-color: #0A0A0C; color: #e5e1e4; min-height: max(884px, 100dvh); }
+  nav a { text-decoration: none; }
 </style>
 </head>
 <body class="font-body-md overflow-x-hidden">
+
 <header class="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-xl border-b border-white/10 shadow-[0_0_20px_rgba(0,219,233,0.1)] flex justify-between items-center px-margin-mobile h-16">
-<div class="flex items-center gap-3">
-<span class="font-display-lg text-headline-lg-mobile tracking-tighter text-primary">NEURAL_OS</span>
-</div>
-<div class="flex items-center gap-4">
-<div class="glass px-3 py-1 rounded-full flex items-center gap-2 border border-primary-container/20">
-<span class="material-symbols-outlined text-primary text-[18px]">account_balance_wallet</span>
-<span class="font-label-sm text-label-sm text-primary">0.84 ETH</span>
-</div>
-</div>
+  <div class="flex items-center gap-3">
+    <span class="font-display-lg text-headline-lg-mobile tracking-tighter text-primary">NEURAL_OS</span>
+  </div>
+  <button id="hdr-wallet-btn" class="glass px-3 py-1 rounded-full flex items-center gap-2 border border-primary-container/20 hover:border-primary/40 transition-colors active:scale-95">
+    <span class="material-symbols-outlined text-primary text-[18px]">account_balance_wallet</span>
+    <span class="font-label-sm text-label-sm text-primary" data-nos="eth-balance">--</span>
+  </button>
 </header>
+
 <main class="pt-24 pb-32 px-margin-mobile max-w-7xl mx-auto">
-<section class="mb-lg">
-<div class="mb-md">
-<h1 class="font-display-lg text-headline-lg-mobile text-on-background mb-base">AGENT_MARKETPLACE</h1>
-<p class="text-outline font-label-sm text-label-sm uppercase tracking-widest">Connect to specialized intelligence clusters</p>
-<div class="glow-line mt-base opacity-30"></div>
-</div>
-<div class="flex flex-col gap-md">
-<div class="relative group">
-<div class="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-<span class="material-symbols-outlined text-outline group-focus-within:text-primary transition-colors">search</span>
-</div>
-<input class="w-full bg-surface-container-lowest border border-outline-variant focus:border-primary-container text-on-surface font-label-sm py-4 pl-12 pr-4 rounded-lg focus:ring-0 transition-all outline-none" placeholder="QUERY NEURAL NETWORK..." type="text"/>
-</div>
-<div class="flex gap-xs overflow-x-auto pb-2">
-<button class="glass px-6 py-2 rounded-full border-primary text-primary font-label-sm whitespace-nowrap active:scale-95 transition-transform">ALL_NODES</button>
-<button class="glass px-6 py-2 rounded-full border-outline-variant text-outline font-label-sm whitespace-nowrap hover:border-primary/50 hover:text-primary transition-all">COMMERCE_01</button>
-<button class="glass px-6 py-2 rounded-full border-outline-variant text-outline font-label-sm whitespace-nowrap hover:border-primary/50 hover:text-primary transition-all">DATA_MINING</button>
-<button class="glass px-6 py-2 rounded-full border-outline-variant text-outline font-label-sm whitespace-nowrap hover:border-primary/50 hover:text-primary transition-all">SOCIAL_GRAPH</button>
-<button class="glass px-6 py-2 rounded-full border-outline-variant text-outline font-label-sm whitespace-nowrap hover:border-primary/50 hover:text-primary transition-all">AUTOMATION</button>
-</div>
-</div>
-</section>
-<section class="grid grid-cols-1 md:grid-cols-3 gap-md mb-lg">
-<div class="md:col-span-2 glass rounded-xl overflow-hidden group hover:border-primary/30 transition-all relative">
-<div class="absolute top-0 right-0 p-4">
-<span class="font-label-sm text-label-sm text-tertiary-fixed flex items-center gap-1">
-<span class="w-2 h-2 rounded-full bg-tertiary-fixed pulsing-dot"></span> LIVE
-</span>
-</div>
-<div class="h-48 relative">
-<img alt="Agent Visualization" class="w-full h-full object-cover opacity-40 group-hover:opacity-60 transition-opacity" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCGfqMWDPW554KVhLqs8k-ubyn8bp-bpMQcn9Fa8y7ltu0x3L_3y0gpUa4sfmc1lWZLz1A8HZa2rzC8CWd9vZ77SG32IGn2gTDWoxsrCDwIL4FzPHc2LwIPz_9Lx68rSMYDEZ7lM8Dptvx9clmC5i1aRvoIj5InUWELvLFvxGFOqUCGohE5nKIW7s93UNmTtxbAPizC5Ow88mZYuHKs0Gn_5cBCp8R2PvXWe5bM_oq_sN-kUx9fuSeTYuOTUDnxGf-PtHpKWGbR"/>
-<div class="absolute inset-0 bg-gradient-to-t from-background to-transparent"></div>
-</div>
-<div class="p-md relative -mt-12">
-<div class="font-label-sm text-label-sm text-primary mb-2">ID: X402-OMEGA</div>
-<h2 class="font-display-lg text-headline-lg-mobile text-on-background mb-sm">COMMERCE_STRATEGIST_PRO</h2>
-<p class="text-on-surface-variant text-body-md mb-md max-w-lg">Autonomous liquidity provision and arbitrage across 12 EVM chains. High precision execution engine with AIXBT integration.</p>
-<div class="flex flex-wrap gap-md items-center pt-md border-t border-white/5">
-<div><div class="text-outline font-label-sm text-[10px] uppercase">APY_OPTIMIZED</div><div class="text-primary font-display-lg text-[24px]">24.8%</div></div>
-<div><div class="text-outline font-label-sm text-[10px] uppercase">X402_BURN_RATE</div><div class="text-secondary font-display-lg text-[24px]">0.02/h</div></div>
-<div class="ml-auto"><button class="bg-primary text-on-primary px-8 py-3 rounded-lg font-label-sm hover:opacity-90 active:scale-95 transition-all">INITIALIZE_NODE</button></div>
-</div>
-</div>
-</div>
-<div class="glass p-md rounded-xl flex flex-col justify-between border-secondary/20">
-<div>
-<h3 class="font-display-lg text-headline-lg-mobile text-secondary mb-base">NETWORK_LOAD</h3>
-<div class="h-32 flex items-end gap-1 mb-md">
-<div class="w-full bg-secondary/20" style="height:40%"></div>
-<div class="w-full bg-secondary/40" style="height:60%"></div>
-<div class="w-full bg-secondary/20" style="height:30%"></div>
-<div class="w-full bg-secondary/60" style="height:80%"></div>
-<div class="w-full bg-secondary/40" style="height:50%"></div>
-<div class="w-full bg-secondary" style="height:90%"></div>
-</div>
-<p class="text-outline font-label-sm text-label-sm">High traffic in Data Sector 09. 128 Agents active.</p>
-</div>
-<div class="pt-md border-t border-white/5 mt-md">
-<div class="flex justify-between items-center mb-xs"><span class="text-on-surface-variant font-label-sm">GAS_FEES</span><span class="text-primary font-label-sm">12 Gwei</span></div>
-<div class="flex justify-between items-center"><span class="text-on-surface-variant font-label-sm">SYNC_STATUS</span><span class="text-tertiary-fixed-dim font-label-sm">OPTIMAL</span></div>
-</div>
-</div>
-</section>
-<section class="mb-lg">
-<h3 class="font-display-lg text-headline-lg-mobile text-on-background mb-md">AVAILABLE_AGENTS</h3>
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
-<div class="glass p-md rounded-xl hover:border-primary/50 transition-all group">
-<div class="flex justify-between items-start mb-md">
-<div class="w-12 h-12 rounded-lg bg-surface-container-high flex items-center justify-center border border-white/10 group-hover:border-primary/40"><span class="material-symbols-outlined text-primary">psychology</span></div>
-<div class="text-right"><div class="font-label-sm text-label-sm text-on-surface">AIXBT_NATIVE</div><div class="text-outline text-[10px] font-label-sm">VERIFIED_009</div></div>
-</div>
-<h4 class="font-headline-lg-mobile text-on-background mb-xs uppercase">Social_Prophet</h4>
-<p class="text-on-surface-variant text-body-md mb-md line-clamp-2">Analyzes sentiment across decentralized social graphs to predict trend volatility.</p>
-<div class="flex justify-between items-center pt-md border-t border-white/5">
-<div class="text-primary font-label-sm">0.12 X402 / day</div>
-<button class="material-symbols-outlined text-outline hover:text-primary transition-colors">add_circle</button>
-</div>
-</div>
-<div class="glass p-md rounded-xl hover:border-primary/50 transition-all group">
-<div class="flex justify-between items-start mb-md">
-<div class="w-12 h-12 rounded-lg bg-surface-container-high flex items-center justify-center border border-white/10 group-hover:border-primary/40"><span class="material-symbols-outlined text-secondary">database</span></div>
-<div class="text-right"><div class="font-label-sm text-label-sm text-on-surface">DATA_NODE</div><div class="text-outline text-[10px] font-label-sm">TIER_LITE</div></div>
-</div>
-<h4 class="font-headline-lg-mobile text-on-background mb-xs uppercase">Indexer_Prime</h4>
-<p class="text-on-surface-variant text-body-md mb-md line-clamp-2">Rapid indexing of sub-graphs for cross-chain data availability layers.</p>
-<div class="flex justify-between items-center pt-md border-t border-white/5">
-<div class="text-primary font-label-sm">FREE_TIER</div>
-<button class="material-symbols-outlined text-outline hover:text-primary transition-colors">add_circle</button>
-</div>
-</div>
-<div class="glass p-md rounded-xl hover:border-primary/50 transition-all group">
-<div class="flex justify-between items-start mb-md">
-<div class="w-12 h-12 rounded-lg bg-surface-container-high flex items-center justify-center border border-white/10 group-hover:border-primary/40"><span class="material-symbols-outlined text-tertiary-fixed">smart_toy</span></div>
-<div class="text-right"><div class="font-label-sm text-label-sm text-on-surface">TASK_MASTER</div><div class="text-outline text-[10px] font-label-sm">ELITE_042</div></div>
-</div>
-<h4 class="font-headline-lg-mobile text-on-background mb-xs uppercase">Task_Automator</h4>
-<p class="text-on-surface-variant text-body-md mb-md line-clamp-2">Complex multi-step workflow execution using LLM-reasoning modules.</p>
-<div class="flex justify-between items-center pt-md border-t border-white/5">
-<div class="text-primary font-label-sm">0.45 X402 / task</div>
-<button class="material-symbols-outlined text-outline hover:text-primary transition-colors">add_circle</button>
-</div>
-</div>
-</div>
-</section>
+  <section class="mb-lg">
+    <div class="mb-md">
+      <h1 class="font-display-lg text-headline-lg-mobile text-on-background mb-base">AGENT_MARKETPLACE</h1>
+      <p class="text-outline font-label-sm text-label-sm uppercase tracking-widest">Connect to specialized intelligence clusters</p>
+      <div class="glow-line mt-base opacity-30"></div>
+    </div>
+    <div class="flex flex-col gap-md">
+      <div class="relative group">
+        <div class="absolute inset-y-0 left-4 flex items-center pointer-events-none"><span class="material-symbols-outlined text-outline group-focus-within:text-primary transition-colors">search</span></div>
+        <input class="w-full bg-surface-container-lowest border border-outline-variant focus:border-primary-container text-on-surface font-label-sm py-4 pl-12 pr-4 rounded-lg focus:ring-0 transition-all outline-none" placeholder="QUERY NEURAL NETWORK..." type="text"/>
+      </div>
+      <div class="flex gap-xs overflow-x-auto pb-2">
+        <button class="glass px-6 py-2 rounded-full border-primary text-primary font-label-sm whitespace-nowrap active:scale-95 transition-transform">ALL_NODES</button>
+        <button class="glass px-6 py-2 rounded-full border-outline-variant text-outline font-label-sm whitespace-nowrap hover:border-primary/50 hover:text-primary transition-all">COMMERCE_01</button>
+        <button class="glass px-6 py-2 rounded-full border-outline-variant text-outline font-label-sm whitespace-nowrap hover:border-primary/50 hover:text-primary transition-all">DATA_MINING</button>
+        <button class="glass px-6 py-2 rounded-full border-outline-variant text-outline font-label-sm whitespace-nowrap hover:border-primary/50 hover:text-primary transition-all">SOCIAL_GRAPH</button>
+        <button class="glass px-6 py-2 rounded-full border-outline-variant text-outline font-label-sm whitespace-nowrap hover:border-primary/50 hover:text-primary transition-all">AUTOMATION</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="grid grid-cols-1 md:grid-cols-3 gap-md mb-lg">
+    <div class="md:col-span-2 glass rounded-xl overflow-hidden group hover:border-primary/30 transition-all relative">
+      <div class="absolute top-0 right-0 p-4"><span class="font-label-sm text-label-sm text-tertiary-fixed flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-tertiary-fixed pulsing-dot"></span> LIVE</span></div>
+      <div class="h-48 relative">
+        <img alt="Agent Visualization" class="w-full h-full object-cover opacity-40 group-hover:opacity-60 transition-opacity" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCGfqMWDPW554KVhLqs8k-ubyn8bp-bpMQcn9Fa8y7ltu0x3L_3y0gpUa4sfmc1lWZLz1A8HZa2rzC8CWd9vZ77SG32IGn2gTDWoxsrCDwIL4FzPHc2LwIPz_9Lx68rSMYDEZ7lM8Dptvx9clmC5i1aRvoIj5InUWELvLFvxGFOqUCGohE5nKIW7s93UNmTtxbAPizC5Ow88mZYuHKs0Gn_5cBCp8R2PvXWe5bM_oq_sN-kUx9fuSeTYuOTUDnxGf-PtHpKWGbR"/>
+        <div class="absolute inset-0 bg-gradient-to-t from-background to-transparent"></div>
+      </div>
+      <div class="p-md relative -mt-12">
+        <div class="font-label-sm text-label-sm text-primary mb-2">ID: X402-OMEGA</div>
+        <h2 class="font-display-lg text-headline-lg-mobile text-on-background mb-sm">COMMERCE_STRATEGIST_PRO</h2>
+        <p class="text-on-surface-variant text-body-md mb-md max-w-lg">Autonomous liquidity provision and arbitrage across 12 EVM chains. High precision execution engine with AIXBT integration.</p>
+        <div class="flex flex-wrap gap-md items-center pt-md border-t border-white/5">
+          <div><div class="text-outline font-label-sm text-[10px] uppercase">APY_OPTIMIZED</div><div class="text-primary font-display-lg text-[24px]">24.8%</div></div>
+          <div><div class="text-outline font-label-sm text-[10px] uppercase">X402_BURN_RATE</div><div class="text-secondary font-display-lg text-[24px]">0.02/h</div></div>
+          <div class="ml-auto"><button class="bg-primary text-on-primary px-8 py-3 rounded-lg font-label-sm hover:opacity-90 active:scale-95 transition-all">INITIALIZE_NODE</button></div>
+        </div>
+      </div>
+    </div>
+    <div class="glass p-md rounded-xl flex flex-col justify-between border-secondary/20">
+      <div>
+        <h3 class="font-display-lg text-headline-lg-mobile text-secondary mb-base">NETWORK_LOAD</h3>
+        <div class="h-32 flex items-end gap-1 mb-md">
+          <div class="w-full bg-secondary/20" style="height:40%"></div>
+          <div class="w-full bg-secondary/40" style="height:60%"></div>
+          <div class="w-full bg-secondary/20" style="height:30%"></div>
+          <div class="w-full bg-secondary/60" style="height:80%"></div>
+          <div class="w-full bg-secondary/40" style="height:50%"></div>
+          <div class="w-full bg-secondary" style="height:90%"></div>
+        </div>
+        <p class="text-outline font-label-sm text-label-sm">High traffic in Data Sector 09. 128 Agents active.</p>
+      </div>
+      <div class="pt-md border-t border-white/5 mt-md">
+        <div class="flex justify-between items-center mb-xs"><span class="text-on-surface-variant font-label-sm">GAS_FEES</span><span class="text-primary font-label-sm">12 Gwei</span></div>
+        <div class="flex justify-between items-center"><span class="text-on-surface-variant font-label-sm">SYNC_STATUS</span><span class="text-tertiary-fixed-dim font-label-sm">OPTIMAL</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mb-lg">
+    <h3 class="font-display-lg text-headline-lg-mobile text-on-background mb-md">AVAILABLE_AGENTS</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
+      <div class="glass p-md rounded-xl hover:border-primary/50 transition-all group">
+        <div class="flex justify-between items-start mb-md">
+          <div class="w-12 h-12 rounded-lg bg-surface-container-high flex items-center justify-center border border-white/10 group-hover:border-primary/40"><span class="material-symbols-outlined text-primary">psychology</span></div>
+          <div class="text-right"><div class="font-label-sm text-label-sm text-on-surface">AIXBT_NATIVE</div><div class="text-outline text-[10px] font-label-sm">VERIFIED_009</div></div>
+        </div>
+        <h4 class="font-headline-lg-mobile text-on-background mb-xs uppercase">Social_Prophet</h4>
+        <p class="text-on-surface-variant text-body-md mb-md line-clamp-2">Analyzes sentiment across decentralized social graphs to predict trend volatility.</p>
+        <div class="flex justify-between items-center pt-md border-t border-white/5">
+          <div class="text-primary font-label-sm">0.12 X402 / day</div>
+          <button class="material-symbols-outlined text-outline hover:text-primary transition-colors">add_circle</button>
+        </div>
+      </div>
+      <div class="glass p-md rounded-xl hover:border-primary/50 transition-all group">
+        <div class="flex justify-between items-start mb-md">
+          <div class="w-12 h-12 rounded-lg bg-surface-container-high flex items-center justify-center border border-white/10 group-hover:border-primary/40"><span class="material-symbols-outlined text-secondary">database</span></div>
+          <div class="text-right"><div class="font-label-sm text-label-sm text-on-surface">DATA_NODE</div><div class="text-outline text-[10px] font-label-sm">TIER_LITE</div></div>
+        </div>
+        <h4 class="font-headline-lg-mobile text-on-background mb-xs uppercase">Indexer_Prime</h4>
+        <p class="text-on-surface-variant text-body-md mb-md line-clamp-2">Rapid indexing of sub-graphs for cross-chain data availability layers.</p>
+        <div class="flex justify-between items-center pt-md border-t border-white/5">
+          <div class="text-primary font-label-sm">FREE_TIER</div>
+          <button class="material-symbols-outlined text-outline hover:text-primary transition-colors">add_circle</button>
+        </div>
+      </div>
+      <div class="glass p-md rounded-xl hover:border-primary/50 transition-all group">
+        <div class="flex justify-between items-start mb-md">
+          <div class="w-12 h-12 rounded-lg bg-surface-container-high flex items-center justify-center border border-white/10 group-hover:border-primary/40"><span class="material-symbols-outlined text-tertiary-fixed">smart_toy</span></div>
+          <div class="text-right"><div class="font-label-sm text-label-sm text-on-surface">TASK_MASTER</div><div class="text-outline text-[10px] font-label-sm">ELITE_042</div></div>
+        </div>
+        <h4 class="font-headline-lg-mobile text-on-background mb-xs uppercase">Task_Automator</h4>
+        <p class="text-on-surface-variant text-body-md mb-md line-clamp-2">Complex multi-step workflow execution using LLM-reasoning modules.</p>
+        <div class="flex justify-between items-center pt-md border-t border-white/5">
+          <div class="text-primary font-label-sm">0.45 X402 / task</div>
+          <button class="material-symbols-outlined text-outline hover:text-primary transition-colors">add_circle</button>
+        </div>
+      </div>
+    </div>
+  </section>
 </main>
+
 <nav class="fixed bottom-0 left-0 w-full z-50 bg-background/80 backdrop-blur-xl border-t border-white/10 flex justify-around items-center h-20 pb-safe px-4">
-<a class="flex flex-col items-center justify-center text-primary fill-current transition-transform active:scale-90" href="discover.html">
-<span class="material-symbols-outlined">explore</span>
-<span class="font-label-sm text-label-sm">Discover</span>
-</a>
-<a class="flex flex-col items-center justify-center text-outline opacity-50 hover:text-primary-fixed-dim transition-colors active:scale-90" href="agents.html">
-<span class="material-symbols-outlined">memory</span>
-<span class="font-label-sm text-label-sm">Agents</span>
-</a>
-<a class="flex flex-col items-center justify-center text-outline opacity-50 hover:text-primary-fixed-dim transition-colors active:scale-90" href="wallet.html">
-<span class="material-symbols-outlined">account_balance_wallet</span>
-<span class="font-label-sm text-label-sm">Wallet</span>
-</a>
-<a class="flex flex-col items-center justify-center text-outline opacity-50 hover:text-primary-fixed-dim transition-colors active:scale-90" href="subscription.html">
-<span class="material-symbols-outlined">settings_input_component</span>
-<span class="font-label-sm text-label-sm">Config</span>
-</a>
+  <a class="flex flex-col items-center justify-center text-primary fill-current transition-transform active:scale-90" href="discover.html"><span class="material-symbols-outlined">explore</span><span class="font-label-sm text-label-sm">Discover</span></a>
+  <a class="flex flex-col items-center justify-center text-outline opacity-50 hover:text-primary-fixed-dim transition-colors active:scale-90" href="agents.html"><span class="material-symbols-outlined">memory</span><span class="font-label-sm text-label-sm">Agents</span></a>
+  <a class="flex flex-col items-center justify-center text-outline opacity-50 hover:text-primary-fixed-dim transition-colors active:scale-90" href="wallet.html"><span class="material-symbols-outlined">account_balance_wallet</span><span class="font-label-sm text-label-sm">Wallet</span></a>
+  <a class="flex flex-col items-center justify-center text-outline opacity-50 hover:text-primary-fixed-dim transition-colors active:scale-90" href="subscription.html"><span class="material-symbols-outlined">settings_input_component</span><span class="font-label-sm text-label-sm">Config</span></a>
 </nav>
+
+<script src="/js/neural-os.iife.js"></script>
 <script>
-        const searchInput = document.querySelector('input[type="text"]');
-        searchInput.addEventListener('focus', () => { searchInput.parentElement.classList.add('glow-primary'); });
-        searchInput.addEventListener('blur', () => { searchInput.parentElement.classList.remove('glow-primary'); });
-        const cards = document.querySelectorAll('.glass');
-        cards.forEach(card => {
-            card.addEventListener('mouseenter', () => { if(!card.classList.contains('border-primary/30')) card.style.borderColor='rgba(0,219,233,0.2)'; });
-            card.addEventListener('mouseleave', () => { if(!card.classList.contains('border-primary/30')) card.style.borderColor='rgba(255,255,255,0.1)'; });
-        });
-    </script>
+document.getElementById('hdr-wallet-btn').addEventListener('click', async () => {
+  if (!window.NOS) return
+  if (NOS.Wallet.isConnected()) {
+    window.location.href = 'wallet.html'
+  } else {
+    try { await NOS.Wallet.connect() } catch(e) {}
+  }
+})
+const si = document.querySelector('input[type="text"]')
+si.addEventListener('focus', () => si.parentElement.classList.add('glow-primary'))
+si.addEventListener('blur', () => si.parentElement.classList.remove('glow-primary'))
+</script>
 </body></html>

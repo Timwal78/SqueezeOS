@@ -4,215 +4,252 @@
 <meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
 <title>NEURAL_OS | Subscription Mesh</title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;family=Geist:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 <script id="tailwind-config">
-    tailwind.config = {
-      darkMode: "class",
-      theme: {
-        extend: {
-          "colors": {
-            "primary-fixed-dim": "#00dbe9", "tertiary-fixed-dim": "#00e639", "primary-container": "#00f0ff",
-            "primary": "#dbfcff", "tertiary-container": "#00fb40", "inverse-on-surface": "#313032",
-            "surface-container": "#201f21", "surface": "#131315", "on-primary": "#00363a",
-            "on-error": "#690005", "tertiary": "#ddffd3", "surface-bright": "#39393b",
-            "on-error-container": "#ffdad6", "surface-container-highest": "#353437",
-            "secondary-fixed-dim": "#ebb2ff", "inverse-surface": "#e5e1e4", "on-tertiary-fixed": "#002203",
-            "surface-container-high": "#2a2a2c", "secondary-fixed": "#f8d8ff", "surface-variant": "#353437",
-            "surface-container-lowest": "#0e0e10", "surface-container-low": "#1c1b1d",
-            "outline-variant": "#3b494b", "on-tertiary-container": "#006e16", "tertiary-fixed": "#72ff70",
-            "on-primary-container": "#006970", "on-surface": "#e5e1e4", "on-secondary-fixed": "#320047",
-            "on-primary-fixed": "#002022", "outline": "#849495", "on-primary-fixed-variant": "#004f54",
-            "inverse-primary": "#006970", "secondary-container": "#b600f8", "on-tertiary-fixed-variant": "#00530e",
-            "error": "#ffb4ab", "surface-dim": "#131315", "primary-fixed": "#7df4ff",
-            "background": "#131315", "on-secondary": "#520072", "on-background": "#e5e1e4",
-            "on-secondary-fixed-variant": "#74009f", "on-secondary-container": "#fff6fc",
-            "secondary": "#ebb2ff", "on-tertiary": "#003907", "surface-tint": "#00dbe9",
-            "on-surface-variant": "#b9cacb", "error-container": "#93000a"
-          },
-          "borderRadius": { "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem" },
-          "spacing": { "margin-mobile": "20px", "xs": "8px", "xl": "64px", "gutter": "16px", "sm": "16px", "md": "24px", "base": "4px", "lg": "40px" },
-          "fontFamily": { "label-sm": ["JetBrains Mono"], "body-md": ["Geist"], "headline-lg-mobile": ["Space Grotesk"], "headline-lg": ["Space Grotesk"], "display-lg": ["Space Grotesk"] },
-          "fontSize": {
-            "label-sm": ["12px",{"lineHeight":"16px","letterSpacing":"0.05em","fontWeight":"500"}],
-            "body-md": ["16px",{"lineHeight":"24px","fontWeight":"400"}],
-            "headline-lg-mobile": ["24px",{"lineHeight":"32px","fontWeight":"600"}],
-            "headline-lg": ["32px",{"lineHeight":"40px","letterSpacing":"-0.01em","fontWeight":"600"}],
-            "display-lg": ["48px",{"lineHeight":"56px","letterSpacing":"-0.02em","fontWeight":"700"}]
-          }
-        }
+  tailwind.config = {
+    darkMode: "class",
+    theme: { extend: {
+      "colors": {
+        "primary-fixed-dim": "#00dbe9", "tertiary-fixed-dim": "#00e639", "primary-container": "#00f0ff",
+        "primary": "#dbfcff", "tertiary-container": "#00fb40", "inverse-on-surface": "#313032",
+        "surface-container": "#201f21", "surface": "#131315", "on-primary": "#00363a",
+        "on-error": "#690005", "tertiary": "#ddffd3", "surface-bright": "#39393b",
+        "on-error-container": "#ffdad6", "surface-container-highest": "#353437",
+        "secondary-fixed-dim": "#ebb2ff", "inverse-surface": "#e5e1e4", "on-tertiary-fixed": "#002203",
+        "surface-container-high": "#2a2a2c", "secondary-fixed": "#f8d8ff", "surface-variant": "#353437",
+        "surface-container-lowest": "#0e0e10", "surface-container-low": "#1c1b1d",
+        "outline-variant": "#3b494b", "on-tertiary-container": "#006e16", "tertiary-fixed": "#72ff70",
+        "on-primary-container": "#006970", "on-surface": "#e5e1e4", "on-secondary-fixed": "#320047",
+        "on-primary-fixed": "#002022", "outline": "#849495", "on-primary-fixed-variant": "#004f54",
+        "inverse-primary": "#006970", "secondary-container": "#b600f8", "on-tertiary-fixed-variant": "#00530e",
+        "error": "#ffb4ab", "surface-dim": "#131315", "primary-fixed": "#7df4ff",
+        "background": "#131315", "on-secondary": "#520072", "on-background": "#e5e1e4",
+        "on-secondary-fixed-variant": "#74009f", "on-secondary-container": "#fff6fc",
+        "secondary": "#ebb2ff", "on-tertiary": "#003907", "surface-tint": "#00dbe9",
+        "on-surface-variant": "#b9cacb", "error-container": "#93000a"
+      },
+      "borderRadius": { "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem" },
+      "spacing": { "margin-mobile": "20px", "xs": "8px", "xl": "64px", "gutter": "16px", "sm": "16px", "md": "24px", "base": "4px", "lg": "40px" },
+      "fontFamily": { "label-sm": ["JetBrains Mono"], "body-md": ["Geist"], "headline-lg-mobile": ["Space Grotesk"], "headline-lg": ["Space Grotesk"], "display-lg": ["Space Grotesk"] },
+      "fontSize": {
+        "label-sm": ["12px",{"lineHeight":"16px","letterSpacing":"0.05em","fontWeight":"500"}],
+        "body-md": ["16px",{"lineHeight":"24px","fontWeight":"400"}],
+        "headline-lg-mobile": ["24px",{"lineHeight":"32px","fontWeight":"600"}],
+        "headline-lg": ["32px",{"lineHeight":"40px","letterSpacing":"-0.01em","fontWeight":"600"}],
+        "display-lg": ["48px",{"lineHeight":"56px","letterSpacing":"-0.02em","fontWeight":"700"}]
       }
-    }
-  </script>
+    }}
+  }
+</script>
 <style>
-    .glass { background: rgba(255,255,255,0.05); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); }
-    .glow-cyan { box-shadow: 0 0 20px rgba(0,219,233,0.1); }
-    .active-glow { box-shadow: 0 0 30px rgba(0,219,233,0.2); border-color: #00dbe9; }
-    .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
-    body { background-color: #0A0A0C; }
-    nav a { text-decoration: none; }
-    body { min-height: max(884px, 100dvh); }
-  </style>
+  .glass { background: rgba(255,255,255,0.05); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); }
+  .active-glow { box-shadow: 0 0 30px rgba(0,219,233,0.2); border-color: #00dbe9; }
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+  body { background-color: #0A0A0C; min-height: max(884px, 100dvh); }
+  nav a { text-decoration: none; }
+  .modal-overlay { position:fixed; inset:0; z-index:200; background:rgba(10,10,12,0.85); backdrop-filter:blur(8px); display:flex; align-items:flex-end; justify-content:center; }
+  .modal-overlay.hidden { display:none; }
+  .modal-sheet { background:#161618; border:1px solid rgba(255,255,255,0.12); border-radius:1.25rem 1.25rem 0 0; width:100%; max-width:480px; padding:1.5rem; }
+  .pay-btn { width:100%; padding:1rem; border-radius:0.5rem; font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:0.05em; font-weight:700; cursor:pointer; transition:all 0.15s; border:none; margin-bottom:0.75rem; }
+  .pay-btn:active { transform:scale(0.97); }
+  .pay-btn-usdc { background:#00dbe9; color:#00363a; }
+  .pay-btn-usdc:hover { filter:brightness(1.1); }
+  .pay-btn-stripe { background:rgba(255,255,255,0.08); color:#e5e1e4; border:1px solid rgba(255,255,255,0.15); }
+  .pay-btn-stripe:hover { background:rgba(255,255,255,0.12); }
+  .pay-btn:disabled { opacity:0.5; cursor:not-allowed; }
+  #sub-toast { position:fixed; bottom:90px; left:50%; transform:translateX(-50%); background:#161618; border:1px solid rgba(0,219,233,0.3); color:#e5e1e4; padding:0.75rem 1.5rem; border-radius:0.5rem; font-family:'JetBrains Mono',monospace; font-size:12px; z-index:300; transition:all 0.3s; white-space:nowrap; max-width:calc(100vw - 40px); }
+  #sub-toast.hidden { opacity:0; pointer-events:none; transform:translateX(-50%) translateY(10px); }
+</style>
 </head>
 <body class="text-on-background font-body-md overflow-x-hidden">
+
 <header class="bg-background/80 backdrop-blur-xl text-primary font-display-lg text-headline-lg-mobile fixed top-0 w-full border-b border-white/10 shadow-[0_0_20px_rgba(0,219,233,0.1)] flex justify-between items-center px-margin-mobile h-16 z-50">
-<div class="flex items-center gap-xs">
-<span class="font-display-lg text-headline-lg-mobile tracking-tighter text-primary">NEURAL_OS</span>
-</div>
-<div class="flex items-center gap-md">
-<div class="hidden md:flex gap-md font-label-sm text-label-sm uppercase tracking-widest text-on-surface-variant">
-<a class="hover:opacity-80 transition-opacity" href="dashboard.html">Nexus</a>
-<a class="hover:opacity-80 transition-opacity" href="agents.html">Agents</a>
-<a class="text-primary" href="subscription.html">Config</a>
-</div>
-<div class="flex items-center gap-xs bg-surface-container px-3 py-1 rounded-full border border-white/5">
-<span class="font-label-sm text-label-sm text-primary">0.84 ETH</span>
-<div class="w-6 h-6 rounded-full bg-gradient-to-tr from-primary-fixed-dim to-secondary-fixed-dim border border-white/20"></div>
-</div>
-</div>
+  <div class="flex items-center gap-xs">
+    <span class="font-display-lg text-headline-lg-mobile tracking-tighter text-primary">NEURAL_OS</span>
+  </div>
+  <button id="hdr-wallet-btn" class="flex items-center gap-xs bg-surface-container px-3 py-1 rounded-full border border-white/5 hover:border-primary/30 transition-colors active:scale-95">
+    <span class="font-label-sm text-label-sm text-primary" data-nos="eth-balance">--</span>
+    <div class="w-6 h-6 rounded-full bg-gradient-to-tr from-primary-fixed-dim to-secondary-fixed-dim border border-white/20"></div>
+  </button>
 </header>
+
 <main class="pt-32 pb-32 px-margin-mobile max-w-7xl mx-auto">
-<section class="mb-lg text-center">
-<h1 class="font-display-lg text-display-lg mb-base tracking-tighter bg-clip-text text-transparent bg-gradient-to-b from-primary to-primary-fixed-dim">MESH_CAPACITY</h1>
-<p class="font-body-md text-on-surface-variant max-w-xl mx-auto opacity-70">Scale your agentic intelligence with tiered orchestration. From individual node runners to institutional mesh networks.</p>
-</section>
-<div class="flex justify-center items-center gap-md mb-lg">
-<span class="font-label-sm text-label-sm text-primary" id="monthly-label">Monthly</span>
-<button class="relative w-14 h-7 glass rounded-full flex items-center p-1 transition-all" onclick="toggleBilling()">
-<div class="w-5 h-5 bg-primary-fixed-dim rounded-full shadow-[0_0_10px_rgba(0,219,233,0.5)] transition-transform translate-x-0" id="toggle-dot"></div>
-</button>
-<span class="font-label-sm text-label-sm text-on-surface-variant" id="annual-label">Annual <span class="text-tertiary-fixed-dim">(-20%)</span></span>
-</div>
-<div class="grid grid-cols-1 md:grid-cols-3 gap-gutter lg:gap-md">
-<div class="glass p-md rounded-xl flex flex-col relative overflow-hidden group">
-<div class="absolute top-0 right-0 p-3">
-<span class="font-label-sm text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded border border-primary/20">CURRENT_ACTIVE</span>
-</div>
-<div class="mb-md">
-<span class="font-label-sm text-label-sm text-on-surface-variant block mb-base uppercase tracking-widest">Entry Level</span>
-<h3 class="font-headline-lg text-headline-lg text-primary">Node Operator</h3>
-</div>
-<div class="mb-lg">
-<div class="flex items-baseline gap-1">
-<span class="font-display-lg text-headline-lg">$0</span>
-<span class="font-label-sm text-on-surface-variant opacity-50">/ month</span>
-</div>
-</div>
-<div class="space-y-sm flex-grow mb-lg">
-<div class="flex items-center gap-xs opacity-80"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span><span class="font-body-md text-sm">3 BYOK API Slots</span></div>
-<div class="flex items-center gap-xs opacity-80"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span><span class="font-body-md text-sm">Single MPC Signer</span></div>
-<div class="flex items-center gap-xs opacity-80"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span><span class="font-body-md text-sm">Monthly Compliance Export</span></div>
-<div class="flex items-center gap-xs opacity-40"><span class="material-symbols-outlined text-[18px]">block</span><span class="font-body-md text-sm">Orchestration Nodes</span></div>
-</div>
-<button class="w-full py-3 bg-white/5 border border-white/10 text-on-surface-variant font-label-sm text-label-sm rounded-lg cursor-not-allowed">CURRENT_TIER</button>
-</div>
-<div class="glass active-glow p-md rounded-xl flex flex-col relative overflow-hidden group border-primary/40 bg-primary/5">
-<div class="absolute top-0 right-0 p-3">
-<span class="font-label-sm text-[10px] bg-primary text-on-primary px-2 py-0.5 rounded shadow-[0_0_10px_rgba(0,219,233,0.3)]">RECOMMENDED</span>
-</div>
-<div class="mb-md">
-<span class="font-label-sm text-label-sm text-primary block mb-base uppercase tracking-widest">Mid Tier</span>
-<h3 class="font-headline-lg text-headline-lg text-primary">Sovereign Agent</h3>
-</div>
-<div class="mb-lg">
-<div class="flex items-baseline gap-1">
-<span class="font-display-lg text-headline-lg billing-price" data-annual="51" data-monthly="64">$64</span>
-<span class="font-label-sm text-on-surface-variant opacity-50">/ month</span>
-</div>
-</div>
-<div class="space-y-sm flex-grow mb-lg">
-<div class="flex items-center gap-xs"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span><span class="font-body-md text-sm">Unlimited BYOK Slots</span></div>
-<div class="flex items-center gap-xs"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span><span class="font-body-md text-sm">5 MPC Multi-Signers</span></div>
-<div class="flex items-center gap-xs"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span><span class="font-body-md text-sm">Weekly Compliance Audit</span></div>
-<div class="flex items-center gap-xs"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span><span class="font-body-md text-sm">Neural Orchestration Logic</span></div>
-<div class="flex items-center gap-xs text-tertiary-fixed-dim"><span class="material-symbols-outlined text-[18px]">bolt</span><span class="font-body-md text-sm">Priority Inference Speed</span></div>
-</div>
-<button class="w-full py-3 bg-primary text-on-primary font-label-sm text-label-sm rounded-lg active:scale-95 transition-transform hover:brightness-110">UPGRADE_MESH</button>
-</div>
-<div class="glass p-md rounded-xl flex flex-col relative overflow-hidden group">
-<div class="mb-md">
-<span class="font-label-sm text-label-sm text-on-surface-variant block mb-base uppercase tracking-widest">Enterprise</span>
-<h3 class="font-headline-lg text-headline-lg text-primary">Institutional Mesh</h3>
-</div>
-<div class="mb-lg">
-<div class="flex items-baseline gap-1">
-<span class="font-display-lg text-headline-lg billing-price" data-annual="204" data-monthly="256">$256</span>
-<span class="font-label-sm text-on-surface-variant opacity-50">/ month</span>
-</div>
-</div>
-<div class="space-y-sm flex-grow mb-lg">
-<div class="flex items-center gap-xs"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span><span class="font-body-md text-sm">Dedicated Agent Cluster</span></div>
-<div class="flex items-center gap-xs"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span><span class="font-body-md text-sm">Enterprise HSM/MPC Integration</span></div>
-<div class="flex items-center gap-xs"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span><span class="font-body-md text-sm">Real-time Compliance Feed</span></div>
-<div class="flex items-center gap-xs"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span><span class="font-body-md text-sm">Custom Protocol Adapters</span></div>
-<div class="flex items-center gap-xs"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span><span class="font-body-md text-sm">White-glove Orchestration</span></div>
-</div>
-<button class="w-full py-3 bg-white/10 hover:bg-white/20 border border-white/20 text-primary font-label-sm text-label-sm rounded-lg active:scale-95 transition-transform">CONTACT_SALES</button>
-</div>
-</div>
-<div class="mt-xl glass p-lg rounded-xl flex flex-col items-center justify-center relative overflow-hidden border-dashed border-primary/20">
-<div class="absolute inset-0 pointer-events-none opacity-20">
-<div class="w-full h-full bg-[radial-gradient(circle_at_center,#00dbe922_0%,transparent_70%)]"></div>
-</div>
-<div class="z-10 text-center">
-<span class="font-label-sm text-label-sm text-tertiary-fixed-dim uppercase mb-sm block">System Health</span>
-<div class="flex items-center justify-center gap-lg">
-<div class="flex flex-col items-center">
-<div class="w-12 h-12 rounded-full border border-primary flex items-center justify-center mb-xs"><span class="material-symbols-outlined text-primary">memory</span></div>
-<span class="font-label-sm text-[10px] text-on-surface-variant">NODE_01</span>
-</div>
-<div class="h-[1px] w-12 bg-gradient-to-r from-primary to-transparent"></div>
-<div class="flex flex-col items-center">
-<div class="w-16 h-16 rounded-full border-2 border-primary active-glow flex items-center justify-center mb-xs"><span class="material-symbols-outlined text-primary scale-125">hub</span></div>
-<span class="font-label-sm text-[10px] text-primary">CORE_MESH</span>
-</div>
-<div class="h-[1px] w-12 bg-gradient-to-l from-primary to-transparent"></div>
-<div class="flex flex-col items-center">
-<div class="w-12 h-12 rounded-full border border-primary flex items-center justify-center mb-xs opacity-50"><span class="material-symbols-outlined text-primary">cloud_done</span></div>
-<span class="font-label-sm text-[10px] text-on-surface-variant">EXPORT_LNK</span>
-</div>
-</div>
-<p class="font-label-sm text-[11px] text-on-surface-variant mt-md opacity-50 uppercase tracking-widest">Active Orchestration Flow: Sovereign Mode Enabled</p>
-</div>
-</div>
+  <section class="mb-lg text-center">
+    <h1 class="font-display-lg text-display-lg mb-base tracking-tighter bg-clip-text text-transparent bg-gradient-to-b from-primary to-primary-fixed-dim">MESH_CAPACITY</h1>
+    <p class="font-body-md text-on-surface-variant max-w-xl mx-auto opacity-70">Scale your agentic intelligence with tiered orchestration. From individual node runners to institutional mesh networks.</p>
+  </section>
+
+  <div class="flex justify-center items-center gap-md mb-lg">
+    <span class="font-label-sm text-label-sm text-primary" id="monthly-label">Monthly</span>
+    <button class="relative w-14 h-7 glass rounded-full flex items-center p-1 transition-all" onclick="toggleBilling()">
+      <div class="w-5 h-5 bg-primary-fixed-dim rounded-full shadow-[0_0_10px_rgba(0,219,233,0.5)] transition-transform translate-x-0" id="toggle-dot"></div>
+    </button>
+    <span class="font-label-sm text-label-sm text-on-surface-variant" id="annual-label">Annual <span class="text-tertiary-fixed-dim">(-20%)</span></span>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-gutter lg:gap-md">
+    <div class="glass p-md rounded-xl flex flex-col relative overflow-hidden">
+      <div class="absolute top-0 right-0 p-3"><span class="font-label-sm text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded border border-primary/20">CURRENT_ACTIVE</span></div>
+      <div class="mb-md">
+        <span class="font-label-sm text-label-sm text-on-surface-variant block mb-base uppercase tracking-widest">Entry Level</span>
+        <h3 class="font-headline-lg text-headline-lg text-primary">Node Operator</h3>
+      </div>
+      <div class="mb-lg"><div class="flex items-baseline gap-1"><span class="font-display-lg text-headline-lg">$0</span><span class="font-label-sm text-on-surface-variant opacity-50">/ month</span></div></div>
+      <div class="space-y-sm flex-grow mb-lg">
+        <div class="flex items-center gap-xs opacity-80"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span><span class="font-body-md text-sm">3 BYOK API Slots</span></div>
+        <div class="flex items-center gap-xs opacity-80"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span><span class="font-body-md text-sm">Single MPC Signer</span></div>
+        <div class="flex items-center gap-xs opacity-80"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span><span class="font-body-md text-sm">Monthly Compliance Export</span></div>
+        <div class="flex items-center gap-xs opacity-40"><span class="material-symbols-outlined text-[18px]">block</span><span class="font-body-md text-sm">Orchestration Nodes</span></div>
+      </div>
+      <button class="w-full py-3 bg-white/5 border border-white/10 text-on-surface-variant font-label-sm text-label-sm rounded-lg cursor-not-allowed">CURRENT_TIER</button>
+    </div>
+
+    <div class="glass active-glow p-md rounded-xl flex flex-col relative overflow-hidden border-primary/40 bg-primary/5">
+      <div class="absolute top-0 right-0 p-3"><span class="font-label-sm text-[10px] bg-primary text-on-primary px-2 py-0.5 rounded shadow-[0_0_10px_rgba(0,219,233,0.3)]">RECOMMENDED</span></div>
+      <div class="mb-md">
+        <span class="font-label-sm text-label-sm text-primary block mb-base uppercase tracking-widest">Mid Tier</span>
+        <h3 class="font-headline-lg text-headline-lg text-primary">Sovereign Agent</h3>
+      </div>
+      <div class="mb-lg"><div class="flex items-baseline gap-1"><span class="font-display-lg text-headline-lg billing-price" data-annual="51" data-monthly="64">$64</span><span class="font-label-sm text-on-surface-variant opacity-50">/ month</span></div></div>
+      <div class="space-y-sm flex-grow mb-lg">
+        <div class="flex items-center gap-xs"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span><span class="font-body-md text-sm">Unlimited BYOK Slots</span></div>
+        <div class="flex items-center gap-xs"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span><span class="font-body-md text-sm">5 MPC Multi-Signers</span></div>
+        <div class="flex items-center gap-xs"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span><span class="font-body-md text-sm">Weekly Compliance Audit</span></div>
+        <div class="flex items-center gap-xs"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span><span class="font-body-md text-sm">Neural Orchestration Logic</span></div>
+        <div class="flex items-center gap-xs text-tertiary-fixed-dim"><span class="material-symbols-outlined text-[18px]">bolt</span><span class="font-body-md text-sm">Priority Inference Speed</span></div>
+      </div>
+      <button onclick="showPayModal('sovereign')" class="w-full py-3 bg-primary text-on-primary font-label-sm text-label-sm rounded-lg active:scale-95 transition-transform hover:brightness-110">UPGRADE_MESH</button>
+    </div>
+
+    <div class="glass p-md rounded-xl flex flex-col relative overflow-hidden">
+      <div class="mb-md">
+        <span class="font-label-sm text-label-sm text-on-surface-variant block mb-base uppercase tracking-widest">Enterprise</span>
+        <h3 class="font-headline-lg text-headline-lg text-primary">Institutional Mesh</h3>
+      </div>
+      <div class="mb-lg"><div class="flex items-baseline gap-1"><span class="font-display-lg text-headline-lg billing-price" data-annual="204" data-monthly="256">$256</span><span class="font-label-sm text-on-surface-variant opacity-50">/ month</span></div></div>
+      <div class="space-y-sm flex-grow mb-lg">
+        <div class="flex items-center gap-xs"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span><span class="font-body-md text-sm">Dedicated Agent Cluster</span></div>
+        <div class="flex items-center gap-xs"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span><span class="font-body-md text-sm">Enterprise HSM/MPC Integration</span></div>
+        <div class="flex items-center gap-xs"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span><span class="font-body-md text-sm">Real-time Compliance Feed</span></div>
+        <div class="flex items-center gap-xs"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span><span class="font-body-md text-sm">Custom Protocol Adapters</span></div>
+        <div class="flex items-center gap-xs"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span><span class="font-body-md text-sm">White-glove Orchestration</span></div>
+      </div>
+      <button onclick="showPayModal('institutional')" class="w-full py-3 bg-white/10 hover:bg-white/20 border border-white/20 text-primary font-label-sm text-label-sm rounded-lg active:scale-95 transition-transform">SUBSCRIBE_MESH</button>
+    </div>
+  </div>
 </main>
+
 <nav class="md:hidden bg-background/80 backdrop-blur-xl border-t border-white/10 fixed bottom-0 left-0 w-full z-50 flex justify-around items-center h-20 pb-safe px-4">
-<a class="flex flex-col items-center justify-center text-outline opacity-50 transition-colors" href="discover.html">
-<span class="material-symbols-outlined">explore</span>
-<span class="font-label-sm text-label-sm">Discover</span>
-</a>
-<a class="flex flex-col items-center justify-center text-outline opacity-50 transition-colors" href="agents.html">
-<span class="material-symbols-outlined">memory</span>
-<span class="font-label-sm text-label-sm">Agents</span>
-</a>
-<a class="flex flex-col items-center justify-center text-outline opacity-50 transition-colors" href="wallet.html">
-<span class="material-symbols-outlined">account_balance_wallet</span>
-<span class="font-label-sm text-label-sm">Wallet</span>
-</a>
-<a class="flex flex-col items-center justify-center text-primary fill-current transition-colors" href="subscription.html">
-<span class="material-symbols-outlined">settings_input_component</span>
-<span class="font-label-sm text-label-sm">Config</span>
-</a>
+  <a class="flex flex-col items-center justify-center text-outline opacity-50 transition-colors" href="discover.html"><span class="material-symbols-outlined">explore</span><span class="font-label-sm text-label-sm">Discover</span></a>
+  <a class="flex flex-col items-center justify-center text-outline opacity-50 transition-colors" href="agents.html"><span class="material-symbols-outlined">memory</span><span class="font-label-sm text-label-sm">Agents</span></a>
+  <a class="flex flex-col items-center justify-center text-outline opacity-50 transition-colors" href="wallet.html"><span class="material-symbols-outlined">account_balance_wallet</span><span class="font-label-sm text-label-sm">Wallet</span></a>
+  <a class="flex flex-col items-center justify-center text-primary" href="subscription.html"><span class="material-symbols-outlined">settings_input_component</span><span class="font-label-sm text-label-sm">Config</span></a>
 </nav>
+
+<div id="pay-modal" class="modal-overlay hidden">
+  <div class="modal-sheet">
+    <div class="flex justify-between items-center mb-md">
+      <div>
+        <h3 class="font-headline-lg-mobile text-primary" id="pay-modal-title">UPGRADE_MESH</h3>
+        <p class="font-label-sm text-[11px] text-outline" id="pay-modal-sub">Sovereign Agent</p>
+      </div>
+      <button id="pay-modal-close" class="material-symbols-outlined text-outline hover:text-primary transition-colors">close</button>
+    </div>
+    <div class="glass rounded-xl p-md mb-md flex justify-between items-center">
+      <div><p class="font-label-sm text-[10px] text-outline uppercase mb-1">Amount Due</p><p class="font-headline-lg-mobile text-primary" id="pay-amount">$64 USDC</p></div>
+      <div class="text-right"><p class="font-label-sm text-[10px] text-outline uppercase mb-1">Network</p><p class="font-label-sm text-on-surface">Base (USDC)</p></div>
+    </div>
+    <p class="font-label-sm text-[11px] text-outline mb-md">Connect your wallet and pay with USDC on Base, or pay by card via Stripe.</p>
+    <button id="pay-usdc-btn" class="pay-btn pay-btn-usdc">PAY WITH USDC (CRYPTO)</button>
+    <button id="pay-stripe-btn" class="pay-btn pay-btn-stripe">PAY WITH CARD (STRIPE)</button>
+    <p id="pay-status" class="font-label-sm text-[11px] text-center text-outline hidden mt-sm"></p>
+  </div>
+</div>
+
+<div id="sub-toast" class="hidden"></div>
+
+<script src="/js/neural-os.iife.js"></script>
 <script>
-    let isAnnual = false;
-    function toggleBilling() {
-      isAnnual = !isAnnual;
-      const dot = document.getElementById('toggle-dot');
-      const monthlyLabel = document.getElementById('monthly-label');
-      const annualLabel = document.getElementById('annual-label');
-      const prices = document.querySelectorAll('.billing-price');
-      if (isAnnual) {
-        dot.style.transform = 'translateX(28px)';
-        monthlyLabel.classList.remove('text-primary'); monthlyLabel.classList.add('text-on-surface-variant');
-        annualLabel.classList.add('text-primary'); annualLabel.classList.remove('text-on-surface-variant');
-        prices.forEach(price => { price.textContent = '$' + price.dataset.annual; });
-      } else {
-        dot.style.transform = 'translateX(0)';
-        monthlyLabel.classList.add('text-primary'); monthlyLabel.classList.remove('text-on-surface-variant');
-        annualLabel.classList.remove('text-primary'); annualLabel.classList.add('text-on-surface-variant');
-        prices.forEach(price => { price.textContent = '$' + price.dataset.monthly; });
-      }
-    }
-  </script>
+let isAnnual = false
+let payTier = 'sovereign'
+
+function subToast(msg, ms = 4000) {
+  const t = document.getElementById('sub-toast')
+  t.textContent = msg; t.classList.remove('hidden')
+  clearTimeout(t._t); t._t = setTimeout(() => t.classList.add('hidden'), ms)
+}
+
+function toggleBilling() {
+  isAnnual = !isAnnual
+  const dot = document.getElementById('toggle-dot')
+  const ml = document.getElementById('monthly-label')
+  const al = document.getElementById('annual-label')
+  dot.style.transform = isAnnual ? 'translateX(28px)' : 'translateX(0)'
+  ml.classList.toggle('text-primary', !isAnnual); ml.classList.toggle('text-on-surface-variant', isAnnual)
+  al.classList.toggle('text-primary', isAnnual); al.classList.toggle('text-on-surface-variant', !isAnnual)
+  document.querySelectorAll('.billing-price').forEach(el => {
+    el.textContent = '$' + (isAnnual ? el.dataset.annual : el.dataset.monthly)
+  })
+}
+
+function showPayModal(tier) {
+  payTier = tier
+  const prices = { sovereign: { monthly: 64, annual: 51 }, institutional: { monthly: 256, annual: 204 } }
+  const labels = { sovereign: 'Sovereign Agent', institutional: 'Institutional Mesh' }
+  const price = prices[tier][isAnnual ? 'annual' : 'monthly']
+  const period = isAnnual ? 'annual' : 'monthly'
+  document.getElementById('pay-modal-title').textContent = tier === 'sovereign' ? 'UPGRADE_MESH' : 'SUBSCRIBE_MESH'
+  document.getElementById('pay-modal-sub').textContent = labels[tier] + ' · ' + (isAnnual ? 'Annual' : 'Monthly')
+  document.getElementById('pay-amount').textContent = '$' + price + ' USDC'
+  document.getElementById('pay-status').classList.add('hidden')
+  document.getElementById('pay-modal').classList.remove('hidden')
+}
+
+document.getElementById('pay-modal-close').addEventListener('click', () => document.getElementById('pay-modal').classList.add('hidden'))
+
+document.getElementById('hdr-wallet-btn').addEventListener('click', async () => {
+  if (!window.NOS) return
+  if (NOS.Wallet.isConnected()) { if (confirm('Disconnect wallet?')) await NOS.Wallet.disconnect() }
+  else { try { await NOS.Wallet.connect() } catch(e) { subToast('Connection cancelled') } }
+})
+
+document.getElementById('pay-usdc-btn').addEventListener('click', async () => {
+  if (!window.NOS) return
+  if (!NOS.Wallet.isConnected()) {
+    subToast('Connect your wallet first')
+    try { await NOS.Wallet.connect() } catch(e) { return }
+  }
+  const btn = document.getElementById('pay-usdc-btn')
+  const stat = document.getElementById('pay-status')
+  btn.disabled = true; btn.textContent = 'BROADCASTING...'
+  stat.textContent = 'Switching to Base network and sending USDC...'; stat.classList.remove('hidden')
+  try {
+    const period = isAnnual ? 'annual' : 'monthly'
+    const hash = await NOS.Billing.subscribeCrypto(payTier, period)
+    stat.textContent = 'Success! TX: ' + hash.slice(0, 20) + '...'
+    subToast('Subscription activated! TX: ' + hash.slice(0, 10) + '...', 10000)
+    document.getElementById('pay-modal').classList.add('hidden')
+  } catch(e) {
+    stat.textContent = 'Error: ' + (e.shortMessage || e.message || 'Transaction failed')
+    subToast('Payment failed: ' + (e.message || 'rejected'))
+  } finally { btn.disabled = false; btn.textContent = 'PAY WITH USDC (CRYPTO)' }
+})
+
+document.getElementById('pay-stripe-btn').addEventListener('click', async () => {
+  if (!window.NOS) return
+  const btn = document.getElementById('pay-stripe-btn')
+  const stat = document.getElementById('pay-status')
+  btn.disabled = true; btn.textContent = 'REDIRECTING...'
+  stat.textContent = 'Opening Stripe checkout...'; stat.classList.remove('hidden')
+  try {
+    const period = isAnnual ? 'annual' : 'monthly'
+    await NOS.Billing.subscribeStripe(payTier, period)
+  } catch(e) {
+    stat.textContent = 'Stripe not configured — add VITE_STRIPE_PK to .env'
+    subToast('Stripe requires backend setup — see .env.example')
+    btn.disabled = false; btn.textContent = 'PAY WITH CARD (STRIPE)'
+  }
+})
+</script>
 </body></html>
