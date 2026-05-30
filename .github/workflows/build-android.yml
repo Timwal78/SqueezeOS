@@ -1,17 +1,10 @@
-name: Build Neural_OS APK
+name: Build Neural_OS AAB
 
 on:
   push:
     branches: [claude/google-stitch-integration-LR0Y0, main]
     paths: [mobile/**]
   workflow_dispatch:
-    inputs:
-      build_type:
-        description: 'Build type (debug or release)'
-        required: false
-        default: 'debug'
-        type: choice
-        options: [debug, release]
 
 jobs:
   build:
@@ -57,46 +50,58 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      - name: Build debug AAB
-        if: ${{ github.event.inputs.build_type != 'release' }}
-        run: cd android && ./gradlew bundleDebug --no-daemon
-        env:
-          ANDROID_HOME: ${{ env.ANDROID_HOME }}
-
-      # ── Release (signed) APK ───────────────────────────────────────────────
-      # To enable: add these GitHub Secrets:
-      #   KEYSTORE_BASE64   – base64-encoded .jks keystore
-      #   KEYSTORE_PASSWORD – storePassword
-      #   KEY_ALIAS         – keyAlias
-      #   KEY_PASSWORD      – keyPassword
-      - name: Decode keystore
-        if: ${{ github.event.inputs.build_type == 'release' }}
+      # ── Keystore: use stored secret or auto-generate one ───────────────────
+      - name: Prepare keystore
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/neural-os-release.jks
+          KS_PATH="$GITHUB_WORKSPACE/mobile/neural-os-upload.jks"
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "Using stored keystore from secret"
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > "$KS_PATH"
+            KS_PASS="${{ secrets.KEYSTORE_PASSWORD }}"
+            KS_ALIAS="${{ secrets.KEY_ALIAS }}"
+            KEY_PASS="${{ secrets.KEY_PASSWORD }}"
+          else
+            echo "No keystore secret found — generating a new one"
+            KS_PASS="neuralOS_$(openssl rand -hex 8)"
+            KS_ALIAS="neural-os-upload"
+            KEY_PASS="$KS_PASS"
+            keytool -genkeypair -v \
+              -keystore "$KS_PATH" \
+              -alias "$KS_ALIAS" \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass "$KS_PASS" -keypass "$KEY_PASS" \
+              -dname "CN=Neural_OS,OU=ScriptMasterLabs,O=ScriptMasterLabs,L=US,ST=US,C=US"
+            echo "KEYSTORE_AUTO_GENERATED=true" >> $GITHUB_ENV
+            echo "KS_PASS=$KS_PASS" >> $GITHUB_ENV
+            echo "KS_ALIAS=$KS_ALIAS" >> $GITHUB_ENV
+          fi
+          echo "KS_PATH=$KS_PATH" >> $GITHUB_ENV
+          echo "KS_PASS_FINAL=${KS_PASS:-${{ secrets.KEYSTORE_PASSWORD }}}" >> $GITHUB_ENV
+          echo "KS_ALIAS_FINAL=${KS_ALIAS:-${{ secrets.KEY_ALIAS }}}" >> $GITHUB_ENV
+          echo "KEY_PASS_FINAL=${KEY_PASS:-${{ secrets.KEY_PASSWORD }}}" >> $GITHUB_ENV
 
-      - name: Build release AAB
-        if: ${{ github.event.inputs.build_type == 'release' }}
+      - name: Build signed release AAB
         run: |
           cd android && ./gradlew bundleRelease --no-daemon \
-            -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/mobile/android/app/neural-os-release.jks" \
-            -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
-            -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
-            -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD }}"
+            -Pandroid.injected.signing.store.file="$KS_PATH" \
+            -Pandroid.injected.signing.store.password="$KS_PASS_FINAL" \
+            -Pandroid.injected.signing.key.alias="$KS_ALIAS_FINAL" \
+            -Pandroid.injected.signing.key.password="$KEY_PASS_FINAL"
         env:
           ANDROID_HOME: ${{ env.ANDROID_HOME }}
 
-      - name: Upload debug AAB
-        if: ${{ github.event.inputs.build_type != 'release' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: neural-os-debug-${{ github.run_number }}
-          path: mobile/android/app/build/outputs/bundle/debug/app-debug.aab
-          retention-days: 30
-
-      - name: Upload release AAB
-        if: ${{ github.event.inputs.build_type == 'release' }}
+      - name: Upload signed AAB
         uses: actions/upload-artifact@v4
         with:
           name: neural-os-release-${{ github.run_number }}
           path: mobile/android/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 90
+
+      # Upload the auto-generated keystore so you can save it for future builds
+      - name: Upload keystore (SAVE THIS — needed for future updates)
+        if: ${{ env.KEYSTORE_AUTO_GENERATED == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: SAVE-THIS-neural-os-keystore-${{ github.run_number }}
+          path: mobile/neural-os-upload.jks
           retention-days: 90
