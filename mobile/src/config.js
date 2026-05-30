@@ -6,8 +6,8 @@ export const WC_PROJECT_ID   = import.meta.env.VITE_WC_PROJECT_ID   || 'REPLACE_
 export const ALCHEMY_KEY     = import.meta.env.VITE_ALCHEMY_KEY     || 'xR7Tl0576BmgNMvF4q_Y8'
 export const STRIPE_PK       = import.meta.env.VITE_STRIPE_PK       || 'pk_live_51S07wtQL50L4TFzsw97jG66buYDIPAO1C4LVPO30GbTCsUiq2nG257s138hpPaP2lxduzaYfUWStb1k2L3O9bGnX00SkdNCnct'
 
-// Recipient wallet for crypto subscription payments
-export const BILLING_WALLET  = import.meta.env.VITE_BILLING_WALLET  || '0x0000000000000000000000000000000000000000'
+// Recipient wallet for crypto subscription payments (Base USDC)
+export const BILLING_WALLET  = import.meta.env.VITE_BILLING_WALLET  || '0x4e14B249D9A4c9c9352D780eCEB508A8eB7a7700'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Chain IDs
