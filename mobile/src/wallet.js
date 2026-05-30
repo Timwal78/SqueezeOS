@@ -11,8 +11,8 @@ const ERC20_ABI = [
   'function approve(address spender, uint256 amount) returns (bool)',
 ]
 
-let _wc   = null   // EthereumProvider instance
-let _ep   = null   // BrowserProvider (ethers)
+let _wc = null
+let _ep = null
 
 async function initProvider() {
   if (_wc) return _wc
@@ -49,7 +49,6 @@ async function initProvider() {
     document.dispatchEvent(new CustomEvent('nos:disconnect'))
   })
 
-  // Reconnect existing session silently
   if (_wc.session) {
     _ep = new BrowserProvider(_wc)
   }
@@ -58,7 +57,6 @@ async function initProvider() {
 }
 
 export const Wallet = {
-  /** Open WalletConnect modal and connect */
   connect: async () => {
     const wc = await initProvider()
     await wc.connect()
@@ -74,14 +72,12 @@ export const Wallet = {
   getAddress:  () => _wc?.accounts?.[0] ?? null,
   getChainId:  () => _wc?.chainId ?? CHAIN_ETH,
 
-  /** Returns ETH balance as formatted string e.g. "1.2345" */
   getEthBalance: async (address) => {
     if (!_ep) return null
     const bal = await _ep.getBalance(address ?? _wc.accounts[0])
     return parseFloat(formatEther(bal)).toFixed(4)
   },
 
-  /** Returns USDC balance as formatted string e.g. "120.00" */
   getUsdcBalance: async (address, chainId = CHAIN_ETH) => {
     if (!_ep) return null
     const token = new Contract(USDC_ADDRESS[chainId], ERC20_ABI, _ep)
@@ -89,7 +85,6 @@ export const Wallet = {
     return parseFloat(formatUnits(bal, dec)).toFixed(2)
   },
 
-  /** Send native ETH.  Returns tx hash. */
   sendEth: async (to, amountEth) => {
     if (!_ep) throw new Error('Wallet not connected')
     const signer = await _ep.getSigner()
@@ -98,7 +93,6 @@ export const Wallet = {
     return tx.hash
   },
 
-  /** Send USDC ERC-20.  Returns tx hash. */
   sendUsdc: async (to, amountUsdc, chainId = CHAIN_ETH) => {
     if (!_ep) throw new Error('Wallet not connected')
     const signer = await _ep.getSigner()
@@ -110,7 +104,6 @@ export const Wallet = {
     return tx.hash
   },
 
-  /** Switch the connected wallet to a different chain */
   switchChain: async (chainId) => {
     if (!_wc) throw new Error('Wallet not connected')
     await _wc.request({
@@ -119,6 +112,41 @@ export const Wallet = {
     })
   },
 
-  /** Pre-warm the provider (call on every page load) */
+  /** Fetch EVM asset transfer history via Alchemy getAssetTransfers */
+  getTransfers: async (address, limit = 10) => {
+    const chainId = _wc ? Number(_wc.chainId) : CHAIN_ETH
+    const rpcUrl = RPC[chainId] || RPC[CHAIN_ETH]
+    const hexLimit = '0x' + Math.min(limit, 100).toString(16)
+    const [sentRes, recvRes] = await Promise.allSettled([
+      fetch(rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: 1, jsonrpc: '2.0', method: 'alchemy_getAssetTransfers',
+          params: [{ fromBlock: '0x0', toBlock: 'latest', fromAddress: address,
+            maxCount: hexLimit, category: ['external', 'erc20'], withMetadata: true }],
+        }),
+      }).then(r => r.json()),
+      fetch(rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: 2, jsonrpc: '2.0', method: 'alchemy_getAssetTransfers',
+          params: [{ fromBlock: '0x0', toBlock: 'latest', toAddress: address,
+            maxCount: hexLimit, category: ['external', 'erc20'], withMetadata: true }],
+        }),
+      }).then(r => r.json()),
+    ])
+    let txs = []
+    if (sentRes.status === 'fulfilled' && sentRes.value?.result?.transfers) {
+      txs.push(...sentRes.value.result.transfers.map(t => ({ ...t, direction: 'out' })))
+    }
+    if (recvRes.status === 'fulfilled' && recvRes.value?.result?.transfers) {
+      txs.push(...recvRes.value.result.transfers.map(t => ({ ...t, direction: 'in' })))
+    }
+    txs.sort((a, b) => parseInt(b.blockNum, 16) - parseInt(a.blockNum, 16))
+    return txs.slice(0, limit)
+  },
+
   init: initProvider,
 }
