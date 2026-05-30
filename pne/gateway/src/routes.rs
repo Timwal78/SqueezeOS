@@ -651,6 +651,38 @@ pub async fn well_known_agents() -> Json<Value> {
     }))
 }
 
+pub async fn index() -> Json<Value> {
+    Json(json!({
+        "name": "Neural Exchequer",
+        "service": "pne-gateway",
+        "version": "1.0.0",
+        "status": "live",
+        "docs": {
+            "llms_txt": "/llms.txt",
+            "mcp": "/.well-known/mcp.json",
+            "ai_plugin": "/.well-known/ai-plugin.json",
+            "agents": "/.well-known/agents.json"
+        },
+        "endpoints": {
+            "status": "/v1/status",
+            "pricing": "/v1/pricing",
+            "auction_book": "/v1/auction/book",
+            "auction_history": "/v1/auction/history",
+            "auction_flow": "/v1/auction/flow",
+            "leaderboard": "/v1/leaderboard",
+            "merkle_root": "/v1/audit/merkle-root",
+            "loom_ws": "/ws/loom"
+        },
+        "premium": {
+            "market_data": "/v1/market-data",
+            "council": "/v1/council",
+            "options": "/v1/options",
+            "scan": "/v1/scan",
+            "auth": "L402 (pay BOLT11 invoice, retry with Authorization: L402 <preimage>:<macaroon>)"
+        }
+    }))
+}
+
 pub async fn llms_txt() -> impl IntoResponse {
     (
         StatusCode::OK,
