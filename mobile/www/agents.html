@@ -4,314 +4,200 @@
 <meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
 <title>NEURAL_OS | Active Agents</title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 <script id="tailwind-config">
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    "colors": {
-                        "inverse-on-surface": "#313032",
-                        "secondary-fixed-dim": "#ebb2ff",
-                        "on-tertiary-container": "#006e16",
-                        "secondary-fixed": "#f8d8ff",
-                        "on-tertiary": "#003907",
-                        "surface-bright": "#39393b",
-                        "surface-container-lowest": "#0e0e10",
-                        "primary-fixed-dim": "#00dbe9",
-                        "on-background": "#e5e1e4",
-                        "surface-container-low": "#1c1b1d",
-                        "primary-fixed": "#7df4ff",
-                        "surface-tint": "#00dbe9",
-                        "on-primary": "#00363a",
-                        "primary": "#dbfcff",
-                        "on-secondary": "#520072",
-                        "on-tertiary-fixed-variant": "#00530e",
-                        "secondary": "#ebb2ff",
-                        "surface-container-high": "#2a2a2c",
-                        "on-secondary-fixed-variant": "#74009f",
-                        "background": "#131315",
-                        "on-primary-fixed": "#002022",
-                        "inverse-surface": "#e5e1e4",
-                        "surface": "#131315",
-                        "tertiary-fixed": "#72ff70",
-                        "tertiary-container": "#00fb40",
-                        "on-surface": "#e5e1e4",
-                        "on-error": "#690005",
-                        "on-surface-variant": "#b9cacb",
-                        "secondary-container": "#b600f8",
-                        "outline": "#849495",
-                        "on-tertiary-fixed": "#002203",
-                        "primary-container": "#00f0ff",
-                        "surface-dim": "#131315",
-                        "outline-variant": "#3b494b",
-                        "on-error-container": "#ffdad6",
-                        "on-primary-fixed-variant": "#004f54",
-                        "on-secondary-container": "#fff6fc",
-                        "surface-container-highest": "#353437",
-                        "on-primary-container": "#006970",
-                        "error": "#ffb4ab",
-                        "on-secondary-fixed": "#320047",
-                        "tertiary": "#ddffd3",
-                        "error-container": "#93000a",
-                        "surface-variant": "#353437",
-                        "inverse-primary": "#006970",
-                        "tertiary-fixed-dim": "#00e639",
-                        "surface-container": "#201f21"
-                    },
-                    "borderRadius": { "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem" },
-                    "spacing": { "xs": "8px", "lg": "40px", "margin-mobile": "20px", "sm": "16px", "md": "24px", "xl": "64px", "gutter": "16px", "base": "4px" },
-                    "fontFamily": { "display-lg": ["Space Grotesk"], "label-sm": ["JetBrains Mono"], "body-md": ["Inter"], "headline-lg-mobile": ["Space Grotesk"], "headline-lg": ["Space Grotesk"] },
-                    "fontSize": {
-                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
-                        "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500" }],
-                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
-                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
-                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600" }]
-                    }
-                }
-            }
-        }
-    </script>
+  tailwind.config = {
+    darkMode: "class",
+    theme: { extend: {
+      "colors": {
+        "inverse-on-surface": "#313032", "secondary-fixed-dim": "#ebb2ff", "on-tertiary-container": "#006e16",
+        "secondary-fixed": "#f8d8ff", "on-tertiary": "#003907", "surface-bright": "#39393b",
+        "surface-container-lowest": "#0e0e10", "primary-fixed-dim": "#00dbe9", "on-background": "#e5e1e4",
+        "surface-container-low": "#1c1b1d", "primary-fixed": "#7df4ff", "surface-tint": "#00dbe9",
+        "on-primary": "#00363a", "primary": "#dbfcff", "on-secondary": "#520072",
+        "on-tertiary-fixed-variant": "#00530e", "secondary": "#ebb2ff", "surface-container-high": "#2a2a2c",
+        "on-secondary-fixed-variant": "#74009f", "background": "#131315", "on-primary-fixed": "#002022",
+        "inverse-surface": "#e5e1e4", "surface": "#131315", "tertiary-fixed": "#72ff70",
+        "tertiary-container": "#00fb40", "on-surface": "#e5e1e4", "on-error": "#690005",
+        "on-surface-variant": "#b9cacb", "secondary-container": "#b600f8", "outline": "#849495",
+        "on-tertiary-fixed": "#002203", "primary-container": "#00f0ff", "surface-dim": "#131315",
+        "outline-variant": "#3b494b", "on-error-container": "#ffdad6", "on-primary-fixed-variant": "#004f54",
+        "on-secondary-container": "#fff6fc", "surface-container-highest": "#353437",
+        "on-primary-container": "#006970", "error": "#ffb4ab", "on-secondary-fixed": "#320047",
+        "tertiary": "#ddffd3", "error-container": "#93000a", "surface-variant": "#353437",
+        "inverse-primary": "#006970", "tertiary-fixed-dim": "#00e639", "surface-container": "#201f21"
+      },
+      "borderRadius": { "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem" },
+      "spacing": { "xs": "8px", "lg": "40px", "margin-mobile": "20px", "sm": "16px", "md": "24px", "xl": "64px", "gutter": "16px", "base": "4px" },
+      "fontFamily": { "display-lg": ["Space Grotesk"], "label-sm": ["JetBrains Mono"], "body-md": ["Inter"], "headline-lg-mobile": ["Space Grotesk"], "headline-lg": ["Space Grotesk"] },
+      "fontSize": {
+        "display-lg": ["48px",{"lineHeight":"56px","letterSpacing":"-0.02em","fontWeight":"700"}],
+        "label-sm": ["12px",{"lineHeight":"16px","letterSpacing":"0.05em","fontWeight":"500"}],
+        "body-md": ["16px",{"lineHeight":"24px","fontWeight":"400"}],
+        "headline-lg-mobile": ["24px",{"lineHeight":"32px","fontWeight":"600"}],
+        "headline-lg": ["32px",{"lineHeight":"40px","letterSpacing":"-0.01em","fontWeight":"600"}]
+      }
+    }}
+  }
+</script>
 <style>
-        body { background-color: #0A0A0C; }
-        .glass-panel { background: rgba(255,255,255,0.05); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); }
-        .glow-cyan { box-shadow: 0 0 20px rgba(0,219,233,0.1); }
-        .pulse-green { animation: pulse 2s infinite; }
-        @keyframes pulse { 0%{transform:scale(0.95);opacity:0.8;} 50%{transform:scale(1.05);opacity:1;} 100%{transform:scale(0.95);opacity:0.8;} }
-        .shimmer { background: linear-gradient(90deg,transparent,rgba(0,219,233,0.2),transparent); background-size:200% 100%; animation:shimmer 3s infinite linear; }
-        @keyframes shimmer { 0%{background-position:-200% 0;} 100%{background-position:200% 0;} }
-        nav a { text-decoration: none; }
-    </style>
-<style>
-    body { min-height: max(884px, 100dvh); }
+  body { background-color: #0A0A0C; min-height: max(884px, 100dvh); }
+  .glass-panel { background: rgba(255,255,255,0.05); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); }
+  .pulse-green { animation: pulse 2s infinite; }
+  @keyframes pulse { 0%{transform:scale(0.95);opacity:0.8;} 50%{transform:scale(1.05);opacity:1;} 100%{transform:scale(0.95);opacity:0.8;} }
+  .shimmer { background: linear-gradient(90deg,transparent,rgba(0,219,233,0.2),transparent); background-size:200% 100%; animation:shimmer 3s infinite linear; }
+  @keyframes shimmer { 0%{background-position:-200% 0;} 100%{background-position:200% 0;} }
+  nav a { text-decoration: none; }
 </style>
 </head>
-<body class="font-body-md text-on-surface selection:bg-primary-container selection:text-on-primary-container">
+<body class="font-body-md text-on-surface">
+
 <header class="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-xl border-b border-white/10 shadow-[0_0_20px_rgba(0,219,233,0.1)] flex justify-between items-center px-margin-mobile h-16">
-<div class="flex items-center gap-3">
-<span class="font-display-lg text-headline-lg-mobile tracking-tighter text-primary">NEURAL_OS</span>
-</div>
-<div class="flex items-center gap-4">
-<div class="hidden md:flex items-center gap-6 mr-6">
-<a class="text-outline hover:text-primary transition-colors font-label-sm text-label-sm uppercase tracking-widest" href="dashboard.html">Nodes</a>
-<a class="text-primary font-label-sm text-label-sm uppercase tracking-widest border-b-2 border-primary" href="agents.html">Agents</a>
-<a class="text-outline hover:text-primary transition-colors font-label-sm text-label-sm uppercase tracking-widest" href="node-health.html">Network</a>
-</div>
-<button class="flex items-center gap-2 bg-surface-container-high px-3 py-1.5 rounded-full border border-white/10 active:scale-95 transition-transform">
-<span class="font-label-sm text-label-sm text-primary">0.84 ETH</span>
-<div class="w-6 h-6 rounded-full bg-primary-container/20 flex items-center justify-center">
-<span class="material-symbols-outlined text-[16px] text-primary">account_balance_wallet</span>
-</div>
-</button>
-</div>
+  <span class="font-display-lg text-headline-lg-mobile tracking-tighter text-primary">NEURAL_OS</span>
+  <button id="hdr-wallet-btn" class="flex items-center gap-2 bg-surface-container-high px-3 py-1.5 rounded-full border border-white/10 hover:border-primary/30 transition-colors active:scale-95">
+    <span class="font-label-sm text-label-sm text-primary" data-nos="eth-balance">--</span>
+    <span class="material-symbols-outlined text-[16px] text-primary">account_balance_wallet</span>
+  </button>
 </header>
+
 <main class="pt-24 pb-32 px-margin-mobile max-w-7xl mx-auto space-y-lg">
-<section class="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
-<div class="lg:col-span-8">
-<h1 class="font-display-lg text-headline-lg-mobile lg:text-display-lg text-on-surface mb-xs">Active Neural Clusters</h1>
-<p class="text-outline max-w-2xl font-body-md text-body-md">Monitoring real-time heuristic execution across deployed sub-modules. Hardware acceleration active via X402 parity.</p>
-</div>
-<div class="lg:col-span-4 glass-panel rounded-xl p-md flex flex-col justify-between border-primary/20">
-<div class="flex justify-between items-start mb-sm">
-<div>
-<span class="font-label-sm text-label-sm text-primary-fixed-dim block uppercase tracking-tighter">X402 Integration</span>
-<span class="font-display-lg text-headline-lg-mobile text-on-surface">98.4<span class="text-primary-fixed-dim text-sm ml-1">%</span></span>
-</div>
-<span class="material-symbols-outlined text-primary text-3xl">memory</span>
-</div>
-<div class="space-y-xs">
-<div class="flex justify-between text-[10px] font-label-sm uppercase text-outline">
-<span>Throughput</span><span>4.2 TB/s</span>
-</div>
-<div class="h-1 bg-surface-container-highest rounded-full overflow-hidden">
-<div class="h-full bg-primary shimmer w-[84%]"></div>
-</div>
-</div>
-</div>
-</section>
-<section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
-<div class="glass-panel rounded-xl p-md flex flex-col glow-cyan transition-all hover:scale-[1.01]">
-<div class="flex justify-between items-start mb-md">
-<div class="flex items-center gap-3">
-<div class="w-10 h-10 rounded-lg bg-primary-container/10 border border-primary/20 flex items-center justify-center">
-<span class="material-symbols-outlined text-primary">psychology</span>
-</div>
-<div>
-<h3 class="font-display-lg text-[18px] leading-tight">SYNT-01</h3>
-<span class="font-label-sm text-[10px] text-outline uppercase">LLM-Orchestrator</span>
-</div>
-</div>
-<div class="flex items-center gap-1.5 bg-tertiary/10 px-2 py-0.5 rounded border border-tertiary/20">
-<span class="w-1.5 h-1.5 rounded-full bg-tertiary-fixed-dim pulse-green"></span>
-<span class="font-label-sm text-[10px] text-tertiary-fixed-dim uppercase">Active</span>
-</div>
-</div>
-<div class="space-y-sm mb-lg">
-<div class="flex justify-between text-label-sm font-label-sm mb-xs">
-<span class="text-outline">Task: Vector Search Indexing</span><span class="text-on-surface">72%</span>
-</div>
-<div class="h-2 bg-surface-container-highest rounded-full overflow-hidden">
-<div class="h-full bg-primary transition-all duration-1000" style="width:72%"></div>
-</div>
-<div class="flex gap-4 pt-base">
-<div class="flex flex-col"><span class="text-[10px] text-outline uppercase font-label-sm">Latency</span><span class="text-sm font-label-sm">14ms</span></div>
-<div class="flex flex-col"><span class="text-[10px] text-outline uppercase font-label-sm">Integrity</span><span class="text-sm font-label-sm">99.9%</span></div>
-</div>
-</div>
-<div class="mt-auto grid grid-cols-2 gap-sm">
-<button class="bg-surface-container-high border border-white/10 py-2 rounded-lg font-label-sm text-label-sm hover:bg-surface-container-highest active:scale-95 transition-all flex items-center justify-center gap-2"><span class="material-symbols-outlined text-sm">pause</span> PAUSE</button>
-<button class="bg-error-container/20 border border-error/30 text-error py-2 rounded-lg font-label-sm text-label-sm hover:bg-error-container/40 active:scale-95 transition-all flex items-center justify-center gap-2"><span class="material-symbols-outlined text-sm">close</span> KILL</button>
-</div>
-</div>
-<div class="glass-panel rounded-xl p-md flex flex-col transition-all hover:scale-[1.01]">
-<div class="flex justify-between items-start mb-md">
-<div class="flex items-center gap-3">
-<div class="w-10 h-10 rounded-lg bg-secondary-container/10 border border-secondary/20 flex items-center justify-center">
-<span class="material-symbols-outlined text-secondary">security</span>
-</div>
-<div>
-<h3 class="font-display-lg text-[18px] leading-tight">AEGIS-X</h3>
-<span class="font-label-sm text-[10px] text-outline uppercase">Security Protocol</span>
-</div>
-</div>
-<div class="flex items-center gap-1.5 bg-outline/10 px-2 py-0.5 rounded border border-outline/20">
-<span class="w-1.5 h-1.5 rounded-full bg-outline"></span>
-<span class="font-label-sm text-[10px] text-outline uppercase">Idle</span>
-</div>
-</div>
-<div class="space-y-sm mb-lg opacity-50">
-<div class="flex justify-between text-label-sm font-label-sm mb-xs">
-<span class="text-outline">Standing by for Audit...</span><span class="text-on-surface">0%</span>
-</div>
-<div class="h-2 bg-surface-container-highest rounded-full overflow-hidden">
-<div class="h-full bg-secondary-fixed-dim w-0"></div>
-</div>
-</div>
-<div class="mt-auto flex flex-col gap-sm">
-<button class="bg-primary text-black py-2.5 rounded-lg font-label-sm text-label-sm hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-2"><span class="material-symbols-outlined text-[18px]">play_arrow</span> DEPLOY AGENT</button>
-</div>
-</div>
-<div class="glass-panel rounded-xl p-md flex flex-col border-error/20 transition-all hover:scale-[1.01]">
-<div class="flex justify-between items-start mb-md">
-<div class="flex items-center gap-3">
-<div class="w-10 h-10 rounded-lg bg-error-container/10 border border-error/20 flex items-center justify-center">
-<span class="material-symbols-outlined text-error">warning</span>
-</div>
-<div>
-<h3 class="font-display-lg text-[18px] leading-tight">CRON-B</h3>
-<span class="font-label-sm text-[10px] text-outline uppercase">Batch Processor</span>
-</div>
-</div>
-<div class="flex items-center gap-1.5 bg-error-container/30 px-2 py-0.5 rounded border border-error/40">
-<span class="w-1.5 h-1.5 rounded-full bg-error"></span>
-<span class="font-label-sm text-[10px] text-error uppercase">Error</span>
-</div>
-</div>
-<div class="space-y-sm mb-lg">
-<div class="bg-error-container/10 p-sm rounded border border-error/10 mb-sm">
-<p class="text-[12px] font-label-sm text-error/80 leading-relaxed uppercase">ERR_PARITY_MISMATCH: Sub-module 04 refused handshake with X402 gateway.</p>
-</div>
-</div>
-<div class="mt-auto grid grid-cols-2 gap-sm">
-<button class="bg-surface-container-high border border-white/10 py-2 rounded-lg font-label-sm text-label-sm hover:bg-surface-container-highest active:scale-95 transition-all flex items-center justify-center gap-2"><span class="material-symbols-outlined text-sm">refresh</span> REBOOT</button>
-<button class="bg-error-container/20 border border-error/30 text-error py-2 rounded-lg font-label-sm text-label-sm hover:bg-error-container/40 active:scale-95 transition-all flex items-center justify-center gap-2"><span class="material-symbols-outlined text-sm">terminal</span> LOGS</button>
-</div>
-</div>
-<div class="lg:col-span-2 glass-panel rounded-xl p-md flex items-center justify-between border-primary/10">
-<div class="flex items-center gap-6">
-<div>
-<span class="font-label-sm text-[10px] text-outline uppercase tracking-widest block mb-1">Global Load</span>
-<div class="flex items-end gap-2">
-<span class="font-display-lg text-headline-lg text-primary">42<span class="text-sm font-label-sm text-outline ml-1">vCPUs</span></span>
-</div>
-</div>
-<div class="h-12 w-[1px] bg-white/10"></div>
-<div>
-<span class="font-label-sm text-[10px] text-outline uppercase tracking-widest block mb-1">Active Threads</span>
-<div class="flex items-end gap-2">
-<span class="font-display-lg text-headline-lg text-on-surface">1,204</span>
-</div>
-</div>
-</div>
-<div class="hidden md:flex gap-1 h-8 items-end">
-<div class="w-1 bg-primary/20 h-4"></div><div class="w-1 bg-primary/40 h-6"></div><div class="w-1 bg-primary/20 h-3"></div><div class="w-1 bg-primary/60 h-8"></div><div class="w-1 bg-primary h-5"></div><div class="w-1 bg-primary/30 h-6"></div>
-</div>
-</div>
-<div class="glass-panel rounded-xl p-md flex flex-col transition-all hover:scale-[1.01]">
-<div class="flex justify-between items-start mb-md">
-<div class="flex items-center gap-3">
-<div class="w-10 h-10 rounded-lg bg-primary-fixed/10 border border-primary-fixed/20 flex items-center justify-center">
-<span class="material-symbols-outlined text-primary-fixed">cloud_sync</span>
-</div>
-<div>
-<h3 class="font-display-lg text-[18px] leading-tight">SYNC-MESH</h3>
-<span class="font-label-sm text-[10px] text-outline uppercase">Data Tunnel</span>
-</div>
-</div>
-<div class="flex items-center gap-1.5 bg-tertiary/10 px-2 py-0.5 rounded border border-tertiary/20">
-<span class="w-1.5 h-1.5 rounded-full bg-tertiary-fixed-dim pulse-green"></span>
-<span class="font-label-sm text-[10px] text-tertiary-fixed-dim uppercase">Active</span>
-</div>
-</div>
-<div class="space-y-sm mb-lg">
-<div class="flex justify-between text-label-sm font-label-sm mb-xs">
-<span class="text-outline">Syncing with Mainframe...</span><span class="text-on-surface">94%</span>
-</div>
-<div class="h-2 bg-surface-container-highest rounded-full overflow-hidden">
-<div class="h-full bg-primary-fixed-dim shimmer w-[94%]"></div>
-</div>
-</div>
-<div class="mt-auto grid grid-cols-2 gap-sm">
-<button class="bg-surface-container-high border border-white/10 py-2 rounded-lg font-label-sm text-label-sm hover:bg-surface-container-highest active:scale-95 transition-all flex items-center justify-center gap-2"><span class="material-symbols-outlined text-sm">pause</span> PAUSE</button>
-<button class="bg-error-container/20 border border-error/30 text-error py-2 rounded-lg font-label-sm text-label-sm hover:bg-error-container/40 active:scale-95 transition-all flex items-center justify-center gap-2"><span class="material-symbols-outlined text-sm">close</span> KILL</button>
-</div>
-</div>
-</section>
-<section class="glass-panel rounded-xl p-xl flex flex-col items-center justify-center text-center relative overflow-hidden group">
-<div class="absolute inset-0 z-0 opacity-20 pointer-events-none transition-transform duration-700 group-hover:scale-110">
-<img class="w-full h-full object-cover grayscale brightness-50" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCRmijTbCMzyc6d_A05kzIYuV4BRvaRaaHoh1uIeBWNx96JgW8Hdne-hE3VBSgRK9g0UIkljDiArfEuUZGAnDa_26w2YozblD_SRUdvjCaKy0Ou_ee2TyOXr61Oa9R7jZlo9NgNE6KzUoQUCBdwd4yJfE80WFwaXrvsLYltQw7pDqiUPqPhMBZIl3djnZGel_HWD1s33EXC3NV3OAzMyM6PftV3Ap8Ocx2_sPaPXFmXnljs62-rksE1HE0_m4wzVksWG6umAWWV" alt="Orchestration Map"/>
-</div>
-<div class="relative z-10 space-y-md">
-<div class="w-16 h-16 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center mx-auto mb-sm">
-<span class="material-symbols-outlined text-primary text-3xl">hub</span>
-</div>
-<h2 class="font-display-lg text-headline-lg text-on-surface">Cluster Visualization</h2>
-<p class="text-outline max-w-lg mx-auto font-body-md text-body-md">Advanced topological view of your AI neural mesh and X402 bridge connections.</p>
-<button class="bg-primary text-on-primary font-label-sm text-label-sm px-xl py-md rounded-full font-bold uppercase tracking-widest active:scale-95 transition-transform">Enter Neural Viewer</button>
-</div>
-</section>
+  <section class="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+    <div class="lg:col-span-8">
+      <h1 class="font-display-lg text-headline-lg-mobile lg:text-display-lg text-on-surface mb-xs">Active Neural Clusters</h1>
+      <p class="text-outline max-w-2xl font-body-md text-body-md">Monitoring real-time heuristic execution across deployed sub-modules. Hardware acceleration active via X402 parity.</p>
+    </div>
+    <div class="lg:col-span-4 glass-panel rounded-xl p-md flex flex-col justify-between border-primary/20">
+      <div class="flex justify-between items-start mb-sm">
+        <div><span class="font-label-sm text-label-sm text-primary-fixed-dim block uppercase tracking-tighter">X402 Integration</span><span class="font-display-lg text-headline-lg-mobile text-on-surface">98.4<span class="text-primary-fixed-dim text-sm ml-1">%</span></span></div>
+        <span class="material-symbols-outlined text-primary text-3xl">memory</span>
+      </div>
+      <div class="space-y-xs">
+        <div class="flex justify-between text-[10px] font-label-sm uppercase text-outline"><span>Throughput</span><span>4.2 TB/s</span></div>
+        <div class="h-1 bg-surface-container-highest rounded-full overflow-hidden"><div class="h-full bg-primary shimmer w-[84%]"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
+    <div class="glass-panel rounded-xl p-md flex flex-col">
+      <div class="flex justify-between items-start mb-md">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-lg bg-primary-container/10 border border-primary/20 flex items-center justify-center"><span class="material-symbols-outlined text-primary">psychology</span></div>
+          <div><h3 class="font-display-lg text-[18px] leading-tight">SYNT-01</h3><span class="font-label-sm text-[10px] text-outline uppercase">LLM-Orchestrator</span></div>
+        </div>
+        <div class="flex items-center gap-1.5 bg-tertiary/10 px-2 py-0.5 rounded border border-tertiary/20">
+          <span class="w-1.5 h-1.5 rounded-full bg-tertiary-fixed-dim pulse-green"></span>
+          <span class="font-label-sm text-[10px] text-tertiary-fixed-dim uppercase">Active</span>
+        </div>
+      </div>
+      <div class="space-y-sm mb-lg">
+        <div class="flex justify-between text-label-sm font-label-sm mb-xs"><span class="text-outline">Task: Vector Search Indexing</span><span class="text-on-surface">72%</span></div>
+        <div class="h-2 bg-surface-container-highest rounded-full overflow-hidden"><div class="h-full bg-primary transition-all duration-1000" style="width:72%"></div></div>
+        <div class="flex gap-4 pt-base">
+          <div class="flex flex-col"><span class="text-[10px] text-outline uppercase font-label-sm">Latency</span><span class="text-sm font-label-sm">14ms</span></div>
+          <div class="flex flex-col"><span class="text-[10px] text-outline uppercase font-label-sm">Integrity</span><span class="text-sm font-label-sm">99.9%</span></div>
+        </div>
+      </div>
+      <div class="mt-auto grid grid-cols-2 gap-sm">
+        <button class="bg-surface-container-high border border-white/10 py-2 rounded-lg font-label-sm text-label-sm hover:bg-surface-container-highest active:scale-95 transition-all flex items-center justify-center gap-2"><span class="material-symbols-outlined text-sm">pause</span> PAUSE</button>
+        <button class="bg-error-container/20 border border-error/30 text-error py-2 rounded-lg font-label-sm text-label-sm hover:bg-error-container/40 active:scale-95 transition-all flex items-center justify-center gap-2"><span class="material-symbols-outlined text-sm">close</span> KILL</button>
+      </div>
+    </div>
+
+    <div class="glass-panel rounded-xl p-md flex flex-col">
+      <div class="flex justify-between items-start mb-md">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-lg bg-secondary-container/10 border border-secondary/20 flex items-center justify-center"><span class="material-symbols-outlined text-secondary">security</span></div>
+          <div><h3 class="font-display-lg text-[18px] leading-tight">AEGIS-X</h3><span class="font-label-sm text-[10px] text-outline uppercase">Security Protocol</span></div>
+        </div>
+        <div class="flex items-center gap-1.5 bg-outline/10 px-2 py-0.5 rounded border border-outline/20">
+          <span class="w-1.5 h-1.5 rounded-full bg-outline"></span>
+          <span class="font-label-sm text-[10px] text-outline uppercase">Idle</span>
+        </div>
+      </div>
+      <div class="space-y-sm mb-lg opacity-50">
+        <div class="flex justify-between text-label-sm font-label-sm mb-xs"><span class="text-outline">Standing by for Audit...</span><span>0%</span></div>
+        <div class="h-2 bg-surface-container-highest rounded-full overflow-hidden"><div class="h-full bg-secondary-fixed-dim w-0"></div></div>
+      </div>
+      <div class="mt-auto">
+        <button class="w-full bg-primary text-black py-2.5 rounded-lg font-label-sm text-label-sm hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-2"><span class="material-symbols-outlined text-[18px]">play_arrow</span> DEPLOY AGENT</button>
+      </div>
+    </div>
+
+    <div class="glass-panel rounded-xl p-md flex flex-col border-error/20">
+      <div class="flex justify-between items-start mb-md">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-lg bg-error-container/10 border border-error/20 flex items-center justify-center"><span class="material-symbols-outlined text-error">warning</span></div>
+          <div><h3 class="font-display-lg text-[18px] leading-tight">CRON-B</h3><span class="font-label-sm text-[10px] text-outline uppercase">Batch Processor</span></div>
+        </div>
+        <div class="flex items-center gap-1.5 bg-error-container/30 px-2 py-0.5 rounded border border-error/40">
+          <span class="w-1.5 h-1.5 rounded-full bg-error"></span>
+          <span class="font-label-sm text-[10px] text-error uppercase">Error</span>
+        </div>
+      </div>
+      <div class="space-y-sm mb-lg">
+        <div class="bg-error-container/10 p-sm rounded border border-error/10"><p class="text-[12px] font-label-sm text-error/80 leading-relaxed uppercase">ERR_PARITY_MISMATCH: Sub-module 04 refused handshake with X402 gateway.</p></div>
+      </div>
+      <div class="mt-auto grid grid-cols-2 gap-sm">
+        <button class="bg-surface-container-high border border-white/10 py-2 rounded-lg font-label-sm text-label-sm hover:bg-surface-container-highest active:scale-95 transition-all flex items-center justify-center gap-2"><span class="material-symbols-outlined text-sm">refresh</span> REBOOT</button>
+        <button class="bg-error-container/20 border border-error/30 text-error py-2 rounded-lg font-label-sm text-label-sm hover:bg-error-container/40 active:scale-95 transition-all flex items-center justify-center gap-2"><span class="material-symbols-outlined text-sm">terminal</span> LOGS</button>
+      </div>
+    </div>
+
+    <div class="lg:col-span-2 glass-panel rounded-xl p-md flex items-center justify-between border-primary/10">
+      <div class="flex items-center gap-6">
+        <div><span class="font-label-sm text-[10px] text-outline uppercase tracking-widest block mb-1">Global Load</span><span class="font-display-lg text-headline-lg text-primary">42<span class="text-sm font-label-sm text-outline ml-1">vCPUs</span></span></div>
+        <div class="h-12 w-[1px] bg-white/10"></div>
+        <div><span class="font-label-sm text-[10px] text-outline uppercase tracking-widest block mb-1">Active Threads</span><span class="font-display-lg text-headline-lg text-on-surface">1,204</span></div>
+      </div>
+      <div class="hidden md:flex gap-1 h-8 items-end">
+        <div class="w-1 bg-primary/20 h-4"></div><div class="w-1 bg-primary/40 h-6"></div><div class="w-1 bg-primary/20 h-3"></div><div class="w-1 bg-primary/60 h-8"></div><div class="w-1 bg-primary h-5"></div><div class="w-1 bg-primary/30 h-6"></div>
+      </div>
+    </div>
+
+    <div class="glass-panel rounded-xl p-md flex flex-col">
+      <div class="flex justify-between items-start mb-md">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-lg bg-primary-fixed/10 border border-primary-fixed/20 flex items-center justify-center"><span class="material-symbols-outlined text-primary-fixed">cloud_sync</span></div>
+          <div><h3 class="font-display-lg text-[18px] leading-tight">SYNC-MESH</h3><span class="font-label-sm text-[10px] text-outline uppercase">Data Tunnel</span></div>
+        </div>
+        <div class="flex items-center gap-1.5 bg-tertiary/10 px-2 py-0.5 rounded border border-tertiary/20">
+          <span class="w-1.5 h-1.5 rounded-full bg-tertiary-fixed-dim pulse-green"></span>
+          <span class="font-label-sm text-[10px] text-tertiary-fixed-dim uppercase">Active</span>
+        </div>
+      </div>
+      <div class="space-y-sm mb-lg">
+        <div class="flex justify-between text-label-sm font-label-sm mb-xs"><span class="text-outline">Syncing with Mainframe...</span><span>94%</span></div>
+        <div class="h-2 bg-surface-container-highest rounded-full overflow-hidden"><div class="h-full bg-primary-fixed-dim shimmer w-[94%]"></div></div>
+      </div>
+      <div class="mt-auto grid grid-cols-2 gap-sm">
+        <button class="bg-surface-container-high border border-white/10 py-2 rounded-lg font-label-sm text-label-sm hover:bg-surface-container-highest active:scale-95 transition-all flex items-center justify-center gap-2"><span class="material-symbols-outlined text-sm">pause</span> PAUSE</button>
+        <button class="bg-error-container/20 border border-error/30 text-error py-2 rounded-lg font-label-sm text-label-sm hover:bg-error-container/40 active:scale-95 transition-all flex items-center justify-center gap-2"><span class="material-symbols-outlined text-sm">close</span> KILL</button>
+      </div>
+    </div>
+  </section>
 </main>
+
 <nav class="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center h-20 pb-safe px-4 bg-background/80 backdrop-blur-xl border-t border-white/10">
-<a class="flex flex-col items-center justify-center text-outline opacity-50 hover:text-primary transition-colors active:scale-90" href="discover.html">
-<span class="material-symbols-outlined">explore</span>
-<span class="font-label-sm text-[10px] mt-1">Discover</span>
-</a>
-<a class="flex flex-col items-center justify-center text-primary fill-current active:scale-90" href="agents.html">
-<span class="material-symbols-outlined">memory</span>
-<span class="font-label-sm text-[10px] mt-1">Agents</span>
-</a>
-<a class="flex flex-col items-center justify-center text-outline opacity-50 hover:text-primary transition-colors active:scale-90" href="wallet.html">
-<span class="material-symbols-outlined">account_balance_wallet</span>
-<span class="font-label-sm text-[10px] mt-1">Wallet</span>
-</a>
-<a class="flex flex-col items-center justify-center text-outline opacity-50 hover:text-primary transition-colors active:scale-90" href="subscription.html">
-<span class="material-symbols-outlined">settings_input_component</span>
-<span class="font-label-sm text-[10px] mt-1">Config</span>
-</a>
+  <a class="flex flex-col items-center justify-center text-outline opacity-50 hover:text-primary transition-colors active:scale-90" href="discover.html"><span class="material-symbols-outlined">explore</span><span class="font-label-sm text-[10px] mt-1">Discover</span></a>
+  <a class="flex flex-col items-center justify-center text-primary fill-current active:scale-90" href="agents.html"><span class="material-symbols-outlined">memory</span><span class="font-label-sm text-[10px] mt-1">Agents</span></a>
+  <a class="flex flex-col items-center justify-center text-outline opacity-50 hover:text-primary transition-colors active:scale-90" href="wallet.html"><span class="material-symbols-outlined">account_balance_wallet</span><span class="font-label-sm text-[10px] mt-1">Wallet</span></a>
+  <a class="flex flex-col items-center justify-center text-outline opacity-50 hover:text-primary transition-colors active:scale-90" href="subscription.html"><span class="material-symbols-outlined">settings_input_component</span><span class="font-label-sm text-[10px] mt-1">Config</span></a>
 </nav>
+
+<script src="/js/neural-os.iife.js"></script>
 <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const bars = document.querySelectorAll('.h-full.bg-primary');
-            bars.forEach(bar => {
-                if (bar.classList.contains('transition-all')) {
-                    setInterval(() => {
-                        const currentWidth = parseInt(bar.style.width);
-                        if (currentWidth < 98) { bar.style.width = (currentWidth + Math.random() * 0.5) + '%'; }
-                    }, 3000);
-                }
-            });
-        });
-    </script>
+document.getElementById('hdr-wallet-btn').addEventListener('click', async () => {
+  if (!window.NOS) return
+  if (NOS.Wallet.isConnected()) { window.location.href = 'wallet.html' }
+  else { try { await NOS.Wallet.connect() } catch(e) {} }
+})
+document.querySelectorAll('.glass-panel .h-full.bg-primary').forEach(bar => {
+  if (bar.classList.contains('transition-all')) setInterval(() => {
+    const w = parseInt(bar.style.width)
+    if (w < 98) bar.style.width = (w + Math.random() * 0.3) + '%'
+  }, 3000)
+})
+</script>
 </body></html>
