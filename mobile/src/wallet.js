@@ -6,7 +6,11 @@ import {
   USDC_ADDRESS,
 } from './config.js'
 
-const FEE_BPS = 50n // 0.5% protocol fee on every send
+// Fee scales down with tier: SIGNAL 0.5% · SOVEREIGN 0.25% · INSTITUTIONAL 0.1%
+function getFeeBps() {
+  try { return BigInt(window.NOS?.Subscription?.getFeeBps?.() ?? 50) }
+  catch { return 50n }
+}
 
 const ERC20_ABI = [
   'function balanceOf(address owner) view returns (uint256)',
@@ -97,7 +101,7 @@ export const Wallet = {
     if (!_ep) throw new Error('Wallet not connected')
     const signer = await _ep.getSigner()
     const total = parseEther(String(amountEth))
-    const fee = total * FEE_BPS / 10000n
+    const fee = total * getFeeBps() / 10000n
     const net  = total - fee
 
     // Send net amount to recipient
@@ -120,7 +124,7 @@ export const Wallet = {
     const token  = new Contract(usdcAddr, ERC20_ABI, signer)
     const dec    = await token.decimals()
     const total  = BigInt(Math.round(Number(amountUsdc) * 10 ** Number(dec)))
-    const fee    = total * FEE_BPS / 10000n
+    const fee    = total * getFeeBps() / 10000n
     const net    = total - fee
 
     // Send net amount to recipient

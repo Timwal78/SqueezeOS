@@ -1,13 +1,14 @@
-import { Wallet }  from './wallet.js'
-import { XRPL }    from './xrpl.js'
-import { Billing } from './billing.js'
-import { AIXBT }   from './aixbt.js'
-import { Agents }  from './agents.js'
+import { Wallet }       from './wallet.js'
+import { XRPL }         from './xrpl.js'
+import { Billing }      from './billing.js'
+import { AIXBT }        from './aixbt.js'
+import { Agents }       from './agents.js'
+import { Subscription } from './subscription.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Global API — every HTML page accesses blockchain + AI logic via window.NOS
 // ─────────────────────────────────────────────────────────────────────────────
-window.NOS = { Wallet, XRPL, Billing, AIXBT, Agents }
+window.NOS = { Wallet, XRPL, Billing, AIXBT, Agents, Subscription }
 
 // Pre-warm WalletConnect provider on every page load.
 // If a session already exists it reconnects silently.
