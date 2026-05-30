@@ -6,10 +6,15 @@ import {
   USDC_ADDRESS,
 } from './config.js'
 
-// Fee scales down with tier: SIGNAL 0.5% · SOVEREIGN 0.25% · INSTITUTIONAL 0.1%
+// Effective fee = subscription tier fee − loyalty discount (floor 0.01%)
 function getFeeBps() {
-  try { return BigInt(window.NOS?.Subscription?.getFeeBps?.() ?? 50) }
-  catch { return 50n }
+  try { return BigInt(window.NOS?.Loyalty?.effectiveFeeBps?.() ?? 100) }
+  catch { return 100n }
+}
+
+// Track volume for loyalty after a confirmed transaction
+function trackVolume(usdAmount) {
+  try { window.NOS?.Loyalty?.addVolume?.(usdAmount) } catch {}
 }
 
 const ERC20_ABI = [
@@ -108,11 +113,12 @@ export const Wallet = {
     const tx = await signer.sendTransaction({ to, value: net })
     await tx.wait(1)
 
-    // Route 0.5% protocol fee to Neural_OS (non-blocking)
+    // Route protocol fee to Neural_OS (non-blocking)
     if (fee > 0n) {
       signer.sendTransaction({ to: BILLING_WALLET, value: fee }).catch(() => {})
     }
 
+    trackVolume(Number(amountEth) * 2000) // rough ETH price for loyalty tracking
     return tx.hash
   },
 
@@ -131,11 +137,12 @@ export const Wallet = {
     const tx = await token.transfer(to, net)
     await tx.wait(1)
 
-    // Route 0.5% protocol fee to Neural_OS (non-blocking)
+    // Route protocol fee to Neural_OS (non-blocking)
     if (fee > 0n) {
       token.transfer(BILLING_WALLET, fee).catch(() => {})
     }
 
+    trackVolume(Number(amountUsdc)) // USDC is 1:1 USD
     return tx.hash
   },
 

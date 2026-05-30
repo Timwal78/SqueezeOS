@@ -4,6 +4,20 @@ import { CHAIN_ETH, CHAIN_BASE, CHAIN_ZKSYNC, CHAIN_ZETA, CHAIN_HYPERLIQUID } fr
 // Tier definitions — enforced client-side; validate server-side before shipping
 // ─────────────────────────────────────────────────────────────────────────────
 export const TIER_DEFS = {
+  free: {
+    label:        'FREE',
+    priceMonth:   0,
+    priceAnnual:  0,
+    usdcMonth:    0n,
+    usdcAnnual:   0n,
+    chains:       [CHAIN_ETH],
+    agents:       0,
+    byok:         false,
+    xrpl:         false,
+    feeBps:       100,  // 1% — upgrade to reduce
+    agentToAgent: false,
+    color:        '#849495',
+  },
   signal: {
     label:       'SIGNAL',
     priceMonth:  49,
