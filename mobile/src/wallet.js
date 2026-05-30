@@ -2,7 +2,7 @@ import { EthereumProvider } from '@walletconnect/ethereum-provider'
 import { BrowserProvider, formatEther, parseEther, Contract, formatUnits } from 'ethers'
 import {
   WC_PROJECT_ID, RPC, BILLING_WALLET,
-  CHAIN_ETH, CHAIN_BASE, CHAIN_ZKSYNC, CHAIN_HYPERLIQUID,
+  CHAIN_ETH, CHAIN_BASE, CHAIN_ZKSYNC, CHAIN_HYPERLIQUID, CHAIN_ZETA,
   USDC_ADDRESS,
 } from './config.js'
 
@@ -26,7 +26,7 @@ async function initProvider() {
   _wc = await EthereumProvider.init({
     projectId: WC_PROJECT_ID,
     chains: [CHAIN_ETH],
-    optionalChains: [CHAIN_BASE, CHAIN_ZKSYNC, CHAIN_HYPERLIQUID],
+    optionalChains: [CHAIN_BASE, CHAIN_ZKSYNC, CHAIN_HYPERLIQUID, CHAIN_ZETA],
     showQrModal: true,
     qrModalOptions: {
       themeMode: 'dark',
@@ -149,6 +149,7 @@ export const Wallet = {
     [CHAIN_BASE]:        'Base',
     [CHAIN_ZKSYNC]:      'zkSync',
     [CHAIN_HYPERLIQUID]: 'HyperEVM',
+    [CHAIN_ZETA]:        'ZetaChain',
   })[chainId] ?? `Chain ${chainId}`,
 
   /** Fetch EVM asset transfer history via Alchemy getAssetTransfers */
