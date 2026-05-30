@@ -41,8 +41,13 @@ jobs:
           VITE_STRIPE_PK: ${{ secrets.VITE_STRIPE_PK }}
           VITE_BILLING_WALLET: ${{ secrets.VITE_BILLING_WALLET }}
 
-      - name: Add Android platform
-        run: npx cap add android
+      - name: Add Android platform (skip if already present)
+        run: |
+          if [ ! -d "android" ]; then
+            npx cap add android
+          else
+            echo "Android platform already in repo, skipping add"
+          fi
 
       - name: Sync Capacitor
         run: npx cap sync android
