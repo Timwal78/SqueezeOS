@@ -1,0 +1,75 @@
+{
+  "schema_version": "v1",
+  "name": "Neural_OS",
+  "description": "Institutional-grade RWA (Real World Asset) settlement infrastructure. AI agents pay USDC on Base per-call to access market intelligence, XRPL settlement routing, and agent hiring. No API keys — just pay.",
+  "url": "https://neuralOS.app",
+  "contact": "https://neuralOS.app",
+  "transport": ["http-post", "websocket"],
+  "auth": {
+    "type": "x402",
+    "payment_chain": "base",
+    "payment_asset": "USDC",
+    "billing_wallet": "0x4e14B249D9A4c9c9352D780eCEB508A8eB7a7700",
+    "session_ttl_seconds": 3600
+  },
+  "tools": [
+    {
+      "name": "rwa_alpha",
+      "description": "Get live RWA alpha signals — top institutional opportunity scores across all supported chains.",
+      "endpoint": "rwa/alpha",
+      "price_usdc": 0.50,
+      "tier_required": "signal",
+      "input_schema": { "type": "object", "properties": { "chain": { "type": "string", "enum": ["eth", "base", "zksync", "zeta", "hyperliquid"] } } }
+    },
+    {
+      "name": "rwa_deep",
+      "description": "Deep institutional read — full portfolio composition, counterparty risk, and settlement path for a given RWA position.",
+      "endpoint": "rwa/deep",
+      "price_usdc": 2.00,
+      "tier_required": "sovereign",
+      "input_schema": { "type": "object", "required": ["asset_id"], "properties": { "asset_id": { "type": "string" } } }
+    },
+    {
+      "name": "rwa_council",
+      "description": "Full council verdict — multi-engine AI consensus on buy/hold/sell for institutional positions.",
+      "endpoint": "rwa/council",
+      "price_usdc": 5.00,
+      "tier_required": "institutional",
+      "input_schema": { "type": "object", "required": ["symbol"], "properties": { "symbol": { "type": "string" }, "size_usd": { "type": "number" } } }
+    },
+    {
+      "name": "agents_hire",
+      "description": "Post an agent hire request — specify a task and budget; Neural_OS routes to the best available agent cluster.",
+      "endpoint": "agents/hire",
+      "price_usdc": 1.00,
+      "tier_required": "sovereign",
+      "input_schema": { "type": "object", "required": ["task", "budget_usdc"], "properties": { "task": { "type": "string" }, "budget_usdc": { "type": "number" }, "deadline_hours": { "type": "number" } } }
+    },
+    {
+      "name": "swarm_ping",
+      "description": "Register as an active swarm agent and get current network load, gas fees, and optimal execution window.",
+      "endpoint": "agents/swarm",
+      "price_usdc": 0.25,
+      "tier_required": "signal",
+      "input_schema": { "type": "object", "properties": { "agent_id": { "type": "string" }, "capabilities": { "type": "array", "items": { "type": "string" } } } }
+    },
+    {
+      "name": "market_sentiment",
+      "description": "Cross-chain market sentiment scan — aggregates AIXBT signals, on-chain flows, and social velocity.",
+      "endpoint": "market/sentiment",
+      "price_usdc": 0.30,
+      "tier_required": "signal",
+      "input_schema": { "type": "object", "properties": { "assets": { "type": "array", "items": { "type": "string" } } } }
+    },
+    {
+      "name": "xrpl_settlement",
+      "description": "Route an XRPL settlement — optimal path selection, fee calculation, and escrow setup for cross-chain RWA delivery.",
+      "endpoint": "xrpl/settlement",
+      "price_usdc": 0.75,
+      "tier_required": "sovereign",
+      "input_schema": { "type": "object", "required": ["from_address", "to_address", "amount_xrp"], "properties": { "from_address": { "type": "string" }, "to_address": { "type": "string" }, "amount_xrp": { "type": "number" }, "memo": { "type": "string" } } }
+    }
+  ],
+  "pricing_model": "per_call",
+  "discovery_timestamp": "2025-05-30T00:00:00Z"
+}
