@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<title>NEURAL_OS | Initializing</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;family=Geist:wght@400;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        body {
+            background-color: #0A0A0C;
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Geist', sans-serif;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .glow-cyan {
+            text-shadow: 0 0 20px rgba(0, 219, 233, 0.6);
+        }
+        .glow-box-cyan {
+            box-shadow: 0 0 30px rgba(0, 219, 233, 0.2);
+        }
+        @keyframes scanline {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100%); }
+        }
+        .scanline-effect {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to bottom, transparent, rgba(0, 219, 233, 0.05), transparent);
+            height: 100%;
+            pointer-events: none;
+            animation: scanline 8s linear infinite;
+        }
+        .data-stream {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            color: rgba(0, 219, 233, 0.15);
+            white-space: nowrap;
+            user-select: none;
+        }
+        @keyframes marquee {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+        .animate-marquee {
+            display: flex;
+            animation: marquee 30s linear infinite;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary-container": "#fff6fc",
+                        "outline": "#849495",
+                        "on-primary-container": "#006970",
+                        "error": "#ffb4ab",
+                        "on-secondary": "#520072",
+                        "on-error-container": "#ffdad6",
+                        "secondary-container": "#b600f8",
+                        "on-tertiary": "#003907",
+                        "tertiary": "#ddffd3",
+                        "on-tertiary-container": "#006e16",
+                        "error-container": "#93000a",
+                        "on-primary-fixed": "#002022",
+                        "primary-fixed-dim": "#00dbe9",
+                        "surface": "#131315",
+                        "on-primary": "#00363a",
+                        "surface-variant": "#353437",
+                        "surface-container-high": "#2a2a2c",
+                        "tertiary-container": "#00fb40",
+                        "on-error": "#690005",
+                        "on-surface-variant": "#b9cacb",
+                        "tertiary-fixed-dim": "#00e639",
+                        "surface-tint": "#00dbe9",
+                        "tertiary-fixed": "#72ff70",
+                        "surface-dim": "#131315",
+                        "primary-fixed": "#7df4ff",
+                        "inverse-primary": "#006970",
+                        "secondary": "#ebb2ff",
+                        "primary-container": "#00f0ff",
+                        "on-secondary-fixed": "#320047",
+                        "primary": "#dbfcff",
+                        "on-tertiary-fixed": "#002203",
+                        "surface-container-lowest": "#0e0e10",
+                        "on-primary-fixed-variant": "#004f54",
+                        "inverse-surface": "#e5e1e4",
+                        "on-surface": "#e5e1e4",
+                        "secondary-fixed-dim": "#ebb2ff",
+                        "inverse-on-surface": "#313032",
+                        "surface-container-low": "#1c1b1d",
+                        "secondary-fixed": "#f8d8ff",
+                        "on-tertiary-fixed-variant": "#00530e",
+                        "on-secondary-fixed-variant": "#74009f",
+                        "surface-container": "#201f21",
+                        "outline-variant": "#3b494b",
+                        "on-background": "#e5e1e4",
+                        "surface-bright": "#39393b",
+                        "surface-container-highest": "#353437",
+                        "background": "#131315"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "sm": "16px",
+                        "lg": "40px",
+                        "xs": "8px",
+                        "xl": "64px",
+                        "md": "24px",
+                        "gutter": "16px",
+                        "base": "4px",
+                        "margin-mobile": "20px"
+                    },
+                    "fontFamily": {
+                        "display-lg": ["Space Grotesk"],
+                        "body-md": ["Geist"],
+                        "headline-lg-mobile": ["Space Grotesk"],
+                        "headline-lg": ["Space Grotesk"],
+                        "label-sm": ["JetBrains Mono"]
+                    },
+                    "fontSize": {
+                        "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+    body { min-height: max(884px, 100dvh); }
+</style>
+</head>
+<body class="bg-background text-on-background overflow-hidden h-screen w-screen flex flex-col justify-center items-center">
+<div class="fixed inset-0 z-0 overflow-hidden opacity-30 pointer-events-none">
+<div class="scanline-effect"></div>
+<div class="absolute inset-0 flex flex-col space-y-4 pt-10" id="hex-stream-container"></div>
+</div>
+<main class="relative z-10 flex flex-col items-center justify-center w-full max-w-lg px-margin-mobile">
+<div class="mb-xl flex flex-col items-center group">
+<div class="relative w-32 h-32 mb-md flex items-center justify-center">
+<div class="absolute inset-0 border-2 border-primary-fixed-dim/30 rounded-full animate-[spin_10s_linear_infinite]"></div>
+<div class="absolute inset-2 border border-primary-fixed-dim/50 rounded-full animate-[spin_6s_linear_reverse_infinite]"></div>
+<div class="absolute inset-4 border-4 border-t-primary-fixed-dim border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin"></div>
+<span class="material-symbols-outlined text-6xl text-primary-fixed-dim glow-cyan" style="font-variation-settings: 'FILL' 1;">memory</span>
+</div>
+<h1 class="font-display-lg text-headline-lg-mobile md:text-display-lg tracking-tighter text-primary-fixed-dim glow-cyan">NEURAL_OS</h1>
+<div class="h-[1px] w-12 bg-gradient-to-r from-transparent via-primary-fixed-dim to-transparent mt-2"></div>
+</div>
+<div class="w-full space-y-md">
+<div class="flex justify-between items-end mb-xs">
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-primary-fixed-dim tracking-widest uppercase">Initializing Protocol</span>
+<span class="font-label-sm text-[10px] text-outline mt-1 uppercase" id="current-task">Loading sub-routine: 0x4A2...</span>
+</div>
+<div class="flex flex-col items-end">
+<span class="font-label-sm text-label-sm text-primary-fixed-dim" id="percentage">00.00%</span>
+<span class="font-label-sm text-[10px] text-outline" id="ms-counter">00:00:00:000</span>
+</div>
+</div>
+<div class="h-2 w-full bg-surface-container-highest rounded-full overflow-hidden border border-white/5 relative">
+<div class="h-full bg-primary-fixed-dim w-0 transition-all duration-300 ease-out glow-box-cyan relative" id="progress-fill">
+<div class="absolute top-0 right-0 h-full w-4 bg-white/40 blur-sm"></div>
+</div>
+</div>
+<div class="font-label-sm text-[10px] text-outline/40 flex justify-center gap-2 overflow-hidden h-4" id="hex-ticker">
+<span>0xAF42</span><span>0x992B</span><span>0xCC11</span><span>0xDE02</span><span>0x8871</span><span>0x00A1</span>
+</div>
+</div>
+</main>
+<footer class="fixed bottom-lg w-full px-margin-mobile flex flex-col items-center space-y-xs z-20">
+<div class="h-[1px] w-32 bg-white/10 mb-md"></div>
+<p class="font-display-lg text-label-sm tracking-[0.2em] text-on-surface/60 font-light">INSTITUTIONAL RWA PROTOCOL</p>
+<div class="flex items-center space-x-md">
+<span class="font-label-sm text-[10px] text-outline tracking-widest">SECURED BY X402</span>
+<div class="w-1 h-1 bg-tertiary-container rounded-full animate-pulse"></div>
+<span class="font-label-sm text-[10px] text-outline tracking-widest">AIXBT ENABLED</span>
+</div>
+</footer>
+<script>
+        let progress = 0;
+        const progressFill = document.getElementById('progress-fill');
+        const percentageText = document.getElementById('percentage');
+        const taskText = document.getElementById('current-task');
+        const msCounter = document.getElementById('ms-counter');
+        const hexTicker = document.getElementById('hex-ticker');
+
+        const tasks = [
+            "Synchronizing Neural Nodes...",
+            "Validating On-Chain Identity...",
+            "Encrypting Session Keys...",
+            "Calibrating RWA Oracle...",
+            "Optimizing Data Streams...",
+            "Finalizing Handshake..."
+        ];
+
+        function updateProgress() {
+            if (progress < 100) {
+                const inc = Math.random() * 0.8;
+                progress += inc;
+                if (progress > 100) progress = 100;
+                progressFill.style.width = `${progress}%`;
+                percentageText.innerText = `${progress.toFixed(2)}%`;
+                const taskIdx = Math.floor((progress / 100) * tasks.length);
+                if (tasks[taskIdx]) taskText.innerText = `Sub-routine: ${tasks[taskIdx]}`;
+                const now = new Date();
+                const ms = String(now.getMilliseconds()).padStart(3, '0');
+                const sec = String(now.getSeconds()).padStart(2, '0');
+                const min = String(now.getMinutes()).padStart(2, '0');
+                msCounter.innerText = `00:${min}:${sec}:${ms}`;
+                if (Math.random() > 0.8) {
+                    const spans = hexTicker.querySelectorAll('span');
+                    const randomIdx = Math.floor(Math.random() * spans.length);
+                    spans[randomIdx].innerText = '0x' + Math.floor(Math.random()*65536).toString(16).toUpperCase().padStart(4, '0');
+                }
+                requestAnimationFrame(updateProgress);
+            } else {
+                taskText.innerText = "PROTOCOL READY";
+                taskText.classList.add('text-tertiary-container');
+                percentageText.innerText = "100.00%";
+                setTimeout(() => { window.location.href = 'discover.html'; }, 1200);
+            }
+        }
+
+        const streamContainer = document.getElementById('hex-stream-container');
+        for (let i = 0; i < 15; i++) {
+            const stream = document.createElement('div');
+            stream.className = 'animate-marquee flex whitespace-nowrap opacity-20';
+            let content = '';
+            for (let j = 0; j < 50; j++) {
+                content += '0x' + Math.floor(Math.random()*16777215).toString(16).toUpperCase() + '   ';
+            }
+            stream.innerHTML = `<span class="data-stream">${content}</span><span class="data-stream">${content}</span>`;
+            stream.style.animationDuration = (20 + Math.random() * 40) + 's';
+            stream.style.animationDirection = Math.random() > 0.5 ? 'normal' : 'reverse';
+            streamContainer.appendChild(stream);
+        }
+
+        setTimeout(updateProgress, 500);
+    </script>
+</body></html>
