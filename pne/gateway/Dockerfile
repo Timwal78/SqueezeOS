@@ -1,4 +1,4 @@
-FROM rust:1.78-slim AS builder
+FROM rust:1.85-slim AS builder
 
 WORKDIR /app
 
@@ -10,7 +10,6 @@ RUN mkdir src && echo "fn main() {}" > src/main.rs && \
 
 # Build actual source
 COPY src ./src
-# Touch main.rs so cargo knows to recompile
 RUN touch src/main.rs && cargo build --release
 
 FROM debian:bookworm-slim
