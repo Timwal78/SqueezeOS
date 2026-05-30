@@ -1,3 +1,4 @@
+#![allow(warnings)]
 mod auction;
 mod config;
 mod error;
