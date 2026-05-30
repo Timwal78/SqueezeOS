@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/>
+<title>Neural_OS | Core Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&amp;family=Geist:wght@400;600;700&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #0b141c;
+            color: #dae3ee;
+            -webkit-tap-highlight-color: transparent;
+            overflow-x: hidden;
+        }
+        .neural-mesh {
+            background-image: radial-gradient(circle at 2px 2px, #00ff41 1px, transparent 0);
+            background-size: 24px 24px;
+            mask-image: radial-gradient(ellipse at center, black 20%, transparent 70%);
+        }
+        @keyframes scanline {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100%); }
+        }
+        .scanline-effect {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(to bottom, transparent, rgba(0, 255, 65, 0.05), transparent);
+            height: 50px;
+            animation: scanline 4s linear infinite;
+            pointer-events: none;
+        }
+        .bento-card {
+            border: 1px solid #3b4b37;
+            background: #0d1117;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .bento-card:active {
+            transform: scale(0.98);
+            border-color: #00ff41;
+        }
+        nav a { text-decoration: none; }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "tertiary-fixed": "#dee2ec",
+                      "inverse-primary": "#006e16",
+                      "tertiary": "#f8f9ff",
+                      "on-primary": "#003907",
+                      "secondary": "#c3c6cf",
+                      "primary-fixed": "#72ff70",
+                      "on-primary-fixed": "#002203",
+                      "on-background": "#dae3ee",
+                      "on-primary-container": "#007117",
+                      "background": "#0b141c",
+                      "on-tertiary-container": "#5c6169",
+                      "on-error-container": "#ffdad6",
+                      "on-tertiary-fixed": "#171c23",
+                      "on-secondary-container": "#b5b8c1",
+                      "surface-dim": "#0b141c",
+                      "surface-variant": "#2d363e",
+                      "error-container": "#93000a",
+                      "on-surface": "#dae3ee",
+                      "error": "#ffb4ab",
+                      "inverse-surface": "#dae3ee",
+                      "on-secondary-fixed": "#181c22",
+                      "on-error": "#690005",
+                      "surface-tint": "#00e639",
+                      "secondary-fixed": "#dfe2eb",
+                      "surface-container": "#182028",
+                      "on-tertiary": "#2c3138",
+                      "surface-bright": "#313a43",
+                      "primary-fixed-dim": "#00e639",
+                      "primary-container": "#00ff41",
+                      "outline": "#84967e",
+                      "on-primary-fixed-variant": "#00530e",
+                      "tertiary-container": "#d9dde6",
+                      "surface-container-highest": "#2d363e",
+                      "on-secondary": "#2d3137",
+                      "on-secondary-fixed-variant": "#43474e",
+                      "outline-variant": "#3b4b37",
+                      "surface": "#0b141c",
+                      "inverse-on-surface": "#29313a",
+                      "secondary-container": "#454950",
+                      "on-surface-variant": "#b9ccb2",
+                      "surface-container-lowest": "#060f16",
+                      "tertiary-fixed-dim": "#c2c7d0",
+                      "surface-container-low": "#141c24",
+                      "primary": "#ebffe2",
+                      "secondary-fixed-dim": "#c3c6cf",
+                      "surface-container-high": "#222b33",
+                      "on-tertiary-fixed-variant": "#42474f"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "margin-tablet": "24px",
+                      "margin-mobile": "16px",
+                      "unit": "4px",
+                      "gutter": "12px",
+                      "touch-target-min": "48px"
+              },
+              "fontFamily": {
+                      "label-mono": ["JetBrains Mono"],
+                      "body-sm": ["Geist"],
+                      "headline-lg-mobile": ["Geist"],
+                      "headline-md": ["Geist"],
+                      "body-lg": ["Geist"],
+                      "headline-lg": ["Geist"],
+                      "label-caps": ["JetBrains Mono"]
+              },
+              "fontSize": {
+                      "label-mono": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                      "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                      "headline-lg-mobile": ["26px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                      "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                      "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                      "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "label-caps": ["10px", {"lineHeight": "12px", "letterSpacing": "0.1em", "fontWeight": "700"}]
+              }
+            }
+          }
+        }
+    </script>
+<style>
+    body { min-height: max(884px, 100dvh); }
+</style>
+</head>
+<body class="flex flex-col min-h-screen">
+<div class="fixed top-0 left-0 w-full h-8 flex justify-between items-center px-6 z-[100] bg-background">
+<span class="font-label-mono text-[10px] text-on-surface">09:41</span>
+<div class="flex gap-2 items-center text-on-surface">
+<span class="material-symbols-outlined text-[14px]">signal_cellular_4_bar</span>
+<span class="material-symbols-outlined text-[14px]">wifi</span>
+<span class="material-symbols-outlined text-[14px]">battery_full</span>
+</div>
+</div>
+<header class="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-margin-mobile h-touch-target-min pt-8 bg-background dark:bg-background border-b border-outline-variant dark:border-outline-variant">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary-container">terminal</span>
+<span class="font-label-mono text-label-mono uppercase tracking-widest text-primary-container dark:text-primary-container font-bold">CORE_PROTOCOL_v4</span>
+</div>
+<button class="hover:bg-surface-variant dark:hover:bg-surface-variant transition-colors active:scale-95 duration-75 p-2 rounded-full">
+<span class="material-symbols-outlined text-on-surface-variant">settings_input_component</span>
+</button>
+</header>
+<main class="flex-grow pt-24 pb-32 px-margin-mobile space-y-gutter">
+<section class="relative overflow-hidden rounded-xl bg-surface-container-low border border-outline-variant p-6 min-h-[220px] flex flex-col justify-end">
+<div class="absolute inset-0 neural-mesh opacity-30"></div>
+<div class="scanline-effect"></div>
+<div class="relative z-10">
+<div class="flex items-center gap-2 mb-2">
+<span class="w-2 h-2 rounded-full bg-primary-container shadow-[0_0_8px_#00ff41] animate-pulse"></span>
+<span class="font-label-mono text-label-mono text-primary-container uppercase">System Status: Optimal</span>
+</div>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface mb-1">Active Neural Grid</h1>
+<p class="font-body-sm text-body-sm text-on-surface-variant max-w-[80%]">Sub-latency processing enabled across 142 decentralized HSM clusters.</p>
+</div>
+<div class="absolute top-4 right-4 w-24 h-24 opacity-40">
+<img alt="Neural visualization" class="w-full h-full object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBHNSKJPSzKeUfwv_QudsZcLzNjLhR5OgTyO2K5gEXETtVoLI5ai1QZC9St6wURdWoKanVMZBEzMTm3IVXh55hdrs-iLeaT390i2ogC0zYg9ZglKiRyTmt8RqBrbGG8Zf_empbZ2aNQD1kWclSqMTSNcnqF7m_kKpoKUZ53k5QBKfd6Pb9iFRG6bS4axRURMNXSHgoeDz0KQ5v_Nht1PnsFO0Tww0iXZpxjJgnduI8CvvDs_vWpnzl0PSknlwDCEIJzXL_UPfeL"/>
+</div>
+</section>
+<div class="grid grid-cols-2 gap-gutter">
+<div class="bento-card rounded-lg p-4 flex flex-col justify-between">
+<div class="flex justify-between items-start">
+<span class="material-symbols-outlined text-primary-container">hub</span>
+<span class="font-label-mono text-[10px] text-on-primary-fixed-variant bg-primary-container px-1">99.8%</span>
+</div>
+<div>
+<div class="font-label-caps text-label-caps text-on-surface-variant mb-1 uppercase">Node Health</div>
+<div class="font-label-mono text-lg text-on-surface">6,402 <span class="text-xs text-primary-container">UP</span></div>
+</div>
+</div>
+<div class="bento-card rounded-lg p-4 flex flex-col justify-between">
+<div class="flex justify-between items-start">
+<span class="material-symbols-outlined text-primary-container">account_balance_wallet</span>
+</div>
+<div>
+<div class="font-label-caps text-label-caps text-on-surface-variant mb-1 uppercase">Protocol Rev.</div>
+<div class="font-label-mono text-lg text-on-surface">&#926; 412.08</div>
+</div>
+</div>
+<div class="bento-card rounded-lg p-4 col-span-2 flex items-center gap-4">
+<div class="w-12 h-12 bg-surface-container-highest flex items-center justify-center rounded border border-outline-variant">
+<span class="material-symbols-outlined text-primary-container">lock_open</span>
+</div>
+<div class="flex-grow">
+<div class="flex justify-between items-center mb-1">
+<span class="font-label-caps text-label-caps text-on-surface-variant uppercase">Active HSM Status</span>
+<span class="font-label-mono text-[10px] text-primary-container">ENCRYPTED</span>
+</div>
+<div class="w-full bg-surface-variant h-1 rounded-full overflow-hidden">
+<div class="bg-primary-container h-full w-4/5 shadow-[0_0_4px_#00ff41]"></div>
+</div>
+</div>
+</div>
+</div>
+<section class="space-y-3">
+<h2 class="font-label-mono text-label-mono text-on-surface-variant uppercase flex justify-between items-center px-1">
+<span>Operational Logs</span>
+<a href="node-health.html" class="text-[10px] underline">View All</a>
+</h2>
+<div class="space-y-2">
+<div class="flex items-center justify-between p-3 border-b border-outline-variant bg-surface-container-low/50">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-on-surface-variant text-sm">terminal</span>
+<span class="font-label-mono text-body-sm">TX_VAL_004: Success</span>
+</div>
+<span class="font-label-mono text-[10px] text-on-surface-variant">2m ago</span>
+</div>
+<div class="flex items-center justify-between p-3 border-b border-outline-variant bg-surface-container-low/50">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-on-surface-variant text-sm">terminal</span>
+<span class="font-label-mono text-body-sm">NODE_SYNC: Complete</span>
+</div>
+<span class="font-label-mono text-[10px] text-on-surface-variant">14m ago</span>
+</div>
+<div class="flex items-center justify-between p-3 border-b border-outline-variant bg-surface-container-low/50">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-on-surface-variant text-sm">terminal</span>
+<span class="font-label-mono text-body-sm">AUTH_HANDSHAKE: Ref</span>
+</div>
+<span class="font-label-mono text-[10px] text-error">ERR: 401</span>
+</div>
+</div>
+</section>
+</main>
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-margin-mobile pb-6 bg-background/80 backdrop-blur-xl border-t border-outline-variant dark:border-outline-variant">
+<a href="dashboard.html" class="flex flex-col items-center justify-center text-primary-container dark:text-primary-container border-t-2 border-primary-container pt-2 hover:text-primary dark:hover:text-primary transition-all active:bg-surface-container-highest duration-150">
+<span class="material-symbols-outlined">hub</span>
+<span class="font-label-caps text-label-caps uppercase">Nodes</span>
+</a>
+<a href="wallet.html" class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-surface-variant pt-2 hover:text-primary dark:hover:text-primary transition-all active:bg-surface-container-highest duration-150">
+<span class="material-symbols-outlined">account_balance_wallet</span>
+<span class="font-label-caps text-label-caps uppercase">Ledger</span>
+</a>
+<a href="wallet.html" class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-surface-variant pt-2 hover:text-primary dark:hover:text-primary transition-all active:bg-surface-container-highest duration-150">
+<span class="material-symbols-outlined">lock_open</span>
+<span class="font-label-caps text-label-caps uppercase">Vault</span>
+</a>
+<a href="node-health.html" class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-surface-variant pt-2 hover:text-primary dark:hover:text-primary transition-all active:bg-surface-container-highest duration-150">
+<span class="material-symbols-outlined">verified_user</span>
+<span class="font-label-caps text-label-caps uppercase">Audit</span>
+</a>
+</nav>
+<div class="fixed bottom-1 left-1/2 -translate-x-1/2 w-32 h-1 bg-on-surface-variant/30 rounded-full z-[101]"></div>
+<script>
+        document.querySelectorAll('.bento-card').forEach(card => {
+            card.addEventListener('touchstart', () => { card.style.borderColor = '#00ff41'; });
+            card.addEventListener('touchend', () => { setTimeout(() => { card.style.borderColor = '#3b4b37'; }, 100); });
+        });
+        const title = document.querySelector('h1');
+        const originalText = title.textContent;
+        title.textContent = '';
+        let i = 0;
+        function typeWriter() {
+            if (i < originalText.length) { title.textContent += originalText.charAt(i); i++; setTimeout(typeWriter, 40); }
+        }
+        setTimeout(typeWriter, 500);
+    </script>
+</body></html>

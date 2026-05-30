@@ -1,0 +1,16 @@
+{
+  "appId": "com.neuralOS.institutional",
+  "appName": "Neural_OS",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": true
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0
+    }
+  }
+}
