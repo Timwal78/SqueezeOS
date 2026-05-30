@@ -1,10 +1,12 @@
 import { EthereumProvider } from '@walletconnect/ethereum-provider'
 import { BrowserProvider, formatEther, parseEther, Contract, formatUnits } from 'ethers'
 import {
-  WC_PROJECT_ID, RPC,
+  WC_PROJECT_ID, RPC, BILLING_WALLET,
   CHAIN_ETH, CHAIN_BASE, CHAIN_ZKSYNC, CHAIN_HYPERLIQUID,
   USDC_ADDRESS,
 } from './config.js'
+
+const FEE_BPS = 50n // 0.5% protocol fee on every send
 
 const ERC20_ABI = [
   'function balanceOf(address owner) view returns (uint256)',
@@ -94,8 +96,19 @@ export const Wallet = {
   sendEth: async (to, amountEth) => {
     if (!_ep) throw new Error('Wallet not connected')
     const signer = await _ep.getSigner()
-    const tx = await signer.sendTransaction({ to, value: parseEther(String(amountEth)) })
+    const total = parseEther(String(amountEth))
+    const fee = total * FEE_BPS / 10000n
+    const net  = total - fee
+
+    // Send net amount to recipient
+    const tx = await signer.sendTransaction({ to, value: net })
     await tx.wait(1)
+
+    // Route 0.5% protocol fee to Neural_OS (non-blocking)
+    if (fee > 0n) {
+      signer.sendTransaction({ to: BILLING_WALLET, value: fee }).catch(() => {})
+    }
+
     return tx.hash
   },
 
@@ -104,11 +117,21 @@ export const Wallet = {
     const usdcAddr = USDC_ADDRESS[chainId]
     if (!usdcAddr) throw new Error(`USDC not configured for chain ${chainId}`)
     const signer = await _ep.getSigner()
-    const token = new Contract(usdcAddr, ERC20_ABI, signer)
-    const dec = await token.decimals()
-    const amount = BigInt(Math.round(Number(amountUsdc) * 10 ** Number(dec)))
-    const tx = await token.transfer(to, amount)
+    const token  = new Contract(usdcAddr, ERC20_ABI, signer)
+    const dec    = await token.decimals()
+    const total  = BigInt(Math.round(Number(amountUsdc) * 10 ** Number(dec)))
+    const fee    = total * FEE_BPS / 10000n
+    const net    = total - fee
+
+    // Send net amount to recipient
+    const tx = await token.transfer(to, net)
     await tx.wait(1)
+
+    // Route 0.5% protocol fee to Neural_OS (non-blocking)
+    if (fee > 0n) {
+      token.transfer(BILLING_WALLET, fee).catch(() => {})
+    }
+
     return tx.hash
   },
 
