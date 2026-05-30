@@ -179,7 +179,7 @@ pub async fn proxy_market_data(
     State(state): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
-    Extension(claims): Extension<MacaroonClaims>,
+    Extension(_claims): Extension<MacaroonClaims>,
     Query(q): Query<MarketDataQuery>,
 ) -> Result<Response, PneError> {
     let symbol = q.symbol.as_deref().unwrap_or("IWM");
@@ -268,7 +268,7 @@ pub async fn proxy_council(
     State(state): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
-    Extension(claims): Extension<MacaroonClaims>,
+    Extension(_claims): Extension<MacaroonClaims>,
     body: Bytes,
 ) -> Result<Response, PneError> {
     let grace_tip = parse_grace_tip(&headers);
@@ -283,7 +283,6 @@ pub async fn proxy_council(
             .unwrap_or_else(|| "anonymous".to_string())
     };
 
-    // Extract symbol for flow tracking and embargo
     let symbol = extract_symbol_from_body(&body).unwrap_or_else(|| "IWM".to_string());
 
     let auction_result = auction::enter_auction(
@@ -296,12 +295,10 @@ pub async fn proxy_council(
     .await
     .map_err(|e| PneError::Internal(e))?;
 
-    // Record flow intelligence (dark pool bids excluded from public index)
     let _ = state.redis.record_flow_bid(&symbol, grace_tip, dark_pool).await;
 
     let is_rank_one = auction_result.rank == 1;
 
-    // Build upstream request — inject embargo header for rank-1 winners
     let upstream_url = format!("{}/api/council", state.config.upstream_base_url);
     let client = reqwest::Client::new();
     let mut req_builder = client
@@ -315,7 +312,6 @@ pub async fn proxy_council(
             .header("X-PNE-Embargo", EMBARGO_SECS.to_string())
             .header("X-PNE-Rank", "1")
             .header("X-PNE-Auction-Window", auction_result.window_id.to_string());
-        // Persist embargo in Redis so auction/book can surface it
         let _ = state.redis.set_embargo(&symbol, &auction_result.request_id, EMBARGO_SECS).await;
     }
 
@@ -343,7 +339,6 @@ pub async fn proxy_council(
     let date = chrono_date();
     let _ = state.redis.append_merkle_leaf(&date, &leaf).await;
 
-    // Store latency certificate (24h retrieval)
     let cert = serde_json::json!({
         "auction_id": &auction_result.request_id,
         "symbol": &symbol,
@@ -420,7 +415,6 @@ pub async fn auction_flow(
                 })
                 .collect();
 
-            // Check which symbols are currently under embargo
             let embargo_checks: Vec<Value> = futures_util::future::join_all(
                 tracked_symbols.iter().map(|&sym| {
                     let redis = state.redis.clone();
@@ -483,7 +477,7 @@ pub async fn proxy_options(
     State(state): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
-    Extension(claims): Extension<MacaroonClaims>,
+    Extension(_claims): Extension<MacaroonClaims>,
     Query(q): Query<HashMap<String, String>>,
 ) -> Result<Response, PneError> {
     proxy_get(state, "/api/options", q, &headers, addr).await
@@ -493,7 +487,7 @@ pub async fn proxy_scan(
     State(state): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
-    Extension(claims): Extension<MacaroonClaims>,
+    Extension(_claims): Extension<MacaroonClaims>,
     Query(q): Query<HashMap<String, String>>,
 ) -> Result<Response, PneError> {
     proxy_get(state, "/api/scan", q, &headers, addr).await
@@ -586,7 +580,6 @@ async fn ws_loom_task(socket: axum::extract::ws::WebSocket, state: AppState) {
     let mut rx = state.redis.loom_tx.subscribe();
     let (mut sender, mut receiver) = socket.split();
 
-    // Send connected event
     let connected = json!({
         "type": "CONNECTED",
         "ts": epoch_ms(),
@@ -596,7 +589,6 @@ async fn ws_loom_task(socket: axum::extract::ws::WebSocket, state: AppState) {
         return;
     }
 
-    // Relay broadcast events to this WebSocket client
     loop {
         tokio::select! {
             Ok(event) = rx.recv() => {
