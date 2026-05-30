@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<title>NEURAL_OS | Protocol Wallet</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+          "on-secondary-container": "#fff6fc", "surface-dim": "#131315", "surface-variant": "#353437",
+          "error-container": "#93000a", "on-surface": "#e5e1e4", "error": "#ffb4ab",
+          "inverse-surface": "#e5e1e4", "surface-tint": "#00dbe9", "on-secondary-fixed": "#320047",
+          "on-error": "#690005", "tertiary-fixed": "#72ff70", "inverse-primary": "#006970",
+          "tertiary": "#ddffd3", "on-primary": "#00363a", "secondary": "#ebb2ff",
+          "primary-fixed": "#7df4ff", "on-primary-fixed": "#002022", "on-background": "#e5e1e4",
+          "on-primary-container": "#006970", "background": "#131315", "on-tertiary-container": "#006e16",
+          "on-error-container": "#ffdad6", "on-tertiary-fixed": "#002203", "surface": "#131315",
+          "outline-variant": "#3b494b", "inverse-on-surface": "#313032", "secondary-container": "#b600f8",
+          "on-surface-variant": "#b9cacb", "tertiary-fixed-dim": "#00e639",
+          "surface-container-lowest": "#0e0e10", "surface-container-low": "#1c1b1d",
+          "secondary-fixed-dim": "#ebb2ff", "primary": "#dbfcff", "surface-container-high": "#2a2a2c",
+          "on-tertiary-fixed-variant": "#00530e", "secondary-fixed": "#f8d8ff",
+          "surface-container": "#201f21", "on-tertiary": "#003907", "surface-bright": "#39393b",
+          "primary-fixed-dim": "#00dbe9", "primary-container": "#00f0ff", "outline": "#849495",
+          "on-primary-fixed-variant": "#004f54", "tertiary-container": "#00fb40",
+          "surface-container-highest": "#353437", "on-secondary-fixed-variant": "#74009f",
+          "on-secondary": "#520072"
+        },
+        "borderRadius": { "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem" },
+        "spacing": { "margin-mobile": "20px", "base": "4px", "xl": "64px", "sm": "16px", "md": "24px", "lg": "40px", "gutter": "16px", "xs": "8px" },
+        "fontFamily": { "body-md": ["Geist"], "headline-lg": ["Space Grotesk"], "display-lg": ["Space Grotesk"], "label-sm": ["JetBrains Mono"], "headline-lg-mobile": ["Space Grotesk"] },
+        "fontSize": {
+          "body-md": ["16px",{"lineHeight":"24px","fontWeight":"400"}],
+          "headline-lg": ["32px",{"lineHeight":"40px","letterSpacing":"-0.01em","fontWeight":"600"}],
+          "display-lg": ["48px",{"lineHeight":"56px","letterSpacing":"-0.02em","fontWeight":"700"}],
+          "label-sm": ["12px",{"lineHeight":"16px","letterSpacing":"0.05em","fontWeight":"500"}],
+          "headline-lg-mobile": ["24px",{"lineHeight":"32px","fontWeight":"600"}]
+        }
+      }
+    }
+  }
+</script>
+<style>
+  .glass-panel { background: rgba(255,255,255,0.05); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); }
+  .glow-line { background: linear-gradient(90deg,#00dbe9 0%,transparent 100%); height:1px; width:100%; }
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+  body { background-color: #0A0A0C; color: #e5e1e4; min-height: max(884px, 100dvh); }
+  .pulsing-dot { animation: pdot 2s cubic-bezier(0.4,0,0.6,1) infinite; }
+  @keyframes pdot { 0%,100%{opacity:1;} 50%{opacity:.4;} }
+  nav a { text-decoration: none; }
+  .modal-overlay { position:fixed; inset:0; z-index:200; background:rgba(10,10,12,0.85); backdrop-filter:blur(8px); display:flex; align-items:flex-end; justify-content:center; }
+  .modal-overlay.hidden { display:none; }
+  .modal-sheet { background:#161618; border:1px solid rgba(255,255,255,0.12); border-radius:1.25rem 1.25rem 0 0; width:100%; max-width:560px; padding:1.5rem; max-height:85vh; overflow-y:auto; }
+  .nos-input { width:100%; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.12); color:#e5e1e4; border-radius:0.5rem; padding:0.75rem 1rem; outline:none; font-family:'JetBrains Mono',monospace; font-size:13px; transition:border-color 0.2s; }
+  .nos-input:focus { border-color:#00dbe9; }
+  .nos-btn-primary { background:#00dbe9; color:#00363a; font-weight:700; border-radius:0.5rem; padding:0.75rem 1.5rem; width:100%; font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:0.05em; cursor:pointer; transition:all 0.15s; border:none; }
+  .nos-btn-primary:hover { filter:brightness(1.1); }
+  .nos-btn-primary:active { transform:scale(0.97); }
+  .nos-btn-primary:disabled { opacity:0.5; cursor:not-allowed; }
+  .nos-btn-secondary { background:rgba(255,255,255,0.06); color:#00dbe9; font-weight:600; border:1px solid rgba(0,219,233,0.3); border-radius:0.5rem; padding:0.75rem 1.5rem; width:100%; font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:0.05em; cursor:pointer; transition:all 0.15s; }
+  .nos-btn-secondary:hover { background:rgba(0,219,233,0.1); }
+  .nos-label { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:#849495; margin-bottom:0.375rem; display:block; }
+  #toast { position:fixed; bottom:90px; left:50%; transform:translateX(-50%); background:#161618; border:1px solid rgba(0,219,233,0.3); color:#e5e1e4; padding:0.75rem 1.5rem; border-radius:0.5rem; font-family:'JetBrains Mono',monospace; font-size:12px; z-index:300; transition:all 0.3s; white-space:nowrap; max-width:calc(100vw - 40px); overflow:hidden; text-overflow:ellipsis; }
+  #toast.hidden { opacity:0; pointer-events:none; transform:translateX(-50%) translateY(10px); }
+  .asset-btn-active { border-color: #00dbe9 !important; color: #00dbe9 !important; }
+</style>
+</head>
+<body class="font-body-md text-on-surface">
+
+<header class="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-xl border-b border-white/10 flex justify-between items-center px-margin-mobile h-16 shadow-[0_0_20px_rgba(0,219,233,0.1)]">
+  <div class="flex items-center gap-xs">
+    <span class="material-symbols-outlined text-primary text-2xl">memory</span>
+    <h1 class="font-display-lg text-headline-lg-mobile tracking-tighter text-primary">NEURAL_OS</h1>
+  </div>
+  <button id="header-wallet-btn" class="flex items-center gap-sm px-3 py-1.5 glass-panel rounded-full hover:border-primary/40 transition-all active:scale-95">
+    <div class="flex flex-col items-end">
+      <span class="font-label-sm text-[10px] text-outline uppercase tracking-widest" id="header-net">Connect Wallet</span>
+      <span class="font-label-sm text-primary" data-nos="eth-balance">--</span>
+    </div>
+    <div class="w-8 h-8 rounded-full border border-primary/20 glass-panel flex items-center justify-center">
+      <span class="material-symbols-outlined text-primary text-[18px]">account_circle</span>
+    </div>
+  </button>
+</header>
+
+<main class="pt-24 pb-32 px-margin-mobile max-w-5xl mx-auto space-y-lg">
+
+  <section class="space-y-md">
+    <div class="flex flex-col md:flex-row md:items-end justify-between gap-md">
+      <div>
+        <h2 class="font-label-sm text-outline uppercase tracking-[0.2em] mb-xs">Aggregate_Capital</h2>
+        <div id="hero-disconnected">
+          <p class="font-body-md text-on-surface-variant mb-sm">Connect your wallet to view live balances and execute transfers.</p>
+          <button id="cta-connect" class="h-12 px-8 bg-primary text-surface-dim font-bold rounded-lg flex items-center gap-xs active:scale-95 transition-transform">
+            <span class="material-symbols-outlined text-[20px]">account_balance_wallet</span> CONNECT_WALLET
+          </button>
+        </div>
+        <div id="hero-connected" class="hidden">
+          <div class="flex items-baseline gap-xs">
+            <span class="font-display-lg text-primary text-5xl md:text-7xl" id="hero-eth">0.0000</span>
+            <span class="font-headline-lg text-primary/60">ETH</span>
+          </div>
+          <p class="font-label-sm text-on-surface-variant mt-2">
+            <span data-nos="usd-balance">≈ $0.00</span>
+            <button id="chain-pill" class="ml-2 font-label-sm text-[10px] bg-primary/10 border border-primary/30 text-primary px-2 py-0.5 rounded-full cursor-pointer hover:bg-primary/20 transition-colors">ETH Mainnet</button>
+          </p>
+          <p class="font-label-sm text-outline mt-1 text-[11px]" data-nos="address"></p>
+        </div>
+      </div>
+      <div id="hero-actions" class="hidden flex gap-sm">
+        <button id="send-btn" class="flex-1 md:flex-none h-12 px-8 bg-primary text-surface-dim font-bold rounded-lg flex items-center justify-center gap-xs active:scale-95 transition-transform">
+          <span class="material-symbols-outlined text-[20px]">north_east</span> SEND
+        </button>
+        <button id="receive-btn" class="flex-1 md:flex-none h-12 px-8 glass-panel border-primary-container/30 text-primary font-bold rounded-lg flex items-center justify-center gap-xs active:scale-95 transition-transform hover:bg-primary/10">
+          <span class="material-symbols-outlined text-[20px]">south_west</span> RECEIVE
+        </button>
+      </div>
+    </div>
+    <div class="glow-line"></div>
+  </section>
+
+  <section class="grid grid-cols-1 md:grid-cols-12 gap-gutter">
+    <div class="md:col-span-7 glass-panel rounded-xl p-md flex flex-col justify-between">
+      <div>
+        <h3 class="font-label-sm text-primary mb-md flex items-center gap-xs">
+          <span class="material-symbols-outlined text-[18px]">bar_chart</span> PROTOCOL_FEE_BREAKDOWN
+        </h3>
+        <div class="space-y-sm">
+          <div class="space-y-1">
+            <div class="flex justify-between font-label-sm"><span class="text-on-surface-variant">X402 Protocol (Relay)</span><span>42%</span></div>
+            <div class="h-2 bg-white/5 rounded-full overflow-hidden"><div class="h-full bg-primary-container w-[42%]"></div></div>
+          </div>
+          <div class="space-y-1">
+            <div class="flex justify-between font-label-sm"><span class="text-on-surface-variant">AIXBT Neural Relay</span><span>35%</span></div>
+            <div class="h-2 bg-white/5 rounded-full overflow-hidden"><div class="h-full bg-secondary-container w-[35%]"></div></div>
+          </div>
+          <div class="space-y-1">
+            <div class="flex justify-between font-label-sm"><span class="text-on-surface-variant">ZK Compute Proofs</span><span>23%</span></div>
+            <div class="h-2 bg-white/5 rounded-full overflow-hidden"><div class="h-full bg-tertiary-fixed-dim w-[23%]"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="mt-lg pt-md border-t border-white/10 flex justify-between items-center">
+        <span class="font-label-sm text-outline">Total Fees (24h)</span>
+        <span class="font-label-sm text-primary" id="fees-24h">-- ETH</span>
+      </div>
+    </div>
+    <div class="md:col-span-5 glass-panel rounded-xl p-md">
+      <h3 class="font-label-sm text-primary mb-md flex items-center gap-xs">
+        <span class="material-symbols-outlined text-[18px]">hub</span> AGENT_NODE_DRAIN
+      </h3>
+      <div class="space-y-md">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-sm">
+            <div class="w-1.5 h-1.5 bg-tertiary-fixed-dim pulsing-dot rounded-full"></div>
+            <div><p class="font-label-sm text-on-surface">Commerce_Strategist_Pro</p><p class="text-[10px] text-outline font-label-sm">NODE_ID: 0x92...f2</p></div>
+          </div>
+          <span class="font-label-sm text-primary">0.002 <span class="text-[10px] opacity-60">ETH/hr</span></span>
+        </div>
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-sm">
+            <div class="w-1.5 h-1.5 bg-tertiary-fixed-dim pulsing-dot rounded-full"></div>
+            <div><p class="font-label-sm text-on-surface">Yield_Optimizer_v4</p><p class="text-[10px] text-outline font-label-sm">NODE_ID: 0x3a...11</p></div>
+          </div>
+          <span class="font-label-sm text-primary">0.0008 <span class="text-[10px] opacity-60">ETH/hr</span></span>
+        </div>
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-sm">
+            <div class="w-1.5 h-1.5 bg-outline rounded-full"></div>
+            <div><p class="font-label-sm text-on-surface-variant">Arbitrage_Bot_Main</p><p class="text-[10px] text-outline font-label-sm">STATUS: STANDBY</p></div>
+          </div>
+          <span class="font-label-sm text-outline">0.000 <span class="text-[10px] opacity-60">ETH/hr</span></span>
+        </div>
+      </div>
+      <a href="agents.html" class="w-full mt-lg h-10 glass-panel border-white/5 hover:border-primary/20 text-outline hover:text-primary font-label-sm transition-all flex items-center justify-center gap-xs">
+        ORCHESTRATE_NODES <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+      </a>
+    </div>
+  </section>
+
+  <section class="space-y-md">
+    <h3 class="font-label-sm text-outline tracking-widest uppercase">Protocol_Assets</h3>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-gutter">
+      <div class="glass-panel p-md rounded-lg flex items-center justify-between hover:border-primary/30 transition-colors">
+        <div class="flex items-center gap-md">
+          <div class="w-10 h-10 flex items-center justify-center bg-white/5 rounded-lg border border-white/10"><span class="material-symbols-outlined text-primary">token</span></div>
+          <div><p class="font-label-sm text-on-surface">Ethereum</p><p class="text-[10px] text-outline font-label-sm">ETH</p></div>
+        </div>
+        <div class="text-right"><p class="font-label-sm text-on-surface" id="asset-eth">--</p><p class="text-[10px] text-outline font-label-sm" id="asset-eth-usd">$0.00</p></div>
+      </div>
+      <div class="glass-panel p-md rounded-lg flex items-center justify-between hover:border-primary/30 transition-colors">
+        <div class="flex items-center gap-md">
+          <div class="w-10 h-10 flex items-center justify-center bg-white/5 rounded-lg border border-white/10"><span class="material-symbols-outlined text-secondary">layers</span></div>
+          <div><p class="font-label-sm text-on-surface">USDC</p><p class="text-[10px] text-outline font-label-sm">Base Network</p></div>
+        </div>
+        <div class="text-right"><p class="font-label-sm text-on-surface" id="asset-usdc">--</p><p class="text-[10px] text-outline font-label-sm">≈ USD</p></div>
+      </div>
+      <div class="glass-panel p-md rounded-lg flex items-center justify-between hover:border-primary/30 transition-colors">
+        <div class="flex items-center gap-md">
+          <div class="w-10 h-10 flex items-center justify-center bg-white/5 rounded-lg border border-white/10"><span class="font-label-sm text-tertiary-fixed-dim font-bold">XRP</span></div>
+          <div><p class="font-label-sm text-on-surface">XRP Ledger</p><p class="text-[10px] text-outline font-label-sm" id="xrp-addr-lbl">Enter address below</p></div>
+        </div>
+        <div class="text-right"><p class="font-label-sm text-on-surface" id="asset-xrp">--</p></div>
+      </div>
+    </div>
+    <div class="flex gap-sm">
+      <input id="xrp-input" class="nos-input flex-1" placeholder="XRP Ledger address (rXXX...)"/>
+      <button id="xrp-load-btn" class="h-11 px-4 glass-panel border border-tertiary-fixed-dim/30 text-tertiary-fixed-dim font-label-sm rounded-lg hover:bg-tertiary-fixed-dim/10 transition-colors whitespace-nowrap">LOAD XRP</button>
+    </div>
+  </section>
+
+  <section class="glass-panel rounded-xl overflow-hidden">
+    <div class="p-md border-b border-white/10 flex justify-between items-center">
+      <h3 class="font-label-sm text-primary flex items-center gap-xs"><span class="material-symbols-outlined text-[18px]">receipt_long</span> LEDGER_INTERACTIONS</h3>
+      <span class="font-label-sm text-outline text-[10px]" id="tx-chain-lbl">EVM Chain</span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left">
+        <thead><tr class="font-label-sm text-outline border-b border-white/5">
+          <th class="p-md font-normal">TYPE</th>
+          <th class="p-md font-normal">FROM / TO</th>
+          <th class="p-md font-normal text-right">VALUE</th>
+          <th class="p-md font-normal text-right">HASH</th>
+        </tr></thead>
+        <tbody id="tx-body" class="font-label-sm">
+          <tr><td colspan="4" class="p-md text-center text-outline">Connect wallet to view transactions</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<nav class="fixed bottom-0 left-0 w-full z-50 bg-background/80 backdrop-blur-xl border-t border-white/10 flex justify-around items-center h-20 pb-safe px-4">
+  <a class="flex flex-col items-center justify-center text-outline opacity-50 hover:text-primary-fixed-dim transition-colors active:scale-90" href="discover.html"><span class="material-symbols-outlined">explore</span><span class="font-label-sm text-label-sm">Discover</span></a>
+  <a class="flex flex-col items-center justify-center text-outline opacity-50 hover:text-primary-fixed-dim transition-colors active:scale-90" href="agents.html"><span class="material-symbols-outlined">memory</span><span class="font-label-sm text-label-sm">Agents</span></a>
+  <a class="flex flex-col items-center justify-center text-primary fill-current active:scale-90 transition-transform" href="wallet.html"><span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1;">account_balance_wallet</span><span class="font-label-sm text-label-sm">Wallet</span></a>
+  <a class="flex flex-col items-center justify-center text-outline opacity-50 hover:text-primary-fixed-dim transition-colors active:scale-90" href="subscription.html"><span class="material-symbols-outlined">settings_input_component</span><span class="font-label-sm text-label-sm">Config</span></a>
+</nav>
+
+<div id="send-modal" class="modal-overlay hidden">
+  <div class="modal-sheet">
+    <div class="flex justify-between items-center mb-md">
+      <h3 class="font-headline-lg-mobile text-primary">SEND_ASSETS</h3>
+      <button id="send-close" class="material-symbols-outlined text-outline hover:text-primary transition-colors">close</button>
+    </div>
+    <div class="space-y-md">
+      <div>
+        <span class="nos-label">Select Asset</span>
+        <div class="flex gap-sm">
+          <button id="ab-eth" class="flex-1 py-2 glass-panel rounded-lg font-label-sm asset-btn-active">ETH</button>
+          <button id="ab-usdc-eth" class="flex-1 py-2 glass-panel rounded-lg font-label-sm text-outline">USDC (ETH)</button>
+          <button id="ab-usdc-base" class="flex-1 py-2 glass-panel rounded-lg font-label-sm text-outline">USDC (Base)</button>
+        </div>
+      </div>
+      <div><span class="nos-label">Recipient Address</span><input id="send-to" class="nos-input" placeholder="0x..." autocomplete="off" spellcheck="false"/></div>
+      <div>
+        <span class="nos-label">Amount</span>
+        <div class="relative">
+          <input id="send-amount" class="nos-input pr-14" type="number" step="any" min="0" placeholder="0.00"/>
+          <span id="send-asset-lbl" class="absolute right-3 top-1/2 -translate-y-1/2 font-label-sm text-outline">ETH</span>
+        </div>
+        <p class="mt-1 font-label-sm text-[10px] text-outline">Available: <span id="send-avail">--</span></p>
+      </div>
+      <button id="send-confirm" class="nos-btn-primary">EXECUTE_TRANSFER</button>
+      <p id="send-status" class="font-label-sm text-[11px] text-center text-outline hidden"></p>
+    </div>
+  </div>
+</div>
+
+<div id="receive-modal" class="modal-overlay hidden">
+  <div class="modal-sheet">
+    <div class="flex justify-between items-center mb-md">
+      <h3 class="font-headline-lg-mobile text-primary">RECEIVE_ASSETS</h3>
+      <button id="recv-close" class="material-symbols-outlined text-outline hover:text-primary transition-colors">close</button>
+    </div>
+    <div class="space-y-md">
+      <div class="w-40 h-40 mx-auto bg-white/5 border border-white/10 rounded-xl flex flex-col items-center justify-center gap-xs">
+        <span class="material-symbols-outlined text-primary text-4xl">qr_code_2</span>
+        <span class="font-label-sm text-[10px] text-outline">SCAN_ADDRESS</span>
+      </div>
+      <div>
+        <span class="nos-label">Your Wallet Address</span>
+        <div class="flex items-center gap-sm nos-input">
+          <span id="recv-addr" data-nos="address" class="text-primary truncate flex-1 font-label-sm">Connect wallet first</span>
+          <button id="copy-addr" class="material-symbols-outlined text-outline hover:text-primary transition-colors flex-shrink-0 ml-1">content_copy</button>
+        </div>
+      </div>
+      <div>
+        <span class="nos-label">Supported Networks</span>
+        <div class="flex flex-wrap gap-xs">
+          <span class="font-label-sm text-[10px] bg-primary/10 border border-primary/20 text-primary px-2 py-0.5 rounded-full">Ethereum Mainnet</span>
+          <span class="font-label-sm text-[10px] bg-primary/10 border border-primary/20 text-primary px-2 py-0.5 rounded-full">Base</span>
+          <span class="font-label-sm text-[10px] bg-white/5 border border-white/10 text-outline px-2 py-0.5 rounded-full">XRP (separate)</span>
+        </div>
+      </div>
+      <button id="copy-addr-btn" class="nos-btn-secondary">COPY_ADDRESS</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="hidden"></div>
+<div class="fixed top-[-10%] right-[-10%] w-[50%] h-[50%] bg-primary/5 blur-[120px] rounded-full pointer-events-none -z-10"></div>
+<div class="fixed bottom-[-10%] left-[-10%] w-[40%] h-[40%] bg-secondary/5 blur-[120px] rounded-full pointer-events-none -z-10"></div>
+
+<script src="/js/neural-os.iife.js"></script>
+<script>
+const CHAIN_NAMES = { 1: 'ETH Mainnet', 8453: 'Base' }
+let selAsset = 'eth'
+
+function toast(msg, ms = 4000) {
+  const t = document.getElementById('toast')
+  t.textContent = msg; t.classList.remove('hidden')
+  clearTimeout(t._t); t._t = setTimeout(() => t.classList.add('hidden'), ms)
+}
+
+async function onConnected(addr) {
+  document.getElementById('hero-disconnected').classList.add('hidden')
+  document.getElementById('hero-connected').classList.remove('hidden')
+  document.getElementById('hero-actions').classList.remove('hidden')
+  document.getElementById('header-net').textContent = 'Wallet_Live'
+  const cid = NOS.Wallet.getChainId()
+  document.getElementById('chain-pill').textContent = CHAIN_NAMES[Number(cid)] || ('Chain ' + cid)
+  document.getElementById('tx-chain-lbl').textContent = Number(cid) === 8453 ? 'BASE' : 'ETH Mainnet'
+  try {
+    const bal = await NOS.Wallet.getEthBalance(addr)
+    document.getElementById('hero-eth').textContent = bal
+    document.getElementById('asset-eth').textContent = bal + ' ETH'
+    document.getElementById('send-avail').textContent = bal + ' ETH'
+  } catch(e) {}
+  try {
+    const usdc = await NOS.Wallet.getUsdcBalance(addr, 8453)
+    document.getElementById('asset-usdc').textContent = usdc + ' USDC'
+  } catch(e) {}
+  loadTxs(addr)
+}
+
+function onDisconnected() {
+  document.getElementById('hero-disconnected').classList.remove('hidden')
+  document.getElementById('hero-connected').classList.add('hidden')
+  document.getElementById('hero-actions').classList.add('hidden')
+  document.getElementById('header-net').textContent = 'Connect Wallet'
+  document.getElementById('tx-body').innerHTML = '<tr><td colspan="4" class="p-md text-center text-outline">Connect wallet to view transactions</td></tr>'
+  document.getElementById('asset-eth').textContent = '--'
+  document.getElementById('asset-usdc').textContent = '--'
+}
+
+async function loadTxs(addr) {
+  const tbody = document.getElementById('tx-body')
+  tbody.innerHTML = '<tr><td colspan="4" class="p-md text-center text-outline">Loading...</td></tr>'
+  try {
+    const txs = await NOS.Wallet.getTransfers(addr, 10)
+    if (!txs.length) { tbody.innerHTML = '<tr><td colspan="4" class="p-md text-center text-outline">No transactions found</td></tr>'; return }
+    const cid = Number(NOS.Wallet.getChainId())
+    const explorer = cid === 8453 ? 'https://basescan.org/tx/' : 'https://etherscan.io/tx/'
+    tbody.innerHTML = txs.map(tx => {
+      const isIn = tx.direction === 'in'
+      const peer = isIn ? tx.from : tx.to
+      const short = peer ? peer.slice(0,6)+'...'+peer.slice(-4) : '--'
+      const val = tx.value ? parseFloat(tx.value).toFixed(4) : '--'
+      const asset = tx.asset || 'ETH'
+      const col = isIn ? 'text-tertiary-fixed-dim' : 'text-error'
+      const sign = isIn ? '+' : '-'
+      const icon = isIn ? 'south_west' : 'north_east'
+      return `<tr class="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+        <td class="p-md flex items-center gap-sm"><span class="material-symbols-outlined ${col} text-[18px]">${icon}</span>${isIn?'RECV':'SENT'}</td>
+        <td class="p-md text-on-surface-variant">${short}</td>
+        <td class="p-md text-right ${col}">${sign}${val} ${asset}</td>
+        <td class="p-md text-right"><a href="${explorer}${tx.hash}" target="_blank" class="font-label-sm text-outline hover:text-primary transition-colors">VIEW</a></td>
+      </tr>`
+    }).join('')
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="4" class="p-md text-center text-outline">Add Alchemy API key to .env to view history</td></tr>`
+  }
+}
+
+async function doConnect() {
+  if (NOS.Wallet.isConnected()) {
+    if (confirm('Disconnect wallet?')) { await NOS.Wallet.disconnect() }
+  } else {
+    try { await NOS.Wallet.connect() } catch(e) { toast('Connection cancelled') }
+  }
+}
+
+document.getElementById('header-wallet-btn').addEventListener('click', doConnect)
+document.getElementById('cta-connect').addEventListener('click', doConnect)
+
+document.getElementById('send-btn').addEventListener('click', () => {
+  if (!NOS.Wallet.isConnected()) { toast('Connect wallet first'); return }
+  document.getElementById('send-modal').classList.remove('hidden')
+})
+document.getElementById('send-close').addEventListener('click', () => document.getElementById('send-modal').classList.add('hidden'))
+
+document.getElementById('receive-btn').addEventListener('click', () => document.getElementById('receive-modal').classList.remove('hidden'))
+document.getElementById('recv-close').addEventListener('click', () => document.getElementById('receive-modal').classList.add('hidden'))
+
+;['ab-eth','ab-usdc-eth','ab-usdc-base'].forEach(id => {
+  document.getElementById(id).addEventListener('click', () => {
+    selAsset = id.replace('ab-','')
+    ;['ab-eth','ab-usdc-eth','ab-usdc-base'].forEach(b => {
+      document.getElementById(b).classList.toggle('asset-btn-active', b === id)
+      document.getElementById(b).classList.toggle('text-outline', b !== id)
+    })
+    document.getElementById('send-asset-lbl').textContent = selAsset === 'eth' ? 'ETH' : 'USDC'
+    const addr = NOS.Wallet.getAddress()
+    if (!addr) return
+    if (selAsset === 'eth') {
+      NOS.Wallet.getEthBalance(addr).then(b => document.getElementById('send-avail').textContent = b + ' ETH').catch(()=>{})
+    } else {
+      const cid = selAsset === 'usdc-base' ? 8453 : 1
+      NOS.Wallet.getUsdcBalance(addr, cid).then(b => document.getElementById('send-avail').textContent = b + ' USDC').catch(()=>{})
+    }
+  })
+})
+
+document.getElementById('send-confirm').addEventListener('click', async () => {
+  const to = document.getElementById('send-to').value.trim()
+  const amt = document.getElementById('send-amount').value.trim()
+  const btn = document.getElementById('send-confirm')
+  const stat = document.getElementById('send-status')
+  if (!to || !amt || isNaN(parseFloat(amt)) || parseFloat(amt) <= 0) { toast('Enter valid address and amount'); return }
+  btn.disabled = true; btn.textContent = 'BROADCASTING...'
+  stat.textContent = 'Waiting for wallet signature...'; stat.classList.remove('hidden')
+  try {
+    let hash
+    if (selAsset === 'eth') hash = await NOS.Wallet.sendEth(to, amt)
+    else if (selAsset === 'usdc-base') { await NOS.Wallet.switchChain(8453); hash = await NOS.Wallet.sendUsdc(to, parseFloat(amt), 8453) }
+    else { await NOS.Wallet.switchChain(1); hash = await NOS.Wallet.sendUsdc(to, parseFloat(amt), 1) }
+    toast('TX Sent! ' + hash.slice(0,20) + '...', 8000)
+    document.getElementById('send-modal').classList.add('hidden')
+    document.getElementById('send-to').value = ''
+    document.getElementById('send-amount').value = ''
+    const addr = NOS.Wallet.getAddress()
+    if (addr) onConnected(addr)
+  } catch(e) {
+    stat.textContent = 'Error: ' + (e.shortMessage || e.message || 'rejected')
+    toast('TX failed: ' + (e.shortMessage || e.message || 'rejected'))
+  } finally { btn.disabled = false; btn.textContent = 'EXECUTE_TRANSFER' }
+})
+
+async function copyAddr() {
+  const addr = NOS.Wallet.getAddress()
+  if (!addr) { toast('Connect wallet first'); return }
+  try { await navigator.clipboard.writeText(addr); toast('Address copied') } catch(e) { toast(addr) }
+}
+document.getElementById('copy-addr').addEventListener('click', copyAddr)
+document.getElementById('copy-addr-btn').addEventListener('click', copyAddr)
+
+document.getElementById('xrp-load-btn').addEventListener('click', async () => {
+  const addr = document.getElementById('xrp-input').value.trim()
+  if (!addr || !addr.startsWith('r')) { toast('Enter a valid XRP address (starts with r)'); return }
+  document.getElementById('asset-xrp').textContent = 'Loading...'
+  try {
+    const bal = await NOS.XRPL.getBalance(addr)
+    document.getElementById('asset-xrp').textContent = bal + ' XRP'
+    document.getElementById('xrp-addr-lbl').textContent = addr.slice(0,6) + '...' + addr.slice(-4)
+    toast('XRP balance loaded')
+  } catch(e) { document.getElementById('asset-xrp').textContent = 'Error'; toast('XRP load failed: ' + e.message) }
+})
+
+document.addEventListener('nos:account', e => { const a = e.detail?.address || NOS.Wallet.getAddress(); if(a) onConnected(a) })
+document.addEventListener('nos:chain', () => { const a = NOS.Wallet.getAddress(); if(a) onConnected(a) })
+document.addEventListener('nos:disconnect', onDisconnected)
+
+if (NOS.Wallet.isConnected()) { const a = NOS.Wallet.getAddress(); if(a) onConnected(a) }
+</script>
+</body>
+</html>

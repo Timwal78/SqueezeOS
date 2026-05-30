@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<title>NEURAL_OS | Subscription</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode:"class",
+    theme:{ extend:{
+      "colors":{
+        "primary":"#dbfcff","on-primary":"#00363a","primary-fixed":"#7df4ff","primary-fixed-dim":"#00dbe9",
+        "secondary":"#ebb2ff","secondary-container":"#b600f8","on-secondary-container":"#fff6fc",
+        "tertiary-container":"#00fb40","tertiary-fixed-dim":"#00e639","tertiary":"#ddffd3",
+        "background":"#131315","surface":"#131315","surface-container":"#201f21",
+        "surface-container-high":"#2a2a2c","surface-container-highest":"#353437",
+        "surface-container-low":"#1c1b1d","on-surface":"#e5e1e4","on-surface-variant":"#b9cacb",
+        "outline":"#849495","outline-variant":"#3b494b","error":"#ffb4ab","error-container":"#93000a",
+        "on-error-container":"#ffdad6"
+      },
+      "fontFamily":{"display-lg":["Space Grotesk"],"label-sm":["JetBrains Mono"],"body-md":["Inter"]},
+      "fontSize":{
+        "display-lg":["48px",{"lineHeight":"56px","letterSpacing":"-0.02em","fontWeight":"700"}],
+        "label-sm":["12px",{"lineHeight":"16px","letterSpacing":"0.05em","fontWeight":"500"}],
+        "body-md":["16px",{"lineHeight":"24px","fontWeight":"400"}],
+        "headline-lg-mobile":["24px",{"lineHeight":"32px","fontWeight":"600"}]
+      }
+    }}
+  }
+</script>
+<style>
+  body { background-color:#0A0A0C; min-height:max(884px,100dvh); }
+  .glass { background:rgba(255,255,255,0.05); backdrop-filter:blur(20px); border:1px solid rgba(255,255,255,0.1); }
+  .tier-signal      { border-color: rgba(0,219,233,0.3); }
+  .tier-sovereign   { border-color: rgba(182,0,248,0.4); background: rgba(182,0,248,0.06); }
+  .tier-institutional { border-color: rgba(0,251,64,0.4); background: rgba(0,251,64,0.04); }
+  .glow-cyan   { box-shadow:0 0 30px rgba(0,219,233,0.15); }
+  .glow-purple { box-shadow:0 0 30px rgba(182,0,248,0.2); }
+  .glow-green  { box-shadow:0 0 30px rgba(0,251,64,0.15); }
+  .badge-popular { background: linear-gradient(135deg,#b600f8,#00dbe9); }
+  nav a { text-decoration:none; }
+  .toggle-active { background:#00dbe9; color:#000; }
+  .modal-bg { background:rgba(0,0,0,0.7); backdrop-filter:blur(8px); }
+  .byok-locked { opacity:0.4; pointer-events:none; }
+</style>
+</head>
+<body class="font-body-md text-on-surface">
+
+<header class="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-xl border-b border-white/10 flex justify-between items-center px-5 h-16">
+  <span class="font-display-lg text-headline-lg-mobile tracking-tighter text-primary">NEURAL_OS</span>
+  <button id="hdr-wallet-btn" class="flex items-center gap-2 bg-surface-container-high px-3 py-1.5 rounded-full border border-white/10 hover:border-primary/30 transition-colors active:scale-95">
+    <span class="font-label-sm text-[12px] text-primary" data-nos="eth-balance">--</span>
+    <span class="material-symbols-outlined text-[16px] text-primary">account_balance_wallet</span>
+  </button>
+</header>
+
+<main class="pt-24 pb-32 px-5 max-w-5xl mx-auto">
+
+  <!-- Header -->
+  <div class="text-center mb-10">
+    <h1 class="font-display-lg text-headline-lg-mobile text-on-surface mb-2">Neural_OS Access Tiers</h1>
+    <p class="text-outline text-sm font-label-sm max-w-lg mx-auto">Each tier is strictly gated. Bringing your own API key does not unlock higher-tier features.</p>
+
+    <!-- Annual/Monthly toggle -->
+    <div class="flex items-center justify-center gap-3 mt-6">
+      <span id="lbl-monthly" class="font-label-sm text-[11px] uppercase text-outline">Monthly</span>
+      <button id="period-toggle" onclick="togglePeriod()" class="w-12 h-6 rounded-full bg-surface-container-high border border-white/10 relative transition-all">
+        <span id="toggle-knob" class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-outline transition-all"></span>
+      </button>
+      <span id="lbl-annual" class="font-label-sm text-[11px] uppercase text-outline">Annual <span class="text-tertiary-fixed-dim">save 17%</span></span>
+    </div>
+  </div>
+
+  <!-- Current tier badge -->
+  <div id="current-tier-banner" class="hidden mb-6 glass rounded-xl px-5 py-3 flex items-center gap-3">
+    <span class="material-symbols-outlined text-primary">verified</span>
+    <span class="font-label-sm text-[11px] uppercase text-outline">Current Plan:</span>
+    <span id="current-tier-label" class="font-label-sm text-[12px] text-primary uppercase"></span>
+  </div>
+
+  <!-- FREE tier -->
+  <div class="glass rounded-xl p-5 mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border border-white/5">
+    <div class="flex items-center gap-4">
+      <span class="material-symbols-outlined text-outline text-2xl">explore</span>
+      <div>
+        <h3 class="font-display-lg text-[16px] text-on-surface">FREE — Discovery</h3>
+        <p class="font-label-sm text-[10px] text-outline uppercase mt-0.5">ETH only · 1% tx fee · No agents · No BYOK · Loyalty still accrues</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-3 shrink-0">
+      <div class="text-right">
+        <span class="font-display-lg text-[22px] text-outline">$0</span>
+        <p class="font-label-sm text-[9px] text-outline uppercase">Forever free</p>
+      </div>
+      <span class="font-label-sm text-[10px] uppercase px-3 py-1.5 rounded-lg border border-white/10 text-outline">Current</span>
+    </div>
+  </div>
+
+  <!-- Tier cards -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
+
+    <!-- SIGNAL -->
+    <div class="glass tier-signal rounded-xl p-6 flex flex-col glow-cyan">
+      <div class="flex justify-between items-start mb-4">
+        <div>
+          <span class="font-label-sm text-[10px] text-primary-fixed-dim uppercase tracking-widest block mb-1">Tier 1</span>
+          <h2 class="font-display-lg text-[22px] text-primary">SIGNAL</h2>
+        </div>
+        <span class="material-symbols-outlined text-primary opacity-60">signal_wifi_4_bar</span>
+      </div>
+      <div class="mb-6">
+        <span id="signal-price" class="font-display-lg text-[36px] text-on-surface">$49</span>
+        <span id="signal-period" class="font-label-sm text-[11px] text-outline">/mo</span>
+      </div>
+      <ul class="space-y-2 mb-6 flex-1">
+        <li class="flex items-center gap-2 text-[12px] font-label-sm"><span class="material-symbols-outlined text-primary text-[14px]">check</span>ETH + Base chains</li>
+        <li class="flex items-center gap-2 text-[12px] font-label-sm"><span class="material-symbols-outlined text-primary text-[14px]">check</span>1 AI Agent slot</li>
+        <li class="flex items-center gap-2 text-[12px] font-label-sm"><span class="material-symbols-outlined text-primary text-[14px]">check</span>AIXBT signal feed</li>
+        <li class="flex items-center gap-2 text-[12px] font-label-sm"><span class="material-symbols-outlined text-primary text-[14px]">check</span>0.5% transaction fee</li>
+        <li class="flex items-center gap-2 text-[12px] font-label-sm text-outline"><span class="material-symbols-outlined text-outline text-[14px]">close</span>BYOK API keys</li>
+        <li class="flex items-center gap-2 text-[12px] font-label-sm text-outline"><span class="material-symbols-outlined text-outline text-[14px]">close</span>XRPL access</li>
+        <li class="flex items-center gap-2 text-[12px] font-label-sm text-outline"><span class="material-symbols-outlined text-outline text-[14px]">close</span>Agent-to-agent txns</li>
+      </ul>
+      <div class="grid grid-cols-2 gap-2">
+        <button onclick="showPayModal('signal','usdc')" class="bg-primary text-black py-2.5 rounded-lg font-label-sm text-[11px] uppercase hover:opacity-90 active:scale-95 transition-all">USDC</button>
+        <button onclick="showPayModal('signal','stripe')" class="glass py-2.5 rounded-lg font-label-sm text-[11px] uppercase hover:bg-white/10 active:scale-95 transition-all border border-primary/20">Card</button>
+      </div>
+    </div>
+
+    <!-- SOVEREIGN -->
+    <div class="tier-sovereign rounded-xl p-6 flex flex-col glow-purple relative overflow-hidden" style="background:rgba(182,0,248,0.06);border:1px solid rgba(182,0,248,0.4);">
+      <div class="absolute top-3 right-3 badge-popular text-black text-[9px] font-label-sm uppercase px-2 py-0.5 rounded">Popular</div>
+      <div class="flex justify-between items-start mb-4">
+        <div>
+          <span class="font-label-sm text-[10px] text-secondary uppercase tracking-widest block mb-1">Tier 2</span>
+          <h2 class="font-display-lg text-[22px] text-secondary">SOVEREIGN</h2>
+        </div>
+        <span class="material-symbols-outlined text-secondary opacity-60">workspace_premium</span>
+      </div>
+      <div class="mb-6">
+        <span id="sovereign-price" class="font-display-lg text-[36px] text-on-surface">$199</span>
+        <span id="sovereign-period" class="font-label-sm text-[11px] text-outline">/mo</span>
+      </div>
+      <ul class="space-y-2 mb-6 flex-1">
+        <li class="flex items-center gap-2 text-[12px] font-label-sm"><span class="material-symbols-outlined text-secondary text-[14px]">check</span>ETH + Base + zkSync + ZetaChain</li>
+        <li class="flex items-center gap-2 text-[12px] font-label-sm"><span class="material-symbols-outlined text-secondary text-[14px]">check</span>3 AI Agent slots</li>
+        <li class="flex items-center gap-2 text-[12px] font-label-sm"><span class="material-symbols-outlined text-secondary text-[14px]">check</span>AIXBT full feed + alerts</li>
+        <li class="flex items-center gap-2 text-[12px] font-label-sm"><span class="material-symbols-outlined text-secondary text-[14px]">check</span>0.25% transaction fee</li>
+        <li class="flex items-center gap-2 text-[12px] font-label-sm"><span class="material-symbols-outlined text-secondary text-[14px]">check</span>BYOK Alchemy key</li>
+        <li class="flex items-center gap-2 text-[12px] font-label-sm"><span class="material-symbols-outlined text-secondary text-[14px]">check</span>XRPL access</li>
+        <li class="flex items-center gap-2 text-[12px] font-label-sm"><span class="material-symbols-outlined text-secondary text-[14px]">check</span>Agent-to-agent txns</li>
+      </ul>
+      <div class="grid grid-cols-2 gap-2">
+        <button onclick="showPayModal('sovereign','usdc')" class="py-2.5 rounded-lg font-label-sm text-[11px] uppercase active:scale-95 transition-all text-black" style="background:#b600f8">USDC</button>
+        <button onclick="showPayModal('sovereign','stripe')" class="py-2.5 rounded-lg font-label-sm text-[11px] uppercase active:scale-95 transition-all border" style="border-color:rgba(182,0,248,0.4);color:#ebb2ff">Card</button>
+      </div>
+    </div>
+
+    <!-- INSTITUTIONAL -->
+    <div class="tier-institutional rounded-xl p-6 flex flex-col glow-green" style="background:rgba(0,251,64,0.04);border:1px solid rgba(0,251,64,0.4);">
+      <div class="flex justify-between items-start mb-4">
+        <div>
+          <span class="font-label-sm text-[10px] text-tertiary-fixed-dim uppercase tracking-widest block mb-1">Tier 3</span>
+          <h2 class="font-display-lg text-[22px] text-tertiary-fixed-dim">INSTITUTIONAL</h2>
+        </div>
+        <span class="material-symbols-outlined text-tertiary-fixed-dim opacity-60">corporate_fare</span>
+      </div>
+      <div class="mb-6">
+        <span id="institutional-price" class="font-display-lg text-[36px] text-on-surface">$749</span>
+        <span id="institutional-period" class="font-label-sm text-[11px] text-outline">/mo</span>
+      </div>
+      <ul class="space-y-2 mb-6 flex-1">
+        <li class="flex items-center gap-2 text-[12px] font-label-sm"><span class="material-symbols-outlined text-tertiary-fixed-dim text-[14px]">check</span>All 6 chains incl. HyperEVM</li>
+        <li class="flex items-center gap-2 text-[12px] font-label-sm"><span class="material-symbols-outlined text-tertiary-fixed-dim text-[14px]">check</span>Unlimited AI Agents</li>
+        <li class="flex items-center gap-2 text-[12px] font-label-sm"><span class="material-symbols-outlined text-tertiary-fixed-dim text-[14px]">check</span>Full AIXBT integration</li>
+        <li class="flex items-center gap-2 text-[12px] font-label-sm"><span class="material-symbols-outlined text-tertiary-fixed-dim text-[14px]">check</span>0.1% transaction fee</li>
+        <li class="flex items-center gap-2 text-[12px] font-label-sm"><span class="material-symbols-outlined text-tertiary-fixed-dim text-[14px]">check</span>BYOK all API keys</li>
+        <li class="flex items-center gap-2 text-[12px] font-label-sm"><span class="material-symbols-outlined text-tertiary-fixed-dim text-[14px]">check</span>XRPL + ZetaChain native</li>
+        <li class="flex items-center gap-2 text-[12px] font-label-sm"><span class="material-symbols-outlined text-tertiary-fixed-dim text-[14px]">check</span>Agent-to-agent + MCP</li>
+      </ul>
+      <div class="grid grid-cols-2 gap-2">
+        <button onclick="showPayModal('institutional','usdc')" class="py-2.5 rounded-lg font-label-sm text-[11px] uppercase active:scale-95 transition-all text-black" style="background:#00fb40">USDC</button>
+        <button onclick="showPayModal('institutional','stripe')" class="py-2.5 rounded-lg font-label-sm text-[11px] uppercase active:scale-95 transition-all border" style="border-color:rgba(0,251,64,0.4);color:#00fb40">Card</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Loyalty Progress -->
+  <div id="loyalty-panel" class="glass rounded-xl p-6 mb-6">
+    <div class="flex items-center gap-3 mb-4">
+      <span class="material-symbols-outlined text-primary">military_tech</span>
+      <div>
+        <h3 class="font-display-lg text-[16px]">Loyalty Status</h3>
+        <p class="font-label-sm text-[10px] text-outline uppercase">Cumulative transaction volume — stacks on your subscription fee</p>
+      </div>
+    </div>
+    <div class="flex flex-wrap gap-6 mb-4">
+      <div>
+        <span class="font-label-sm text-[10px] text-outline uppercase block mb-1">Current Tier</span>
+        <span id="loyalty-tier-label" class="font-label-sm text-[14px] uppercase" style="color:#849495">MEMBER</span>
+      </div>
+      <div>
+        <span class="font-label-sm text-[10px] text-outline uppercase block mb-1">Volume</span>
+        <span id="loyalty-volume" class="font-label-sm text-[14px] text-on-surface">$0</span>
+      </div>
+      <div>
+        <span class="font-label-sm text-[10px] text-outline uppercase block mb-1">Transactions</span>
+        <span id="loyalty-txcount" class="font-label-sm text-[14px] text-on-surface">0</span>
+      </div>
+      <div>
+        <span class="font-label-sm text-[10px] text-outline uppercase block mb-1">Fee Discount</span>
+        <span id="loyalty-discount" class="font-label-sm text-[14px] text-tertiary-fixed-dim">0 bps</span>
+      </div>
+      <div>
+        <span class="font-label-sm text-[10px] text-outline uppercase block mb-1">Effective Fee</span>
+        <span id="loyalty-effective-fee" class="font-label-sm text-[14px] text-primary">1.00%</span>
+      </div>
+    </div>
+    <div id="loyalty-progress-wrap">
+      <div class="flex justify-between font-label-sm text-[10px] text-outline uppercase mb-1">
+        <span id="loyalty-progress-label">Progress to SILVER</span>
+        <span id="loyalty-progress-pct">0%</span>
+      </div>
+      <div class="h-2 bg-surface-container-highest rounded-full overflow-hidden">
+        <div id="loyalty-bar" class="h-full rounded-full transition-all duration-700" style="width:0%;background:#849495"></div>
+      </div>
+      <p id="loyalty-next-msg" class="font-label-sm text-[10px] text-outline mt-1"></p>
+    </div>
+    <!-- Tier ladder -->
+    <div class="grid grid-cols-5 gap-1 mt-4">
+      <div class="text-center"><div class="w-6 h-6 rounded-full mx-auto mb-1 bg-outline/30 flex items-center justify-center"><span class="text-[8px]">M</span></div><span class="font-label-sm text-[8px] text-outline block">MEMBER</span><span class="font-label-sm text-[8px] text-outline block">0%</span></div>
+      <div class="text-center"><div class="w-6 h-6 rounded-full mx-auto mb-1 bg-white/20 flex items-center justify-center"><span class="text-[8px]">S</span></div><span class="font-label-sm text-[8px] text-outline block">SILVER</span><span class="font-label-sm text-[8px] text-outline block">-5bps</span></div>
+      <div class="text-center"><div class="w-6 h-6 rounded-full mx-auto mb-1 flex items-center justify-center" style="background:#FFD70030"><span class="text-[8px]" style="color:#FFD700">G</span></div><span class="font-label-sm text-[8px] text-outline block">GOLD</span><span class="font-label-sm text-[8px] text-outline block">-10bps</span></div>
+      <div class="text-center"><div class="w-6 h-6 rounded-full mx-auto mb-1 bg-primary/20 flex items-center justify-center"><span class="text-[8px] text-primary">P</span></div><span class="font-label-sm text-[8px] text-outline block">PLATINUM</span><span class="font-label-sm text-[8px] text-outline block">-20bps</span></div>
+      <div class="text-center"><div class="w-6 h-6 rounded-full mx-auto mb-1 bg-secondary/20 flex items-center justify-center"><span class="text-[8px] text-secondary">E</span></div><span class="font-label-sm text-[8px] text-outline block">ELITE</span><span class="font-label-sm text-[8px] text-outline block">-30bps</span></div>
+    </div>
+  </div>
+
+  <!-- BYOK Panel -->
+  <div id="byok-panel" class="glass rounded-xl p-6 mb-6">
+    <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center gap-3">
+        <span class="material-symbols-outlined text-primary">key</span>
+        <div>
+          <h3 class="font-display-lg text-[16px]">Bring Your Own Key (BYOK)</h3>
+          <p class="font-label-sm text-[10px] text-outline uppercase">Sovereign + Institutional only — features remain tier-locked</p>
+        </div>
+      </div>
+      <span id="byok-lock-icon" class="material-symbols-outlined text-outline">lock</span>
+    </div>
+    <div id="byok-fields" class="space-y-3">
+      <div>
+        <label class="font-label-sm text-[10px] text-outline uppercase block mb-1">Alchemy API Key</label>
+        <div class="flex gap-2">
+          <input id="byok-alchemy" type="password" placeholder="xR7T..." class="flex-1 bg-surface-container-high border border-white/10 rounded-lg px-3 py-2 font-label-sm text-[12px] text-on-surface outline-none focus:border-primary/40"/>
+          <button onclick="saveBYOK('alchemy')" class="bg-primary text-black px-4 py-2 rounded-lg font-label-sm text-[11px] uppercase active:scale-95 transition-all">Save</button>
+        </div>
+      </div>
+    </div>
+    <p id="byok-upgrade-msg" class="hidden font-label-sm text-[11px] text-outline mt-3">Upgrade to Sovereign or Institutional to use BYOK.</p>
+  </div>
+
+  <!-- Fee comparison -->
+  <div class="glass rounded-xl p-5 text-center">
+    <p class="font-label-sm text-[10px] text-outline uppercase mb-2">Bloomberg Terminal costs $2,000/month. Neural_OS Institutional is $749.</p>
+    <p class="font-label-sm text-[10px] text-primary-fixed-dim uppercase">Higher tier = lower transaction fee = more money stays in your wallet.</p>
+  </div>
+
+</main>
+
+<!-- Payment modal -->
+<div id="pay-modal" class="fixed inset-0 z-50 hidden flex items-end justify-center modal-bg" onclick="if(event.target===this)closeModal()">
+  <div class="w-full max-w-md bg-surface-container rounded-t-2xl p-6 border-t border-white/10">
+    <div class="flex justify-between items-center mb-4">
+      <h3 class="font-display-lg text-[18px]" id="modal-title">Confirm Subscription</h3>
+      <button onclick="closeModal()" class="material-symbols-outlined text-outline">close</button>
+    </div>
+    <div class="glass rounded-xl p-4 mb-4">
+      <div class="flex justify-between mb-2">
+        <span class="font-label-sm text-[11px] text-outline uppercase">Tier</span>
+        <span id="modal-tier" class="font-label-sm text-[11px] uppercase text-primary"></span>
+      </div>
+      <div class="flex justify-between mb-2">
+        <span class="font-label-sm text-[11px] text-outline uppercase">Period</span>
+        <span id="modal-period-lbl" class="font-label-sm text-[11px] uppercase text-on-surface"></span>
+      </div>
+      <div class="flex justify-between">
+        <span class="font-label-sm text-[11px] text-outline uppercase">Amount</span>
+        <span id="modal-amount" class="font-label-sm text-[14px] text-primary"></span>
+      </div>
+    </div>
+    <div id="modal-usdc-btn-wrap">
+      <button id="modal-usdc-btn" onclick="payUsdc()" class="w-full bg-primary text-black py-3 rounded-xl font-label-sm text-[12px] uppercase mb-3 active:scale-95 transition-all">
+        Pay with USDC (Base)
+      </button>
+    </div>
+    <div id="modal-stripe-btn-wrap">
+      <button id="modal-stripe-btn" onclick="payStripe()" class="w-full glass border border-white/20 py-3 rounded-xl font-label-sm text-[12px] uppercase active:scale-95 transition-all">
+        Pay with Card (Stripe)
+      </button>
+    </div>
+    <p class="text-center font-label-sm text-[10px] text-outline mt-3">Subscription activates immediately on-chain confirmation</p>
+  </div>
+</div>
+
+<!-- Upgrade prompt modal -->
+<div id="upgrade-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center modal-bg" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="w-full max-w-sm bg-surface-container rounded-2xl p-6 border border-white/10 mx-4">
+    <div class="text-center">
+      <span class="material-symbols-outlined text-secondary text-4xl mb-3 block">upgrade</span>
+      <h3 class="font-display-lg text-[18px] mb-2">Upgrade Required</h3>
+      <p id="upgrade-msg" class="font-label-sm text-[11px] text-outline mb-4"></p>
+      <button onclick="document.getElementById('upgrade-modal').classList.add('hidden')" class="bg-secondary-container text-on-secondary-container px-6 py-2.5 rounded-xl font-label-sm text-[11px] uppercase active:scale-95 transition-all">View Plans</button>
+    </div>
+  </div>
+</div>
+
+<nav class="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center h-20 pb-safe px-4 bg-background/80 backdrop-blur-xl border-t border-white/10">
+  <a class="flex flex-col items-center justify-center text-outline opacity-50 hover:text-primary transition-colors active:scale-90" href="discover.html"><span class="material-symbols-outlined">explore</span><span class="font-label-sm text-[10px] mt-1">Discover</span></a>
+  <a class="flex flex-col items-center justify-center text-outline opacity-50 hover:text-primary transition-colors active:scale-90" href="agents.html"><span class="material-symbols-outlined">memory</span><span class="font-label-sm text-[10px] mt-1">Agents</span></a>
+  <a class="flex flex-col items-center justify-center text-outline opacity-50 hover:text-primary transition-colors active:scale-90" href="wallet.html"><span class="material-symbols-outlined">account_balance_wallet</span><span class="font-label-sm text-[10px] mt-1">Wallet</span></a>
+  <a class="flex flex-col items-center justify-center text-primary active:scale-90" href="subscription.html"><span class="material-symbols-outlined">settings_input_component</span><span class="font-label-sm text-[10px] mt-1">Config</span></a>
+</nav>
+
+<script src="/js/neural-os.iife.js"></script>
+<script>
+let isAnnual = false
+let payTier = 'signal'
+let payMethod = 'usdc'
+
+const PRICES = {
+  signal:        { monthly: 49,  annual: 490  },
+  sovereign:     { monthly: 199, annual: 1990 },
+  institutional: { monthly: 749, annual: 7490 },
+}
+
+// ─── Period toggle ────────────────────────────────────────────────────────────
+function togglePeriod() {
+  isAnnual = !isAnnual
+  const knob = document.getElementById('toggle-knob')
+  knob.style.left = isAnnual ? '26px' : '2px'
+  knob.style.background = isAnnual ? '#00dbe9' : ''
+  updatePrices()
+}
+
+function updatePrices() {
+  const p = isAnnual ? 'annual' : 'monthly'
+  const sfx = isAnnual ? '/yr' : '/mo'
+  for (const t of ['signal','sovereign','institutional']) {
+    document.getElementById(t + '-price').textContent = '$' + PRICES[t][p].toLocaleString()
+    document.getElementById(t + '-period').textContent = sfx
+  }
+}
+
+// ─── Payment modal ────────────────────────────────────────────────────────────
+function showPayModal(tier, method) {
+  payTier = tier; payMethod = method
+  const period = isAnnual ? 'annual' : 'monthly'
+  const amt    = PRICES[tier][period]
+  const labels = { signal:'SIGNAL', sovereign:'SOVEREIGN', institutional:'INSTITUTIONAL' }
+  document.getElementById('modal-tier').textContent      = labels[tier]
+  document.getElementById('modal-period-lbl').textContent = isAnnual ? 'Annual' : 'Monthly'
+  document.getElementById('modal-amount').textContent    = '$' + amt.toLocaleString() + ' USDC'
+  document.getElementById('modal-usdc-btn-wrap').style.display  = method === 'usdc'   ? '' : 'none'
+  document.getElementById('modal-stripe-btn-wrap').style.display = method === 'stripe' ? '' : 'none'
+  document.getElementById('pay-modal').classList.remove('hidden')
+}
+
+function closeModal() { document.getElementById('pay-modal').classList.add('hidden') }
+
+async function payUsdc() {
+  if (!window.NOS) return
+  if (!NOS.Wallet.isConnected()) { await NOS.Wallet.connect().catch(()=>{}) }
+  const period = isAnnual ? 'annual' : 'monthly'
+  try {
+    await NOS.Billing.subscribeCrypto(payTier, period)
+    NOS.Subscription.setTier(payTier)
+    closeModal()
+    updateCurrentTier()
+    alert('Subscription activated!')
+  } catch(e) { alert('Transaction failed: ' + e.message) }
+}
+
+async function payStripe() {
+  if (!window.NOS) return
+  const period = isAnnual ? 'annual' : 'monthly'
+  try {
+    await NOS.Billing.subscribeStripe(payTier, period)
+    NOS.Subscription.setTier(payTier)
+    closeModal()
+  } catch(e) { alert('Stripe error: ' + e.message) }
+}
+
+// ─── BYOK ─────────────────────────────────────────────────────────────────────
+function saveBYOK(service) {
+  const key = document.getElementById('byok-' + service).value.trim()
+  if (!key) return
+  try {
+    NOS.Subscription.setBYOK(service, key)
+    document.getElementById('byok-' + service).value = ''
+    document.getElementById('byok-' + service).placeholder = 'Saved ✓'
+    setTimeout(() => { document.getElementById('byok-' + service).placeholder = service === 'alchemy' ? 'xR7T...' : '' }, 2000)
+  } catch(e) {
+    document.getElementById('upgrade-msg').textContent = e.message
+    document.getElementById('upgrade-modal').classList.remove('hidden')
+  }
+}
+
+function updateByokPanel() {
+  const canByok = window.NOS && NOS.Subscription.canByok()
+  const fields  = document.getElementById('byok-fields')
+  const msg     = document.getElementById('byok-upgrade-msg')
+  const icon    = document.getElementById('byok-lock-icon')
+  if (canByok) {
+    fields.classList.remove('byok-locked')
+    msg.classList.add('hidden')
+    icon.textContent = 'lock_open'
+    icon.style.color = '#00dbe9'
+  } else {
+    fields.classList.add('byok-locked')
+    msg.classList.remove('hidden')
+    icon.textContent = 'lock'
+    icon.style.color = ''
+  }
+}
+
+function updateCurrentTier() {
+  if (!window.NOS) return
+  const tier = NOS.Subscription.getTier()
+  if (tier !== 'signal') {
+    const labels = { sovereign:'SOVEREIGN', institutional:'INSTITUTIONAL' }
+    document.getElementById('current-tier-label').textContent = labels[tier] || tier
+    document.getElementById('current-tier-banner').classList.remove('hidden')
+  }
+  updateByokPanel()
+}
+
+// ─── Upgrade event ────────────────────────────────────────────────────────────
+document.addEventListener('nos:upgrade-required', ({ detail }) => {
+  document.getElementById('upgrade-msg').textContent =
+    `${detail.action || 'This feature'} requires ${detail.needed?.toUpperCase()} tier or higher.`
+  document.getElementById('upgrade-modal').classList.remove('hidden')
+})
+
+document.getElementById('hdr-wallet-btn').addEventListener('click', async () => {
+  if (!window.NOS) return
+  if (NOS.Wallet.isConnected()) window.location.href = 'wallet.html'
+  else { try { await NOS.Wallet.connect() } catch(e) {} }
+})
+
+updatePrices()
+updateCurrentTier()
+updateLoyalty()
+// ─── Loyalty display ──────────────────────────────────────────────────────────
+function updateLoyalty() {
+  if (!window.NOS) return
+  const status = NOS.Loyalty.getStatus()
+  const tier   = status.tier
+
+  document.getElementById('loyalty-tier-label').textContent  = tier.label
+  document.getElementById('loyalty-tier-label').style.color  = tier.color
+  document.getElementById('loyalty-volume').textContent      = '$' + status.volume.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})
+  document.getElementById('loyalty-txcount').textContent     = status.txCount
+  document.getElementById('loyalty-discount').textContent    = tier.discountBps + ' bps'
+  document.getElementById('loyalty-effective-fee').textContent = (NOS.Loyalty.effectiveFeeBps() / 100).toFixed(2) + '%'
+
+  if (status.next) {
+    document.getElementById('loyalty-progress-label').textContent = 'Progress to ' + status.next.label
+    document.getElementById('loyalty-progress-pct').textContent   = status.progressToNext.toFixed(1) + '%'
+    document.getElementById('loyalty-bar').style.width            = status.progressToNext + '%'
+    document.getElementById('loyalty-bar').style.background       = tier.color
+    document.getElementById('loyalty-next-msg').textContent       = '$' + status.volumeToNext.toLocaleString() + ' more volume to unlock ' + status.next.label + ' (−' + status.next.discountBps + ' bps)'
+  } else {
+    document.getElementById('loyalty-progress-label').textContent = 'ELITE — Maximum Loyalty'
+    document.getElementById('loyalty-progress-pct').textContent   = '100%'
+    document.getElementById('loyalty-bar').style.width            = '100%'
+    document.getElementById('loyalty-bar').style.background       = tier.color
+    document.getElementById('loyalty-next-msg').textContent       = 'You have reached the highest loyalty tier.'
+  }
+}
+
+document.addEventListener('nos:loyalty', updateLoyalty)
+
+
+</script>
+</body></html>

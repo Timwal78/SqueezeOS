@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/>
+<title>Neural_OS | Core Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&amp;family=Geist:wght@400;600;700&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+  body { background-color: #0b141c; color: #dae3ee; -webkit-tap-highlight-color: transparent; overflow-x: hidden; }
+  .neural-mesh {
+    background-image: radial-gradient(circle at 2px 2px, #00ff41 1px, transparent 0);
+    background-size: 24px 24px;
+    mask-image: radial-gradient(ellipse at center, black 20%, transparent 70%);
+  }
+  @keyframes scanline { 0%{transform:translateY(-100%);} 100%{transform:translateY(100%);} }
+  .scanline-effect {
+    position:absolute; top:0; left:0; right:0; bottom:0;
+    background:linear-gradient(to bottom,transparent,rgba(0,255,65,0.05),transparent);
+    height:50px; animation:scanline 4s linear infinite; pointer-events:none;
+  }
+  .bento-card { border:1px solid #3b4b37; background:#0d1117; transition:all 0.2s cubic-bezier(0.4,0,0.2,1); }
+  .bento-card:active { transform:scale(0.98); border-color:#00ff41; }
+  nav a { text-decoration:none; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(6px);} to{opacity:1;transform:translateY(0);} }
+  .fade-in { animation:fadeIn 0.4s ease-out forwards; }
+  .loyalty-bar { background:linear-gradient(90deg,#00ff41,#00dbe9); }
+</style>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode:"class",
+    theme: { extend: {
+      "colors": {
+        "tertiary-fixed":"#dee2ec","inverse-primary":"#006e16","tertiary":"#f8f9ff",
+        "on-primary":"#003907","secondary":"#c3c6cf","primary-fixed":"#72ff70",
+        "on-primary-fixed":"#002203","on-background":"#dae3ee","on-primary-container":"#007117",
+        "background":"#0b141c","on-tertiary-container":"#5c6169","on-error-container":"#ffdad6",
+        "on-tertiary-fixed":"#171c23","on-secondary-container":"#b5b8c1","surface-dim":"#0b141c",
+        "surface-variant":"#2d363e","error-container":"#93000a","on-surface":"#dae3ee",
+        "error":"#ffb4ab","inverse-surface":"#dae3ee","on-secondary-fixed":"#181c22",
+        "on-error":"#690005","surface-tint":"#00e639","secondary-fixed":"#dfe2eb",
+        "surface-container":"#182028","on-tertiary":"#2c3138","surface-bright":"#313a43",
+        "primary-fixed-dim":"#00e639","primary-container":"#00ff41","outline":"#84967e",
+        "on-primary-fixed-variant":"#00530e","tertiary-container":"#d9dde6",
+        "surface-container-highest":"#2d363e","on-secondary":"#2d3137",
+        "on-secondary-fixed-variant":"#43474e","outline-variant":"#3b4b37",
+        "surface":"#0b141c","inverse-on-surface":"#29313a","secondary-container":"#454950",
+        "on-surface-variant":"#b9ccb2","surface-container-lowest":"#060f16",
+        "tertiary-fixed-dim":"#c2c7d0","surface-container-low":"#141c24",
+        "primary":"#ebffe2","secondary-fixed-dim":"#c3c6cf","surface-container-high":"#222b33",
+        "on-tertiary-fixed-variant":"#42474f"
+      },
+      "borderRadius":{"DEFAULT":"0.25rem","lg":"0.5rem","xl":"0.75rem","full":"9999px"},
+      "spacing":{"margin-tablet":"24px","margin-mobile":"16px","unit":"4px","gutter":"12px","touch-target-min":"48px"},
+      "fontFamily":{"label-mono":["JetBrains Mono"],"body-sm":["Geist"],"headline-lg-mobile":["Geist"],"headline-md":["Geist"],"body-lg":["Geist"],"headline-lg":["Geist"],"label-caps":["JetBrains Mono"]},
+      "fontSize":{
+        "label-mono":["12px",{"lineHeight":"16px","letterSpacing":"0.05em","fontWeight":"500"}],
+        "body-sm":["14px",{"lineHeight":"20px","fontWeight":"400"}],
+        "headline-lg-mobile":["26px",{"lineHeight":"32px","letterSpacing":"-0.01em","fontWeight":"700"}],
+        "headline-md":["20px",{"lineHeight":"28px","fontWeight":"600"}],
+        "body-lg":["16px",{"lineHeight":"24px","fontWeight":"400"}],
+        "headline-lg":["32px",{"lineHeight":"40px","letterSpacing":"-0.02em","fontWeight":"700"}],
+        "label-caps":["10px",{"lineHeight":"12px","letterSpacing":"0.1em","fontWeight":"700"}]
+      }
+    }}
+  }
+</script>
+<style>body { min-height: max(884px, 100dvh); }</style>
+</head>
+<body class="flex flex-col min-h-screen">
+
+<!-- Status bar -->
+<div class="fixed top-0 left-0 w-full h-8 flex justify-between items-center px-6 z-[100] bg-background">
+  <span class="font-label-mono text-[10px] text-on-surface" id="clock">--:--</span>
+  <div class="flex gap-2 items-center text-on-surface">
+    <span class="material-symbols-outlined text-[14px]">signal_cellular_4_bar</span>
+    <span class="material-symbols-outlined text-[14px]">wifi</span>
+    <span class="material-symbols-outlined text-[14px]">battery_full</span>
+  </div>
+</div>
+
+<header class="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-margin-mobile h-touch-target-min pt-8 bg-background dark:bg-background border-b border-outline-variant dark:border-outline-variant">
+  <div class="flex items-center gap-2">
+    <span class="material-symbols-outlined text-primary-container">terminal</span>
+    <span class="font-label-mono text-label-mono uppercase tracking-widest text-primary-container font-bold">CORE_PROTOCOL_v4</span>
+  </div>
+  <button id="settings-btn" class="hover:bg-surface-variant transition-colors active:scale-95 duration-75 p-2 rounded-full">
+    <span class="material-symbols-outlined text-on-surface-variant">settings_input_component</span>
+  </button>
+</header>
+
+<main class="flex-grow pt-24 pb-32 px-margin-mobile space-y-gutter">
+
+  <!-- Hero: wallet status + portfolio value -->
+  <section class="relative overflow-hidden rounded-xl bg-surface-container-low border border-outline-variant p-6 min-h-[220px] flex flex-col justify-end">
+    <div class="absolute inset-0 neural-mesh opacity-30"></div>
+    <div class="scanline-effect"></div>
+    <div class="relative z-10">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="w-2 h-2 rounded-full bg-primary-container shadow-[0_0_8px_#00ff41]" id="status-dot"></span>
+        <span class="font-label-mono text-label-mono text-primary-container uppercase" id="status-label">Initializing...</span>
+      </div>
+      <h1 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface mb-1" id="hero-title">Neural Grid</h1>
+      <div class="flex items-end gap-3">
+        <span class="font-label-mono text-[22px] text-primary-container" id="portfolio-eth">-- ETH</span>
+        <span class="font-label-mono text-[14px] text-on-surface-variant mb-1" id="portfolio-usd">≈ $--</span>
+      </div>
+      <p class="font-label-mono text-[10px] text-on-surface-variant mt-1" id="wallet-addr">Not connected</p>
+    </div>
+    <div class="absolute top-4 right-4 flex flex-col items-end gap-1">
+      <div class="font-label-caps text-label-caps text-primary-container uppercase" id="tier-badge">FREE</div>
+      <div class="font-label-caps text-[9px] text-on-surface-variant" id="fee-display">1.00% fee</div>
+    </div>
+  </section>
+
+  <!-- Bento grid: key metrics -->
+  <div class="grid grid-cols-2 gap-gutter">
+
+    <!-- Active agents -->
+    <div class="bento-card rounded-lg p-4 flex flex-col justify-between">
+      <div class="flex justify-between items-start">
+        <span class="material-symbols-outlined text-primary-container">memory</span>
+        <span class="font-label-mono text-[10px] text-primary-container" id="agent-running-pct">—</span>
+      </div>
+      <div>
+        <div class="font-label-caps text-label-caps text-on-surface-variant mb-1 uppercase">Agents</div>
+        <div class="font-label-mono text-lg text-on-surface"><span id="agent-running">0</span> <span class="text-xs text-primary-container">RUNNING</span></div>
+        <div class="font-label-mono text-[10px] text-on-surface-variant"><span id="agent-paused">0</span> paused</div>
+      </div>
+    </div>
+
+    <!-- Protocol revenue (fees collected) -->
+    <div class="bento-card rounded-lg p-4 flex flex-col justify-between">
+      <div class="flex justify-between items-start">
+        <span class="material-symbols-outlined text-primary-container">account_balance_wallet</span>
+      </div>
+      <div>
+        <div class="font-label-caps text-label-caps text-on-surface-variant mb-1 uppercase">Vol. Tracked</div>
+        <div class="font-label-mono text-lg text-on-surface">$<span id="loyalty-volume">0</span></div>
+        <div class="font-label-mono text-[10px] text-on-surface-variant"><span id="loyalty-txcount">0</span> txns</div>
+      </div>
+    </div>
+
+    <!-- Loyalty tier card -->
+    <div class="bento-card rounded-lg p-4 col-span-2">
+      <div class="flex justify-between items-center mb-2">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-[16px] text-primary-container">diamond</span>
+          <span class="font-label-caps text-label-caps text-on-surface-variant uppercase">Loyalty</span>
+        </div>
+        <span class="font-label-mono text-[10px] text-primary-container" id="loyalty-tier">MEMBER</span>
+      </div>
+      <div class="flex justify-between items-center mb-1">
+        <span class="font-label-mono text-[10px] text-on-surface-variant">Progress to <span id="loyalty-next">SILVER</span></span>
+        <span class="font-label-mono text-[10px] text-primary-container">$<span id="loyalty-to-next">1,000</span> to go</span>
+      </div>
+      <div class="w-full bg-surface-variant h-1.5 rounded-full overflow-hidden">
+        <div class="loyalty-bar h-full rounded-full transition-all duration-700" id="loyalty-bar" style="width:0%"></div>
+      </div>
+      <div class="flex justify-between mt-1">
+        <span class="font-label-caps text-[8px] text-on-surface-variant">Effective fee: <span id="effective-fee">—</span></span>
+        <span class="font-label-caps text-[8px] text-primary-container">-<span id="loyalty-discount">0</span> bps discount</span>
+      </div>
+    </div>
+
+    <!-- USDC balance -->
+    <div class="bento-card rounded-lg p-4 flex flex-col justify-between">
+      <div class="flex justify-between items-start">
+        <span class="material-symbols-outlined text-primary-container">paid</span>
+      </div>
+      <div>
+        <div class="font-label-caps text-label-caps text-on-surface-variant mb-1 uppercase">USDC</div>
+        <div class="font-label-mono text-lg text-on-surface" id="usdc-balance">--</div>
+      </div>
+    </div>
+
+    <!-- XRP balance -->
+    <div class="bento-card rounded-lg p-4 flex flex-col justify-between">
+      <div class="flex justify-between items-start">
+        <span class="material-symbols-outlined text-primary-container">currency_exchange</span>
+      </div>
+      <div>
+        <div class="font-label-caps text-label-caps text-on-surface-variant mb-1 uppercase">XRP</div>
+        <div class="font-label-mono text-lg text-on-surface" id="xrp-balance">--</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Operational logs: real tx history -->
+  <section class="space-y-3">
+    <h2 class="font-label-mono text-label-mono text-on-surface-variant uppercase flex justify-between items-center px-1">
+      <span>TX History</span>
+      <a href="wallet.html" class="text-[10px] underline">View All</a>
+    </h2>
+    <div class="space-y-2" id="tx-log">
+      <div class="flex items-center justify-center p-6">
+        <span class="font-label-mono text-[10px] text-on-surface-variant">LOADING TRANSACTIONS...</span>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-margin-mobile pb-6 bg-background/80 backdrop-blur-xl border-t border-outline-variant dark:border-outline-variant">
+  <a href="dashboard.html" class="flex flex-col items-center justify-center text-primary-container dark:text-primary-container border-t-2 border-primary-container pt-2 transition-all active:bg-surface-container-highest duration-150">
+    <span class="material-symbols-outlined">hub</span>
+    <span class="font-label-caps text-label-caps uppercase">Nodes</span>
+  </a>
+  <a href="wallet.html" class="flex flex-col items-center justify-center text-on-surface-variant pt-2 hover:text-primary transition-all active:bg-surface-container-highest duration-150">
+    <span class="material-symbols-outlined">account_balance_wallet</span>
+    <span class="font-label-caps text-label-caps uppercase">Ledger</span>
+  </a>
+  <a href="agents.html" class="flex flex-col items-center justify-center text-on-surface-variant pt-2 hover:text-primary transition-all active:bg-surface-container-highest duration-150">
+    <span class="material-symbols-outlined">memory</span>
+    <span class="font-label-caps text-label-caps uppercase">Agents</span>
+  </a>
+  <a href="subscription.html" class="flex flex-col items-center justify-center text-on-surface-variant pt-2 hover:text-primary transition-all active:bg-surface-container-highest duration-150">
+    <span class="material-symbols-outlined">verified_user</span>
+    <span class="font-label-caps text-label-caps uppercase">Tier</span>
+  </a>
+</nav>
+<div class="fixed bottom-1 left-1/2 -translate-x-1/2 w-32 h-1 bg-on-surface-variant/30 rounded-full z-[101]"></div>
+
+<script src="/js/neural-os.iife.js"></script>
+<script>
+// ── Clock ──────────────────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date()
+  document.getElementById('clock').textContent = now.toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit',hour12:false})
+}
+updateClock(); setInterval(updateClock, 10_000)
+
+// ── Bento touch effect ────────────────────────────────────────────────────
+document.querySelectorAll('.bento-card').forEach(card => {
+  card.addEventListener('touchstart', () => { card.style.borderColor = '#00ff41' })
+  card.addEventListener('touchend', () => { setTimeout(() => { card.style.borderColor = '#3b4b37' }, 100) })
+})
+
+// ── Settings nav ───────────────────────────────────────────────────────────
+document.getElementById('settings-btn').addEventListener('click', () => { window.location.href = 'subscription.html' })
+
+// ── Dashboard data loader ─────────────────────────────────────────────────
+async function loadDashboard(address) {
+  // Subscription / tier
+  const tier   = window.NOS?.Subscription?.getTier?.() || 'free'
+  const tierDef = window.NOS?.Subscription?.getDef?.(tier) || {}
+  document.getElementById('tier-badge').textContent = tier.toUpperCase()
+  const feeBps = window.NOS?.Loyalty?.effectiveFeeBps?.() ?? tierDef.feeBps ?? 100
+  document.getElementById('fee-display').textContent = (feeBps / 100).toFixed(2) + '% fee'
+
+  // Loyalty status
+  const loyalty = window.NOS?.Loyalty?.getStatus?.()
+  if (loyalty) {
+    document.getElementById('loyalty-tier').textContent = loyalty.tier?.label || 'MEMBER'
+    document.getElementById('loyalty-next').textContent = loyalty.next?.label || 'SILVER'
+    document.getElementById('loyalty-volume').textContent = (loyalty.volume || 0).toLocaleString('en-US', {maximumFractionDigits:0})
+    document.getElementById('loyalty-txcount').textContent = loyalty.txCount || 0
+    document.getElementById('loyalty-bar').style.width = (loyalty.progressToNext || 0).toFixed(1) + '%'
+    document.getElementById('loyalty-to-next').textContent = (loyalty.volumeToNext || 0).toLocaleString('en-US', {maximumFractionDigits:0})
+    document.getElementById('loyalty-discount').textContent = loyalty.tier?.discountBps || 0
+    document.getElementById('effective-fee').textContent = (feeBps / 100).toFixed(2) + '%'
+  }
+
+  // Agents
+  const agents = window.NOS?.Agents?.all?.() || []
+  const running = agents.filter(a => a.status === 'running').length
+  const paused  = agents.filter(a => a.status === 'paused').length
+  document.getElementById('agent-running').textContent = running
+  document.getElementById('agent-paused').textContent  = paused
+  document.getElementById('agent-running-pct').textContent = agents.length ? Math.round(running/agents.length*100)+'%' : '—'
+
+  if (!address) {
+    document.getElementById('status-dot').style.background = '#849495'
+    document.getElementById('status-label').textContent = 'Wallet Disconnected'
+    document.getElementById('hero-title').textContent = 'Connect Wallet'
+    document.getElementById('portfolio-eth').textContent = '-- ETH'
+    document.getElementById('portfolio-usd').textContent = '≈ $--'
+    document.getElementById('wallet-addr').textContent = 'Tap to connect'
+    document.getElementById('tx-log').innerHTML = '<div class="flex items-center justify-center p-6"><span class="font-label-mono text-[10px] text-on-surface-variant">CONNECT WALLET TO SEE TX HISTORY</span></div>'
+    return
+  }
+
+  // Hero wallet data
+  document.getElementById('status-dot').style.background = '#00ff41'
+  document.getElementById('status-label').textContent = 'Active Neural Grid'
+  document.getElementById('hero-title').textContent = 'Portfolio'
+  document.getElementById('wallet-addr').textContent = address.slice(0,6) + '...' + address.slice(-4)
+
+  // ETH balance + USD
+  try {
+    const eth = await window.NOS.Wallet.getEthBalance(address)
+    document.getElementById('portfolio-eth').textContent = (eth || '0.0000') + ' ETH'
+    fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd')
+      .then(r=>r.json()).then(d => {
+        const usd = (parseFloat(eth||0) * d.ethereum.usd).toLocaleString('en-US', {style:'currency',currency:'USD'})
+        document.getElementById('portfolio-usd').textContent = '≈ ' + usd
+      }).catch(()=>{})
+  } catch(e) {}
+
+  // USDC balance
+  try {
+    const usdc = await window.NOS.Wallet.getUsdcBalance(address)
+    document.getElementById('usdc-balance').textContent = usdc ? '$' + parseFloat(usdc).toLocaleString('en-US',{maximumFractionDigits:2}) : '--'
+  } catch(e) { document.getElementById('usdc-balance').textContent = '--' }
+
+  // XRP balance
+  try {
+    const xrpAddr = window.NOS?.XRPL?.getAddress?.()
+    if (xrpAddr) {
+      const info = await window.NOS.XRPL.getAccountInfo(xrpAddr)
+      const xrpBal = info?.result?.account_data?.Balance
+      if (xrpBal) document.getElementById('xrp-balance').textContent = (parseInt(xrpBal) / 1_000_000).toFixed(2) + ' XRP'
+    }
+  } catch(e) {}
+
+  // TX history
+  loadTxHistory(address)
+}
+
+async function loadTxHistory(address) {
+  const log = document.getElementById('tx-log')
+  try {
+    const txs = await window.NOS.Wallet.getTransfers(address, 8)
+    if (!txs || !txs.length) {
+      log.innerHTML = '<div class="flex items-center justify-center p-6"><span class="font-label-mono text-[10px] text-on-surface-variant">NO TRANSACTIONS FOUND</span></div>'
+      return
+    }
+    log.innerHTML = txs.map(tx => {
+      const dir    = tx.direction === 'out' ? '↑' : '↓'
+      const dirCol = tx.direction === 'out' ? '#ff6b6b' : '#00ff41'
+      const asset  = tx.asset || 'ETH'
+      const val    = tx.value ? parseFloat(tx.value).toFixed(4) : '—'
+      const ts     = tx.metadata?.blockTimestamp
+        ? new Date(tx.metadata.blockTimestamp).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})
+        : '—'
+      const from = tx.direction === 'out' ? tx.to : tx.from
+      const short = from ? from.slice(0,6)+'...'+from.slice(-4) : '—'
+      const hash = tx.hash || ''
+      return `<div class="flex items-center justify-between p-3 border-b border-outline-variant bg-surface-container-low/50 fade-in">
+        <div class="flex items-center gap-3">
+          <span class="font-label-mono text-[14px]" style="color:${dirCol}">${dir}</span>
+          <div>
+            <span class="font-label-mono text-body-sm">${val} ${asset}</span>
+            <div class="font-label-mono text-[10px] text-on-surface-variant">${tx.direction === 'out' ? 'To' : 'From'}: ${short}</div>
+          </div>
+        </div>
+        <div class="text-right">
+          <span class="font-label-mono text-[10px] text-on-surface-variant">${ts}</span>
+          ${hash ? `<div><a href="https://etherscan.io/tx/${hash}" class="font-label-mono text-[9px] text-primary-container underline" target="_blank">VIEW</a></div>` : ''}
+        </div>
+      </div>`
+    }).join('')
+  } catch(e) {
+    log.innerHTML = '<div class="flex items-center justify-center p-6"><span class="font-label-mono text-[10px] text-on-surface-variant">TX HISTORY UNAVAILABLE</span></div>'
+  }
+}
+
+// ── Event wiring ───────────────────────────────────────────────────────────
+document.addEventListener('nos:account', ({ detail }) => loadDashboard(detail.address))
+document.addEventListener('nos:disconnect', () => loadDashboard(null))
+document.addEventListener('nos:tier', () => loadDashboard(window.NOS?.Wallet?.getAddress?.()))
+document.addEventListener('nos:loyalty', () => loadDashboard(window.NOS?.Wallet?.getAddress?.()))
+document.addEventListener('nos:agent', () => {
+  const agents  = window.NOS?.Agents?.all?.() || []
+  const running = agents.filter(a => a.status === 'running').length
+  const paused  = agents.filter(a => a.status === 'paused').length
+  document.getElementById('agent-running').textContent = running
+  document.getElementById('agent-paused').textContent  = paused
+  document.getElementById('agent-running-pct').textContent = agents.length ? Math.round(running/agents.length*100)+'%' : '—'
+})
+
+// Initial load
+setTimeout(() => {
+  if (window.NOS) {
+    const addr = window.NOS.Wallet?.getAddress?.()
+    loadDashboard(addr)
+  }
+}, 300)
+
+// Typewriter on hero title once data loads
+const _origTypewriter = (el) => {
+  const txt = el.textContent
+  el.textContent = ''
+  let i = 0
+  function tw() { if (i < txt.length) { el.textContent += txt.charAt(i); i++; setTimeout(tw, 40) } }
+  setTimeout(tw, 500)
+}
+</script>
+</body></html>
