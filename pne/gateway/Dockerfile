@@ -10,6 +10,7 @@ RUN mkdir src && echo "fn main() {}" > src/main.rs && \
 
 # Build actual source
 COPY src ./src
+COPY .well-known ./.well-known
 RUN touch src/main.rs && cargo build --release
 
 FROM debian:bookworm-slim
