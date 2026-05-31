@@ -313,6 +313,8 @@
 <script>
 const CHAIN_NAMES = { 1: 'ETH Mainnet', 8453: 'Base' }
 let selAsset = 'eth'
+let disconnectPending = false
+let sendHighBalWarn = false
 
 function toast(msg, ms = 4000) {
   const t = document.getElementById('toast')
@@ -383,7 +385,14 @@ async function loadTxs(addr) {
 async function doConnect() {
   if (!window.NOS) { toast('App loading, please wait...'); return }
   if (NOS.Wallet.isConnected()) {
-    if (confirm('Disconnect wallet?')) { await NOS.Wallet.disconnect() }
+    if (disconnectPending) {
+      disconnectPending = false
+      await NOS.Wallet.disconnect()
+    } else {
+      disconnectPending = true
+      toast('Tap again within 3s to disconnect wallet')
+      setTimeout(() => { disconnectPending = false }, 3000)
+    }
   } else {
     try { await NOS.Wallet.connect() } catch(e) { toast('Connection cancelled') }
   }
@@ -426,6 +435,20 @@ document.getElementById('send-confirm').addEventListener('click', async () => {
   const btn = document.getElementById('send-confirm')
   const stat = document.getElementById('send-status')
   if (!to || !amt || isNaN(parseFloat(amt)) || parseFloat(amt) <= 0) { toast('Enter valid address and amount'); return }
+
+  // 90% balance safety gate — require a second tap to confirm high-value sends
+  const availText = document.getElementById('send-avail').textContent.replace(/[^0-9.]/g, '')
+  const available = parseFloat(availText)
+  if (!isNaN(available) && available > 0 && parseFloat(amt) / available > 0.9) {
+    if (!sendHighBalWarn) {
+      sendHighBalWarn = true
+      toast('⚠ SENDING >90% OF BALANCE — tap again to confirm', 5000)
+      setTimeout(() => { sendHighBalWarn = false }, 5000)
+      return
+    }
+  }
+  sendHighBalWarn = false
+
   btn.disabled = true; btn.textContent = 'BROADCASTING...'
   stat.textContent = 'Waiting for wallet signature...'; stat.classList.remove('hidden')
   try {

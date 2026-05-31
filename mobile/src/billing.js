@@ -9,6 +9,23 @@ async function stripe() {
   return _stripe
 }
 
+// Retry saveSubscription with exponential backoff — subscription sync is money-critical
+async function _saveWithRetry(walletAddress, tier, txHash, period, maxRetries = 3) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const ok = await CloudDB.saveSubscription(walletAddress, tier, txHash, period)
+      if (ok) return
+    } catch {}
+    if (attempt < maxRetries - 1) {
+      await new Promise(r => setTimeout(r, 1000 * (2 ** attempt)))
+    }
+  }
+  // All retries exhausted — notify the UI so user knows to sync manually
+  document.dispatchEvent(new CustomEvent('nos:sync-warn', {
+    detail: { message: 'Subscription cloud sync failed — tap Sync to retry.' },
+  }))
+}
+
 export const Billing = {
   /**
    * Card payment via Stripe Checkout.
@@ -44,7 +61,7 @@ export const Billing = {
 
   /**
    * Pay subscription in USDC on Base.
-   * Immediately sets tier and syncs to Supabase after on-chain confirmation.
+   * Returns tx hash after on-chain confirmation. Saves to Supabase with retry.
    */
   subscribeCrypto: async (tier, period = 'monthly') => {
     if (!Wallet.isConnected()) throw new Error('Connect wallet first')
@@ -55,10 +72,10 @@ export const Billing = {
     const usdcAmount = Number(amount) / 1e6
     const hash = await Wallet.sendUsdc(BILLING_WALLET, usdcAmount, 8453)
 
-    // Persist to Supabase — survives app reinstall
     const address = Wallet.getAddress()
     if (address) {
-      CloudDB.saveSubscription(address, tier, hash, period).catch(() => {})
+      // Fire and retry in background — don't block UI on Supabase sync
+      _saveWithRetry(address, tier, hash, period)
     }
 
     return hash

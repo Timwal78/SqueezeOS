@@ -26,7 +26,7 @@ export const Loyalty = {
     data.volume   = (data.volume   || 0) + usdAmount
     data.txCount  = (data.txCount  || 0) + 1
     data.lastTx   = Date.now()
-    localStorage.setItem(LOYALTY_KEY, JSON.stringify(data))
+    try { localStorage.setItem(LOYALTY_KEY, JSON.stringify(data)) } catch {}
     document.dispatchEvent(new CustomEvent('nos:loyalty', { detail: Loyalty.getStatus() }))
     return data
   },
