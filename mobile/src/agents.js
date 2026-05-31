@@ -19,7 +19,7 @@ const DEFAULTS = {
   'wallet-guard':   { status: 'running',  label: 'Wallet Guard',      signalCount: 0 },
   'synt-01':        { status: 'running',  label: 'SYNT-01',           signalCount: 0 },
   'aegis-x':        { status: 'idle',     label: 'AEGIS-X',           signalCount: 0 },
-  'cron-b':         { status: 'error',    label: 'CRON-B',            signalCount: 0 },
+  'cron-b':         { status: 'running',  label: 'CRON-B',            signalCount: 0 },
   'sync-mesh':      { status: 'running',  label: 'SYNC-MESH',         signalCount: 0 },
 }
 

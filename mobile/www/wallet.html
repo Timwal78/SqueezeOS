@@ -381,6 +381,7 @@ async function loadTxs(addr) {
 }
 
 async function doConnect() {
+  if (!window.NOS) { toast('App loading, please wait...'); return }
   if (NOS.Wallet.isConnected()) {
     if (confirm('Disconnect wallet?')) { await NOS.Wallet.disconnect() }
   } else {
@@ -468,7 +469,7 @@ document.addEventListener('nos:account', e => { const a = e.detail?.address || N
 document.addEventListener('nos:chain', () => { const a = NOS.Wallet.getAddress(); if(a) onConnected(a) })
 document.addEventListener('nos:disconnect', onDisconnected)
 
-if (NOS.Wallet.isConnected()) { const a = NOS.Wallet.getAddress(); if(a) onConnected(a) }
+if (window.NOS && NOS.Wallet.isConnected()) { const a = NOS.Wallet.getAddress(); if(a) onConnected(a) }
 </script>
 </body>
 </html>
