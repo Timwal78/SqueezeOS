@@ -71,7 +71,7 @@ export const Subscription = {
 
   setTier: (tier) => {
     if (!TIER_DEFS[tier]) throw new Error(`Unknown tier: ${tier}`)
-    localStorage.setItem(TIER_KEY, tier)
+    try { localStorage.setItem(TIER_KEY, tier) } catch {}
     document.dispatchEvent(new CustomEvent('nos:tier', { detail: { tier } }))
   },
 
@@ -102,7 +102,7 @@ export const Subscription = {
     }
     const current = Subscription.getBYOK()
     current[service] = key
-    localStorage.setItem(BYOK_KEY, JSON.stringify(current))
+    try { localStorage.setItem(BYOK_KEY, JSON.stringify(current)) } catch {}
     document.dispatchEvent(new CustomEvent('nos:byok', { detail: { service } }))
   },
 
@@ -114,7 +114,7 @@ export const Subscription = {
   clearBYOK: (service) => {
     const current = Subscription.getBYOK()
     delete current[service]
-    localStorage.setItem(BYOK_KEY, JSON.stringify(current))
+    try { localStorage.setItem(BYOK_KEY, JSON.stringify(current)) } catch {}
   },
 
   // Returns user's Alchemy key if BYOK enabled, else null (falls back to app key)

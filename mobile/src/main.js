@@ -74,3 +74,41 @@ document.addEventListener('nos:disconnect', clearWalletUI)
 if (Wallet.isConnected()) {
   syncWalletUI(Wallet.getAddress())
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Offline detection — red banner across all pages while network is unavailable
+// ─────────────────────────────────────────────────────────────────────────────
+function injectOfflineBanner() {
+  const banner = document.createElement('div')
+  banner.id = 'nos-offline-banner'
+  banner.style.cssText = [
+    'display:none', 'position:fixed', 'top:0', 'left:0', 'right:0', 'z-index:9999',
+    'background:#93000a', 'color:#ffdad6', 'text-align:center', 'padding:8px 16px',
+    'font-family:"JetBrains Mono",monospace', 'font-size:11px', 'letter-spacing:0.05em',
+    'border-bottom:1px solid #ff6b6b',
+  ].join(';')
+  banner.textContent = '⚠ OFFLINE — Wallet operations suspended. Check your connection before transacting.'
+  document.body.appendChild(banner)
+  const update = () => { banner.style.display = navigator.onLine ? 'none' : 'block' }
+  window.addEventListener('online', update)
+  window.addEventListener('offline', update)
+  update()
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', injectOfflineBanner)
+} else {
+  injectOfflineBanner()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Global event forwarding — nos:sync-warn → page toast (if present)
+// ─────────────────────────────────────────────────────────────────────────────
+document.addEventListener('nos:sync-warn', ({ detail }) => {
+  const t = document.getElementById('toast')
+  if (!t) return
+  t.textContent = '⚠ ' + detail.message
+  t.classList.remove('hidden')
+  clearTimeout(t._t)
+  t._t = setTimeout(() => t.classList.add('hidden'), 8000)
+})

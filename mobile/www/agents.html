@@ -346,8 +346,17 @@
   <a class="flex flex-col items-center justify-center text-outline opacity-50 hover:text-primary transition-colors active:scale-90" href="subscription.html"><span class="material-symbols-outlined">settings_input_component</span><span class="font-label-sm text-[10px] mt-1">Config</span></a>
 </nav>
 
+<div id="toast" style="display:none;position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#161618;border:1px solid rgba(0,219,233,0.3);color:#e5e1e4;padding:0.75rem 1.5rem;border-radius:0.5rem;font-family:'JetBrains Mono',monospace;font-size:12px;z-index:300;transition:all 0.3s;white-space:nowrap;max-width:calc(100vw - 40px);overflow:hidden;text-overflow:ellipsis;"></div>
+
 <script src="/js/neural-os.iife.js"></script>
 <script>
+function toast(msg, ms = 4000) {
+  const t = document.getElementById('toast')
+  if (!t) return
+  t.textContent = msg; t.style.display = 'block'; t.style.opacity = '1'
+  clearTimeout(t._t); t._t = setTimeout(() => { t.style.opacity = '0'; setTimeout(() => { t.style.display = 'none' }, 300) }, ms)
+}
+
 // ─── Header wallet ───────────────────────────────────────────────────────────
 document.getElementById('hdr-wallet-btn').addEventListener('click', async () => {
   if (!window.NOS) return
@@ -372,9 +381,16 @@ function toggleAgent(id) {
   refreshStats()
 }
 
+let _killPending = null
 function killAgent(id) {
   if (!window.NOS) return
-  if (!confirm('Kill agent ' + id + '?')) return
+  if (_killPending !== id) {
+    _killPending = id
+    toast('Tap KILL again to confirm termination of ' + id)
+    setTimeout(() => { if (_killPending === id) _killPending = null }, 3000)
+    return
+  }
+  _killPending = null
   NOS.Agents.kill(id)
   const card = document.getElementById('card-' + id)
   if (card) card.classList.add('agent-killed')
