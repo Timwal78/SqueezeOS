@@ -67,7 +67,7 @@ const BYOK_KEY = 'nos:byok'
 
 export const Subscription = {
   // ── Tier state ─────────────────────────────────────────────────────────────
-  getTier: () => localStorage.getItem(TIER_KEY) || 'signal',
+  getTier: () => localStorage.getItem(TIER_KEY) || 'institutional',
 
   setTier: (tier) => {
     if (!TIER_DEFS[tier]) throw new Error(`Unknown tier: ${tier}`)
@@ -125,7 +125,7 @@ export const Subscription = {
 
   // ── Upgrade prompt helper ──────────────────────────────────────────────────
   requireTier: (needed, action) => {
-    const order = ['signal', 'sovereign', 'institutional']
+    const order = ['free', 'signal', 'sovereign', 'institutional']
     const current = Subscription.getTier()
     if (order.indexOf(current) < order.indexOf(needed)) {
       document.dispatchEvent(new CustomEvent('nos:upgrade-required', {

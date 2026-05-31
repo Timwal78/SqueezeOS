@@ -251,7 +251,7 @@
       </div>
       <span id="byok-lock-icon" class="material-symbols-outlined text-outline">lock</span>
     </div>
-    <div id="byok-fields" class="space-y-3">
+    <div id="byok-fields" class="space-y-3 byok-locked">
       <div>
         <label class="font-label-sm text-[10px] text-outline uppercase block mb-1">Alchemy API Key</label>
         <div class="flex gap-2">
@@ -273,7 +273,7 @@
 
 <!-- Payment modal -->
 <div id="pay-modal" class="fixed inset-0 z-50 hidden flex items-end justify-center modal-bg" onclick="if(event.target===this)closeModal()">
-  <div class="w-full max-w-md bg-surface-container rounded-t-2xl p-6 border-t border-white/10">
+  <div class="w-full max-w-md bg-surface-container rounded-t-2xl p-6 border-t border-white/10" style="max-height:85vh;overflow-y:auto;padding-bottom:max(1.5rem,env(safe-area-inset-bottom))">
     <div class="flex justify-between items-center mb-4">
       <h3 class="font-display-lg text-[18px]" id="modal-title">Confirm Subscription</h3>
       <button onclick="closeModal()" class="material-symbols-outlined text-outline">close</button>
@@ -396,6 +396,7 @@ async function payStripe() {
 
 // ─── BYOK ─────────────────────────────────────────────────────────────────────
 function saveBYOK(service) {
+  if (!window.NOS) return
   const key = document.getElementById('byok-' + service).value.trim()
   if (!key) return
   try {
@@ -430,11 +431,9 @@ function updateByokPanel() {
 function updateCurrentTier() {
   if (!window.NOS) return
   const tier = NOS.Subscription.getTier()
-  if (tier !== 'signal') {
-    const labels = { sovereign:'SOVEREIGN', institutional:'INSTITUTIONAL' }
-    document.getElementById('current-tier-label').textContent = labels[tier] || tier
-    document.getElementById('current-tier-banner').classList.remove('hidden')
-  }
+  const labels = { free:'FREE', signal:'SIGNAL', sovereign:'SOVEREIGN', institutional:'INSTITUTIONAL' }
+  document.getElementById('current-tier-label').textContent = labels[tier] || tier.toUpperCase()
+  document.getElementById('current-tier-banner').classList.remove('hidden')
   updateByokPanel()
 }
 
@@ -483,6 +482,7 @@ function updateLoyalty() {
 }
 
 document.addEventListener('nos:loyalty', updateLoyalty)
+document.addEventListener('nos:tier', updateCurrentTier)
 
 
 </script>
