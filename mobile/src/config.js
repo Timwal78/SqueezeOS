@@ -23,6 +23,13 @@ export const TESTER_WALLETS = (import.meta.env.VITE_TESTER_WALLETS || '')
   .split(',').map(a => a.trim().toLowerCase()).filter(Boolean)
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Beta mode — set VITE_BETA_TIER to 'signal' | 'sovereign' | 'institutional'
+// to grant all users that tier during closed testing.
+// REMOVE THIS SECRET before public launch (revert handled by reverting this config).
+// ─────────────────────────────────────────────────────────────────────────────
+export const BETA_TIER = (import.meta.env.VITE_BETA_TIER || '').toLowerCase() || null
+
+// ─────────────────────────────────────────────────────────────────────────────
 // App base URL — used for Stripe success/cancel redirect URLs.
 // ─────────────────────────────────────────────────────────────────────────────
 export const APP_URL = import.meta.env.VITE_APP_URL || 'https://neuralOS.app'
