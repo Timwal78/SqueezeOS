@@ -269,6 +269,15 @@
     <p class="font-label-sm text-[10px] text-primary-fixed-dim uppercase">Higher tier = lower transaction fee = more money stays in your wallet.</p>
   </div>
 
+  <!-- Sync subscription from server (for Stripe returns / reinstalls) -->
+  <div id="sync-panel" class="glass rounded-xl p-5 flex items-center justify-between mt-4">
+    <div>
+      <p class="font-label-sm text-[11px] text-outline uppercase">Paid by card or reinstalled the app?</p>
+      <p class="font-label-sm text-[10px] text-outline mt-0.5">Connect your wallet to restore your subscription from the server.</p>
+    </div>
+    <button id="sync-btn" onclick="syncSubscription()" class="bg-primary text-black px-4 py-2 rounded-lg font-label-sm text-[11px] uppercase active:scale-95 transition-all whitespace-nowrap ml-4">Sync</button>
+  </div>
+
 </main>
 
 <!-- Payment modal -->
@@ -483,6 +492,38 @@ function updateLoyalty() {
 
 document.addEventListener('nos:loyalty', updateLoyalty)
 document.addEventListener('nos:tier', updateCurrentTier)
+
+// ─── Sync subscription from Supabase ────────────────────────────────────────
+async function syncSubscription() {
+  if (!window.NOS) { alert('App loading, please wait.'); return }
+  if (!NOS.Wallet.isConnected()) {
+    try { await NOS.Wallet.connect() } catch(e) { return }
+  }
+  const btn = document.getElementById('sync-btn')
+  btn.textContent = 'Syncing...'
+  btn.disabled = true
+  try {
+    const address = NOS.Wallet.getAddress()
+    const sub = await NOS.CloudDB.loadSubscription(address)
+    if (sub?.tier && sub.tier !== 'free') {
+      NOS.Subscription.setTier(sub.tier)
+      updateCurrentTier()
+      alert('Subscription restored: ' + sub.tier.toUpperCase())
+    } else {
+      alert('No active subscription found for this wallet.')
+    }
+  } catch(e) {
+    alert('Sync failed: ' + e.message)
+  } finally {
+    btn.textContent = 'Sync'
+    btn.disabled = false
+  }
+}
+
+// Auto-detect Stripe return (?payment=success in URL)
+if (new URLSearchParams(window.location.search).get('payment') === 'success') {
+  setTimeout(() => syncSubscription(), 1500)
+}
 
 
 </script>
