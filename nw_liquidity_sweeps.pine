@@ -2,7 +2,7 @@
 // © AlgoAlpha
 
 //@version=6
-indicator("Nadaraya-Watson Regression Liquidity Sweeps [AlgoAlpha]", "AlgoAlpha - Nadaraya-Watson Regression Liquidity", overlay = false, max_lines_count = 500, max_labels_count = 500)
+indicator("Nadaraya-Watson Regression Liquidity Sweeps [AlgoAlpha]", "NW-Liq-Sw", overlay = false, max_lines_count = 500, max_labels_count = 500)
 
 // ─── Groups ───────────────────────────────────────────────────────────────────
 group_regression = "Regression"
@@ -84,8 +84,7 @@ size_to_size(string s) =>
         =>          size.small
 
 dots(int sc) =>
-    sc >= 6 ? "●●●●●●" : sc == 5 ? "●●●●●○" : sc == 4 ? "●●●●○○" :
-    sc == 3 ? "●●●○○○" : sc == 2 ? "●●○○○○" : sc == 1 ? "●○○○○○" : "○○○○○○"
+    sc >= 6 ? "●●●●●●" : sc == 5 ? "●●●●●○" : sc == 4 ? "●●●●○○" : sc == 3 ? "●●●○○○" : sc == 2 ? "●●○○○○" : sc == 1 ? "●○○○○○" : "○○○○○○"
 
 log_sig(string name, int[] bars, string[] names) =>
     array.unshift(bars, bar_index)
@@ -359,16 +358,13 @@ if barstate.islast
              frame_color  = color.new(chart.fg_color, 55),
              frame_width  = 1)
 
-        // ── Header ──
         tbl_hdr(smart_tbl, 0, "◈  NW LIQUIDITY SWEEPS  " + timeframe.period, tsz)
 
-        // ── Market Bias ──
         tbl_hdr(smart_tbl, 1, "MARKET BIAS", tsz)
         tbl_row(smart_tbl, 2, "Trend",    bias_bull ? "BULLISH  ↑" : "BEARISH  ↓",   b_col, tsz)
         tbl_row(smart_tbl, 3, "Phase",    osc > signal ? "OSC > SIGNAL" : "OSC < SIGNAL", b_col, tsz)
         tbl_row(smart_tbl, 4, "Momentum", mom_txt, mom_col, tsz)
 
-        // ── Oscillator ──
         tbl_hdr(smart_tbl, 5, "OSCILLATOR", tsz)
         tbl_row(smart_tbl, 6, "OSC",      str.tostring(osc,    "#.####"), osc > 0 ? g_col : r_col, tsz)
         tbl_row(smart_tbl, 7, "Signal",   str.tostring(signal, "#.####"), osc > signal ? g_col : r_col, tsz)
@@ -376,14 +372,12 @@ if barstate.islast
         tbl_row(smart_tbl, 9, "Overflow", overflow > 0 ? str.tostring(overflow, "#.##") : "—",
                  overflow > 0 ? color.new(#ff9800, 0) : col_lbl, tsz)
 
-        // ── Regression ──
         tbl_hdr(smart_tbl, 10, "REGRESSION", tsz)
         tbl_row(smart_tbl, 11, "NW Value",   str.tostring(nw_val, format.mintick), col_val, tsz)
         tbl_row(smart_tbl, 12, "vs Close",   nw_vs_txt, close >= nw_val ? g_col : r_col, tsz)
         tbl_row(smart_tbl, 13, "Volatility", str.tostring(volatility, format.mintick), col_val, tsz)
         tbl_row(smart_tbl, 14, "Band Width", str.tostring(volatility * 2, format.mintick), col_val, tsz)
 
-        // ── Active Level ──
         tbl_hdr(smart_tbl, 15, "ACTIVE LEVEL", tsz)
         tbl_row(smart_tbl, 16, "Type",     ltype_txt,   ltype_col, tsz)
         tbl_row(smart_tbl, 17, "Price",    lp_txt,      ltype_col, tsz)
@@ -391,20 +385,17 @@ if barstate.islast
         tbl_row(smart_tbl, 19, "Status",   active_line_type != 0 ? "ACTIVE" : "—",
                  active_line_type != 0 ? g_col : col_lbl, tsz)
 
-        // ── VPIN ──
         tbl_hdr(smart_tbl, 20, "VPIN", tsz)
         tbl_row(smart_tbl, 21, "VPIN", vpin_txt, color.new(vpin_col, 0), tsz)
         tbl_row(smart_tbl, 22, "OFI",  ofi_bull ? "BUY DOMINANT" : "SELL DOMINANT",
                  ofi_bull ? g_col : r_col, tsz)
 
-        // ── Signal Log ──
         tbl_hdr(smart_tbl, 23, "SIGNALS  (last 4)", tsz)
         tbl_row(smart_tbl, 24, s0, get_sage(0, sig_bars), sig_c(s0, g_col, r_col, col_val), tsz)
         tbl_row(smart_tbl, 25, s1, get_sage(1, sig_bars), sig_c(s1, g_col, r_col, col_val), tsz)
         tbl_row(smart_tbl, 26, s2, get_sage(2, sig_bars), sig_c(s2, g_col, r_col, col_val), tsz)
         tbl_row(smart_tbl, 27, s3, get_sage(3, sig_bars), sig_c(s3, g_col, r_col, col_val), tsz)
 
-        // ── Confluence ──
         tbl_hdr(smart_tbl, 28, "CONFLUENCE", tsz)
         tbl_wide(smart_tbl, 29, bs_txt, g_col, tsz)
         tbl_wide(smart_tbl, 30, rs_txt, r_col, tsz)
