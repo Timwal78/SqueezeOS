@@ -304,8 +304,8 @@
         <div class="flex justify-between text-label-sm font-label-sm mb-xs"><span class="text-outline">X402 Batch Queue</span><span id="cron-pct">100%</span></div>
         <div class="h-2 bg-surface-container-highest rounded-full overflow-hidden"><div id="cron-bar" class="h-full bg-primary transition-all duration-1000" style="width:100%"></div></div>
         <div class="flex gap-4 pt-base">
-          <div class="flex flex-col"><span class="text-[10px] text-outline uppercase font-label-sm">Processed</span><span class="text-sm font-label-sm">847</span></div>
-          <div class="flex flex-col"><span class="text-[10px] text-outline uppercase font-label-sm">Queue</span><span class="text-sm font-label-sm">0</span></div>
+          <div class="flex flex-col"><span class="text-[10px] text-outline uppercase font-label-sm">Processed</span><span id="cron-processed" class="text-sm font-label-sm">—</span></div>
+          <div class="flex flex-col"><span class="text-[10px] text-outline uppercase font-label-sm">Status</span><span id="cron-status" class="text-sm font-label-sm">—</span></div>
         </div>
       </div>
       <div class="mt-auto grid grid-cols-2 gap-sm">
@@ -329,10 +329,8 @@
         <div class="h-12 w-[1px] bg-white/10"></div>
         <div><span class="font-label-sm text-[10px] text-outline uppercase tracking-widest block mb-1">Total Signals</span><span id="stat-signals" class="font-display-lg text-headline-lg text-on-surface">—</span></div>
       </div>
-      <div class="hidden md:flex gap-1 h-8 items-end">
-        <div class="w-1 bg-primary/20 h-4"></div><div class="w-1 bg-primary/40 h-6"></div>
-        <div class="w-1 bg-primary/20 h-3"></div><div class="w-1 bg-primary/60 h-8"></div>
-        <div class="w-1 bg-primary h-5"></div><div class="w-1 bg-primary/30 h-6"></div>
+      <div class="hidden md:flex gap-1 h-8 items-end" id="signal-bars">
+        <!-- Populated dynamically from real signal counts -->
       </div>
     </div>
 
@@ -510,12 +508,12 @@ async function loadCronB() {
     const processed = status.processed_today ?? status.signals_processed ?? status.total_signals ?? null
     const uptime    = status.uptime ?? null
     if (processed != null) {
-      document.querySelector('#card-cron-b #cron-pct').textContent =
-        processed > 0 ? processed + ' processed' : 'Live'
+      document.getElementById('cron-processed').textContent = processed.toLocaleString()
+      document.getElementById('cron-pct').textContent = 'Live'
+      document.getElementById('cron-bar').style.width = '100%'
     }
     if (uptime != null) {
-      document.querySelector('#card-cron-b .flex.gap-4 .flex-col:last-child .text-sm').textContent =
-        uptime.toFixed ? uptime.toFixed(1) + '%' : uptime
+      document.getElementById('cron-status').textContent = uptime.toFixed ? uptime.toFixed(1) + '%' : String(uptime)
     }
   } catch {}
 }
@@ -557,11 +555,28 @@ document.addEventListener('nos:agent', (e) => {
   if (e.detail?.id === 'aegis-x' && e.detail?.status === 'running') loadAegisX()
 })
 
+// ─── Signal bar chart — real per-agent signal counts ─────────────────────────
+function updateSignalBars() {
+  if (!window.NOS) return
+  const all    = NOS.Agents.all()
+  const agents = Object.values(all)
+  const bars   = document.getElementById('signal-bars')
+  if (!bars) return
+  const max = Math.max(1, ...agents.map(a => a.signalCount || 0))
+  bars.innerHTML = agents.map(a => {
+    const pct = Math.max(4, Math.round(((a.signalCount || 0) / max) * 32))
+    const col = a.status === 'running' ? 'bg-primary' : 'bg-primary/20'
+    return `<div class="w-1 ${col} rounded-sm transition-all duration-700" style="height:${pct}px" title="${a.label}: ${a.signalCount || 0} signals"></div>`
+  }).join('')
+}
+
 // ─── Boot ────────────────────────────────────────────────────────────────────
 refreshStats()
+updateSignalBars()
 updateWalletGuard()
 loadAIXBT()
 setInterval(loadAIXBT, 60000)
 loadAegisX()
+document.addEventListener('nos:agent', () => { refreshStats(); updateSignalBars() })
 </script>
 </body></html>

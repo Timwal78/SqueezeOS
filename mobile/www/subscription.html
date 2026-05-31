@@ -271,6 +271,23 @@
     <p class="font-label-sm text-[10px] text-primary-fixed-dim uppercase">Higher tier = lower transaction fee = more money stays in your wallet.</p>
   </div>
 
+  <!-- Owner / Tester dev panel — hidden for regular users -->
+  <div id="dev-panel" class="hidden glass rounded-xl p-5 mt-4 border border-yellow-500/20">
+    <div class="flex items-center gap-3 mb-3">
+      <span class="material-symbols-outlined text-yellow-400">developer_mode</span>
+      <div>
+        <p class="font-label-sm text-[12px] text-yellow-400 uppercase">Dev / Tester Access</p>
+        <p class="font-label-sm text-[10px] text-outline">Override tier for testing. Does not affect billing.</p>
+      </div>
+    </div>
+    <div class="grid grid-cols-4 gap-2">
+      <button onclick="devSetTier('free')"          class="glass py-2 rounded-lg font-label-sm text-[10px] uppercase hover:bg-white/10 active:scale-95 transition-all">FREE</button>
+      <button onclick="devSetTier('signal')"        class="glass py-2 rounded-lg font-label-sm text-[10px] uppercase hover:bg-white/10 active:scale-95 transition-all" style="border-color:rgba(0,219,233,0.3)">SIGNAL</button>
+      <button onclick="devSetTier('sovereign')"     class="glass py-2 rounded-lg font-label-sm text-[10px] uppercase hover:bg-white/10 active:scale-95 transition-all" style="border-color:rgba(182,0,248,0.3)">SOVEREIGN</button>
+      <button onclick="devSetTier('institutional')" class="glass py-2 rounded-lg font-label-sm text-[10px] uppercase hover:bg-white/10 active:scale-95 transition-all" style="border-color:rgba(0,251,64,0.3)">INSTITUTIONAL</button>
+    </div>
+  </div>
+
   <!-- Sync subscription from server (for Stripe returns / reinstalls) -->
   <div id="sync-panel" class="glass rounded-xl p-5 flex items-center justify-between mt-4">
     <div>
@@ -551,6 +568,25 @@ async function syncSubscription() {
 if (new URLSearchParams(window.location.search).get('payment') === 'success') {
   setTimeout(() => syncSubscription(), 1500)
 }
+
+// Show dev panel for owner/tester wallets only.
+function checkDevAccess() {
+  if (!window.NOS) return
+  const isPrivileged = NOS.Subscription.isOwner() || NOS.Subscription.isTester()
+  document.getElementById('dev-panel').classList.toggle('hidden', !isPrivileged)
+}
+
+function devSetTier(tier) {
+  if (!window.NOS) return
+  if (!NOS.Subscription.isOwner() && !NOS.Subscription.isTester()) return
+  NOS.Subscription.setTier(tier)
+  updateCurrentTier()
+  toast('Dev: tier set to ' + tier.toUpperCase(), 3000)
+}
+
+document.addEventListener('nos:account', checkDevAccess)
+document.addEventListener('nos:disconnect', checkDevAccess)
+checkDevAccess()
 
 
 </script>

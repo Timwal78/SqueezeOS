@@ -1,7 +1,7 @@
-import { CHAIN_ETH, CHAIN_BASE, CHAIN_ZKSYNC, CHAIN_ZETA, CHAIN_HYPERLIQUID } from './config.js'
+import { CHAIN_ETH, CHAIN_BASE, CHAIN_ZKSYNC, CHAIN_ZETA, CHAIN_HYPERLIQUID, OWNER_WALLETS, TESTER_WALLETS, BETA_TIER } from './config.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tier definitions — enforced client-side; validate server-side before shipping
+// Tier definitions
 // ─────────────────────────────────────────────────────────────────────────────
 export const TIER_DEFS = {
   free: {
@@ -14,7 +14,7 @@ export const TIER_DEFS = {
     agents:       0,
     byok:         false,
     xrpl:         false,
-    feeBps:       100,  // 1% — upgrade to reduce
+    feeBps:       100,
     agentToAgent: false,
     color:        '#849495',
   },
@@ -28,7 +28,7 @@ export const TIER_DEFS = {
     agents:      1,
     byok:        false,
     xrpl:        false,
-    feeBps:      50,   // 0.5%
+    feeBps:      50,
     agentToAgent:false,
     color:       '#00dbe9',
   },
@@ -42,7 +42,7 @@ export const TIER_DEFS = {
     agents:      3,
     byok:        true,
     xrpl:        true,
-    feeBps:      25,   // 0.25%
+    feeBps:      25,
     agentToAgent:true,
     color:       '#b600f8',
   },
@@ -56,18 +56,62 @@ export const TIER_DEFS = {
     agents:      Infinity,
     byok:        true,
     xrpl:        true,
-    feeBps:      10,   // 0.1%
+    feeBps:      10,
     agentToAgent:true,
     color:       '#00fb40',
   },
 }
 
-const TIER_KEY = 'nos:tier'
-const BYOK_KEY = 'nos:byok'
+const TIER_KEY          = 'nos:tier'
+const BYOK_KEY          = 'nos:byok'
+const TIER_VERIFIED_KEY = 'nos:tier-verified'
+const TIER_PERIOD_KEY   = 'nos:tier-period'
+const TIER_PAID_AT_KEY  = 'nos:tier-paid-at'
+
+// Subscription validity windows — how long a payment lasts before re-verification required.
+const PERIOD_TTL = {
+  monthly: 32 * 24 * 60 * 60 * 1000,  // 32 days (buffer)
+  annual:  370 * 24 * 60 * 60 * 1000, // 370 days (buffer)
+}
+
+function _getConnectedAddr() {
+  try { return (window.NOS?.Wallet?.getAddress?.() || '').toLowerCase() } catch { return '' }
+}
 
 export const Subscription = {
   // ── Tier state ─────────────────────────────────────────────────────────────
-  getTier: () => localStorage.getItem(TIER_KEY) || 'institutional',
+
+  getTier: () => {
+    const addr = _getConnectedAddr()
+
+    // Owner wallets — hardcoded lifetime institutional, immune to localStorage manipulation.
+    if (addr && OWNER_WALLETS.includes(addr)) return 'institutional'
+
+    // Tester wallets — can switch tiers freely via UI, no payment needed.
+    if (addr && TESTER_WALLETS.includes(addr)) {
+      return localStorage.getItem(TIER_KEY) || 'free'
+    }
+
+    // Beta mode — all users get this tier during closed testing.
+    // Controlled entirely by VITE_BETA_TIER GitHub secret — no code change needed to enable/disable.
+    if (BETA_TIER && TIER_DEFS[BETA_TIER]) return BETA_TIER
+
+    const tier = localStorage.getItem(TIER_KEY) || 'free'
+    if (tier === 'free') return 'free'
+
+    // Paid tier — verify the server-confirmed timestamp is within subscription window.
+    // This prevents tier from persisting indefinitely if subscription lapses.
+    const verifiedAt = Number(localStorage.getItem(TIER_VERIFIED_KEY) || '0')
+    const period     = localStorage.getItem(TIER_PERIOD_KEY) || 'monthly'
+    const ttl        = PERIOD_TTL[period] || PERIOD_TTL.monthly
+
+    if (Date.now() - verifiedAt > ttl) {
+      // Subscription window elapsed — downgrade until wallet reconnects + server re-confirms.
+      return 'free'
+    }
+
+    return tier
+  },
 
   setTier: (tier) => {
     if (!TIER_DEFS[tier]) throw new Error(`Unknown tier: ${tier}`)
@@ -75,31 +119,51 @@ export const Subscription = {
     document.dispatchEvent(new CustomEvent('nos:tier', { detail: { tier } }))
   },
 
-  getDef: (tier) => TIER_DEFS[tier ?? Subscription.getTier()] ?? TIER_DEFS.signal,
+  // Called by CloudDB sync after confirmed server-side payment record is found.
+  // Sets the tier, period, and verification timestamp atomically.
+  markVerified: (tier, period = 'monthly', paidAt = null) => {
+    try {
+      localStorage.setItem(TIER_KEY,          tier)
+      localStorage.setItem(TIER_VERIFIED_KEY, String(Date.now()))
+      localStorage.setItem(TIER_PERIOD_KEY,   period)
+      if (paidAt) localStorage.setItem(TIER_PAID_AT_KEY, paidAt)
+    } catch {}
+  },
+
+  // Called when owner/tester wallets connect — marks their tier as permanently verified.
+  markOwnerVerified: () => {
+    try {
+      localStorage.setItem(TIER_KEY,          'institutional')
+      localStorage.setItem(TIER_VERIFIED_KEY, String(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000))
+      localStorage.setItem(TIER_PERIOD_KEY,   'annual')
+    } catch {}
+  },
+
+  getDef: (tier) => TIER_DEFS[tier ?? Subscription.getTier()] ?? TIER_DEFS.free,
 
   // ── Feature gates ──────────────────────────────────────────────────────────
-  canAccessChain: (chainId) => {
-    return Subscription.getDef().chains.includes(chainId)
+
+  canAccessChain: (chainId) => Subscription.getDef().chains.includes(chainId),
+  canRunAgents:   (count = 1) => { const max = Subscription.getDef().agents; return max === Infinity || max >= count },
+  canByok:        () => Subscription.getDef().byok,
+  canXrpl:        () => Subscription.getDef().xrpl,
+  canAgentToAgent:() => Subscription.getDef().agentToAgent,
+  getFeeBps:      () => Subscription.getDef().feeBps,
+
+  isOwner: () => {
+    const addr = _getConnectedAddr()
+    return addr ? OWNER_WALLETS.includes(addr) : false
   },
 
-  canRunAgents: (count = 1) => {
-    const max = Subscription.getDef().agents
-    return max === Infinity || max >= count
+  isTester: () => {
+    const addr = _getConnectedAddr()
+    return addr ? TESTER_WALLETS.includes(addr) : false
   },
-
-  canByok: () => Subscription.getDef().byok,
-
-  canXrpl: () => Subscription.getDef().xrpl,
-
-  canAgentToAgent: () => Subscription.getDef().agentToAgent,
-
-  getFeeBps: () => Subscription.getDef().feeBps,
 
   // ── BYOK key management ────────────────────────────────────────────────────
+
   setBYOK: (service, key) => {
-    if (!Subscription.canByok()) {
-      throw new Error('BYOK requires Sovereign or Institutional tier')
-    }
+    if (!Subscription.canByok()) throw new Error('BYOK requires Sovereign or Institutional tier')
     const current = Subscription.getBYOK()
     current[service] = key
     try { localStorage.setItem(BYOK_KEY, JSON.stringify(current)) } catch {}
@@ -107,8 +171,7 @@ export const Subscription = {
   },
 
   getBYOK: () => {
-    try { return JSON.parse(localStorage.getItem(BYOK_KEY) || '{}') }
-    catch { return {} }
+    try { return JSON.parse(localStorage.getItem(BYOK_KEY) || '{}') } catch { return {} }
   },
 
   clearBYOK: (service) => {
@@ -117,20 +180,18 @@ export const Subscription = {
     try { localStorage.setItem(BYOK_KEY, JSON.stringify(current)) } catch {}
   },
 
-  // Returns user's Alchemy key if BYOK enabled, else null (falls back to app key)
   getAlchemyKey: () => {
     if (!Subscription.canByok()) return null
     return Subscription.getBYOK().alchemy || null
   },
 
   // ── Upgrade prompt helper ──────────────────────────────────────────────────
+
   requireTier: (needed, action) => {
     const order = ['free', 'signal', 'sovereign', 'institutional']
     const current = Subscription.getTier()
     if (order.indexOf(current) < order.indexOf(needed)) {
-      document.dispatchEvent(new CustomEvent('nos:upgrade-required', {
-        detail: { needed, action }
-      }))
+      document.dispatchEvent(new CustomEvent('nos:upgrade-required', { detail: { needed, action } }))
       return false
     }
     return true

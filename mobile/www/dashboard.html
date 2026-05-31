@@ -262,13 +262,14 @@ async function loadDashboard(address) {
     document.getElementById('effective-fee').textContent = (feeBps / 100).toFixed(2) + '%'
   }
 
-  // Agents
-  const agents = window.NOS?.Agents?.all?.() || []
-  const running = agents.filter(a => a.status === 'running').length
-  const paused  = agents.filter(a => a.status === 'paused').length
+  // Agents — Agents.all() returns an object, convert to array first
+  const agentsObj  = window.NOS?.Agents?.all?.() || {}
+  const agentsList = Object.values(agentsObj)
+  const running = agentsList.filter(a => a.status === 'running').length
+  const paused  = agentsList.filter(a => a.status === 'paused').length
   document.getElementById('agent-running').textContent = running
   document.getElementById('agent-paused').textContent  = paused
-  document.getElementById('agent-running-pct').textContent = agents.length ? Math.round(running/agents.length*100)+'%' : '—'
+  document.getElementById('agent-running-pct').textContent = agentsList.length ? Math.round(running/agentsList.length*100)+'%' : '—'
 
   if (!address) {
     document.getElementById('status-dot').style.background = '#849495'
@@ -304,18 +305,34 @@ async function loadDashboard(address) {
     document.getElementById('usdc-balance').textContent = usdc ? '$' + parseFloat(usdc).toLocaleString('en-US',{maximumFractionDigits:2}) : '--'
   } catch(e) { document.getElementById('usdc-balance').textContent = '--' }
 
-  // XRP balance
+  // XRP balance — uses persisted address from XRPL.getAddress()
   try {
     const xrpAddr = window.NOS?.XRPL?.getAddress?.()
     if (xrpAddr) {
-      const info = await window.NOS.XRPL.getAccountInfo(xrpAddr)
-      const xrpBal = info?.result?.account_data?.Balance
-      if (xrpBal) document.getElementById('xrp-balance').textContent = (parseInt(xrpBal) / 1_000_000).toFixed(2) + ' XRP'
+      const bal = await window.NOS.XRPL.getBalance(xrpAddr)
+      document.getElementById('xrp-balance').textContent = parseFloat(bal).toFixed(2) + ' XRP'
     }
   } catch(e) {}
 
   // TX history
   loadTxHistory(address)
+}
+
+function _explorerUrl(chainId, hash) {
+  const explorers = {
+    1:    'https://etherscan.io/tx/',
+    8453: 'https://basescan.org/tx/',
+    324:  'https://explorer.zksync.io/tx/',
+    7000: 'https://zetachain.blockscout.com/tx/',
+    999:  'https://explorer.hyperliquid.xyz/tx/',
+  }
+  return (explorers[chainId] || 'https://etherscan.io/tx/') + hash
+}
+
+function _safeText(str) {
+  const d = document.createElement('span')
+  d.textContent = str
+  return d.innerHTML
 }
 
 async function loadTxHistory(address) {
@@ -326,28 +343,31 @@ async function loadTxHistory(address) {
       log.innerHTML = '<div class="flex items-center justify-center p-6"><span class="font-label-mono text-[10px] text-on-surface-variant">NO TRANSACTIONS FOUND</span></div>'
       return
     }
+    const chainId = Number(window.NOS?.Wallet?.getChainId?.() || 1)
     log.innerHTML = txs.map(tx => {
       const dir    = tx.direction === 'out' ? '↑' : '↓'
       const dirCol = tx.direction === 'out' ? '#ff6b6b' : '#00ff41'
-      const asset  = tx.asset || 'ETH'
+      // Sanitize all strings from external API before inserting into DOM
+      const asset  = _safeText(tx.asset || 'ETH')
       const val    = tx.value ? parseFloat(tx.value).toFixed(4) : '—'
       const ts     = tx.metadata?.blockTimestamp
         ? new Date(tx.metadata.blockTimestamp).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})
         : '—'
-      const from = tx.direction === 'out' ? tx.to : tx.from
-      const short = from ? from.slice(0,6)+'...'+from.slice(-4) : '—'
-      const hash = tx.hash || ''
+      const peer  = tx.direction === 'out' ? tx.to : tx.from
+      const short = peer ? _safeText(peer.slice(0,6)+'...'+peer.slice(-4)) : '—'
+      const hash  = tx.hash || ''
+      const label = tx.direction === 'out' ? 'To' : 'From'
       return `<div class="flex items-center justify-between p-3 border-b border-outline-variant bg-surface-container-low/50 fade-in">
         <div class="flex items-center gap-3">
           <span class="font-label-mono text-[14px]" style="color:${dirCol}">${dir}</span>
           <div>
             <span class="font-label-mono text-body-sm">${val} ${asset}</span>
-            <div class="font-label-mono text-[10px] text-on-surface-variant">${tx.direction === 'out' ? 'To' : 'From'}: ${short}</div>
+            <div class="font-label-mono text-[10px] text-on-surface-variant">${label}: ${short}</div>
           </div>
         </div>
         <div class="text-right">
           <span class="font-label-mono text-[10px] text-on-surface-variant">${ts}</span>
-          ${hash ? `<div><a href="https://etherscan.io/tx/${hash}" class="font-label-mono text-[9px] text-primary-container underline" target="_blank">VIEW</a></div>` : ''}
+          ${hash ? `<div><a href="${_explorerUrl(chainId, hash)}" class="font-label-mono text-[9px] text-primary-container underline" target="_blank" rel="noopener noreferrer">VIEW</a></div>` : ''}
         </div>
       </div>`
     }).join('')
@@ -362,12 +382,13 @@ document.addEventListener('nos:disconnect', () => loadDashboard(null))
 document.addEventListener('nos:tier', () => loadDashboard(window.NOS?.Wallet?.getAddress?.()))
 document.addEventListener('nos:loyalty', () => loadDashboard(window.NOS?.Wallet?.getAddress?.()))
 document.addEventListener('nos:agent', () => {
-  const agents  = window.NOS?.Agents?.all?.() || []
-  const running = agents.filter(a => a.status === 'running').length
-  const paused  = agents.filter(a => a.status === 'paused').length
+  const agentsObj  = window.NOS?.Agents?.all?.() || {}
+  const agentsList = Object.values(agentsObj)
+  const running = agentsList.filter(a => a.status === 'running').length
+  const paused  = agentsList.filter(a => a.status === 'paused').length
   document.getElementById('agent-running').textContent = running
   document.getElementById('agent-paused').textContent  = paused
-  document.getElementById('agent-running-pct').textContent = agents.length ? Math.round(running/agents.length*100)+'%' : '—'
+  document.getElementById('agent-running-pct').textContent = agentsList.length ? Math.round(running/agentsList.length*100)+'%' : '—'
 })
 
 // Initial load

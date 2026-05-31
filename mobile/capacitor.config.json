@@ -1,5 +1,5 @@
 {
-  "appId": "com.neuralOS.institutional",
+  "appId": "com.neuralOS.app",
   "appName": "Neural_OS",
   "webDir": "www",
   "server": {
@@ -10,7 +10,8 @@
   },
   "plugins": {
     "SplashScreen": {
-      "launchShowDuration": 0
+      "launchShowDuration": 0,
+      "launchAutoHide": true
     }
   }
 }
