@@ -10,6 +10,12 @@ export const STRIPE_PK       = import.meta.env.VITE_STRIPE_PK       || 'pk_live_
 export const BILLING_WALLET  = import.meta.env.VITE_BILLING_WALLET  || '0x4e14B249D9A4c9c9352D780eCEB508A8eB7a7700'
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Supabase — subscription persistence (public anon key, safe to bundle)
+// ─────────────────────────────────────────────────────────────────────────────
+export const SUPABASE_URL      = import.meta.env.VITE_SUPABASE_URL      || 'https://mkftltqjxeqejztzomzf.supabase.co'
+export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1rZnRsdHFqeGVxZWp6dHpvbXpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4MzMwODEsImV4cCI6MjA5MDQwOTA4MX0.n_OPmJFg2bOmNn1Gdc4gPsgor5iSgQbS04uZ_EFOYlY'
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Chain IDs
 // ─────────────────────────────────────────────────────────────────────────────
 export const CHAIN_ETH         = 1

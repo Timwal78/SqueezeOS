@@ -16,7 +16,7 @@ export default defineConfig({
     lib: {
       entry: resolve(__dirname, 'src/main.js'),
       name: 'NOS',
-      fileName: () => 'neural-os',
+      fileName: () => 'neural-os.iife.js',
       formats: ['iife'],
     },
     outDir: 'www/js',

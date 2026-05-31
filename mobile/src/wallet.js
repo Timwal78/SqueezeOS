@@ -1,5 +1,5 @@
 import { EthereumProvider } from '@walletconnect/ethereum-provider'
-import { BrowserProvider, formatEther, parseEther, Contract, formatUnits } from 'ethers'
+import { BrowserProvider, formatEther, parseEther, Contract, formatUnits, getAddress } from 'ethers'
 import {
   WC_PROJECT_ID, RPC, BILLING_WALLET,
   CHAIN_ETH, CHAIN_BASE, CHAIN_ZKSYNC, CHAIN_HYPERLIQUID, CHAIN_ZETA,
@@ -104,18 +104,21 @@ export const Wallet = {
 
   sendEth: async (to, amountEth) => {
     if (!_ep) throw new Error('Wallet not connected')
+    let toAddr
+    try { toAddr = getAddress(to) } catch { throw new Error('Invalid recipient address (checksum failed)') }
     const signer = await _ep.getSigner()
     const total = parseEther(String(amountEth))
     const fee = total * getFeeBps() / 10000n
     const net  = total - fee
 
-    // Send net amount to recipient
-    const tx = await signer.sendTransaction({ to, value: net })
+    const tx = await signer.sendTransaction({ to: toAddr, value: net })
     await tx.wait(1)
 
-    // Route protocol fee to Neural_OS (non-blocking)
     if (fee > 0n) {
-      signer.sendTransaction({ to: BILLING_WALLET, value: fee }).catch(() => {})
+      signer.sendTransaction({ to: BILLING_WALLET, value: fee }).catch(err => {
+        console.error('[NOS] Protocol fee transfer failed:', err.shortMessage || err.message)
+        document.dispatchEvent(new CustomEvent('nos:fee-warn', { detail: { error: err.message } }))
+      })
     }
 
     trackVolume(Number(amountEth) * 2000) // rough ETH price for loyalty tracking
@@ -124,6 +127,8 @@ export const Wallet = {
 
   sendUsdc: async (to, amountUsdc, chainId = CHAIN_ETH) => {
     if (!_ep) throw new Error('Wallet not connected')
+    let toAddr
+    try { toAddr = getAddress(to) } catch { throw new Error('Invalid recipient address (checksum failed)') }
     const usdcAddr = USDC_ADDRESS[chainId]
     if (!usdcAddr) throw new Error(`USDC not configured for chain ${chainId}`)
     const signer = await _ep.getSigner()
@@ -133,13 +138,14 @@ export const Wallet = {
     const fee    = total * getFeeBps() / 10000n
     const net    = total - fee
 
-    // Send net amount to recipient
-    const tx = await token.transfer(to, net)
+    const tx = await token.transfer(toAddr, net)
     await tx.wait(1)
 
-    // Route protocol fee to Neural_OS (non-blocking)
     if (fee > 0n) {
-      token.transfer(BILLING_WALLET, fee).catch(() => {})
+      token.transfer(BILLING_WALLET, fee).catch(err => {
+        console.error('[NOS] Protocol fee routing failed:', err.shortMessage || err.message)
+        document.dispatchEvent(new CustomEvent('nos:fee-warn', { detail: { error: err.message } }))
+      })
     }
 
     trackVolume(Number(amountUsdc)) // USDC is 1:1 USD

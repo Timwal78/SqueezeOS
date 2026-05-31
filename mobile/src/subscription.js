@@ -67,11 +67,11 @@ const BYOK_KEY = 'nos:byok'
 
 export const Subscription = {
   // ── Tier state ─────────────────────────────────────────────────────────────
-  getTier: () => localStorage.getItem(TIER_KEY) || 'signal',
+  getTier: () => localStorage.getItem(TIER_KEY) || 'institutional',
 
   setTier: (tier) => {
     if (!TIER_DEFS[tier]) throw new Error(`Unknown tier: ${tier}`)
-    localStorage.setItem(TIER_KEY, tier)
+    try { localStorage.setItem(TIER_KEY, tier) } catch {}
     document.dispatchEvent(new CustomEvent('nos:tier', { detail: { tier } }))
   },
 
@@ -102,7 +102,7 @@ export const Subscription = {
     }
     const current = Subscription.getBYOK()
     current[service] = key
-    localStorage.setItem(BYOK_KEY, JSON.stringify(current))
+    try { localStorage.setItem(BYOK_KEY, JSON.stringify(current)) } catch {}
     document.dispatchEvent(new CustomEvent('nos:byok', { detail: { service } }))
   },
 
@@ -114,7 +114,7 @@ export const Subscription = {
   clearBYOK: (service) => {
     const current = Subscription.getBYOK()
     delete current[service]
-    localStorage.setItem(BYOK_KEY, JSON.stringify(current))
+    try { localStorage.setItem(BYOK_KEY, JSON.stringify(current)) } catch {}
   },
 
   // Returns user's Alchemy key if BYOK enabled, else null (falls back to app key)
@@ -125,7 +125,7 @@ export const Subscription = {
 
   // ── Upgrade prompt helper ──────────────────────────────────────────────────
   requireTier: (needed, action) => {
-    const order = ['signal', 'sovereign', 'institutional']
+    const order = ['free', 'signal', 'sovereign', 'institutional']
     const current = Subscription.getTier()
     if (order.indexOf(current) < order.indexOf(needed)) {
       document.dispatchEvent(new CustomEvent('nos:upgrade-required', {
