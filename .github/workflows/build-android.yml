@@ -50,6 +50,12 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
+      - name: Patch Android SDK to API 35
+        run: |
+          sed -i "s/targetSdkVersion = [0-9]*/targetSdkVersion = 35/" android/variables.gradle
+          sed -i "s/compileSdkVersion = [0-9]*/compileSdkVersion = 35/" android/variables.gradle
+          grep -E "targetSdk|compileSdk" android/variables.gradle
+
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
