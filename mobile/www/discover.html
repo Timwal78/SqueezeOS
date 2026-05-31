@@ -182,8 +182,17 @@
   <a class="flex flex-col items-center justify-center text-outline opacity-50 hover:text-primary-fixed-dim transition-colors active:scale-90" href="subscription.html"><span class="material-symbols-outlined">settings_input_component</span><span class="font-label-sm text-label-sm">Config</span></a>
 </nav>
 
+<div id="toast" style="display:none;position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#161618;border:1px solid rgba(0,219,233,0.3);color:#e5e1e4;padding:0.75rem 1.5rem;border-radius:0.5rem;font-family:'JetBrains Mono',monospace;font-size:12px;z-index:300;transition:opacity 0.3s;white-space:nowrap;max-width:calc(100vw - 40px);overflow:hidden;text-overflow:ellipsis;"></div>
+
 <script src="/js/neural-os.iife.js"></script>
 <script>
+function toast(msg, ms = 4000) {
+  const t = document.getElementById('toast')
+  if (!t) return
+  t.textContent = msg; t.style.display = 'block'; t.style.opacity = '1'
+  clearTimeout(t._t); t._t = setTimeout(() => { t.style.opacity = '0'; setTimeout(() => { t.style.display = 'none' }, 300) }, ms)
+}
+
 // ── Wallet header ──────────────────────────────────────────────────────────
 document.getElementById('hdr-wallet-btn').addEventListener('click', async () => {
   if (!window.NOS) return
@@ -195,7 +204,10 @@ si.addEventListener('focus', () => si.parentElement.classList.add('glow-primary'
 si.addEventListener('blur', () => si.parentElement.classList.remove('glow-primary'))
 
 // ── Market prices ──────────────────────────────────────────────────────────
+let _pricesRunning = false
 async function loadPrices() {
+  if (_pricesRunning) return
+  _pricesRunning = true
   try {
     const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum,bitcoin,ripple,aixbt-by-virtuals&vs_currencies=usd&include_24hr_change=true')
     const d = await r.json()
@@ -242,13 +254,16 @@ async function loadPrices() {
     }
     const html = [...items,...items].map(mkItem).join('')
     document.getElementById('ticker-inner').innerHTML = html
-  } catch(e) {}
+  } catch(e) {} finally { _pricesRunning = false }
 }
 loadPrices()
 setInterval(loadPrices, 60_000)
 
 // ── Gas price ──────────────────────────────────────────────────────────────
+let _gasRunning = false
 async function loadGas() {
+  if (_gasRunning) return
+  _gasRunning = true
   try {
     const RPC_ETH = 'https://eth-mainnet.g.alchemy.com/v2/xR7Tl0576BmgNMvF4q_Y8'
     const r = await fetch(RPC_ETH, {
@@ -261,13 +276,16 @@ async function loadGas() {
       document.getElementById('gas-price').textContent = gwei + ' Gwei'
       document.getElementById('gas-fast').textContent = gwei
     }
-  } catch(e) {}
+  } catch(e) {} finally { _gasRunning = false }
 }
 loadGas()
 setInterval(loadGas, 15_000)
 
 // ── AIXBT signals ──────────────────────────────────────────────────────────
+let _signalsRunning = false
 async function loadSignals() {
+  if (_signalsRunning) return
+  _signalsRunning = true
   const feed = document.getElementById('signals-feed')
   try {
     const signals = await window.NOS?.AIXBT?.getSignals?.(6)
@@ -299,7 +317,7 @@ async function loadSignals() {
       <span class="font-label-sm text-outline text-label-sm">SIGNALS REQUIRE WALLET CONNECTION</span>
       <p class="font-label-sm text-[11px] text-outline mt-1">Connect wallet to access AIXBT intelligence feed</p>
     </div>`
-  }
+  } finally { _signalsRunning = false }
 }
 setTimeout(() => { if (window.NOS) loadSignals() }, 1200)
 setInterval(loadSignals, 30_000)
@@ -395,20 +413,20 @@ function renderAgents(list) {
       const agent = AGENTS_CATALOG.find(a => a.id === id)
       if (!agent) return
       if (!window.NOS?.Wallet?.isConnected()) {
-        alert('Connect your wallet to hire agents')
+        toast('Connect your wallet to hire agents')
         return
       }
       const tier = window.NOS?.Subscription?.getTier?.() || 'free'
       const tierOrder = ['free','signal','sovereign','institutional']
       if (tierOrder.indexOf(tier) < tierOrder.indexOf(agent.tier)) {
-        alert(`${agent.name} requires ${agent.tier.toUpperCase()} tier. Upgrade in Config.`)
+        toast(`${agent.name} requires ${agent.tier.toUpperCase()} tier — upgrade in Config.`)
         return
       }
       const agentId = agent.id
       try {
         window.NOS?.Agents?.deploy?.(agentId)
         window.location.href = 'agents.html'
-      } catch(err) { alert('Deploy failed: ' + err.message) }
+      } catch(err) { toast('Deploy failed: ' + (err.message || 'unknown error')) }
     })
   })
 }

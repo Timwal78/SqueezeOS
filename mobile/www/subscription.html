@@ -44,6 +44,8 @@
   .toggle-active { background:#00dbe9; color:#000; }
   .modal-bg { background:rgba(0,0,0,0.7); backdrop-filter:blur(8px); }
   .byok-locked { opacity:0.4; pointer-events:none; }
+  #toast { position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#161618;border:1px solid rgba(0,219,233,0.3);color:#e5e1e4;padding:0.75rem 1.5rem;border-radius:0.5rem;font-family:'JetBrains Mono',monospace;font-size:12px;z-index:300;transition:all 0.3s;white-space:nowrap;max-width:calc(100vw - 40px);overflow:hidden;text-overflow:ellipsis; }
+  #toast.hidden { opacity:0;pointer-events:none;transform:translateX(-50%) translateY(10px); }
 </style>
 </head>
 <body class="font-body-md text-on-surface">
@@ -251,7 +253,7 @@
       </div>
       <span id="byok-lock-icon" class="material-symbols-outlined text-outline">lock</span>
     </div>
-    <div id="byok-fields" class="space-y-3">
+    <div id="byok-fields" class="space-y-3 byok-locked">
       <div>
         <label class="font-label-sm text-[10px] text-outline uppercase block mb-1">Alchemy API Key</label>
         <div class="flex gap-2">
@@ -269,11 +271,20 @@
     <p class="font-label-sm text-[10px] text-primary-fixed-dim uppercase">Higher tier = lower transaction fee = more money stays in your wallet.</p>
   </div>
 
+  <!-- Sync subscription from server (for Stripe returns / reinstalls) -->
+  <div id="sync-panel" class="glass rounded-xl p-5 flex items-center justify-between mt-4">
+    <div>
+      <p class="font-label-sm text-[11px] text-outline uppercase">Paid by card or reinstalled the app?</p>
+      <p class="font-label-sm text-[10px] text-outline mt-0.5">Connect your wallet to restore your subscription from the server.</p>
+    </div>
+    <button id="sync-btn" onclick="syncSubscription()" class="bg-primary text-black px-4 py-2 rounded-lg font-label-sm text-[11px] uppercase active:scale-95 transition-all whitespace-nowrap ml-4">Sync</button>
+  </div>
+
 </main>
 
 <!-- Payment modal -->
 <div id="pay-modal" class="fixed inset-0 z-50 hidden flex items-end justify-center modal-bg" onclick="if(event.target===this)closeModal()">
-  <div class="w-full max-w-md bg-surface-container rounded-t-2xl p-6 border-t border-white/10">
+  <div class="w-full max-w-md bg-surface-container rounded-t-2xl p-6 border-t border-white/10" style="max-height:85vh;overflow-y:auto;padding-bottom:max(1.5rem,env(safe-area-inset-bottom))">
     <div class="flex justify-between items-center mb-4">
       <h3 class="font-display-lg text-[18px]" id="modal-title">Confirm Subscription</h3>
       <button onclick="closeModal()" class="material-symbols-outlined text-outline">close</button>
@@ -325,11 +336,20 @@
   <a class="flex flex-col items-center justify-center text-primary active:scale-90" href="subscription.html"><span class="material-symbols-outlined">settings_input_component</span><span class="font-label-sm text-[10px] mt-1">Config</span></a>
 </nav>
 
+<div id="toast" class="hidden"></div>
+
 <script src="/js/neural-os.iife.js"></script>
 <script>
 let isAnnual = false
 let payTier = 'signal'
 let payMethod = 'usdc'
+
+function toast(msg, ms = 5000) {
+  const t = document.getElementById('toast')
+  if (!t) return
+  t.textContent = msg; t.classList.remove('hidden')
+  clearTimeout(t._t); t._t = setTimeout(() => t.classList.add('hidden'), ms)
+}
 
 const PRICES = {
   signal:        { monthly: 49,  annual: 490  },
@@ -374,28 +394,44 @@ function closeModal() { document.getElementById('pay-modal').classList.add('hidd
 async function payUsdc() {
   if (!window.NOS) return
   if (!NOS.Wallet.isConnected()) { await NOS.Wallet.connect().catch(()=>{}) }
+  if (!NOS.Wallet.isConnected()) return
   const period = isAnnual ? 'annual' : 'monthly'
+  const btn = document.getElementById('modal-usdc-btn')
+  btn.disabled = true; btn.textContent = 'BROADCASTING...'
   try {
-    await NOS.Billing.subscribeCrypto(payTier, period)
+    const hash = await NOS.Billing.subscribeCrypto(payTier, period)
     NOS.Subscription.setTier(payTier)
     closeModal()
     updateCurrentTier()
-    alert('Subscription activated!')
-  } catch(e) { alert('Transaction failed: ' + e.message) }
+    const short = hash.slice(0, 12) + '...'
+    toast(`✓ Subscription activated! TX: ${short} (view on BaseScan)`, 8000)
+  } catch(e) {
+    toast('TX failed: ' + (e.shortMessage || e.message || 'rejected'))
+  } finally {
+    btn.disabled = false; btn.textContent = 'Pay with USDC (Base)'
+  }
 }
 
 async function payStripe() {
   if (!window.NOS) return
   const period = isAnnual ? 'annual' : 'monthly'
+  const btn = document.getElementById('modal-stripe-btn')
+  btn.disabled = true; btn.textContent = 'OPENING CHECKOUT...'
   try {
     await NOS.Billing.subscribeStripe(payTier, period)
-    NOS.Subscription.setTier(payTier)
     closeModal()
-  } catch(e) { alert('Stripe error: ' + e.message) }
+    // Tier is set by Stripe webhook server-side after payment — do NOT set it here
+    toast('Stripe checkout opened. Return here after payment and tap Sync.', 8000)
+  } catch(e) {
+    toast('Stripe error: ' + (e.message || 'Failed to open checkout'))
+  } finally {
+    btn.disabled = false; btn.textContent = 'Pay with Card (Stripe)'
+  }
 }
 
 // ─── BYOK ─────────────────────────────────────────────────────────────────────
 function saveBYOK(service) {
+  if (!window.NOS) return
   const key = document.getElementById('byok-' + service).value.trim()
   if (!key) return
   try {
@@ -430,11 +466,9 @@ function updateByokPanel() {
 function updateCurrentTier() {
   if (!window.NOS) return
   const tier = NOS.Subscription.getTier()
-  if (tier !== 'signal') {
-    const labels = { sovereign:'SOVEREIGN', institutional:'INSTITUTIONAL' }
-    document.getElementById('current-tier-label').textContent = labels[tier] || tier
-    document.getElementById('current-tier-banner').classList.remove('hidden')
-  }
+  const labels = { free:'FREE', signal:'SIGNAL', sovereign:'SOVEREIGN', institutional:'INSTITUTIONAL' }
+  document.getElementById('current-tier-label').textContent = labels[tier] || tier.toUpperCase()
+  document.getElementById('current-tier-banner').classList.remove('hidden')
   updateByokPanel()
 }
 
@@ -483,6 +517,40 @@ function updateLoyalty() {
 }
 
 document.addEventListener('nos:loyalty', updateLoyalty)
+document.addEventListener('nos:tier', updateCurrentTier)
+
+// ─── Sync subscription from Supabase ────────────────────────────────────────
+async function syncSubscription() {
+  if (!window.NOS) { toast('App loading, please wait...'); return }
+  if (!NOS.Wallet.isConnected()) {
+    try { await NOS.Wallet.connect() } catch(e) { return }
+  }
+  if (!NOS.Wallet.isConnected()) return
+  const btn = document.getElementById('sync-btn')
+  btn.textContent = 'Syncing...'
+  btn.disabled = true
+  try {
+    const address = NOS.Wallet.getAddress()
+    const sub = await NOS.CloudDB.loadSubscription(address)
+    if (sub?.tier && sub.tier !== 'free') {
+      NOS.Subscription.setTier(sub.tier)
+      updateCurrentTier()
+      toast('✓ Subscription restored: ' + sub.tier.toUpperCase())
+    } else {
+      toast('No active subscription found for this wallet.')
+    }
+  } catch(e) {
+    toast('Sync failed: ' + (e.message || 'Network error'))
+  } finally {
+    btn.textContent = 'Sync'
+    btn.disabled = false
+  }
+}
+
+// Auto-detect Stripe return (?payment=success in URL)
+if (new URLSearchParams(window.location.search).get('payment') === 'success') {
+  setTimeout(() => syncSubscription(), 1500)
+}
 
 
 </script>

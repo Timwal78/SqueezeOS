@@ -6,20 +6,79 @@ import { BILLING_WALLET, CHAIN_BASE, USDC_ADDRESS } from './config.js'
 
 // Price per call in USDC micro-units (6 decimals)
 export const ENDPOINTS = {
-  'rwa/alpha':        { price: 500_000n,   label: 'RWA Alpha Signal',      tier: 'signal'        },
-  'rwa/deep':         { price: 2_000_000n, label: 'Deep Institutional Read', tier: 'sovereign'    },
-  'rwa/council':      { price: 5_000_000n, label: 'Full Council Verdict',   tier: 'institutional' },
-  'agents/hire':      { price: 1_000_000n, label: 'Agent Hire Request',     tier: 'sovereign'     },
-  'agents/swarm':     { price: 250_000n,   label: 'Swarm Ping',             tier: 'signal'        },
-  'market/sentiment': { price: 300_000n,   label: 'Market Sentiment Scan',  tier: 'signal'        },
-  'xrpl/settlement':  { price: 750_000n,   label: 'XRPL Settlement Route',  tier: 'sovereign'     },
+  'rwa/alpha':        { price: 500_000n,   label: 'RWA Alpha Signal',        tier: 'signal'        },
+  'rwa/deep':         { price: 2_000_000n, label: 'Deep Institutional Read',  tier: 'sovereign'     },
+  'rwa/council':      { price: 5_000_000n, label: 'Full Council Verdict',     tier: 'institutional' },
+  'agents/hire':      { price: 1_000_000n, label: 'Agent Hire Request',       tier: 'sovereign'     },
+  'agents/swarm':     { price: 250_000n,   label: 'Swarm Ping',               tier: 'signal'        },
+  'market/sentiment': { price: 300_000n,   label: 'Market Sentiment Scan',    tier: 'signal'        },
+  'xrpl/settlement':  { price: 750_000n,   label: 'XRPL Settlement Route',    tier: 'sovereign'     },
 }
 
-const SESSION_KEY  = 'nos:agent-sessions'
-const SWARM_KEY    = 'nos:swarm-hits'
-const SESSION_TTL  = 60 * 60 * 1000  // 1 hour
+const SESSION_KEY = 'nos:agent-sessions'
+const SWARM_KEY   = 'nos:swarm-hits'
+const SECRET_KEY  = 'nos:agent-secret'
+const SESSION_TTL = 60 * 60 * 1000  // 1 hour
 
 function _now() { return Date.now() }
+
+// Per-device HMAC secret — persisted so tokens survive page refresh
+function _getOrCreateSecret() {
+  let secret = localStorage.getItem(SECRET_KEY)
+  if (!secret) {
+    const bytes = new Uint8Array(32)
+    crypto.getRandomValues(bytes)
+    secret = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('')
+    try { localStorage.setItem(SECRET_KEY, secret) } catch {}
+  }
+  return secret
+}
+
+async function _hmacKey(usage) {
+  return crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(_getOrCreateSecret()),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    [usage],
+  )
+}
+
+function _b64url(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+}
+
+function _b64urlDecode(s) {
+  return Uint8Array.from(
+    atob(s.replace(/-/g, '+').replace(/_/g, '/')),
+    c => c.charCodeAt(0),
+  )
+}
+
+// Mint a HMAC-SHA256 signed session token (Web Crypto — not forgeable client-side)
+async function _mintToken(agentWallet, endpoint, exp) {
+  const payload = btoa(JSON.stringify({ w: agentWallet, e: endpoint, exp }))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+  const key    = await _hmacKey('sign')
+  const sigBuf = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload))
+  return `${payload}.${_b64url(sigBuf)}`
+}
+
+// Verify HMAC signature AND expiry
+async function _verifyToken(token) {
+  try {
+    const [payload, sig] = token.split('.')
+    if (!payload || !sig) return null
+    const data = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')))
+    if (data.exp < _now()) return null
+    const key   = await _hmacKey('verify')
+    const valid = await crypto.subtle.verify(
+      'HMAC', key, _b64urlDecode(sig), new TextEncoder().encode(payload),
+    )
+    return valid ? data : null
+  } catch { return null }
+}
 
 function _loadSessions() {
   try { return JSON.parse(sessionStorage.getItem(SESSION_KEY) || '{}') }
@@ -39,48 +98,27 @@ function _saveSwarm(s) {
   try { localStorage.setItem(SWARM_KEY, JSON.stringify(s)) } catch {}
 }
 
-// Generates a simple signed token string (not cryptographic — demo-grade).
-// Production: replace with HMAC-SHA256 via SubtleCrypto.
-function _mintToken(agentWallet, endpoint, exp) {
-  const payload = btoa(JSON.stringify({ w: agentWallet, e: endpoint, exp }))
-  const sig     = btoa(`${agentWallet}:${endpoint}:${exp}:NOS_RUNTIME_v1`)
-  return `${payload}.${sig}`
-}
-
-function _verifyToken(token) {
-  try {
-    const [payload] = token.split('.')
-    const data = JSON.parse(atob(payload))
-    if (data.exp < _now()) return null
-    return data
-  } catch { return null }
-}
-
 export const AgentRuntime = {
   // Called by an AI agent to open a paid session.
-  // Returns { token, exp, endpoint, price } or throws.
+  // Returns { token, exp, endpoint, priceUsdc } or throws.
   createSession: async (agentWallet, endpoint) => {
     const def = ENDPOINTS[endpoint]
     if (!def) throw new Error(`Unknown endpoint: ${endpoint}`)
 
-    // Check wallet connected — agent must own a wallet to pay
     if (!window.NOS?.Wallet?.isConnected()) {
       throw new Error('Wallet not connected — agent must connect first')
     }
 
-    // Charge the agent: transfer USDC on Base to BILLING_WALLET
     const priceUsdc = Number(def.price) / 1_000_000
     await window.NOS.Wallet.sendUsdc(BILLING_WALLET, priceUsdc, CHAIN_BASE)
 
     const exp   = _now() + SESSION_TTL
-    const token = _mintToken(agentWallet, endpoint, exp)
+    const token = await _mintToken(agentWallet, endpoint, exp)
 
-    // Persist session
     const sessions = _loadSessions()
     sessions[token] = { agentWallet, endpoint, exp, created: _now() }
     _saveSessions(sessions)
 
-    // Track swarm activity
     const swarm = _loadSwarm()
     swarm.hits++
     swarm.volume = (swarm.volume || 0) + priceUsdc
@@ -90,15 +128,15 @@ export const AgentRuntime = {
     _saveSwarm(swarm)
 
     document.dispatchEvent(new CustomEvent('nos:agent-session', {
-      detail: { agentWallet, endpoint, exp, priceUsdc }
+      detail: { agentWallet, endpoint, exp, priceUsdc },
     }))
 
     return { token, exp, endpoint, priceUsdc }
   },
 
-  // Validate an existing session token.
-  verifySession: (token) => {
-    const data = _verifyToken(token)
+  // Validate an existing session token — async due to HMAC verification
+  verifySession: async (token) => {
+    const data    = await _verifyToken(token)
     if (!data) return null
     const sessions = _loadSessions()
     const session  = sessions[token]
@@ -107,7 +145,7 @@ export const AgentRuntime = {
     return session
   },
 
-  // Get swarm telemetry (how many AI agents have transacted through Neural_OS)
+  // Get swarm telemetry
   getSwarmStats: () => {
     const swarm = _loadSwarm()
     return {
