@@ -3,18 +3,53 @@ import { BrowserProvider, formatEther, parseEther, Contract, formatUnits, getAdd
 import {
   WC_PROJECT_ID, RPC, BILLING_WALLET,
   CHAIN_ETH, CHAIN_BASE, CHAIN_ZKSYNC, CHAIN_HYPERLIQUID, CHAIN_ZETA,
-  USDC_ADDRESS,
+  USDC_ADDRESS, ALCHEMY_KEY,
 } from './config.js'
+import { Price } from './price.js'
 
-// Effective fee = subscription tier fee − loyalty discount (floor 0.01%)
 function getFeeBps() {
   try { return BigInt(window.NOS?.Loyalty?.effectiveFeeBps?.() ?? 100) }
   catch { return 100n }
 }
 
-// Track volume for loyalty after a confirmed transaction
-function trackVolume(usdAmount) {
-  try { window.NOS?.Loyalty?.addVolume?.(usdAmount) } catch {}
+async function trackVolume(amountUsd) {
+  try {
+    const usd = typeof amountUsd === 'number' ? amountUsd : Number(amountUsd)
+    window.NOS?.Loyalty?.addVolume?.(usd)
+  } catch {}
+}
+
+// Collect and confirm a protocol fee transaction.
+// Awaited separately so the user's main tx is not blocked, but failures are logged.
+async function collectFee(signer, to, value) {
+  try {
+    const feeTx = await signer.sendTransaction({ to, value })
+    await feeTx.wait(1)
+  } catch (err) {
+    console.error('[NOS] Protocol fee collection failed:', err.shortMessage || err.message)
+    document.dispatchEvent(new CustomEvent('nos:fee-warn', { detail: { error: err.message } }))
+    // Persist failed fee for manual reconciliation
+    try {
+      const failed = JSON.parse(localStorage.getItem('nos:failed-fees') || '[]')
+      failed.push({ ts: Date.now(), to, value: value.toString(), err: err.message })
+      localStorage.setItem('nos:failed-fees', JSON.stringify(failed.slice(-50)))
+    } catch {}
+  }
+}
+
+async function collectTokenFee(token, to, amount) {
+  try {
+    const feeTx = await token.transfer(to, amount)
+    await feeTx.wait(1)
+  } catch (err) {
+    console.error('[NOS] Protocol fee routing failed:', err.shortMessage || err.message)
+    document.dispatchEvent(new CustomEvent('nos:fee-warn', { detail: { error: err.message } }))
+    try {
+      const failed = JSON.parse(localStorage.getItem('nos:failed-fees') || '[]')
+      failed.push({ ts: Date.now(), to, value: amount.toString(), err: err.message })
+      localStorage.setItem('nos:failed-fees', JSON.stringify(failed.slice(-50)))
+    } catch {}
+  }
 }
 
 const ERC20_ABI = [
@@ -107,21 +142,22 @@ export const Wallet = {
     let toAddr
     try { toAddr = getAddress(to) } catch { throw new Error('Invalid recipient address (checksum failed)') }
     const signer = await _ep.getSigner()
-    const total = parseEther(String(amountEth))
-    const fee = total * getFeeBps() / 10000n
-    const net  = total - fee
+    const total  = parseEther(String(amountEth))
+    const fee    = total * getFeeBps() / 10000n
+    const net    = total - fee
 
     const tx = await signer.sendTransaction({ to: toAddr, value: net })
     await tx.wait(1)
 
     if (fee > 0n) {
-      signer.sendTransaction({ to: BILLING_WALLET, value: fee }).catch(err => {
-        console.error('[NOS] Protocol fee transfer failed:', err.shortMessage || err.message)
-        document.dispatchEvent(new CustomEvent('nos:fee-warn', { detail: { error: err.message } }))
-      })
+      // Fire protocol fee collection after user tx confirmed; logged on failure.
+      collectFee(signer, BILLING_WALLET, fee)
     }
 
-    trackVolume(Number(amountEth) * 2000) // rough ETH price for loyalty tracking
+    // Use live ETH price for accurate loyalty tracking.
+    const ethPrice = await Price.getEth()
+    await trackVolume(Number(amountEth) * ethPrice)
+
     return tx.hash
   },
 
@@ -142,13 +178,12 @@ export const Wallet = {
     await tx.wait(1)
 
     if (fee > 0n) {
-      token.transfer(BILLING_WALLET, fee).catch(err => {
-        console.error('[NOS] Protocol fee routing failed:', err.shortMessage || err.message)
-        document.dispatchEvent(new CustomEvent('nos:fee-warn', { detail: { error: err.message } }))
-      })
+      collectTokenFee(token, BILLING_WALLET, fee)
     }
 
-    trackVolume(Number(amountUsdc)) // USDC is 1:1 USD
+    // USDC is 1:1 USD — no price lookup needed.
+    await trackVolume(Number(amountUsdc))
+
     return tx.hash
   },
 
@@ -160,7 +195,6 @@ export const Wallet = {
     })
   },
 
-  /** Returns chain name string for UI display */
   getChainName: (chainId) => ({
     [CHAIN_ETH]:         'Ethereum',
     [CHAIN_BASE]:        'Base',
@@ -169,10 +203,11 @@ export const Wallet = {
     [CHAIN_ZETA]:        'ZetaChain',
   })[chainId] ?? `Chain ${chainId}`,
 
-  /** Fetch EVM asset transfer history via Alchemy getAssetTransfers */
+  // Fetch EVM asset transfer history via Alchemy. Requires ALCHEMY_KEY.
   getTransfers: async (address, limit = 10) => {
+    if (!ALCHEMY_KEY) return []
     const chainId = _wc ? Number(_wc.chainId) : CHAIN_ETH
-    const rpcUrl = RPC[chainId] || RPC[CHAIN_ETH]
+    const rpcUrl  = RPC[chainId] || RPC[CHAIN_ETH]
     const hexLimit = '0x' + Math.min(limit, 100).toString(16)
     const [sentRes, recvRes] = await Promise.allSettled([
       fetch(rpcUrl, {

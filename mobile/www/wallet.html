@@ -129,54 +129,34 @@
     <div class="md:col-span-7 glass-panel rounded-xl p-md flex flex-col justify-between">
       <div>
         <h3 class="font-label-sm text-primary mb-md flex items-center gap-xs">
-          <span class="material-symbols-outlined text-[18px]">bar_chart</span> PROTOCOL_FEE_BREAKDOWN
+          <span class="material-symbols-outlined text-[18px]">bar_chart</span> PROTOCOL_ACTIVITY
         </h3>
-        <div class="space-y-sm">
+        <div class="space-y-sm" id="protocol-stats">
           <div class="space-y-1">
-            <div class="flex justify-between font-label-sm"><span class="text-on-surface-variant">X402 Protocol (Relay)</span><span>42%</span></div>
-            <div class="h-2 bg-white/5 rounded-full overflow-hidden"><div class="h-full bg-primary-container w-[42%]"></div></div>
+            <div class="flex justify-between font-label-sm"><span class="text-on-surface-variant">X402 Agent Sessions</span><span id="proto-sessions">—</span></div>
+            <div class="h-2 bg-white/5 rounded-full overflow-hidden"><div id="proto-sessions-bar" class="h-full bg-primary-container transition-all duration-700" style="width:0%"></div></div>
           </div>
           <div class="space-y-1">
-            <div class="flex justify-between font-label-sm"><span class="text-on-surface-variant">AIXBT Neural Relay</span><span>35%</span></div>
-            <div class="h-2 bg-white/5 rounded-full overflow-hidden"><div class="h-full bg-secondary-container w-[35%]"></div></div>
+            <div class="flex justify-between font-label-sm"><span class="text-on-surface-variant">X402 Volume (USDC)</span><span id="proto-volume">—</span></div>
+            <div class="h-2 bg-white/5 rounded-full overflow-hidden"><div id="proto-volume-bar" class="h-full bg-secondary-container transition-all duration-700" style="width:0%"></div></div>
           </div>
           <div class="space-y-1">
-            <div class="flex justify-between font-label-sm"><span class="text-on-surface-variant">ZK Compute Proofs</span><span>23%</span></div>
-            <div class="h-2 bg-white/5 rounded-full overflow-hidden"><div class="h-full bg-tertiary-fixed-dim w-[23%]"></div></div>
+            <div class="flex justify-between font-label-sm"><span class="text-on-surface-variant">Unique Agent Wallets</span><span id="proto-agents">—</span></div>
+            <div class="h-2 bg-white/5 rounded-full overflow-hidden"><div id="proto-agents-bar" class="h-full bg-tertiary-fixed-dim transition-all duration-700" style="width:0%"></div></div>
           </div>
         </div>
       </div>
       <div class="mt-lg pt-md border-t border-white/10 flex justify-between items-center">
-        <span class="font-label-sm text-outline">Total Fees (24h)</span>
-        <span class="font-label-sm text-primary" id="fees-24h">-- ETH</span>
+        <span class="font-label-sm text-outline">Your Effective Fee</span>
+        <span class="font-label-sm text-primary" id="proto-fee-rate">— %</span>
       </div>
     </div>
     <div class="md:col-span-5 glass-panel rounded-xl p-md">
       <h3 class="font-label-sm text-primary mb-md flex items-center gap-xs">
-        <span class="material-symbols-outlined text-[18px]">hub</span> AGENT_NODE_DRAIN
+        <span class="material-symbols-outlined text-[18px]">hub</span> ACTIVE_AGENTS
       </h3>
-      <div class="space-y-md">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-sm">
-            <div class="w-1.5 h-1.5 bg-tertiary-fixed-dim pulsing-dot rounded-full"></div>
-            <div><p class="font-label-sm text-on-surface">Commerce_Strategist_Pro</p><p class="text-[10px] text-outline font-label-sm">NODE_ID: 0x92...f2</p></div>
-          </div>
-          <span class="font-label-sm text-primary">0.002 <span class="text-[10px] opacity-60">ETH/hr</span></span>
-        </div>
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-sm">
-            <div class="w-1.5 h-1.5 bg-tertiary-fixed-dim pulsing-dot rounded-full"></div>
-            <div><p class="font-label-sm text-on-surface">Yield_Optimizer_v4</p><p class="text-[10px] text-outline font-label-sm">NODE_ID: 0x3a...11</p></div>
-          </div>
-          <span class="font-label-sm text-primary">0.0008 <span class="text-[10px] opacity-60">ETH/hr</span></span>
-        </div>
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-sm">
-            <div class="w-1.5 h-1.5 bg-outline rounded-full"></div>
-            <div><p class="font-label-sm text-on-surface-variant">Arbitrage_Bot_Main</p><p class="text-[10px] text-outline font-label-sm">STATUS: STANDBY</p></div>
-          </div>
-          <span class="font-label-sm text-outline">0.000 <span class="text-[10px] opacity-60">ETH/hr</span></span>
-        </div>
+      <div class="space-y-md" id="agent-node-list">
+        <p class="font-label-sm text-[10px] text-outline">Connect wallet to see agents</p>
       </div>
       <a href="agents.html" class="w-full mt-lg h-10 glass-panel border-white/5 hover:border-primary/20 text-outline hover:text-primary font-label-sm transition-all flex items-center justify-center gap-xs">
         ORCHESTRATE_NODES <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
@@ -281,9 +261,8 @@
       <button id="recv-close" class="material-symbols-outlined text-outline hover:text-primary transition-colors">close</button>
     </div>
     <div class="space-y-md">
-      <div class="w-40 h-40 mx-auto bg-white/5 border border-white/10 rounded-xl flex flex-col items-center justify-center gap-xs">
-        <span class="material-symbols-outlined text-primary text-4xl">qr_code_2</span>
-        <span class="font-label-sm text-[10px] text-outline">SCAN_ADDRESS</span>
+      <div id="qr-canvas" class="w-44 h-44 mx-auto bg-white p-2 rounded-xl flex items-center justify-center">
+        <span class="font-label-sm text-[10px] text-outline" id="qr-placeholder" style="color:#849495">Connect wallet to generate QR</span>
       </div>
       <div>
         <span class="nos-label">Your Wallet Address</span>
@@ -309,6 +288,7 @@
 <div class="fixed top-[-10%] right-[-10%] w-[50%] h-[50%] bg-primary/5 blur-[120px] rounded-full pointer-events-none -z-10"></div>
 <div class="fixed bottom-[-10%] left-[-10%] w-[40%] h-[40%] bg-secondary/5 blur-[120px] rounded-full pointer-events-none -z-10"></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" integrity="sha512-CNgIRecGo7nphbeZ04Sc13ka07paqdeTu0WR1IM4kNcpmBAUSHSi2Z+wGqBdTkPbl2LVuuKSIB3vDssODM7pw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="/js/neural-os.iife.js"></script>
 <script>
 const CHAIN_NAMES = { 1: 'ETH Mainnet', 8453: 'Base' }
@@ -341,6 +321,60 @@ async function onConnected(addr) {
     document.getElementById('asset-usdc').textContent = usdc + ' USDC'
   } catch(e) {}
   loadTxs(addr)
+  loadProtocolStats()
+  loadAgentNodes()
+}
+
+function loadProtocolStats() {
+  if (!window.NOS) return
+  const swarm = NOS.AgentRuntime.getSwarmStats()
+  const feeBps = NOS.Loyalty.effectiveFeeBps()
+
+  const sessions = swarm.totalHits || 0
+  const volume   = swarm.totalVolume || 0
+  const agents   = swarm.uniqueAgents || 0
+
+  document.getElementById('proto-sessions').textContent = sessions.toLocaleString()
+  document.getElementById('proto-volume').textContent   = '$' + volume.toLocaleString('en-US', { maximumFractionDigits: 2 })
+  document.getElementById('proto-agents').textContent   = agents.toLocaleString()
+  document.getElementById('proto-fee-rate').textContent = (feeBps / 100).toFixed(2) + '%'
+
+  // Scale bars relative to each other (max 100%)
+  const maxSessions = Math.max(sessions, 1)
+  document.getElementById('proto-sessions-bar').style.width = Math.min(100, (sessions / maxSessions) * 100) + '%'
+  const volPct = volume > 0 ? Math.min(100, Math.log10(volume + 1) / Math.log10(10000) * 100) : 0
+  document.getElementById('proto-volume-bar').style.width = volPct + '%'
+  const agPct = agents > 0 ? Math.min(100, (agents / 10) * 100) : 0
+  document.getElementById('proto-agents-bar').style.width = agPct + '%'
+}
+
+function loadAgentNodes() {
+  if (!window.NOS) return
+  const all      = NOS.Agents.all()
+  const running  = Object.entries(all).filter(([, a]) => a.status === 'running')
+  const list     = document.getElementById('agent-node-list')
+
+  if (!running.length) {
+    list.innerHTML = '<p class="font-label-sm text-[10px] text-outline">No agents currently running</p>'
+    return
+  }
+
+  list.innerHTML = running.map(([id, agent]) => {
+    const label = document.createElement('span')
+    label.textContent = agent.label || id
+    const signals = document.createElement('span')
+    signals.textContent = (agent.signalCount || 0) + ' signals'
+    return `<div class="flex items-center justify-between">
+      <div class="flex items-center gap-sm">
+        <div class="w-1.5 h-1.5 bg-tertiary-fixed-dim pulsing-dot rounded-full"></div>
+        <div>
+          <p class="font-label-sm text-on-surface">${label.innerHTML}</p>
+          <p class="text-[10px] text-outline font-label-sm">STATUS: RUNNING</p>
+        </div>
+      </div>
+      <span class="font-label-sm text-primary text-[10px]">${signals.innerHTML}</span>
+    </div>`
+  }).join('')
 }
 
 function onDisconnected() {
@@ -407,7 +441,26 @@ document.getElementById('send-btn').addEventListener('click', () => {
 })
 document.getElementById('send-close').addEventListener('click', () => document.getElementById('send-modal').classList.add('hidden'))
 
-document.getElementById('receive-btn').addEventListener('click', () => document.getElementById('receive-modal').classList.remove('hidden'))
+let _qrGenerated = false
+document.getElementById('receive-btn').addEventListener('click', () => {
+  document.getElementById('receive-modal').classList.remove('hidden')
+  const addr = NOS.Wallet.getAddress()
+  if (addr && !_qrGenerated && typeof QRCode !== 'undefined') {
+    const container = document.getElementById('qr-canvas')
+    const placeholder = document.getElementById('qr-placeholder')
+    if (placeholder) placeholder.remove()
+    container.innerHTML = ''
+    new QRCode(container, {
+      text:          addr,
+      width:         160,
+      height:        160,
+      colorDark:     '#000000',
+      colorLight:    '#ffffff',
+      correctLevel:  QRCode.CorrectLevel.M,
+    })
+    _qrGenerated = true
+  }
+})
 document.getElementById('recv-close').addEventListener('click', () => document.getElementById('receive-modal').classList.add('hidden'))
 
 ;['ab-eth','ab-usdc-eth','ab-usdc-base'].forEach(id => {
@@ -490,7 +543,7 @@ document.getElementById('xrp-load-btn').addEventListener('click', async () => {
 
 document.addEventListener('nos:account', e => { const a = e.detail?.address || NOS.Wallet.getAddress(); if(a) onConnected(a) })
 document.addEventListener('nos:chain', () => { const a = NOS.Wallet.getAddress(); if(a) onConnected(a) })
-document.addEventListener('nos:disconnect', onDisconnected)
+document.addEventListener('nos:disconnect', () => { onDisconnected(); _qrGenerated = false })
 
 if (window.NOS && NOS.Wallet.isConnected()) { const a = NOS.Wallet.getAddress(); if(a) onConnected(a) }
 </script>

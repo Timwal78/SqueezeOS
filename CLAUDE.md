@@ -106,6 +106,52 @@ These rules from `DEVELOPER_MANIFESTO.md` override everything:
 
 ---
 
+## Mobile App (Neural_OS) — `mobile/` — Extended Manifesto
+
+The `mobile/` directory contains a Capacitor Android app (Neural_OS). The same Prime Directive applies with additional rules:
+
+### NEVER do any of the following in `mobile/`:
+
+- **NO hardcoded numbers in HTML/JS that represent real-time data** — no `847`, `42%`, `0.002 ETH/hr`, hardcoded agent names like `Commerce_Strategist_Pro`, or any value that looks like live data but is static.
+- **NO fake agent node names** — agent nodes must come from `NOS.Agents.all()` or `agents.json`. If no agents are running, show "No agents running", not invented names.
+- **NO hardcoded fee breakdowns** — fee distribution charts must be populated from `NOS.AgentRuntime.getSwarmStats()` or a real API endpoint. Never use fixed percentages.
+- **NO hardcoded wallet addresses in displayed UI** — the billing wallet (`BILLING_WALLET`) is for payments only; never show it as a "live node" or "wallet drain".
+- **NO placeholder QR codes** — the receive modal must use the real `QRCode` library with the real connected wallet address.
+- **NO simulated scan progress** — if a scan is not actually running, show 0% or a "not running" state. Random-increment animations on real-seeming progress bars are prohibited.
+- **NO default tier above 'free'** — `Subscription.getTier()` defaults to `'free'`. Owner wallets get `'institutional'` via the `OWNER_WALLETS` array in `config.js`, not localStorage.
+- **NO localStorage-only loyalty** — loyalty volume must sync to Supabase (`CloudDB.saveLoyalty`) after each transaction. Local data is optimistic only; server wins on conflict.
+- **NO fire-and-forget fee transactions** — protocol fee transfers must be awaited and failures must be logged to `nos:failed-fees` in localStorage for reconciliation.
+
+### Subscription & Access Control Rules:
+
+- Owner wallets: defined in `VITE_OWNER_WALLETS` env var (comma-separated). They receive lifetime institutional access. Add new owner addresses to this env var — never via localStorage.
+- Tester wallets: defined in `VITE_TESTER_WALLETS` env var. They can switch tiers freely via the dev panel on `subscription.html`. This panel is only visible to owner/tester wallets.
+- Tier verification: `Subscription.markVerified(tier, period)` must be called after every successful server-side payment confirmation. Without it, tiers expire after the subscription window.
+- `Subscription.getTier()` is synchronous and must remain synchronous — do not add async logic to it.
+
+### Data Source Rules:
+
+| Data | Source | NOT acceptable |
+|------|--------|----------------|
+| Agent status | `NOS.Agents.all()` | Hardcoded names/values |
+| Protocol fee activity | `NOS.AgentRuntime.getSwarmStats()` | Fixed percentages |
+| TX history | `NOS.Wallet.getTransfers()` via Alchemy | Any placeholder rows |
+| ETH price | `NOS.Price.getEth()` (60s cache) | Hardcoded `$2000` |
+| XRP balance | `NOS.XRPL.getBalance(addr)` | Static strings |
+| Loyalty volume | Supabase `neural_os_loyalty` + localStorage | Client-only |
+| Subscription tier | Supabase `neural_os_subscriptions` | localStorage alone |
+| Market signals | `NOS.SqueezeOS.getHistory()` | Mock signal objects |
+| AIXBT signals | `NOS.AIXBT.getSignals()` | Placeholder text |
+| Wallet balance | Live from wallet provider | Any cached/stale values |
+
+### If live data is unavailable, show:
+- `—` (em dash) for missing numeric values
+- `"Awaiting data"` or `"Connect wallet"` for context-dependent data
+- `"Unavailable"` for API failures
+- Never invent numbers to fill the space.
+
+---
+
 ## Repository Layout
 
 ```
