@@ -8,26 +8,37 @@ import { Loyalty }      from './loyalty.js'
 import { AgentRuntime } from './agent-runtime.js'
 import { SqueezeOS }    from './squeezeos.js'
 import { CloudDB }      from './cloud-db.js'
+import { Price }        from './price.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Global API — every HTML page accesses blockchain + AI logic via window.NOS
 // ─────────────────────────────────────────────────────────────────────────────
-window.NOS = { Wallet, XRPL, Billing, AIXBT, Agents, Subscription, Loyalty, AgentRuntime, SqueezeOS, CloudDB }
+window.NOS = { Wallet, XRPL, Billing, AIXBT, Agents, Subscription, Loyalty, AgentRuntime, SqueezeOS, CloudDB, Price }
 
-// Pre-warm WalletConnect provider on every page load.
-// If a session already exists it reconnects silently.
+// Pre-warm WalletConnect provider and start ETH price cache immediately.
 Wallet.init().catch(() => {})
+Price.getEth().catch(() => {})
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Global DOM sync — update any element with data-nos attributes on wallet events
+// Wallet sync — runs on connect, restores tier + loyalty from server.
+// Owner and tester wallets receive appropriate access instantly.
 // ─────────────────────────────────────────────────────────────────────────────
 async function syncWalletUI(address) {
   if (!address) return
 
-  const ethBal = await Wallet.getEthBalance(address).catch(() => '0.0000')
+  // Resolve owner/tester wallet access first — no server call needed.
+  if (Subscription.isOwner()) {
+    Subscription.markOwnerVerified()
+  }
+
+  // Fetch balances in parallel with server sync.
+  const [ethBal] = await Promise.allSettled([
+    Wallet.getEthBalance(address).catch(() => '0.0000'),
+  ])
+  const bal = ethBal.status === 'fulfilled' ? (ethBal.value || '0.0000') : '0.0000'
 
   document.querySelectorAll('[data-nos="eth-balance"]').forEach((el) => {
-    el.textContent = `${ethBal} ETH`
+    el.textContent = `${bal} ETH`
   })
   document.querySelectorAll('[data-nos="address"]').forEach((el) => {
     el.textContent = `${address.slice(0, 6)}...${address.slice(-4)}`
@@ -36,29 +47,32 @@ async function syncWalletUI(address) {
     el.textContent = `${address.slice(0, 6)}...${address.slice(-4)}`
   })
 
-  fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd')
-    .then((r) => r.json())
-    .then((data) => {
-      const usd = (parseFloat(ethBal) * data.ethereum.usd).toLocaleString('en-US', {
-        style: 'currency', currency: 'USD',
-      })
-      document.querySelectorAll('[data-nos="usd-balance"]').forEach((el) => {
-        el.textContent = `≈ ${usd}`
-      })
+  // Update USD display using cached price.
+  Price.getEth().then((ethPrice) => {
+    const usd = (parseFloat(bal) * ethPrice).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+    document.querySelectorAll('[data-nos="usd-balance"]').forEach((el) => {
+      el.textContent = `≈ ${usd}`
     })
-    .catch(() => {})
-
-  // ── Restore subscription from server ──────────────────────────────────────
-  // Runs silently — if server has a paid tier on record, restore it.
-  // This survives app reinstall and localStorage clears.
-  CloudDB.loadSubscription(address).then((sub) => {
-    if (!sub?.tier || sub.tier === 'free') return
-    const current = Subscription.getTier()
-    const order = ['free', 'signal', 'sovereign', 'institutional']
-    if (order.indexOf(sub.tier) > order.indexOf(current)) {
-      Subscription.setTier(sub.tier)
-    }
   }).catch(() => {})
+
+  // Restore subscription from server — upgrades localStorage if server has higher tier.
+  if (!Subscription.isOwner()) {
+    CloudDB.loadSubscription(address).then((sub) => {
+      if (!sub?.tier || sub.tier === 'free') return
+      const order = ['free', 'signal', 'sovereign', 'institutional']
+      const current = localStorage.getItem('nos:tier') || 'free'
+      if (order.indexOf(sub.tier) > order.indexOf(current)) {
+        Subscription.markVerified(sub.tier, sub.period || 'monthly', sub.paid_at)
+        document.dispatchEvent(new CustomEvent('nos:tier', { detail: { tier: sub.tier } }))
+      } else if (sub.tier !== 'free') {
+        // Re-verify the existing tier timestamp so it stays valid.
+        Subscription.markVerified(current, sub.period || 'monthly', sub.paid_at)
+      }
+    }).catch(() => {})
+  }
+
+  // Restore loyalty volume from server.
+  Loyalty.loadFromServer(address).catch(() => {})
 }
 
 function clearWalletUI() {
