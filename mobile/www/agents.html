@@ -246,11 +246,11 @@
         </div>
       </div>
       <div class="space-y-sm mb-lg">
-        <div class="flex justify-between text-label-sm font-label-sm mb-xs"><span class="text-outline">Task: Vector Search Indexing</span><span id="synt-pct">72%</span></div>
-        <div class="h-2 bg-surface-container-highest rounded-full overflow-hidden"><div id="synt-bar" class="h-full bg-primary transition-all duration-1000" style="width:72%"></div></div>
+        <div class="flex justify-between text-label-sm font-label-sm mb-xs"><span class="text-outline">RDT Multi-Symbol Analysis</span><span id="synt-pct">—</span></div>
+        <div class="h-2 bg-surface-container-highest rounded-full overflow-hidden"><div id="synt-bar" class="h-full bg-primary transition-all duration-1000" style="width:0%"></div></div>
         <div class="flex gap-4 pt-base">
-          <div class="flex flex-col"><span class="text-[10px] text-outline uppercase font-label-sm">Latency</span><span class="text-sm font-label-sm">14ms</span></div>
-          <div class="flex flex-col"><span class="text-[10px] text-outline uppercase font-label-sm">Integrity</span><span class="text-sm font-label-sm">99.9%</span></div>
+          <div class="flex flex-col"><span class="text-[10px] text-outline uppercase font-label-sm">Confidence</span><span id="synt-conf" class="text-sm font-label-sm">—</span></div>
+          <div class="flex flex-col"><span class="text-[10px] text-outline uppercase font-label-sm">Regime</span><span id="synt-regime" class="text-sm font-label-sm">—</span></div>
         </div>
       </div>
       <div class="mt-auto grid grid-cols-2 gap-sm">
@@ -433,16 +433,101 @@ async function loadAIXBT() {
   }
 }
 
-// ─── Alpha scanner animation ─────────────────────────────────────────────────
-let alphaPct = 0
+// ─── Alpha scanner — real SqueezeOS signals ──────────────────────────────────
+async function loadAlphaScanner() {
+  if (!window.NOS) return
+  const agent = NOS.Agents.get('alpha-scanner')
+  if (agent.status !== 'running') return
+  try {
+    const signals = await NOS.SqueezeOS.getHistory(20)
+    const count = Array.isArray(signals) ? signals.length : 0
+    document.getElementById('alpha-signals').textContent = count
+    if (count > 0) {
+      document.getElementById('alpha-pct').textContent = '100%'
+      document.getElementById('alpha-bar').style.width = '100%'
+      NOS.Agents.incrementSignal('alpha-scanner')
+    }
+  } catch {}
+}
+// Animated progress while scan is in-flight
+let _alphoPct = 0
 setInterval(() => {
   if (!window.NOS) return
   const agent = NOS.Agents.get('alpha-scanner')
   if (agent.status !== 'running') return
-  alphaPct = alphaPct >= 99 ? 10 : alphaPct + (Math.random() * 1.5)
-  document.getElementById('alpha-bar').style.width = alphaPct.toFixed(1) + '%'
-  document.getElementById('alpha-pct').textContent = alphaPct.toFixed(0) + '%'
+  _alphoPct = _alphoPct >= 95 ? 10 : _alphoPct + (Math.random() * 2.5)
+  document.getElementById('alpha-bar').style.width = _alphoPct.toFixed(1) + '%'
+  document.getElementById('alpha-pct').textContent = _alphoPct.toFixed(0) + '%'
 }, 2000)
+loadAlphaScanner()
+setInterval(loadAlphaScanner, 30000)
+
+// ─── SYNT-01 — real RDT multi-symbol analysis ────────────────────────────────
+async function loadSynt01() {
+  if (!window.NOS) return
+  const agent = NOS.Agents.get('synt-01')
+  if (agent.status !== 'running') return
+  try {
+    const rdt = await NOS.SqueezeOS.getRDT()
+    if (!rdt) return
+    const signals = rdt.signals ?? rdt.results ?? rdt.data ?? []
+    const count   = Array.isArray(signals) ? signals.length : 0
+    const top     = signals[0]
+    const conf    = top?.confidence ?? top?.score ?? null
+    const regime  = top?.regime ?? rdt.regime ?? null
+    const pct     = conf != null ? Math.min(100, conf) : (count > 0 ? 80 : 0)
+    document.getElementById('synt-bar').style.width = pct + '%'
+    document.getElementById('synt-pct').textContent = conf != null ? conf.toFixed(0) + '%' : (count > 0 ? count + ' symbols' : '--')
+    document.getElementById('synt-conf').textContent   = conf != null ? conf.toFixed(1) + '%' : '--'
+    document.getElementById('synt-regime').textContent = regime ?? '--'
+  } catch {}
+}
+loadSynt01()
+setInterval(loadSynt01, 60000)
+
+// ─── CRON-B — real SqueezeOS system status ───────────────────────────────────
+async function loadCronB() {
+  if (!window.NOS) return
+  try {
+    const status = await NOS.SqueezeOS.getStatus()
+    if (!status) return
+    const processed = status.processed_today ?? status.signals_processed ?? status.total_signals ?? null
+    const uptime    = status.uptime ?? null
+    if (processed != null) {
+      document.querySelector('#card-cron-b #cron-pct').textContent =
+        processed > 0 ? processed + ' processed' : 'Live'
+    }
+    if (uptime != null) {
+      document.querySelector('#card-cron-b .flex.gap-4 .flex-col:last-child .text-sm').textContent =
+        uptime.toFixed ? uptime.toFixed(1) + '%' : uptime
+    }
+  } catch {}
+}
+loadCronB()
+
+// ─── AEGIS-X — real oracle verdict on deploy ─────────────────────────────────
+async function loadAegisX() {
+  if (!window.NOS) return
+  const agent = NOS.Agents.get('aegis-x')
+  if (agent.status !== 'running') return
+  try {
+    const oracle = await NOS.SqueezeOS.getOracle('IWM')
+    if (!oracle) return
+    const directive = oracle.directive ?? oracle.signal ?? oracle.verdict ?? 'MONITORING'
+    const conf      = oracle.confidence ?? oracle.score ?? null
+    const statusEl  = document.getElementById('status-aegis-x')
+    if (statusEl) {
+      statusEl.className = 'flex items-center gap-1.5 bg-secondary/10 px-2 py-0.5 rounded border border-secondary/30'
+      statusEl.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-secondary pulse-green"></span>
+        <span class="font-label-sm text-[10px] text-secondary uppercase">${directive}${conf != null ? ' ' + conf.toFixed(0) + '%' : ''}</span>`
+    }
+    const bar = document.querySelector('#card-aegis-x .h-2')
+    if (bar && conf != null) {
+      bar.innerHTML = `<div class="h-full bg-secondary transition-all duration-700" style="width:${Math.min(100, conf)}%"></div>`
+      bar.parentElement.previousElementSibling?.querySelector('span:last-child')?.setAttribute('textContent', conf.toFixed(0) + '%')
+    }
+  } catch {}
+}
 
 // ─── Wallet guard ────────────────────────────────────────────────────────────
 function updateWalletGuard() {
@@ -452,11 +537,15 @@ function updateWalletGuard() {
 }
 document.addEventListener('nos:account',    updateWalletGuard)
 document.addEventListener('nos:disconnect', updateWalletGuard)
+document.addEventListener('nos:agent', (e) => {
+  if (e.detail?.id === 'aegis-x' && e.detail?.status === 'running') loadAegisX()
+})
 
 // ─── Boot ────────────────────────────────────────────────────────────────────
 refreshStats()
 updateWalletGuard()
 loadAIXBT()
-setInterval(loadAIXBT, 60000) // refresh every 60s
+setInterval(loadAIXBT, 60000)
+loadAegisX()
 </script>
 </body></html>
