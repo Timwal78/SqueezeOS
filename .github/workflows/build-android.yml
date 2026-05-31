@@ -55,13 +55,22 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      - name: Bump targetSdkVersion to 35
+      # ── Patch versionCode / versionName from package.json ─────────────────
+      - name: Patch version in build.gradle
         run: |
-          sed -i 's/targetSdkVersion = 34/targetSdkVersion = 35/' android/variables.gradle
-          sed -i 's/compileSdkVersion = 34/compileSdkVersion = 35/' android/variables.gradle
+          PKG_VER=$(node -p "require('./package.json').version")
+          # Convert semver to versionCode: major*10000 + minor*100 + patch
+          MAJOR=$(echo $PKG_VER | cut -d. -f1)
+          MINOR=$(echo $PKG_VER | cut -d. -f2)
+          PATCH=$(echo $PKG_VER | cut -d. -f3)
+          VERSION_CODE=$(( MAJOR * 10000 + MINOR * 100 + PATCH ))
+          sed -i "s/versionCode [0-9]*/versionCode $VERSION_CODE/" android/app/build.gradle
+          sed -i "s/versionName \"[^\"]*\"/versionName \"$PKG_VER\"/" android/app/build.gradle
+          echo "Built versionCode=$VERSION_CODE versionName=$PKG_VER"
 
-      # ── Keystore: use stored secret or auto-generate one ───────────────────
+      # ── Keystore: use stored secret or auto-generate one ──────────────────
       - name: Prepare keystore
+        id: keystore
         run: |
           KS_PATH="$GITHUB_WORKSPACE/mobile/neural-os-upload.jks"
           if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
@@ -70,6 +79,7 @@ jobs:
             KS_PASS="${{ secrets.KEYSTORE_PASSWORD }}"
             KS_ALIAS="${{ secrets.KEY_ALIAS }}"
             KEY_PASS="${{ secrets.KEY_PASSWORD }}"
+            echo "auto_generated=false" >> $GITHUB_OUTPUT
           else
             echo "No keystore secret found — generating a new one"
             KS_PASS="neuralOS_$(openssl rand -hex 8)"
@@ -81,35 +91,46 @@ jobs:
               -keyalg RSA -keysize 2048 -validity 10000 \
               -storepass "$KS_PASS" -keypass "$KEY_PASS" \
               -dname "CN=Neural_OS,OU=ScriptMasterLabs,O=ScriptMasterLabs,L=US,ST=US,C=US"
-            echo "KEYSTORE_AUTO_GENERATED=true" >> $GITHUB_ENV
-            echo "KS_PASS=$KS_PASS" >> $GITHUB_ENV
-            echo "KS_ALIAS=$KS_ALIAS" >> $GITHUB_ENV
+            echo "auto_generated=true" >> $GITHUB_OUTPUT
           fi
           echo "KS_PATH=$KS_PATH" >> $GITHUB_ENV
-          echo "KS_PASS_FINAL=${KS_PASS:-${{ secrets.KEYSTORE_PASSWORD }}}" >> $GITHUB_ENV
-          echo "KS_ALIAS_FINAL=${KS_ALIAS:-${{ secrets.KEY_ALIAS }}}" >> $GITHUB_ENV
-          echo "KEY_PASS_FINAL=${KEY_PASS:-${{ secrets.KEY_PASSWORD }}}" >> $GITHUB_ENV
+          echo "KS_PASS=$KS_PASS" >> $GITHUB_ENV
+          echo "KS_ALIAS=$KS_ALIAS" >> $GITHUB_ENV
+          echo "KEY_PASS=$KEY_PASS" >> $GITHUB_ENV
 
       - name: Build signed release AAB
         run: |
           cd android && ./gradlew bundleRelease --no-daemon \
             -Pandroid.injected.signing.store.file="$KS_PATH" \
-            -Pandroid.injected.signing.store.password="$KS_PASS_FINAL" \
-            -Pandroid.injected.signing.key.alias="$KS_ALIAS_FINAL" \
-            -Pandroid.injected.signing.key.password="$KEY_PASS_FINAL"
-        env:
-          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+            -Pandroid.injected.signing.store.password="$KS_PASS" \
+            -Pandroid.injected.signing.key.alias="$KS_ALIAS" \
+            -Pandroid.injected.signing.key.password="$KEY_PASS"
+
+      - name: Build signed release APK
+        run: |
+          cd android && ./gradlew assembleRelease --no-daemon \
+            -Pandroid.injected.signing.store.file="$KS_PATH" \
+            -Pandroid.injected.signing.store.password="$KS_PASS" \
+            -Pandroid.injected.signing.key.alias="$KS_ALIAS" \
+            -Pandroid.injected.signing.key.password="$KEY_PASS"
 
       - name: Upload signed AAB
         uses: actions/upload-artifact@v4
         with:
-          name: neural-os-release-${{ github.run_number }}
+          name: neural-os-${{ github.run_number }}-release.aab
           path: mobile/android/app/build/outputs/bundle/release/app-release.aab
           retention-days: 90
 
-      # Upload the auto-generated keystore so you can save it for future builds
-      - name: Upload keystore (SAVE THIS — needed for future updates)
-        if: ${{ env.KEYSTORE_AUTO_GENERATED == 'true' }}
+      - name: Upload signed APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: neural-os-${{ github.run_number }}-release.apk
+          path: mobile/android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 90
+
+      # Upload the auto-generated keystore — SAVE THIS for future updates
+      - name: Upload keystore (SAVE THIS for future builds)
+        if: steps.keystore.outputs.auto_generated == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: SAVE-THIS-neural-os-keystore-${{ github.run_number }}
