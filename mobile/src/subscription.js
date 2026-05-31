@@ -1,4 +1,4 @@
-import { CHAIN_ETH, CHAIN_BASE, CHAIN_ZKSYNC, CHAIN_ZETA, CHAIN_HYPERLIQUID, OWNER_WALLETS, TESTER_WALLETS } from './config.js'
+import { CHAIN_ETH, CHAIN_BASE, CHAIN_ZKSYNC, CHAIN_ZETA, CHAIN_HYPERLIQUID, OWNER_WALLETS, TESTER_WALLETS, BETA_TIER } from './config.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tier definitions
@@ -91,6 +91,10 @@ export const Subscription = {
     if (addr && TESTER_WALLETS.includes(addr)) {
       return localStorage.getItem(TIER_KEY) || 'free'
     }
+
+    // Beta mode — all users get this tier during closed testing.
+    // Controlled entirely by VITE_BETA_TIER GitHub secret — no code change needed to enable/disable.
+    if (BETA_TIER && TIER_DEFS[BETA_TIER]) return BETA_TIER
 
     const tier = localStorage.getItem(TIER_KEY) || 'free'
     if (tier === 'free') return 'free'
