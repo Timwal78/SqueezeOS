@@ -221,6 +221,22 @@ def require_payment(f):
             _g.proof402_endpoint_id = endpoint_id
             return f(*args, **kwargs)
 
+        # Check automated Stripe API Keys in Redis
+        if passed_key and passed_key.startswith('sml_live_'):
+            try:
+                import redis, json
+                redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
+                r = redis.from_url(redis_url, decode_responses=True)
+                data = r.get(f"apikey:{passed_key}")
+                if data:
+                    key_data = json.loads(data)
+                    if key_data.get('active'):
+                        _g.proof402_wallet      = f'STRIPE_USER'
+                        _g.proof402_endpoint_id = endpoint_id
+                        return f(*args, **kwargs)
+            except Exception as e:
+                _logging.error(f"Redis API Key lookup failed: {e}")
+
         token = request.headers.get('X-Payment-Token')
         if token:
             result = _verify_token_local(token)

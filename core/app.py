@@ -33,6 +33,7 @@ from core.api.agent_analytics import analytics_bp, before_analytics, after_analy
 from core.api.autopilot_bp import autopilot_bp
 from core.api.stigmergy_bp import stigmergy_bp
 from core.api.nw_liq_bp import nw_liq_bp
+from core.api.keys_bp import keys_bp
 import core.signal_history as signal_history
 from core.legacy import start_whale_stalker, init_services, get_service, clean_data
 from core.market_graph import get_graph
@@ -114,6 +115,7 @@ def create_app():
     app.register_blueprint(convergence_bp,     url_prefix='/api')
     app.register_blueprint(autopilot_bp)
     app.register_blueprint(analytics_bp)
+    app.register_blueprint(keys_bp)
     app.register_blueprint(v2_bp, url_prefix='/api')
     app.register_blueprint(v2_bp, url_prefix='/api/v1', name='v2_bridge_v1')
 
