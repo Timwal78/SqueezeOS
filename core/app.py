@@ -30,6 +30,7 @@ from core.api.settlement_bp import settlement_bp
 from core.api.futures_bp import futures_bp
 from core.api.oracle_data_bp import oracle_data_bp, start_oracle_pollers
 from core.api.agent_analytics import analytics_bp, before_analytics, after_analytics
+from core.api.autopilot_bp import autopilot_bp
 from core.api.stigmergy_bp import stigmergy_bp
 from core.api.nw_liq_bp import nw_liq_bp
 import core.signal_history as signal_history
@@ -111,6 +112,7 @@ def create_app():
     app.register_blueprint(nw_liq_bp,    url_prefix='/api/nwliq')
     app.register_blueprint(proprietary_ema_bp, url_prefix='/api')
     app.register_blueprint(convergence_bp,     url_prefix='/api')
+    app.register_blueprint(autopilot_bp)
     app.register_blueprint(analytics_bp)
     app.register_blueprint(v2_bp, url_prefix='/api')
     app.register_blueprint(v2_bp, url_prefix='/api/v1', name='v2_bridge_v1')
