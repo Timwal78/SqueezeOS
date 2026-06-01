@@ -24,11 +24,15 @@ The following directives apply absolutely and without exception:
 > It gates premium APIs behind XRPL RLUSD micropayments with full compliance
 > receipts, Agent Passport identity, and loyalty tier discounts.
 
-Operated by: Script Master Labs
+Operated by: Script Master Labs / $XAH Institutional Stack v3.0
 Base URL: https://four02proof.onrender.com
 Payment network: XRP Ledger mainnet
 Payment asset: RLUSD (issuer: rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De)
 Token TTL: 1 hour (HMAC-SHA256, wallet-bound)
+
+Full stack: Ghost Layer (bridge+matrix) · SqueezeOS (options intel) · Signal Loom (data feed)
+Portal: https://xah-portal.onrender.com
+Ghost Layer llms.txt: https://ghost-layer.onrender.com/llms.txt
 
 ## How It Works
 
@@ -40,62 +44,63 @@ Token TTL: 1 hour (HMAC-SHA256, wallet-bound)
 4. Agent retries original endpoint with `X-Payment-Token: <token>` header
 5. Token verified locally (sub-millisecond, no network call) and access granted
 
-## Protected Endpoints (Script Master Labs)
+## Protected Endpoints — SqueezeOS Gold Vault (squeezeos-vault.onrender.com)
 
-### POST /api/council — 0.10 RLUSD
+All SqueezeOS endpoints require `X-Payment-Token` from 402Proof.
+Base URL: https://squeezeos-vault.onrender.com
+
+### GET /api/council/decision — 0.10 RLUSD
 AI Council Verdict. Multi-engine signal aggregate: SML fractal cascade +
-Battle Computer regime detection. Returns bias, regime, confidence score,
-and actionable thesis for any symbol. Endpoint ID: 12a0e7a1-6812-4c3f-aa24-de6e3bc12b5a
+Battle Computer regime detection. Returns bias, regime, confidence, thesis.
+Endpoint ID: 12a0e7a1-6812-4c3f-aa24-de6e3bc12b5a
+Query: ?symbol=IWM
 
-Request:
-```json
-{"symbol": "IWM"}
-```
-
-Response:
-```json
-{
-  "verdict": {
-    "symbol": "IWM",
-    "bias": "BULLISH",
-    "regime": "TRENDING",
-    "confidence": 87,
-    "thesis": "IWM regime=TRENDING trend_score=0.435 → BULLISH",
-    "timestamp": 1747612800.0
-  },
-  "engines": {
-    "sml": {"regime": "TRENDING", "trend_score": 0.435},
-    "battle": {"summary": "..."},
-    "market_state": {"uptime": 3600, "terminal_feed": [...]}
-  }
-}
-```
-
-### GET /api/scan — 0.05 RLUSD
-Full $1–$50 universe market scanner. Live squeeze signals, options intelligence,
-and institutional flow across the entire discoverable universe (up to 250 symbols).
+### GET /api/market/scan — 0.05 RLUSD
+Squeeze scanner — scored universe of tradeable stocks ($1–$150). Sweet spot
+$2–$50. Grade A–F, squeeze scores, volume ratios, favorites boost.
 Endpoint ID: 160cf28d-b364-44eb-adbd-2489c5cc2cf8
 
-Response:
-```json
-{
-  "quotes": {"GME": {"price": 12.50, "volRatio": 3.2, "sweet_spot": true}, ...},
-  "options": [{"symbol": "GME", "strike": 13.0, "grade": "A", "score": 85}, ...],
-  "universe_size": 187,
-  "scan_count": 44,
-  "cache_age_seconds": 1.2
-}
-```
-
-### GET /api/options — 0.05 RLUSD
-Options intelligence flow. Institutional sweeps, whale detection, unusual volume
-for any symbol. Default: IWM.
+### GET /api/market/flow — 0.05 RLUSD
+Live options flow. Institutional sweeps, unusual volume, OI spikes, block trades.
+Sub-$150 universe + FAVORITES. Sorted by unusual_score.
 Endpoint ID: c951a374-2424-4064-ab80-35afe8053d29
 
-### GET /api/iwm — 0.03 RLUSD
-IWM 0DTE institutional scanner. Scored contracts, parity watch, realized
-volatility, and delta/gamma analytics for Russell 2000 index options.
+### GET /api/market/chain/{ticker} — 0.05 RLUSD
+Full options chain for any symbol. All strikes, all expirations.
+Endpoint ID: c951a374-2424-4064-ab80-35afe8053d29
+
+### GET /api/market/strikes — 0.05 RLUSD
+Strike radar — top 15 most active contracts by premium + heat score.
+Aggregates flow into strike-level sentiment map.
+Endpoint ID: c951a374-2424-4064-ab80-35afe8053d29
+
+### GET /api/market/whales — 0.05 RLUSD
+Whale heat map — ticker-level aggregated premium, count, sweep/block flags.
+Endpoint ID: c951a374-2424-4064-ab80-35afe8053d29
+
+### GET /api/market/intel — 0.05 RLUSD
+Tactical intel feed — last 20 BeastIntel events from the live cache.
+Endpoint ID: c951a374-2424-4064-ab80-35afe8053d29
+
+### GET /api/mmle — 0.05 RLUSD
+MM Liquidity Engine stats — market maker liquidity model output.
+Endpoint ID: c951a374-2424-4064-ab80-35afe8053d29
+
+### GET /api/market/iwm_playbook — 0.03 RLUSD
+IWM 0DTE institutional playbook. Scored contracts, regime, delta/gamma analytics
+for Russell 2000 index options.
 Endpoint ID: 60f48ce0-6002-4385-9b60-03a0d2bbebab
+
+### GET /api/market/risk — 0.03 RLUSD
+Risk sizing for a symbol+score pair. Kelly criterion position sizing.
+Query: ?symbol=GME&score=85
+Endpoint ID: 60f48ce0-6002-4385-9b60-03a0d2bbebab
+
+### Free endpoints (no token required)
+GET /api/health         → system health + provider status + Discord status
+GET /api/market/quotes  → live quote cache
+GET /api/market/status  → market open/closed status
+GET /api/agent/status   → agent bridge status + top targets
 
 ## 402Proof API Reference
 
