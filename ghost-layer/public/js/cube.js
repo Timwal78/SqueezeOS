@@ -799,6 +799,35 @@ fetch('/api/config')
     connectMetricsWS(window.location.origin.replace(/^http/, 'ws') + '/ws/metrics');
   });
 
+// ── Auto-commit — ledger-verify state after every rotation ────────────────────
+// If a valid mint token is cached, silently POSTs the new state to /api/cube/state.
+// No UI interruption — a successful on-chain mint broadcasts XAHAU_MINT_CONFIRMED
+// over SSE which cube.js already handles (STATUS → ON-CHAIN, verdict palette flash).
+// If no token is cached or the token is expired, the call returns 402/401 and the
+// user sees PAY 0.05 RLUSD in the token panel as a prompt to mint.
+async function autoCommitState() {
+  const payload = buildMintPayload();
+  const token   = sessionStorage.getItem('cube_mint_token') ?? undefined;
+  try {
+    const res  = await submitMint(payload, token);
+    if (res.status === 402) {
+      // No token — prompt but don't interrupt
+      const data = await res.json();
+      if (tokenStatEl) { tokenStatEl.textContent = 'PAY 0.05 RLUSD TO COMMIT'; tokenStatEl.style.color = '#FF8800'; }
+      return;
+    }
+    if (res.status === 401) {
+      sessionStorage.removeItem('cube_mint_token');
+      if (tokenStatEl) { tokenStatEl.textContent = 'TOKEN EXPIRED — CLICK MINT'; tokenStatEl.style.color = '#FF8800'; }
+      return;
+    }
+    if (res.ok) {
+      const data = await res.json();
+      if (data.verified) applyMintSuccess(data);
+    }
+  } catch { /* network error — silent, rotation already complete */ }
+}
+
 // ── Animation loop ─────────────────────────────────────────────────────────────
 function animate() {
   requestAnimationFrame(animate);
@@ -814,7 +843,11 @@ function animate() {
   if (layerRotating) {
     layerAngle += LAYER_STEP;
     cubeGroup.rotation[layerRotAxis] += LAYER_STEP * layerRotDir;
-    if (layerAngle >= LAYER_TARGET) { layerRotating = false; setState('IDLE'); }
+    if (layerAngle >= LAYER_TARGET) {
+      layerRotating = false;
+      setState('IDLE');
+      autoCommitState(); // ledger-verify the new state after every rotation
+    }
   } else {
     cubeGroup.rotation.x += rotSpeed;
     cubeGroup.rotation.y += rotSpeed * 1.3;
