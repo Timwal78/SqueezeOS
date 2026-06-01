@@ -1018,6 +1018,40 @@ class DataManager:
     def get_historical_bars(self, symbol: str, timeframe: str = '1Day', limit: int = 40) -> List[dict]:
         return self.alpaca.get_historical_bars(symbol, timeframe, limit)
 
+    def get_bars(self, symbol: str, timeframe: str = '1D', limit: int = 60) -> List[dict]:
+        """Fetch historical bars primarily using Polygon, fallback to Alpaca."""
+        try:
+            if self.polygon.available:
+                # Map timeframe to Polygon formats (e.g. 1D -> 1, day)
+                multiplier = 1
+                timespan = 'day'
+                days_back = limit * 2 # pad for weekends
+                if timeframe.upper() == '1D':
+                    timespan = 'day'
+                    days_back = limit * 2
+                elif timeframe.upper() == '1MIN' or timeframe.upper() == '1M':
+                    timespan = 'minute'
+                    days_back = max(2, int(limit / 390)) + 1
+                elif timeframe.upper() == '5MIN' or timeframe.upper() == '5M':
+                    multiplier = 5
+                    timespan = 'minute'
+                    days_back = max(2, int(limit / 78)) + 1
+                    
+                bars = self.polygon.get_aggregates(symbol, multiplier=multiplier, timespan=timespan, limit=limit, days_back=days_back)
+                if bars:
+                    # Polygon returns them descending usually (from our code), but lets make sure it's consistent if the app expects ascending
+                    # DataManager usually returns chronological order (ascending) for AI processing
+                    bars = sorted(bars, key=lambda x: x.get('timestamp', 0))
+                    return bars
+        except Exception as e:
+            logger.error(f"[DATA] Polygon get_bars error: {e}")
+            
+        # Fallback to Alpaca
+        alpaca_tf = '1Day'
+        if timeframe.upper() in ['1MIN', '1M']: alpaca_tf = '1Min'
+        elif timeframe.upper() in ['5MIN', '5M']: alpaca_tf = '5Min'
+        return self.alpaca.get_historical_bars(symbol, alpaca_tf, limit)
+
     def get_option_contracts(self, symbol: str, max_dte: int = 10) -> List[dict]:
         return self.alpaca.get_option_contracts(symbol, max_dte)
 
