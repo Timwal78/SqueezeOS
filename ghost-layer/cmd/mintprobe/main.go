@@ -151,7 +151,8 @@ func main() {
 
 	fmt.Printf("\n[mintprobe] submitting URITokenMint to Xahau…\n")
 	start := time.Now()
-	txHash, err := c.MintURIToken(hash, hookParams, string(memoBytes))
+	uniqueURI := fmt.Sprintf("%s-%d", hash, time.Now().UnixNano())
+	txHash, err := c.MintURIToken(uniqueURI, hookParams, string(memoBytes))
 	elapsed := time.Since(start)
 	if err != nil {
 		fatalf("[mintprobe] FAIL mint: %v", err)

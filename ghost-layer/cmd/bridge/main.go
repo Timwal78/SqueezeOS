@@ -257,7 +257,15 @@ func init() {
 				}
 			}
 
-			mintHash, mintErr := xahauClient.MintURIToken(state.Hash, uriParams, string(memoBytes))
+			// Anchor URI to the payment tx hash — unique, verifiable, canonical.
+			// Falls back to nanosecond timestamp if no tx hash in args.
+			mintURI := state.Hash
+			if txHashStr, ok := args["tx_hash"].(string); ok && txHashStr != "" {
+				mintURI = fmt.Sprintf("%s-%s", state.Hash, txHashStr)
+			} else {
+				mintURI = fmt.Sprintf("%s-%d", state.Hash, time.Now().UnixNano())
+			}
+			mintHash, mintErr := xahauClient.MintURIToken(mintURI, uriParams, string(memoBytes))
 			if mintErr != nil {
 				log.Printf("[CUBE] Xahau mint failed via x402: %v", mintErr)
 				return nil, fmt.Errorf("ERR_MINT_FAILED: %v", mintErr)
@@ -1123,7 +1131,8 @@ func main() {
 			return
 		}
 
-		xahauTx, err := xahauClient.MintURIToken(decisionHash, nil, string(memoBytes))
+		uniqueURI := fmt.Sprintf("%s-%d", decisionHash, time.Now().UnixNano())
+		xahauTx, err := xahauClient.MintURIToken(uniqueURI, nil, string(memoBytes))
 		if err != nil {
 			log.Printf("[NOTARY] Xahau mint failed: %v", err)
 			writeJSONErr(w, http.StatusInternalServerError, "ERR_MINT_FAILED")
