@@ -211,7 +211,11 @@ def require_payment(f):
         bearer_key = auth_header.split('Bearer ')[-1].strip() if 'Bearer ' in auth_header else ''
         passed_key = request.headers.get('X-Owner-Key') or request.headers.get('X-API-Key') or bearer_key
         
-        valid_keys = [k for k in [os.getenv('OPERATOR_API_KEY'), OWNER_API_KEY] if k]
+        # Load single master keys plus any dynamically provisioned agent keys (comma-separated)
+        agent_keys_str = os.getenv('AGENT_API_KEYS', '')
+        agent_keys = [k.strip() for k in agent_keys_str.split(',') if k.strip()]
+        valid_keys = [k for k in [os.getenv('OPERATOR_API_KEY'), OWNER_API_KEY] if k] + agent_keys
+        
         if passed_key and passed_key in valid_keys:
             _g.proof402_wallet      = 'API_KEY_USER'
             _g.proof402_endpoint_id = endpoint_id
