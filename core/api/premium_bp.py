@@ -92,20 +92,48 @@ def council():
     except Exception as e:
         logger.warning(f"[COUNCIL] State error: {e}")
 
-    # Derive top-level verdict
+    # Derive top-level verdict from cascade output
     sml_data = verdict["engines"].get("sml", {})
-    regime = sml_data.get("regime", "UNKNOWN")
-    trend = sml_data.get("trend_score", 0)
-    bias = "BULLISH" if trend > 0.2 else "BEARISH" if trend < -0.2 else "NEUTRAL"
 
-    confidence = min(100, int(abs(trend) * 200))
+    # Cascade returns: cascade_bias, alignment_score, bull_count, bear_count, avoid_count
+    cascade_bias = sml_data.get("cascade_bias", "")
+    alignment    = float(sml_data.get("alignment_score", 0))
+    bull_count   = int(sml_data.get("bull_count", 0))
+    bear_count   = int(sml_data.get("bear_count", 0))
+
+    # Map cascade_bias to clean directional bias
+    cb_upper = cascade_bias.upper()
+    if "BEAR" in cb_upper:
+        bias = "BEARISH"
+    elif "BULL" in cb_upper:
+        bias = "BULLISH"
+    else:
+        bias = "NEUTRAL"
+
+    # Confidence = alignment_score capped at 100
+    confidence = min(100, int(alignment))
+
+    # Regime from timeframe majority
+    if bull_count > bear_count:
+        regime = "BULLISH_EXPANSION"
+    elif bear_count > bull_count:
+        regime = "BEARISH_CONTRACTION"
+    else:
+        regime = "CONSOLIDATION"
+
+    thesis = sml_data.get("cascade_meaning") or \
+             f"{symbol} — {cascade_bias} | alignment={round(alignment,1)} bull={bull_count} bear={bear_count}"
+
     verdict["verdict"] = {
-        "symbol": symbol,
-        "bias": bias,
-        "regime": regime,
+        "symbol":     symbol,
+        "bias":       bias,
+        "regime":     regime,
         "confidence": confidence,
-        "thesis": f"{symbol} regime={regime} trend_score={round(trend, 3)} → {bias}",
-        "timestamp": time.time(),
+        "thesis":     thesis,
+        "alignment_score": alignment,
+        "bull_count": bull_count,
+        "bear_count": bear_count,
+        "timestamp":  time.time(),
     }
 
     council_evt = {
