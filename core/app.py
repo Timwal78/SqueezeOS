@@ -153,6 +153,7 @@ def create_app():
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+        response.headers['Link'] = '<https://squeezeos-api.onrender.com/.well-known/agents.json>; rel="payment"'
         if 'text/html' in response.content_type:
             response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
             response.headers['Pragma'] = 'no-cache'

@@ -205,9 +205,15 @@ def require_payment(f):
         if not endpoint_id:
             return f(*args, **kwargs)
 
-        # Owner bypass — set OWNER_API_KEY in env, pass X-Owner-Key header to get free access
-        if OWNER_API_KEY and request.headers.get('X-Owner-Key') == OWNER_API_KEY:
-            _g.proof402_wallet      = 'OWNER'
+        # API Key bypass (for human devs who paid via Stripe)
+        # Accepts standard 'Authorization: Bearer <key>' or 'X-API-Key: <key>' or 'X-Owner-Key: <key>'
+        auth_header = request.headers.get('Authorization', '')
+        bearer_key = auth_header.split('Bearer ')[-1].strip() if 'Bearer ' in auth_header else ''
+        passed_key = request.headers.get('X-Owner-Key') or request.headers.get('X-API-Key') or bearer_key
+        
+        valid_keys = [k for k in [os.getenv('OPERATOR_API_KEY'), OWNER_API_KEY] if k]
+        if passed_key and passed_key in valid_keys:
+            _g.proof402_wallet      = 'API_KEY_USER'
             _g.proof402_endpoint_id = endpoint_id
             return f(*args, **kwargs)
 
