@@ -869,7 +869,13 @@ def mcp_dispatch():
 
     if method == "tools/list":
         cursor = params.get("cursor")   # pagination — not needed, all fit in one page
-        return ok({"tools": _TOOLS, "nextCursor": None})
+        return ok({"tools": _TOOLS})
+
+    if method == "resources/list":
+        return ok({"resources": []})
+
+    if method == "prompts/list":
+        return ok({"prompts": []})
 
     if method == "tools/call":
         tool_name = params.get("name", "")
