@@ -23,7 +23,7 @@ This project is indexed by GitNexus as **SqueezeOS** (2652 symbols, 4519 relatio
 ## Resources
 
 | Resource | Use for |
-|----------|---------|
+|----------|--------|
 | `gitnexus://repo/SqueezeOS/context` | Codebase overview, check index freshness |
 | `gitnexus://repo/SqueezeOS/clusters` | All functional areas |
 | `gitnexus://repo/SqueezeOS/processes` | All execution flows |
@@ -77,7 +77,11 @@ The `scriptmasterlabs.com` site lists multiple products. Only these have live ba
 - ✅ SqueezeOS — market intelligence API
 - ✅ Ghost Layer — private XRP routing engine
 - ✅ 402Proof — x402 payment firewall
-- 🚧 Everything else on the site (Xahau Remittance Rails, Pulse-Verify, Xahau Hooks Intelligence, XRPL Copy-Trader, Memecoin Launchpad) — listed but not yet deployed
+- ✅ RLUSD Rails / Xahau Remittance Rails — `sml-rails.onrender.com` (SML-XRPL-FEE-FORGE/rails)
+- ✅ XRPL Copy-Trader Engine — `sml-copytrader.onrender.com` (SML-XRPL-FEE-FORGE/copytrader)
+- ✅ Memecoin Launchpad — `sml-launchpad.onrender.com` (SML-XRPL-FEE-FORGE/launchpad)
+- 🚧 Pulse-Verify™ Notary → 402Proof `/v1/verify` (endpoint exists, site link pending)
+- 🚧 Xahau Hooks Intelligence → Ghost Layer's `xahau.go` URITokenMint (endpoint exists, site link pending)
 
 ---
 
@@ -245,7 +249,7 @@ SqueezeOS/
 Single `GlobalState` instance exported as `state`, plus `sse_queues: list` for SSE broadcast.
 
 | Attribute | Type | Purpose |
-|-----------|------|---------|
+|-----------|------|--------|
 | `state.lock` | `threading.Lock` | Protects all mutations |
 | `state.universe` | `dict` | Active ticker OHLCV |
 | `state.quotes` | `dict` | Live quote snapshots |
@@ -483,7 +487,7 @@ All vars documented in `.env.example`. Key ones:
 ## GitHub Actions
 
 | Workflow | Trigger | Purpose |
-|----------|---------|---------|
+|----------|---------|--------|
 | `agent.yml` | Cron (5× weekday: 08:45, 09:35, 12:00, 15:00, 16:15 ET) | Runs `agent/sml_agent.py` — autonomous Claude agent that pays for market data with XRPL wallet |
 | `keepalive.yml` | Cron | Pings Render + Onrender services to prevent cold starts |
 | `publish-npm.yml` | Push/tag | Publishes npm package |
@@ -517,14 +521,19 @@ Secrets: `AGENT_XRPL_SEED`, `AGENT_XRPL_ADDRESS`, `ANTHROPIC_API_KEY` (GitHub Ac
 | 402Proof | **Render** | `https://four02proof.onrender.com` | separate repo |
 | SML Rails (RLUSD Rails) | **Render** | `https://sml-rails.onrender.com` | `SML-XRPL-FEE-FORGE/rails/` |
 
-**SML-XRPL-FEE-FORGE repo** (`github.com/Timwal78/SML-XRPL-FEE-FORGE`, private) contains 4 products:
+**SML-XRPL-FEE-FORGE repo** (`github.com/Timwal78/SML-XRPL-FEE-FORGE`, private) — 7 services:
+
+> ⚠️ `tiphawk/` has been **deleted** — X.com API requires paid access. **TipMaster™** was rebuilt for **Farcaster (Neynar free tier)** and lives in a **separate repo** (NOT in SML-XRPL-FEE-FORGE).
 
 | Directory | Product | Deployed URL | Status |
 |-----------|---------|-------------|--------|
 | `rails/` | RLUSD Rails™ | `https://sml-rails.onrender.com` | ✅ Live on Render |
-| `tiphawk/` | TipMaster™ | `https://tipmaster.onrender.com` | ⚠️ Service created on Render — needs secret env vars set in dashboard (NEYNAR_API_KEY, NEYNAR_WEBHOOK_SECRET, NEYNAR_BOT_SIGNER_UUID, TIPMASTER_BOT_FID, TIPMASTER_XRPL_SEED, TIPMASTER_XRPL_ADDRESS, TIPMASTER_TREASURY_ADDRESS). X.com API is paid/blocked — rebuilt for Farcaster (Neynar free tier). |
-| `copytrader/` | XRPL Copy-Trader Engine™ | unknown | ❓ check Render dashboard |
-| `launchpad/` | Memecoin Launchpad (Forge)™ | unknown | ❓ check Render dashboard |
+| *(separate repo)* | **TipMaster™** (Farcaster) | `https://tipmaster.onrender.com` | ⚠️ Needs: `NEYNAR_API_KEY`, `NEYNAR_WEBHOOK_SECRET`, `NEYNAR_BOT_SIGNER_UUID`, `TIPMASTER_BOT_FID`, `TIPMASTER_XRPL_SEED`, `TIPMASTER_XRPL_ADDRESS`, `TIPMASTER_TREASURY_ADDRESS` |
+| `copytrader/` | XRPL Copy-Trader Engine™ | `https://sml-copytrader.onrender.com` | ⚠️ Deployed with PostgreSQL — needs `COPYTRADER_DB_URL`, `OPERATOR_WALLET_SEED`, `OPERATOR_WALLET_ADDRESS`, `DISCORD_WEBHOOK_COPYTRADER` |
+| `launchpad/` | Memecoin Launchpad (Forge)™ | `https://sml-launchpad.onrender.com` | ⚠️ Deployed with PostgreSQL — needs `LAUNCHPAD_DB_URL`, `OPERATOR_WALLET_SEED`, `OPERATOR_WALLET_ADDRESS`, `DISCORD_WEBHOOK_LAUNCHPAD` |
+| `x402-gateway/` | x402 Payment Gateway (Go) | `https://forge-gateway-a822.onrender.com` | ⚠️ Go service — needs `MERCHANT_WALLET_ADDRESS`, `ANTHROPIC_API_KEY`, `XRPL_NOTARY_WALLET_ADDRESS`, `XRPL_NOTARY_WALLET_SEED`, `REDIS_URL` |
+| `shadow-desk/` | Shadow Desk MCP Server (Go) | `https://shadow-desk.onrender.com` | ⚠️ Go service — needs `INGEST_SECRET`, `ALPHA_PROVIDER_WALLET`, `PLATFORM_WALLET`, `ADMIN_API_KEY` |
+| `dashboard/` | Forge Dashboard (React/Vite) | `https://sml-forge-dashboard.onrender.com` | ✅ Static site — `VITE_GATEWAY_URL=https://forge-gateway-a822.onrender.com` |
 
 **echo-forge repo** (`github.com/Timwal78/echo-forge`, public) — historical pattern matching engine (Polygon.io + ML cosine similarity). Dockerized, NOT yet deployed to Render as of May 2026.
 
@@ -533,8 +542,8 @@ Secrets: `AGENT_XRPL_SEED`, `AGENT_XRPL_ADDRESS`, `ANTHROPIC_API_KEY` (GitHub Ac
 - Xahau Hooks Intelligence → Ghost Layer's `xahau.go` URITokenMint (same service)
 - Xahau Remittance Rails → `sml-rails.onrender.com` (SML-XRPL-FEE-FORGE/rails)
 - Pulse-Verify™ Notary → 402Proof `/v1/verify` (same service)
-- XRPL Copy-Trader Engine → SML-XRPL-FEE-FORGE/copytrader (deployment TBD)
-- Memecoin Launchpad → SML-XRPL-FEE-FORGE/launchpad (deployment TBD)
+- XRPL Copy-Trader Engine → `sml-copytrader.onrender.com` (SML-XRPL-FEE-FORGE/copytrader)
+- Memecoin Launchpad → `sml-launchpad.onrender.com` (SML-XRPL-FEE-FORGE/launchpad)
 
 ## Ecosystem Services
 
@@ -544,6 +553,10 @@ Secrets: `AGENT_XRPL_SEED`, `AGENT_XRPL_ADDRESS`, `ANTHROPIC_API_KEY` (GitHub Ac
 | 402Proof | Render | `four02proof.onrender.com` | x402 payment firewall, invoice generation, XRPL payment verification, Agent Credit Bureau |
 | Ghost Layer | Render | `ghost-layer.onrender.com` | Dual-chain XRPL+Base toll gateway (Go service, `ghost-layer/`) |
 | SML Rails | Render | `sml-rails.onrender.com` | RLUSD Rails — XRP/Xahau remittance (SML-XRPL-FEE-FORGE/rails) |
+| SML Copy-Trader | Render | `sml-copytrader.onrender.com` | XRPL whale copy-trading engine (SML-XRPL-FEE-FORGE/copytrader) |
+| SML Launchpad | Render | `sml-launchpad.onrender.com` | Memecoin bonding curve launchpad (SML-XRPL-FEE-FORGE/launchpad) |
+| Forge x402 Gateway | Render | `forge-gateway-a822.onrender.com` | x402 payment protocol + BYOK LLM proxy (SML-XRPL-FEE-FORGE/x402-gateway) |
+| Shadow Desk | Render | `shadow-desk.onrender.com` | MCP signal server + billing (SML-XRPL-FEE-FORGE/shadow-desk) |
 | Script Master Labs | Vercel | `scriptmasterlabs.com` | Operator homepage + Ghost Layer Sovereign frontend |
 
 ---
