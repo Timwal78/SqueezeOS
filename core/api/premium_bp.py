@@ -66,7 +66,7 @@ def council():
         if sml and dm:
             bars = clean_data(dm.get_bars(symbol, timeframe='1D', limit=60))
             if bars:
-                history = {"1D": bars}
+                history = {symbol: bars}
                 cascade = sml.compute_fractal_cascade(symbol, history)
                 verdict["engines"]["sml"] = cascade
     except Exception as e:
