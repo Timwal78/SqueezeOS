@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="BEAST MODE">
+<meta name="theme-color" content="#000000">
+<title>BEAST MODE — GME/AMC Fractal Command Center</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --cyan:#00f5ff; --green:#00e676; --purple:#d900ff;
+  --red:#ff5252; --gold:#ffd700; --orange:#ff9100;
+  --blue:#2979ff; --teal:#1de9b6; --pink:#ff4081;
+  --bg:#000; --card:#080808; --border:#181818; --border2:#222; --text:#ddd;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Courier New',monospace;min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;top:0;left:0;width:100%;height:100%;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,245,255,.012) 2px,rgba(0,245,255,.012) 4px);pointer-events:none;z-index:9999}
+
+.hdr{background:linear-gradient(135deg,#000 0%,#080018 60%,#000 100%);border-bottom:2px solid var(--purple);padding:14px 16px 10px;text-align:center;position:sticky;top:0;z-index:200;box-shadow:0 0 40px rgba(217,0,255,.25)}
+.hdr h1{font-size:clamp(1.1rem,4.5vw,1.9rem);color:var(--cyan);letter-spacing:5px;text-transform:uppercase;text-shadow:0 0 20px var(--cyan),0 0 40px var(--cyan);animation:glitch 5s infinite}
+.hdr .sub{color:var(--purple);font-size:.6rem;letter-spacing:3px;margin-top:3px;text-shadow:0 0 8px var(--purple)}
+.hdr .ts{color:#333;font-size:.55rem;margin-top:5px}
+@keyframes glitch{0%,90%,100%{text-shadow:0 0 20px var(--cyan),0 0 40px var(--cyan);transform:translate(0)}92%{text-shadow:-2px 0 var(--red),2px 0 var(--purple);transform:translate(-1px,1px)}94%{text-shadow:2px 0 var(--cyan),-1px 0 var(--gold);transform:translate(1px,-1px)}96%{text-shadow:0 0 20px var(--cyan);transform:translate(0)}}
+
+.price-bar{background:#050505;border-bottom:2px solid var(--border2);padding:10px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:center}
+.piw{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--border2);border-radius:6px;padding:6px 12px}
+.piw label{font-size:.65rem;letter-spacing:2px;color:#555;text-transform:uppercase}
+.piw input{background:none;border:none;color:var(--green);font-family:'Courier New',monospace;font-size:1.1rem;font-weight:bold;width:72px;text-align:right;outline:none;text-shadow:0 0 10px var(--green)}
+.piw input:focus{color:var(--cyan);text-shadow:0 0 10px var(--cyan)}
+.piw .sym{font-weight:bold;font-size:.85rem}
+.ubtn{background:none;border:1px solid var(--cyan);color:var(--cyan);font-family:'Courier New',monospace;font-size:.6rem;letter-spacing:2px;padding:8px 14px;border-radius:4px;cursor:pointer;text-transform:uppercase;transition:all .2s}
+.ubtn:hover{background:rgba(0,245,255,.1);box-shadow:0 0 12px rgba(0,245,255,.3)}
+
+.ticker{background:#030303;border-bottom:1px solid var(--border);padding:8px 16px;display:flex;gap:16px;overflow-x:auto;scrollbar-width:none;align-items:center;white-space:nowrap}
+.ticker::-webkit-scrollbar{display:none}
+.tsym{color:var(--gold);font-weight:bold;font-size:.8rem}
+.tpr{font-weight:bold;font-size:.8rem}
+.tgp{font-size:.62rem}
+.tsep{color:#1a1a1a}
+
+.cdbar{background:linear-gradient(90deg,#04000f,#080020,#04000f);border-bottom:1px solid var(--purple);border-top:1px solid rgba(217,0,255,.3);padding:10px 16px;display:flex;justify-content:space-around;flex-wrap:wrap;gap:8px}
+.cdi{text-align:center;flex:1;min-width:80px}
+.cdl{font-size:.5rem;letter-spacing:2px;text-transform:uppercase;margin-bottom:3px;opacity:.8}
+.cdc{font-size:clamp(.75rem,2.5vw,1.15rem);font-weight:bold;letter-spacing:1px;text-shadow:0 0 12px currentColor}
+.cds{font-size:.5rem;opacity:.6;margin-top:2px}
+
+.nav{position:fixed;bottom:0;left:0;right:0;background:rgba(0,0,0,.97);border-top:1px solid var(--border2);display:flex;backdrop-filter:blur(12px);z-index:200}
+.nb{flex:1;padding:10px 2px 12px;background:none;border:none;color:#333;font-family:'Courier New',monospace;font-size:.48rem;letter-spacing:1px;text-transform:uppercase;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;transition:color .2s}
+.nb.active{color:var(--cyan)}
+.nb:hover{color:var(--cyan)}
+.ni{font-size:.9rem}
+
+.page{display:none}.page.active{display:block}
+.main{padding:14px;max-width:1200px;margin:0 auto}
+
+.sh{font-size:.58rem;letter-spacing:4px;text-transform:uppercase;padding:6px 0;margin:16px 0 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.sh::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--border),transparent)}
+
+.cr{display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:8px;margin-bottom:12px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 10px;position:relative;overflow:hidden}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.cy::before{background:var(--cyan);box-shadow:0 0 8px var(--cyan)}.gn::before{background:var(--green);box-shadow:0 0 8px var(--green)}.pu::before{background:var(--purple);box-shadow:0 0 8px var(--purple)}.rd::before{background:var(--red);box-shadow:0 0 8px var(--red)}.go::before{background:var(--gold);box-shadow:0 0 8px var(--gold)}.or::before{background:var(--orange);box-shadow:0 0 8px var(--orange)}.tl::before{background:var(--teal);box-shadow:0 0 8px var(--teal)}.pk::before{background:var(--pink);box-shadow:0 0 8px var(--pink)}
+.cl{font-size:.52rem;letter-spacing:2px;color:#444;text-transform:uppercase;margin-bottom:5px}
+.cv{font-size:clamp(1rem,3.5vw,1.6rem);font-weight:bold}
+.cs{font-size:.58rem;color:#444;margin-top:3px}
+.cy .cv{color:var(--cyan);text-shadow:0 0 12px var(--cyan)}.gn .cv{color:var(--green);text-shadow:0 0 12px var(--green)}.pu .cv{color:var(--purple);text-shadow:0 0 12px var(--purple)}.rd .cv{color:var(--red);text-shadow:0 0 12px var(--red)}.go .cv{color:var(--gold);text-shadow:0 0 12px var(--gold)}.or .cv{color:var(--orange);text-shadow:0 0 12px var(--orange)}.tl .cv{color:var(--teal);text-shadow:0 0 12px var(--teal)}.pk .cv{color:var(--pink);text-shadow:0 0 12px var(--pink)}
+
+.pw{margin-bottom:11px}
+.plr{display:flex;justify-content:space-between;font-size:.58rem;margin-bottom:4px;color:#555}
+.pbg{background:#0a0a0a;border-radius:3px;height:8px;overflow:hidden;border:1px solid #111}
+.pbf{height:100%;border-radius:3px;transition:width 1.2s cubic-bezier(.25,.46,.45,.94);position:relative}
+.pbf::after{content:'';position:absolute;top:0;right:0;bottom:0;width:14px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.2));border-radius:3px}
+
+.bt{width:100%;border-collapse:collapse;font-size:.68rem;margin-bottom:14px}
+.bt th{color:#383838;font-size:.52rem;letter-spacing:2px;text-transform:uppercase;padding:7px 7px;border-bottom:1px solid var(--border);text-align:left}
+.bt td{padding:8px 7px;border-bottom:1px solid #0b0b0b;vertical-align:middle}
+.bt tr.r-now td{background:rgba(0,230,118,.05)}
+.bt tr.r-past td{opacity:.38}
+.bt tr.r-warn td{background:rgba(255,82,82,.03)}
+.bt tr.r-amc td{background:rgba(255,64,129,.04)}
+.bt tr:hover td{background:rgba(255,255,255,.02)}
+
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px}
+.dp{background:#1e1e1e}.dn{background:var(--green);box-shadow:0 0 5px var(--green);animation:pulse 1.5s infinite}.df{background:var(--purple)}.dh{background:var(--red);box-shadow:0 0 5px var(--red);animation:pulse 1.5s infinite}.dg{background:var(--gold);box-shadow:0 0 5px var(--gold)}.damc{background:var(--pink);box-shadow:0 0 5px var(--pink)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+.tag{display:inline-block;padding:2px 6px;border-radius:3px;font-size:.52rem;letter-spacing:1px;text-transform:uppercase;font-weight:bold}
+.tg{background:rgba(0,230,118,.12);color:var(--green);border:1px solid rgba(0,230,118,.25)}
+.tw{background:rgba(255,82,82,.12);color:var(--red);border:1px solid rgba(255,82,82,.25)}
+.tp{background:rgba(217,0,255,.12);color:var(--purple);border:1px solid rgba(217,0,255,.25)}
+.to{background:rgba(255,145,0,.12);color:var(--orange);border:1px solid rgba(255,145,0,.25)}
+.tgo{background:rgba(255,215,0,.1);color:var(--gold);border:1px solid rgba(255,215,0,.25)}
+.tc{background:rgba(0,245,255,.1);color:var(--cyan);border:1px solid rgba(0,245,255,.25)}
+.tpk{background:rgba(255,64,129,.12);color:var(--pink);border:1px solid rgba(255,64,129,.25)}
+
+.ig{display:grid;grid-template-columns:repeat(auto-fit,minmax(255px,1fr));gap:10px;margin-bottom:14px}
+.ib{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:13px}
+.ib h3{font-size:.55rem;letter-spacing:3px;text-transform:uppercase;margin-bottom:10px;padding-bottom:7px;border-bottom:1px solid var(--border)}
+.ir{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #090909;font-size:.68rem}
+.ir:last-child{border-bottom:none}
+.ik{color:#4a4a4a}
+.iv{font-weight:bold}
+
+.cc{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:13px;margin-bottom:12px}
+.ct{font-size:.55rem;letter-spacing:3px;color:#3a3a3a;text-transform:uppercase;margin-bottom:10px}
+canvas{max-height:250px}
+
+.mb{background:linear-gradient(135deg,#080400,#100800,#080400);border:1px solid rgba(255,215,0,.2);border-radius:8px;padding:18px;margin-bottom:14px;text-align:center;box-shadow:0 0 40px rgba(255,215,0,.04)}
+.ml{font-size:.55rem;letter-spacing:4px;color:var(--gold);text-transform:uppercase;margin-bottom:6px;opacity:.7}
+.mp{font-size:clamp(2.2rem,9vw,4rem);font-weight:bold;color:var(--gold);text-shadow:0 0 30px var(--gold),0 0 60px rgba(255,215,0,.4);line-height:1}
+.ms{font-size:.62rem;color:#555;margin-top:6px;letter-spacing:2px}
+.mm{font-size:.9rem;color:var(--orange);margin-top:8px;text-shadow:0 0 8px var(--orange)}
+
+/* AMC INDEPENDENT BLOCK */
+.amc-mb{background:linear-gradient(135deg,#080005,#100010,#080005);border:1px solid rgba(255,64,129,.2);border-radius:8px;padding:18px;margin-bottom:14px;text-align:center;box-shadow:0 0 40px rgba(255,64,129,.04)}
+.amc-ml{font-size:.55rem;letter-spacing:4px;color:var(--pink);text-transform:uppercase;margin-bottom:6px;opacity:.7}
+.amc-mp{font-size:clamp(2rem,8vw,3.5rem);font-weight:bold;color:var(--pink);text-shadow:0 0 25px var(--pink),0 0 50px rgba(255,64,129,.4);line-height:1}
+.amc-ms{font-size:.62rem;color:#555;margin-top:6px;letter-spacing:2px}
+.amc-mm{font-size:.85rem;color:var(--purple);margin-top:8px;text-shadow:0 0 8px var(--purple)}
+
+/* PHASE COMPARISON */
+.phase-box{background:var(--card);border:1px solid var(--border2);border-radius:8px;padding:14px;margin-bottom:14px}
+.phase-box h3{font-size:.55rem;letter-spacing:3px;text-transform:uppercase;margin-bottom:12px;padding-bottom:7px;border-bottom:1px solid var(--border)}
+.phase-row{display:grid;grid-template-columns:1fr 30px 1fr;gap:4px;border-bottom:1px solid #0a0a0a;font-size:.67rem;align-items:center}
+.phase-row:last-child{border-bottom:none}
+.ph-l{padding:8px 8px 8px 0;text-align:right}
+.ph-m{text-align:center;color:#222;padding:4px 0}
+.ph-r{padding:8px 0 8px 8px}
+.phase-hdr{display:grid;grid-template-columns:1fr 30px 1fr;font-size:.52rem;letter-spacing:2px;color:#2a2a2a;text-transform:uppercase;padding:5px 0 8px;border-bottom:1px solid var(--border);margin-bottom:4px}
+
+.sb{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:13px;margin-bottom:12px}
+.sbt{font-size:.55rem;letter-spacing:3px;text-transform:uppercase;color:#3a3a3a;margin-bottom:10px;padding-bottom:7px;border-bottom:1px solid var(--border)}
+.sr{display:flex;align-items:center;gap:9px;padding:6px 0;border-bottom:1px solid #090909;font-size:.7rem}
+.sr:last-child{border-bottom:none}
+.si{font-size:.95rem;width:18px;text-align:center;flex-shrink:0}
+.sl{flex:1;color:#777}
+.ss{font-weight:bold;font-size:.62rem;text-align:right}
+
+.alert{background:rgba(255,82,82,.06);border:1px solid rgba(255,82,82,.18);border-radius:8px;padding:13px;margin-bottom:12px;font-size:.68rem;line-height:1.8}
+.ah{color:var(--red);font-size:.58rem;letter-spacing:3px;text-transform:uppercase;margin-bottom:6px;font-weight:bold}
+
+.sq-wrap{text-align:center;padding:14px;background:var(--card);border:1px solid var(--border);border-radius:8px;margin-bottom:12px}
+.sq-lbl{font-size:.55rem;letter-spacing:4px;color:#3a3a3a;text-transform:uppercase;margin-bottom:10px}
+.sq-ring{width:105px;height:105px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 10px;position:relative}
+.sq-ring::before{content:'';position:absolute;width:79px;height:79px;border-radius:50%;background:var(--card)}
+.sq-num{position:relative;z-index:1;font-size:1.7rem;font-weight:bold}
+.sq-desc{font-size:.62rem;color:#444}
+
+.cal-sec{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:13px;margin-bottom:12px}
+.cal-sec h3{font-size:.55rem;letter-spacing:3px;text-transform:uppercase;margin-bottom:10px;padding-bottom:7px;border-bottom:1px solid var(--border)}
+.cal-item{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid #090909;font-size:.7rem}
+.cal-item:last-child{border-bottom:none}
+.cal-dt{width:82px;flex-shrink:0;color:#444;font-size:.62rem;padding-top:1px}
+.cal-ev{flex:1;line-height:1.5}
+.cal-cd{color:#333;font-size:.58rem;min-width:55px;text-align:right;padding-top:1px}
+
+.mirror-hdr{display:grid;grid-template-columns:1fr 18px 1fr;font-size:.5rem;letter-spacing:2px;color:#2a2a2a;text-transform:uppercase;padding:5px 8px 8px;border-bottom:1px solid var(--border)}
+.mirror-row{display:grid;grid-template-columns:1fr 18px 1fr;border-bottom:1px solid #0a0a0a}
+.mirror-row:last-child{border-bottom:none}
+.ml2{padding:8px 8px 8px 0;text-align:right;color:#444;font-size:.67rem;line-height:1.5}
+.mm2{display:flex;align-items:center;justify-content:center;color:#1e1e1e;font-size:.65rem;padding:6px 0}
+.mr2{padding:8px 0 8px 8px;font-size:.67rem;line-height:1.5}
+
+.disc{background:#030303;border:1px solid #0d0d0d;border-radius:8px;padding:13px;margin-bottom:14px;font-size:.58rem;color:#2a2a2a;line-height:1.9}
+.spacer{height:80px}
+@media(max-width:380px){.cr{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <h1>&#9889; BEAST MODE &#9889;</h1>
+  <div class="sub">GME &bull; AMC INDEPENDENT &bull; 180° FRACTAL COMMAND CENTER &bull; 2021&#8596;2027</div>
+  <div class="ts" id="ts">—</div>
+</div>
+
+<!-- PRICE INPUTS -->
+<div class="price-bar">
+  <div class="piw"><span class="sym" style="color:var(--cyan)">GME</span><label>$</label><input type="number" id="gmeIn" value="23.00" step="0.01" min="0" onchange="recalc()"></div>
+  <div class="piw"><span class="sym" style="color:var(--pink)">AMC</span><label>$</label><input type="number" id="amcIn" value="1.57" step="0.01" min="0" onchange="recalc()"></div>
+  <button class="ubtn" onclick="recalc()">&#8635; UPDATE</button>
+</div>
+
+<!-- TICKER -->
+<div class="ticker">
+  <span class="tsym">GME</span><span class="tpr" id="tk-gme" style="color:var(--green)">$23.00</span><span class="tgp" id="tk-gme-g" style="color:var(--red)">—</span>
+  <span class="tsep">|</span>
+  <span class="tsym">AMC</span><span class="tpr" id="tk-amc" style="color:var(--green)">$1.57</span><span class="tgp" id="tk-amc-g" style="color:var(--red)">—</span>
+  <span class="tsep">|</span>
+  <span class="tsym" style="color:var(--pink)">AMC OWN</span><span class="tpr" id="tk-amc-ind" style="color:var(--pink)">—</span><span class="tgp" style="color:var(--pink)">Jun 2, 2027</span>
+  <span class="tsep">|</span>
+  <span class="tsym">ANCHOR</span><span class="tpr" style="color:var(--orange)">$24</span><span class="tgp" id="tk-anch" style="color:var(--red)">NOT HELD</span>
+  <span class="tsep">|</span>
+  <span class="tsym">GME&#8594;$300</span><span class="tpr" id="tk-gx" style="color:var(--gold)">—</span>
+  <span class="tsep">|</span>
+  <span class="tsym" style="color:var(--pink)">AMC&#8594;$29</span><span class="tpr" id="tk-ax" style="color:var(--pink)">—</span>
+</div>
+
+<!-- COUNTDOWNS -->
+<div class="cdbar">
+  <div class="cdi"><div class="cdl" style="color:var(--orange)">GME ANCHOR</div><div class="cdc" style="color:var(--orange)" id="cd-anch">—</div><div class="cds" style="color:var(--orange)">$24 reclaim</div></div>
+  <div class="cdi"><div class="cdl" style="color:var(--purple)">JUN 22 CONVERGE</div><div class="cdc" style="color:var(--purple)" id="cd-jun22">—</div><div class="cds" style="color:var(--purple)">GME $99.84</div></div>
+  <div class="cdi"><div class="cdl" style="color:var(--red)">SEP 22 COMPLETE</div><div class="cdc" style="color:var(--red)" id="cd-sep22">—</div><div class="cds" style="color:var(--red)">GME $174.96</div></div>
+  <div class="cdi"><div class="cdl" style="color:var(--gold)">JAN 28, 2027</div><div class="cdc" style="color:var(--gold)" id="cd-jan28">—</div><div class="cds" style="color:var(--gold)">GME $300 • 6yr anniv</div></div>
+  <div class="cdi"><div class="cdl" style="color:var(--pink)">JUN 2, 2027</div><div class="cdc" style="color:var(--pink)" id="cd-jun2">—</div><div class="cds" style="color:var(--pink)">AMC OWN PEAK • $29</div></div>
+</div>
+
+<!-- NAV -->
+<div class="nav">
+  <button class="nb active" onclick="go('dash')" id="n-dash"><span class="ni">&#9881;</span>DASH</button>
+  <button class="nb" onclick="go('fractal')" id="n-fractal"><span class="ni">&#9650;</span>FRACTAL</button>
+  <button class="nb" onclick="go('cal')" id="n-cal"><span class="ni">&#128197;</span>CAL</button>
+  <button class="nb" onclick="go('chart')" id="n-chart"><span class="ni">&#128200;</span>CHART</button>
+  <button class="nb" onclick="go('intel')" id="n-intel"><span class="ni">&#128202;</span>INTEL</button>
+</div>
+
+<!-- ══════════════ DASHBOARD ══════════════ -->
+<div class="page active main" id="p-dash">
+  <div class="sh" style="color:var(--green)">&#9679; LIVE STATUS — JUN 1, 2026</div>
+  <div class="cr">
+    <div class="card rd"><div class="cl">GME Actual</div><div class="cv" id="d-gme">$23.00</div><div class="cs" id="d-gme-s">Below anchor ▼</div></div>
+    <div class="card rd"><div class="cl">AMC Actual</div><div class="cv" id="d-amc">$1.57</div><div class="cs">Below $2 break ▼</div></div>
+    <div class="card cy"><div class="cl">GME Jun 22</div><div class="cv">$99.84</div><div class="cs">4.16× anchor</div></div>
+    <div class="card pk"><div class="cl">AMC OWN Target</div><div class="cv" id="d-amc-ind">$29.00</div><div class="cs">Jun 2, 2027 • 14.5×</div></div>
+    <div class="card pu"><div class="cl">GME Sep 22</div><div class="cv">$174.96</div><div class="cs">7.29× anchor</div></div>
+    <div class="card tl"><div class="cl">AMC Corr. (Jun22)</div><div class="cv" id="d-amc-c">$6.82</div><div class="cs">ratio-scaled w/ GME</div></div>
+    <div class="card go"><div class="cl">GME Jan 28, 2027</div><div class="cv">$300</div><div class="cs">12.5× • 6yr anniv</div></div>
+    <div class="card pk"><div class="cl">AMC Jun 2, 2027</div><div class="cv">$29</div><div class="cs">own fractal • 6yr anniv</div></div>
+  </div>
+
+  <!-- DUAL TARGET COMPARISON -->
+  <div class="sh" style="color:var(--pink)">&#8596; AMC: CORRELATED vs INDEPENDENT TARGETS</div>
+  <div class="phase-box">
+    <h3 style="color:var(--pink)">Two Ways to Map AMC</h3>
+    <div class="phase-hdr"><span style="text-align:right">GME-CORRELATED (ratio)</span><span></span><span style="color:var(--pink)">AMC INDEPENDENT (own cycle)</span></div>
+    <div class="phase-row"><div class="ph-l" style="color:var(--cyan)">$4.26<br><small style="color:#444">Jun 1 now</small></div><div class="ph-m">&#8596;</div><div class="ph-r" style="color:var(--pink)">$1.57<br><small style="color:#444">own baseline</small></div></div>
+    <div class="phase-row"><div class="ph-l" style="color:var(--cyan)">$6.82<br><small style="color:#444">Jun 22, 2026</small></div><div class="ph-m">&#8596;</div><div class="ph-r" style="color:var(--pink)">~$8.00<br><small style="color:#444">4× own anchor</small></div></div>
+    <div class="phase-row"><div class="ph-l" style="color:var(--cyan)">$11.95<br><small style="color:#444">Sep 22, 2026</small></div><div class="ph-m">&#8596;</div><div class="ph-r" style="color:var(--pink)">~$16.00<br><small style="color:#444">~Nov 2026</small></div></div>
+    <div class="phase-row"><div class="ph-l" style="color:var(--gold)">$20.48<br><small style="color:#444">Jan 28, 2027</small></div><div class="ph-m">&#8596;</div><div class="ph-r" style="color:var(--pink)">~$29.00<br><small style="color:#444">Jun 2, 2027 PEAK</small></div></div>
+    <div style="font-size:.6rem;color:#444;padding:10px 0 4px;line-height:1.8">
+      AMC's 2021 peak was <span style="color:var(--pink)">Jun 2, 2021 @ $72.62</span> — 156 days AFTER GME's Jan 28, 2021 peak.
+      AMC's independent fractal is phase-shifted +156 days forward from GME's.
+      AMC may lag GME's peak by ~5 months — peaking <span style="color:var(--pink)">Jun 2027</span> while GME peaks <span style="color:var(--gold)">Jan 2027</span>.
+    </div>
+  </div>
+
+  <!-- SQUEEZE SCORE -->
+  <div class="sq-wrap">
+    <div class="sq-lbl">Fractal Alignment Score</div>
+    <div class="sq-ring" id="sq-ring" style="background:conic-gradient(var(--purple) 0% 37%,#111 37% 100%)"><div class="sq-num" style="color:var(--purple)" id="sq-num">37</div></div>
+    <div class="sq-desc" id="sq-desc">Pre-launch — anchor not yet confirmed</div>
+  </div>
+
+  <!-- SIGNAL BOARD -->
+  <div class="sb">
+    <div class="sbt" style="color:var(--cyan)">&#9658; SIGNAL BOARD</div>
+    <div class="sr"><span class="si">&#10005;</span><span class="sl">GME above $24 anchor (flip confirmed)</span><span class="ss" style="color:var(--red)">FAILED</span></div>
+    <div class="sr"><span class="si">&#10005;</span><span class="sl">Volume spike / catalyst event</span><span class="ss" style="color:var(--red)">ABSENT</span></div>
+    <div class="sr"><span class="si">&#10005;</span><span class="sl">AMC above $2.00 break level</span><span class="ss" style="color:var(--red)">NOT YET</span></div>
+    <div class="sr"><span class="si">&#9654;</span><span class="sl">Greg Code 1667 window active (Jun 1–Jul 7)</span><span class="ss" style="color:var(--green)">LIVE NOW</span></div>
+    <div class="sr"><span class="si">&#9654;</span><span class="sl">GME Jun 22 convergence window</span><span class="ss" style="color:var(--purple)">T‑21 DAYS</span></div>
+    <div class="sr"><span class="si">&#9654;</span><span class="sl">AMC own cycle: 156-day offset from GME active</span><span class="ss" style="color:var(--pink)">IN WINDOW</span></div>
+    <div class="sr"><span class="si">&#63;</span><span class="sl">SI% confirmed elevated (20%+)</span><span class="ss" style="color:var(--orange)">MONITOR</span></div>
+    <div class="sr"><span class="si">&#63;</span><span class="sl">Options chain / gamma ramp building</span><span class="ss" style="color:var(--orange)">MONITOR</span></div>
+    <div class="sr"><span class="si">&#63;</span><span class="sl">T+35 FTD cycle window</span><span class="ss" style="color:var(--cyan)">POSSIBLE</span></div>
+    <div class="sr"><span class="si">&#63;</span><span class="sl">OPEX gamma squeeze (Jun 19)</span><span class="ss" style="color:var(--cyan)">18 DAYS</span></div>
+  </div>
+
+  <!-- PROGRESS BARS -->
+  <div class="sh" style="color:var(--cyan)">&#9658; PROGRESS TO TARGETS</div>
+  <div class="pw"><div class="plr"><span style="color:var(--orange)">GME &#8594; $24 ANCHOR</span><span id="pb-a-t">—</span></div><div class="pbg"><div class="pbf" id="pb-a" style="background:linear-gradient(90deg,#ff9100,#ffd700)"></div></div></div>
+  <div class="pw"><div class="plr"><span style="color:var(--purple)">GME &#8594; $99.84 (Jun 22)</span><span id="pb-j-t">—</span></div><div class="pbg"><div class="pbf" id="pb-j" style="background:linear-gradient(90deg,#ff5252,#d900ff)"></div></div></div>
+  <div class="pw"><div class="plr"><span style="color:var(--red)">GME &#8594; $174.96 (Sep 22)</span><span id="pb-s-t">—</span></div><div class="pbg"><div class="pbf" id="pb-s" style="background:linear-gradient(90deg,#ff5252,#ff9100)"></div></div></div>
+  <div class="pw"><div class="plr"><span style="color:var(--gold)">GME &#8594; $300 (Jan 28, 2027)</span><span id="pb-m-t">—</span></div><div class="pbg"><div class="pbf" id="pb-m" style="background:linear-gradient(90deg,#ff9100,#ffd700)"></div></div></div>
+  <div class="pw"><div class="plr"><span style="color:var(--teal)">AMC (corr.) &#8594; $6.82 (Jun 22)</span><span id="pb-ac-t">—</span></div><div class="pbg"><div class="pbf" id="pb-ac" style="background:linear-gradient(90deg,#d900ff,#00f5ff)"></div></div></div>
+  <div class="pw"><div class="plr"><span style="color:var(--pink)">AMC (OWN) &#8594; $2.00 (break level)</span><span id="pb-ab-t">—</span></div><div class="pbg"><div class="pbf" id="pb-ab" style="background:linear-gradient(90deg,#ff4081,#d900ff)"></div></div></div>
+  <div class="pw"><div class="plr"><span style="color:var(--pink)">AMC (OWN) &#8594; $29 (Jun 2, 2027)</span><span id="pb-am-t">—</span></div><div class="pbg"><div class="pbf" id="pb-am" style="background:linear-gradient(90deg,#ff4081,#ffd700)"></div></div></div>
+
+  <!-- DAILY % REQUIRED -->
+  <div class="sh" style="color:var(--orange)">&#9650; DAILY % GAIN REQUIRED (compounded)</div>
+  <div class="cr">
+    <div class="card or"><div class="cl">GME &#8594; $24</div><div class="cv" id="d-d-a">—</div><div class="cs">% gain needed</div></div>
+    <div class="card pu"><div class="cl">GME &#8594; $99 (21d)</div><div class="cv" id="d-d-j">—</div><div class="cs">% per day</div></div>
+    <div class="card rd"><div class="cl">GME &#8594; $175 (113d)</div><div class="cv" id="d-d-s">—</div><div class="cs">% per day</div></div>
+    <div class="card go"><div class="cl">GME &#8594; $300 (244d)</div><div class="cv" id="d-d-m">—</div><div class="cs">% per day</div></div>
+    <div class="card pk"><div class="cl">AMC &#8594; $2 break</div><div class="cv" id="d-d-ab">—</div><div class="cs">% gain needed</div></div>
+    <div class="card pk"><div class="cl">AMC &#8594; $29 (366d)</div><div class="cv" id="d-d-am">—</div><div class="cs">% per day</div></div>
+  </div>
+
+  <div class="alert">
+    <div class="ah">&#9888; ANCHOR NOT HELD — GME & AMC BOTH BELOW KEY LEVELS</div>
+    GME at <span id="al-gme" style="color:var(--red)">$23.00</span> is below the $24.00 fractal flip anchor. AMC at <span id="al-amc" style="color:var(--red)">$1.57</span> is below the $2.00 break level. All targets are theoretical. AMC has TWO target sets: <span style="color:var(--teal)">GME-correlated</span> (ratio-scaled, peaks Jan 2027 with GME) and <span style="color:var(--pink)">independent fractal</span> (based on AMC's own Jun 2, 2021 peak, 156-day offset, peaks Jun 2027).
+  </div>
+  <div class="spacer"></div>
+</div>
+
+<!-- ══════════════ FRACTAL ══════════════ -->
+<div class="page main" id="p-fractal">
+
+  <div class="sh" style="color:var(--cyan)">&#9650; GME — 180° FRACTAL TRAJECTORY</div>
+  <table class="bt">
+    <tr><th>EVENT</th><th>DATE</th><th>GME</th><th>MULT</th><th></th></tr>
+    <tr class="r-past"><td><span class="dot dp"></span>Flip Anchor</td><td style="color:#333">Feb 23</td><td style="color:#333">$24.00</td><td style="color:#333">1.0×</td><td><span class="tag tw">BELOW</span></td></tr>
+    <tr class="r-past"><td><span class="dot dp"></span>Cheers Peak</td><td style="color:#333">Mar 17</td><td style="color:#333">$55.68</td><td style="color:#333">2.32×</td><td><span class="tag tw">MISSED</span></td></tr>
+    <tr class="r-past"><td><span class="dot dp"></span>May Cycle</td><td style="color:#333">May 22</td><td style="color:#333">$60.00</td><td style="color:#333">2.5×</td><td><span class="tag tw">MISSED</span></td></tr>
+    <tr class="r-now"><td><span class="dot dn"></span><b>YOU ARE HERE</b></td><td style="color:var(--green)"><b>Jun 1</b></td><td style="color:var(--green)"><b>$62.40</b></td><td style="color:var(--green)"><b>2.6×</b></td><td><span class="tag tg">NOW</span></td></tr>
+    <tr><td><span class="dot df"></span>Greg Code Window</td><td style="color:var(--cyan)">Jun 1–Jul 7</td><td style="color:var(--cyan)">$62+</td><td style="color:var(--cyan)">2.6×+</td><td><span class="tag tp">OPEN</span></td></tr>
+    <tr><td><span class="dot dh"></span>OPEX</td><td style="color:var(--orange)">Jun 19</td><td style="color:var(--orange)">gamma event</td><td>—</td><td><span class="tag to">18d</span></td></tr>
+    <tr class="r-warn"><td><span class="dot dh"></span>JUN 22 Convergence</td><td style="color:var(--purple)">Jun 22</td><td style="color:var(--purple)">$99.84</td><td style="color:var(--purple)">4.16×</td><td><span class="tag tp">21d</span></td></tr>
+    <tr><td><span class="dot df"></span>Jul OPEX</td><td style="color:#444">Jul 17</td><td style="color:#444">—</td><td>—</td><td><span class="tag tc">46d</span></td></tr>
+    <tr><td><span class="dot df"></span>Aug OPEX</td><td style="color:#444">Aug 21</td><td style="color:#444">—</td><td>—</td><td><span class="tag tc">81d</span></td></tr>
+    <tr><td><span class="dot df"></span>Sep OPEX</td><td style="color:#444">Sep 19</td><td style="color:#444">—</td><td>—</td><td><span class="tag tc">110d</span></td></tr>
+    <tr class="r-warn"><td><span class="dot dh"></span>SEP 22 Complete</td><td style="color:var(--red)">Sep 22</td><td style="color:var(--red)">$174.96</td><td style="color:var(--red)">7.29×</td><td><span class="tag tw">113d</span></td></tr>
+    <tr><td><span class="dot df"></span>Oct–Dec OPEX</td><td style="color:#444">Oct/Nov/Dec</td><td style="color:#444">—</td><td>—</td><td><span class="tag tc">137–200d</span></td></tr>
+    <tr><td><span class="dot df"></span>LEAPS OPEX</td><td style="color:var(--purple)">Jan 16, 2027</td><td style="color:var(--purple)">gamma max</td><td>—</td><td><span class="tag tp">229d</span></td></tr>
+    <tr class="r-warn"><td><span class="dot dg"></span><b>JAN 28 — 6YR ANNIV</b></td><td style="color:var(--gold)"><b>Jan 28, 2027</b></td><td style="color:var(--gold)"><b>$300</b></td><td style="color:var(--gold)"><b>12.5×</b></td><td><span class="tag tgo">241d</span></td></tr>
+  </table>
+
+  <!-- GME 2021 MIRROR -->
+  <div class="sh" style="color:var(--purple)">&#8596; GME — 2021 ↔ 2026/2027 MIRROR</div>
+  <div class="ib" style="margin-bottom:14px">
+    <div class="mirror-hdr"><span style="text-align:right">2021 ORIGINAL</span><span></span><span>2026/2027 MIRROR</span></div>
+    <div class="mirror-row"><div class="ml2">Jan 11, 2021<br>Ryan Cohen joins<br>$20→$38</div><div class="mm2">&#8596;</div><div class="mr2" style="color:var(--orange)">Feb 23, 2026<br>Flip Anchor<br>$24.00</div></div>
+    <div class="mirror-row"><div class="ml2">Jan 22, 2021<br>First halt $65</div><div class="mm2">&#8596;</div><div class="mr2" style="color:#888">Mar 17, 2026<br>Cheers Peak $55.68</div></div>
+    <div class="mirror-row"><div class="ml2">Jan 26, 2021<br>Elon "Gamestonk" $147</div><div class="mm2">&#8596;</div><div class="mr2" style="color:#888">May 22, 2026<br>May Cycle $60.00</div></div>
+    <div class="mirror-row" style="background:rgba(0,230,118,.04)"><div class="ml2" style="color:var(--green)">Jan 28, 2021<br>$483 intraday HIGH<br>Brokers halt</div><div class="mm2" style="color:var(--green)">&#8596;</div><div class="mr2" style="color:var(--green)">Jun 1–22, 2026<br>Current window<br>$62–$99 zone</div></div>
+    <div class="mirror-row"><div class="ml2">Feb 24, 2021<br>Post-halt ~$40</div><div class="mm2">&#8596;</div><div class="mr2" style="color:var(--purple)">Jun 22, 2026<br>Convergence $99.84</div></div>
+    <div class="mirror-row"><div class="ml2">Mar 10, 2021<br>Third run $265</div><div class="mm2">&#8596;</div><div class="mr2" style="color:var(--red)">Sep 22, 2026<br>Complete $174.96</div></div>
+    <div class="mirror-row"><div class="ml2" style="color:var(--gold)">Jan 28, 2021<br>$483 — THE peak</div><div class="mm2" style="color:var(--gold)">&#8596;</div><div class="mr2" style="color:var(--gold)">Jan 28, 2027<br>6-yr anniv $300</div></div>
+  </div>
+
+  <!-- GME MOASS BLOCK -->
+  <div class="mb">
+    <div class="ml">&#128293; GME — JAN 28, 2027 — 6-YEAR ANNIVERSARY</div>
+    <div class="mp">$300</div>
+    <div class="ms">Jan 28, 2021 → $483 intraday &bull; Brokers halted buying &bull; 6 years later = Jan 28, 2027</div>
+    <div class="mm">12.5× from anchor &bull; 13× from $23 current</div>
+  </div>
+
+  <!-- AMC INDEPENDENT CYCLE -->
+  <div class="sh" style="color:var(--pink)">&#9829; AMC — INDEPENDENT FRACTAL CYCLE (Jun 2, 2021 → Jun 2, 2027)</div>
+
+  <div style="background:rgba(255,64,129,.05);border:1px solid rgba(255,64,129,.15);border-radius:8px;padding:12px;margin-bottom:14px;font-size:.68rem;line-height:1.9;color:#aaa">
+    AMC's biggest squeeze was <span style="color:var(--pink)">Jun 2, 2021 @ $72.62</span> — not January 2021.
+    That's <b style="color:var(--pink)">156 days AFTER</b> GME's Jan 28 peak.
+    Apply the same 6-year mirror: AMC's independent MOASS target = <b style="color:var(--pink)">Jun 2, 2027</b>.
+    Every GME milestone date + 156 days = AMC's equivalent date.
+    AMC's own anchor: <b style="color:var(--pink)">$2.00</b> (round number near current $1.57).
+    From $2 anchor applying 2021 multipliers: 4× = $8 &bull; 8× = $16 &bull; 14.5× = <b style="color:var(--pink)">$29.00 peak</b>.
+  </div>
+
+  <table class="bt">
+    <tr><th>AMC EVENT</th><th>DATE</th><th>AMC TARGET</th><th>MULT (own)</th><th>GME EQUIV</th><th></th></tr>
+    <tr class="r-amc"><td><span class="dot damc"></span>AMC Own Anchor</td><td style="color:var(--pink)">~Mar 2026</td><td style="color:var(--pink)">$2.00</td><td style="color:var(--pink)">1.0×</td><td style="color:#444">Feb 23</td><td><span class="tag tpk">BASE</span></td></tr>
+    <tr class="r-amc r-now"><td><span class="dot dn"></span><b>AMC NOW</b></td><td style="color:var(--green)"><b>Jun 1</b></td><td style="color:var(--green)"><b>$1.57</b></td><td style="color:var(--green)"><b>0.79×</b></td><td style="color:#444">Jun 1</td><td><span class="tag tg">LIVE</span></td></tr>
+    <tr class="r-amc"><td><span class="dot damc"></span>First Spike Zone</td><td style="color:var(--pink)">~Jul 2026</td><td style="color:var(--pink)">$8.00</td><td style="color:var(--pink)">4×</td><td style="color:#444">Jun 22</td><td><span class="tag tpk">~56d</span></td></tr>
+    <tr class="r-amc"><td><span class="dot damc"></span>Mid Expansion</td><td style="color:var(--pink)">~Nov 2026</td><td style="color:var(--pink)">$16.00</td><td style="color:var(--pink)">8×</td><td style="color:#444">Sep 22</td><td><span class="tag tpk">~153d</span></td></tr>
+    <tr class="r-amc"><td><span class="dot damc"></span>Pre-Peak Setup</td><td style="color:var(--pink)">~Feb 2027</td><td style="color:var(--pink)">$22.00</td><td style="color:var(--pink)">11×</td><td style="color:#444">Jan 28</td><td><span class="tag tpk">~246d</span></td></tr>
+    <tr class="r-amc"><td><span class="dot damc"></span><b>AMC OWN PEAK</b></td><td style="color:var(--pink)"><b>Jun 2, 2027</b></td><td style="color:var(--pink)"><b>$29.00</b></td><td style="color:var(--pink)"><b>14.5×</b></td><td style="color:var(--gold)">Jan 28 +156d</td><td><span class="tag tpk">367d</span></td></tr>
+  </table>
+
+  <!-- AMC 2021 MIRROR -->
+  <div class="sh" style="color:var(--pink)">&#8596; AMC — 2021 ↔ 2026/2027 OWN MIRROR</div>
+  <div class="ib" style="margin-bottom:14px">
+    <div class="mirror-hdr"><span style="text-align:right">2021 AMC ORIGINAL</span><span></span><span style="color:var(--pink)">2026/2027 AMC MIRROR</span></div>
+    <div class="mirror-row"><div class="ml2">Jan 2021<br>AMC ~$5 pre-squeeze<br>base level</div><div class="mm2">&#8596;</div><div class="mr2" style="color:var(--pink)">~Mar 2026<br>AMC $2.00 anchor<br>current $1.57</div></div>
+    <div class="mirror-row"><div class="ml2">Jan 27, 2021<br>AMC first spike<br>~$20 (4× base)</div><div class="mm2">&#8596;</div><div class="mr2" style="color:var(--pink)">~Jul 2026<br>AMC $8.00<br>4× own anchor</div></div>
+    <div class="mirror-row"><div class="ml2">May 2021<br>AMC own run begins<br>~$12→$35</div><div class="mm2">&#8596;</div><div class="mr2" style="color:var(--pink)">~Nov–Dec 2026<br>AMC $16.00<br>8× own anchor</div></div>
+    <div class="mirror-row" style="background:rgba(255,64,129,.06)"><div class="ml2" style="color:var(--pink)">Jun 2, 2021<br>AMC $72.62 PEAK<br>14.5× from base</div><div class="mm2" style="color:var(--pink)">&#8596;</div><div class="mr2" style="color:var(--pink)">Jun 2, 2027<br>AMC ~$29 PEAK<br>14.5× own anchor</div></div>
+    <div class="mirror-row"><div class="ml2">Jun 8, 2021<br>AMC second spike<br>~$62</div><div class="mm2">&#8596;</div><div class="mr2" style="color:var(--pink)">~Jun–Jul 2027<br>Potential second wave<br>~$20–25 post-peak</div></div>
+  </div>
+
+  <!-- AMC MOASS BLOCK -->
+  <div class="amc-mb">
+    <div class="amc-ml">&#9829; AMC OWN FRACTAL — JUN 2, 2027 — 6-YEAR ANNIVERSARY</div>
+    <div class="amc-mp">$29</div>
+    <div class="amc-ms">Jun 2, 2021 → $72.62 AMC peak &bull; 6 years later = Jun 2, 2027 &bull; Phase offset: +156 days from GME</div>
+    <div class="amc-mm">14.5× from $2 own anchor &bull; 18.5× from $1.57 current &bull; GME peaks 5 months earlier</div>
+  </div>
+
+  <div class="spacer"></div>
+</div>
+
+<!-- ══════════════ CALENDAR ══════════════ -->
+<div class="page main" id="p-cal">
+  <div class="sh" style="color:var(--purple)">&#128197; FULL CALENDAR — JUN 2026 → JUN 2027</div>
+
+  <div class="cal-sec">
+    <h3 style="color:var(--green)">&#9679; JUNE 2026 — HIGHEST PRIORITY</h3>
+    <div class="cal-item"><div class="cal-dt" style="color:var(--green)">Jun 1</div><div class="cal-ev"><span class="dot dn"></span><b style="color:var(--green)">YOU ARE HERE</b> — Greg Code 1667 opens &bull; GME fractal position: $62.40 &bull; AMC corr: $4.26</div><div class="cal-cd" id="c-j1" style="color:var(--green)">TODAY</div></div>
+    <div class="cal-item"><div class="cal-dt" style="color:var(--orange)">Jun 10</div><div class="cal-ev"><span class="dot df"></span>T+35 FTD estimated window from May cycle dates</div><div class="cal-cd" id="c-j10" style="color:var(--orange)">—</div></div>
+    <div class="cal-item"><div class="cal-dt" style="color:var(--orange)">Jun 19</div><div class="cal-ev"><span class="dot dh"></span><b>GME OPEX</b> — Options expiration &bull; Gamma ramp pressure &bull; Max pain critical</div><div class="cal-cd" id="c-j19" style="color:var(--orange)">—</div></div>
+    <div class="cal-item"><div class="cal-dt" style="color:var(--purple)">Jun 22</div><div class="cal-ev"><span class="dot dh"></span><b style="color:var(--purple)">GME CONVERGENCE</b> — 180° fractal target &bull; $99.84 GME &bull; $6.82 AMC (corr)</div><div class="cal-cd" id="c-j22" style="color:var(--purple)">—</div></div>
+    <div class="cal-item"><div class="cal-dt" style="color:var(--cyan)">Jul 7</div><div class="cal-ev"><span class="dot df"></span>Greg Code 1667 window closes</div><div class="cal-cd" id="c-j7" style="color:var(--cyan)">—</div></div>
+  </div>
+
+  <div class="cal-sec">
+    <h3 style="color:var(--cyan)">JULY–AUGUST 2026</h3>
+    <div class="cal-item"><div class="cal-dt" style="color:var(--pink)">~Jul 2026</div><div class="cal-ev"><span class="dot damc"></span><b style="color:var(--pink)">AMC INDEPENDENT: First Spike Zone</b> — ~$8 target (4× own anchor) — AMC's equivalent of GME Jan22 spike</div><div class="cal-cd" style="color:var(--pink)">~56d</div></div>
+    <div class="cal-item"><div class="cal-dt">Jul 17</div><div class="cal-ev"><span class="dot df"></span>GME OPEX — July options expiration</div><div class="cal-cd" id="c-j17">—</div></div>
+    <div class="cal-item"><div class="cal-dt">Aug 21</div><div class="cal-ev"><span class="dot df"></span>GME OPEX — August options expiration</div><div class="cal-cd" id="c-a21">—</div></div>
+  </div>
+
+  <div class="cal-sec">
+    <h3 style="color:var(--red)">SEPTEMBER 2026 — GME PATTERN COMPLETION</h3>
+    <div class="cal-item"><div class="cal-dt" style="color:var(--orange)">Sep 19</div><div class="cal-ev"><span class="dot df"></span>GME OPEX — pre-completion pressure</div><div class="cal-cd" id="c-s19">—</div></div>
+    <div class="cal-item"><div class="cal-dt" style="color:var(--red)">Sep 22</div><div class="cal-ev"><span class="dot dh"></span><b style="color:var(--red)">GME PATTERN COMPLETE</b> — 180° fractal apex &bull; $174.96 GME &bull; $11.95 AMC (corr)</div><div class="cal-cd" id="c-s22">—</div></div>
+  </div>
+
+  <div class="cal-sec">
+    <h3 style="color:var(--pink)">OCT–DEC 2026 — AMC INDEPENDENT ACCELERATION</h3>
+    <div class="cal-item"><div class="cal-dt">Oct 16</div><div class="cal-ev"><span class="dot df"></span>GME OPEX — October</div><div class="cal-cd" id="c-o16">—</div></div>
+    <div class="cal-item"><div class="cal-dt" style="color:var(--pink)">~Nov 2026</div><div class="cal-ev"><span class="dot damc"></span><b style="color:var(--pink)">AMC INDEPENDENT: Mid Expansion</b> — ~$16 target (8× own anchor) — AMC own run accelerating as GME consolidates post-Sep 22</div><div class="cal-cd" style="color:var(--pink)">~153d</div></div>
+    <div class="cal-item"><div class="cal-dt">Nov 20</div><div class="cal-ev"><span class="dot df"></span>GME OPEX — November</div><div class="cal-cd" id="c-n20">—</div></div>
+    <div class="cal-item"><div class="cal-dt">Dec 18</div><div class="cal-ev"><span class="dot df"></span>GME OPEX — December</div><div class="cal-cd" id="c-d18">—</div></div>
+  </div>
+
+  <div class="cal-sec">
+    <h3 style="color:var(--gold)">JANUARY 2027 — GME MOASS WINDOW</h3>
+    <div class="cal-item"><div class="cal-dt" style="color:var(--purple)">Jan 16, 2027</div><div class="cal-ev"><span class="dot df"></span><b>LEAPS OPEX</b> — January LEAPS expire &bull; Largest annual gamma event &bull; Maximum options pressure</div><div class="cal-cd" id="c-j16" style="color:var(--purple)">—</div></div>
+    <div class="cal-item"><div class="cal-dt" style="color:var(--pink)">~Feb 2027</div><div class="cal-ev"><span class="dot damc"></span><b style="color:var(--pink)">AMC INDEPENDENT: Pre-Peak</b> — ~$22 target (11×) — AMC charging toward Jun 2 peak while GME is post-MOASS</div><div class="cal-cd" style="color:var(--pink)">~246d</div></div>
+    <div class="cal-item"><div class="cal-dt" style="color:var(--gold)">Jan 28, 2027</div><div class="cal-ev"><span class="dot dg"></span><b style="color:var(--gold)">GME MOASS TARGET</b> — 6-year anniversary of $483 Jan 28, 2021 peak &bull; $300 fractal target &bull; 12.5× anchor</div><div class="cal-cd" id="c-j28" style="color:var(--gold)">—</div></div>
+    <div class="cal-item"><div class="cal-dt" style="color:var(--gold)">Jan 31, 2027</div><div class="cal-ev"><span class="dot dg"></span>GME Extended Horizon — fractal cycle plateau window close</div><div class="cal-cd" id="c-j31" style="color:var(--gold)">—</div></div>
+  </div>
+
+  <div class="cal-sec">
+    <h3 style="color:var(--pink)">JUNE 2027 — AMC INDEPENDENT PEAK</h3>
+    <div class="cal-item"><div class="cal-dt" style="color:var(--pink)">Jun 2, 2027</div><div class="cal-ev"><span class="dot damc"></span><b style="color:var(--pink)">AMC INDEPENDENT MOASS</b> — 6-year anniversary of AMC $72.62 peak (Jun 2, 2021) &bull; $29 target &bull; 14.5× own anchor &bull; 156 days after GME Jan 28 peak</div><div class="cal-cd" id="c-jj2" style="color:var(--pink)">—</div></div>
+    <div class="cal-item"><div class="cal-dt" style="color:var(--pink)">Jun 8, 2027</div><div class="cal-ev"><span class="dot damc"></span>AMC potential second wave (Jun 8, 2021 = $62 second spike) — possible consolidation bounce ~$20–25</div><div class="cal-cd" id="c-jj8" style="color:var(--pink)">—</div></div>
+  </div>
+
+  <div class="spacer"></div>
+</div>
+
+<!-- ══════════════ CHART ══════════════ -->
+<div class="page main" id="p-chart">
+  <div class="sh" style="color:var(--cyan)">&#128200; CHARTS</div>
+  <div class="cc"><div class="ct">GME — ACTUAL vs 180° FRACTAL TARGET</div><canvas id="c-gme"></canvas></div>
+  <div class="cc"><div class="ct">AMC — CORRELATED (ratio) vs INDEPENDENT (own fractal)</div><canvas id="c-amc"></canvas></div>
+  <div class="cc"><div class="ct">PHASE OFFSET — GME JAN 28 vs AMC JUN 2 (both 2027)</div><canvas id="c-phase"></canvas></div>
+  <div class="cc"><div class="ct">REQUIRED % GAIN/DAY TO HIT TARGETS (compounded from current)</div><canvas id="c-gain"></canvas></div>
+  <div class="spacer"></div>
+</div>
+
+<!-- ══════════════ INTEL ══════════════ -->
+<div class="page main" id="p-intel">
+  <div class="sh" style="color:var(--cyan)">&#128202; FULL INTEL BRIEFING</div>
+  <div class="ig">
+    <div class="ib">
+      <h3 style="color:var(--cyan)">GME Fundamentals</h3>
+      <div class="ir"><span class="ik">Ticker</span><span class="iv" style="color:var(--cyan)">NYSE: GME</span></div>
+      <div class="ir"><span class="ik">Price Jun 1</span><span class="iv" style="color:var(--red)" id="i-gme">$23.00</span></div>
+      <div class="ir"><span class="ik">Fractal Anchor</span><span class="iv" style="color:var(--orange)">$24.00</span></div>
+      <div class="ir"><span class="ik">CEO</span><span class="iv">Ryan Cohen</span></div>
+      <div class="ir"><span class="ik">Cash</span><span class="iv" style="color:var(--green)">~$4B+</span></div>
+      <div class="ir"><span class="ik">Float</span><span class="iv">~305M shares</span></div>
+      <div class="ir"><span class="ik">SI%</span><span class="iv" style="color:var(--purple)">~20%+</span></div>
+      <div class="ir"><span class="ik">2021 Peak</span><span class="iv" style="color:var(--gold)">$483 Jan 28</span></div>
+      <div class="ir"><span class="ik">2027 Target</span><span class="iv" style="color:var(--gold)">$300 Jan 28</span></div>
+    </div>
+    <div class="ib">
+      <h3 style="color:var(--pink)">AMC — BOTH CYCLES</h3>
+      <div class="ir"><span class="ik">Ticker</span><span class="iv" style="color:var(--cyan)">NYSE: AMC</span></div>
+      <div class="ir"><span class="ik">Price Jun 1</span><span class="iv" style="color:var(--red)" id="i-amc">$1.57</span></div>
+      <div class="ir"><span class="ik">Own Anchor</span><span class="iv" style="color:var(--pink)">$2.00</span></div>
+      <div class="ir"><span class="ik">Break Level</span><span class="iv" style="color:var(--orange)">$2.00</span></div>
+      <div class="ir"><span class="ik">Correlated Target (Jun22)</span><span class="iv" style="color:var(--teal)" id="i-amc-c">$6.82</span></div>
+      <div class="ir"><span class="ik">Own Cycle Target</span><span class="iv" style="color:var(--pink)">$29.00</span></div>
+      <div class="ir"><span class="ik">2021 Peak</span><span class="iv" style="color:var(--gold)">$72.62 Jun 2</span></div>
+      <div class="ir"><span class="ik">2027 Own Peak</span><span class="iv" style="color:var(--pink)">$29 Jun 2, 2027</span></div>
+      <div class="ir"><span class="ik">Phase Offset</span><span class="iv" style="color:var(--pink)">+156 days vs GME</span></div>
+    </div>
+    <div class="ib">
+      <h3 style="color:var(--purple)">Key Codes & Cycles</h3>
+      <div class="ir"><span class="ik">Greg Code 1667</span><span class="iv" style="color:var(--purple)">Jun 1–Jul 7</span></div>
+      <div class="ir"><span class="ik">T+35 FTD Reset</span><span class="iv" style="color:var(--cyan)">Rolling</span></div>
+      <div class="ir"><span class="ik">Monthly OPEX</span><span class="iv">3rd Friday</span></div>
+      <div class="ir"><span class="ik">LEAPS OPEX</span><span class="iv" style="color:var(--gold)">Jan 16, 2027</span></div>
+      <div class="ir"><span class="ik">GME MOASS Window</span><span class="iv" style="color:var(--gold)">Jan 28–31, 2027</span></div>
+      <div class="ir"><span class="ik">AMC Own Peak</span><span class="iv" style="color:var(--pink)">Jun 2, 2027</span></div>
+      <div class="ir"><span class="ik">Phase gap</span><span class="iv" style="color:var(--pink)">156 days</span></div>
+    </div>
+    <div class="ib">
+      <h3 style="color:var(--red)">Risk Factors</h3>
+      <div class="ir"><span class="ik">GME anchor not held</span><span class="iv" style="color:var(--red)">CRITICAL</span></div>
+      <div class="ir"><span class="ik">AMC below $2 break</span><span class="iv" style="color:var(--red)">CRITICAL</span></div>
+      <div class="ir"><span class="ik">63% below Jun22 target</span><span class="iv" style="color:var(--red)">HIGH</span></div>
+      <div class="ir"><span class="ik">AMC dilution risk</span><span class="iv" style="color:var(--orange)">ELEVATED</span></div>
+      <div class="ir"><span class="ik">Volume absent</span><span class="iv" style="color:var(--red)">CONCERN</span></div>
+      <div class="ir"><span class="ik">Catalyst needed</span><span class="iv" style="color:var(--red)">YES</span></div>
+      <div class="ir"><span class="ik">All targets speculative</span><span class="iv" style="color:var(--orange)">CONFIRMED</span></div>
+    </div>
+    <div class="ib">
+      <h3 style="color:var(--teal)">Squeeze Checklist</h3>
+      <div class="ir"><span class="ik" style="color:var(--red)">✗ GME above $24</span><span class="iv" style="color:var(--red)">NOT YET</span></div>
+      <div class="ir"><span class="ik" style="color:var(--red)">✗ AMC above $2.00</span><span class="iv" style="color:var(--red)">NOT YET</span></div>
+      <div class="ir"><span class="ik" style="color:var(--red)">✗ Volume spike</span><span class="iv" style="color:var(--red)">ABSENT</span></div>
+      <div class="ir"><span class="ik" style="color:var(--orange)">? SI% confirmed</span><span class="iv" style="color:var(--orange)">MONITOR</span></div>
+      <div class="ir"><span class="ik" style="color:var(--orange)">? Options loading</span><span class="iv" style="color:var(--orange)">MONITOR</span></div>
+      <div class="ir"><span class="ik" style="color:var(--cyan)">~ T+35 FTD window</span><span class="iv" style="color:var(--cyan)">POSSIBLE</span></div>
+      <div class="ir"><span class="ik" style="color:var(--green)">✓ GME date window</span><span class="iv" style="color:var(--green)">CONFIRMED</span></div>
+      <div class="ir"><span class="ik" style="color:var(--pink)">✓ AMC own cycle active</span><span class="iv" style="color:var(--pink)">CONFIRMED</span></div>
+    </div>
+    <div class="ib">
+      <h3 style="color:var(--orange)">GME Price Ladder</h3>
+      <div class="ir"><span class="ik" style="color:var(--red)">$23 (NOW)</span><span class="iv" style="color:var(--red)">Below anchor</span></div>
+      <div class="ir"><span class="ik" style="color:var(--orange)">$24</span><span class="iv" style="color:var(--orange)">ANCHOR FLIP</span></div>
+      <div class="ir"><span class="ik" style="color:var(--cyan)">$55–65</span><span class="iv" style="color:var(--cyan)">Cheers zone</span></div>
+      <div class="ir"><span class="ik" style="color:var(--purple)">$80–100</span><span class="iv" style="color:var(--purple)">Jun 22 zone</span></div>
+      <div class="ir"><span class="ik" style="color:var(--red)">$150–175</span><span class="iv" style="color:var(--red)">Sep 22 apex</span></div>
+      <div class="ir"><span class="ik" style="color:var(--gold)">$250–300</span><span class="iv" style="color:var(--gold)">MOASS Jan 2027</span></div>
+      <div class="ir"><span class="ik" style="color:var(--gold)">$483+</span><span class="iv" style="color:var(--gold)">2021 high to eclipse</span></div>
+    </div>
+  </div>
+
+  <div class="disc">
+    <span style="color:#222;letter-spacing:2px;text-transform:uppercase">DISCLAIMER</span> — Personal analysis tool. All targets are theoretical projections based on fractal pattern analysis. GME and AMC are highly volatile. Past fractals do not guarantee future price action. Not financial advice. Never invest more than you can afford to lose.
+  </div>
+  <button class="ubtn" style="display:block;margin:0 auto 80px" onclick="window.location.reload()">&#8635; RELOAD</button>
+  <div class="spacer"></div>
+</div>
+
+<script>
+const ANCHOR=24,AMC_ANCHOR=2;
+let GME=23,AMC=1.57;
+let cBuilt=false,cObjs={};
+
+// AMC own cycle: anchor $2, multiples from 2021 (4x, 8x, 14.5x)
+const AMC_OWN_PEAK=29;
+
+function go(n){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
+  document.getElementById('p-'+n).classList.add('active');
+  document.getElementById('n-'+n).classList.add('active');
+  if(n==='chart') buildCharts();
+}
+
+function recalc(){
+  GME=parseFloat(document.getElementById('gmeIn').value)||23;
+  AMC=parseFloat(document.getElementById('amcIn').value)||1.57;
+  const ratio=AMC/GME;
+  const amcCorJ=99.84*ratio;
+
+  // ticker
+  s('tk-gme','$'+f(GME)); s('tk-amc','$'+f(AMC));
+  s('tk-amc-ind','$'+AMC_OWN_PEAK+' target');
+  s('tk-gx',fx(300/GME)); s('tk-ax',fx(AMC_OWN_PEAK/AMC));
+  s('tk-anch',GME>=ANCHOR?'HELD ✓':'$'+(ANCHOR-GME).toFixed(2)+' away');
+  document.getElementById('tk-anch').style.color=GME>=ANCHOR?'var(--green)':'var(--red)';
+  s('tk-gme-g','vs $99.84 ('+((99.84-GME)/99.84*100).toFixed(1)+'% gap)');
+  s('tk-amc-g','vs $'+f(amcCorJ)+' corr / $'+AMC_OWN_PEAK+' own');
+
+  // dashboard cards
+  s('d-gme','$'+f(GME));
+  s('d-gme-s',GME>=ANCHOR?'Above anchor ▲':'Below anchor ▼');
+  document.getElementById('d-gme').style.color=GME>=ANCHOR?'var(--green)':'var(--red)';
+  s('d-amc','$'+f(AMC));
+  s('d-amc-c','$'+f(amcCorJ));
+  s('d-amc-ind','$'+f(AMC_OWN_PEAK));
+
+  // progress bars
+  pb('pb-a',GME,ANCHOR,'pb-a-t');
+  pb('pb-j',GME,99.84,'pb-j-t');
+  pb('pb-s',GME,174.96,'pb-s-t');
+  pb('pb-m',GME,300,'pb-m-t');
+  pb('pb-ac',AMC,amcCorJ,'pb-ac-t');
+  pb('pb-ab',AMC,2.00,'pb-ab-t');
+  pb('pb-am',AMC,AMC_OWN_PEAK,'pb-am-t');
+
+  // required daily %
+  const now=new Date('2026-06-01');
+  const d=(dt)=>Math.max(1,Math.round((new Date(dt)-now)/86400000));
+  const dp=(t,days)=>((Math.pow(t/GME,1/days)-1)*100).toFixed(1)+'%';
+  const dpa=(t,days)=>((Math.pow(t/AMC,1/days)-1)*100).toFixed(1)+'%';
+  s('d-d-a',GME>=ANCHOR?'0%':'+'+((ANCHOR/GME-1)*100).toFixed(1)+'%');
+  s('d-d-j','+'+dp(99.84,21));
+  s('d-d-s','+'+dp(174.96,113));
+  s('d-d-m','+'+dp(300,244));
+  s('d-d-ab',AMC>=2?'0%':'+'+((2/AMC-1)*100).toFixed(1)+'%');
+  s('d-d-am','+'+dpa(AMC_OWN_PEAK,366));
+
+  // alert prices
+  s('al-gme','$'+f(GME)); s('al-amc','$'+f(AMC));
+
+  // countdown anchor
+  s('cd-anch',GME>=ANCHOR?'HELD ✓':'$'+(ANCHOR-GME).toFixed(2)+' away');
+
+  // intel
+  s('i-gme','$'+f(GME)); s('i-amc','$'+f(AMC));
+  s('i-amc-c','$'+f(amcCorJ));
+
+  // squeeze score
+  let sc=0;
+  if(GME>=ANCHOR) sc+=25; else sc+=Math.max(0,(GME/ANCHOR)*13);
+  sc+=12; sc+=8; // window + fractal
+  sc=Math.round(sc);
+  const ring=document.getElementById('sq-ring');
+  const num=document.getElementById('sq-num');
+  const desc=document.getElementById('sq-desc');
+  if(ring) ring.style.background=`conic-gradient(var(--purple) 0% ${sc}%,#111 ${sc}% 100%)`;
+  if(num) num.textContent=sc;
+  if(desc) desc.textContent=sc<25?'Pre-launch — anchor not confirmed':sc<50?'Anchor zone — building':sc<75?'Squeeze conditions forming':'FULL SQUEEZE CONDITIONS';
+
+  if(cBuilt){cBuilt=false;buildCharts();}
+}
+
+function pb(id,cur,target,tid){
+  const pct=Math.min(99,(cur/target*100));
+  const el=document.getElementById(id);
+  if(el) el.style.width=pct.toFixed(1)+'%';
+  const t=document.getElementById(tid);
+  if(t) t.textContent='$'+f(cur)+' / $'+f(target)+'  '+pct.toFixed(1)+'%';
+}
+
+// COUNTDOWNS
+const CDS=[
+  {id:'cd-jun22',dt:'2026-06-22T09:30:00'},
+  {id:'cd-sep22',dt:'2026-09-22T09:30:00'},
+  {id:'cd-jan28',dt:'2027-01-28T09:30:00'},
+  {id:'cd-jun2', dt:'2027-06-02T09:30:00'},
+];
+const CALDATES=[
+  {id:'c-j1',dt:'2026-06-01'},{id:'c-j10',dt:'2026-06-10'},
+  {id:'c-j19',dt:'2026-06-19'},{id:'c-j22',dt:'2026-06-22'},
+  {id:'c-j7',dt:'2026-07-07'},{id:'c-j17',dt:'2026-07-17'},
+  {id:'c-a21',dt:'2026-08-21'},{id:'c-s19',dt:'2026-09-19'},
+  {id:'c-s22',dt:'2026-09-22'},{id:'c-o16',dt:'2026-10-16'},
+  {id:'c-n20',dt:'2026-11-20'},{id:'c-d18',dt:'2026-12-18'},
+  {id:'c-j16',dt:'2027-01-16'},{id:'c-j28',dt:'2027-01-28'},
+  {id:'c-j31',dt:'2027-01-31'},{id:'c-jj2',dt:'2027-06-02'},
+  {id:'c-jj8',dt:'2027-06-08'},
+];
+
+function pad(n){return String(n).padStart(2,'0');}
+function clocks(){
+  const now=new Date();
+  CDS.forEach(t=>{
+    const el=document.getElementById(t.id); if(!el) return;
+    const diff=new Date(t.dt)-now;
+    if(diff<=0){el.textContent='PAST';return;}
+    const d=Math.floor(diff/86400000),h=Math.floor((diff%86400000)/3600000),m=Math.floor((diff%3600000)/60000);
+    el.textContent=d+'d '+pad(h)+'h '+pad(m)+'m';
+  });
+  CALDATES.forEach(t=>{
+    const el=document.getElementById(t.id); if(!el) return;
+    const diff=new Date(t.dt)-now;
+    if(diff<=0){el.textContent='PAST';return;}
+    el.textContent=Math.ceil(diff/86400000)+'d';
+  });
+  document.getElementById('c-j1').textContent='TODAY';
+}
+
+// CHARTS
+function buildCharts(){
+  if(cBuilt) return; cBuilt=true;
+  const ratio=AMC/GME;
+  const lbl=['Feb23\nAnchor','Mar17\nCheers','May22\nMay','Jun1\nNOW','Jun22\nConverge','Sep22\nComplete','Jan28\n2027'];
+  const gmeT=[24,55.68,60,62.40,99.84,174.96,300];
+  const amcCorr=gmeT.map(v=>+(v*ratio).toFixed(2));
+  // AMC own cycle milestones (own fractal, different dates)
+  const amcOwnLbl=['Mar26\n$2 anchor','~Jul26\nFirst spike','~Nov26\nMid expand','~Feb27\nPre-peak','Jun2\n2027 PEAK'];
+  const amcOwnT=[2,8,16,22,29];
+
+  dc('c-gme'); dc('c-amc'); dc('c-phase'); dc('c-gain');
+
+  cObjs['c-gme']=new Chart(document.getElementById('c-gme').getContext('2d'),{
+    type:'line',data:{labels:lbl,datasets:[
+      {label:'GME Theory',data:gmeT,borderColor:'#00f5ff',backgroundColor:'rgba(0,245,255,.06)',borderWidth:2,pointBackgroundColor:'#00f5ff',pointRadius:5,tension:.35,fill:true},
+      {label:'GME Actual',data:[null,null,null,GME,null,null,null],borderColor:'#ff5252',pointBackgroundColor:'#ff5252',pointRadius:12,pointStyle:'crossRot',showLine:false}
+    ]},options:co('GME Price ($)')
+  });
+
+  cObjs['c-amc']=new Chart(document.getElementById('c-amc').getContext('2d'),{
+    type:'line',data:{labels:lbl,datasets:[
+      {label:'AMC Correlated (ratio)',data:amcCorr,borderColor:'#1de9b6',backgroundColor:'rgba(29,233,182,.05)',borderWidth:2,pointBackgroundColor:'#1de9b6',pointRadius:5,tension:.35,fill:true},
+      {label:'AMC Actual',data:[null,null,null,AMC,null,null,null],borderColor:'#ff5252',pointBackgroundColor:'#ff5252',pointRadius:12,pointStyle:'crossRot',showLine:false}
+    ]},options:co('AMC Price ($) — correlated')
+  });
+
+  // Phase offset chart: GME vs AMC own cycle
+  cObjs['c-phase']=new Chart(document.getElementById('c-phase').getContext('2d'),{
+    type:'line',data:{labels:amcOwnLbl,datasets:[
+      {label:'AMC Own Fractal ($2 anchor)',data:amcOwnT,borderColor:'#ff4081',backgroundColor:'rgba(255,64,129,.06)',borderWidth:2,pointBackgroundColor:'#ff4081',pointRadius:6,tension:.35,fill:true},
+      {label:'AMC Actual Now',data:[null,AMC,null,null,null],borderColor:'#ff5252',pointBackgroundColor:'#ff5252',pointRadius:12,pointStyle:'crossRot',showLine:false}
+    ]},options:co('AMC Price ($) — own fractal')
+  });
+
+  // gain chart
+  const d=n=>Math.max(1,n);
+  const dp=(t,days)=>+((Math.pow(t/GME,1/d(days))-1)*100).toFixed(2);
+  const dpa=(t,days)=>+((Math.pow(t/AMC,1/d(days))-1)*100).toFixed(2);
+  cObjs['c-gain']=new Chart(document.getElementById('c-gain').getContext('2d'),{
+    type:'bar',
+    data:{labels:['GME $24\nanchor','GME $99.84\n21d','GME $174.96\n113d','GME $300\n244d','AMC $2\nbreak','AMC $29\n366d'],
+      datasets:[{label:'% per day',data:[((ANCHOR/GME-1)*100).toFixed(2),dp(99.84,21),dp(174.96,113),dp(300,244),((2/AMC-1)*100).toFixed(2),dpa(29,366)],
+        backgroundColor:['#ff9100','#ff5252','#d900ff','#ffd700','#ff4081','#ff4081'],borderRadius:4}]},
+    options:{...co('% gain required'),plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed.y+'%/day'}}}}
+  });
+}
+
+function dc(id){if(cObjs[id]){cObjs[id].destroy();delete cObjs[id];}}
+
+function co(yLabel){
+  return{responsive:true,maintainAspectRatio:true,
+    plugins:{legend:{labels:{color:'#444',font:{family:'Courier New',size:9}}},tooltip:{backgroundColor:'#080808',borderColor:'#1a1a1a',borderWidth:1,titleColor:'#00f5ff',bodyColor:'#888'}},
+    scales:{x:{ticks:{color:'#3a3a3a',font:{family:'Courier New',size:8}},grid:{color:'#0a0a0a'}},
+      y:{ticks:{color:'#3a3a3a',font:{family:'Courier New',size:8},callback:v=>yLabel.includes('%')?v+'%':'$'+v},grid:{color:'#0a0a0a'},
+        title:{display:true,text:yLabel,color:'#2a2a2a',font:{family:'Courier New',size:8}}}}};
+}
+
+function s(id,v){const e=document.getElementById(id);if(e)e.textContent=v;}
+function f(n){return parseFloat(n).toFixed(2);}
+function fx(n){return n.toFixed(2)+'×';}
+
+// TIMESTAMP
+function ts(){const n=new Date();document.getElementById('ts').textContent='Loaded: '+n.toLocaleString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'});}
+
+ts(); recalc(); clocks(); setInterval(clocks,30000);
+</script>
+</body>
+</html>
