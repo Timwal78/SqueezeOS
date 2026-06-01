@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>SqueezeOS API Pricing — Script Master Labs</title>
+<meta name="description" content="Institutional AI trading signals for developers and AI agents. Pay by card. No XRPL required. Works with Claude, Cursor, GPT, and any MCP client.">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#080808;--card:#0f0f0f;--border:#1a1a1a;
+  --green:#00ff88;--green-dim:#00ff8820;--green-mid:#00ff8860;
+  --blue:#4488ff;--orange:#ff9500;
+  --text:#e0e0e0;--muted:#666;--sub:#444;
+}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh}
+
+/* NAV */
+nav{display:flex;align-items:center;justify-content:space-between;padding:18px 40px;border-bottom:1px solid var(--border)}
+.logo{color:var(--green);font-weight:800;font-size:16px;letter-spacing:-0.5px}
+.logo span{color:var(--text)}
+nav a{color:var(--muted);font-size:13px;text-decoration:none}
+nav a:hover{color:var(--text)}
+
+/* HERO */
+.hero{text-align:center;padding:70px 20px 50px}
+.hero h1{font-size:clamp(28px,5vw,46px);font-weight:800;line-height:1.1;margin-bottom:16px}
+.hero h1 em{font-style:normal;color:var(--green)}
+.hero p{color:var(--muted);font-size:16px;max-width:520px;margin:0 auto 24px;line-height:1.6}
+.hero-badges{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:10px}
+.badge{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;font-size:11px;border:1px solid var(--border);color:var(--muted)}
+.badge.green{border-color:var(--green-mid);color:var(--green)}
+
+/* PLANS */
+.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;max-width:960px;margin:0 auto;padding:0 20px 60px}
+.plan{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:32px;position:relative;transition:border-color .2s}
+.plan:hover{border-color:#333}
+.plan.featured{border-color:var(--green-mid);background:linear-gradient(135deg,#0d1a0d,#0f0f0f)}
+.featured-tag{position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:var(--green);color:#000;font-size:10px;font-weight:800;padding:4px 14px;border-radius:20px;text-transform:uppercase;letter-spacing:1px}
+.plan-name{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px}
+.plan-price{font-size:42px;font-weight:800;line-height:1;margin-bottom:4px}
+.plan-price sup{font-size:20px;vertical-align:top;margin-top:8px}
+.plan-period{color:var(--muted);font-size:13px;margin-bottom:20px}
+.plan-calls{font-size:26px;font-weight:700;color:var(--green);margin-bottom:4px}
+.plan-calls-sub{color:var(--muted);font-size:12px;margin-bottom:24px}
+.plan-features{list-style:none;margin-bottom:28px}
+.plan-features li{color:#aaa;font-size:13px;padding:5px 0;border-bottom:1px solid #111;display:flex;align-items:center;gap:8px}
+.plan-features li:last-child{border:none}
+.plan-features li::before{content:"✓";color:var(--green);font-weight:700;flex-shrink:0}
+
+/* FORM */
+.checkout-form input{width:100%;background:#0a0a0a;border:1px solid var(--border);border-radius:8px;padding:12px 14px;color:var(--text);font-size:14px;margin-bottom:10px;outline:none}
+.checkout-form input:focus{border-color:var(--green-mid)}
+.checkout-form input::placeholder{color:var(--sub)}
+.btn{width:100%;padding:14px;border-radius:8px;border:none;font-size:14px;font-weight:700;cursor:pointer;transition:all .15s}
+.btn-green{background:var(--green);color:#000}
+.btn-green:hover{background:#00dd77;transform:translateY(-1px)}
+.btn-outline{background:transparent;color:var(--green);border:1px solid var(--green-mid)}
+.btn-outline:hover{background:var(--green-dim)}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none!important}
+.plan-note{color:var(--sub);font-size:11px;text-align:center;margin-top:10px}
+
+/* APIS */
+.apis{max-width:900px;margin:0 auto;padding:0 20px 60px}
+.apis h2{font-size:20px;font-weight:700;margin-bottom:6px}
+.apis .sub{color:var(--muted);font-size:13px;margin-bottom:24px}
+.api-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.api-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px}
+.api-card .method{font-size:10px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+.api-card .name{font-size:13px;font-weight:600;margin-bottom:4px;font-family:'SF Mono',monospace}
+.api-card .desc{color:var(--muted);font-size:11px;line-height:1.4}
+.api-card .price{color:var(--green);font-size:11px;font-weight:700;margin-top:6px}
+
+/* HOW IT WORKS */
+.how{max-width:800px;margin:0 auto;padding:0 20px 60px;text-align:center}
+.how h2{font-size:20px;font-weight:700;margin-bottom:8px}
+.how .sub{color:var(--muted);font-size:13px;margin-bottom:32px}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;text-align:left}
+.step{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:20px}
+.step-num{color:var(--green);font-size:28px;font-weight:800;margin-bottom:8px}
+.step h3{font-size:13px;font-weight:600;margin-bottom:4px}
+.step p{color:var(--muted);font-size:11px;line-height:1.5}
+
+/* MCP */
+.mcp-box{max-width:700px;margin:0 auto 60px;padding:0 20px}
+.mcp-inner{background:var(--card);border:1px solid var(--green-mid);border-radius:12px;padding:28px}
+.mcp-inner h2{color:var(--green);font-size:17px;font-weight:700;margin-bottom:6px}
+.mcp-inner p{color:var(--muted);font-size:13px;margin-bottom:16px;line-height:1.5}
+pre{background:#080808;border:1px solid var(--border);border-radius:8px;padding:14px;font-size:11px;color:#aaa;overflow-x:auto;line-height:1.7;font-family:'SF Mono','Cascadia Code',Consolas,monospace}
+.hl{color:#88ccff}
+
+/* FOOTER */
+footer{border-top:1px solid var(--border);padding:24px 40px;display:flex;align-items:center;justify-content:space-between;flex-wrap:gap}
+footer p{color:var(--sub);font-size:12px}
+footer a{color:var(--muted);font-size:12px;text-decoration:none}
+footer a:hover{color:var(--text)}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:#000000cc;display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-overlay.open{opacity:1;pointer-events:all}
+.modal{background:#111;border:1px solid #222;border-radius:14px;padding:32px;max-width:440px;width:100%}
+.modal h3{font-size:18px;font-weight:700;margin-bottom:6px}
+.modal p{color:var(--muted);font-size:13px;margin-bottom:20px}
+.modal-close{float:right;background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;margin-top:-4px}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">Squeeze<span>OS</span></div>
+  <div style="display:flex;gap:20px;align-items:center">
+    <a href="https://squeezeos-api.onrender.com/.well-known/mcp.json">MCP Docs</a>
+    <a href="https://squeezeos-api.onrender.com/api/status">Status</a>
+    <a href="mailto:support@scriptmasterlabs.com">Support</a>
+  </div>
+</nav>
+
+<section class="hero">
+  <h1>Institutional AI signals.<br><em>One API key.</em></h1>
+  <p>Pay by credit card. Works with Claude, Cursor, GPT, and every MCP client. No XRPL wallet required.</p>
+  <div class="hero-badges">
+    <span class="badge green">✓ No XRPL required</span>
+    <span class="badge green">✓ Works with Claude &amp; Cursor</span>
+    <span class="badge green">✓ MCP native</span>
+    <span class="badge">31 tools</span>
+    <span class="badge">Real data only</span>
+    <span class="badge">Zero simulation</span>
+  </div>
+</section>
+
+<section class="plans">
+
+  <!-- DEV PACK -->
+  <div class="plan">
+    <div class="plan-name">Dev Pack</div>
+    <div class="plan-price"><sup>$</sup>9</div>
+    <div class="plan-period">one-time · never expires</div>
+    <div class="plan-calls">100</div>
+    <div class="plan-calls-sub">API calls included</div>
+    <ul class="plan-features">
+      <li>All premium endpoints</li>
+      <li>Council verdicts (any symbol)</li>
+      <li>Market scan + options flow</li>
+      <li>MCP + REST access</li>
+      <li>No expiry, no renewal</li>
+    </ul>
+    <div class="checkout-form">
+      <input type="email" id="email-dev" placeholder="Your email (for receipt)" autocomplete="email">
+      <button class="btn btn-outline" onclick="checkout('dev','email-dev',this)">Get Dev Pack →</button>
+    </div>
+    <p class="plan-note">Best for evaluation &amp; prototyping</p>
+  </div>
+
+  <!-- STARTER (featured) -->
+  <div class="plan featured">
+    <div class="featured-tag">Most Popular</div>
+    <div class="plan-name">Starter</div>
+    <div class="plan-price"><sup>$</sup>29</div>
+    <div class="plan-period">per month · cancel anytime</div>
+    <div class="plan-calls">500</div>
+    <div class="plan-calls-sub">calls / month · resets on renewal</div>
+    <ul class="plan-features">
+      <li>Everything in Dev Pack</li>
+      <li>Monthly quota reset</li>
+      <li>Autopilot status &amp; trades (free)</li>
+      <li>SSE live event stream</li>
+      <li>Email support</li>
+    </ul>
+    <div class="checkout-form">
+      <input type="email" id="email-starter" placeholder="Your email (for receipt)" autocomplete="email">
+      <button class="btn btn-green" onclick="checkout('starter','email-starter',this)">Subscribe $29/mo →</button>
+    </div>
+    <p class="plan-note">16¢ per council verdict · scales to teams</p>
+  </div>
+
+  <!-- PRO -->
+  <div class="plan">
+    <div class="plan-name">Pro</div>
+    <div class="plan-price"><sup>$</sup>79</div>
+    <div class="plan-period">per month · cancel anytime</div>
+    <div class="plan-calls">2,000</div>
+    <div class="plan-calls-sub">calls / month · resets on renewal</div>
+    <ul class="plan-features">
+      <li>Everything in Starter</li>
+      <li>4¢ per council verdict</li>
+      <li>Priority email support</li>
+      <li>Autopilot operator access</li>
+      <li>Custom symbol watchlists</li>
+    </ul>
+    <div class="checkout-form">
+      <input type="email" id="email-pro" placeholder="Your email (for receipt)" autocomplete="email">
+      <button class="btn btn-outline" onclick="checkout('pro','email-pro',this)">Subscribe $79/mo →</button>
+    </div>
+    <p class="plan-note">Best for production agents &amp; trading desks</p>
+  </div>
+
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="how">
+  <h2>How it works</h2>
+  <p class="sub">Three steps from zero to institutional-grade trading signals</p>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <h3>Pick a plan</h3>
+      <p>Choose Dev ($9), Starter ($29/mo), or Pro ($79/mo). Pay by card via Stripe.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <h3>Get your key</h3>
+      <p>Your API key appears instantly on the confirmation page. Save it — it's shown once.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <h3>Call any endpoint</h3>
+      <p>Pass <code style="color:#00ff88;background:#0a0a0a;padding:1px 5px;border-radius:3px;font-size:10px">Authorization: Bearer sml_live_...</code> on any premium endpoint or MCP tool call.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <h3>Add to MCP client</h3>
+      <p>Point Claude / Cursor / any MCP client at <code style="color:#00ff88;background:#0a0a0a;padding:1px 5px;border-radius:3px;font-size:10px">squeezeos-api.onrender.com/mcp</code> with your key in the header.</p>
+    </div>
+  </div>
+</section>
+
+<!-- MCP QUICKSTART -->
+<section class="mcp-box">
+  <div class="mcp-inner">
+    <h2>⚡ MCP Quickstart</h2>
+    <p>Add to Claude Desktop <code style="color:#00ff88;background:#0a0a0a;padding:1px 5px;border-radius:3px">claude_desktop_config.json</code> — works with any MCP client.</p>
+    <pre>{
+  <span class="hl">"mcpServers"</span>: {
+    <span class="hl">"squeezeos"</span>: {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-fetch",
+               "https://squeezeos-api.onrender.com/mcp"],
+      "env": {
+        <span class="hl">"Authorization"</span>: "Bearer sml_live_YOUR_KEY_HERE"
+      }
+    }
+  }
+}</pre>
+    <p style="color:#555;font-size:12px;margin-top:12px">Or call REST directly: <code style="color:#00ff88;font-size:11px">curl -X POST https://squeezeos-api.onrender.com/api/council -H "Authorization: Bearer sml_live_..." -d '{"symbol":"NVDA"}'</code></p>
+  </div>
+</section>
+
+<!-- ENDPOINTS -->
+<section class="apis">
+  <h2>Premium Endpoints</h2>
+  <p class="sub">All included with any plan. Calls deducted from monthly quota.</p>
+  <div class="api-grid">
+    <div class="api-card">
+      <div class="method">POST</div>
+      <div class="name">/api/council</div>
+      <div class="desc">BUY/SELL/HOLD verdict. 8 engines. Confidence 0-100. TP/SL targets.</div>
+      <div class="price">1 call</div>
+    </div>
+    <div class="api-card">
+      <div class="method">GET</div>
+      <div class="name">/api/scan</div>
+      <div class="desc">Full $1-$50 squeeze universe. Grade-A options picks.</div>
+      <div class="price">1 call</div>
+    </div>
+    <div class="api-card">
+      <div class="method">GET</div>
+      <div class="name">/api/options</div>
+      <div class="desc">Institutional options flow. Sweeps, whale blocks, unusual vol.</div>
+      <div class="price">1 call</div>
+    </div>
+    <div class="api-card">
+      <div class="method">GET</div>
+      <div class="name">/api/iwm</div>
+      <div class="desc">IWM 0DTE scanner. Delta/gamma scored contracts. Max pain.</div>
+      <div class="price">1 call</div>
+    </div>
+    <div class="api-card">
+      <div class="method">GET</div>
+      <div class="name">/api/oracle/*</div>
+      <div class="desc">SEC 8-K, FDA approvals, USPTO patents. Real-time regulatory events.</div>
+      <div class="price">1 call</div>
+    </div>
+    <div class="api-card">
+      <div class="method">FREE</div>
+      <div class="name">/api/demo</div>
+      <div class="desc">IWM council verdict. No key needed. Always free.</div>
+      <div class="price" style="color:#888">0 calls</div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p>© 2026 Script Master Labs · <a href="mailto:support@scriptmasterlabs.com">support@scriptmasterlabs.com</a></p>
+  <div style="display:flex;gap:16px">
+    <a href="/.well-known/agents.json">agents.json</a>
+    <a href="/.well-known/mcp.json">mcp.json</a>
+    <a href="/llms.txt">llms.txt</a>
+    <a href="/api/status">Status</a>
+  </div>
+</footer>
+
+<!-- Modal (error / loading) -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">×</button>
+    <h3 id="modal-title">Processing...</h3>
+    <p id="modal-body">Please wait while we create your checkout session.</p>
+  </div>
+</div>
+
+<script>
+async function checkout(plan, emailId, btn) {
+  const email = document.getElementById(emailId).value.trim();
+  if (!email) {
+    document.getElementById(emailId).focus();
+    document.getElementById(emailId).style.borderColor = '#ff4444';
+    setTimeout(() => document.getElementById(emailId).style.borderColor = '', 2000);
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Redirecting to Stripe...';
+  openModal('Creating checkout...', 'Redirecting to Stripe secure checkout. Please wait.');
+
+  try {
+    const res = await fetch('/api/keys/checkout', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({plan, email})
+    });
+    const data = await res.json();
+    if (data.url) {
+      window.location.href = data.url;
+    } else {
+      openModal('Error', data.error || 'Checkout failed. Please contact support@scriptmasterlabs.com');
+      btn.disabled = false;
+      btn.textContent = plan === 'starter' ? 'Subscribe $29/mo →' : plan === 'pro' ? 'Subscribe $79/mo →' : 'Get Dev Pack →';
+    }
+  } catch (e) {
+    openModal('Network Error', 'Could not reach server. Please try again or contact support@scriptmasterlabs.com');
+    btn.disabled = false;
+    btn.textContent = plan === 'starter' ? 'Subscribe $29/mo →' : plan === 'pro' ? 'Subscribe $79/mo →' : 'Get Dev Pack →';
+  }
+}
+
+function openModal(title, body) {
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-body').textContent = body;
+  document.getElementById('modal').classList.add('open');
+}
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+document.getElementById('modal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+</script>
+</body>
+</html>
