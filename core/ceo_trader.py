@@ -27,6 +27,8 @@ ENV VARS (all optional — sensible defaults apply):
   AUTOPILOT_COOLDOWN_SECONDS=300      Min seconds between any new entries
   AUTOPILOT_SCAN_INTERVAL=30          Seconds between watchlist sweeps
   AUTOPILOT_REGIME_WHITELIST          Allowed regimes (default: ALPHA_EXPANSION,NEUTRAL)
+  AUTOPILOT_MAX_DAILY_LOSS_PCT=0.02   Auto-halt if daily realized P&L < -(equity * pct)  [default 2%]
+  AUTOPILOT_MAX_DAILY_TRADES=20       Hard cap on trades per calendar day (default 20)
 """
 
 import os
@@ -89,6 +91,12 @@ def _scan_interval() -> float:
 def _regime_whitelist() -> set:
     raw = os.environ.get("AUTOPILOT_REGIME_WHITELIST", "ALPHA_EXPANSION,NEUTRAL")
     return {r.strip().upper() for r in raw.split(",") if r.strip()}
+
+def _max_daily_loss_pct() -> float:
+    return float(os.environ.get("AUTOPILOT_MAX_DAILY_LOSS_PCT", "0.02"))
+
+def _max_daily_trades() -> int:
+    return int(os.environ.get("AUTOPILOT_MAX_DAILY_TRADES", "20"))
 
 
 # ── Kelly Criterion position sizing ──────────────────────────────────────────
@@ -191,6 +199,15 @@ class CEOTrader:
         self.last_entry = 0.0          # timestamp of last executed trade
         self._scan_count = 0
         self._fire_count = 0
+        self._trade_day: Optional[str] = None   # YYYY-MM-DD of current day counter
+
+        # ── Circuit Breaker (also synced on exec_eng for REST visibility) ────
+        if not hasattr(self.exec, "circuit_breaker_tripped"):
+            self.exec.circuit_breaker_tripped = False
+        if not hasattr(self.exec, "daily_pnl"):
+            self.exec.daily_pnl = 0.0
+        if not hasattr(self.exec, "daily_trade_count"):
+            self.exec.daily_trade_count = 0
 
         logger.info(
             f"[CEO] Sovereign Autopilot Initialized | "
@@ -229,24 +246,30 @@ class CEOTrader:
     def status(self) -> dict:
         active_trades = self.exec.get_active_trades()
         return {
-            "active":          self.active,
-            "live_mode":       self.exec.live_mode,
-            "symbols":         _symbols(),
-            "min_confidence":  _min_confidence(),
-            "kelly_fraction":  _kelly_fraction(),
-            "max_position_pct":_max_position_pct(),
-            "max_order_value": _max_order_value(),
-            "max_concurrent":  _max_concurrent(),
-            "cooldown_seconds":_cooldown(),
-            "scan_interval":   _scan_interval(),
-            "regime_whitelist":list(_regime_whitelist()),
-            "market_open":     _market_open(),
-            "last_entry":      self.last_entry,
-            "cooldown_remaining": max(0, _cooldown() - (time.time() - self.last_entry)),
-            "active_positions":len(active_trades),
-            "active_symbols":  [t["symbol"] for t in active_trades.values()],
-            "scan_count":      self._scan_count,
-            "fire_count":      self._fire_count,
+            "active":            self.active,
+            "live_mode":         self.exec.live_mode,
+            "symbols":           _symbols(),
+            "min_confidence":    _min_confidence(),
+            "kelly_fraction":    _kelly_fraction(),
+            "max_position_pct":  _max_position_pct(),
+            "max_order_value":   _max_order_value(),
+            "max_concurrent":    _max_concurrent(),
+            "cooldown_seconds":  _cooldown(),
+            "scan_interval":     _scan_interval(),
+            "regime_whitelist":  list(_regime_whitelist()),
+            "market_open":       _market_open(),
+            "last_entry":        self.last_entry,
+            "cooldown_remaining":max(0, _cooldown() - (time.time() - self.last_entry)),
+            "active_positions":  len(active_trades),
+            "active_symbols":    [t["symbol"] for t in active_trades.values()],
+            "scan_count":        self._scan_count,
+            "fire_count":        self._fire_count,
+            # Circuit breaker
+            "circuit_breaker":   "TRIPPED" if getattr(self.exec, "circuit_breaker_tripped", False) else "NORMAL",
+            "daily_pnl":         getattr(self.exec, "daily_pnl", 0.0),
+            "daily_trade_count": getattr(self.exec, "daily_trade_count", 0),
+            "max_daily_loss_pct":_max_daily_loss_pct(),
+            "max_daily_trades":  _max_daily_trades(),
         }
 
     # ── Main Loop ─────────────────────────────────────────────────────────────
@@ -259,17 +282,38 @@ class CEOTrader:
             try:
                 state.heartbeats["ceo_trader"] = time.time()
 
-                # ── Gate 1: Market hours ──────────────────────────────────────
+                # ── Daily counter reset at midnight ET ───────────────────────
+                today = datetime.now(tz=_ET).strftime("%Y-%m-%d")
+                if self._trade_day != today:
+                    self._trade_day = today
+                    self.exec.daily_pnl = 0.0
+                    self.exec.daily_trade_count = 0
+                    if self.exec.circuit_breaker_tripped:
+                        # Auto-reset breaker at day open
+                        self.exec.circuit_breaker_tripped = False
+                        logger.info("[CEO] Circuit breaker auto-reset at new trading day")
+
+                # ── Gate 1: Circuit breaker ───────────────────────────────────
+                if self.exec.circuit_breaker_tripped:
+                    time.sleep(60)
+                    continue
+
+                # ── Gate 2: Market hours ──────────────────────────────────────
                 if not _market_open():
                     time.sleep(60)
                     continue
 
-                # ── Gate 2: Global cooldown ───────────────────────────────────
+                # ── Gate 3: Global cooldown ───────────────────────────────────
                 if (time.time() - self.last_entry) < _cooldown():
                     time.sleep(10)
                     continue
 
-                # ── Gate 3: Max concurrent positions ─────────────────────────
+                # ── Gate 4: Max daily trades ──────────────────────────────────
+                if self.exec.daily_trade_count >= _max_daily_trades():
+                    time.sleep(60)
+                    continue
+
+                # ── Gate 5: Max concurrent positions ─────────────────────────
                 active_trades = self.exec.get_active_trades()
                 if len(active_trades) >= _max_concurrent():
                     time.sleep(30)
@@ -314,7 +358,34 @@ class CEOTrader:
                 self.last_entry = time.time()
                 self.exec.last_autopilot_entry = self.last_entry
                 self._fire_count += 1
+                self.exec.daily_trade_count = getattr(self.exec, "daily_trade_count", 0) + 1
+                # Check circuit breaker after trade
+                self._check_circuit_breaker()
                 break
+
+    # ── Circuit Breaker ───────────────────────────────────────────────────────
+
+    def _check_circuit_breaker(self):
+        """
+        Halts autopilot if realized daily P&L drops below
+        -(equity * AUTOPILOT_MAX_DAILY_LOSS_PCT).
+        Called after each trade fires.
+        """
+        try:
+            equity = _get_equity(self.exec)
+            daily_pnl = getattr(self.exec, "daily_pnl", 0.0)
+            threshold = -(equity * _max_daily_loss_pct())
+            if daily_pnl < threshold:
+                self.exec.circuit_breaker_tripped = True
+                msg = (
+                    f"CIRCUIT BREAKER TRIPPED | daily_pnl=${daily_pnl:,.2f} "
+                    f"< threshold=${threshold:,.2f} ({_max_daily_loss_pct()*100:.1f}% of ${equity:,.0f}) | "
+                    f"AUTOPILOT HALTED — call /api/autopilot/circuit-breaker/reset to resume"
+                )
+                logger.critical(f"[CEO] {msg}")
+                state.push_terminal("AUTOPILOT", msg)
+        except Exception as e:
+            logger.warning(f"[CEO] Circuit breaker check failed: {e}")
 
     # ── Signal Evaluation ─────────────────────────────────────────────────────
 

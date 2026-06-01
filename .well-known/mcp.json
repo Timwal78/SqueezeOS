@@ -834,6 +834,26 @@
       }
     }
   ],
+  "sovereign_autopilot": {
+    "description": "Autonomous live equity trading — OracleEngine verdicts → Kelly Criterion sizing → Tradier API orders. Zero hardcoded values. Zero simulation. Institutional grade.",
+    "version": "7.0",
+    "auth": {"type": "header", "header": "X-Operator-Key", "env_var": "OPERATOR_API_KEY", "note": "MCP agents may pass operator_key in tool arguments instead."},
+    "tools": {
+      "autopilot_status":      {"auth": "none",     "description": "Full status: active, circuit_breaker, daily_pnl, positions, scan_count"},
+      "autopilot_start":       {"auth": "operator", "description": "Activate autopilot. TRADIER_LIVE=true required for real orders."},
+      "autopilot_stop":        {"auth": "operator", "description": "Halt autopilot. Open positions untouched."},
+      "autopilot_trades":      {"auth": "none",     "description": "Live active trades + last 50 history"},
+      "circuit_breaker_reset": {"auth": "operator", "description": "Reset after daily loss halt"}
+    },
+    "safety_rails": {
+      "AUTOPILOT_MAX_DAILY_LOSS_PCT": "Auto-halt if daily P&L < -(equity * pct). Default 2%.",
+      "AUTOPILOT_MAX_DAILY_TRADES": "Hard daily trade cap. Default 20.",
+      "AUTOPILOT_MIN_CONFIDENCE": "Oracle confidence floor. Default 82.",
+      "AUTOPILOT_REGIME_WHITELIST": "Allowed regimes. Default ALPHA_EXPANSION,NEUTRAL.",
+      "market_hours_gate": "9:30-15:45 ET Mon-Fri. Non-overridable.",
+      "pdt_shield": "PDT compliance enforced by ExecutionEngine."
+    }
+  },
   "agent_flow": [
     "1. Call a tool endpoint \u2192 receive HTTP 402 + invoice JSON",
     "2. Establish RLUSD trust line on XRPL if first time (TrustSet to rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De)",
