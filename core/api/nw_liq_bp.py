@@ -95,7 +95,7 @@ def _build_embed(p: dict) -> dict:
     vp     = float(p.get("vpin", 0))
     vr     = p.get("vpin_regime", "—")
     ofi    = p.get("ofi", "—").upper()
-    expl   = p.get("explanation", "—")
+    expl   = p.get("explanation", "—")[:1024]
 
     color  = _COLORS.get(action, 0xFFFFFF)
     icon   = _ICONS.get(action, "⚪")
