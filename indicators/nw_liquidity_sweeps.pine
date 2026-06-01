@@ -1,0 +1,422 @@
+// This Pine Script® code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © AlgoAlpha
+
+//@version=6
+indicator("Nadaraya-Watson Regression Liquidity Sweeps [AlgoAlpha]", "NW-Liq-Sw", overlay = false, max_lines_count = 500, max_labels_count = 500)
+
+// ─── Groups ───────────────────────────────────────────────────────────────────
+group_regression = "Regression"
+group_oscillator = "Oscillator"
+group_volatility = "Volatility"
+group_levels     = "Liquidity Levels"
+group_vpin       = "VPIN"
+group_table      = "Smart Table"
+group_appearance = "Appearance"
+
+// ─── Inputs ───────────────────────────────────────────────────────────────────
+norm_len       = input.int(100, "Normalization Length",        minval = 1, group = group_oscillator, tooltip = "Controls the standard deviation window used to normalize the Nadaraya-Watson slope. Increasing it makes oscillator scaling more stable and slower to adapt; decreasing it makes scaling adapt faster but can make the oscillator more reactive and noisy.")
+nw_bandwidth   = input.int(30,  "Nadaraya-Watson Bandwidth",   minval = 1, group = group_regression, tooltip = "Controls the width of the Nadaraya-Watson kernel. Increasing it makes the regression smoother and slower to turn; decreasing it makes the regression track price more closely but can add noise.")
+nw_lookback    = input.int(140, "Nadaraya-Watson Lookback",    minval = 1, group = group_regression, tooltip = "Controls how many historical bars are included in the Nadaraya-Watson estimate. Increasing it uses more history for a more stable curve; decreasing it focuses more on recent price action and reacts faster.")
+osc_smooth_len = input.int(21,  "Oscillator Smoothing Length", minval = 1, group = group_oscillator, tooltip = "Controls the WMA smoothing applied to the normalized slope oscillator. Increasing it makes the oscillator smoother with fewer sharp turns; decreasing it makes the oscillator more responsive but choppier.")
+signal_len     = input.int(14,  "Signal Length",               minval = 1, group = group_oscillator, tooltip = "Controls the EMA length of the oscillator signal line. Increasing it makes signal crosses slower and less frequent; decreasing it makes crosses happen earlier and more often.")
+atr_len        = input.int(14,  "ATR Length",                  minval = 1, group = group_volatility, tooltip = "Controls the ATR window used for the price overlay volatility offset. Increasing it makes volatility measurement smoother; decreasing it makes the overlay react faster to recent range expansion or contraction.")
+vol_smooth_len = input.int(21,  "Volatility Smoothing Length", minval = 1, group = group_volatility, tooltip = "Controls the smoothing applied to ATR before it is used in the overlay. Increasing it creates a steadier volatility offset; decreasing it makes the offset expand and contract more quickly.")
+
+use_tip = input.bool(true, "Use Swing Points", group = group_levels, tooltip = "When enabled, liquidity levels are anchored to the highest high or lowest low reached during the active oscillator phase. When disabled, new levels are anchored to the current bar high or low when the signal event occurs.")
+
+// VPIN
+vpin_len            = input.int(20,   "VPIN Length",             minval = 1,   group = group_vpin, tooltip = "Number of bars used to average the per-bar order imbalance ratio. Higher values produce a smoother, slower-reacting VPIN; lower values react faster but are noisier.")
+vpin_high_thresh    = input.float(0.50, "VPIN High Threshold",   minval = 0.1, maxval = 1.0, step = 0.05, group = group_vpin, tooltip = "VPIN above this level is flagged as elevated informed trading activity. Orange on table.")
+vpin_extreme_thresh = input.float(0.65, "VPIN Extreme Threshold",minval = 0.1, maxval = 1.0, step = 0.05, group = group_vpin, tooltip = "VPIN above this level signals extreme order flow toxicity. Red on table.")
+show_vpin_labels    = input.bool(true, "Show VPIN Event Labels", group = group_vpin, tooltip = "Displays a floating label directly on the price chart at key signal events when VPIN is elevated, showing current VPIN and order flow direction.")
+
+// Smart Table
+show_table     = input.bool(true, "Show Smart Table", group = group_table)
+table_pos_str  = input.string("Top Right", "Table Position", options = ["Top Right", "Top Left", "Bottom Right", "Bottom Left", "Top Center", "Bottom Center", "Middle Right", "Middle Left"], group = group_table)
+table_size_str = input.string("Small", "Table Text Size", options = ["Tiny", "Small", "Normal", "Large"], group = group_table)
+
+// Appearance
+show_nw_band_candles   = input.bool(true, "Show Nadaraya-Watson Band Candles", group = group_appearance, tooltip = "When enabled, plots the Nadaraya-Watson volatility band as overlay candles.")
+show_bar_color_candles = input.bool(true, "Show Bar Colour Candles",           group = group_appearance, tooltip = "When enabled, redraws price candles with oscillator-based bullish or bearish colours.")
+show_signal_line       = input.bool(true, "Show Oscillator Signal Line",       group = group_appearance, tooltip = "When enabled, displays the EMA signal line of the oscillator.")
+show_momentum_signals  = input.bool(true, "Show Momentum Weakening Signals",   group = group_appearance, tooltip = "When enabled, displays the small momentum weakening dots on the chart.")
+show_rebound_signals   = input.bool(true, "Show Rebound Signals",              group = group_appearance, tooltip = "When enabled, displays bullish and bearish rebound markers around the Nadaraya-Watson value.")
+green = input.color(#00ffbb, "Bullish Colour", group = group_appearance)
+red   = input.color(#ff1100, "Bearish Colour", group = group_appearance)
+
+// ─── Helper Functions ─────────────────────────────────────────────────────────
+nw(series float src, simple int bandwidth, simple int lookback) =>
+    float num = 0.0
+    float den = 0.0
+    float h2  = 2.0 * math.pow(bandwidth, 2)
+    for i = 0 to lookback - 1
+        float w = math.exp(-math.pow(i, 2) / h2)
+        num += src[i] * w
+        den += w
+    num / den
+
+pseudo_transp(color c, int t) =>
+    color.from_gradient(t, 0, 100, c, chart.bg_color)
+
+pos_to_pos(string s) =>
+    switch s
+        "Top Right"     => position.top_right
+        "Top Left"      => position.top_left
+        "Bottom Right"  => position.bottom_right
+        "Bottom Left"   => position.bottom_left
+        "Top Center"    => position.top_center
+        "Bottom Center" => position.bottom_center
+        "Middle Right"  => position.middle_right
+        "Middle Left"   => position.middle_left
+        =>                 position.top_right
+
+size_to_size(string s) =>
+    switch s
+        "Tiny"   => size.tiny
+        "Small"  => size.small
+        "Normal" => size.normal
+        "Large"  => size.large
+        =>          size.small
+
+dots(int sc) =>
+    sc >= 6 ? "●●●●●●" : sc == 5 ? "●●●●●○" : sc == 4 ? "●●●●○○" : sc == 3 ? "●●●○○○" : sc == 2 ? "●●○○○○" : sc == 1 ? "●○○○○○" : "○○○○○○"
+
+log_sig(string name, int[] bars, string[] names) =>
+    array.unshift(bars, bar_index)
+    array.unshift(names, name)
+    if array.size(bars) > 4
+        array.pop(bars)
+        array.pop(names)
+
+get_sname(int idx, int[] bars, string[] names) =>
+    array.size(bars) > idx ? array.get(names, idx) : "—"
+
+get_sage(int idx, int[] bars) =>
+    array.size(bars) > idx ? str.tostring(bar_index - array.get(bars, idx)) + " bars" : "—"
+
+sig_c(string n, color gc, color rc, color def) =>
+    n == "⚡ Upper Swept" ? gc : n == "⚡ Lower Swept" ? rc : str.contains(n, "↑") or str.contains(n, "▲") ? gc : str.contains(n, "↓") or str.contains(n, "▼") ? rc : str.contains(n, "Bull") ? gc : str.contains(n, "Bear") ? rc : def
+
+tbl_hdr(table t, int r, string txt, string sz_str) =>
+    table.cell(t, 0, r, txt, text_color = color.new(chart.fg_color, 0), text_size = size_to_size(sz_str), text_halign = text.align_center, bgcolor = color.new(#1a1f2e, 0))
+    table.merge_cells(t, 0, r, 1, r)
+
+tbl_row(table t, int r, string lbl, string val, color vc, string sz_str) =>
+    bg = color.new(chart.bg_color, 5)
+    sz = size_to_size(sz_str)
+    table.cell(t, 0, r, lbl, text_color = color.new(chart.fg_color, 45), text_size = sz, text_halign = text.align_left,  bgcolor = bg)
+    table.cell(t, 1, r, val, text_color = vc,                            text_size = sz, text_halign = text.align_right, bgcolor = bg)
+
+tbl_wide(table t, int r, string val, color vc, string sz_str) =>
+    table.cell(t, 0, r, val, text_color = vc, text_size = size_to_size(sz_str), text_halign = text.align_left, bgcolor = color.new(chart.bg_color, 5))
+    table.merge_cells(t, 0, r, 1, r)
+
+mk_sig(string action, string sig, float entry, float nw, float atr, float tgt, float stp, float rr, float cb, float cr, float vp, string vr, string ofi, string expl) =>
+    p1 = '{"ticker":"' + syminfo.ticker + '","exchange":"' + syminfo.prefix + '","timeframe":"' + timeframe.period + '"'
+    p2 = ',"action":"' + action + '","signal":"' + sig + '"'
+    p3 = ',"price":' + str.tostring(entry, "#.####") + ',"nw":' + str.tostring(nw, "#.####") + ',"atr":' + str.tostring(atr, "#.####")
+    p4 = ',"target":' + str.tostring(tgt, "#.####") + ',"stop":' + str.tostring(stp, "#.####") + ',"rr":' + str.tostring(rr, "#.##")
+    p5 = ',"confluence_bull":' + str.tostring(cb) + ',"confluence_bear":' + str.tostring(cr)
+    p6 = ',"vpin":' + str.tostring(vp, "#.####") + ',"vpin_regime":"' + vr + '","ofi":"' + ofi + '"'
+    p7 = ',"explanation":"' + expl + '"}'
+    p1 + p2 + p3 + p4 + p5 + p6 + p7
+
+// ─── Core Calculations ────────────────────────────────────────────────────────
+nw_val     = nw(close, nw_bandwidth, nw_lookback)
+nw_slope   = nw_val - nw_val[1]
+slope_std  = ta.stdev(nw_slope, norm_len)
+osc_       = nw_slope / slope_std
+osc        = ta.wma(osc_, osc_smooth_len)
+signal     = ta.ema(osc, signal_len)
+volatility = ta.sma(ta.atr(atr_len), vol_smooth_len)
+overflow   = math.max(math.abs(osc) - 2, 0)
+
+// ─── VPIN ─────────────────────────────────────────────────────────────────────
+hl_range    = math.max(high - low, 1e-10)
+buy_vol     = close >= open ? volume : volume * (close - low) / hl_range
+sell_vol    = volume - buy_vol
+vpin        = ta.sma(math.abs(buy_vol - sell_vol) / math.max(volume, 1e-10), vpin_len)
+ofi_bull    = ta.sma(buy_vol - sell_vol, vpin_len) > 0
+vpin_col    = vpin > vpin_extreme_thresh ? color.new(#ff4444, 0) : vpin > vpin_high_thresh ? color.new(#ff9800, 0) : vpin > 0.35 ? color.new(#ffeb3b, 0) : color.new(green, 0)
+vpin_regime = vpin > vpin_extreme_thresh ? "EXTREME" : vpin > vpin_high_thresh ? "HIGH" : vpin > 0.35 ? "MODERATE" : "CALM"
+
+// ─── Signal Conditions ────────────────────────────────────────────────────────
+con1 = ta.crossunder(osc, signal)
+con2 = ta.crossover(osc, signal)
+
+above_signal = osc > signal
+below_signal = osc < signal
+
+var float above_tip_price = na
+var int   above_tip_bar   = na
+var float below_tip_price = na
+var int   below_tip_bar   = na
+
+if above_signal
+    if not above_signal[1]
+        above_tip_price := high
+        above_tip_bar   := bar_index
+    else if na(above_tip_price) or high > above_tip_price
+        above_tip_price := high
+        above_tip_bar   := bar_index
+
+if below_signal
+    if not below_signal[1]
+        below_tip_price := low
+        below_tip_bar   := bar_index
+    else if na(below_tip_price) or low < below_tip_price
+        below_tip_price := low
+        below_tip_bar   := bar_index
+
+draw_upper_line = osc > 0 and con1
+draw_lower_line = osc < 0 and con2
+draw_new_line   = draw_upper_line or draw_lower_line
+
+var line  active_line       = na
+var float active_line_price = na
+var int   active_line_type  = 0
+
+upper_level_swept = not na(active_line) and active_line_type ==  1 and close > active_line_price
+lower_level_swept = not na(active_line) and active_line_type == -1 and close < active_line_price
+
+if not na(active_line) and active_line_type != 0
+    line.set_x2(active_line, bar_index)
+    if (active_line_type == 1 ? close > active_line_price : close < active_line_price) or draw_new_line
+        active_line_type := 0
+
+if draw_upper_line
+    float lp = use_tip and not na(above_tip_price) ? above_tip_price : high
+    int   lb = use_tip and not na(above_tip_bar)   ? above_tip_bar   : bar_index
+    active_line := line.new(lb, lp, bar_index, lp, xloc = xloc.bar_index, color = red, style = line.style_solid, width = 2, force_overlay = true)
+    active_line_price := lp
+    active_line_type  := 1
+
+if draw_lower_line
+    float lp = use_tip and not na(below_tip_price) ? below_tip_price : low
+    int   lb = use_tip and not na(below_tip_bar)   ? below_tip_bar   : bar_index
+    active_line := line.new(lb, lp, bar_index, lp, xloc = xloc.bar_index, color = green, style = line.style_solid, width = 2, force_overlay = true)
+    active_line_price := lp
+    active_line_type  := -1
+
+weakening_bullish_momentum = osc > 0 and con1
+weakening_bearish_momentum = osc < 0 and con2
+bullish_zero_cross         = ta.crossover(osc, 0)
+bearish_zero_cross         = ta.crossunder(osc, 0)
+bullish_signal_cross       = con2
+bearish_signal_cross       = con1
+bullish_rebound            = osc > 0 and close[1] < nw_val and close > nw_val
+bearish_rebound            = osc < 0 and close[1] > nw_val and close < nw_val
+
+// ─── Signal Log (last 4) ──────────────────────────────────────────────────────
+var int[]    sig_bars  = array.new<int>()
+var string[] sig_names = array.new<string>()
+
+if upper_level_swept,          log_sig("⚡ Upper Swept",  sig_bars, sig_names)
+if lower_level_swept,          log_sig("⚡ Lower Swept",  sig_bars, sig_names)
+if weakening_bullish_momentum, log_sig("● Wk Bull Mom",  sig_bars, sig_names)
+if weakening_bearish_momentum, log_sig("● Wk Bear Mom",  sig_bars, sig_names)
+if bullish_rebound,            log_sig("▲ Bull Rebound", sig_bars, sig_names)
+if bearish_rebound,            log_sig("▼ Bear Rebound", sig_bars, sig_names)
+if bullish_zero_cross,         log_sig("↑ Bull Zero X",  sig_bars, sig_names)
+if bearish_zero_cross,         log_sig("↓ Bear Zero X",  sig_bars, sig_names)
+if bullish_signal_cross,       log_sig("↑ Bull Sig X",   sig_bars, sig_names)
+if bearish_signal_cross,       log_sig("↓ Bear Sig X",   sig_bars, sig_names)
+
+// ─── Confluence Tracking ──────────────────────────────────────────────────────
+var int last_bull_zero = na
+var int last_bear_zero = na
+var int last_bull_sig  = na
+var int last_bear_sig  = na
+var int last_bull_reb  = na
+var int last_bear_reb  = na
+
+if bullish_zero_cross,   last_bull_zero := bar_index
+if bearish_zero_cross,   last_bear_zero := bar_index
+if bullish_signal_cross, last_bull_sig  := bar_index
+if bearish_signal_cross, last_bear_sig  := bar_index
+if bullish_rebound,      last_bull_reb  := bar_index
+if bearish_rebound,      last_bear_reb  := bar_index
+
+cw           = 5
+has_bull_sig = (not na(last_bull_zero) and bar_index - last_bull_zero <= cw) or (not na(last_bull_sig) and bar_index - last_bull_sig <= cw) or (not na(last_bull_reb) and bar_index - last_bull_reb <= cw)
+has_bear_sig = (not na(last_bear_zero) and bar_index - last_bear_zero <= cw) or (not na(last_bear_sig) and bar_index - last_bear_sig <= cw) or (not na(last_bear_reb) and bar_index - last_bear_reb <= cw)
+bull_score   = (osc > 0 ? 1 : 0) + (osc > signal ? 1 : 0) + (has_bull_sig ? 1 : 0) + (close > nw_val ? 1 : 0) + (active_line_type == -1 ? 1 : 0) + (ofi_bull and vpin < vpin_high_thresh ? 1 : 0)
+bear_score   = (osc < 0 ? 1 : 0) + (osc < signal ? 1 : 0) + (has_bear_sig ? 1 : 0) + (close < nw_val ? 1 : 0) + (active_line_type == 1 ? 1 : 0) + (not ofi_bull and vpin < vpin_high_thresh ? 1 : 0)
+bull_conf_strong   = bull_score >= 5 and (na(bull_score[1]) or bull_score[1] < 5)
+bear_conf_strong   = bear_score >= 5 and (na(bear_score[1]) or bear_score[1] < 5)
+vpin_extreme_cross = ta.crossover(vpin, vpin_extreme_thresh)
+
+// ─── VPIN Chart Labels ────────────────────────────────────────────────────────
+vpin_event = vpin > vpin_high_thresh and (draw_upper_line or draw_lower_line or upper_level_swept or lower_level_swept or bullish_zero_cross or bearish_zero_cross or bullish_rebound or bearish_rebound)
+
+if show_vpin_labels and vpin_event and barstate.isconfirmed
+    label.new(bar_index, nw_val + (osc > 0 ? volatility * 2.5 : -(volatility * 2.5)), text = "VPIN: " + str.tostring(vpin, "#.##") + "  OFI: " + (ofi_bull ? "BUY" : "SELL"), style = label.style_label_left, color = color.new(vpin_col, 10), textcolor = color.black, size = size.tiny, force_overlay = true)
+
+// ─── Smart Table ──────────────────────────────────────────────────────────────
+var table smart_tbl = na
+
+if barstate.islast
+    if not na(smart_tbl)
+        table.delete(smart_tbl)
+        smart_tbl := na
+
+    if show_table
+        tsz     = table_size_str
+        tpos    = pos_to_pos(table_pos_str)
+        g_col   = color.new(green, 0)
+        r_col   = color.new(red, 0)
+        col_val = color.new(chart.fg_color, 0)
+        col_lbl = color.new(chart.fg_color, 45)
+        b_col   = osc > 0 ? g_col : r_col
+
+        mom_txt   = overflow > 0 ? "EXTREME ⚡" : math.abs(osc) > 1.5 ? "STRONG" : math.abs(osc) > 0.8 ? "MODERATE" : "WEAK"
+        mom_col   = overflow > 0 ? color.new(#ff9800, 0) : col_val
+        lp_txt    = not na(active_line_price) ? str.tostring(active_line_price, format.mintick) : "—"
+        ltype_txt = active_line_type == 1 ? "RESISTANCE" : active_line_type == -1 ? "SUPPORT" : "NONE"
+        ltype_col = active_line_type == 1 ? r_col : active_line_type == -1 ? g_col : col_lbl
+        ldist_pct = not na(active_line_price) ? math.abs(close - active_line_price) / close * 100 : na
+        ldist_atr = not na(active_line_price) and volatility > 0 ? math.abs(close - active_line_price) / volatility : na
+        ldist_txt = not na(ldist_pct) ? str.tostring(ldist_pct, "#.##") + "%  " + str.tostring(ldist_atr, "#.#") + "× ATR" : "—"
+        nw_diff   = (close - nw_val) / nw_val * 100
+        nw_vs_txt = (nw_diff >= 0 ? "▲ +" : "▼ ") + str.tostring(nw_diff, "#.##") + "%"
+        vpin_txt  = str.tostring(vpin, "#.###") + "  " + vpin_regime
+        s0        = get_sname(0, sig_bars, sig_names)
+        s1        = get_sname(1, sig_bars, sig_names)
+        s2        = get_sname(2, sig_bars, sig_names)
+        s3        = get_sname(3, sig_bars, sig_names)
+        bs_txt    = "BULL  " + str.tostring(bull_score) + "/6   " + dots(bull_score)
+        rs_txt    = "BEAR  " + str.tostring(bear_score) + "/6   " + dots(bear_score)
+
+        smart_tbl := table.new(tpos, 2, 31, bgcolor = color.new(chart.bg_color, 5), border_color = color.new(chart.fg_color, 75), border_width = 1, frame_color = color.new(chart.fg_color, 55), frame_width = 1)
+
+        tbl_hdr(smart_tbl, 0,  "◈  NW LIQUIDITY SWEEPS  " + timeframe.period, tsz)
+        tbl_hdr(smart_tbl, 1,  "MARKET BIAS", tsz)
+        tbl_row(smart_tbl, 2,  "Trend",    osc > 0 ? "BULLISH  ↑" : "BEARISH  ↓",         b_col,    tsz)
+        tbl_row(smart_tbl, 3,  "Phase",    osc > signal ? "OSC > SIGNAL" : "OSC < SIGNAL", b_col,    tsz)
+        tbl_row(smart_tbl, 4,  "Momentum", mom_txt,                                        mom_col,  tsz)
+        tbl_hdr(smart_tbl, 5,  "OSCILLATOR", tsz)
+        tbl_row(smart_tbl, 6,  "OSC",      str.tostring(osc,    "#.####"),                 osc > 0 ? g_col : r_col,      tsz)
+        tbl_row(smart_tbl, 7,  "Signal",   str.tostring(signal, "#.####"),                 osc > signal ? g_col : r_col, tsz)
+        tbl_row(smart_tbl, 8,  "Spread",   str.tostring(osc - signal, "#.####"),           osc > signal ? g_col : r_col, tsz)
+        tbl_row(smart_tbl, 9,  "Overflow", overflow > 0 ? str.tostring(overflow, "#.##") : "—", overflow > 0 ? color.new(#ff9800, 0) : col_lbl, tsz)
+        tbl_hdr(smart_tbl, 10, "REGRESSION", tsz)
+        tbl_row(smart_tbl, 11, "NW Value",   str.tostring(nw_val, format.mintick),         col_val,                        tsz)
+        tbl_row(smart_tbl, 12, "vs Close",   nw_vs_txt,                                    close >= nw_val ? g_col : r_col, tsz)
+        tbl_row(smart_tbl, 13, "Volatility", str.tostring(volatility, format.mintick),     col_val,                        tsz)
+        tbl_row(smart_tbl, 14, "Band Width", str.tostring(volatility * 2, format.mintick), col_val,                        tsz)
+        tbl_hdr(smart_tbl, 15, "ACTIVE LEVEL", tsz)
+        tbl_row(smart_tbl, 16, "Type",     ltype_txt,                               ltype_col,                          tsz)
+        tbl_row(smart_tbl, 17, "Price",    lp_txt,                                  ltype_col,                          tsz)
+        tbl_row(smart_tbl, 18, "Distance", ldist_txt,                               col_val,                            tsz)
+        tbl_row(smart_tbl, 19, "Status",   active_line_type != 0 ? "ACTIVE" : "—", active_line_type != 0 ? g_col : col_lbl, tsz)
+        tbl_hdr(smart_tbl, 20, "VPIN", tsz)
+        tbl_row(smart_tbl, 21, "VPIN", vpin_txt,                                     color.new(vpin_col, 0),  tsz)
+        tbl_row(smart_tbl, 22, "OFI",  ofi_bull ? "BUY DOMINANT" : "SELL DOMINANT", ofi_bull ? g_col : r_col, tsz)
+        tbl_hdr(smart_tbl, 23, "SIGNALS  (last 4)", tsz)
+        tbl_row(smart_tbl, 24, s0, get_sage(0, sig_bars), sig_c(s0, g_col, r_col, col_val), tsz)
+        tbl_row(smart_tbl, 25, s1, get_sage(1, sig_bars), sig_c(s1, g_col, r_col, col_val), tsz)
+        tbl_row(smart_tbl, 26, s2, get_sage(2, sig_bars), sig_c(s2, g_col, r_col, col_val), tsz)
+        tbl_row(smart_tbl, 27, s3, get_sage(3, sig_bars), sig_c(s3, g_col, r_col, col_val), tsz)
+        tbl_hdr(smart_tbl, 28, "CONFLUENCE", tsz)
+        tbl_wide(smart_tbl, 29, bs_txt, g_col, tsz)
+        tbl_wide(smart_tbl, 30, rs_txt, r_col, tsz)
+
+// ─── Color ────────────────────────────────────────────────────────────────────
+col_ = osc > 0 ? color.from_gradient(osc, 0, 3, pseudo_transp(green, 80), pseudo_transp(green, 30)) : color.from_gradient(osc, -3, 0, pseudo_transp(red, 30), pseudo_transp(red, 80))
+
+// ─── Plots ────────────────────────────────────────────────────────────────────
+main = plot(osc,    "Oscillator",  color.blue, 2, plot.style_line, display = display.none)
+plot(signal, "Signal Line", show_signal_line ? color.new(chart.fg_color, 50) : na)
+ovf  = plot(osc > 2 ? overflow : osc < -2 ? -overflow : 0, "Overflow", display = display.none)
+zero = plot(0, "Zero Line", chart.fg_color)
+fill(main, ovf, col_, "Oscillator Fill")
+fill(zero, ovf, osc > 0 ? green : red, "Oscillator Fill")
+
+plotcandle(open = show_nw_band_candles ? nw_val + (osc > 0 ? -volatility : volatility) : na, high = show_nw_band_candles ? osc < 0 ? high : nw_val : na, low = show_nw_band_candles ? osc > 0 ? low : nw_val : na, close = show_nw_band_candles ? nw_val : na, title = "Nadaraya-Watson Band", bordercolor = na, force_overlay = true, color = col_, wickcolor = color.new(col_, 70))
+
+plotcandle(open = show_bar_color_candles ? open : na, high = show_bar_color_candles ? high : na, low = show_bar_color_candles ? low : na, close = show_bar_color_candles ? close : na, title = "Price", color = col_, wickcolor = col_, bordercolor = col_, force_overlay = true)
+
+plotchar(show_momentum_signals and weakening_bullish_momentum, "Weakening Bullish Momentum", "●", location.abovebar, green, size = size.tiny, force_overlay = true)
+plotchar(show_momentum_signals and weakening_bearish_momentum, "Weakening Bearish Momentum", "●", location.belowbar, red,   size = size.tiny, force_overlay = true)
+plotchar(show_rebound_signals and bullish_rebound ? nw_val - volatility * 1.5 : na, "Bullish Rebound", "▲", location.absolute, green, size = size.tiny, force_overlay = true)
+plotchar(show_rebound_signals and bearish_rebound ? nw_val + volatility * 1.5 : na, "Bearish Rebound", "▼", location.absolute, red,   size = size.tiny, force_overlay = true)
+
+// ─── Alert Conditions ─────────────────────────────────────────────────────────
+alertcondition(weakening_bullish_momentum, title = "Weakening Bullish Momentum")
+alertcondition(weakening_bearish_momentum, title = "Weakening Bearish Momentum")
+alertcondition(bullish_signal_cross,       title = "Bullish Signal Cross")
+alertcondition(bearish_signal_cross,       title = "Bearish Signal Cross")
+alertcondition(bullish_zero_cross,         title = "Bullish Zero Cross")
+alertcondition(bearish_zero_cross,         title = "Bearish Zero Cross")
+alertcondition(bullish_rebound,            title = "Bullish Rebound")
+alertcondition(bearish_rebound,            title = "Bearish Rebound")
+alertcondition(draw_upper_line,            title = "New Upper Liquidity Sweep Level")
+alertcondition(draw_lower_line,            title = "New Lower Liquidity Sweep Level")
+alertcondition(upper_level_swept,          title = "Upper Liquidity Sweep Level Swept")
+alertcondition(lower_level_swept,          title = "Lower Liquidity Sweep Level Swept")
+alertcondition(bull_conf_strong,           title = "Bull Confluence 5+/6")
+alertcondition(bear_conf_strong,           title = "Bear Confluence 5+/6")
+alertcondition(vpin_extreme_cross,         title = "VPIN Extreme Breach")
+
+// ─── Webhook Signals (JSON) ───────────────────────────────────────────────────
+// TradingView: ONE alert → Condition = "Any alert() function call" → https://squeezeos-api.onrender.com/api/nwliq/signal
+_buy_tgt  = not na(active_line_price) and active_line_type == 1  ? active_line_price : nw_val + volatility * 2.0
+_buy_stp  = nw_val - volatility * 1.0
+_sell_tgt = not na(active_line_price) and active_line_type == -1 ? active_line_price : nw_val - volatility * 2.0
+_sell_stp = nw_val + volatility * 1.0
+_ofi_dir  = ofi_bull ? "buy" : "sell"
+
+if bullish_zero_cross and barstate.isconfirmed
+    _rr = close > _buy_stp and _buy_tgt > close ? (_buy_tgt - close) / (close - _buy_stp) : 0.0
+    alert(mk_sig("buy", "Bullish Zero Cross", close, nw_val, volatility, _buy_tgt, _buy_stp, _rr, bull_score, bear_score, vpin, vpin_regime, _ofi_dir, "OSC crossed above zero - trend flipped bullish. NW regression below close confirms upward pressure. Enter long, target " + str.tostring(_buy_tgt, format.mintick) + ", stop " + str.tostring(_buy_stp, format.mintick) + "."), alert.freq_once_per_bar_close)
+
+if bearish_zero_cross and barstate.isconfirmed
+    _rr = _sell_stp > close and close > _sell_tgt ? (close - _sell_tgt) / (_sell_stp - close) : 0.0
+    alert(mk_sig("sell", "Bearish Zero Cross", close, nw_val, volatility, _sell_tgt, _sell_stp, _rr, bull_score, bear_score, vpin, vpin_regime, _ofi_dir, "OSC crossed below zero - trend flipped bearish. NW regression above close confirms downward pressure. Enter short, target " + str.tostring(_sell_tgt, format.mintick) + ", stop " + str.tostring(_sell_stp, format.mintick) + "."), alert.freq_once_per_bar_close)
+
+if bullish_signal_cross and barstate.isconfirmed
+    _rr = close > _buy_stp and _buy_tgt > close ? (_buy_tgt - close) / (close - _buy_stp) : 0.0
+    alert(mk_sig("buy", "Bullish Signal Cross", close, nw_val, volatility, _buy_tgt, _buy_stp, _rr, bull_score, bear_score, vpin, vpin_regime, _ofi_dir, "OSC crossed above signal line - bullish momentum building. Stronger conviction if OSC also above zero. Target " + str.tostring(_buy_tgt, format.mintick) + ", stop " + str.tostring(_buy_stp, format.mintick) + "."), alert.freq_once_per_bar_close)
+
+if bearish_signal_cross and barstate.isconfirmed
+    _rr = _sell_stp > close and close > _sell_tgt ? (close - _sell_tgt) / (_sell_stp - close) : 0.0
+    alert(mk_sig("sell", "Bearish Signal Cross", close, nw_val, volatility, _sell_tgt, _sell_stp, _rr, bull_score, bear_score, vpin, vpin_regime, _ofi_dir, "OSC crossed under signal line - bearish momentum building. Stronger conviction if OSC also below zero. Target " + str.tostring(_sell_tgt, format.mintick) + ", stop " + str.tostring(_sell_stp, format.mintick) + "."), alert.freq_once_per_bar_close)
+
+if upper_level_swept and barstate.isconfirmed
+    _rr = close > _buy_stp and _buy_tgt > close ? (_buy_tgt - close) / (close - _buy_stp) : 0.0
+    alert(mk_sig("buy", "Upper Level Swept", close, nw_val, volatility, _buy_tgt, _buy_stp, _rr, bull_score, bear_score, vpin, vpin_regime, _ofi_dir, "Resistance swept - price broke above liquidity level. High-conviction long. Target " + str.tostring(_buy_tgt, format.mintick) + ", stop " + str.tostring(_buy_stp, format.mintick) + ". Watch for retest as new support."), alert.freq_once_per_bar_close)
+
+if lower_level_swept and barstate.isconfirmed
+    _rr = _sell_stp > close and close > _sell_tgt ? (close - _sell_tgt) / (_sell_stp - close) : 0.0
+    alert(mk_sig("sell", "Lower Level Swept", close, nw_val, volatility, _sell_tgt, _sell_stp, _rr, bull_score, bear_score, vpin, vpin_regime, _ofi_dir, "Support swept - price broke below liquidity level. High-conviction short. Target " + str.tostring(_sell_tgt, format.mintick) + ", stop " + str.tostring(_sell_stp, format.mintick) + ". Watch for retest as new resistance."), alert.freq_once_per_bar_close)
+
+if bullish_rebound and barstate.isconfirmed
+    _rr = close > _buy_stp and _buy_tgt > close ? (_buy_tgt - close) / (close - _buy_stp) : 0.0
+    alert(mk_sig("buy", "Bullish Rebound", close, nw_val, volatility, _buy_tgt, _buy_stp, _rr, bull_score, bear_score, vpin, vpin_regime, _ofi_dir, "Price bounced above NW regression - dynamic support held. Long from NW level. Target " + str.tostring(_buy_tgt, format.mintick) + ", stop " + str.tostring(_buy_stp, format.mintick) + ". OSC positive confirms upward bias."), alert.freq_once_per_bar_close)
+
+if bearish_rebound and barstate.isconfirmed
+    _rr = _sell_stp > close and close > _sell_tgt ? (close - _sell_tgt) / (_sell_stp - close) : 0.0
+    alert(mk_sig("sell", "Bearish Rebound", close, nw_val, volatility, _sell_tgt, _sell_stp, _rr, bull_score, bear_score, vpin, vpin_regime, _ofi_dir, "Price crossed below NW regression - dynamic resistance rejected. Short from NW level. Target " + str.tostring(_sell_tgt, format.mintick) + ", stop " + str.tostring(_sell_stp, format.mintick) + ". OSC negative confirms downward bias."), alert.freq_once_per_bar_close)
+
+if draw_upper_line and barstate.isconfirmed
+    alert(mk_sig("hold", "New Resistance Level", close, nw_val, volatility, active_line_price, _buy_stp, 0.0, bull_score, bear_score, vpin, vpin_regime, _ofi_dir, "New resistance sweep level at " + str.tostring(active_line_price, format.mintick) + ". OSC weakening from bullish phase. Watch for test or sweep. Tighten long stops or reduce exposure."), alert.freq_once_per_bar_close)
+
+if draw_lower_line and barstate.isconfirmed
+    alert(mk_sig("hold", "New Support Level", close, nw_val, volatility, active_line_price, _sell_stp, 0.0, bull_score, bear_score, vpin, vpin_regime, _ofi_dir, "New support sweep level at " + str.tostring(active_line_price, format.mintick) + ". OSC weakening from bearish phase. Watch for test or sweep. Tighten short stops or reduce exposure."), alert.freq_once_per_bar_close)
+
+if weakening_bullish_momentum and barstate.isconfirmed
+    alert(mk_sig("hold", "Weakening Bull Momentum", close, nw_val, volatility, _buy_tgt, _buy_stp, 0.0, bull_score, bear_score, vpin, vpin_regime, _ofi_dir, "Bullish momentum weakening - OSC rolling over while still positive. Not a reversal yet. Tighten long stops toward " + str.tostring(_buy_stp, format.mintick) + " or take partial profits."), alert.freq_once_per_bar_close)
+
+if weakening_bearish_momentum and barstate.isconfirmed
+    alert(mk_sig("hold", "Weakening Bear Momentum", close, nw_val, volatility, _sell_tgt, _sell_stp, 0.0, bull_score, bear_score, vpin, vpin_regime, _ofi_dir, "Bearish momentum weakening - OSC rolling over while still negative. Not a reversal yet. Tighten short stops toward " + str.tostring(_sell_stp, format.mintick) + " or take partial profits."), alert.freq_once_per_bar_close)
+
+if bull_conf_strong and barstate.isconfirmed
+    _rr = close > _buy_stp and _buy_tgt > close ? (_buy_tgt - close) / (close - _buy_stp) : 0.0
+    alert(mk_sig("buy", "Bull Confluence 5+/6", close, nw_val, volatility, _buy_tgt, _buy_stp, _rr, bull_score, bear_score, vpin, vpin_regime, _ofi_dir, "Confluence score " + str.tostring(bull_score) + "/6 bullish - multiple conditions aligned. High-conviction long. Target " + str.tostring(_buy_tgt, format.mintick) + ", stop " + str.tostring(_buy_stp, format.mintick) + ". VPIN " + vpin_regime + "."), alert.freq_once_per_bar_close)
+
+if bear_conf_strong and barstate.isconfirmed
+    _rr = _sell_stp > close and close > _sell_tgt ? (close - _sell_tgt) / (_sell_stp - close) : 0.0
+    alert(mk_sig("sell", "Bear Confluence 5+/6", close, nw_val, volatility, _sell_tgt, _sell_stp, _rr, bull_score, bear_score, vpin, vpin_regime, _ofi_dir, "Confluence score " + str.tostring(bear_score) + "/6 bearish - multiple conditions aligned. High-conviction short. Target " + str.tostring(_sell_tgt, format.mintick) + ", stop " + str.tostring(_sell_stp, format.mintick) + ". VPIN " + vpin_regime + "."), alert.freq_once_per_bar_close)
+
+if vpin_extreme_cross and barstate.isconfirmed
+    alert(mk_sig("hold", "VPIN Extreme", close, nw_val, volatility, close, close, 0.0, bull_score, bear_score, vpin, vpin_regime, _ofi_dir, "VPIN spiked to EXTREME (" + str.tostring(vpin, "#.###") + ") - informed trading very high. " + (ofi_bull ? "Buy" : "Sell") + " side dominant. Avoid new positions or apply tight stops. Large directional move imminent."), alert.freq_once_per_bar_close)
