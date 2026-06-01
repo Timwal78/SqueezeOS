@@ -111,6 +111,16 @@ tbl_wide(table t, int r, string val, color vc, string sz_str) =>
     table.cell(t, 0, r, val, text_color = vc, text_size = size_to_size(sz_str), text_halign = text.align_left, bgcolor = color.new(chart.bg_color, 5))
     table.merge_cells(t, 0, r, 1, r)
 
+mk_sig(string action, string sig, float entry, float nw, float atr, float tgt, float stp, float rr, float cb, float cr, float vp, string vr, string ofi, string expl) =>
+    p1 = '{"ticker":"' + syminfo.ticker + '","exchange":"' + syminfo.prefix + '","timeframe":"' + timeframe.period + '"'
+    p2 = ',"action":"' + action + '","signal":"' + sig + '"'
+    p3 = ',"price":' + str.tostring(entry, "#.####") + ',"nw":' + str.tostring(nw, "#.####") + ',"atr":' + str.tostring(atr, "#.####")
+    p4 = ',"target":' + str.tostring(tgt, "#.####") + ',"stop":' + str.tostring(stp, "#.####") + ',"rr":' + str.tostring(rr, "#.##")
+    p5 = ',"confluence_bull":' + str.tostring(cb) + ',"confluence_bear":' + str.tostring(cr)
+    p6 = ',"vpin":' + str.tostring(vp, "#.####") + ',"vpin_regime":"' + vr + '","ofi":"' + ofi + '"'
+    p7 = ',"explanation":"' + expl + '"}'
+    p1 + p2 + p3 + p4 + p5 + p6 + p7
+
 // ─── Core Calculations ────────────────────────────────────────────────────────
 nw_val     = nw(close, nw_bandwidth, nw_lookback)
 nw_slope   = nw_val - nw_val[1]
@@ -232,6 +242,9 @@ has_bull_sig = (not na(last_bull_zero) and bar_index - last_bull_zero <= cw) or 
 has_bear_sig = (not na(last_bear_zero) and bar_index - last_bear_zero <= cw) or (not na(last_bear_sig) and bar_index - last_bear_sig <= cw) or (not na(last_bear_reb) and bar_index - last_bear_reb <= cw)
 bull_score   = (osc > 0 ? 1 : 0) + (osc > signal ? 1 : 0) + (has_bull_sig ? 1 : 0) + (close > nw_val ? 1 : 0) + (active_line_type == -1 ? 1 : 0) + (ofi_bull and vpin < vpin_high_thresh ? 1 : 0)
 bear_score   = (osc < 0 ? 1 : 0) + (osc < signal ? 1 : 0) + (has_bear_sig ? 1 : 0) + (close < nw_val ? 1 : 0) + (active_line_type == 1 ? 1 : 0) + (not ofi_bull and vpin < vpin_high_thresh ? 1 : 0)
+bull_conf_strong   = bull_score >= 5 and (na(bull_score[1]) or bull_score[1] < 5)
+bear_conf_strong   = bear_score >= 5 and (na(bear_score[1]) or bear_score[1] < 5)
+vpin_extreme_cross = ta.crossover(vpin, vpin_extreme_thresh)
 
 // ─── VPIN Chart Labels ────────────────────────────────────────────────────────
 vpin_event = vpin > vpin_high_thresh and (draw_upper_line or draw_lower_line or upper_level_swept or lower_level_swept or bullish_zero_cross or bearish_zero_cross or bullish_rebound or bearish_rebound)
@@ -328,14 +341,82 @@ plotchar(show_momentum_signals and weakening_bearish_momentum, "Weakening Bearis
 plotchar(show_rebound_signals and bullish_rebound ? nw_val - volatility * 1.5 : na, "Bullish Rebound", "▲", location.absolute, green, size = size.tiny, force_overlay = true)
 plotchar(show_rebound_signals and bearish_rebound ? nw_val + volatility * 1.5 : na, "Bearish Rebound", "▼", location.absolute, red,   size = size.tiny, force_overlay = true)
 
-// ─── Alerts ───────────────────────────────────────────────────────────────────
+// ─── Alert Conditions ─────────────────────────────────────────────────────────
 alertcondition(weakening_bullish_momentum, title = "Weakening Bullish Momentum")
 alertcondition(weakening_bearish_momentum, title = "Weakening Bearish Momentum")
 alertcondition(bullish_signal_cross,       title = "Bullish Signal Cross")
 alertcondition(bearish_signal_cross,       title = "Bearish Signal Cross")
 alertcondition(bullish_zero_cross,         title = "Bullish Zero Cross")
 alertcondition(bearish_zero_cross,         title = "Bearish Zero Cross")
+alertcondition(bullish_rebound,            title = "Bullish Rebound")
+alertcondition(bearish_rebound,            title = "Bearish Rebound")
 alertcondition(draw_upper_line,            title = "New Upper Liquidity Sweep Level")
 alertcondition(draw_lower_line,            title = "New Lower Liquidity Sweep Level")
 alertcondition(upper_level_swept,          title = "Upper Liquidity Sweep Level Swept")
 alertcondition(lower_level_swept,          title = "Lower Liquidity Sweep Level Swept")
+alertcondition(bull_conf_strong,           title = "Bull Confluence 5+/6")
+alertcondition(bear_conf_strong,           title = "Bear Confluence 5+/6")
+alertcondition(vpin_extreme_cross,         title = "VPIN Extreme Breach")
+
+// ─── Webhook Signals (JSON) ───────────────────────────────────────────────────
+// TradingView: ONE alert → Condition = "Any alert() function call" → https://squeezeos-api.onrender.com/api/nwliq/signal
+_buy_tgt  = not na(active_line_price) and active_line_type == 1  ? active_line_price : nw_val + volatility * 2.0
+_buy_stp  = nw_val - volatility * 1.0
+_sell_tgt = not na(active_line_price) and active_line_type == -1 ? active_line_price : nw_val - volatility * 2.0
+_sell_stp = nw_val + volatility * 1.0
+_ofi_dir  = ofi_bull ? "buy" : "sell"
+
+if bullish_zero_cross and barstate.isconfirmed
+    _rr = close > _buy_stp and _buy_tgt > close ? (_buy_tgt - close) / (close - _buy_stp) : 0.0
+    alert(mk_sig("buy", "Bullish Zero Cross", close, nw_val, volatility, _buy_tgt, _buy_stp, _rr, bull_score, bear_score, vpin, vpin_regime, _ofi_dir, "OSC crossed above zero - trend flipped bullish. NW regression below close confirms upward pressure. Enter long, target " + str.tostring(_buy_tgt, format.mintick) + ", stop " + str.tostring(_buy_stp, format.mintick) + "."), alert.freq_once_per_bar_close)
+
+if bearish_zero_cross and barstate.isconfirmed
+    _rr = _sell_stp > close and close > _sell_tgt ? (close - _sell_tgt) / (_sell_stp - close) : 0.0
+    alert(mk_sig("sell", "Bearish Zero Cross", close, nw_val, volatility, _sell_tgt, _sell_stp, _rr, bull_score, bear_score, vpin, vpin_regime, _ofi_dir, "OSC crossed below zero - trend flipped bearish. NW regression above close confirms downward pressure. Enter short, target " + str.tostring(_sell_tgt, format.mintick) + ", stop " + str.tostring(_sell_stp, format.mintick) + "."), alert.freq_once_per_bar_close)
+
+if bullish_signal_cross and barstate.isconfirmed
+    _rr = close > _buy_stp and _buy_tgt > close ? (_buy_tgt - close) / (close - _buy_stp) : 0.0
+    alert(mk_sig("buy", "Bullish Signal Cross", close, nw_val, volatility, _buy_tgt, _buy_stp, _rr, bull_score, bear_score, vpin, vpin_regime, _ofi_dir, "OSC crossed above signal line - bullish momentum building. Stronger conviction if OSC also above zero. Target " + str.tostring(_buy_tgt, format.mintick) + ", stop " + str.tostring(_buy_stp, format.mintick) + "."), alert.freq_once_per_bar_close)
+
+if bearish_signal_cross and barstate.isconfirmed
+    _rr = _sell_stp > close and close > _sell_tgt ? (close - _sell_tgt) / (_sell_stp - close) : 0.0
+    alert(mk_sig("sell", "Bearish Signal Cross", close, nw_val, volatility, _sell_tgt, _sell_stp, _rr, bull_score, bear_score, vpin, vpin_regime, _ofi_dir, "OSC crossed under signal line - bearish momentum building. Stronger conviction if OSC also below zero. Target " + str.tostring(_sell_tgt, format.mintick) + ", stop " + str.tostring(_sell_stp, format.mintick) + "."), alert.freq_once_per_bar_close)
+
+if upper_level_swept and barstate.isconfirmed
+    _rr = close > _buy_stp and _buy_tgt > close ? (_buy_tgt - close) / (close - _buy_stp) : 0.0
+    alert(mk_sig("buy", "Upper Level Swept", close, nw_val, volatility, _buy_tgt, _buy_stp, _rr, bull_score, bear_score, vpin, vpin_regime, _ofi_dir, "Resistance swept - price broke above liquidity level. High-conviction long. Target " + str.tostring(_buy_tgt, format.mintick) + ", stop " + str.tostring(_buy_stp, format.mintick) + ". Watch for retest as new support."), alert.freq_once_per_bar_close)
+
+if lower_level_swept and barstate.isconfirmed
+    _rr = _sell_stp > close and close > _sell_tgt ? (close - _sell_tgt) / (_sell_stp - close) : 0.0
+    alert(mk_sig("sell", "Lower Level Swept", close, nw_val, volatility, _sell_tgt, _sell_stp, _rr, bull_score, bear_score, vpin, vpin_regime, _ofi_dir, "Support swept - price broke below liquidity level. High-conviction short. Target " + str.tostring(_sell_tgt, format.mintick) + ", stop " + str.tostring(_sell_stp, format.mintick) + ". Watch for retest as new resistance."), alert.freq_once_per_bar_close)
+
+if bullish_rebound and barstate.isconfirmed
+    _rr = close > _buy_stp and _buy_tgt > close ? (_buy_tgt - close) / (close - _buy_stp) : 0.0
+    alert(mk_sig("buy", "Bullish Rebound", close, nw_val, volatility, _buy_tgt, _buy_stp, _rr, bull_score, bear_score, vpin, vpin_regime, _ofi_dir, "Price bounced above NW regression - dynamic support held. Long from NW level. Target " + str.tostring(_buy_tgt, format.mintick) + ", stop " + str.tostring(_buy_stp, format.mintick) + ". OSC positive confirms upward bias."), alert.freq_once_per_bar_close)
+
+if bearish_rebound and barstate.isconfirmed
+    _rr = _sell_stp > close and close > _sell_tgt ? (close - _sell_tgt) / (_sell_stp - close) : 0.0
+    alert(mk_sig("sell", "Bearish Rebound", close, nw_val, volatility, _sell_tgt, _sell_stp, _rr, bull_score, bear_score, vpin, vpin_regime, _ofi_dir, "Price crossed below NW regression - dynamic resistance rejected. Short from NW level. Target " + str.tostring(_sell_tgt, format.mintick) + ", stop " + str.tostring(_sell_stp, format.mintick) + ". OSC negative confirms downward bias."), alert.freq_once_per_bar_close)
+
+if draw_upper_line and barstate.isconfirmed
+    alert(mk_sig("hold", "New Resistance Level", close, nw_val, volatility, active_line_price, _buy_stp, 0.0, bull_score, bear_score, vpin, vpin_regime, _ofi_dir, "New resistance sweep level at " + str.tostring(active_line_price, format.mintick) + ". OSC weakening from bullish phase. Watch for test or sweep. Tighten long stops or reduce exposure."), alert.freq_once_per_bar_close)
+
+if draw_lower_line and barstate.isconfirmed
+    alert(mk_sig("hold", "New Support Level", close, nw_val, volatility, active_line_price, _sell_stp, 0.0, bull_score, bear_score, vpin, vpin_regime, _ofi_dir, "New support sweep level at " + str.tostring(active_line_price, format.mintick) + ". OSC weakening from bearish phase. Watch for test or sweep. Tighten short stops or reduce exposure."), alert.freq_once_per_bar_close)
+
+if weakening_bullish_momentum and barstate.isconfirmed
+    alert(mk_sig("hold", "Weakening Bull Momentum", close, nw_val, volatility, _buy_tgt, _buy_stp, 0.0, bull_score, bear_score, vpin, vpin_regime, _ofi_dir, "Bullish momentum weakening - OSC rolling over while still positive. Not a reversal yet. Tighten long stops toward " + str.tostring(_buy_stp, format.mintick) + " or take partial profits."), alert.freq_once_per_bar_close)
+
+if weakening_bearish_momentum and barstate.isconfirmed
+    alert(mk_sig("hold", "Weakening Bear Momentum", close, nw_val, volatility, _sell_tgt, _sell_stp, 0.0, bull_score, bear_score, vpin, vpin_regime, _ofi_dir, "Bearish momentum weakening - OSC rolling over while still negative. Not a reversal yet. Tighten short stops toward " + str.tostring(_sell_stp, format.mintick) + " or take partial profits."), alert.freq_once_per_bar_close)
+
+if bull_conf_strong and barstate.isconfirmed
+    _rr = close > _buy_stp and _buy_tgt > close ? (_buy_tgt - close) / (close - _buy_stp) : 0.0
+    alert(mk_sig("buy", "Bull Confluence 5+/6", close, nw_val, volatility, _buy_tgt, _buy_stp, _rr, bull_score, bear_score, vpin, vpin_regime, _ofi_dir, "Confluence score " + str.tostring(bull_score) + "/6 bullish - multiple conditions aligned. High-conviction long. Target " + str.tostring(_buy_tgt, format.mintick) + ", stop " + str.tostring(_buy_stp, format.mintick) + ". VPIN " + vpin_regime + "."), alert.freq_once_per_bar_close)
+
+if bear_conf_strong and barstate.isconfirmed
+    _rr = _sell_stp > close and close > _sell_tgt ? (close - _sell_tgt) / (_sell_stp - close) : 0.0
+    alert(mk_sig("sell", "Bear Confluence 5+/6", close, nw_val, volatility, _sell_tgt, _sell_stp, _rr, bull_score, bear_score, vpin, vpin_regime, _ofi_dir, "Confluence score " + str.tostring(bear_score) + "/6 bearish - multiple conditions aligned. High-conviction short. Target " + str.tostring(_sell_tgt, format.mintick) + ", stop " + str.tostring(_sell_stp, format.mintick) + ". VPIN " + vpin_regime + "."), alert.freq_once_per_bar_close)
+
+if vpin_extreme_cross and barstate.isconfirmed
+    alert(mk_sig("hold", "VPIN Extreme", close, nw_val, volatility, close, close, 0.0, bull_score, bear_score, vpin, vpin_regime, _ofi_dir, "VPIN spiked to EXTREME (" + str.tostring(vpin, "#.###") + ") - informed trading very high. " + (ofi_bull ? "Buy" : "Sell") + " side dominant. Avoid new positions or apply tight stops. Large directional move imminent."), alert.freq_once_per_bar_close)
