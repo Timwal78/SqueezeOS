@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Timothy Walton — Script Master Labs</title>
+<meta name="description" content="Timothy Walton · Script Master Labs · Institutional AI trading infrastructure, autonomous agent economy, XRPL payments, and more.">
+<style>
+:root {
+  --bg:#020202; --panel:#0a0a0a; --line:#1c1c1c;
+  --green:#39ff14; --red:#ff073a; --blue:#00e5ff;
+  --orange:#ff9900; --magenta:#ff00ff; --yellow:#ffd700;
+  --text:#fff; --dim:#555;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  font-family:'JetBrains Mono','Courier New',monospace;
+  background:var(--bg);color:var(--text);
+  min-height:100vh;
+}
+
+/* ── SCANLINE overlay ── */
+body::before{
+  content:'';position:fixed;inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,229,255,0.015) 2px,rgba(0,229,255,0.015) 4px);
+  pointer-events:none;z-index:1000;
+}
+
+/* ── HERO ── */
+.hero{
+  max-width:900px;margin:0 auto;
+  padding:4rem 1.5rem 2rem;
+  border-bottom:1px solid var(--line);
+}
+.tag{font-size:0.62rem;letter-spacing:3px;color:var(--blue);text-shadow:0 0 8px var(--blue);margin-bottom:0.75rem}
+h1{font-size:clamp(1.8rem,5vw,3rem);letter-spacing:2px;line-height:1.1;margin-bottom:0.5rem}
+h1 .name{color:var(--text)}
+h1 .org{color:var(--magenta);text-shadow:0 0 12px var(--magenta)}
+.tagline{font-size:0.78rem;color:var(--dim);letter-spacing:1px;line-height:1.7;max-width:560px;margin-bottom:1.5rem}
+.tagline b{color:var(--orange)}
+
+.links{display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:2rem}
+.links a{
+  font-size:0.65rem;letter-spacing:1px;padding:5px 12px;
+  border:1px solid var(--line);color:var(--dim);
+  text-decoration:none;transition:all 0.2s;
+}
+.links a:hover,.links a.hot{border-color:var(--blue);color:var(--blue);text-shadow:0 0 4px var(--blue)}
+.links a.action{border-color:var(--green);color:var(--green);text-shadow:0 0 4px var(--green)}
+
+/* ── STATS BAR ── */
+.stats{
+  display:flex;flex-wrap:wrap;gap:2rem;
+  padding:1.25rem 0;border-bottom:1px solid var(--line);margin-bottom:2.5rem;
+  font-size:0.65rem;letter-spacing:1px;
+}
+.stat .val{font-size:1.4rem;font-weight:bold;display:block;margin-bottom:2px}
+.stat .lbl{color:var(--dim)}
+.stat.g .val{color:var(--green);text-shadow:0 0 6px var(--green)}
+.stat.b .val{color:var(--blue)}
+.stat.m .val{color:var(--magenta)}
+.stat.o .val{color:var(--orange)}
+
+/* ── SECTIONS ── */
+.grid{max-width:900px;margin:0 auto;padding:0 1.5rem 4rem}
+.section{margin-bottom:2.5rem}
+.section-hdr{
+  font-size:0.65rem;letter-spacing:3px;color:var(--magenta);
+  text-shadow:0 0 5px var(--magenta);padding-bottom:0.5rem;
+  border-bottom:1px solid var(--line);margin-bottom:1rem;
+  display:flex;justify-content:space-between;align-items:center;
+}
+.section-hdr span{font-size:0.55rem;color:var(--dim);letter-spacing:1px}
+
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px}
+.card{
+  background:var(--panel);border:1px solid var(--line);
+  padding:0.9rem;position:relative;transition:border-color 0.2s;
+}
+.card:hover{border-color:var(--blue)}
+.card .c-name{font-size:0.85rem;font-weight:bold;letter-spacing:1px;margin-bottom:0.3rem}
+.card .c-desc{font-size:0.62rem;color:var(--dim);line-height:1.5;margin-bottom:0.5rem}
+.card .c-tag{
+  display:inline-block;font-size:0.52rem;letter-spacing:1px;
+  padding:1px 5px;border-radius:2px;margin-right:3px;margin-bottom:2px;
+}
+.card a{text-decoration:none;color:inherit;display:block;height:100%}
+.card .c-link{
+  font-size:0.58rem;color:var(--blue);letter-spacing:1px;
+  margin-top:0.5rem;text-shadow:0 0 4px var(--blue);
+}
+/* Card accent colors */
+.accent-g{border-left:3px solid var(--green)}
+.accent-b{border-left:3px solid var(--blue)}
+.accent-m{border-left:3px solid var(--magenta)}
+.accent-o{border-left:3px solid var(--orange)}
+.accent-y{border-left:3px solid var(--yellow)}
+.accent-r{border-left:3px solid var(--red)}
+
+.tag-finance{background:rgba(57,255,20,0.1);color:var(--green)}
+.tag-ai{background:rgba(0,229,255,0.1);color:var(--blue)}
+.tag-xrpl{background:rgba(255,0,255,0.1);color:var(--magenta)}
+.tag-app{background:rgba(255,153,0,0.1);color:var(--orange)}
+.tag-book{background:rgba(255,215,0,0.1);color:var(--yellow)}
+.tag-live{background:rgba(57,255,20,0.15);color:var(--green)}
+
+/* ── LIVE VERDICT TICKER ── */
+.ticker{
+  background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--green);
+  padding:0.75rem 1rem;margin-bottom:1rem;font-size:0.7rem;
+  display:flex;align-items:center;gap:1rem;flex-wrap:wrap;
+}
+.ticker .dot{width:7px;height:7px;border-radius:50%;background:var(--green);
+  box-shadow:0 0 6px var(--green);animation:pulse 1.5s infinite;flex-shrink:0}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.ticker .sym{font-weight:bold;color:var(--blue)}
+.ticker .verdict{color:var(--green)}
+.ticker .conf{color:var(--dim)}
+
+/* ── FOOTER ── */
+footer{
+  max-width:900px;margin:0 auto;padding:1.5rem;
+  border-top:1px solid var(--line);font-size:0.6rem;
+  color:var(--dim);letter-spacing:1px;
+  display:flex;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;
+}
+footer b{color:var(--text)}
+</style>
+</head>
+<body>
+
+<div style="max-width:900px;margin:0 auto;padding:0 1.5rem">
+  <!-- HERO -->
+  <div class="hero" style="padding-left:0;padding-right:0">
+    <div class="tag">▸ DIGITAL BUSINESS CARD · SCRIPT MASTER LABS</div>
+    <h1><span class="name">TIMOTHY WALTON</span><br><span class="org">Script Master Labs™</span></h1>
+    <p class="tagline">
+      US Army Veteran · Disabled · Builder.<br>
+      Building <b>institutional-grade AI trading infrastructure</b> and an
+      <b>autonomous agent economy</b> on XRPL — from zero, every day.
+    </p>
+
+    <div class="links">
+      <a href="https://www.scriptmasterlabs.com" target="_blank" class="hot">scriptmasterlabs.com</a>
+      <a href="https://squeezeos-api.onrender.com" target="_blank">SqueezeOS API</a>
+      <a href="https://smithery.ai/servers/timothy-walton45/squeezeos-api" target="_blank">Smithery MCP</a>
+      <a href="https://squeezeos-api.onrender.com/pricing" target="_blank" class="action">API Pricing</a>
+      <a href="https://squeezeos-api.onrender.com/llms.txt" target="_blank">llms.txt</a>
+      <a href="https://squeezeos-api.onrender.com/.well-known/agents.json" target="_blank">agents.json</a>
+      <a href="https://github.com/Timwal78/SqueezeOS" target="_blank">GitHub</a>
+    </div>
+
+    <!-- STATS -->
+    <div class="stats">
+      <div class="stat g"><span class="val">33</span><span class="lbl">MCP TOOLS LIVE</span></div>
+      <div class="stat b"><span class="val">7+</span><span class="lbl">INCOME STREAMS</span></div>
+      <div class="stat m"><span class="val">x402</span><span class="lbl">RLUSD PAYMENTS</span></div>
+      <div class="stat o"><span class="val">30+</span><span class="lbl">PRODUCTS SHIPPED</span></div>
+    </div>
+
+    <!-- LIVE COUNCIL TICKER -->
+    <div id="ticker-area"></div>
+  </div>
+
+  <div class="grid" style="padding-left:0;padding-right:0">
+
+    <!-- TRADING TECH -->
+    <div class="section">
+      <div class="section-hdr">TRADING INTELLIGENCE STACK <span>INSTITUTIONAL GRADE · LIVE</span></div>
+      <div class="cards">
+        <div class="card accent-g">
+          <div class="c-name">SqueezeOS v6.6</div>
+          <div class="c-desc">Real-time AI council verdicts, squeeze scanner, options flow, IWM 0DTE, CEO Trader auto-execution on Tradier. 33 MCP tools. RLUSD micropayment per call.</div>
+          <span class="c-tag tag-finance">Finance</span><span class="c-tag tag-ai">AI</span><span class="c-tag tag-live">LIVE</span>
+          <div class="c-link"><a href="https://squeezeos-api.onrender.com/beast" target="_blank">squeezeos-api.onrender.com/beast ↗</a></div>
+        </div>
+        <div class="card accent-b">
+          <div class="c-name">SML Harmonic Scanner v4.0</div>
+          <div class="c-desc">World Snapback Ranker, institutional GEX dealer positioning, RVOL/ATR scoring, beastmode AI analysis, Tradier live data.</div>
+          <span class="c-tag tag-finance">Finance</span><span class="c-tag tag-live">LIVE</span>
+          <div class="c-link">Local · sml_harmonic_scanner.html</div>
+        </div>
+        <div class="card accent-m">
+          <div class="c-name">402Proof</div>
+          <div class="c-desc">x402/HTTP 402 autonomous agent payment compliance firewall on XRPL. Agent Credit Bureau (300-850 score), loyalty tiers, RLUSD micropayment settlement.</div>
+          <span class="c-tag tag-xrpl">XRPL</span><span class="c-tag tag-ai">AI Agents</span><span class="c-tag tag-live">LIVE</span>
+          <div class="c-link"><a href="https://four02proof.onrender.com" target="_blank">four02proof.onrender.com ↗</a></div>
+        </div>
+        <div class="card accent-o">
+          <div class="c-name">Ghost Layer</div>
+          <div class="c-desc">MEV-proof private XRP routing. EC-ElGamal ZK encryption. The Sentinel MEV blocker. 0.2% fee. No KYC. Dual-chain XRPL + Base/EVM.</div>
+          <span class="c-tag tag-xrpl">XRPL</span><span class="c-tag tag-finance">DeFi</span><span class="c-tag tag-live">LIVE</span>
+          <div class="c-link"><a href="https://ghost-layer.onrender.com" target="_blank">ghost-layer.onrender.com ↗</a></div>
+        </div>
+        <div class="card accent-y">
+          <div class="c-name">IWM 0DTE Scanner</div>
+          <div class="c-desc">Scored 0DTE contracts for Russell 2000 ETF. Delta/gamma, realized vol, max pain, buy/sell recommendations. Integrated into SqueezeOS.</div>
+          <span class="c-tag tag-finance">Options</span>
+        </div>
+        <div class="card accent-r">
+          <div class="c-name">Options Grader + Order Flow Radar</div>
+          <div class="c-desc">Institutional sweep detection, put/call ratio, unusual volume, dark pool prints. Full options chain analysis.</div>
+          <span class="c-tag tag-finance">Options</span><span class="c-tag tag-ai">AI</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- AGENT / AI INFRASTRUCTURE -->
+    <div class="section">
+      <div class="section-hdr">AGENT & AI INFRASTRUCTURE <span>AUTONOMOUS · XRPL NATIVE</span></div>
+      <div class="cards">
+        <div class="card accent-b">
+          <div class="c-name">SML Agent OS</div>
+          <div class="c-desc">Institutional agentic publishing system. T.I.R. Substack drafts with paywall enforcement, X/Twitter auto-post, approval queue, Discord routing. Council → content pipeline.</div>
+          <span class="c-tag tag-ai">AI</span><span class="c-tag tag-app">Publishing</span>
+        </div>
+        <div class="card accent-m">
+          <div class="c-name">Beastmode Social Automation</div>
+          <div class="c-desc">n8n + Postiz Docker stack. Auto-scrape, GPT-4o analysis, multi-platform scheduling. Integrated with SqueezeOS telemetry.</div>
+          <span class="c-tag tag-ai">AI</span><span class="c-tag tag-app">Social</span>
+        </div>
+        <div class="card accent-g">
+          <div class="c-name">GitNexus</div>
+          <div class="c-desc">AI-powered codebase knowledge graph. Index any repo, query with natural language, generate wikis. MCP integration.</div>
+          <span class="c-tag tag-ai">AI</span>
+        </div>
+        <div class="card accent-o">
+          <div class="c-name">Echo Forge</div>
+          <div class="c-desc">Signal intelligence and content amplification engine. SEO war engine, SERP reward radar, niche factory automation.</div>
+          <span class="c-tag tag-ai">AI</span><span class="c-tag tag-app">SEO</span>
+        </div>
+        <div class="card accent-b">
+          <div class="c-name">Exo Brain</div>
+          <div class="c-desc">External cognitive augmentation system. Memory management, task routing, agent coordination layer.</div>
+          <span class="c-tag tag-ai">AI</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- APPS -->
+    <div class="section">
+      <div class="section-hdr">APPS & PRODUCTS <span>SHIPPED · GOOGLE PLAY · KDP · ETSY</span></div>
+      <div class="cards">
+        <div class="card accent-g">
+          <div class="c-name">NeuroSpark™</div>
+          <div class="c-desc">ADHD-optimized productivity OS for neurodivergent operators. Google Play, KDP, Etsy. Interactive planner, SOP protocols, shield omnibus. Built for disabled veterans.</div>
+          <span class="c-tag tag-app">App</span><span class="c-tag tag-book">Book</span><span class="c-tag tag-live">SHIPPED</span>
+          <div class="c-link"><a href="https://neurospark.scriptmasterlabs.com" target="_blank">neurospark.scriptmasterlabs.com ↗</a></div>
+        </div>
+        <div class="card accent-y">
+          <div class="c-name">MasterSheets™</div>
+          <div class="c-desc">Institutional-grade financial spreadsheet system. Position sizing, risk management, trade journaling. Built for serious traders.</div>
+          <span class="c-tag tag-finance">Finance</span><span class="c-tag tag-app">App</span>
+        </div>
+        <div class="card accent-o">
+          <div class="c-name">Credit Beast</div>
+          <div class="c-desc">AI-powered credit repair system. Automated dispute generation, score tracking, improvement roadmap.</div>
+          <span class="c-tag tag-app">Finance</span>
+        </div>
+        <div class="card accent-b">
+          <div class="c-name">Infinite Blog / v2</div>
+          <div class="c-desc">Autonomous content generation and publishing system. Next.js. SEO-optimized infinite content at scale.</div>
+          <span class="c-tag tag-ai">AI</span><span class="c-tag tag-app">SaaS</span>
+        </div>
+        <div class="card accent-m">
+          <div class="c-name">Sovereign Pay + Xahpay</div>
+          <div class="c-desc">XRPL and Xahau payment infrastructure. Hooks-native payment routing, ZK-shielded transactions, URIToken dNFT minting.</div>
+          <span class="c-tag tag-xrpl">XRPL</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- BOOKS -->
+    <div class="section">
+      <div class="section-hdr">PUBLISHED WORKS <span>KDP · GOOGLE PLAY · eCO FILED</span></div>
+      <div class="cards">
+        <div class="card accent-r">
+          <div class="c-name">Blood Oath Chronicles (BOC)</div>
+          <div class="c-desc">5-volume dark fantasy series. Thorns of Blood and Oath · Crown of Ash and Covenant · Iron of Covenant and Bone · Silence of the Unmapped Dark · The First and Final Vein. Copyright filed.</div>
+          <span class="c-tag tag-book">Fiction · 5 Vols</span><span class="c-tag tag-live">PUBLISHED</span>
+        </div>
+        <div class="card accent-b">
+          <div class="c-name">Learning Engines</div>
+          <div class="c-desc">6-volume technical series on AI, trading systems, and autonomous agent architecture. Deep technical depth per manifesto. eCO deposited.</div>
+          <span class="c-tag tag-book">Technical · 6 Vols</span><span class="c-tag tag-live">PUBLISHED</span>
+        </div>
+        <div class="card accent-o">
+          <div class="c-name">Argus Series</div>
+          <div class="c-desc">Multiple editions including Netflix-format package. Institutional intelligence fiction. Rebuilt and verified.</div>
+          <span class="c-tag tag-book">Fiction</span><span class="c-tag tag-live">PUBLISHED</span>
+        </div>
+        <div class="card accent-y">
+          <div class="c-name">Reactive Trader Series</div>
+          <div class="c-desc">Institutional trading methodology books. Options trading, squeeze setups, regime analysis. KDP published.</div>
+          <span class="c-tag tag-book">Finance · Trading</span><span class="c-tag tag-live">PUBLISHED</span>
+        </div>
+        <div class="card accent-g">
+          <div class="c-name">Book of Enoch Retold + Jubilees</div>
+          <div class="c-desc">Ancient texts reimagined. EPUB + KDP hardcover. Unique technical depth, zero cloning per literary integrity manifesto.</div>
+          <span class="c-tag tag-book">Ancient Texts</span><span class="c-tag tag-live">PUBLISHED</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTACT / CTA -->
+    <div class="section">
+      <div class="section-hdr">CONNECT · DEPLOY · BUILD</div>
+      <div class="cards">
+        <div class="card accent-g" style="grid-column:span 2">
+          <div class="c-name" style="font-size:1.1rem;margin-bottom:0.5rem">Ready to use SqueezeOS?</div>
+          <div class="c-desc" style="font-size:0.7rem;margin-bottom:0.75rem">
+            AI agents pay per call via x402 RLUSD on XRPL.<br>
+            Human devs get a Stripe API key — $9 dev / $29/mo starter / $79/mo pro.<br>
+            MCP server live on Smithery · 33 tools · Always-on Render deployment.
+          </div>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+            <a href="https://squeezeos-api.onrender.com/pricing" target="_blank"
+              style="font-size:0.65rem;padding:6px 14px;background:rgba(57,255,20,0.1);border:1px solid var(--green);color:var(--green);text-decoration:none;letter-spacing:1px">
+              GET API ACCESS ↗
+            </a>
+            <a href="https://smithery.ai/servers/timothy-walton45/squeezeos-api" target="_blank"
+              style="font-size:0.65rem;padding:6px 14px;border:1px solid var(--blue);color:var(--blue);text-decoration:none;letter-spacing:1px">
+              MCP ON SMITHERY ↗
+            </a>
+            <a href="https://squeezeos-api.onrender.com/api/demo/council" target="_blank"
+              style="font-size:0.65rem;padding:6px 14px;border:1px solid var(--dim);color:var(--dim);text-decoration:none;letter-spacing:1px">
+              FREE DEMO ↗
+            </a>
+          </div>
+        </div>
+        <div class="card accent-m">
+          <div class="c-name">Hire / Collaborate</div>
+          <div class="c-desc">Building institutional AI infrastructure, autonomous agent systems, XRPL payment rails, or trading tools? Let's talk.</div>
+          <div class="c-link"><a href="mailto:timothy.walton45@gmail.com">timothy.walton45@gmail.com</a></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /grid -->
+</div>
+
+<footer>
+  <span><b>Timothy Walton</b> · Script Master Labs™ · US Army Veteran</span>
+  <span>Built with conviction. No simulation. No fakes.</span>
+  <span style="color:var(--green)">▸ <b>ZERO DEMO / 100% FETCH</b></span>
+</footer>
+
+<script>
+// Pull live council verdict for the ticker
+async function loadTicker() {
+  const area = document.getElementById('ticker-area');
+  const symbols = ['IWM','AMC','GME'];
+  const results = [];
+
+  for (const sym of symbols) {
+    try {
+      const r = await fetch(`https://squeezeos-api.onrender.com/api/preview/${sym}`, {cache:'no-store'});
+      if (!r.ok) continue;
+      const d = await r.json();
+      const bias = d.bias || d.verdict?.bias || '—';
+      const conf = d.confidence ?? d.verdict?.confidence ?? '—';
+      const regime = d.regime || d.verdict?.regime || '';
+      results.push({sym, bias, conf, regime});
+    } catch(e) {}
+  }
+
+  if (!results.length) return;
+
+  area.innerHTML = results.map(({sym, bias, conf, regime}) => {
+    const color = bias === 'BULLISH' ? '#39ff14' : bias === 'BEARISH' ? '#ff073a' : '#ffd700';
+    return `<div class="ticker">
+      <span class="dot"></span>
+      <span class="sym">${sym}</span>
+      <span class="verdict" style="color:${color}">${bias}</span>
+      <span class="conf">${conf}% · ${regime}</span>
+    </div>`;
+  }).join('');
+}
+
+loadTicker();
+</script>
+</body>
+</html>
