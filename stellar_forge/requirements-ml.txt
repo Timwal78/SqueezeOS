@@ -10,4 +10,4 @@
 torch>=2.0          # fusion_engine, shard_router, black_hole (research)
 pyyaml>=6.0         # lora_merge mergekit config generation
 pycryptodome>=3.19  # shard_router keccak256 (matches Solidity exactly)
-mergekit>=0.0.4     # lora_merge production adapter fusion (run step)
+mergekit>=0.1.4     # lora_merge production adapter fusion (run step)
