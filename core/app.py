@@ -186,6 +186,10 @@ def create_app():
     def serve_gme_beastmode():
         return send_from_directory(app.static_folder, 'gme_beastmode.html')
 
+    @app.route('/card')
+    def serve_card():
+        return send_from_directory(app.static_folder, 'card.html')
+
     # ── 301 Redirects — dead routes indexed by Google ────────────────────────
     # All permanently redirect to / so link equity passes forward, no 404 penalty.
     @app.route('/trading-indicators')
