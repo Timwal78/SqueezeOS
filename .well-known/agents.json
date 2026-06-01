@@ -99,6 +99,35 @@
       "challenge": "https://squeezeos-api.onrender.com/api/echolock/challenge"
     }
   ],
+  "sovereign_autopilot": {
+    "description": "Sovereign Autopilot — fully autonomous live equity trading via OracleEngine + Kelly Criterion + Tradier API. Zero hardcoded values. Zero simulation. All parameters env-var-driven. Requires OPERATOR_API_KEY for start/stop/reset.",
+    "version": "7.0",
+    "endpoints": {
+      "status":  {"method": "GET",  "path": "/api/autopilot",                        "auth": "none",          "description": "Full autopilot + circuit breaker status. Free."},
+      "start":   {"method": "POST", "path": "/api/autopilot/start",                  "auth": "X-Operator-Key","description": "Activate sovereign autopilot."},
+      "stop":    {"method": "POST", "path": "/api/autopilot/stop",                   "auth": "X-Operator-Key","description": "Halt autopilot (open positions untouched)."},
+      "trades":  {"method": "GET",  "path": "/api/autopilot/trades",                 "auth": "none",          "description": "Active trades + last 50 history. Free."},
+      "reset":   {"method": "POST", "path": "/api/autopilot/circuit-breaker/reset",  "auth": "X-Operator-Key","description": "Reset circuit breaker after daily loss halt."}
+    },
+    "mcp_tools": ["autopilot_status", "autopilot_start", "autopilot_stop", "autopilot_trades", "circuit_breaker_reset"],
+    "safety_rails": {
+      "circuit_breaker":    "Auto-halts on daily P&L < -(equity * AUTOPILOT_MAX_DAILY_LOSS_PCT). Default 2%.",
+      "max_daily_trades":   "Hard cap via AUTOPILOT_MAX_DAILY_TRADES. Default 20.",
+      "max_concurrent":     "AUTOPILOT_MAX_CONCURRENT positions. Default 3.",
+      "cooldown":           "AUTOPILOT_COOLDOWN_SECONDS between entries. Default 300s.",
+      "regime_gate":        "Only fires in AUTOPILOT_REGIME_WHITELIST regimes. Default: ALPHA_EXPANSION,NEUTRAL.",
+      "confidence_floor":   "Minimum AUTOPILOT_MIN_CONFIDENCE to fire. Default 82.",
+      "kelly_fraction":     "Fractional Kelly sizing. AUTOPILOT_KELLY_FRACTION default 0.25.",
+      "live_kill_switch":   "TRADIER_LIVE=true required for real orders. Default is shadow mode.",
+      "market_hours_gate":  "Only trades 9:30-15:45 ET Mon-Fri. Hard-coded, non-overridable.",
+      "pdt_shield":         "PDT day-trade counter enforced by ExecutionEngine. Never exceeds 3 round-trips in 5 days."
+    },
+    "operator_auth": {
+      "header": "X-Operator-Key",
+      "env_var": "OPERATOR_API_KEY",
+      "note": "MCP agents may pass operator_key as an argument instead of header."
+    }
+  },
   "free_endpoints": [
     {
       "name": "Live SSE Event Stream",

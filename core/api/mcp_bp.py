@@ -39,8 +39,8 @@ PROOF402_BASE = "https://four02proof.onrender.com"
 
 _SERVER_INFO = {
     "name": "squeezeos",
-    "version": "4.1.0",
-    "description": "SqueezeOS — Institutional AI trading intelligence + Real-World Data Oracle for autonomous agents",
+    "version": "5.0.0",
+    "description": "SqueezeOS — Institutional AI trading intelligence + Sovereign Autopilot + Real-World Data Oracle for autonomous agents",
 }
 
 _TOOLS = [
@@ -399,6 +399,78 @@ _TOOLS = [
             },
         },
     },
+    # ── Sovereign Autopilot ──────────────────────────────────────────────────────
+    {
+        "name": "autopilot_status",
+        "description": (
+            "Read-only status of the Sovereign Autopilot (CEO Trader). "
+            "Returns: active (bool), live_mode (bool), symbols watchlist, "
+            "min_confidence threshold, Kelly fraction, max concurrent positions, "
+            "cooldown remaining, active open positions with symbol/side/entry/SL/TP, "
+            "circuit breaker state, daily P&L, daily trade count. "
+            "Free — no auth required. Safe for any agent to call at any frequency."
+        ),
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "autopilot_start",
+        "description": (
+            "Activate the Sovereign Autopilot. Requires X-Operator-Key header "
+            "(set OPERATOR_API_KEY env var on the server). "
+            "Once active, the autopilot polls OracleEngine every AUTOPILOT_SCAN_INTERVAL "
+            "seconds, fires on confidence >= AUTOPILOT_MIN_CONFIDENCE, sizes via Kelly "
+            "Criterion from live Tradier account equity, and routes to Tradier API. "
+            "TRADIER_LIVE must be true for real orders — otherwise runs in shadow mode. "
+            "Returns: {status, live_mode, message}."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "operator_key": {"type": "string", "description": "Operator API key (or pass X-Operator-Key header)"},
+            },
+        },
+    },
+    {
+        "name": "autopilot_stop",
+        "description": (
+            "Halt the Sovereign Autopilot immediately. Does NOT close open positions — "
+            "use autopilot_trades to review then manage manually. "
+            "Requires X-Operator-Key header. Returns: {status}."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "operator_key": {"type": "string"},
+            },
+        },
+    },
+    {
+        "name": "autopilot_trades",
+        "description": (
+            "Live view of all active and historical autopilot trades. "
+            "Returns: active_trades (open positions with symbol, side, qty, entry_price, "
+            "current_price, sl, tp, unrealized_pnl, mode LIVE/SHADOW), "
+            "trade_history (last 50 closed trades with realized_pnl), "
+            "daily_pnl, daily_trade_count, live_mode. Free — no auth required."
+        ),
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "circuit_breaker_reset",
+        "description": (
+            "Reset the autopilot circuit breaker after a daily loss halt. "
+            "The circuit breaker fires automatically when realized daily P&L "
+            "drops below AUTOPILOT_MAX_DAILY_LOSS_PCT of account equity. "
+            "Call this to re-arm after reviewing trades and confirming resumption is safe. "
+            "Requires X-Operator-Key. Returns: {status, daily_pnl, breaker_state}."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "operator_key": {"type": "string"},
+            },
+        },
+    },
     {
         "name": "beastmode_scan",
         "description": (
@@ -570,6 +642,26 @@ def _need_token(tool_name: str) -> dict:
     })
 
 
+def _operator_auth(args: dict, req_headers: dict):
+    """
+    Returns (ok: bool, err_response: dict|None).
+    Accepts operator_key arg OR X-Operator-Key header.
+    Server must have OPERATOR_API_KEY env var set.
+    """
+    server_key = os.environ.get("OPERATOR_API_KEY", "")
+    if not server_key:
+        return False, _text({"error": "ERR_OPERATOR_NOT_CONFIGURED",
+                              "message": "OPERATOR_API_KEY env var is not set on this server."})
+    provided = args.pop("operator_key", None) or req_headers.get("X-Operator-Key", "")
+    if not provided:
+        return False, _text({"error": "ERR_OPERATOR_KEY_REQUIRED",
+                              "message": "Pass operator_key in arguments or X-Operator-Key header."})
+    if provided != server_key:
+        return False, _text({"error": "ERR_OPERATOR_FORBIDDEN",
+                              "message": "Invalid operator key."})
+    return True, None
+
+
 def _dispatch(name: str, args: dict, req_headers: dict) -> dict:
     payment_token = args.pop("payment_token", None) or req_headers.get("X-Payment-Token", "")
     agent_wallet  = args.pop("agent_wallet",  None) or req_headers.get("X-Agent-Wallet",  "")
@@ -693,6 +785,37 @@ def _dispatch(name: str, args: dict, req_headers: dict) -> dict:
 
     if name == "beastmode_scan":
         return _text(_proxy("GET", f"{sq}/api/beastmode"))
+
+    # ── Sovereign Autopilot ──────────────────────────────────────────────────
+    if name == "autopilot_status":
+        return _text(_proxy("GET", f"{sq}/api/autopilot"))
+
+    if name == "autopilot_start":
+        ok_auth, err = _operator_auth(args, req_headers)
+        if not ok_auth:
+            return err
+        op_key = os.environ.get("OPERATOR_API_KEY", "")
+        return _text(_proxy("POST", f"{sq}/api/autopilot/start",
+                             headers={"X-Operator-Key": op_key}))
+
+    if name == "autopilot_stop":
+        ok_auth, err = _operator_auth(args, req_headers)
+        if not ok_auth:
+            return err
+        op_key = os.environ.get("OPERATOR_API_KEY", "")
+        return _text(_proxy("POST", f"{sq}/api/autopilot/stop",
+                             headers={"X-Operator-Key": op_key}))
+
+    if name == "autopilot_trades":
+        return _text(_proxy("GET", f"{sq}/api/autopilot/trades"))
+
+    if name == "circuit_breaker_reset":
+        ok_auth, err = _operator_auth(args, req_headers)
+        if not ok_auth:
+            return err
+        op_key = os.environ.get("OPERATOR_API_KEY", "")
+        return _text(_proxy("POST", f"{sq}/api/autopilot/circuit-breaker/reset",
+                             headers={"X-Operator-Key": op_key}))
 
     if name == "proprietary_ema_signal":
         symbol = (args.get("symbol") or "IWM").upper()
