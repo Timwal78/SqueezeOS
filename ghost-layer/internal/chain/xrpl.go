@@ -185,6 +185,11 @@ func (c *XRPLClient) call(method string, params interface{}) (json.RawMessage, e
 	return r.Result, nil
 }
 
+// Call exposes the private rpc call method publicly to satisfy cuberouter.RPCCaller.
+func (c *XRPLClient) Call(method string, params map[string]interface{}) (json.RawMessage, error) {
+	return c.call(method, params)
+}
+
 func (c *XRPLClient) fetchSequence(address string) (uint32, error) {
 	result, err := c.call("account_info", map[string]interface{}{
 		"account":      address,

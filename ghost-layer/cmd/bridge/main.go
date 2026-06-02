@@ -25,6 +25,7 @@ import (
 	"ghost-layer-core/internal/chain"
 	"ghost-layer-core/internal/credit"
 	"ghost-layer-core/internal/crypto"
+	"ghost-layer-core/internal/cuberouter"
 	"ghost-layer-core/internal/ledger"
 	"ghost-layer-core/internal/router"
 	"ghost-layer-core/internal/toll"
@@ -308,6 +309,46 @@ func init() {
 		BasePrice: 50000, // 0.05 RLUSD — regulatory / legal grade
 		Dispatcher: func(args map[string]any) (json.RawMessage, error) {
 			return nil, errors.New("ERR_USE_NOTARIZE_ENDPOINT")
+		},
+	})
+
+	x402Registry.Register(&x402.Product{
+		ID:        "routing.cube",
+		Name:      "NEXUS402 Cube Router — XRPL Multi-Hop Path Finder",
+		BasePrice: 2000, // 0.002 RLUSD per query
+		Dispatcher: func(args map[string]any) (json.RawMessage, error) {
+			if xrplClient == nil {
+				return nil, errors.New("ERR_XRPL_NOT_CONFIGURED")
+			}
+			fromCurrency, _ := args["from_currency"].(string)
+			toCurrency, _   := args["to_currency"].(string)
+			amount, _       := args["amount"].(string)
+			sourceAcct, _   := args["source_account"].(string)
+			fromIssuer, _   := args["from_issuer"].(string)
+			toIssuer, _     := args["to_issuer"].(string)
+
+			if fromCurrency == "" || toCurrency == "" || amount == "" || sourceAcct == "" {
+				return nil, errors.New("ERR_MISSING_FIELDS: from_currency, to_currency, amount, source_account required")
+			}
+			routes, err := cuberouter.FindBestRoutes(xrplClient, cuberouter.FindRequest{
+				SourceAccount:   sourceAcct,
+				FromCurrency:    fromCurrency,
+				FromIssuer:      fromIssuer,
+				ToCurrency:      toCurrency,
+				ToIssuer:        toIssuer,
+				Amount:          amount,
+				MaxAlternatives: 4,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("ERR_ROUTE_FAILED: %v", err)
+			}
+			return json.Marshal(map[string]interface{}{
+				"routes":     routes,
+				"best_route": routes[0],
+				"from":       fromCurrency,
+				"to":         toCurrency,
+				"amount":     amount,
+			})
 		},
 	})
 
@@ -744,6 +785,41 @@ func main() {
 		})
 	})
 
+	// ── NEXUS402 CUBE ROUTER — free preview endpoint ──────────────────────────
+	r.Get("/api/route/preview", func(w http.ResponseWriter, req *http.Request) {
+		q := req.URL.Query()
+		from    := q.Get("from")
+		to      := q.Get("to")
+		amount  := q.Get("amount")
+		account := q.Get("account")
+
+		if from == "" || to == "" || amount == "" || account == "" {
+			writeJSONErr(w, http.StatusBadRequest, "ERR_MISSING_PARAMS: from, to, amount, account required")
+			return
+		}
+		if xrplClient == nil {
+			writeJSONErr(w, http.StatusServiceUnavailable, "ERR_XRPL_NOT_CONFIGURED")
+			return
+		}
+		routes, err := cuberouter.FindBestRoutes(xrplClient, cuberouter.FindRequest{
+			SourceAccount:   account,
+			FromCurrency:    from,
+			ToCurrency:      to,
+			Amount:          amount,
+			MaxAlternatives: 1,
+		})
+		if err != nil {
+			writeJSONErr(w, http.StatusInternalServerError, "ERR_ROUTE_FAILED")
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"best_route": routes[0],
+			"note":       "Full route alternatives available via x402 routing.cube product",
+			"powered_by": "NEXUS402 Cube Router",
+		})
+	})
+
 	// ── AGENT LOYALTY STATS ───────────────────────────────────────────────────
 	r.Get("/api/agent/{addr}/stats", func(w http.ResponseWriter, req *http.Request) {
 		addr := chi.URLParam(req, "addr")
@@ -869,6 +945,10 @@ func main() {
 			"routing.telemetry": {
 				desc: "60-second live telemetry window into Ghost Layer routing state: active lanes, TPS, agent tier distribution, and gamma-wall settlement metrics. Ideal for AI agents performing market microstructure analysis.",
 				tags: []string{"telemetry", "real-time", "routing", "ai-agent", "metrics"},
+			},
+			"routing.cube": {
+				desc: "NEXUS402 Cube Router — multi-hop XRPL path optimizer. Returns up to 4 ranked swap routes with price impact scores for any token pair on XRPL/Xahau. Best execution for institutions and AI agents. Free preview at /api/route/preview.",
+				tags: []string{"routing", "swap", "path-finding", "multi-hop", "xrpl", "nexus402", "ai-agent"},
 			},
 			"bridge.priority": {
 				desc: "Reserved fast-lane slot — sub-100ms guaranteed routing priority over standard agents. Coming soon: bid-based priority auction via Tipmaster integration.",
