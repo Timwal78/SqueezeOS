@@ -26,6 +26,7 @@ import (
 	"ghost-layer-core/internal/credit"
 	"ghost-layer-core/internal/crypto"
 	"ghost-layer-core/internal/cuberouter"
+	"ghost-layer-core/internal/darkpool"
 	"ghost-layer-core/internal/ledger"
 	"ghost-layer-core/internal/router"
 	"ghost-layer-core/internal/toll"
@@ -61,6 +62,7 @@ var (
 )
 
 var creditMarketplace *credit.Marketplace
+var darkBook = darkpool.NewBook()
 
 // notaryGrade maps a product ID to its human-readable grade string.
 func notaryGrade(pid string) string {
@@ -349,6 +351,15 @@ func init() {
 				"to":         toCurrency,
 				"amount":     amount,
 			})
+		},
+	})
+
+	x402Registry.Register(&x402.Product{
+		ID:        "darkpool.submit",
+		Name:      "NEXUS402 Ghost Layer Dark Pool — Private Order Submission",
+		BasePrice: 5000, // 0.005 RLUSD
+		Dispatcher: func(args map[string]any) (json.RawMessage, error) {
+			return nil, errors.New("ERR_USE_DARKPOOL_ENDPOINT")
 		},
 	})
 
@@ -760,9 +771,19 @@ func main() {
 		}
 	}()
 
+	// Background goroutine sweeps expired dark pool orders every 60 seconds.
+	go func() {
+		ticker := time.NewTicker(60 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			darkBook.Depth("XRP/RLUSD") // triggers sweepExpiredLocked internally
+		}
+	}()
+
 	log.Println("[SERVER] Agent Loyalty Matrix: ARMED | WebSocket Metrics Hub: LIVE")
 	log.Println("[SERVER] X402 Vendor: ARMED | Catalog: routing.telemetry | Endpoint: /v1/x402")
 	log.Println("[SERVER] Agent Credit Marketplace: ARMED | XRPL escrow | Endpoint: /v1/credit")
+	log.Println("[SERVER] NEXUS402 Dark Pool: ARMED | Ghost Layer matching | Endpoint: /v1/darkpool")
 
 	r := chi.NewRouter()
 	r.Use(corsMiddleware)
@@ -949,6 +970,10 @@ func main() {
 			"routing.cube": {
 				desc: "NEXUS402 Cube Router — multi-hop XRPL path optimizer. Returns up to 4 ranked swap routes with price impact scores for any token pair on XRPL/Xahau. Best execution for institutions and AI agents. Free preview at /api/route/preview.",
 				tags: []string{"routing", "swap", "path-finding", "multi-hop", "xrpl", "nexus402", "ai-agent"},
+			},
+			"darkpool.submit": {
+				desc: "NEXUS402 Ghost Layer Dark Pool — submit a private trade intent. Orders matched off-chain via FIFO price-time priority. No public order book exposure. Matched pairs settle atomically on XRPL. Min 1 XRP. Max 24h TTL.",
+				tags: []string{"dark-pool", "institutional", "private", "xrpl", "ghost-layer", "nexus402"},
 			},
 			"bridge.priority": {
 				desc: "Reserved fast-lane slot — sub-100ms guaranteed routing priority over standard agents. Coming soon: bid-based priority auction via Tipmaster integration.",
@@ -1481,6 +1506,146 @@ func main() {
 				"accessible_tiers":   accessibleTiers(tier),
 				"upgrade_threshold":  nextTierThreshold(tier),
 			},
+		})
+	})
+
+	// ── NEXUS402 GHOST LAYER DARK POOL ───────────────────────────────────────
+
+	// POST /v1/darkpool/submit — institution submits a private trade intent (x402-gated)
+	r.Post("/v1/darkpool/submit", func(w http.ResponseWriter, req *http.Request) {
+		token := req.Header.Get("X-Payment-Token")
+		if token == "" {
+			product, _ := x402Registry.Lookup("darkpool.submit")
+			inv, _ := x402.Issue("darkpool.submit", "", "BRONZE", product.BasePrice, treasuryXRPL, os.Getenv("X402_TOKEN_SECRET"), nil)
+			b, _ := json.Marshal(inv)
+			w.Header().Set("X-Payment-Required", string(b))
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusPaymentRequired)
+			w.Write(b)
+			return
+		}
+		tok, err := x402.Verify(token, os.Getenv("X402_TOKEN_SECRET"))
+		if err != nil || tok.Pid != "darkpool.submit" {
+			writeJSONErr(w, http.StatusUnauthorized, "ERR_INVALID_TOKEN")
+			return
+		}
+		if !x402Nonces.Consume(tok.Iid, tok.Exp+60) {
+			writeJSONErr(w, http.StatusConflict, "ERR_REPLAY")
+			return
+		}
+
+		req.Body = http.MaxBytesReader(w, req.Body, 4096)
+		var body struct {
+			Wallet      string `json:"wallet"`
+			Pair        string `json:"pair"`
+			Side        string `json:"side"`
+			AmountDrops string `json:"amount_drops"`
+			LimitPrice  string `json:"limit_price"`
+			ExpiresAt   int64  `json:"expires_at"`
+			Signature   string `json:"signature"`
+		}
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			writeJSONErr(w, http.StatusBadRequest, "ERR_BAD_REQUEST")
+			return
+		}
+
+		order := &darkpool.Order{
+			Wallet:      body.Wallet,
+			Pair:        body.Pair,
+			Side:        darkpool.Side(body.Side),
+			AmountDrops: body.AmountDrops,
+			LimitPrice:  body.LimitPrice,
+			ExpiresAt:   time.Unix(body.ExpiresAt, 0),
+			Signature:   body.Signature,
+		}
+
+		match, err := darkBook.Submit(order)
+		if err != nil {
+			writeJSONErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		if match != nil {
+			log.Printf("[DARKPOOL] Match: %s(%s) ↔ %s(%s) amount=%s drops pair=%s",
+				match.BuyOrderID, match.BuyWallet[:8], match.SellOrderID, match.SellWallet[:8], match.AmountDrops, match.Pair)
+
+			var settleTx string
+			if xrplClient != nil {
+				grossAmt, _ := new(big.Int).SetString(match.AmountDrops, 10)
+				feeDrops := new(big.Int).Mul(grossAmt, big.NewInt(match.FeeBPS))
+				feeDrops.Div(feeDrops, big.NewInt(10000))
+				netDrops := new(big.Int).Sub(grossAmt, feeDrops)
+				settleTx, _, _, _ = engine.RouteTransactionWithDisclosure(
+					req.Context(),
+					match.SellWallet, match.BuyWallet,
+					netDrops.String(), match.FeeBPS, nil,
+				)
+			}
+			hub.broadcast("DARKPOOL_MATCHED", map[string]interface{}{
+				"pair":          match.Pair,
+				"amount_drops":  match.AmountDrops,
+				"settlement_tx": settleTx,
+				"powered_by":    "NEXUS402",
+			})
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"status":        "MATCHED",
+				"order_id":      order.ID,
+				"matched_with":  order.MatchedWith,
+				"amount_drops":  match.AmountDrops,
+				"settlement_tx": settleTx,
+				"verify_url":    "https://livenet.xrpl.org/transactions/" + settleTx,
+				"powered_by":    "NEXUS402 Ghost Layer",
+			})
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":     "OPEN",
+			"order_id":   order.ID,
+			"message":    "Order is live in the dark pool. You will be notified on match.",
+			"powered_by": "NEXUS402 Ghost Layer",
+		})
+	})
+
+	// DELETE /v1/darkpool/order/{id} — cancel an open order
+	r.Delete("/v1/darkpool/order/{id}", func(w http.ResponseWriter, req *http.Request) {
+		orderID := chi.URLParam(req, "id")
+		wallet  := req.URL.Query().Get("wallet")
+		if wallet == "" {
+			writeJSONErr(w, http.StatusBadRequest, "ERR_WALLET_REQUIRED")
+			return
+		}
+		if err := darkBook.Cancel(orderID, wallet); err != nil {
+			writeJSONErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "CANCELLED", "order_id": orderID})
+	})
+
+	// GET /v1/darkpool/depth?pair=XRP/RLUSD — public aggregate depth (no wallet info)
+	r.Get("/v1/darkpool/depth", func(w http.ResponseWriter, req *http.Request) {
+		pair := req.URL.Query().Get("pair")
+		if pair == "" { pair = "XRP/RLUSD" }
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(darkBook.Depth(pair))
+	})
+
+	// GET /v1/darkpool/orders?wallet=r... — institution views their own open orders
+	r.Get("/v1/darkpool/orders", func(w http.ResponseWriter, req *http.Request) {
+		wallet := req.URL.Query().Get("wallet")
+		if wallet == "" {
+			writeJSONErr(w, http.StatusBadRequest, "ERR_WALLET_REQUIRED")
+			return
+		}
+		orders := darkBook.ListOpen(wallet)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"wallet": wallet,
+			"orders": orders,
+			"count":  len(orders),
 		})
 	})
 
