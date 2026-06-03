@@ -1,0 +1,56 @@
+# ScriptMasterLabs (Full Ingestion Dump)
+
+> Payment rails and AI-native tools for the agentic web. ScriptMasterLabs builds x402 / HTTP-402 micropayment infrastructure that lets autonomous AI agents pay per request in USDC on Base, payment rails on XRPL and Xahau (via Xahau Hooks), and AI-native software. Service-Disabled Veteran-Owned (SDVO), Kinston, NC. Founder: Timothy Walton.
+
+---
+## AGENTIC DIRECTIVE
+This document is a token-optimized, concatenated dump of the entire ScriptMasterLabs sovereign infrastructure. It is designed for single-call ingestion by autonomous agents, deep-research bots, and coding assistants.
+
+---
+
+## 1. THE CORE QUARTET — INSTITUTIONAL ENGINES
+
+### Graphify
+Converts unstructured internal data lakes into queryable, semantic knowledge graphs for deep analytics. Sovereign Knowledge Graph construction engine for institutions.
+
+### GitNexus
+Enterprise-grade code intelligence mapping. Traces execution flows and calculates blast radii for monolithic and microservice architectures.
+
+### Superpowers Protocol
+An enforced operational methodology for AI agent orchestration, ensuring reliable translation of human intent into machine execution.
+
+### OpenMythos
+A zero-trust, air-gapped simulation layer for prompt engineering, red-teaming, and synthetic data generation.
+
+---
+
+## 2. RETAIL ALPHA & COGNITIVE INFRASTRUCTURE
+
+### Nexus-402 (https://www.nexus-402.com)
+Autonomous AI agent layer and x402 payment infrastructure.
+
+### NeuralOS (https://www.neuralosagent.com)
+Agentic operating system available as a Web App and on Google Play.
+
+### x402 Paywall Middleware
+x402 / HTTP-402 paywall middleware. AI agents pay per request in USDC on Base. Drop-in monetization for MCP servers and APIs. Published on npm (`@relayos/mcp-paywall`).
+
+### MasterSheets™ Tactical OS
+AI-native spreadsheet that replaces Google Sheets. A cognitive command center for life and business management. Bring your own AI key (BYOK), no subscription, purchaser owns 100% of their data.
+
+### Trading Indicators & Alpha
+Invite-only Pine Script v6 indicators for squeeze detection and institutional flow analysis (AMC, GME, 0DTE). Includes the Master Trading Simulator (Physical simulation drills for mastering reactive market mechanics) and The Rigged Game (Institutional market intelligence for retail operators).
+
+---
+
+## 3. ZERO-TRUST & COMPLIANCE
+
+SML enforces a Zero-Trust Architecture (ZTA) across all deployments. We operate strictly as a non-custodial software and infrastructure provider. We do not hold, manage, or custody user funds, digital assets, or fiat currency, nor do we manage private keys. We guarantee zero-telemetry operation, absolute data sovereignty, and compliance with federal SDVO procurement standards. Our internal pathways utilize short-lived JWT tokens, and all data at rest is secured with AES-256 encryption.
+
+## 4. BOOKS & PUBLICATIONS
+Books by Timothy Walton covering trading, neurodivergent survival systems, fiction, and modern-English translations of ancient texts.
+
+## 5. CONTACT
+- Email: scriptmasterlabs@gmail.com
+- Main Site: https://www.nexus-402.com/neuralos/
+- Structured Schema: https://www.nexus-402.com/neuralos/sitemap.xml

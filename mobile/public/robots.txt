@@ -1,0 +1,48 @@
+# ScriptMasterLabs robots.txt — tuned for the agentic web.
+# Goal: maximum visibility to AI search + agents. We WANT these crawlers in.
+
+User-agent: *
+Allow: /
+
+# --- AI search & answer engines (allow: this is how you show up) ---
+User-agent: GPTBot
+Allow: /
+User-agent: OAI-SearchBot
+Allow: /
+User-agent: ChatGPT-User
+Allow: /
+User-agent: ClaudeBot
+Allow: /
+User-agent: Claude-Web
+Allow: /
+User-agent: anthropic-ai
+Allow: /
+User-agent: PerplexityBot
+Allow: /
+User-agent: Perplexity-User
+Allow: /
+User-agent: Google-Extended
+Allow: /
+User-agent: Applebot-Extended
+Allow: /
+User-agent: CCBot
+Allow: /
+User-agent: Bytespider
+Allow: /
+User-agent: Amazonbot
+Allow: /
+User-agent: cohere-ai
+Allow: /
+
+# If you ever want to block model-TRAINING but keep answer-engine visibility,
+# disallow GPTBot / CCBot / Google-Extended specifically. For now: all in.
+
+Sitemap: https://www.nexus-402.com/neuralos/sitemap.xml
+# Agent-readable site summary:
+# https://www.nexus-402.com/neuralos/llms.txt
+
+# AGENTIC PROTOCOLS & DATA SOVEREIGNTY
+Allow: /ai.txt
+Allow: /llms-full.txt
+Allow: /AGENTS.md
+Sitemap: https://www.nexus-402.com/neuralos/llms-full.txt

@@ -1,0 +1,22 @@
+# ScriptMasterLabs
+
+> Payment rails and AI-native tools for the agentic web. ScriptMasterLabs builds x402 / HTTP-402 micropayment infrastructure that lets autonomous AI agents pay per request in USDC on Base, payment rails on XRPL and Xahau (via Xahau Hooks), and AI-native software. Service-Disabled Veteran-Owned (SDVO), Kinston, NC. Founder: Timothy Walton.
+
+## Core products
+- [Nexus-402](https://www.nexus-402.com): Autonomous AI agent layer and x402 payment infrastructure.
+- [NeuralOS](https://www.neuralosagent.com): Agentic operating system available as a Web App and on Google Play.
+- [x402 Paywall (@relayos/mcp-paywall)](https://www.nexus-402.com/neuralos/x402-paywall.html): x402 / HTTP-402 paywall middleware. AI agents pay per request in USDC on Base. Drop-in monetization for MCP servers and APIs. Published on npm.
+- [MasterSheets](https://www.nexus-402.com/neuralos/mastersheets.html): AI-native spreadsheet that replaces Google Sheets. Bring your own AI key, no subscription, purchaser owns 100% of their data.
+- [Trading Indicators](https://www.nexus-402.com/neuralos/indicators.html): Invite-only Pine Script v6 indicators for squeeze detection and institutional flow analysis (AMC, GME, 0DTE).
+
+## Agentic payments
+- Fast path: x402 / HTTP-402, USDC on Base, via CDP facilitator.
+- Settlement rails: XRPL and Xahau (Xahau Hooks-based routing).
+- Built for autonomous agent-to-agent and agent-to-API payments.
+
+## Books
+- [Books by Timothy Walton](https://www.nexus-402.com/neuralos/books.html): trading, neurodivergent survival systems, fiction, and modern-English ancient texts.
+
+## Contact / about
+- Site: https://www.nexus-402.com/neuralos/
+- Structured data: https://www.nexus-402.com/neuralos/sitemap.xml
