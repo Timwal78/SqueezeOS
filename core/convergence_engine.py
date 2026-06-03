@@ -31,9 +31,6 @@ from core.proprietary_ema_engine import _ema, _tail
 
 logger = logging.getLogger("SML.Convergence")
 
-# Monitored universe
-BEASTMODE_UNIVERSE = ["GME", "AMC", "MSTR", "PLTR", "HOOD", "IWM", "SPY", "QQQ", "NVDA", "TSLA"]
-
 
 # ── Tradier Options Sniper ────────────────────────────────────────────────────
 
@@ -258,19 +255,29 @@ class ConvergenceEngine:
 
 # ── Multi-symbol Beastmode scan ───────────────────────────────────────────────
 
-def scan_beastmode_universe(services: dict) -> list:
+def scan_beastmode_universe(services: dict, symbols: list = None) -> list:
     """
-    Scan all symbols in BEASTMODE_UNIVERSE.
-    Returns only symbols with HIGH_CONVERGENCE or BEASTMODE signals.
+    Scan provided symbols (or live market scanner state — no hardcoded watchlist).
+    Pulls whatever is currently active in state.universe if no symbols given.
+    Returns all signals above NEUTRAL, sorted by composite score.
     """
+    from core.state import state
+
     dm = services.get("dm")
     if not dm:
+        return []
+
+    # Use live universe from market scanner if no symbols provided
+    if not symbols:
+        symbols = list(state.universe.keys()) if state.universe else []
+
+    if not symbols:
         return []
 
     engine = ConvergenceEngine()
     hits   = []
 
-    for symbol in BEASTMODE_UNIVERSE:
+    for symbol in symbols:
         try:
             bars    = dm.get_historical_bars(symbol, timeframe="1Day", limit=400) or []
             closes  = [float(b.get("c") or b.get("close", 0)) for b in bars if b.get("c") or b.get("close")]

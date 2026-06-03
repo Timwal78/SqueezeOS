@@ -9,7 +9,7 @@ import logging
 import time
 from flask import Blueprint, jsonify, request
 from core.legacy import get_service, clean_data
-from core.convergence_engine import ConvergenceEngine, scan_beastmode_universe, BEASTMODE_UNIVERSE
+from core.convergence_engine import ConvergenceEngine, scan_beastmode_universe
 from core.engine2_settlement import get_clock, stamp_ignition, get_all_active
 from core.discord_payload import fire_discord
 
@@ -78,24 +78,34 @@ def convergence_signal(symbol):
 
 @convergence_bp.route("/beastmode", methods=["GET"])
 def beastmode_scan():
-    """Scan the full universe. Only returns HIGH_CONVERGENCE+ signals."""
+    """
+    Scan symbols from live market universe (no hardcoded watchlist).
+    Pass ?symbols=GME,AMC,IWM to override with specific tickers.
+    """
     dm = get_service("dm")
     if not dm:
         return jsonify({"status": "error", "message": "DataManager unavailable"}), 503
 
-    hits = scan_beastmode_universe({"dm": dm})
+    # Optional override: ?symbols=GME,AMC,IWM
+    sym_param = request.args.get("symbols", "")
+    symbols   = [s.strip().upper() for s in sym_param.split(",") if s.strip()] if sym_param else None
+
+    hits = scan_beastmode_universe({"dm": dm}, symbols=symbols)
 
     # Fire Discord for every convergence hit
     for hit in hits:
         sniper_data = hit.get("options_sniper") or {}
         fire_discord(hit, trade_type=sniper_data.get("type", "CALL").lower())
 
+    from core.state import state
+    active_universe = list(state.universe.keys()) if state.universe else symbols or []
+
     return jsonify(clean_data({
-        "status":        "success",
-        "universe":      BEASTMODE_UNIVERSE,
-        "hits":          len(hits),
-        "signals":       hits,
-        "timestamp":     time.time(),
+        "status":    "success",
+        "universe":  active_universe,
+        "hits":      len(hits),
+        "signals":   hits,
+        "timestamp": time.time(),
     }))
 
 

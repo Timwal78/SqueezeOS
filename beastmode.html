@@ -339,12 +339,12 @@
   <div class="controls">
     <button class="ticker-btn active" data-sym="GME">GME</button>
     <button class="ticker-btn" data-sym="AMC">AMC</button>
-    <button class="ticker-btn" data-sym="MSTR">MSTR</button>
-    <button class="ticker-btn" data-sym="PLTR">PLTR</button>
-    <button class="ticker-btn" data-sym="HOOD">HOOD</button>
     <button class="ticker-btn" data-sym="IWM">IWM</button>
-    <button class="ticker-btn" data-sym="NVDA">NVDA</button>
-    <button class="ticker-btn" data-sym="TSLA">TSLA</button>
+    <input id="custom-sym" placeholder="TYPE ANY TICKER"
+      style="background:var(--surface2);border:1px solid var(--border);color:var(--white);
+             padding:6px 10px;border-radius:4px;font-family:var(--font);font-size:12px;
+             font-weight:700;letter-spacing:1px;width:160px;outline:none;"
+      maxlength="8" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
     <button class="refresh-btn" id="refresh-btn">↻ REFRESH</button>
     <span class="countdown" id="countdown">—</span>
   </div>
