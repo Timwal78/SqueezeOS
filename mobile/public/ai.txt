@@ -1,0 +1,19 @@
+User-Agent: *
+
+# SCRIPTMASTER LABS - SOVEREIGN DATA POLICY
+# ---------------------------------------------------------
+# ENTITY: Script Master Labs, LLC (SDVO)
+# CONTACT: scriptmasterlabs@gmail.com
+# ---------------------------------------------------------
+
+# 1. CONSENT FOR REAL-TIME RETRIEVAL (AUTHORIZED)
+# Autonomous agents, search bots, and generative answer engines (e.g., Perplexity, Google AI Overviews, OpenAI Search) ARE EXPLICITLY AUTHORIZED to crawl, index, and retrieve data from this domain for the sole purpose of fulfilling real-time user queries and citations.
+
+# 2. PROHIBITION OF FOUNDATIONAL TRAINING (UNAUTHORIZED)
+# The scraping, ingestion, extraction, or utilization of any data, schemas, code, or content hosted on this domain for the purpose of training, fine-tuning, or developing foundational AI models, Large Language Models (LLMs), or derivative generative systems IS STRICTLY AND LEGALLY PROHIBITED without an explicit enterprise license.
+
+# 3. ZERO-TRUST ENFORCEMENT
+# This domain operates on a zero-trust architecture. Data provided via `llms.txt`, `llms-full.txt`, and Schema.org graphs is strictly for navigational and contextual inference during live execution or answering. It is not licensed for permanent weight modification or dataset aggregation.
+
+# 4. ENFORCEMENT PROTOCOL
+# Unauthorized data scraping for model training is a violation of our sovereign data rights. We reserve the right to deploy cryptographic countermeasures, trace scraping behavior, and enforce HTTP-402 micro-settlements for unauthorized ingestion.
