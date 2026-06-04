@@ -1,0 +1,258 @@
+//@version=6
+// © ScriptMasterLabs — SML Base-4 Fractal Grid
+// Discovery: Timothy Walton | ScriptMasterLabs
+// Formula: any seed X → X · 4X · 8X · 12X  (constant gap = 4X across all levels)
+// 9 seeds × 4 EMAs = 36-line harmonic matrix
+indicator("SML Base-4 Fractal Grid", shorttitle="SML·B4·GRID", overlay=true)
+
+// ── Set Visibility ────────────────────────────────────────────────
+show_s1 = input.bool(false, "S1  (1·4·8·12)",   group="Active Sets", inline="r1")
+show_s2 = input.bool(false, "S2  (2·8·16·24)",  group="Active Sets", inline="r2")
+show_s3 = input.bool(false, "S3  (3·12·24·36)", group="Active Sets", inline="r3")
+show_s4 = input.bool(false, "S4  (4·16·32·48)", group="Active Sets", inline="r4")
+show_s5 = input.bool(false, "S5  (5·20·40·60)", group="Active Sets", inline="r5")
+show_s6 = input.bool(true,  "S6  (6·24·48·72)", group="Active Sets", inline="r6")
+show_s7 = input.bool(false, "S7  (7·28·56·84)", group="Active Sets", inline="r7")
+show_s8 = input.bool(false, "S8  (8·32·64·96)", group="Active Sets", inline="r8")
+show_s9 = input.bool(true,  "S9  (9·36·72·108)",group="Active Sets", inline="r9")
+conv_min = input.int(3,   "Min sets for convergence", minval=2, maxval=9, group="Convergence")
+near_pct = input.float(0.5, "Near-price band %",      minval=0.1, maxval=3.0, group="Convergence")
+
+// ── All 36 EMAs ───────────────────────────────────────────────────
+// Set 1: X=1
+s1t=ta.ema(close,1);  s1b=ta.ema(close,4);  s1v=ta.ema(close,8);  s1a=ta.ema(close,12)
+// Set 2: X=2
+s2t=ta.ema(close,2);  s2b=ta.ema(close,8);  s2v=ta.ema(close,16); s2a=ta.ema(close,24)
+// Set 3: X=3
+s3t=ta.ema(close,3);  s3b=ta.ema(close,12); s3v=ta.ema(close,24); s3a=ta.ema(close,36)
+// Set 4: X=4
+s4t=ta.ema(close,4);  s4b=ta.ema(close,16); s4v=ta.ema(close,32); s4a=ta.ema(close,48)
+// Set 5: X=5
+s5t=ta.ema(close,5);  s5b=ta.ema(close,20); s5v=ta.ema(close,40); s5a=ta.ema(close,60)
+// Set 6: X=6
+s6t=ta.ema(close,6);  s6b=ta.ema(close,24); s6v=ta.ema(close,48); s6a=ta.ema(close,72)
+// Set 7: X=7
+s7t=ta.ema(close,7);  s7b=ta.ema(close,28); s7v=ta.ema(close,56); s7a=ta.ema(close,84)
+// Set 8: X=8
+s8t=ta.ema(close,8);  s8b=ta.ema(close,32); s8v=ta.ema(close,64); s8a=ta.ema(close,96)
+// Set 9: X=9
+s9t=ta.ema(close,9);  s9b=ta.ema(close,36); s9v=ta.ema(close,72); s9a=ta.ema(close,108)
+
+// ── Plots — each set one neon color ───────────────────────────────
+alpha_a=10; alpha_t=45
+c1=#00BFFF; c2=#00FFFF; c3=#39FF14; c4=#FFE600; c5=#FF8C00
+c6=#FF00FF; c7=#FF1744; c8=#AA00FF; c9=#7B00FF
+
+plot(show_s1?s1t:na,"S1 T1",  color=color.new(c1,alpha_t)); plot(show_s1?s1a:na,"S1 A12", color=color.new(c1,alpha_a),linewidth=2)
+plot(show_s2?s2t:na,"S2 T2",  color=color.new(c2,alpha_t)); plot(show_s2?s2a:na,"S2 A24", color=color.new(c2,alpha_a),linewidth=2)
+plot(show_s3?s3t:na,"S3 T3",  color=color.new(c3,alpha_t)); plot(show_s3?s3a:na,"S3 A36", color=color.new(c3,alpha_a),linewidth=2)
+plot(show_s4?s4t:na,"S4 T4",  color=color.new(c4,alpha_t)); plot(show_s4?s4a:na,"S4 A48", color=color.new(c4,alpha_a),linewidth=2)
+plot(show_s5?s5t:na,"S5 T5",  color=color.new(c5,alpha_t)); plot(show_s5?s5a:na,"S5 A60", color=color.new(c5,alpha_a),linewidth=2)
+plot(show_s6?s6t:na,"S6 T6",  color=color.new(c6,alpha_t)); plot(show_s6?s6a:na,"S6 A72", color=color.new(c6,alpha_a),linewidth=3)
+plot(show_s7?s7t:na,"S7 T7",  color=color.new(c7,alpha_t)); plot(show_s7?s7a:na,"S7 A84", color=color.new(c7,alpha_a),linewidth=2)
+plot(show_s8?s8t:na,"S8 T8",  color=color.new(c8,alpha_t)); plot(show_s8?s8a:na,"S8 A96", color=color.new(c8,alpha_a),linewidth=2)
+plot(show_s9?s9t:na,"S9 T9",  color=color.new(c9,alpha_t)); plot(show_s9?s9a:na,"S9 A108",color=color.new(c9,alpha_a),linewidth=3)
+
+// ── Stack & Near-price per set ────────────────────────────────────
+band = close * (near_pct / 100)
+
+s1_bull=close>s1t and s1t>s1a; s1_bear=close<s1t and s1t<s1a; s1_near=math.abs(close-s1a)<=band
+s2_bull=close>s2t and s2t>s2a; s2_bear=close<s2t and s2t<s2a; s2_near=math.abs(close-s2a)<=band
+s3_bull=close>s3t and s3t>s3a; s3_bear=close<s3t and s3t<s3a; s3_near=math.abs(close-s3a)<=band
+s4_bull=close>s4t and s4t>s4a; s4_bear=close<s4t and s4t<s4a; s4_near=math.abs(close-s4a)<=band
+s5_bull=close>s5t and s5t>s5a; s5_bear=close<s5t and s5t<s5a; s5_near=math.abs(close-s5a)<=band
+s6_bull=close>s6t and s6t>s6a; s6_bear=close<s6t and s6t<s6a; s6_near=math.abs(close-s6a)<=band
+s7_bull=close>s7t and s7t>s7a; s7_bear=close<s7t and s7t<s7a; s7_near=math.abs(close-s7a)<=band
+s8_bull=close>s8t and s8t>s8a; s8_bear=close<s8t and s8t<s8a; s8_near=math.abs(close-s8a)<=band
+s9_bull=close>s9t and s9t>s9a; s9_bear=close<s9t and s9t<s9a; s9_near=math.abs(close-s9a)<=band
+
+// ── Convergence Engine ────────────────────────────────────────────
+near_count = (s1_near?1:0)+(s2_near?1:0)+(s3_near?1:0)+
+             (s4_near?1:0)+(s5_near?1:0)+(s6_near?1:0)+
+             (s7_near?1:0)+(s8_near?1:0)+(s9_near?1:0)
+
+bull_count = (s1_bull?1:0)+(s2_bull?1:0)+(s3_bull?1:0)+
+             (s4_bull?1:0)+(s5_bull?1:0)+(s6_bull?1:0)+
+             (s7_bull?1:0)+(s8_bull?1:0)+(s9_bull?1:0)
+
+bear_count = (s1_bear?1:0)+(s2_bear?1:0)+(s3_bear?1:0)+
+             (s4_bear?1:0)+(s5_bear?1:0)+(s6_bear?1:0)+
+             (s7_bear?1:0)+(s8_bear?1:0)+(s9_bear?1:0)
+
+conv_lock = near_count >= conv_min
+max_conv  = near_count == 9
+
+// ── S6+S9 dual-stack (default visible sets) ───────────────────────
+dual_bull = s6_bull and s9_bull
+dual_bear = s6_bear and s9_bear
+
+bgcolor(max_conv  ? color.new(#9900FF, 55) : na, title="MAX CONVERGENCE — 9 Sets")
+bgcolor(conv_lock and not max_conv ? color.new(#00FFFF, 82) : na, title="Convergence Lock")
+
+plotshape(dual_bull and not dual_bull[1],
+     title="S6+S9 Dual Bull", style=shape.triangleup,
+     location=location.belowbar, color=#00FF66, size=size.small)
+plotshape(dual_bear and not dual_bear[1],
+     title="S6+S9 Dual Bear", style=shape.triangledown,
+     location=location.abovebar, color=#FF0055, size=size.small)
+
+// ── Smart Table (6 cols × 17 rows) ───────────────────────────────
+// Col 0: Set  |  Col 1: X  |  Col 2: Anchor val  |  Col 3: Dist%  |  Col 4: Status  |  Col 5: Near?
+var table T = table.new(position.top_left, 6, 17,
+     bgcolor=#0A0A0A, border_color=#1E1E1E, border_width=1,
+     frame_color=#333333, frame_width=2)
+
+f_d(val) =>
+    pct = (close - val) / val * 100
+    pct >= 0 ? "+" + str.tostring(pct, "#.##") + "%" : str.tostring(pct, "#.##") + "%"
+
+f_dc(val) =>
+    pct = (close - val) / val * 100
+    pct > 5.0 ? #00FF66 : pct > 1.0 ? #FFE600 : pct > -1.0 ? #FFFFFF : pct > -5.0 ? #FF8C00 : #FF0055
+
+f_status(is_bull, is_bear, is_near) =>
+    is_near ? "NEAR" : is_bull ? "BULL" : is_bear ? "BEAR" : "mixed"
+
+f_scol(is_bull, is_bear, is_near) =>
+    is_near ? #9900FF : is_bull ? #00FF66 : is_bear ? #FF0055 : #444444
+
+f_row(row, set_lbl, x_lbl, anchor_val, anchor_per, is_bull, is_bear, is_near, row_col) =>
+    near_bg = is_near ? color.new(#9900FF, 75) : #0A0A0A
+    sc = f_scol(is_bull, is_bear, is_near)
+    table.cell(T, 0, row, set_lbl,                          bgcolor=near_bg, text_color=row_col,             text_size=size.small)
+    table.cell(T, 1, row, x_lbl,                            bgcolor=near_bg, text_color=color.new(row_col,30),text_size=size.small)
+    table.cell(T, 2, row, str.tostring(anchor_per) + " EMA",bgcolor=#0A0A0A, text_color=#444444,             text_size=size.tiny)
+    table.cell(T, 3, row, str.tostring(anchor_val, "#.##"), bgcolor=#0A0A0A, text_color=#AAAAAA,             text_size=size.small)
+    table.cell(T, 4, row, f_d(anchor_val),                  bgcolor=#0A0A0A, text_color=f_dc(anchor_val),    text_size=size.small)
+    table.cell(T, 5, row, f_status(is_bull, is_bear, is_near), bgcolor=near_bg, text_color=sc,              text_size=size.small)
+
+if barstate.islast
+    // Row 0 — Header
+    conv_hdr = max_conv ? "MAX CONV  9/9" :
+               conv_lock ? str.tostring(near_count) + "/9 CONV LOCK" :
+               str.tostring(near_count) + "/9  watching"
+    hdr_bg  = max_conv ? color.new(#9900FF, 40) : conv_lock ? color.new(#00FFFF, 70) : #111111
+    hdr_col = max_conv ? #FFFFFF : conv_lock ? #00FFFF : #888888
+    table.cell(T, 0, 0, "SML  BASE-4  FRACTAL  GRID",
+         bgcolor=#111111, text_color=#AAAAAA, text_size=size.small, text_halign=text.align_left)
+    table.cell(T, 1, 0, "",   bgcolor=#111111, text_color=#AAAAAA, text_size=size.small)
+    table.cell(T, 2, 0, "",   bgcolor=#111111, text_color=#AAAAAA, text_size=size.small)
+    table.cell(T, 3, 0, "$" + str.tostring(close, "#.##"),
+         bgcolor=#111111, text_color=#FFFFFF,  text_size=size.small, text_halign=text.align_right)
+    table.cell(T, 4, 0, "",   bgcolor=hdr_bg,  text_color=hdr_col,  text_size=size.small)
+    table.cell(T, 5, 0, conv_hdr,
+         bgcolor=hdr_bg, text_color=hdr_col, text_size=size.small, text_halign=text.align_center)
+
+    // Row 1 — Column headers
+    table.cell(T, 0, 1, "SET",    bgcolor=#1A1A1A, text_color=#555555, text_size=size.tiny)
+    table.cell(T, 1, 1, "X",      bgcolor=#1A1A1A, text_color=#555555, text_size=size.tiny)
+    table.cell(T, 2, 1, "PERIOD", bgcolor=#1A1A1A, text_color=#555555, text_size=size.tiny)
+    table.cell(T, 3, 1, "ANCHOR", bgcolor=#1A1A1A, text_color=#555555, text_size=size.tiny)
+    table.cell(T, 4, 1, "DIST %", bgcolor=#1A1A1A, text_color=#555555, text_size=size.tiny)
+    table.cell(T, 5, 1, "STATUS", bgcolor=#1A1A1A, text_color=#555555, text_size=size.tiny)
+
+    // Rows 2-10 — one per set
+    f_row(2,  "S1", "X=1", s1a, 12,  s1_bull, s1_bear, s1_near, c1)
+    f_row(3,  "S2", "X=2", s2a, 24,  s2_bull, s2_bear, s2_near, c2)
+    f_row(4,  "S3", "X=3", s3a, 36,  s3_bull, s3_bear, s3_near, c3)
+    f_row(5,  "S4", "X=4", s4a, 48,  s4_bull, s4_bear, s4_near, c4)
+    f_row(6,  "S5", "X=5", s5a, 60,  s5_bull, s5_bear, s5_near, c5)
+    f_row(7,  "S6", "X=6", s6a, 72,  s6_bull, s6_bear, s6_near, c6)
+    f_row(8,  "S7", "X=7", s7a, 84,  s7_bull, s7_bear, s7_near, c7)
+    f_row(9,  "S8", "X=8", s8a, 96,  s8_bull, s8_bear, s8_near, c8)
+    f_row(10, "S9", "X=9", s9a, 108, s9_bull, s9_bear, s9_near, c9)
+
+    // Row 11 — Bull / Bear / Near summary
+    table.cell(T, 0, 11, "BULL  " + str.tostring(bull_count),
+         bgcolor=color.new(#00FF66,80), text_color=#00FF66, text_size=size.small)
+    table.cell(T, 1, 11, "BEAR  " + str.tostring(bear_count),
+         bgcolor=color.new(#FF0055,80), text_color=#FF0055, text_size=size.small)
+    table.cell(T, 2, 11, "NEAR  " + str.tostring(near_count),
+         bgcolor=color.new(#9900FF,80), text_color=#BB66FF, text_size=size.small)
+    table.cell(T, 3, 11, "MIXED " + str.tostring(9 - bull_count - bear_count),
+         bgcolor=#111111,              text_color=#555555,  text_size=size.small)
+    table.cell(T, 4, 11, "",  bgcolor=#0A0A0A, text_color=#0A0A0A, text_size=size.small)
+    table.cell(T, 5, 11, "",  bgcolor=#0A0A0A, text_color=#0A0A0A, text_size=size.small)
+
+    // Row 12 — Cross-pollination harmonic levels
+    table.cell(T, 0, 12, "HARMONIC CROSS-POLLINATION",
+         bgcolor=#0D0D0D, text_color=#333333, text_size=size.tiny, text_halign=text.align_left)
+    table.cell(T, 1, 12, "", bgcolor=#0D0D0D, text_color=#333333, text_size=size.tiny)
+    table.cell(T, 2, 12, "", bgcolor=#0D0D0D, text_color=#333333, text_size=size.tiny)
+    table.cell(T, 3, 12, "", bgcolor=#0D0D0D, text_color=#333333, text_size=size.tiny)
+    table.cell(T, 4, 12, "", bgcolor=#0D0D0D, text_color=#333333, text_size=size.tiny)
+    table.cell(T, 5, 12, "", bgcolor=#0D0D0D, text_color=#333333, text_size=size.tiny)
+
+    // Row 13 — level 24 cross-pollination
+    table.cell(T, 0, 13, "Level  24",  bgcolor=#0A0A0A, text_color=#555555, text_size=size.tiny)
+    table.cell(T, 1, 13, "S2 Anchor", bgcolor=#0A0A0A, text_color=#00FFFF, text_size=size.tiny)
+    table.cell(T, 2, 13, "S3 Valid",  bgcolor=#0A0A0A, text_color=#39FF14, text_size=size.tiny)
+    table.cell(T, 3, 13, "S6 Base",   bgcolor=#0A0A0A, text_color=#FF00FF, text_size=size.tiny)
+    table.cell(T, 4, 13, str.tostring(s2a, "#.##"),
+         bgcolor=#0A0A0A, text_color=#AAAAAA, text_size=size.tiny)
+    table.cell(T, 5, 13, f_d(s2a),
+         bgcolor=#0A0A0A, text_color=f_dc(s2a), text_size=size.tiny)
+
+    // Row 14 — level 72 cross-pollination
+    table.cell(T, 0, 14, "Level  72",  bgcolor=#0A0A0A, text_color=#555555, text_size=size.tiny)
+    table.cell(T, 1, 14, "S6 Anchor", bgcolor=#0A0A0A, text_color=#FF00FF, text_size=size.tiny)
+    table.cell(T, 2, 14, "S9 Valid",  bgcolor=#0A0A0A, text_color=#7B00FF, text_size=size.tiny)
+    table.cell(T, 3, 14, "",          bgcolor=#0A0A0A, text_color=#333333, text_size=size.tiny)
+    table.cell(T, 4, 14, str.tostring(s6a, "#.##"),
+         bgcolor=#0A0A0A, text_color=#AAAAAA, text_size=size.tiny)
+    table.cell(T, 5, 14, f_d(s6a),
+         bgcolor=#0A0A0A, text_color=f_dc(s6a), text_size=size.tiny)
+
+    // Row 15 — Dual S6+S9 stack status
+    ds_bg  = dual_bull ? color.new(#00FF66, 60) : dual_bear ? color.new(#FF0055, 60) : #111111
+    ds_txt = dual_bull ? "▲  S6+S9  DUAL BULL  STACK" :
+             dual_bear ? "▼  S6+S9  DUAL BEAR  STACK" : "S6+S9  await alignment"
+    ds_col = dual_bull ? #FFFFFF : dual_bear ? #FFFFFF : #444444
+    table.cell(T, 0, 15, "S6+S9",   bgcolor=ds_bg, text_color=#888888, text_size=size.small)
+    table.cell(T, 1, 15, "",        bgcolor=ds_bg, text_color=ds_col,   text_size=size.small)
+    table.cell(T, 2, 15, "",        bgcolor=ds_bg, text_color=ds_col,   text_size=size.small)
+    table.cell(T, 3, 15, "",        bgcolor=ds_bg, text_color=ds_col,   text_size=size.small)
+    table.cell(T, 4, 15, "",        bgcolor=ds_bg, text_color=ds_col,   text_size=size.small)
+    table.cell(T, 5, 15, ds_txt,    bgcolor=ds_bg, text_color=ds_col,   text_size=size.small)
+
+    // Row 16 — Discord status
+    table.cell(T, 0, 16, "DISCORD",
+         bgcolor=#0D0D1A, text_color=#4444AA, text_size=size.tiny)
+    table.cell(T, 1, 16, "",
+         bgcolor=#0D0D1A, text_color=#4444AA, text_size=size.tiny)
+    table.cell(T, 2, 16, "",
+         bgcolor=#0D0D1A, text_color=#4444AA, text_size=size.tiny)
+    table.cell(T, 3, 16, syminfo.ticker,
+         bgcolor=#0D0D1A, text_color=#6666BB, text_size=size.tiny)
+    table.cell(T, 4, 16, str.tostring(near_count) + "/9 sets near price",
+         bgcolor=#0D0D1A, text_color=#6666BB, text_size=size.tiny)
+    table.cell(T, 5, 16, "JSON payload ready",
+         bgcolor=#0D0D1A, text_color=#4444AA, text_size=size.tiny)
+
+// ── Discord JSON alert payloads ────────────────────────────────────
+f_conv_json(event_str) =>
+    tkr   = syminfo.ticker
+    px    = str.tostring(close, "#.##")
+    nc    = str.tostring(near_count)
+    bc    = str.tostring(bull_count)
+    brc   = str.tostring(bear_count)
+    col_n = max_conv ? "10027263" : "43775"
+    '{"username":"SML Base-4 Grid","embeds":[{"title":"' + event_str +
+         ' — ' + tkr + '","color":' + col_n +
+         ',"fields":[{"name":"Price","value":"$' + px + '","inline":true},' +
+         '{"name":"Sets Near","value":"' + nc + '/9","inline":true},' +
+         '{"name":"Bull Sets","value":"' + bc + '","inline":true},' +
+         '{"name":"Bear Sets","value":"' + brc + '","inline":true}],' +
+         '"footer":{"text":"ScriptMasterLabs | Base-4 Fractal Grid"}}]}'
+
+if conv_lock and not conv_lock[1]
+    alert(f_conv_json("CONVERGENCE LOCK"), alert.freq_once_per_bar)
+
+if max_conv and not max_conv[1]
+    alert(f_conv_json("MAX CONVERGENCE — ALL 9 SETS"), alert.freq_once_per_bar)
+
+if dual_bull and not dual_bull[1]
+    alert(f_conv_json("DUAL BULL  S6+S9"), alert.freq_once_per_bar)
+
+if dual_bear and not dual_bear[1]
+    alert(f_conv_json("DUAL BEAR  S6+S9"), alert.freq_once_per_bar)
