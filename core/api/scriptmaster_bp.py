@@ -99,7 +99,7 @@ def _run_protocol_02_visual_saturation(ai_client=None):
     """
     topics = [
         "NeuroSpark SOP: Executive Dysfunction Override Protocol",
-        "LifeSheets: The Zero-Subscription Productivity Stack",
+        "MasterSheets: The Zero-Subscription Productivity Stack",
         "Blood Oath Chronicles: Tactical Fiction for AuDHD Minds",
     ]
     briefs = []
@@ -172,7 +172,7 @@ def get_status():
         "log": log_snapshot,
         "targets": [
             "NeuroSpark: SOP Manual",
-            "LifeSheets: Zero Subscription Tracker",
+            "MasterSheets: Zero Subscription Tracker",
             "Blood Oath Chronicles (Fiction Series)",
         ]
     })
