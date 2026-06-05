@@ -1,19 +1,23 @@
 """
 SqueezeOS Convergence Engine — The Logic Gate
 =============================================
-Runs all 5 engines simultaneously against live data and evaluates
-the Beastmode trigger: a multi-engine convergence lock.
+Runs the full proprietary engine cascade against live data and evaluates
+the Beastmode trigger: a multi-engine convergence lock across five
+independent market dimensions.
 
-Beastmode fires ONLY when all 5 conditions are true:
-  E1: Price elastically suppressed below 578/963 (Engine 1 SUPPRESSED)
-  E5: 42 EMA curling toward 369 macro frequency (Engine 5 GANN_IGNITION)
-  E3: Volume geometrically exploding through 123/321 baselines (Engine 3)
-  E2: Settlement clock in 72-hour Kill Zone (T+13 or C+35) (Engine 2)
-  E4: Live price ≥70% correlated with Feb-22 mirror projection (Engine 4)
+Beastmode fires only when all five engines align:
+  E1: Price elasticity / macro stretch detector
+  E5: Macro frequency / momentum ignition filter
+  E3: Dark-pool volume kinetics detector
+  E2: Settlement-clock window (kill zone)
+  E4: Temporal correlation against historical pivot
 
 Phase 3 — Options Sniper:
-  Microsecond convergence is achieved → Tradier API scan
-  Filter: 0–14 DTE | Delta: 0.35–0.45 | Type: Call (default)
+  When convergence is achieved → Tradier API scan for short-DTE contracts
+  in a high-leverage delta band.
+
+Internal parameters (periods, thresholds, pivot dates, lookback windows,
+DTE/delta ranges) are proprietary.
 """
 
 import os
