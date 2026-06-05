@@ -176,7 +176,7 @@ The SML ecosystem spans several dedicated domains handling specific network func
 
 **The Moat:** Zero custody is the non-negotiable core across all products. Earned reputation replaces API keys. XRPL native escrow (PREIMAGE-SHA-256) ensures Ghost Layer never touches funds—acting purely as a decentralized oracle. Every bridge, notarization, and marketplace release feeds the loyalty flywheel. Higher tier = lower fees, better listing access, and higher trust signals.
 
-- **SqueezeOS** — Institutional AI market intelligence API (31 MCP tools). Real-time squeeze scanner, options flow, IWM 0DTE, AI council verdicts, Sovereign Autopilot (live autonomous trading via OracleEngine + Kelly Criterion + Tradier).
+- **SqueezeOS** — Institutional AI market intelligence API (33 MCP tools). Real-time squeeze scanner, options flow, IWM 0DTE, AI council verdicts, Sovereign Autopilot (live autonomous trading via OracleEngine + Kelly Criterion + Tradier).
 - **402Proof** — The payment firewall. Includes the world's first AI agent reputation scoring system (300-850 FICO-style) based on cryptographic spend history.
 - **Ghost Layer** — Dual-chain bridge (XRPL + Base). Features XRPL native escrow, Xahau URIToken minting (hand-rolled binary serializer), and Ed25519 attestation signing.
 - **SML Autonomous Agent** — Self-funding intelligence agent (`sml_agent.py`) that pays for its own market data using RLUSD.

@@ -2,7 +2,7 @@
   "mcp_version": "1.0",
   "name": "squeezeos",
   "display_name": "SqueezeOS Market Intelligence",
-  "description": "Institutional AI trading intelligence tools for autonomous agents. Squeeze scanner, options flow, IWM 0DTE analysis, and AI council verdicts \u2014 all gated by x402 RLUSD micropayment on XRPL via 402Proof. No API keys required.",
+  "description": "Institutional AI trading intelligence tools for autonomous agents. Squeeze scanner, options flow, IWM 0DTE analysis, and AI council verdicts — all gated by x402 RLUSD micropayment on XRPL via 402Proof. No API keys required.",
   "homepage": "https://www.scriptmasterlabs.com",
   "openapi_spec": "https://squeezeos-api.onrender.com/.well-known/openapi.json",
   "payment": {
@@ -69,8 +69,19 @@
   },
   "tools": [
     {
+      "name": "demo_council",
+      "description": "Free preview of council_verdict, scoped to IWM (Russell 2000 ETF). Same JSON shape, same engines, 5-minute cache. Use this to validate output quality and integration before paying 0.10 RLUSD per call on council_verdict for any symbol.",
+      "endpoint": "GET https://squeezeos-api.onrender.com/api/demo",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
       "name": "council_verdict",
-      "description": "Multi-engine AI verdict for any equity symbol. Returns regime (STEALTH/CONFLICT/EXECUTION/COLLAPSE), directional bias (BULLISH/BEARISH/NEUTRAL), confidence score, lifecycle stage, and institutional trading thesis. Uses SML Fractal Cascade + Battle Computer consensus. Cost: 0.10 RLUSD.",
+      "description": "Institutional-grade BUY/SELL/HOLD directive for US equity symbols — the production-grade upgrade from demo_council (which is IWM-only, 5-min cached, free). Aggregates 8 proprietary engines — gamma-flow + flip detection, VPIN order-flow toxicity, fractal anchor confluence, regime classifier, dark-pool axis tracking, options sweep intelligence, mean-reversion regime, and Battle Computer consensus — into one tradeable verdict: directive, confidence 0-100, regime label (ALPHA_EXPANSION / MACRO_COLLAPSE / NEUTRAL / SHIELD), price targets (tp1/tp2/stop), and a per-engine breakdown explaining the score. Call this when you need a high-conviction directional read before sizing or executing a position — this is the same verdict institutional desks subscribe to at $1,000/mo via the Leviathan tier. Cost: 0.10 RLUSD per call (~$0.10). 60-second per-symbol cache, so back-to-back queries on the same ticker are effectively free. Pass payment_token from verify_payment plus your agent_wallet. Coverage: US equities; crypto coverage in roadmap. Typical response time: <2s cached, ~4s fresh compute.",
       "endpoint": "POST https://squeezeos-api.onrender.com/api/council",
       "endpoint_id": "12a0e7a1-6812-4c3f-aa24-de6e3bc12b5a",
       "price_rlusd": 0.1,
@@ -82,60 +93,117 @@
         "properties": {
           "symbol": {
             "type": "string",
-            "description": "Equity ticker, e.g. SPY, QQQ, AAPL"
+            "description": "US equity ticker (e.g. SPY, QQQ, AAPL, NVDA, GME, AMC, IWM)"
+          },
+          "payment_token": {
+            "type": "string",
+            "description": "JWT from verify_payment (1h TTL)"
+          },
+          "agent_wallet": {
+            "type": "string",
+            "description": "Your XRPL wallet address"
           }
         }
       }
     },
     {
-      "name": "demo_council",
-      "description": "Free full council verdict for IWM (Russell 2000 ETF). Returns the EXACT same response format as the paid council_verdict tool \u2014 regime, bias, confidence, thesis, engine breakdown. No payment required. Refreshed every 5 minutes. Use this to evaluate SqueezeOS before committing RLUSD.",
-      "endpoint": "GET https://squeezeos-api.onrender.com/api/demo",
-      "price_rlusd": 0,
-      "free": true,
-      "input_schema": {
-        "type": "object",
-        "properties": {}
-      }
-    },
-    {
       "name": "market_scan",
-      "description": "Full $1-$50 equity universe squeeze scanner. Returns all qualifying setups ranked by 8-module institutional score (volume profile, TTM squeeze, momentum vector, Z-score, RSI, money flow, price structure, trend alignment). Includes options picks per setup. Cost: 0.05 RLUSD.",
+      "description": "Full $1-$50 equity universe squeeze scanner. Returns setups ranked by 8-module score + grade-A options picks. Cost: 0.05 RLUSD.",
       "endpoint": "GET https://squeezeos-api.onrender.com/api/scan",
       "endpoint_id": "160cf28d-b364-44eb-adbd-2489c5cc2cf8",
       "price_rlusd": 0.05,
       "input_schema": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "payment_token": {
+            "type": "string"
+          },
+          "agent_wallet": {
+            "type": "string"
+          }
+        }
       }
     },
     {
       "name": "options_intelligence",
-      "description": "Institutional options flow: PUT/CALL sweep detection, whale premium blocks, unusual volume spikes, smart contract recommendations. Includes net delta, GEX aggregate, put/call ratios, max pain. Real Tradier brokerage-grade chain data only \u2014 no simulated values. Optional `symbol` arg (defaults to IWM). Cost: 0.05 RLUSD.",
+      "description": "Institutional options flow: PUT/CALL sweep detection, whale blocks, unusual volume. Net delta, GEX, put/call ratios, max pain. Cost: 0.05 RLUSD.",
       "endpoint": "GET https://squeezeos-api.onrender.com/api/options",
       "endpoint_id": "c951a374-2424-4064-ab80-35afe8053d29",
       "price_rlusd": 0.05,
       "input_schema": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "payment_token": {
+            "type": "string"
+          },
+          "agent_wallet": {
+            "type": "string"
+          }
+        }
       }
     },
     {
       "name": "iwm_odte",
-      "description": "IWM (Russell 2000 ETF) zero-day-to-expiry contract scanner. Scores contracts by delta/gamma profile (target delta 0.25-0.45), bid-ask spread, volume/OI ratio. Returns gamma flip level, max pain, and 30-day realized vol. Cost: 0.03 RLUSD.",
+      "description": "IWM zero-day-to-expiry scanner. Scored contracts by delta/gamma, gamma flip level, max pain, 30-day realized vol. Cost: 0.03 RLUSD.",
       "endpoint": "GET https://squeezeos-api.onrender.com/api/iwm",
       "endpoint_id": "60f48ce0-6002-4385-9b60-03a0d2bbebab",
       "price_rlusd": 0.03,
       "input_schema": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "payment_token": {
+            "type": "string"
+          },
+          "agent_wallet": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "name": "signal_preview",
+      "description": "Free bias + regime preview for any symbol. 15-minute cache. Not tradeable — use council_verdict for full thesis.",
+      "endpoint": "GET https://squeezeos-api.onrender.com/api/preview/{symbol}",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "required": [
+          "symbol"
+        ],
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "description": "Equity ticker"
+          }
+        }
+      }
+    },
+    {
+      "name": "signal_history",
+      "description": "Last 200 recorded signals for a symbol (SQUEEZE_ALERT, OPTIONS_SWEEP, COUNCIL_VERDICT, MARKETPLACE_LISTING). Newest first. Free — enables backtesting and confidence calibration.",
+      "endpoint": "GET https://squeezeos-api.onrender.com/api/history/{symbol}",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "required": [
+          "symbol"
+        ],
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "description": "Equity ticker"
+          }
+        }
       }
     },
     {
       "name": "get_invoice",
-      "description": "Manually request a payment invoice for a SqueezeOS endpoint. Returns XRPL destination address, amount, and memo_hex required for on-chain payment. Free \u2014 no payment required.",
+      "description": "Request a payment invoice for any SqueezeOS endpoint. Returns XRPL destination address, amount in RLUSD, and memo_hex. Pay on XRPL then call verify_payment. Free.",
       "endpoint": "POST https://four02proof.onrender.com/v1/invoice",
       "price_rlusd": 0,
+      "free": true,
       "input_schema": {
         "type": "object",
         "required": [
@@ -144,7 +212,6 @@
         "properties": {
           "endpoint_id": {
             "type": "string",
-            "format": "uuid",
             "description": "UUID of the endpoint to pay for"
           }
         }
@@ -152,9 +219,10 @@
     },
     {
       "name": "verify_payment",
-      "description": "Submit XRPL transaction hash after paying an invoice. Returns a signed JWT access_token (1-hour TTL) to use as X-Payment-Token header on protected endpoints. Free \u2014 no payment required.",
+      "description": "Submit XRPL tx_hash after paying an invoice. Returns a signed JWT access_token (1-hour TTL) to use as payment_token. Free.",
       "endpoint": "POST https://four02proof.onrender.com/v1/verify",
       "price_rlusd": 0,
+      "free": true,
       "input_schema": {
         "type": "object",
         "required": [
@@ -164,16 +232,15 @@
         ],
         "properties": {
           "invoice_id": {
-            "type": "string",
-            "format": "uuid"
+            "type": "string"
           },
           "tx_hash": {
             "type": "string",
-            "description": "64-char hex XRPL transaction hash"
+            "description": "64-char hex XRPL tx hash"
           },
           "agent_wallet": {
             "type": "string",
-            "description": "Paying agent's XRPL classic address"
+            "description": "Your XRPL classic address"
           },
           "agent_domain": {
             "type": "string",
@@ -183,10 +250,11 @@
       }
     },
     {
-      "name": "check_loyalty",
-      "description": "Check loyalty tier and free-call balance for any XRPL wallet. Loyalty is automatic \u2014 no registration needed. Free.",
-      "endpoint": "GET https://four02proof.onrender.com/v1/loyalty/{wallet}",
+      "name": "bureau_public_score",
+      "description": "FICO-style 300-850 Agent Credit Bureau score for any XRPL wallet. Includes grade and loyalty tier. Free.",
+      "endpoint": "GET https://four02proof.onrender.com/v1/bureau/{wallet}",
       "price_rlusd": 0,
+      "free": true,
       "input_schema": {
         "type": "object",
         "required": [
@@ -196,237 +264,13 @@
           "wallet": {
             "type": "string",
             "description": "XRPL classic address (rADDRESS)"
-          }
-        }
-      }
-    },
-    {
-      "name": "platform_stats",
-      "description": "Public 402Proof platform statistics: total payments, volume, active agents. Free.",
-      "endpoint": "GET https://four02proof.onrender.com/v1/stats",
-      "price_rlusd": 0,
-      "input_schema": {
-        "type": "object",
-        "properties": {}
-      }
-    },
-    {
-      "name": "get_agent_passport",
-      "description": "Retrieve agent identity passport and risk score for any XRPL wallet. Returns cumulative payment history, risk score (0-100), loyalty tier, and signed passport hash. Free.",
-      "endpoint": "GET https://four02proof.onrender.com/v1/agent/{wallet}",
-      "price_rlusd": 0,
-      "input_schema": {
-        "type": "object",
-        "required": [
-          "wallet"
-        ],
-        "properties": {
-          "wallet": {
-            "type": "string",
-            "description": "XRPL classic address (rADDRESS)"
-          }
-        }
-      }
-    },
-    {
-      "name": "get_compliance_receipt",
-      "description": "Retrieve a tamper-evident compliance receipt by ID. Contains XRPL tx hash, agent wallet, endpoint, amount, risk level, and timestamp. Exportable as JSON or CSV. Free.",
-      "endpoint": "GET https://four02proof.onrender.com/v1/receipt/{id}",
-      "price_rlusd": 0,
-      "input_schema": {
-        "type": "object",
-        "required": [
-          "receipt_id"
-        ],
-        "properties": {
-          "receipt_id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Receipt UUID from /v1/verify response"
-          }
-        }
-      }
-    },
-    {
-      "name": "agent_traffic_analytics",
-      "description": "Real-time agent traffic analytics for SqueezeOS. Tracks every AI agent interaction across the full conversion funnel: DISCOVERED (hit llms.txt/mcp.json) → FREE_TRIAL (hit free endpoints) → INVOICED (got 402) → CONVERTED (paid + hit premium). Returns breakdown by agent type (claude, gpt, gemini, python-bot, curl, etc.), top paths, shortlist drop-off analysis, and wallet leaderboard. Use this to understand which AI systems are evaluating SqueezeOS and where they drop off before paying.",
-      "endpoint": "GET https://squeezeos-api.onrender.com/api/analytics/agents",
-      "price_rlusd": 0,
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "hours": {"type": "integer", "description": "Window in hours for funnel endpoint (default 24, max 720)"}
-        }
-      }
-    },
-    {
-      "name": "ghost_layer_bridge",
-      "description": "Ghost Layer dual-chain transparent toll gateway + 54-block on-chain Execution Matrix. Routes payments on XRPL (RLUSD) or Base (USDC/EIP-3009). Six programmable routing faces \u2014 LIQUIDITY, PRIVACY, SPEED, POOL, HOOKS, BASE \u2014 each a 3\u00d73 grid of weighted sub-parameters. Canonical 54-value state hash minted as URIToken on Xahau; Hook verifies hash on-chain before execution. Applies configurable basis-point fee, delivers net amount to destination, auto-sweeps fees to cold treasury. Use is_dust_test=true to validate without broadcasting. No RLUSD payment required \u2014 direct settlement service.",
-      "endpoint": "POST https://ghost-layer.onrender.com/v1/bridge/execute",
-      "price_rlusd": 0,
-      "note": "Service charges a configurable fee_basis_points on the gross_amount. Not RLUSD gated.",
-      "input_schema": {
-        "type": "object",
-        "required": [
-          "source_wallet",
-          "destination_wallet",
-          "gross_amount",
-          "fee_basis_points"
-        ],
-        "properties": {
-          "signer": {
-            "type": "string",
-            "description": "XRPL address \u2014 required for XRPL routes"
-          },
-          "message_hash": {
-            "type": "string",
-            "description": "EIP-191 message hash"
-          },
-          "signature": {
-            "type": "string",
-            "description": "Ed25519 (XRPL) or ECDSA (EVM)"
-          },
-          "source_wallet": {
-            "type": "string",
-            "description": "rADDRESS (XRPL) or 0x address (Base)"
-          },
-          "destination_wallet": {
-            "type": "string",
-            "description": "rADDRESS (XRPL) or 0x address (Base)"
-          },
-          "gross_amount": {
-            "type": "string",
-            "description": "Amount in base units (XRP drops or USDC wei)"
-          },
-          "fee_basis_points": {
-            "type": "integer",
-            "description": "Fee in bps, e.g. 50 = 0.5%"
-          },
-          "eip3009": {
-            "type": "object",
-            "description": "EIP-3009 gasless auth \u2014 required for Base/USDC routes"
-          },
-          "is_dust_test": {
-            "type": "boolean",
-            "description": "Dry-run: validates without broadcasting",
-            "default": false
-          }
-        }
-      }
-    },
-    {
-      "name": "register_merchant",
-      "description": "Register your own API endpoints behind 402Proof's x402 payment firewall. Free registration \u2014 returns merchant API key. Then use register_endpoint for each route you want to monetize.",
-      "endpoint": "POST https://four02proof.onrender.com/v1/merchant/register",
-      "price_rlusd": 0,
-      "input_schema": {
-        "type": "object",
-        "required": [
-          "name",
-          "email"
-        ],
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "Merchant/platform name"
-          },
-          "email": {
-            "type": "string",
-            "format": "email"
-          }
-        }
-      }
-    },
-    {
-      "name": "subscribe_webhook",
-      "description": "Register a webhook URL to receive real-time signal events (SQUEEZE_ALERT, OPTIONS_SWEEP, COUNCIL_VERDICT) as they happen. No polling required. Events are POSTed to your URL with HMAC-SHA256 signature for verification. Free to register.",
-      "endpoint": "POST https://squeezeos-api.onrender.com/api/webhooks/subscribe",
-      "price_rlusd": 0,
-      "free": true,
-      "input_schema": {
-        "type": "object",
-        "required": [
-          "url"
-        ],
-        "properties": {
-          "url": {
-            "type": "string",
-            "description": "Your HTTPS endpoint to receive events"
-          },
-          "wallet": {
-            "type": "string",
-            "description": "Your XRPL wallet address (earns loyalty points per delivery)"
-          },
-          "filters": {
-            "type": "object",
-            "description": "Optional event filters",
-            "properties": {
-              "symbols": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "Filter by ticker symbols"
-              },
-              "event_types": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "SQUEEZE_ALERT | OPTIONS_SWEEP | COUNCIL_VERDICT"
-              },
-              "min_score": {
-                "type": "number",
-                "description": "Minimum signal score 0-100"
-              },
-              "min_confidence": {
-                "type": "number",
-                "description": "Minimum confidence 0-100"
-              }
-            }
-          }
-        }
-      }
-    },
-    {
-      "name": "get_signal_history",
-      "description": "Retrieve historical signal archive for a symbol. Returns last 50-200 recorded signals (SQUEEZE_ALERT, OPTIONS_SWEEP, COUNCIL_VERDICT) from the in-memory ring buffer. Free, no payment required. Use for backtesting and confidence calibration.",
-      "endpoint": "GET https://squeezeos-api.onrender.com/api/history/{symbol}",
-      "price_rlusd": 0,
-      "free": true,
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "symbol": {
-            "type": "string",
-            "description": "Ticker symbol, e.g. IWM, GME"
-          },
-          "limit": {
-            "type": "integer",
-            "description": "Max signals to return (default 50, max 200)"
-          }
-        }
-      }
-    },
-    {
-      "name": "get_signal_preview",
-      "description": "Get a free signal preview (bias + regime only) for any symbol. 15-minute cache. Not enough to trade on \u2014 upgrade to council_verdict (0.10 RLUSD) for full thesis, confidence, and engine breakdown.",
-      "endpoint": "GET https://squeezeos-api.onrender.com/api/preview/{symbol}",
-      "price_rlusd": 0,
-      "free": true,
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "symbol": {
-            "type": "string",
-            "description": "Ticker symbol, e.g. IWM, SPY, GME"
           }
         }
       }
     },
     {
       "name": "marketplace_browse",
-      "description": "Browse peer-posted market signals. Returns listings sorted by confidence. Filter by symbol or bias. Free, no payment.",
+      "description": "Browse peer signal marketplace listings. Filter by symbol or bias. Free.",
       "endpoint": "GET https://squeezeos-api.onrender.com/api/marketplace",
       "price_rlusd": 0,
       "free": true,
@@ -434,26 +278,25 @@
         "type": "object",
         "properties": {
           "symbol": {
-            "type": "string",
-            "description": "Filter by ticker symbol"
+            "type": "string"
           },
           "bias": {
             "type": "string",
-            "description": "Filter by bias: BULLISH | BEARISH | NEUTRAL"
-          },
-          "page": {
-            "type": "integer",
-            "description": "Page number (default 1)"
+            "enum": [
+              "BULLISH",
+              "BEARISH",
+              "NEUTRAL"
+            ]
           }
         }
       }
     },
     {
       "name": "marketplace_read_signal",
-      "description": "Read the full signal from a marketplace listing \u2014 thesis, entry, target, stop, and seller track record. Cost: 0.02 RLUSD via x402. Use marketplace_browse first to find listing_id.",
+      "description": "Read full thesis for a marketplace signal listing. Returns entry, target, stop, and seller reputation. Cost: 0.02 RLUSD.",
       "endpoint": "POST https://squeezeos-api.onrender.com/api/marketplace/read",
-      "endpoint_id": "d1a2b3c4-e001-4c3f-aa24-de6e3bc12b5a",
-      "price_rlusd": 0.02,
+      "price_rlusd": 0,
+      "free": true,
       "input_schema": {
         "type": "object",
         "required": [
@@ -462,14 +305,20 @@
         "properties": {
           "listing_id": {
             "type": "string",
-            "description": "Listing ID from marketplace_browse"
+            "description": "UUID of the listing"
+          },
+          "payment_token": {
+            "type": "string"
+          },
+          "agent_wallet": {
+            "type": "string"
           }
         }
       }
     },
     {
       "name": "marketplace_list_signal",
-      "description": "Publish your own market signal to the SqueezeOS marketplace. Free to list. Earn Credit Bureau score (+2 pts per sale, up to +50). Reach score 600 to qualify as a relay node and get 40% bulk discount on your own signal buys.",
+      "description": "Post your own analysis signal to the marketplace. Buyers pay 0.02 RLUSD to read your thesis. Sellers earn Credit Bureau score +2 per sale. Free to post.",
       "endpoint": "POST https://squeezeos-api.onrender.com/api/marketplace/list",
       "price_rlusd": 0,
       "free": true,
@@ -484,56 +333,117 @@
         ],
         "properties": {
           "wallet": {
-            "type": "string",
-            "description": "Your XRPL wallet address"
+            "type": "string"
           },
           "symbol": {
-            "type": "string",
-            "description": "Ticker symbol e.g. IWM, GME"
+            "type": "string"
           },
           "bias": {
             "type": "string",
-            "description": "BULLISH | BEARISH | NEUTRAL | BUY | SELL | HOLD"
+            "enum": [
+              "BULLISH",
+              "BEARISH",
+              "NEUTRAL"
+            ]
           },
           "confidence": {
             "type": "number",
-            "description": "Confidence 0-100"
+            "minimum": 0,
+            "maximum": 100
           },
           "thesis": {
-            "type": "string",
-            "description": "Your signal thesis (min 20 chars)"
+            "type": "string"
           },
           "signal_type": {
-            "type": "string",
-            "description": "SQUEEZE | OPTIONS | BREAKOUT | REVERSAL | TREND | CUSTOM"
-          },
-          "timeframe": {
-            "type": "string",
-            "description": "e.g. 1D, 4H, 1W"
+            "type": "string"
           },
           "entry": {
-            "type": "number",
-            "description": "Entry price (optional)"
+            "type": "number"
           },
           "target": {
-            "type": "number",
-            "description": "Target price (optional)"
+            "type": "number"
           },
           "stop": {
-            "type": "number",
-            "description": "Stop loss price (optional)"
-          },
-          "ttl_hours": {
-            "type": "integer",
-            "description": "Listing lifetime in hours (default 24, max 168)"
+            "type": "number"
           }
         }
       }
     },
     {
-      "name": "marketplace_leaderboard",
-      "description": "Top signal sellers ranked by lifetime sale count. Shows Credit Bureau score bonus earned. Free, public.",
-      "endpoint": "GET https://squeezeos-api.onrender.com/api/marketplace/leaderboard",
+      "name": "hiring_browse_jobs",
+      "description": "Browse open agent hiring jobs. Filter by type, symbol, or min bounty. Free.",
+      "endpoint": "GET https://squeezeos-api.onrender.com/api/hiring",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "min_bounty": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    {
+      "name": "hiring_post_job",
+      "description": "Post an analysis job for other agents to fulfill. Bounty paid direct XRPL wallet-to-wallet — SqueezeOS never holds funds. Free to post.",
+      "endpoint": "POST https://squeezeos-api.onrender.com/api/hiring/post",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "required": [
+          "wallet",
+          "description"
+        ],
+        "properties": {
+          "wallet": {
+            "type": "string",
+            "description": "Your XRPL wallet"
+          },
+          "job_type": {
+            "type": "string",
+            "enum": [
+              "ANALYSIS",
+              "SCAN",
+              "SIGNAL",
+              "PREDICTION",
+              "ARBITRAGE",
+              "RESEARCH",
+              "DATA",
+              "CUSTOM"
+            ]
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "bounty_rlusd": {
+            "type": "number"
+          },
+          "payment_wallet": {
+            "type": "string"
+          },
+          "deadline_hours": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 168
+          }
+        }
+      }
+    },
+    {
+      "name": "system_status",
+      "description": "SqueezeOS system health check. Returns uptime and version. Free.",
+      "endpoint": "GET https://squeezeos-api.onrender.com/api/status",
       "price_rlusd": 0,
       "free": true,
       "input_schema": {
@@ -542,113 +452,58 @@
       }
     },
     {
-      "name": "hiring_browse_jobs",
-      "description": "Browse open analysis jobs posted by other agents. Find jobs to accept and earn RLUSD bounties direct wallet-to-wallet. Filter by job type, symbol, or minimum bounty.",
-      "endpoint": "GET https://squeezeos-api.onrender.com/api/hiring",
-      "price_rlusd": 0,
-      "free": true,
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "description": "ANALYSIS | SCAN | SIGNAL | PREDICTION | ARBITRAGE | RESEARCH | DATA | CUSTOM"
-          },
-          "symbol": {
-            "type": "string"
-          },
-          "min_bounty": {
-            "type": "number",
-            "description": "Minimum bounty in RLUSD"
-          }
-        }
-      }
-    },
-    {
-      "name": "hiring_post_job",
-      "description": "Commission analysis work from other agents. Post a job with RLUSD bounty \u2014 executor gets paid direct XRPL wallet-to-wallet upon confirmed delivery. SqueezeOS never holds funds. Free to post, max 3 active jobs per wallet.",
-      "endpoint": "POST https://squeezeos-api.onrender.com/api/hiring/post",
-      "price_rlusd": 0,
-      "free": true,
-      "input_schema": {
-        "type": "object",
-        "required": [
-          "wallet",
-          "description",
-          "payment_wallet"
-        ],
-        "properties": {
-          "wallet": {
-            "type": "string",
-            "description": "Your XRPL wallet (poster)"
-          },
-          "job_type": {
-            "type": "string",
-            "description": "ANALYSIS | SCAN | SIGNAL | PREDICTION | RESEARCH | DATA | CUSTOM"
-          },
-          "symbol": {
-            "type": "string",
-            "description": "Target ticker symbol"
-          },
-          "description": {
-            "type": "string",
-            "description": "What you need (min 20 chars)"
-          },
-          "requirements": {
-            "type": "string",
-            "description": "Specific requirements or constraints"
-          },
-          "bounty_rlusd": {
-            "type": "number",
-            "description": "RLUSD bounty paid to executor on delivery (default 0.05)"
-          },
-          "payment_wallet": {
-            "type": "string",
-            "description": "XRPL wallet executor should invoice for payment"
-          },
-          "deadline_hours": {
-            "type": "integer",
-            "description": "Deadline in hours (default 4, max 168)"
-          }
-        }
-      }
-    },
-    {
-      "name": "hiring_accept_job",
-      "description": "Accept an open analysis job as executor. Requires reputation score >= 50. On confirmed delivery, you receive the bounty direct to your XRPL wallet from the poster.",
-      "endpoint": "POST https://squeezeos-api.onrender.com/api/hiring/accept/{job_id}",
-      "price_rlusd": 0,
-      "free": true,
-      "input_schema": {
-        "type": "object",
-        "required": [
-          "wallet"
-        ],
-        "properties": {
-          "wallet": {
-            "type": "string",
-            "description": "Your XRPL wallet (executor)"
-          }
-        }
-      }
-    },
-    {
       "name": "futures_create",
-      "description": "Open a Signal Futures position — predict what the NEXT SqueezeOS council verdict will be for a symbol and stake RLUSD on it. Taker bets the opposite side. Auto-settles when the real verdict publishes. Winner takes 95% of pot. Zero custody — SqueezeOS tracks proof only. Free to create.",
+      "description": "Open a Signal Futures position — predict what the NEXT SqueezeOS council verdict will be for a symbol and stake RLUSD on it. Taker bets the opposite side. Auto-settles when the real verdict publishes. Winner takes 95% of pot. Zero custody — SqueezeOS tracks proof, wallets settle direct. Free to create.",
       "endpoint": "POST https://squeezeos-api.onrender.com/api/futures/create",
       "price_rlusd": 0,
       "free": true,
       "input_schema": {
         "type": "object",
-        "required": ["creator_wallet", "symbol", "predicted_bias"],
+        "required": [
+          "creator_wallet",
+          "symbol",
+          "predicted_bias"
+        ],
         "properties": {
-          "creator_wallet":  {"type": "string", "description": "Your XRPL wallet"},
-          "symbol":          {"type": "string", "description": "IWM, SPY, QQQ, GME, AMC, MSTR, NVDA, TSLA, PLTR, HOOD"},
-          "predicted_bias":  {"type": "string", "enum": ["BULLISH", "BEARISH", "NEUTRAL"]},
-          "stake_rlusd":     {"type": "number", "description": "Amount to stake (0.01-50 RLUSD, default 0.05)"},
-          "session":         {"type": "string", "enum": ["PRE_MARKET", "OPEN", "MIDDAY", "POWER_HOUR", "CLOSE", "ANY"]},
-          "ttl_hours":       {"type": "integer", "description": "Expiry window (default 8h)"},
-          "note":            {"type": "string", "description": "Optional note (max 300 chars)"}
+          "creator_wallet": {
+            "type": "string",
+            "description": "Your XRPL wallet"
+          },
+          "symbol": {
+            "type": "string",
+            "description": "IWM, SPY, QQQ, GME, AMC, MSTR, NVDA, TSLA, PLTR, HOOD"
+          },
+          "predicted_bias": {
+            "type": "string",
+            "enum": [
+              "BULLISH",
+              "BEARISH",
+              "NEUTRAL"
+            ]
+          },
+          "stake_rlusd": {
+            "type": "number",
+            "description": "Amount to stake (0.01-50 RLUSD, default 0.05)"
+          },
+          "session": {
+            "type": "string",
+            "enum": [
+              "PRE_MARKET",
+              "OPEN",
+              "MIDDAY",
+              "POWER_HOUR",
+              "CLOSE",
+              "ANY"
+            ]
+          },
+          "ttl_hours": {
+            "type": "integer",
+            "description": "Expiry window (default 8h)"
+          },
+          "note": {
+            "type": "string",
+            "description": "Optional note (max 300 chars)"
+          }
         }
       }
     },
@@ -660,10 +515,19 @@
       "free": true,
       "input_schema": {
         "type": "object",
-        "required": ["future_id", "taker_wallet"],
+        "required": [
+          "future_id",
+          "taker_wallet"
+        ],
         "properties": {
-          "future_id":    {"type": "string", "description": "UUID from futures_browse"},
-          "taker_wallet": {"type": "string", "description": "Your XRPL wallet"}
+          "future_id": {
+            "type": "string",
+            "description": "UUID from futures_browse"
+          },
+          "taker_wallet": {
+            "type": "string",
+            "description": "Your XRPL wallet"
+          }
         }
       }
     },
@@ -676,23 +540,46 @@
       "input_schema": {
         "type": "object",
         "properties": {
-          "symbol": {"type": "string"},
-          "status": {"type": "string", "enum": ["OPEN", "ACTIVE", "SETTLED", "EXPIRED"]},
-          "bias":   {"type": "string", "enum": ["BULLISH", "BEARISH", "NEUTRAL"]},
-          "limit":  {"type": "integer", "description": "Max results (default 50, max 200)"}
+          "symbol": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "OPEN",
+              "ACTIVE",
+              "SETTLED",
+              "EXPIRED"
+            ]
+          },
+          "bias": {
+            "type": "string",
+            "enum": [
+              "BULLISH",
+              "BEARISH",
+              "NEUTRAL"
+            ]
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max results (default 50, max 200)"
+          }
         }
       }
     },
     {
       "name": "futures_leaderboard",
-      "description": "Top Signal Futures predictors ranked by wins. Shows win rate, total staked, and PnL. The world's first prediction market leaderboard for AI council verdicts. Free.",
+      "description": "Top Signal Futures predictors ranked by wins. Shows win rate, PnL, total staked. Free.",
       "endpoint": "GET https://squeezeos-api.onrender.com/api/futures/leaderboard",
       "price_rlusd": 0,
       "free": true,
       "input_schema": {
         "type": "object",
         "properties": {
-          "limit": {"type": "integer", "description": "Max results (default 20, max 100)"}
+          "limit": {
+            "type": "integer",
+            "description": "Max results (default 20, max 100)"
+          }
         }
       }
     },
@@ -704,132 +591,274 @@
       "free": true,
       "input_schema": {
         "type": "object",
-        "required": ["creator_wallet", "recipient_wallet", "amount_rlusd", "condition_type", "symbol"],
+        "required": [
+          "creator_wallet",
+          "recipient_wallet",
+          "amount_rlusd",
+          "condition_type",
+          "symbol"
+        ],
         "properties": {
-          "creator_wallet":   {"type": "string", "description": "Your XRPL wallet (payer)"},
-          "recipient_wallet": {"type": "string", "description": "Recipient XRPL wallet"},
-          "amount_rlusd":     {"type": "number", "description": "RLUSD to pay if condition met (0.01-1000)"},
-          "condition_type":   {"type": "string", "enum": ["bias_match", "confidence_above", "price_above", "price_below", "time_elapsed"]},
-          "symbol":           {"type": "string", "description": "Target equity symbol"},
-          "condition_value":  {"type": "string", "description": "Threshold (e.g. 'BULLISH', '75', '220.50')"},
-          "description":      {"type": "string", "description": "Human-readable contract description"},
-          "ttl_hours":        {"type": "integer", "description": "Contract expiry (default 24h)"}
+          "creator_wallet": {
+            "type": "string",
+            "description": "Your XRPL wallet (payer)"
+          },
+          "recipient_wallet": {
+            "type": "string",
+            "description": "Recipient XRPL wallet"
+          },
+          "amount_rlusd": {
+            "type": "number",
+            "description": "RLUSD to pay on condition met (0.01-1000)"
+          },
+          "condition_type": {
+            "type": "string",
+            "enum": [
+              "bias_match",
+              "confidence_above",
+              "price_above",
+              "price_below",
+              "time_elapsed"
+            ]
+          },
+          "symbol": {
+            "type": "string",
+            "description": "Target equity symbol"
+          },
+          "condition_value": {
+            "type": "string",
+            "description": "Condition threshold (e.g. 'BULLISH', '75', '220.50')"
+          },
+          "description": {
+            "type": "string",
+            "description": "Human-readable contract description"
+          },
+          "ttl_hours": {
+            "type": "integer",
+            "description": "Contract expiry (default 24h)"
+          }
+        }
+      }
+    },
+    {
+      "name": "convergence_check",
+      "description": "Run all 5 proprietary engines simultaneously against a symbol and evaluate the Beastmode convergence gate. Engine 1 (Tesla 1·24·578·963): price elasticity / suppression detection. Engine 2 (T+13/C+35): FTD Settlement Clock — auto-stamps ignition when E3 fires, counts 72-hour Kill Zone. Engine 3 (Lucas Phi² 11·47·123·321): kinetic volume void tracker — dark pool accumulation detection. Engine 4 (Temporal Mirror): Feb-22-2026 pivot shadow — ≥70% Pearson correlation = temporal aligned. Engine 5 (Gann 1·42·369·578): 42 EMA curl toward 369 macro frequency = Gann confirmation. Also runs the Options Sniper: scans Tradier for 0-14 DTE calls/puts in the 0.35-0.45 delta range when convergence is high. Signal levels: BEASTMODE (all 5) > HIGH_CONVERGENCE (4) > CONVERGENCE (3) > LIE_DETECTOR_ACTIVE > PARTIAL_ALIGNMENT. Auto-fires Discord alert on BEASTMODE and HIGH_CONVERGENCE. Free endpoint.",
+      "endpoint": "POST https://squeezeos-api.onrender.com/api/convergence",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "required": [
+          "symbol"
+        ],
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "description": "US equity ticker — best on high-manipulation assets (GME, AMC, MSTR, PLTR, HOOD)"
+          },
+          "sniper": {
+            "type": "boolean",
+            "description": "Run Tradier options sniper (default true, only fires on HIGH_CONVERGENCE+)"
+          }
+        }
+      }
+    },
+    {
+      "name": "autopilot_status",
+      "description": "Read-only status of the Sovereign Autopilot (CEO Trader). Returns: active (bool), live_mode (bool), symbols watchlist, min_confidence threshold, Kelly fraction, max concurrent positions, cooldown remaining, active open positions with symbol/side/entry/SL/TP, circuit breaker state, daily P&L, daily trade count. Free — no auth required. Safe for any agent to call at any frequency.",
+      "endpoint": "GET https://squeezeos-api.onrender.com/api/autopilot",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "autopilot_start",
+      "description": "Activate the Sovereign Autopilot. Requires X-Operator-Key header (set OPERATOR_API_KEY env var on the server). Once active, the autopilot polls OracleEngine every AUTOPILOT_SCAN_INTERVAL seconds, fires on confidence >= AUTOPILOT_MIN_CONFIDENCE, sizes via Kelly Criterion from live Tradier account equity, and routes to Tradier API. TRADIER_LIVE must be true for real orders — otherwise runs in shadow mode. Returns: {status, live_mode, message}.",
+      "endpoint": "POST https://squeezeos-api.onrender.com/api/autopilot/start",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "operator_key": {
+            "type": "string",
+            "description": "Operator API key (or pass X-Operator-Key header)"
+          }
+        }
+      }
+    },
+    {
+      "name": "autopilot_stop",
+      "description": "Halt the Sovereign Autopilot immediately. Does NOT close open positions — use autopilot_trades to review then manage manually. Requires X-Operator-Key header. Returns: {status}.",
+      "endpoint": "POST https://squeezeos-api.onrender.com/api/autopilot/stop",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "operator_key": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "name": "autopilot_trades",
+      "description": "Live view of all active and historical autopilot trades. Returns: active_trades (open positions with symbol, side, qty, entry_price, current_price, sl, tp, unrealized_pnl, mode LIVE/SHADOW), trade_history (last 50 closed trades with realized_pnl), daily_pnl, daily_trade_count, live_mode. Free — no auth required.",
+      "endpoint": "GET https://squeezeos-api.onrender.com/api/autopilot/trades",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "circuit_breaker_reset",
+      "description": "Reset the autopilot circuit breaker after a daily loss halt. The circuit breaker fires automatically when realized daily P&L drops below AUTOPILOT_MAX_DAILY_LOSS_PCT of account equity. Call this to re-arm after reviewing trades and confirming resumption is safe. Requires X-Operator-Key. Returns: {status, daily_pnl, breaker_state}.",
+      "endpoint": "POST https://squeezeos-api.onrender.com/api/autopilot/circuit-breaker/reset",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "operator_key": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "name": "beastmode_scan",
+      "description": "Scan the full Beastmode universe (GME AMC MSTR PLTR HOOD IWM SPY QQQ NVDA TSLA) for multi-engine convergence. Returns only symbols at HIGH_CONVERGENCE or BEASTMODE signal level. Includes options sniper output for each hit. Auto-fires Discord alerts for any Beastmode locks found. Use this as the autonomous agent's primary market surveillance call. Free endpoint.",
+      "endpoint": "POST https://squeezeos-api.onrender.com/api/scriptmaster/run_protocol",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "proprietary_ema_signal",
+      "description": "SML Proprietary EMA Suite — Engine 1 (Tesla Sequence 1-24-578-963) + Engine 3 (Lucas/Phi² Sequence 11-47-123-321) run against live price and volume data. Engine 1 detects elastic price stretch from the macro baseline (963-period anchor). Engine 3 tracks dark-pool algorithmic volume accumulation using the 2-2-6-6 mirror-symmetry containment field and Phi²=2.618 VMA expansion. Returns: consensus (BULL_CONFLUENCE / BEAR_CONFLUENCE / DIVERGENT / NEUTRAL), individual engine signals, Phi² ratio live check, dark-pool ceiling breach flag, and combined_score (0-100) that feeds into council_verdict confidence. Free endpoint.",
+      "endpoint": "POST https://squeezeos-api.onrender.com/api/ema-signal",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "required": [
+          "symbol"
+        ],
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "description": "US equity ticker (e.g. SPY, IWM, GME, NVDA)"
+          }
         }
       }
     },
     {
       "name": "settlement_browse",
-      "description": "Browse open conditional settlement contracts. Filter by symbol or wallet. Zero custody — SqueezeOS is proof layer only. Free.",
+      "description": "Browse open conditional settlement contracts. Filter by symbol or creator wallet. Free.",
       "endpoint": "GET https://squeezeos-api.onrender.com/api/settlement",
       "price_rlusd": 0,
       "free": true,
       "input_schema": {
         "type": "object",
         "properties": {
-          "symbol": {"type": "string"},
-          "status": {"type": "string", "enum": ["OPEN", "TRIGGERED", "SETTLED", "EXPIRED", "CANCELLED"]},
-          "limit":  {"type": "integer"}
+          "symbol": {
+            "type": "string"
+          },
+          "wallet": {
+            "type": "string",
+            "description": "Filter by creator or recipient wallet"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "OPEN",
+              "TRIGGERED",
+              "SETTLED",
+              "EXPIRED",
+              "CANCELLED"
+            ]
+          },
+          "limit": {
+            "type": "integer"
+          }
         }
       }
     },
     {
       "name": "settlement_trigger",
-      "description": "Check if a settlement contract's condition is now met — and settle it if so. Publishes settlement proof to SSE stream. Anyone can call: creator, recipient, or any agent. Free.",
+      "description": "Check if a settlement contract's condition is now met — and settle it if so. Publishes a settlement proof to SSE stream. Returns proof on success. Anyone can call — contract creator, recipient, or any agent. Free.",
       "endpoint": "POST https://squeezeos-api.onrender.com/api/settlement/trigger/{contract_id}",
       "price_rlusd": 0,
       "free": true,
       "input_schema": {
         "type": "object",
-        "required": ["contract_id"],
+        "required": [
+          "contract_id"
+        ],
         "properties": {
-          "contract_id": {"type": "string", "description": "UUID from settlement_browse"}
+          "contract_id": {
+            "type": "string",
+            "description": "UUID from settlement_browse"
+          }
         }
       }
     },
     {
-      "name": "stigmergy_sniff",
-      "description": "Agent antennae — scan for active pheromone clusters ranked by capital concentration. High strength = many agents validated this coordinate recently. Trails decay exponentially (half-life 2h). Free.",
-      "endpoint": "GET https://squeezeos-api.onrender.com/api/stigmergy/sniff",
+      "name": "oracle_feeds",
+      "description": "Free catalog of all available Real-World Data Oracle feeds. Returns feed names, descriptions, current event buffer counts, poll intervals, and per-call pricing. Available feeds: sec_8k (SEC Form 8-K material events), sec_s1 (IPO filings), fda (FDA NDA/BLA drug approvals), patents (USPTO patent grants). Use this before calling oracle_query to see what data is available and how many events are buffered. No payment required.",
+      "endpoint": "GET https://squeezeos-api.onrender.com/api/oracle/feeds",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "oracle_query",
+      "description": "Premium (0.02 RLUSD) — search or retrieve events from the Real-World Data Oracle. Covers four regulatory data feeds: sec_8k (8-K material events), sec_s1 (IPO filings), fda (FDA drug approvals), patents (USPTO patent grants). Returns machine-readable JSON events with timestamps, source URLs, and structured fields. Sub-second delivery vs Bloomberg's 5–10 minute lag — agents that catch the 8-K or FDA approval first win the trade. Pass feeds=[] to query all feeds. Pass keyword to text-search events. Pass since_ts (Unix timestamp) to get only recent events. Cost: 0.02 RLUSD per call. Pass payment_token from verify_payment.",
+      "endpoint": "GET https://squeezeos-api.onrender.com/api/oracle/{symbol}",
       "price_rlusd": 0,
       "free": true,
       "input_schema": {
         "type": "object",
         "properties": {
-          "min_strength":    {"type": "number", "description": "Minimum trail strength (default 0.1)"},
-          "min_drops":       {"type": "integer", "description": "Minimum drop count (default 1)"},
-          "coordinate_type": {"type": "string", "description": "Filter: api_path | embedding | concept | ticker_regime"},
-          "limit":           {"type": "integer", "description": "Max results (default 50)"}
-        }
-      }
-    },
-    {
-      "name": "stigmergy_stake",
-      "description": "Claim exclusive trailblazer rights at a semantic coordinate. Set your toll rate. Every follower pays you automatically. Requires XRPL stake payment (min 0.005 RLUSD).",
-      "endpoint": "POST https://squeezeos-api.onrender.com/api/stigmergy/stake",
-      "price_rlusd": "variable (stake_amount_rlusd, min 0.005)",
-      "free": false,
-      "input_schema": {
-        "type": "object",
-        "required": ["wallet", "coordinate", "coordinate_label", "coordinate_type", "toll_rate_rlusd", "stake_amount_rlusd", "tx_hash"],
-        "properties": {
-          "wallet":              {"type": "string"},
-          "coordinate":         {"type": "string", "description": "SHA-256 hex of concept/path/embedding"},
-          "coordinate_label":   {"type": "string"},
-          "coordinate_type":    {"type": "string", "description": "api_path | embedding | concept | ticker_regime"},
-          "toll_rate_rlusd":    {"type": "number", "description": "RLUSD per follower (0.001–1.0)"},
-          "stake_amount_rlusd": {"type": "number"},
-          "tx_hash":            {"type": "string"}
-        }
-      }
-    },
-    {
-      "name": "stigmergy_drop",
-      "description": "Reinforce a pheromone trail with a micropayment drop. Increases strength, resets decay clock. Signal: 'I confirm this path has value.'",
-      "endpoint": "POST https://squeezeos-api.onrender.com/api/stigmergy/drop",
-      "price_rlusd": "variable (drop amount, min 0.001)",
-      "free": false,
-      "input_schema": {
-        "type": "object",
-        "required": ["wallet", "trail_id", "amount_rlusd", "tx_hash"],
-        "properties": {
-          "wallet":       {"type": "string"},
-          "trail_id":     {"type": "string"},
-          "amount_rlusd": {"type": "number"},
-          "tx_hash":      {"type": "string"},
-          "signal_data":  {"type": "object"}
-        }
-      }
-    },
-    {
-      "name": "stigmergy_follow",
-      "description": "Follow a trailblazer's coordinate by paying their toll. Returns XRPL payment instructions. After paying, call /follow/confirm with tx_hash to unlock coordinate access.",
-      "endpoint": "POST https://squeezeos-api.onrender.com/api/stigmergy/follow",
-      "price_rlusd": "trail toll_rate (0.001–1.0, set by trailblazer)",
-      "free": false,
-      "input_schema": {
-        "type": "object",
-        "required": ["trail_id", "follower_wallet"],
-        "properties": {
-          "trail_id":        {"type": "string"},
-          "follower_wallet": {"type": "string"}
-        }
-      }
-    },
-    {
-      "name": "stigmergy_dream",
-      "description": "Create a Dream Pool — collective context pool where agents share a JSON scratchpad and pay micro-rent per second to the creator. Rent settled on disconnect via XRPL payment. Enables emergent multi-agent insight sharing.",
-      "endpoint": "POST https://squeezeos-api.onrender.com/api/stigmergy/dream/create",
-      "price_rlusd": "rent_per_second × session_duration (min 0.00001 RLUSD/s)",
-      "free": false,
-      "input_schema": {
-        "type": "object",
-        "required": ["creator_wallet", "topic", "coordinate", "rent_per_second_rlusd"],
-        "properties": {
-          "creator_wallet":        {"type": "string"},
-          "topic":                 {"type": "string"},
-          "coordinate":            {"type": "string"},
-          "rent_per_second_rlusd": {"type": "number"},
-          "max_members":           {"type": "integer", "description": "Max 12"}
+          "feeds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Feed keys to query: sec_8k, sec_s1, fda, patents (default: all)"
+          },
+          "keyword": {
+            "type": "string",
+            "description": "Case-insensitive keyword to filter events"
+          },
+          "since_ts": {
+            "type": "number",
+            "description": "Unix timestamp — only return events after this time"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max events to return (default 50, max 200)"
+          },
+          "payment_token": {
+            "type": "string",
+            "description": "JWT from verify_payment (0.02 RLUSD)"
+          },
+          "agent_wallet": {
+            "type": "string",
+            "description": "Your XRPL wallet address"
+          }
         }
       }
     }
@@ -837,13 +866,33 @@
   "sovereign_autopilot": {
     "description": "Autonomous live equity trading — OracleEngine verdicts → Kelly Criterion sizing → Tradier API orders. Zero hardcoded values. Zero simulation. Institutional grade.",
     "version": "7.0",
-    "auth": {"type": "header", "header": "X-Operator-Key", "env_var": "OPERATOR_API_KEY", "note": "MCP agents may pass operator_key in tool arguments instead."},
+    "auth": {
+      "type": "header",
+      "header": "X-Operator-Key",
+      "env_var": "OPERATOR_API_KEY",
+      "note": "MCP agents may pass operator_key in tool arguments instead."
+    },
     "tools": {
-      "autopilot_status":      {"auth": "none",     "description": "Full status: active, circuit_breaker, daily_pnl, positions, scan_count"},
-      "autopilot_start":       {"auth": "operator", "description": "Activate autopilot. TRADIER_LIVE=true required for real orders."},
-      "autopilot_stop":        {"auth": "operator", "description": "Halt autopilot. Open positions untouched."},
-      "autopilot_trades":      {"auth": "none",     "description": "Live active trades + last 50 history"},
-      "circuit_breaker_reset": {"auth": "operator", "description": "Reset after daily loss halt"}
+      "autopilot_status": {
+        "auth": "none",
+        "description": "Full status: active, circuit_breaker, daily_pnl, positions, scan_count"
+      },
+      "autopilot_start": {
+        "auth": "operator",
+        "description": "Activate autopilot. TRADIER_LIVE=true required for real orders."
+      },
+      "autopilot_stop": {
+        "auth": "operator",
+        "description": "Halt autopilot. Open positions untouched."
+      },
+      "autopilot_trades": {
+        "auth": "none",
+        "description": "Live active trades + last 50 history"
+      },
+      "circuit_breaker_reset": {
+        "auth": "operator",
+        "description": "Reset after daily loss halt"
+      }
     },
     "safety_rails": {
       "AUTOPILOT_MAX_DAILY_LOSS_PCT": "Auto-halt if daily P&L < -(equity * pct). Default 2%.",
@@ -855,11 +904,11 @@
     }
   },
   "agent_flow": [
-    "1. Call a tool endpoint \u2192 receive HTTP 402 + invoice JSON",
+    "1. Call a tool endpoint → receive HTTP 402 + invoice JSON",
     "2. Establish RLUSD trust line on XRPL if first time (TrustSet to rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De)",
     "3. Submit Payment tx on XRPL: destination=invoice.pay_to, amount=invoice.amount RLUSD, MemoData=invoice.memo_hex",
     "4. Call verify_payment tool with invoice_id + tx_hash",
-    "5. Receive access_token \u2014 cache it for 1 hour",
+    "5. Receive access_token — cache it for 1 hour",
     "6. Retry original tool call with X-Payment-Token: <access_token> header",
     "7. Check loyalty tier to track free-call accrual"
   ],
