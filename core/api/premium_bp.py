@@ -34,9 +34,9 @@ def _broadcast_sse(event: dict):
         except ValueError:
             pass
 
-# proof402_integration.py lives at repo root
+# proof402_integration.py lives at repo root (kept as secondary XRPL/RLUSD rail)
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-from proof402_integration import require_payment
+from x402_flask import x402_guard
 
 logger = logging.getLogger("SqueezeOS-Premium")
 premium_bp = Blueprint('premium', __name__)
@@ -45,7 +45,7 @@ premium_bp = Blueprint('premium', __name__)
 # ── /api/council ─────────────────────────────────────────────────────────────
 
 @premium_bp.route('/council', methods=['POST', 'GET'])
-@require_payment
+@x402_guard(price_usdc="0.10", description="AI Council Verdict — multi-engine signal aggregate. Returns regime (EXECUTION/STEALTH/CONFLICT/COLLAPSE), directional bias, confidence (0-100), and full institutional thesis for any equity symbol.")
 def council():
     """
     AI Council Verdict — multi-engine signal aggregate.
@@ -176,7 +176,7 @@ def council():
 # ── /api/scan ─────────────────────────────────────────────────────────────────
 
 @premium_bp.route('/scan', methods=['GET', 'POST'])
-@require_payment
+@x402_guard(price_usdc="0.05", description="Full universe market scan — squeeze signals and grade-A options picks across the $1-$50 universe (up to 250 symbols).")
 def scan():
     """
     Full $1-$50 market scanner — live squeeze + options picks.
@@ -203,7 +203,7 @@ def scan():
 # ── /api/options ──────────────────────────────────────────────────────────────
 
 @premium_bp.route('/options', methods=['GET', 'POST'])
-@require_payment
+@x402_guard(price_usdc="0.05", description="Institutional options flow scanner — sweeps, whale detection, unusual volume, dark-pool prints. Tradier brokerage-grade feed.")
 def options_flow():
     """
     Options intelligence — sweeps, whales, unusual volume for requested symbol.
@@ -235,7 +235,7 @@ def options_flow():
 # ── /api/iwm ──────────────────────────────────────────────────────────────────
 
 @premium_bp.route('/iwm', methods=['GET', 'POST'])
-@require_payment
+@x402_guard(price_usdc="0.03", description="IWM 0DTE contract scorer — scored by delta/gamma profile, parity watch, realized vol, expiry-day institutional activity.")
 def iwm():
     """
     IWM 0DTE institutional scanner — scored contracts, parity watch, regime.
