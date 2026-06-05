@@ -261,7 +261,7 @@ It is also visible at `https://ghost-layer.onrender.com/health`.
 
 | Resource | URL |
 |----------|-----|
-| MCP manifest (20 tools) | `/well-known/mcp.json` |
+| MCP manifest (33 tools) | `/.well-known/mcp.json` |
 | OpenAPI 3.1 | `/.well-known/openapi.json` |
 | AI plugin | `/.well-known/ai-plugin.json` |
 | agents.json | `/.well-known/agents.json` |

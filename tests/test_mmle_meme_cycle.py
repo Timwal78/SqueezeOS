@@ -11,7 +11,7 @@ Phases:
                         the engine is built to detect (TNT_LONG)
   4. UNWIND          — short-vol replenishment; regime should fall to NEUTRAL
 
-The test is intentionally synthetic — Schwab/Polygon are not called.
+The test is intentionally synthetic — Tradier/Polygon are not called.
 This is a *logic* stress test, not a market simulation. AGENT_LAW §3.1
 applies: every synthetic input is labeled below.
 

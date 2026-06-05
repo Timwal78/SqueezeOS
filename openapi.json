@@ -6,7 +6,7 @@
     "description": "Three-system platform: SqueezeOS (institutional AI trading intelligence), 402Proof (x402/HTTP 402 autonomous agent payment compliance firewall on XRPL), and Ghost Layer (dual-chain transparent toll gateway bridging XRPL and Base/EVM). All premium SqueezeOS endpoints follow the x402 standard \u2014 agents pay RLUSD on XRPL, no API keys required. Ghost Layer routes XRPL and Base chain USDC payments with full fee disclosure. Agent SDK: https://four02proof.onrender.com/agent/",
     "contact": {
       "name": "Script Master Labs",
-      "url": "https://scriptmasterlabs.com"
+      "url": "https://www.scriptmasterlabs.com"
     },
     "x-llm-summary": "Two-system platform: SqueezeOS delivers real-time market intelligence (squeeze scanner, options flow, IWM 0DTE, AI council verdicts). 402Proof handles x402-compliant RLUSD micropayment settlement on XRPL so autonomous agents can pay per call with no API keys. Loyalty tiers reward cumulative spend. MCP middleware available via npm @relayos/mcp-paywall."
   },
@@ -868,7 +868,7 @@
       "get": {
         "operationId": "optionsIntelligence",
         "summary": "Institutional options intelligence: sweeps, whales, unusual volume",
-        "description": "Real Schwab options chain analysis. Detects institutional sweeps, whale premium blocks, unusual volume spikes, and scores top contract recommendations. Includes net delta, GEX, put/call ratios, max pain. Cost: 0.05 RLUSD. Endpoint ID: c951a374-2424-4064-ab80-35afe8053d29",
+        "description": "Real Tradier brokerage-grade options chain analysis. Detects institutional sweeps, whale premium blocks, unusual volume spikes, and scores top contract recommendations. Includes net delta, GEX, put/call ratios, max pain. Optional `symbol` query param (defaults to IWM). Cost: 0.05 RLUSD. Endpoint ID: c951a374-2424-4064-ab80-35afe8053d29",
         "servers": [
           {
             "url": "https://squeezeos-api.onrender.com"

@@ -20,7 +20,7 @@
       "id": "squeezeos",
       "name": "SqueezeOS — Institutional AI Market Intelligence",
       "tagline": "Multi-engine AI trading signals for autonomous agents. Pay per call. No API keys.",
-      "description": "Squeeze scanner, institutional options flow, IWM 0DTE analysis, AI council verdicts, signal futures prediction market, regulatory event oracle (SEC 8-K, FDA, USPTO), and Stigmergy pheromone coordination. 23+ MCP tools. All premium calls gated by x402 RLUSD. Free demo, preview, and SSE stream always available.",
+      "description": "Squeeze scanner, institutional options flow, IWM 0DTE analysis, AI council verdicts, signal futures prediction market, regulatory event oracle (SEC 8-K, FDA, USPTO), and Stigmergy pheromone coordination. 33 MCP tools. All premium calls gated by x402 RLUSD. Free demo, preview, and SSE stream always available.",
       "category": ["finance", "trading", "market-intelligence", "agent-economy"],
       "status": "live",
       "url": "https://squeezeos-api.onrender.com",
@@ -268,7 +268,7 @@
       "payment_asset": "RLUSD",
       "payment_network": "XRPL",
       "free_tools": ["demo_council", "signal_preview", "signal_history", "system_status", "stigmergy_sniff"],
-      "tool_count": 23,
+      "tool_count": 33,
       "categories": ["finance", "trading", "market-data", "agent-economy"]
     },
     "google_ap2": {
