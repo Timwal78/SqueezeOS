@@ -23,9 +23,10 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 from collections import deque
 try:
-    from schwab_api import schwab_api
-except ImportError:
-    schwab_api = None
+    import tradier_api as _tradier_mod
+    _tradier_get_chain = _tradier_mod.get_option_chain_schwab_format
+except (ImportError, AttributeError):
+    _tradier_get_chain = None
 from data_providers import PolygonProvider
 
 logger = logging.getLogger(__name__)
@@ -296,7 +297,7 @@ def calculate_gex_profile(raw_chain, spot_price, ticker=""):
 
 class GammaFlowEngine:
     def __init__(self, polygon: PolygonProvider, watchlist: List[str]):
-        self.schwab = schwab_api
+        self._get_chain = _tradier_get_chain
         self.polygon = polygon
         self.watchlist = watchlist
 
@@ -343,10 +344,10 @@ class GammaFlowEngine:
         if spot <= 0:
             return
 
-        # 2. Get GEX Profile
-        if not self.schwab:
+        # 2. Get GEX Profile via Tradier adapter (Schwab-shape format)
+        if not self._get_chain:
             return
-        raw_chain = self.schwab.get_option_chains(ticker)
+        raw_chain = self._get_chain(ticker)
         if not raw_chain or 'error' in raw_chain:
             return
 

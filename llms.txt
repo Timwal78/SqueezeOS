@@ -250,7 +250,7 @@ SqueezeOS is a fully autonomous AI trading system featuring a multi-agent counci
 It includes TipMaster, a zero-custody Farcaster tipping bot running natively on the XRP Ledger.
 
 - **GitHub:** https://github.com/Timwal78/SqueezeOS
-- **Live Command Center UI:** https://squeeze-os-ochre.vercel.app
+- **Signal Auction Loom:** https://signal-auction-loom.vercel.app
 - **Ghost Layer Endpoint:** `https://squeezeos-api.onrender.com`
 - **TipMaster Endpoint:** `https://tipmaster.onrender.com`
 
@@ -548,8 +548,7 @@ To integrate SqueezeOS seamlessly into your agent frameworks, refer to our machi
 |----------|-----|
 | Brand Homepage | https://www.scriptmasterlabs.com |
 | Harmonic Scanner (Rubics Cube) | https://www.scriptmasterlabs.com/sml_harmonic_scanner.html |
-| Command Center (live dashboard) | https://squeeze-os-ochre.vercel.app |
-| Signal Auction Loom | https://loom.scriptmasterlabs.com |
+| Signal Auction Loom | https://signal-auction-loom.vercel.app (also: https://loom.scriptmasterlabs.com) |
 | SqueezeOS Free Demo | https://api.scriptmasterlabs.com/api/demo |
 | Oracle Feeds (free) | https://api.scriptmasterlabs.com/api/oracle/feeds |
 | Signal Marketplace | https://api.scriptmasterlabs.com/api/marketplace |

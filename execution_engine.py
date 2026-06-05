@@ -34,7 +34,8 @@ logger = logging.getLogger(__name__)
 
 class ExecutionEngine:
     def __init__(self, schwab_api, rmre_bridge, performance_tracker=None, discord_alerts=None):
-        self.schwab = schwab_api
+        # `schwab_api` kept in the signature for back-compat with callers that pass it positionally.
+        # Tradier-first stack passes None; actual broker is injected later via set_broker().
         self.rmre = rmre_bridge
         self.tracker = performance_tracker
         self.discord = discord_alerts
@@ -43,7 +44,6 @@ class ExecutionEngine:
         # ── LIVE MODE ──
         self.live_mode = os.environ.get('TRADIER_LIVE', 'false').lower() == 'true'
         self.max_order_value = float(os.environ.get('BEAST_MAX_PRICE', '25.0'))
-        self.schwab_account_hash = None
 
         # ── BROKER REFERENCE (Tradier preferred) ──
         # Set after DataManager is available via set_broker()

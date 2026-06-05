@@ -171,7 +171,7 @@ SqueezeOS/
 │   ├── telemetry_rotator.py # Background telemetry heartbeat
 │   ├── ceo_trader.py        # CEOTrader institutional logic
 │   └── api/                 # Flask Blueprints (one file per domain)
-│       ├── mcp_bp.py        # POST /mcp — JSON-RPC 2.0 MCP server (23 tools)
+│       ├── mcp_bp.py        # POST /mcp — JSON-RPC 2.0 MCP server (33 tools)
 │       ├── premium_bp.py    # /api/council /api/scan /api/options /api/iwm (402-gated)
 │       ├── market_scanner.py# /api/market — background scan loop + cache
 │       ├── marketplace_bp.py# /api/marketplace — peer signal marketplace
@@ -304,7 +304,7 @@ The `@require_payment` decorator gates premium endpoints. Token verification is 
 
 ## MCP Server (`core/api/mcp_bp.py`)
 
-Mounted at `/mcp`. Implements JSON-RPC 2.0. **23 tools** total.
+Mounted at `/mcp`. Implements JSON-RPC 2.0. **33 tools** total.
 
 **Supported RPC methods:**
 - `initialize` — handshake, returns `protocolVersion: "2024-11-05"`
