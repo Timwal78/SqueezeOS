@@ -1,0 +1,96 @@
+//@version=6
+// © ScriptMasterLabs — Apex Sonar: Fractal Swarm Siphon
+// Discovery: Timothy Walton | ScriptMasterLabs
+//
+// CONCEPT: Counter-trend siphon. Fires when macro trend (Sets 7-9) is
+// fully one-directional but micro trend (Sets 1-3) violently snaps the
+// opposite direction — detecting artificial algorithmic sweeps.
+strategy("Apex Sonar: Fractal Swarm Siphon",
+     overlay=true,
+     initial_capital=100000,
+     default_qty_type=strategy.percent_of_equity,
+     default_qty_value=10,
+     commission_type=strategy.commission.percent,
+     commission_value=0.01)
+
+// =========================================================================
+// 1. FRACTAL GRID ENGINE
+// =========================================================================
+
+// Returns [bull_aligned, bear_aligned, trigger_ema, anchor_ema]
+get_alignment(t_len, b_len, v_len, a_len) =>
+    t = ta.ema(close, t_len)
+    b = ta.ema(close, b_len)
+    v = ta.ema(close, v_len)
+    a = ta.ema(close, a_len)
+    bull = t > b and b > v and v > a
+    bear = t < b and b < v and v < a
+    [bull, bear, t, a]
+
+// ── MICRO SCALPING ENGINE (Sets 1, 2, 3) ──────────────────────────
+[bull1, bear1, t1, a1] = get_alignment(1,  4,  8,  12)
+[bull2, bear2, t2, a2] = get_alignment(2,  8, 16,  24)
+[bull3, bear3, t3, a3] = get_alignment(3, 12, 24,  36)
+
+micro_bull = bull1 and bull2 and bull3
+micro_bear = bear1 and bear2 and bear3
+
+// ── MACRO ANCHOR ENGINE (Sets 7, 8, 9) ────────────────────────────
+[bull7, bear7, t7, a7] = get_alignment(7, 28, 56,  84)
+[bull8, bear8, t8, a8] = get_alignment(8, 32, 64,  96)
+[bull9, bear9, t9, a9] = get_alignment(9, 36, 72, 108)
+
+macro_bull = bull7 and bull8 and bull9
+macro_bear = bear7 and bear8 and bear9
+
+// =========================================================================
+// 2. THE PREDATORY SIPHON (EXECUTION)
+// =========================================================================
+// Siphon Long:  macro deeply bearish + micro violently flips bullish
+//               → detects artificial downward sweep being reversed
+// Siphon Short: macro deeply bullish + micro violently flips bearish
+//               → detects bear trap / liquidity grab at highs
+
+siphon_long  = macro_bear and micro_bull
+siphon_short = macro_bull  and micro_bear
+
+if siphon_long
+    strategy.entry("Siphon Long",  strategy.long)
+
+if siphon_short
+    strategy.entry("Siphon Short", strategy.short)
+
+// =========================================================================
+// 3. EXITS — close the moment micro consensus fractures
+// =========================================================================
+if not micro_bull
+    strategy.close("Siphon Long",  comment="Micro Fractured")
+
+if not micro_bear
+    strategy.close("Siphon Short", comment="Micro Fractured")
+
+// =========================================================================
+// 4. VISUALS
+// =========================================================================
+plot(t1, "Set 1 Trigger (Micro)", color=#00FF66, linewidth=2)
+plot(a1, "Set 1 Anchor  (Micro)", color=#FF0055, linewidth=1)
+plot(t9, "Set 9 Trigger (Macro)", color=#00BFFF, linewidth=2)
+plot(a9, "Set 9 Anchor  (Macro)", color=#FF8C00, linewidth=3)
+
+bgcolor(siphon_long  ? color.new(#00FF66, 82) : na, title="Siphon Long Zone")
+bgcolor(siphon_short ? color.new(#FF0055, 82) : na, title="Siphon Short Zone")
+
+// ── Signal label ──────────────────────────────────────────────────
+var label sig_lbl = label(na)
+if barstate.islast
+    label.delete(sig_lbl)
+    if siphon_long
+        sig_lbl := label.new(bar_index, low * 0.998,
+             text="⚡ SIPHON LONG\nMacro Bear + Micro Bull",
+             color=#00FF66, textcolor=color.black,
+             style=label.style_label_up, size=size.small)
+    else if siphon_short
+        sig_lbl := label.new(bar_index, high * 1.002,
+             text="⚡ SIPHON SHORT\nMacro Bull + Micro Bear",
+             color=#FF0055, textcolor=color.white,
+             style=label.style_label_down, size=size.small)
