@@ -125,6 +125,33 @@ async def health():
     return {"status": "ok"}
 
 
+# ── x402 Bazaar Discovery ────────────────────────────────────────────────────
+@app.get("/.well-known/x402", include_in_schema=False)
+async def x402_discovery():
+    """Standard x402 discovery endpoint — indexes TipMaster in the CDP Bazaar."""
+    return {
+        "x402Version": 1,
+        "operator": "ScriptMasterLabs — TipMaster",
+        "network": "xrpl-mainnet",
+        "asset": "RLUSD",
+        "payTo": BOT_ADDRESS or "not-configured",
+        "facilitator": "https://four02proof.onrender.com",
+        "discoverable": True,
+        "resources": [
+            {
+                "path": "/api/resolve/{username}",
+                "price": {"amountRLUSD": "0.001", "asset": "RLUSD", "network": "xrpl-mainnet"},
+                "description": "Resolve any Farcaster username to their registered XRPL wallet address. Essential for AI agents performing autonomous P2P RLUSD payments without manual address lookup.",
+            },
+            {
+                "path": "/api/leaderboard",
+                "price": {"amountRLUSD": "0.000", "asset": "RLUSD", "network": "xrpl-mainnet"},
+                "description": "Free: Weekly and all-time RLUSD tipping leaderboard across Farcaster.",
+            },
+        ],
+    }
+
+
 
 @app.get("/api/status")
 async def status():
@@ -151,7 +178,69 @@ async def leaderboard(period: str = "week", limit: int = 10):
 
 
 @app.get("/api/resolve/{username}")
-async def api_resolve(username: str):
+async def api_resolve(username: str, request: Request):
+    """
+    Resolve a Farcaster username to their registered XRPL wallet address.
+    Gated by x402 micropayment (0.001 RLUSD via four02proof).
+    Returns 402 with invoice if X-Payment-Token header is absent or invalid.
+    """
+    import hmac as _hmac, hashlib as _hl, base64 as _b64, json as _json, time as _time
+
+    PROOF402_SECRET = os.getenv("PROOF402_TOKEN_SECRET", "")
+    PROOF402_SERVER = os.getenv("PROOF402_SERVER_URL", "https://four02proof.onrender.com")
+    ENDPOINT_ID     = os.getenv("TIPMASTER_RESOLVE_ENDPOINT_ID", "")
+
+    token = request.headers.get("X-Payment-Token")
+
+    def _verify(tok: str) -> dict:
+        if not PROOF402_SECRET:
+            return {"valid": False, "reason": "ERR_SECRET_NOT_CONFIGURED"}
+        try:
+            dot = tok.rfind(".")
+            if dot < 0:
+                return {"valid": False, "reason": "ERR_TOKEN_MALFORMED"}
+            encoded, sig = tok[:dot], tok[dot + 1:]
+            expected = _hmac.new(PROOF402_SECRET.encode(), encoded.encode(), _hl.sha256).hexdigest()
+            if not _hmac.compare_digest(sig, expected):
+                return {"valid": False, "reason": "ERR_TOKEN_INVALID"}
+            pad = 4 - len(encoded) % 4
+            payload = _json.loads(_b64.urlsafe_b64decode(encoded + "=" * pad))
+            if int(_time.time()) > payload["exp"]:
+                return {"valid": False, "reason": "ERR_TOKEN_EXPIRED"}
+            return {"valid": True, "endpoint_id": payload.get("eid")}
+        except Exception:
+            return {"valid": False, "reason": "ERR_TOKEN_MALFORMED"}
+
+    if not token:
+        # Issue invoice or return standard 402 challenge
+        invoice: dict = {
+            "error": "ERR_PAYMENT_REQUIRED",
+            "message": "Wallet resolution costs 0.001 RLUSD. Pay on XRPL to continue.",
+            "x402Version": 1,
+            "accepts": [{
+                "scheme": "exact",
+                "network": "xrpl-mainnet",
+                "asset": "RLUSD",
+                "maxAmountRequired": "1000",  # drops (0.001 RLUSD)
+                "resource": str(request.url),
+                "description": "Farcaster username → XRPL wallet resolution",
+                "payTo": BOT_ADDRESS or "not-configured",
+                "facilitator": PROOF402_SERVER,
+            }],
+            "remedy": {
+                "step1": f"POST {PROOF402_SERVER}/v1/invoice with endpoint_id={ENDPOINT_ID or '<see four02proof dashboard>'}",
+                "step2": "Pay RLUSD on XRPL",
+                "step3": f"POST {PROOF402_SERVER}/v1/verify",
+                "step4": "Retry with header: X-Payment-Token: <token>",
+            },
+        }
+        return Response(content=_json.dumps(invoice), status_code=402,
+                        media_type="application/json")
+
+    result = _verify(token)
+    if not result["valid"]:
+        raise HTTPException(status_code=401, detail=result["reason"])
+
     # Farcaster usernames are generally lowercase
     wallet = await get_wallet_by_username(username.lower())
     if not wallet:

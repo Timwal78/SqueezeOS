@@ -2096,6 +2096,66 @@ func main() {
 		http.ServeFile(w, req, "./public/.well-known/server.json")
 	})
 
+	// ── X402 BAZAAR DISCOVERY — standard /.well-known/x402 ───────────────────
+	// Advertises Ghost Layer's native x402 products for CDP Bazaar indexing.
+	// Products are XRPL/RLUSD-settled; dispense endpoint: /v1/x402/dispense/{pid}
+	r.Get("/.well-known/x402", func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "public, max-age=60")
+
+		type x402Price struct {
+			AmountRLUSD string `json:"amountRLUSD"`
+			Asset       string `json:"asset"`
+			Network     string `json:"network"`
+		}
+		type x402Resource struct {
+			Path        string    `json:"path"`
+			Price       x402Price `json:"price"`
+			Description string    `json:"description"`
+		}
+
+		products := []struct {
+			id    string
+			price string
+			desc  string
+		}{
+			{"routing.telemetry", "0.05",  "60-second live routing telemetry: TPS, bridge count, agent tier distribution, gamma-wall settlement metrics."},
+			{"bridge.attestation", "0.10", "Institutional cross-chain settlement receipt. Ed25519-signed attestation anchored to XRPL + Xahau tx hash. MiCA-compliant audit trail."},
+			{"cube.mint", "0.05",          "Mint a permanent Cube URIToken on Xahau. Encodes 54-block state hash on-ledger as sovereign proof-of-compute."},
+			{"routing.cube", "0.002",      "NEXUS402 Cube Router — multi-hop XRPL path optimizer. Up to 4 ranked swap routes with price impact scores for any XRPL/Xahau token pair."},
+			{"darkpool.submit", "0.005",   "Ghost Layer Dark Pool — private trade intent. FIFO price-time matching, no public order book exposure, atomic XRPL settlement."},
+			{"decision.notarize", "0.001", "AI Decision Notary — mint any AI decision as a Xahau URIToken. Standard tier: URIToken + JSON memo."},
+		}
+
+		resources := make([]x402Resource, 0, len(products))
+		for _, p := range products {
+			resources = append(resources, x402Resource{
+				Path: "/v1/x402/dispense/" + p.id,
+				Price: x402Price{
+					AmountRLUSD: p.price,
+					Asset:       "RLUSD",
+					Network:     "xrpl-mainnet",
+				},
+				Description: p.desc,
+			})
+		}
+
+		resp := map[string]interface{}{
+			"x402Version": 1,
+			"operator":    "ScriptMasterLabs — Ghost Layer",
+			"network":     "xrpl-mainnet",
+			"asset":       "RLUSD",
+			"payTo":       treasuryXRPL,
+			"facilitator": "https://ghost-layer.onrender.com/v1/x402",
+			"discoverable": true,
+			"catalog":     "https://ghost-layer.onrender.com/v1/x402/catalog",
+			"resources":   resources,
+		}
+		w.WriteHeader(http.StatusOK)
+		enc := json.NewEncoder(w)
+		enc.SetIndent("", "  ")
+		enc.Encode(resp)
+	})
 
 	// ── STATIC FRONTEND (Three.js terminal) ──────────────────────────────────
 	fs := http.FileServer(http.Dir("./public"))
