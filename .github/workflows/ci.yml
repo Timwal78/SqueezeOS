@@ -66,12 +66,14 @@ jobs:
 
           failures = []
           checks = [
-              ('core.state',          'GlobalState'),
-              ('core.legacy',         'get_service'),
-              ('core.oracle_engine',  'OracleEngine'),
-              ('core.rdt_engine',     'RecurrentDepthTransformer'),
-              ('core.market_graph',   'get_graph'),
-              ('core.signal_history', 'record'),
+              ('core.state',                  'GlobalState'),
+              ('core.legacy',                 'get_service'),
+              ('core.oracle_engine',          'OracleEngine'),
+              ('core.rdt_engine',             'RecurrentDepthTransformer'),
+              ('core.market_graph',           'get_graph'),
+              ('core.signal_history',         'record'),
+              ('core.proprietary_ema_engine', 'Engine4_HarmonicLadder'),
+              ('core.proprietary_ema_engine', 'run_proprietary_suite'),
           ]
 
           for module, symbol in checks:
