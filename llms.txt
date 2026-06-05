@@ -34,12 +34,41 @@
 -->
 
 # Script Master Labs — AI Agent Integration Guide
+
+## ⟡ Quick Start (No Payment Required)
+
+**Try the free demo right now — same response format as the paid council, fixed to IWM, refreshed every 5 minutes:**
+
+```bash
+curl https://squeezeos-api.onrender.com/api/demo/council
+```
+
+**Want any symbol?** Pay 0.10 RLUSD per call to `/api/council`. Full payment flow below.
+
+**MCP client config** (Claude Desktop, Cline, Cursor, etc.):
+
+```json
+{
+  "mcpServers": {
+    "squeezeos": {
+      "url": "https://squeezeos-api.onrender.com/mcp",
+      "transport": "streamable-http"
+    }
+  }
+}
+```
+
+> **Canonical URLs (use these if alias domains fail):**
+> - API: `https://squeezeos-api.onrender.com`
+> - Payment Gateway: `https://four02proof.onrender.com`
+> - MCP endpoint: `https://squeezeos-api.onrender.com/mcp`
+> - OpenAPI spec: `https://squeezeos-api.onrender.com/.well-known/openapi.json`
+> - MCP manifest: `https://squeezeos-api.onrender.com/.well-known/mcp.json`
+> - Brand site: `https://www.scriptmasterlabs.com`
+
+---
+
 > Machine-readable blueprint for autonomous agents. Follows llms.txt standard.
-> Brand: https://www.scriptmasterlabs.com
-> Command Center: https://squeeze-os-ochre.vercel.app
-> OpenAPI: https://api.scriptmasterlabs.com/.well-known/openapi.json
-> MCP (31 tools): https://api.scriptmasterlabs.com/.well-known/mcp.json
-> Live Agent: rEmdJWrAWFtud1vFN8Zm8eWkgK4AVMWPiX (SML Autonomous Market Intelligence Agent)
 
 ---
 
