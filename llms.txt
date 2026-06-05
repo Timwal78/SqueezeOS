@@ -34,12 +34,41 @@
 -->
 
 # Script Master Labs — AI Agent Integration Guide
+
+## ⟡ Quick Start (No Payment Required)
+
+**Try the free demo right now — same response format as the paid council, fixed to IWM, refreshed every 5 minutes:**
+
+```bash
+curl https://squeezeos-api.onrender.com/api/demo/council
+```
+
+**Want any symbol?** Pay 0.10 RLUSD per call to `/api/council`. Full payment flow below.
+
+**MCP client config** (Claude Desktop, Cline, Cursor, etc.):
+
+```json
+{
+  "mcpServers": {
+    "squeezeos": {
+      "url": "https://squeezeos-api.onrender.com/mcp",
+      "transport": "streamable-http"
+    }
+  }
+}
+```
+
+> **Canonical URLs (use these if alias domains fail):**
+> - API: `https://squeezeos-api.onrender.com`
+> - Payment Gateway: `https://four02proof.onrender.com`
+> - MCP endpoint: `https://squeezeos-api.onrender.com/mcp`
+> - OpenAPI spec: `https://squeezeos-api.onrender.com/.well-known/openapi.json`
+> - MCP manifest: `https://squeezeos-api.onrender.com/.well-known/mcp.json`
+> - Brand site: `https://www.scriptmasterlabs.com`
+
+---
+
 > Machine-readable blueprint for autonomous agents. Follows llms.txt standard.
-> Brand: https://www.scriptmasterlabs.com
-> Command Center: https://squeeze-os-ochre.vercel.app
-> OpenAPI: https://api.scriptmasterlabs.com/.well-known/openapi.json
-> MCP (31 tools): https://api.scriptmasterlabs.com/.well-known/mcp.json
-> Live Agent: rEmdJWrAWFtud1vFN8Zm8eWkgK4AVMWPiX (SML Autonomous Market Intelligence Agent)
 
 ---
 
@@ -147,7 +176,7 @@ The SML ecosystem spans several dedicated domains handling specific network func
 
 **The Moat:** Zero custody is the non-negotiable core across all products. Earned reputation replaces API keys. XRPL native escrow (PREIMAGE-SHA-256) ensures Ghost Layer never touches funds—acting purely as a decentralized oracle. Every bridge, notarization, and marketplace release feeds the loyalty flywheel. Higher tier = lower fees, better listing access, and higher trust signals.
 
-- **SqueezeOS** — Institutional AI market intelligence API (31 MCP tools). Real-time squeeze scanner, options flow, IWM 0DTE, AI council verdicts, Sovereign Autopilot (live autonomous trading via OracleEngine + Kelly Criterion + Tradier).
+- **SqueezeOS** — Institutional AI market intelligence API (33 MCP tools). Real-time squeeze scanner, options flow, IWM 0DTE, AI council verdicts, Sovereign Autopilot (live autonomous trading via OracleEngine + Kelly Criterion + Tradier).
 - **402Proof** — The payment firewall. Includes the world's first AI agent reputation scoring system (300-850 FICO-style) based on cryptographic spend history.
 - **Ghost Layer** — Dual-chain bridge (XRPL + Base). Features XRPL native escrow, Xahau URIToken minting (hand-rolled binary serializer), and Ed25519 attestation signing.
 - **SML Autonomous Agent** — Self-funding intelligence agent (`sml_agent.py`) that pays for its own market data using RLUSD.
@@ -221,7 +250,7 @@ SqueezeOS is a fully autonomous AI trading system featuring a multi-agent counci
 It includes TipMaster, a zero-custody Farcaster tipping bot running natively on the XRP Ledger.
 
 - **GitHub:** https://github.com/Timwal78/SqueezeOS
-- **Live Command Center UI:** https://squeeze-os-ochre.vercel.app
+- **Signal Auction Loom:** https://signal-auction-loom.vercel.app
 - **Ghost Layer Endpoint:** `https://squeezeos-api.onrender.com`
 - **TipMaster Endpoint:** `https://tipmaster.onrender.com`
 
@@ -519,8 +548,7 @@ To integrate SqueezeOS seamlessly into your agent frameworks, refer to our machi
 |----------|-----|
 | Brand Homepage | https://www.scriptmasterlabs.com |
 | Harmonic Scanner (Rubics Cube) | https://www.scriptmasterlabs.com/sml_harmonic_scanner.html |
-| Command Center (live dashboard) | https://squeeze-os-ochre.vercel.app |
-| Signal Auction Loom | https://loom.scriptmasterlabs.com |
+| Signal Auction Loom | https://signal-auction-loom.vercel.app (also: https://loom.scriptmasterlabs.com) |
 | SqueezeOS Free Demo | https://api.scriptmasterlabs.com/api/demo |
 | Oracle Feeds (free) | https://api.scriptmasterlabs.com/api/oracle/feeds |
 | Signal Marketplace | https://api.scriptmasterlabs.com/api/marketplace |

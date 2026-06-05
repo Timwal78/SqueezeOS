@@ -9,7 +9,7 @@ This repository is governed by the **ScriptMasterLabs Master Integrity Law**. Al
 
 ### LAW 1: NO SIMULATED DATA
 No placeholders, faked GEX profiles, or "estimated" premium blocks.
-- **Rule 1.1**: If Schwab or Polygon data is missing, the engine MUST pause or report "Awaiting Stream." NEVER invent dummy values.
+- **Rule 1.1**: If Tradier (options) or Polygon/Alpaca (equities) data is missing, the engine MUST pause or report "Awaiting Stream." NEVER invent dummy values.
 
 ### LAW 2: PARAMETERIZED ALPHA FACTORS
 All HJB Kalman sensitivities, Gamma Flip thresholds, and DTE weights MUST reside in configuration. 
@@ -23,4 +23,4 @@ If a statistical proxy is required for calculation (e.g. using IV to estimate Ga
 Maintain the 5-minute evaluation cycle for structural signals to ensure signal quality over quantity.
 
 ---
-**REFERENCE:** [DEVELOPER_MANIFESTO.md](file:///C:/Users/timot/.gemini/antigravity/scratch/SqueezeOS/DEVELOPER_MANIFESTO.md)
+**REFERENCE:** [DEVELOPER_MANIFESTO.md](./DEVELOPER_MANIFESTO.md)

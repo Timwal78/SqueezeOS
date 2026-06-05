@@ -22,7 +22,7 @@ This document serves as the "Main Memory" for every agent and developer working 
 - This keeps the focus on the **SQUEEZE ENGINE** while maintaining visibility into the broader market leaders.
 
 ### 4. TRANSPARENCY
-- Every data point must have a traceable source (Schwab, Alpaca, Polygon).
+- Every data point must have a traceable source (Tradier, Alpaca, Polygon).
 - "Zero-Fake Audit": Any simulated data found in the codebase must be purged immediately.
 
 ### 5. LITERARY INTEGRITY

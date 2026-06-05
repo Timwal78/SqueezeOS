@@ -42,7 +42,10 @@ class MarketGraph:
     def __init__(self):
         self.driver = GraphDatabase.driver(
             NEO4J_URI,
-            auth=(NEO4J_USERNAME, NEO4J_PASSWORD)
+            auth=(NEO4J_USERNAME, NEO4J_PASSWORD),
+            connection_timeout=10.0,
+            connection_acquisition_timeout=15.0,
+            max_connection_lifetime=300,
         )
         self.driver.verify_connectivity()
         self._seed_schema()

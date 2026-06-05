@@ -105,7 +105,8 @@ class OracleEngine:
             if not dm:
                 return {}
             rmre = RMREBridge()
-            ee = ExecutionEngine(schwab_api=dm, rmre_bridge=rmre)
+            ee = ExecutionEngine(schwab_api=None, rmre_bridge=rmre)
+            ee.set_broker(dm)
             walls = ee.get_gamma_walls(symbol)
             if not walls:
                 return {}

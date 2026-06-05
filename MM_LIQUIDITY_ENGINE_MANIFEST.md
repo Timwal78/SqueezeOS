@@ -84,7 +84,7 @@ Where `VCCW_open` (Vanna-Charm Convergence Window) is true only during the windo
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │  LAYER 1 — INGEST (real data only, AGENT_LAW §1)              │
-│    • Schwab option chain (full chain, no DTE/strike caps)     │
+│    • Tradier option chain (full chain, no DTE/strike caps)    │
 │    • Polygon trades+quotes (NBBO, condition codes)            │
 │    • Polygon dark-pool prints (TRF condition: D)              │
 │    • VIX / VVIX / VIX9D term-structure                         │

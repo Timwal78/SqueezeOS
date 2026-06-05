@@ -629,18 +629,6 @@ class DiscordAlerts:
             }]
         })
 
-    def fire_schwab_connected_alert(self):
-        url = self.webhook_all or self.webhook_squeeze
-        if not url:
-            return
-        self._post(url, {
-            "embeds": [{
-                "title": "✅ Schwab API Connected",
-                "description": "Real-time quotes + full options chains active.\nGreeks • IV • Volume • OI • Bid/Ask all flowing.",
-                "color": 0x00FF00,
-            }]
-        })
-
     # ══════════════════════════════════════════════════════════
     # GAMMA FLOW FUSION ALERTS
     # ══════════════════════════════════════════════════════════
