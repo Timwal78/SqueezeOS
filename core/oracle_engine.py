@@ -203,7 +203,7 @@ class OracleEngine:
             return {}
 
     def _get_proprietary_ema(self, symbol: str) -> dict:
-        """Run Engine 1 (Tesla) + Engine 3 (Lucas/Phi²) against live bars."""
+        """Run the proprietary EMA suite (E1, E3, E4) against live bars."""
         try:
             from core.proprietary_ema_engine import run_proprietary_suite
             dm = self._get_service("dm")
@@ -281,11 +281,11 @@ class OracleEngine:
         parts = []
         # Triple Lock is the highest-conviction proprietary signal — lead with it
         if prop_consensus == "TRIPLE_LOCK_BULL":
-            parts.append("TRIPLE LOCK bullish — Tesla stretch + Lucas volume + Harmonic Ladder aligned")
+            parts.append("TRIPLE LOCK bullish — three independent proprietary engines aligned")
         elif prop_consensus == "TRIPLE_LOCK_BEAR":
-            parts.append("TRIPLE LOCK bearish — Tesla stretch + Lucas volume + Harmonic Ladder aligned")
+            parts.append("TRIPLE LOCK bearish — three independent proprietary engines aligned")
         elif prop_consensus == "LIE_DETECTOR_ACTIVE":
-            parts.append("LIE DETECTOR active — price suppressed while dark-pool volume kinetics exploding")
+            parts.append("LIE DETECTOR active — price suppressed while volume kinetics exploding")
         if gamma_flip:
             parts.append("gamma flip confirmed above VWAP")
         if fractal_match and fractal_match != "None":
@@ -349,9 +349,9 @@ class OracleEngine:
         e1_contrib = prop_ema.get("engine_1", {}).get("score_contrib", 0)
         e3_contrib = prop_ema.get("engine_3", {}).get("score_contrib", 0)
         e4_contrib = prop_ema.get("engine_4", {}).get("score_contrib", 0)
-        score += e1_contrib * 0.5  # weight: up to ±12.5 pts (Tesla price stretch)
-        score += e3_contrib * 0.5  # weight: up to ±10 pts (Lucas volume kinetics)
-        score += e4_contrib * 0.5  # weight: up to ±12.5 pts (Harmonic Ladder ribbon)
+        score += e1_contrib * 0.5  # weight: up to ±12.5 pts (E1 — macro price stretch)
+        score += e3_contrib * 0.5  # weight: up to ±10 pts  (E3 — dark-pool volume kinetics)
+        score += e4_contrib * 0.5  # weight: up to ±12.5 pts (E4 — price ribbon harmonics)
         # Triple Lock bonus — all three proprietary engines agree at three dimensions
         if prop_ema.get("triple_lock_bull"):
             score += 10

@@ -1,19 +1,14 @@
 """
-Engine 4 — Temporal Mirror (As Above, So Below)
+Engine 4 — Temporal Correlation Detector
 ================================================
-Pivot date: February 22, 2026.
+Time dimension. Captures the pre-pivot price sequence around a designated
+anchor date, mirrors it post-pivot, and computes Pearson correlation
+between live price and the mirrored projection. Signal fires when the
+correlation crosses the configured threshold — temporal confirmation
+that the cyclical setup is tracking on schedule.
 
-Pre-pivot: the price sequence leading into the Feb 22 anchor is captured.
-Post-pivot: that sequence is mirrored (reversed, reflected around pivot price)
-           to create a shadow projection of where price "should" be.
-
-Signal fires when live price holds ≥70% Pearson correlation with the
-mirrored shadow — confirming that the post-pivot price is tracking the
-mirror of the pre-pivot suppression pattern. This is the temporal proof
-that a cyclical reversal is underway on schedule.
-
-123/321 pivot: these are the lookback windows (trading bar counts) that
-anchor the mirror on both the near (123-bar) and far (321-bar) time horizon.
+Internal parameters (pivot date, correlation threshold, lookback windows)
+are proprietary.
 """
 
 import logging
