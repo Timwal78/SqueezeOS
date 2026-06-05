@@ -3,6 +3,11 @@ x402_flask.py — Protocol-compliant x402 paywall for the SqueezeOS Flask API.
 Real x402 wire protocol (HTTP 402 -> accepts -> X-PAYMENT -> facilitator /verify+/settle)
 on USDC over Base. Makes endpoints payable by any x402 agent and discoverable in the
 x402 Bazaar when routed through the CDP facilitator.
+
+Dual-rail 402 body: every payment-required response advertises BOTH rails so that
+- Standard x402 / Base / USDC agents pick the EVM entry and pay via facilitator.
+- RLUSD / XRPL agents pick the XRPL entry and pay via the 402Proof invoice flow
+  (POST /v1/invoice → pay on XRPL → POST /v1/verify → retry with X-Payment-Token).
 """
 
 import os
@@ -18,6 +23,10 @@ NETWORK      = os.environ.get("X402_NETWORK", "base-sepolia")
 PAY_TO       = os.environ.get("X402_PAY_TO", "0x4e14B249D9A4c9c9352D780eCEB508A8eB7a7700")
 FACILITATOR  = os.environ.get("X402_FACILITATOR", "https://x402.org/facilitator").rstrip("/")
 MAX_TIMEOUT  = int(os.environ.get("X402_MAX_TIMEOUT", "120"))
+
+# ── RLUSD on XRPL rail (proprietary 402Proof flow) ──
+RLUSD_ISSUER  = os.environ.get("RLUSD_ISSUER",  "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De")
+PROOF402_BASE = os.environ.get("PROOF402_SERVER_URL", "https://four02proof.onrender.com").rstrip("/")
 
 USDC = {
     "base":         {"asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
@@ -49,8 +58,61 @@ def _payment_requirements(price_usdc: str, description: str, resource: str) -> d
     }
 
 
+def _rlusd_requirements(price_rlusd: str, description: str, resource: str) -> dict:
+    """
+    XRPL/RLUSD entry for the 402 `accepts` array.
+
+    Not native x402 (XRPL has no x402 facilitator), so agents that match this
+    entry use the 402Proof invoice/verify flow declared under `extra.flow`.
+    Endpoint UUID is looked up by path so the agent can POST it straight to
+    /v1/invoice without an extra discovery round-trip.
+    """
+    try:
+        from proof402_integration import ENDPOINTS as _RLUSD_ENDPOINTS
+    except Exception:
+        _RLUSD_ENDPOINTS = {}
+
+    from urllib.parse import urlparse
+    path = urlparse(resource).path or ""
+    endpoint_id = _RLUSD_ENDPOINTS.get(path, "")
+
+    return {
+        "scheme": "xrpl-invoice",
+        "network": "xrpl",
+        "maxAmountRequired": str(price_rlusd),
+        "resource": resource,
+        "description": description,
+        "mimeType": "application/json",
+        "payTo": "",
+        "maxTimeoutSeconds": MAX_TIMEOUT,
+        "asset": "RLUSD",
+        "extra": {
+            "name": "Ripple USD",
+            "issuer": RLUSD_ISSUER,
+            "endpointId": endpoint_id,
+            "invoiceEndpoint": f"{PROOF402_BASE}/v1/invoice",
+            "verifyEndpoint":  f"{PROOF402_BASE}/v1/verify",
+            "tokenHeader":     "X-Payment-Token",
+            "walletHeader":    "X-Agent-Wallet",
+            "flow": [
+                f"1. POST {PROOF402_BASE}/v1/invoice {{\"endpoint_id\":\"{endpoint_id}\"}} → {{pay_to, amount, memo_hex}}",
+                "2. Send RLUSD on XRPL to pay_to with memo_hex as MemoData",
+                f"3. POST {PROOF402_BASE}/v1/verify {{invoice_id, tx_hash, agent_wallet}} → access_token (1h TTL)",
+                f"4. Retry {path} with X-Payment-Token: <access_token> and X-Agent-Wallet: <rWALLET>",
+            ],
+        },
+    }
+
+
 def _402(requirements: dict, reason: str = ""):
-    body = {"x402Version": X402_VERSION, "accepts": [requirements], "error": reason}
+    accepts = [requirements]
+    rlusd = _rlusd_requirements(
+        price_rlusd=str(float(requirements["maxAmountRequired"]) / 1_000_000),
+        description=requirements["description"],
+        resource=requirements["resource"],
+    )
+    accepts.append(rlusd)
+    body = {"x402Version": X402_VERSION, "accepts": accepts, "error": reason}
     resp = make_response(jsonify(body), 402)
     resp.headers["Content-Type"] = "application/json"
     return resp
@@ -112,14 +174,30 @@ def register_x402_discovery(app):
         return jsonify({
             "x402Version": X402_VERSION,
             "operator": "ScriptMasterLabs",
-            "network": NETWORK,
-            "asset": cfg["asset"],
-            "payTo": PAY_TO,
-            "facilitator": FACILITATOR,
             "discoverable": True,
+            "rails": [
+                {
+                    "name": "Base / USDC (x402 standard)",
+                    "network": NETWORK,
+                    "asset": cfg["asset"],
+                    "assetSymbol": "USDC",
+                    "payTo": PAY_TO,
+                    "facilitator": FACILITATOR,
+                    "scheme": "exact",
+                },
+                {
+                    "name": "XRPL / RLUSD (402Proof invoice flow)",
+                    "network": "xrpl",
+                    "asset": "RLUSD",
+                    "assetIssuer": RLUSD_ISSUER,
+                    "invoiceEndpoint": f"{PROOF402_BASE}/v1/invoice",
+                    "verifyEndpoint":  f"{PROOF402_BASE}/v1/verify",
+                    "scheme": "xrpl-invoice",
+                },
+            ],
             "resources": [
                 {"path": d["fn"],
-                 "price": {"amountUSDC": d["price_usdc"], "asset": "USDC", "network": NETWORK},
+                 "price": {"amount": d["price_usdc"], "assets": ["USDC", "RLUSD"]},
                  "description": d["description"]}
                 for d in DISCOVERY
             ],
