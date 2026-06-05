@@ -339,7 +339,8 @@ def require_payment(f):
 #
 # Add to .env on your SqueezeOS V2 machine:
 #   PROOF402_SERVER_URL=https://four02proof.onrender.com
-#   PROOF402_TOKEN_SECRET=0d38159d1867b684d71dc65be255782839ae894bb3b43796f129365b63dbda84
+#   PROOF402_TOKEN_SECRET=<set this to the value configured on the 402Proof server; rotate with `openssl rand -hex 32` and apply the SAME value on both services — never commit the real secret>
+
 #
 # NOTE: @require_payment fails OPEN — if 402Proof is unreachable, the route
 # still serves so SqueezeOS never goes down because of the payment layer.
