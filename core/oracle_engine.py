@@ -105,6 +105,8 @@ class OracleEngine:
             if not dm:
                 return {}
             rmre = RMREBridge()
+            # First kwarg name (`schwab_api`) is the legacy interface slot — we pass the
+            # DataManager which speaks Tradier underneath. Rename pending repo-wide refactor.
             ee = ExecutionEngine(schwab_api=dm, rmre_bridge=rmre)
             walls = ee.get_gamma_walls(symbol)
             if not walls:

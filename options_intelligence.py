@@ -4,8 +4,10 @@ SQUEEZE OS v4.3 — Options Intelligence Layer
 Institutional-grade options analysis: sweep detection, whale watching,
 unusual volume spike detection, contract recommendations, and flow summary.
 
-This module ingests real options chain data from the Schwab API and
-performs sophisticated analysis to identify institutional activity patterns.
+This module ingests real options chain data from Tradier (delivered in the
+legacy Schwab-shape dict that the engine originally targeted — see
+tradier_api.get_option_chain_schwab_format) and performs sophisticated
+analysis to identify institutional activity patterns.
 
 FEATURES:
   - PUT/CALL SWEEP DETECTION: Identifies aggressive premium accumulation
@@ -138,7 +140,8 @@ class FlowSummary:
 class OptionsIntelligence:
     """
     Institutional-grade options intelligence layer.
-    Ingests Schwab options chain data and performs sophisticated analysis.
+    Ingests options chain data (Tradier delivered in Schwab-shape via adapter)
+    and performs sophisticated analysis.
     """
 
     def __init__(self):
@@ -160,7 +163,7 @@ class OptionsIntelligence:
 
         Args:
             symbol: Stock symbol
-            chain: Schwab options chain dict with callExpDateMap/putExpDateMap
+            chain: Options chain dict (legacy Schwab-shape — supplied by tradier_api adapter) with callExpDateMap / putExpDateMap
 
         Returns:
             List of Sweep objects sorted by sweep_score (highest first)
@@ -297,7 +300,7 @@ class OptionsIntelligence:
 
         Args:
             symbol: Stock symbol
-            chain: Schwab options chain dict
+            chain: Options chain dict (legacy Schwab-shape — supplied by tradier_api adapter)
 
         Returns:
             List of UnusualActivity objects sorted by severity
@@ -406,7 +409,7 @@ class OptionsIntelligence:
 
         Args:
             symbol: Stock symbol
-            chain: Schwab options chain dict
+            chain: Options chain dict (legacy Schwab-shape — supplied by tradier_api adapter)
             quote: Quote dict with 'last' or 'mark' for spot price
 
         Returns:
@@ -542,7 +545,7 @@ class OptionsIntelligence:
 
         Args:
             symbol: Stock symbol
-            chain: Schwab options chain dict
+            chain: Options chain dict (legacy Schwab-shape — supplied by tradier_api adapter)
             quote: Quote dict
             bias: 'BULL', 'BEAR', or 'NEUTRAL'
 
@@ -673,7 +676,7 @@ class OptionsIntelligence:
 
         Args:
             symbol: Stock symbol
-            chain: Schwab options chain dict
+            chain: Options chain dict (legacy Schwab-shape — supplied by tradier_api adapter)
 
         Returns:
             FlowSummary as dict
@@ -839,7 +842,7 @@ class OptionsIntelligence:
 
         Args:
             symbol: Stock symbol
-            chain: Schwab options chain dict
+            chain: Options chain dict (legacy Schwab-shape — supplied by tradier_api adapter)
             quote: Quote dict
 
         Returns:
@@ -888,7 +891,7 @@ class OptionsIntelligence:
     @staticmethod
     def _parse_expiry_key(key: str) -> Tuple[Optional[str], Optional[int]]:
         """
-        Parse Schwab expiry key format: "2024-01-19:5"
+        Parse legacy Schwab-shape expiry key format: "2024-01-19:5"
 
         Returns:
             Tuple of (expiry_date_str, days_to_expiration)

@@ -157,7 +157,8 @@ def find_zero_gamma_line(gex_by_strike, spot_price):
 # ═══════════════════════════════════════════════════════════════
 
 def calculate_gex_profile(raw_chain, spot_price, ticker=""):
-    """Build institutional-grade GEX profile from Schwab chain data."""
+    """Build institutional-grade GEX profile from options chain data
+    (Tradier delivered in legacy Schwab-shape via tradier_api adapter)."""
     gex_by_strike = {}
     oi_by_strike = {}       # Total OI per strike (for pin detection)
     iv_samples = []         # ATM IV samples for expected move
@@ -205,7 +206,7 @@ def calculate_gex_profile(raw_chain, spot_price, ticker=""):
                     if oi <= 0:
                         continue
 
-                    # If gamma is missing/zero from Schwab, estimate via BS
+                    # If gamma is missing/zero from the provider, estimate via Black-Scholes
                     if gamma_val <= 0:
                         iv_raw = float(opt.get('volatility', 0) or 0) / 100.0
                         if iv_raw > 0:
