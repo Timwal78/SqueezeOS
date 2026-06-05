@@ -18,10 +18,10 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 # ── Credentials (set via environment variables — never hardcode) ──
-NEO4J_URI      = os.getenv("NEO4J_URI",      "").replace("neo4j+s://", "neo4j+ssc://")
-NEO4J_USERNAME = os.getenv("NEO4J_USERNAME", "")
+NEO4J_URI      = os.getenv("NEO4J_URI",      "")
+NEO4J_USERNAME = os.getenv("NEO4J_USERNAME", "neo4j")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "")
-NEO4J_DATABASE = os.getenv("NEO4J_DATABASE", "")
+NEO4J_DATABASE = os.getenv("NEO4J_DATABASE", "neo4j")
 
 # ── SML Universe ──
 SML_TICKERS = ["GME", "AMC", "IWM"]
@@ -44,8 +44,12 @@ class MarketGraph:
             NEO4J_URI,
             auth=(NEO4J_USERNAME, NEO4J_PASSWORD)
         )
+        self.driver.verify_connectivity()
         self._seed_schema()
-        logger.info("[GRAPH] MarketGraphify connected to Neo4j AuraDB.")
+        logger.info(
+            "[GRAPH] MarketGraphify connected to Neo4j at %s (db=%s)",
+            NEO4J_URI, NEO4J_DATABASE,
+        )
 
     # ── Schema + Seed ─────────────────────────────────────────────────────────
 
@@ -190,11 +194,21 @@ _graph_instance: Optional[MarketGraph] = None
 
 def get_graph() -> Optional[MarketGraph]:
     global _graph_instance
-    if not _NEO4J_AVAILABLE or not NEO4J_URI or not NEO4J_PASSWORD:
+    if not _NEO4J_AVAILABLE:
+        logger.warning("[GRAPH] neo4j driver not installed (pip install neo4j>=5.0)")
+        return None
+    if not NEO4J_URI or not NEO4J_PASSWORD:
+        logger.warning(
+            "[GRAPH] Neo4j env vars missing — URI=%r PASSWORD=%s",
+            NEO4J_URI, "set" if NEO4J_PASSWORD else "EMPTY",
+        )
         return None
     if _graph_instance is None:
         try:
             _graph_instance = MarketGraph()
         except Exception as e:
-            logger.warning(f"[GRAPH] Neo4j unavailable: {e}")
+            logger.warning(
+                "[GRAPH] Neo4j unavailable (URI=%s db=%s): %s: %s",
+                NEO4J_URI, NEO4J_DATABASE, type(e).__name__, e,
+            )
     return _graph_instance
