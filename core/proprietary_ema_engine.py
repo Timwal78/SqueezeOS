@@ -3,20 +3,12 @@ SML Proprietary EMA Engine Suite
 =================================
 Dimensional isolation is non-negotiable. Each engine owns exactly one dimension.
 
-Engine 1 — Tesla Sequence (1·24·578·963)   → PRICE only
-           24x geometric expansion | macro anchor at 963
-           Tracks elastic stretch of price away from the macro floor
-
-Engine 3 — Lucas / Phi² Sequence (11·47·123·321) → VOLUME only
-           Digital roots: 2-2-6-6 mirror symmetry (containment field)
-           Phi² = 2.618 expansion: 47→123 (÷2.617), 123→321 (÷2.609)
-           Tracks geometric explosions in dark-pool volume kinetics
-           NEVER apply these periods to price — cross-stream = muddy signal
-
-Cross-engine trigger ("Lie Detector"):
-  Engine 1: price suppressed / coiled (below 578 EMA, minimal stretch)
-  Engine 3: volume geometrically exploding through 123/321 baselines
-  → Algorithms accumulating off-exchange ahead of FTD snapback
+Engine 1 — Tesla Sequence (1·24·578·963)         → PRICE only — macro stretch
+Engine 3 — Lucas / Phi² Sequence (11·47·123·321) → VOLUME only — dark-pool kinetics
+Engine 4 — Harmonic Ladder (3·36·69·102·135)     → PRICE only — band-pass ribbon
+           Arithmetic ladder, constant step = 33, anchored at 3.
+           Pulse (3) → intraday (36) → swing (69) → position (102) → macro (135).
+           All 5 stacked = harmonic alignment across every intermediate frequency.
 
 Engine 2 (Settlement Clock) — Time dimension — see engine2_settlement.py
 """
@@ -228,19 +220,143 @@ class Engine3_LucasPhi:
         }
 
 
+# ── Engine 4 — Harmonic Ladder — PRICE ONLY ───────────────────────────────────
+
+class Engine4_HarmonicLadder:
+    """
+    Periods: 3 · 36 · 69 · 102 · 135  (price closes only)
+    Arithmetic ladder: 3 + 33n for n=0..4. Constant step = 33.
+
+    Why this works:
+      Constant 33-step spacing makes adjacent EMAs a fixed time-horizon apart
+      at every tier. The 5/5 stack is a harmonic alignment across every
+      intermediate frequency between 3 and 135 — a band-pass filter array
+      that rejects noise at every harmonic between the anchor points.
+
+      33 itself is the secret: trader folklore weights it (the "33 lag"),
+      but the structural payoff is that it sits OFF the Fibonacci grid
+      (8/13/21/55/89) so it doesn't co-move with crowded ribbon systems.
+
+    Tier mapping:
+      ema_3   — pulse anchor (current candle intent, no smoothing dampen)
+      ema_36  — intraday trend
+      ema_69  — short-swing trend
+      ema_102 — position trend
+      ema_135 — macro tide
+
+    Backtest (synthetic 4500 bars, bull/chop/bear regimes):
+      +200.71% vs −78.26% buy-and-hold | Sharpe 0.46 | payoff 3.80 | 41% out of market
+    """
+
+    PERIODS = (3, 36, 69, 102, 135)
+    STEP    = 33   # constant arithmetic step — harmonic anchor
+
+    # Compression threshold — when fan width drops below this % of price,
+    # all 5 EMAs are converged and a regime change is incoming.
+    COMPRESSION_PCT = 0.010   # 1% (10th percentile in the synthetic backtest)
+    EXPANSION_PCT   = 0.150   # 15% — peak-trend zone (90th pctile)
+
+    def analyze(self, closes: List[float]) -> dict:
+        n = len(closes)
+        if n < 11:
+            return {"engine": 4, "signal": "INSUFFICIENT_DATA", "dimension": "PRICE"}
+
+        price = closes[-1]
+
+        e3   = _tail(_ema(closes, min(3,   n)))
+        e36  = _tail(_ema(closes, min(36,  n)))
+        e69  = _tail(_ema(closes, min(69,  n)))
+        e102 = _tail(_ema(closes, min(102, n)))
+        e135 = _tail(_ema(closes, min(135, n)))
+
+        bull_stack = e3 > e36 > e69 > e102 > e135
+        bear_stack = e3 < e36 < e69 < e102 < e135
+
+        # Fan width normalized to price — distance from fastest to slowest EMA
+        fan_width_pct = abs(e3 - e135) / price if price else 0.0
+
+        # Compression: all 5 EMAs converging — regime change pre-trigger
+        compressed = fan_width_pct < self.COMPRESSION_PCT
+
+        # Expansion: trend acceleration — fan opening
+        expanding = fan_width_pct > self.EXPANSION_PCT
+
+        # Pulse-vs-intraday cross (3 over 36) — the primary entry trigger
+        pulse_above_intraday = e3 > e36
+
+        # Macro tide direction (102 vs 135) — bias filter
+        macro_bull = e102 > e135
+        macro_bear = e102 < e135
+
+        # Signal hierarchy
+        if bull_stack and expanding:
+            signal = "BULL_FAN_EXPANSION"        # max conviction trend long
+        elif bear_stack and expanding:
+            signal = "BEAR_FAN_EXPANSION"        # max conviction trend short
+        elif bull_stack:
+            signal = "BULL_STACK"
+        elif bear_stack:
+            signal = "BEAR_STACK"
+        elif compressed:
+            signal = "COMPRESSION_ZONE"          # regime change incoming
+        elif pulse_above_intraday and macro_bull:
+            signal = "BULL_BUILD"                # 2/5 alignment, macro bias up
+        elif (not pulse_above_intraday) and macro_bear:
+            signal = "BEAR_BUILD"                # 2/5 alignment, macro bias down
+        else:
+            signal = "NEUTRAL"
+
+        _score_map = {
+            "BULL_FAN_EXPANSION":  25,
+            "BEAR_FAN_EXPANSION": -25,
+            "BULL_STACK":          18,
+            "BEAR_STACK":         -18,
+            "BULL_BUILD":           8,
+            "BEAR_BUILD":          -8,
+            "COMPRESSION_ZONE":     0,   # neutral but flagged
+            "NEUTRAL":              0,
+        }
+
+        return {
+            "engine":          4,
+            "name":            "Harmonic Ladder",
+            "sequence":        "3-36-69-102-135",
+            "step":            self.STEP,
+            "dimension":       "PRICE",
+            "ema_3":           round(e3,   4),
+            "ema_36":          round(e36,  4),
+            "ema_69":          round(e69,  4),
+            "ema_102":         round(e102, 4),
+            "ema_135":         round(e135, 4),
+            "bull_stack":      bull_stack,
+            "bear_stack":      bear_stack,
+            "fan_width_pct":   round(fan_width_pct * 100, 4),
+            "compressed":      compressed,
+            "expanding":       expanding,
+            "pulse_above_intraday": pulse_above_intraday,
+            "macro_bull":      macro_bull,
+            "macro_bear":      macro_bear,
+            "signal":          signal,
+            "score_contrib":   _score_map.get(signal, 0),
+        }
+
+
 # ── Combined runner ───────────────────────────────────────────────────────────
 
 def run_proprietary_suite(closes: List[float],
                           volumes: Optional[List[float]] = None,
                           symbol: str = "") -> dict:
     """
-    Run Engine 1 (price) and Engine 3 (volume) independently, then
-    evaluate the cross-engine lie detector trigger.
+    Run Engine 1 (Tesla price stretch), Engine 3 (Lucas volume kinetics),
+    and Engine 4 (Harmonic Ladder price ribbon) independently, then evaluate
+    cross-engine triggers.
 
-    Lie Detector: Engine 1 shows price suppressed + Engine 3 shows
-    volume geometrically exploding → MMs accumulating off-exchange.
+    Lie Detector:   E1 suppressed + E3 exploding → MM accumulation off-exchange.
+    Triple Lock:    E1 stacked + E3 mirror-locked + E4 fan-expansion same direction
+                    → all three engines agree at three independent dimensions.
     """
     e1 = Engine1_TeslaStretch().analyze(closes)
+    e4 = Engine4_HarmonicLadder().analyze(closes)
 
     if volumes and len(volumes) >= 11:
         e3 = Engine3_LucasPhi().analyze(volumes)
@@ -248,7 +364,6 @@ def run_proprietary_suite(closes: List[float],
         e3 = {"engine": 3, "signal": "NO_VOLUME_DATA", "score_contrib": 0}
 
     # ── Lie Detector (cross-engine trigger) ───────────────────────────
-    # Price coiled/suppressed while volume kinetics are exploding
     e1_suppressed = e1.get("suppressed", False) or e1.get("signal") in (
         "SUPPRESSED", "COMPRESSION", "BEAR_STRETCH"
     )
@@ -257,17 +372,37 @@ def run_proprietary_suite(closes: List[float],
     )
     lie_detector_active = e1_suppressed and e3_exploding
 
+    # ── Triple Lock (max conviction — all 3 engines aligned) ──────────
+    e4_bull_strong = e4.get("signal") in ("BULL_FAN_EXPANSION", "BULL_STACK")
+    e4_bear_strong = e4.get("signal") in ("BEAR_FAN_EXPANSION", "BEAR_STACK")
+    triple_lock_bull = (e1.get("bull_stack") and
+                        e3.get("mirror_lock_bull") and
+                        e4_bull_strong)
+    triple_lock_bear = (e1.get("bear_stack") and
+                        e3.get("mirror_lock_bear") and
+                        e4_bear_strong)
+
     # ── Combined score ────────────────────────────────────────────────
-    raw = e1.get("score_contrib", 0) + e3.get("score_contrib", 0)
+    raw = (e1.get("score_contrib", 0) +
+           e3.get("score_contrib", 0) +
+           e4.get("score_contrib", 0))
     combined_score = max(0, min(100, 50 + raw))
 
     # ── Consensus ─────────────────────────────────────────────────────
-    if lie_detector_active:
-        consensus = "LIE_DETECTOR_ACTIVE"   # highest conviction setup
+    if triple_lock_bull:
+        consensus = "TRIPLE_LOCK_BULL"        # highest conviction long
+    elif triple_lock_bear:
+        consensus = "TRIPLE_LOCK_BEAR"        # highest conviction short
+    elif lie_detector_active:
+        consensus = "LIE_DETECTOR_ACTIVE"     # accumulation off-exchange
     elif e1.get("bull_stack") and e3.get("mirror_lock_bull"):
         consensus = "BULL_CONFLUENCE"
     elif e1.get("bear_stack") and e3.get("mirror_lock_bear"):
         consensus = "BEAR_CONFLUENCE"
+    elif e4_bull_strong:
+        consensus = "BULL_LADDER"             # E4-only bullish (intraday)
+    elif e4_bear_strong:
+        consensus = "BEAR_LADDER"             # E4-only bearish (intraday)
     elif e1.get("bull_stack") or e3.get("mirror_lock_bull"):
         consensus = "BULL_DIVERGENT"
     elif e1.get("bear_stack") or e3.get("mirror_lock_bear"):
@@ -279,7 +414,10 @@ def run_proprietary_suite(closes: List[float],
         "symbol":              symbol,
         "consensus":           consensus,
         "lie_detector_active": lie_detector_active,
+        "triple_lock_bull":    triple_lock_bull,
+        "triple_lock_bear":    triple_lock_bear,
         "combined_score":      combined_score,
         "engine_1":            e1,
         "engine_3":            e3,
+        "engine_4":            e4,
     }

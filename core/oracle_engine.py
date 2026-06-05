@@ -273,9 +273,17 @@ class OracleEngine:
         return "HOLD"
 
     def _build_reason(self, directive: str, fractal_match: str, gamma_flip: bool,
-                      vpin: float, regime: str, score: float) -> str:
+                      vpin: float, regime: str, score: float,
+                      prop_consensus: str = "NEUTRAL") -> str:
         """One-sentence Driver/Navigator reason string."""
         parts = []
+        # Triple Lock is the highest-conviction proprietary signal — lead with it
+        if prop_consensus == "TRIPLE_LOCK_BULL":
+            parts.append("TRIPLE LOCK bullish — Tesla stretch + Lucas volume + Harmonic Ladder aligned")
+        elif prop_consensus == "TRIPLE_LOCK_BEAR":
+            parts.append("TRIPLE LOCK bearish — Tesla stretch + Lucas volume + Harmonic Ladder aligned")
+        elif prop_consensus == "LIE_DETECTOR_ACTIVE":
+            parts.append("LIE DETECTOR active — price suppressed while dark-pool volume kinetics exploding")
         if gamma_flip:
             parts.append("gamma flip confirmed above VWAP")
         if fractal_match and fractal_match != "None":
@@ -335,11 +343,18 @@ class OracleEngine:
             score -= 15
         if mmle.get("axis_collapse"):
             score -= 20
-        # Engine 1 & 3 proprietary signal contribution
+        # Engine 1, 3, 4 proprietary signal contribution
         e1_contrib = prop_ema.get("engine_1", {}).get("score_contrib", 0)
         e3_contrib = prop_ema.get("engine_3", {}).get("score_contrib", 0)
-        score += e1_contrib * 0.5  # weight: up to ±12.5 pts
-        score += e3_contrib * 0.5  # weight: up to ±10 pts
+        e4_contrib = prop_ema.get("engine_4", {}).get("score_contrib", 0)
+        score += e1_contrib * 0.5  # weight: up to ±12.5 pts (Tesla price stretch)
+        score += e3_contrib * 0.5  # weight: up to ±10 pts (Lucas volume kinetics)
+        score += e4_contrib * 0.5  # weight: up to ±12.5 pts (Harmonic Ladder ribbon)
+        # Triple Lock bonus — all three proprietary engines agree at three dimensions
+        if prop_ema.get("triple_lock_bull"):
+            score += 10
+        elif prop_ema.get("triple_lock_bear"):
+            score -= 10
         score = max(0, min(100, score))
 
         # 4. Directive
@@ -367,7 +382,8 @@ class OracleEngine:
         reason = self._build_reason(
             directive,
             fractal.get("fractal_match", "None"),
-            gamma_flip, vpin, regime, score
+            gamma_flip, vpin, regime, score,
+            prop_consensus=prop_ema.get("consensus", "NEUTRAL"),
         )
 
         payload = {
@@ -394,10 +410,15 @@ class OracleEngine:
             "fractal_match":    fractal.get("fractal_match", "None"),
             "fractal_score":    round(fractal.get("fractal_score", 0)),
             "proprietary_ema":  {
-                "consensus":    prop_ema.get("consensus", "NEUTRAL"),
-                "engine_1":     prop_ema.get("engine_1", {}),
-                "engine_3":     prop_ema.get("engine_3", {}),
+                "consensus":         prop_ema.get("consensus", "NEUTRAL"),
+                "triple_lock_bull":  prop_ema.get("triple_lock_bull", False),
+                "triple_lock_bear":  prop_ema.get("triple_lock_bear", False),
+                "lie_detector":      prop_ema.get("lie_detector_active", False),
+                "engine_1":          prop_ema.get("engine_1", {}),
+                "engine_3":          prop_ema.get("engine_3", {}),
+                "engine_4":          prop_ema.get("engine_4", {}),
             },
+            "triple_lock": prop_ema.get("triple_lock_bull") or prop_ema.get("triple_lock_bear"),
         }
 
         logger.info(f"[Oracle] {symbol} → {directive} | Score: {round(score)} | {reason}")
