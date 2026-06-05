@@ -1,27 +1,22 @@
 """
-SML Engine 4 — Harmonic Ladder (3·36·69·102·135) Multi-Symbol Backtest
-══════════════════════════════════════════════════════════════════════
-
-Runs the 5-EMA proprietary ladder strategy across a watchlist and reports
-per-symbol metrics + aggregate. Two data modes:
-
-  --mode synthetic   Generate bull/chop/bear regime walks per symbol (default,
-                     no API keys needed). Reproducible via --seed.
-  --mode live        Fetch real OHLC via data_providers.DataManager. Requires
-                     TRADIER_API_KEY or POLYGON_API_KEY in env.
-
-Strategy (mirrors Engine4_HarmonicLadder.analyze logic):
-  LONG  when bull_stack (e3 > e36 > e69 > e102 > e135)
-  SHORT when bear_stack (e3 < e36 < e69 < e102 < e135)
+SML Engine 4 — Multi-Symbol Backtest Harness  (internal-use)
+═════════════════════════════════════════════════════════════
+Runs the proprietary price-ribbon ladder strategy across a watchlist and
+reports per-symbol metrics + aggregate. Strategy:
+  LONG  when the ribbon is fully stacked bullish
+  SHORT when the ribbon is fully stacked bearish
   FLAT  otherwise
 
-No stops, no targets — pure signal evaluation (compare to council/ stop+target
-overlay separately).
+No stops, no targets — pure signal evaluation. Internal parameters live in
+core.proprietary_ema_engine and are imported, not hard-coded here.
+
+Two data modes:
+  --mode synthetic   Bull/chop/bear regime walks (no API keys needed).
+  --mode live        Real OHLC via data_providers.DataManager.
 
 Usage:
   python tools/backtest_5ema.py
-  python tools/backtest_5ema.py --symbols IWM,SPY,GME,NVDA,TSLA --mode synthetic
-  python tools/backtest_5ema.py --symbols IWM,SPY --mode live --bars 1000
+  python tools/backtest_5ema.py --symbols IWM,SPY,GME --mode live --bars 1000
 """
 from __future__ import annotations
 

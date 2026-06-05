@@ -1,17 +1,17 @@
 """
 GET /api/ema/<symbol>
 ====================
-Returns the full SML Proprietary EMA Suite output for any symbol.
-
-Engine 1: Tesla Sequence (1-24-578-963) — price elastic stretch
-Engine 3: Lucas/Phi² Sequence (11-47-123-321) — dark-pool volume accumulation
+Returns the SML Proprietary EMA Suite consensus + signal taxonomy for any
+symbol. Internal engine parameters (periods, EMA values, step constants,
+sequence identifiers) are redacted at this boundary — agents see signals,
+not the engine that produces them.
 """
 
 import logging
 import time
 from flask import Blueprint, jsonify, request
 from core.legacy import get_service, clean_data
-from core.proprietary_ema_engine import run_proprietary_suite
+from core.proprietary_ema_engine import run_proprietary_suite, redact_suite_output
 
 logger = logging.getLogger("SML.PropEMA.API")
 proprietary_ema_bp = Blueprint("proprietary_ema", __name__)
@@ -58,7 +58,7 @@ def proprietary_ema_signal(symbol):
             "message": f"Insufficient price history ({len(closes)} bars). Need ≥11.",
         }), 422
 
-    result = run_proprietary_suite(closes, volumes, symbol=symbol)
+    result = redact_suite_output(run_proprietary_suite(closes, volumes, symbol=symbol))
 
     payload = {
         "status":    "success",
@@ -67,9 +67,8 @@ def proprietary_ema_signal(symbol):
         "bars_used": len(closes),
         "ema_suite": result,
         "meta": {
-            "engine_1":   "Tesla Sequence 1-24-578-963 — Price dimension only",
-            "engine_3":   "Lucas Phi² Sequence 11-47-123-321 — Volume dimension only",
-            "dimensions": "ISOLATED: Engine 1 owns price. Engine 3 owns volume.",
+            "engines":    "Multiple independent proprietary engines across distinct market dimensions.",
+            "redaction":  "Internal parameters not exposed at this boundary.",
         },
     }
 
