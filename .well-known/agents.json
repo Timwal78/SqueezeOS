@@ -106,7 +106,7 @@
       "cost": "0",
       "currency": "RLUSD",
       "free": true,
-      "description": "Three independent proprietary EMA engines across three dimensions. Engine 1 (Tesla 1·24·578·963) — elastic price stretch from the 963-bar macro anchor. Engine 3 (Lucas/Phi² 11·47·123·321) — dark-pool volume kinetics via 2-2-6-6 mirror symmetry and Phi²=2.618 expansion. Engine 4 (Harmonic Ladder 3·36·69·102·135) — band-pass price ribbon with constant 33-period spacing off the Fibonacci grid. TRIPLE_LOCK consensus fires when all three agree at three independent dimensions — the highest-conviction proprietary signal in the suite. Feeds council_verdict confidence. Backtest: +200% strategy vs −78% buy-and-hold on 4500-bar synthetic series (Sharpe 0.46, payoff 3.80, 9/10 symbols beat buy-and-hold on multi-symbol run).",
+      "description": "Three independent proprietary EMA engines across three distinct market dimensions (macro price stretch, dark-pool volume kinetics, price ribbon harmonics). TRIPLE_LOCK consensus fires when all three engines agree at independent dimensions — the highest-conviction proprietary signal in the suite. LIE_DETECTOR_ACTIVE flags cross-engine divergence (institutional accumulation footprint). Feeds council_verdict confidence.",
       "signals": ["TRIPLE_LOCK_BULL", "TRIPLE_LOCK_BEAR", "LIE_DETECTOR_ACTIVE", "BULL_CONFLUENCE", "BEAR_CONFLUENCE", "BULL_LADDER", "BEAR_LADDER", "BULL_DIVERGENT", "BEAR_DIVERGENT", "NEUTRAL"]
     }
   ],
