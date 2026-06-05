@@ -19,6 +19,8 @@ from datetime import datetime
 from typing import Optional
 import pandas as pd
 
+from core.proprietary_ema_engine import redact_engine_block as _redact_engine
+
 logger = logging.getLogger("Oracle")
 
 # Sweet spot for 0DTE focus ($1–$60 range)
@@ -409,14 +411,16 @@ class OracleEngine:
             "axis_collapse":    mmle.get("axis_collapse", False),
             "fractal_match":    fractal.get("fractal_match", "None"),
             "fractal_score":    round(fractal.get("fractal_score", 0)),
+            # Per-engine internal parameters are stripped at this boundary;
+            # only signal taxonomy + consensus flags are returned to agents.
             "proprietary_ema":  {
                 "consensus":         prop_ema.get("consensus", "NEUTRAL"),
                 "triple_lock_bull":  prop_ema.get("triple_lock_bull", False),
                 "triple_lock_bear":  prop_ema.get("triple_lock_bear", False),
                 "lie_detector":      prop_ema.get("lie_detector_active", False),
-                "engine_1":          prop_ema.get("engine_1", {}),
-                "engine_3":          prop_ema.get("engine_3", {}),
-                "engine_4":          prop_ema.get("engine_4", {}),
+                "engine_1":          _redact_engine(prop_ema.get("engine_1", {})),
+                "engine_3":          _redact_engine(prop_ema.get("engine_3", {})),
+                "engine_4":          _redact_engine(prop_ema.get("engine_4", {})),
             },
             "triple_lock": prop_ema.get("triple_lock_bull") or prop_ema.get("triple_lock_bear"),
         }

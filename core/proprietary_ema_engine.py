@@ -1,16 +1,18 @@
 """
 SML Proprietary EMA Engine Suite
 =================================
-Dimensional isolation is non-negotiable. Each engine owns exactly one dimension.
+Multi-engine proprietary signal cascade. Dimensional isolation is non-negotiable —
+each engine owns exactly one market dimension.
 
-Engine 1 — Tesla Sequence (1·24·578·963)         → PRICE only — macro stretch
-Engine 3 — Lucas / Phi² Sequence (11·47·123·321) → VOLUME only — dark-pool kinetics
-Engine 4 — Harmonic Ladder (3·36·69·102·135)     → PRICE only — band-pass ribbon
-           Arithmetic ladder, constant step = 33, anchored at 3.
-           Pulse (3) → intraday (36) → swing (69) → position (102) → macro (135).
-           All 5 stacked = harmonic alignment across every intermediate frequency.
+Engine 1 → macro price stretch
+Engine 3 → dark-pool volume kinetics
+Engine 4 → price ribbon harmonics
 
-Engine 2 (Settlement Clock) — Time dimension — see engine2_settlement.py
+Engine 2 (Settlement Clock — time dimension) lives in engine2_settlement.py.
+
+Internal parameters (periods, step constants, thresholds, sequence identifiers)
+are proprietary. Use `redact_engine_block` / `redact_suite_output` at every
+API boundary to strip them before serialization.
 """
 
 import logging
@@ -40,18 +42,57 @@ def _tail(series: List[float]) -> float:
     return series[-1] if series else 0.0
 
 
+# ── IP protection — redact internal parameters at API boundaries ──────────────
+
+# Fields safe to expose in public responses (signal taxonomy, not parameters).
+# Anything not in this set — periods, EMA values, sequence strings, step
+# constants, fan widths, internal thresholds — is stripped before serialization.
+_PUBLIC_FIELDS = {
+    "engine", "dimension", "signal", "score_contrib",
+    "bull_stack", "bear_stack",
+    "compressed", "expanding",
+    "pulse_above_intraday", "macro_bull", "macro_bear",
+    "mirror_lock_bull", "mirror_lock_bear",
+    "ignition_trending_up", "macro_trending_up",
+    "phi_expansion_live", "ceiling_breach",
+    "vol_above_11", "vol_above_47", "vol_above_123", "vol_above_321",
+    "suppressed",
+}
+
+
+def redact_engine_block(block):
+    """Strip internal parameters (periods, EMA values, sequence strings,
+    step constants, named engine identifiers) from an engine response dict.
+    Apply at every API boundary that returns proprietary engine output."""
+    if not isinstance(block, dict):
+        return block
+    return {k: v for k, v in block.items() if k in _PUBLIC_FIELDS}
+
+
+def redact_suite_output(suite):
+    """Apply redaction to all engine blocks in a run_proprietary_suite output.
+    Top-level consensus/triple_lock flags pass through; per-engine blocks are
+    scrubbed to signal taxonomy only."""
+    if not isinstance(suite, dict):
+        return suite
+    out = dict(suite)
+    for key in ("engine_1", "engine_3", "engine_4"):
+        if key in out:
+            out[key] = redact_engine_block(out[key])
+    return out
+
+
 # ── Engine 1 — Tesla Sequence — PRICE ONLY ────────────────────────────────────
 
 class Engine1_TeslaStretch:
     """
-    Periods: 1 · 24 · 578 · 963  (price closes only)
-    24x seed → 24x² ≈ 578 → macro anchor 963
-    Tesla triad embedded in 963 (digits 9-6-3)
+    Engine 1 — macro price stretch detector.
+    Price closes only. Detects elastic deviation from a long-window macro
+    anchor. When the engine reports `suppressed`, watch Engine 3 for the
+    off-exchange volume footprint.
 
-    Detects how far price has been elastically dragged from the 963-bar
-    macro floor by market-maker suppression. When price is coiled below
-    the 578 line with minimal stretch, Engine 3 volume explosion is the
-    signal that accumulation is happening off-exchange.
+    Internal parameters are proprietary; see `_PUBLIC_FIELDS` for the
+    fields exposed at API boundaries.
     """
 
     PERIODS = (1, 24, 578, 963)
@@ -118,21 +159,15 @@ class Engine1_TeslaStretch:
 
 class Engine3_LucasPhi:
     """
-    Periods: 11 · 47 · 123 · 321  (raw volume bars only — never price)
-    Digital roots: 2-2-6-6 (mirror symmetry — "As Above, So Below")
-    Phi² expansion: 123/47=2.617, 321/123=2.609, both ≈ Phi²=2.618
+    Engine 3 — dark-pool volume kinetics detector.
+    Volume bars only — never applied to price. Tracks ignition spikes
+    and macro accumulation baselines independently and locks when both
+    move in the same direction (mirror lock).
 
-    Ignition bands  (VMA11 · VMA47):   fast-twitch institutional spikes
-    Dark-pool ceilings (VMA123 · VMA321): macro accumulation baselines
+    Cross-engine trigger: Engine 1 SUPPRESSED + Engine 3 expanding =
+    Lie Detector active (off-exchange institutional accumulation).
 
-    Mirror lock (purely volume-based):
-      VMA11 > VMA47  (ignition trending up)  AND
-      VMA123 > VMA321 (macro baseline trending up)
-      → "As Above, So Below" — both VMA pairs moving in the same direction
-
-    Cross-engine trigger: when Engine 1 shows price SUPPRESSED and
-    Engine 3 shows volume SHATTERING through 123/321 — that is the lie
-    detector firing. Price is the lie; volume is the truth.
+    Internal parameters are proprietary; see `_PUBLIC_FIELDS`.
     """
 
     PERIODS       = (11, 47, 123, 321)
@@ -224,37 +259,20 @@ class Engine3_LucasPhi:
 
 class Engine4_HarmonicLadder:
     """
-    Periods: 3 · 36 · 69 · 102 · 135  (price closes only)
-    Arithmetic ladder: 3 + 33n for n=0..4. Constant step = 33.
+    Engine 4 — price ribbon harmonics.
+    Price closes only. Five-tier ribbon designed as a band-pass array;
+    full stack = harmonic alignment across every intermediate frequency.
+    Fan-width compression precedes regime change; fan expansion confirms
+    trend acceleration.
 
-    Why this works:
-      Constant 33-step spacing makes adjacent EMAs a fixed time-horizon apart
-      at every tier. The 5/5 stack is a harmonic alignment across every
-      intermediate frequency between 3 and 135 — a band-pass filter array
-      that rejects noise at every harmonic between the anchor points.
-
-      33 itself is the secret: trader folklore weights it (the "33 lag"),
-      but the structural payoff is that it sits OFF the Fibonacci grid
-      (8/13/21/55/89) so it doesn't co-move with crowded ribbon systems.
-
-    Tier mapping:
-      ema_3   — pulse anchor (current candle intent, no smoothing dampen)
-      ema_36  — intraday trend
-      ema_69  — short-swing trend
-      ema_102 — position trend
-      ema_135 — macro tide
-
-    Backtest (synthetic 4500 bars, bull/chop/bear regimes):
-      +200.71% vs −78.26% buy-and-hold | Sharpe 0.46 | payoff 3.80 | 41% out of market
+    Internal parameters are proprietary; see `_PUBLIC_FIELDS`.
     """
 
     PERIODS = (3, 36, 69, 102, 135)
-    STEP    = 33   # constant arithmetic step — harmonic anchor
+    STEP    = 33
 
-    # Compression threshold — when fan width drops below this % of price,
-    # all 5 EMAs are converged and a regime change is incoming.
-    COMPRESSION_PCT = 0.010   # 1% (10th percentile in the synthetic backtest)
-    EXPANSION_PCT   = 0.150   # 15% — peak-trend zone (90th pctile)
+    COMPRESSION_PCT = 0.010
+    EXPANSION_PCT   = 0.150
 
     def analyze(self, closes: List[float]) -> dict:
         n = len(closes)
