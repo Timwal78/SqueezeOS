@@ -680,6 +680,9 @@ def create_app():
     def serve_static(path):
         return send_from_directory(app.static_folder, path)
 
+    from x402_flask import register_x402_discovery
+    register_x402_discovery(app)
+
     return app
 
 if __name__ == "__main__":
