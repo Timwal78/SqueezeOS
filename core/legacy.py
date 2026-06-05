@@ -180,7 +180,8 @@ def init_services():
             except ImportError:
                 rmre_bridge = None
                 
-            exec_eng = ExecutionEngine(None, rmre_bridge) # Schwab API not needed for Tradier-first
+            # First positional arg is the legacy schwab_api slot — Tradier-first stack passes None
+            exec_eng = ExecutionEngine(None, rmre_bridge)
             exec_eng.set_broker(dm)
             _services['exec'] = exec_eng
             

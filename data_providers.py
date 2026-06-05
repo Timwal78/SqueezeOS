@@ -7,10 +7,10 @@ DISCOVERY (find tickers automatically):
   - Polygon Grouped Daily: ALL US stocks OHLCV in one call (free)
 
 QUOTES (get real-time data for discovered tickers):
-  1. Schwab (if authenticated)
-  2. Alpaca snapshots (batch, fast)
-  3. Polygon prev-day bars (5/min, slow)
-  4. Alpha Vantage (25/day, last resort)
+  1. Tradier (production-tier brokerage feed; sandbox is 15-min delayed)
+  2. Alpaca snapshots (free IEX quotes, batch)
+  3. Polygon prev-day bars (free 5/min tier)
+  4. Alpha Vantage (free 25/day, last-resort fallback)
 """
 import os
 import sys
@@ -821,26 +821,18 @@ class TradierProvider:
 
 
 # ============================================================
-# SCHWAB PROVIDER — STUBBED (Tradier-native system)
-# ============================================================
-class SchwabProvider:
-    """Silent no-op stub. Schwab has been removed."""
-    available = False
-    def __init__(self, *a, **kw): pass
-    def get_quotes_batch(self, *a, **kw): return {}
-    def get_movers(self, *a, **kw): return []
-    def get_option_chains(self, *a, **kw): return None
-
-
-# ============================================================
 # UNIFIED DATA MANAGER
 # ============================================================
 class DataManager:
     """Auto-discovers tickers + fetches real quotes. Never fakes data."""
 
     def __init__(self, schwab_state=None):
+        # `schwab_state` kept in the signature for back-compat with old callers.
+        # The Schwab provider was deprecated in favor of Tradier; this slot now
+        # always resolves to None and the downstream `if self.schwab` guards are
+        # dead branches that the next refactor will remove.
         logger.info("[DATA] Initializing...")
-        self.schwab = SchwabProvider(schwab_state) if schwab_state else None
+        self.schwab = None
         self.alpaca = AlpacaProvider()
         self.polygon = PolygonProvider()
         self.alphav = AlphaVantageProvider()
@@ -943,39 +935,6 @@ class DataManager:
                             poly_added += 1
                 logger.info(f"[DISCOVERY] Polygon: {poly_added} tickers added")
 
-        # ════════════════════════════════════════════════════════════
-        # TIER 3: SCHWAB MOVERS — If available, use primary source
-        # ════════════════════════════════════════════════════════════
-        if self.schwab and self.schwab.available:
-            if progress_cb: progress_cb('Discovering: Schwab market movers...')
-            try:
-                for index in ['$SPX', '$DJI', '$COMPX']:
-                    movers = self.schwab.get_movers(index=index, direction='up', change_type='percent')
-                    if movers:
-                        for m in movers:
-                            sym = m.get('symbol', '')
-                            if sym and not is_junk(sym) and sym not in universe:
-                                universe[sym] = {
-                                    'symbol': sym, 'discovery': 'schwab_mover',
-                                    'changePct': m.get('changePct', 0),
-                                    'price': m.get('price', 0),
-                                    'volume': m.get('volume', 0),
-                                }
-                    movers_dn = self.schwab.get_movers(index=index, direction='down', change_type='percent')
-                    if movers_dn:
-                        for m in movers_dn:
-                            sym = m.get('symbol', '')
-                            if sym and not is_junk(sym) and sym not in universe:
-                                universe[sym] = {
-                                    'symbol': sym, 'discovery': 'schwab_mover',
-                                    'changePct': m.get('changePct', 0),
-                                    'price': m.get('price', 0),
-                                    'volume': m.get('volume', 0),
-                                }
-                logger.info(f"[DISCOVERY] Schwab movers added, total: {len(universe)}")
-            except Exception as e:
-                logger.debug(f"Schwab movers unavailable: {e}")
-
         if progress_cb: progress_cb(f'Discovered {len(universe)} tickers')
         logger.info(f"[DISCOVERY] Total universe: {len(universe)} tickers")
         return universe
@@ -997,12 +956,6 @@ class DataManager:
         # 2. Alpaca (BACKUP — High speed batch)
         if self.alpaca.available and remaining:
             data = self.alpaca.get_snapshots(remaining)
-            results.update(data)
-            remaining = [s for s in remaining if s not in results]
-
-        # 3. Schwab (STUB — Always no-op, kept for interface compatibility)
-        if self.schwab and self.schwab.available and remaining:
-            data = self.schwab.get_quotes_batch(remaining, progress_cb=progress_cb)
             results.update(data)
             remaining = [s for s in remaining if s not in results]
 
