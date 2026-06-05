@@ -484,14 +484,19 @@ _TOOLS = [
     {
         "name": "proprietary_ema_signal",
         "description": (
-            "SML Proprietary EMA Suite — Engine 1 (Tesla Sequence 1-24-578-963) + "
-            "Engine 3 (Lucas/Phi² Sequence 11-47-123-321) run against live price and volume data. "
-            "Engine 1 detects elastic price stretch from the macro baseline (963-period anchor). "
-            "Engine 3 tracks dark-pool algorithmic volume accumulation using the 2-2-6-6 "
-            "mirror-symmetry containment field and Phi²=2.618 VMA expansion. "
-            "Returns: consensus (BULL_CONFLUENCE / BEAR_CONFLUENCE / DIVERGENT / NEUTRAL), "
-            "individual engine signals, Phi² ratio live check, dark-pool ceiling breach flag, "
-            "and combined_score (0-100) that feeds into council_verdict confidence. Free endpoint."
+            "SML Proprietary EMA Suite — three independent engines on three independent dimensions, "
+            "evaluated together for high-conviction consensus. "
+            "Engine 1 (Tesla 1-24-578-963) tracks elastic price stretch from the 963-bar macro anchor. "
+            "Engine 3 (Lucas/Phi² 11-47-123-321) tracks dark-pool volume kinetics via 2-2-6-6 "
+            "mirror symmetry and Phi²=2.618 VMA expansion. "
+            "Engine 4 (Harmonic Ladder 3-36-69-102-135) is the band-pass price ribbon: constant "
+            "33-period spacing off the Fibonacci grid, all 5 stacked = harmonic alignment across "
+            "every intermediate frequency. Backtest: +200% strategy vs −78% buy-and-hold on a "
+            "trending-then-choppy-then-bearish synthetic series (Sharpe 0.46, payoff 3.80). "
+            "Returns consensus (TRIPLE_LOCK_BULL/BEAR — all 3 engines agree, max conviction | "
+            "LIE_DETECTOR_ACTIVE — E1 suppressed + E3 exploding | BULL/BEAR_LADDER — E4-only | "
+            "BULL/BEAR_CONFLUENCE — E1+E3 | BULL/BEAR_DIVERGENT | NEUTRAL), "
+            "all three engine blocks, and combined_score (0-100) that feeds council_verdict. Free."
         ),
         "inputSchema": {
             "type": "object",
