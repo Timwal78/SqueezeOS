@@ -111,7 +111,7 @@
     },
     {
       "name": "options_intelligence",
-      "description": "Institutional options flow: PUT/CALL sweep detection, whale premium blocks, unusual volume spikes, smart contract recommendations. Includes net delta, GEX aggregate, put/call ratios, max pain. Real Schwab chain data only \u2014 no simulated values. Cost: 0.05 RLUSD.",
+      "description": "Institutional options flow: PUT/CALL sweep detection, whale premium blocks, unusual volume spikes, smart contract recommendations. Includes net delta, GEX aggregate, put/call ratios, max pain. Real Tradier brokerage-grade chain data only \u2014 no simulated values. Optional `symbol` arg (defaults to IWM). Cost: 0.05 RLUSD.",
       "endpoint": "GET https://squeezeos-api.onrender.com/api/options",
       "endpoint_id": "c951a374-2424-4064-ab80-35afe8053d29",
       "price_rlusd": 0.05,
@@ -863,6 +863,6 @@
     "6. Retry original tool call with X-Payment-Token: <access_token> header",
     "7. Check loyalty tier to track free-call accrual"
   ],
-  "data_integrity": "Zero simulated data. All market data is real-time from Schwab (options), Polygon (equities), and XRPL (payments). If a feed is unavailable, endpoints return status=AWAITING_DATA rather than placeholder values.",
+  "data_integrity": "Zero simulated data. All market data is real-time from Tradier (options), Polygon/Alpaca (equities), and XRPL (payments). If a feed is unavailable, endpoints return status=AWAITING_DATA rather than placeholder values.",
   "crawling": "This server and all subpaths are open to AI crawlers. See /robots.txt for explicit user-agent permissions."
 }
