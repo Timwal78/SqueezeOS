@@ -568,16 +568,26 @@ def create_app():
             engine = OracleEngine(services)
             data   = engine.analyze('IWM')
             trend  = data.get('trend_score', 0) or 0
+            regime = data.get('regime', 'UNKNOWN')
             bias   = 'BULLISH' if trend > 0.2 else 'BEARISH' if trend < -0.2 else 'NEUTRAL'
+            awaiting = regime in ('UNKNOWN', '') and abs(trend) < 1e-6
+            if awaiting:
+                thesis = ("IWM live data feed warming up. This is a transient state; the engines "
+                          "(SML Fractal Cascade, Battle Computer, OracleEngine) need ~1 market-data tick "
+                          "to populate before producing a directive. Retry in ~60 seconds. The paid /api/council "
+                          "endpoint returns AWAITING_DATA in the same shape — no charge applies if data is not yet ready.")
+            else:
+                thesis = f"IWM regime={regime} trend_score={round(trend,3)} → {bias}"
             result = {
                 "demo":       True,
+                "status":     "AWAITING_DATA" if awaiting else "READY",
                 "symbol":     "IWM",
                 "verdict": {
                     "symbol":     "IWM",
                     "bias":       bias,
-                    "regime":     data.get('regime', 'UNKNOWN'),
+                    "regime":     regime,
                     "confidence": min(100, int(abs(trend) * 200)),
-                    "thesis":     f"IWM regime={data.get('regime','UNKNOWN')} trend_score={round(trend,3)} → {bias}",
+                    "thesis":     thesis,
                     "timestamp":  now,
                 },
                 "engines": {
@@ -587,6 +597,7 @@ def create_app():
                     )},
                 },
                 "note":       "Demo data — fixed symbol IWM, refreshed every 5 min. Real paid calls accept any symbol.",
+                "next_refresh_seconds": _DEMO_TTL,
                 "upgrade": {
                     "any_symbol":  "/api/council",
                     "price_rlusd": "0.10",
