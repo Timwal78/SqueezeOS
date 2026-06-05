@@ -40,10 +40,10 @@ def _status_block(gate: dict) -> str:
     """Build the 5-engine status grid."""
     labels = {
         "e1_price_suppressed":   "E1 · Price Suppressed",
-        "e5_gann_curl":          "E5 · Gann 42→369 Curl",
+        "e5_gann_curl":          "E5 · Macro Frequency Curl",
         "e3_volume_firing":      "E3 · Volume Void Breach",
         "e2_kill_zone":          "E2 · Kill Zone Active",
-        "e4_temporal_aligned":   "E4 · Mirror Aligned (≥70%)",
+        "e4_temporal_aligned":   "E4 · Temporal Correlation (≥threshold)",
     }
     lines = []
     for key, label in labels.items():
@@ -140,7 +140,7 @@ def build_beastmode_embed(convergence_result: dict,
             "inline": False,
         },
         {
-            "name":   "🪞 Temporal Mirror (E4)",
+            "name":   "🪞 Temporal Correlation (E4)",
             "value":  mirror_str,
             "inline": True,
         },

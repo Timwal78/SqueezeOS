@@ -315,7 +315,7 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); f
                 <div class="hint">Comma or newline separated. Symbols normalized automatically.</div>
             </div>
             <div class="toggle"><label>ARTIFACT FILTER</label><input type="checkbox" id="artifactFilter" checked></div>
-            <div class="hint">Drops |div|>500% AND requires EMA963 within 1y price range.</div>
+            <div class="hint">Drops divergence outliers and requires macro anchor within 1y price range.</div>
             <div class="toggle"><label>TREND FILTER</label><input type="checkbox" id="trendFilter" checked></div>
             <div class="hint">LONG: price not at 5d low. SHORT: price not at 5d high.</div>
             <button class="btn" id="scanBtn" onclick="runWorldScan()">EXECUTE WORLD SCAN</button>
@@ -379,7 +379,7 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); f
                 <div>✓ <span style="color:var(--neon-green);">WIKIPEDIA</span> — NDX universe</div>
                 <div>○ <span style="color:var(--muted);">POLYGON</span> — reserved</div>
                 <div style="margin-top:8px; color:var(--neon-gold);">CACHE: 4hr TTL (localStorage)</div>
-                <div style="color:var(--neon-gold);">EMAS: 1 / 24 / 578 / 963</div>
+                <div style="color:var(--neon-gold);">CASCADE: PULSE / MOMENTUM / MID / MACRO</div>
                 <div style="color:var(--neon-gold);">SCORE: DIV 40% + RVOL 35% + ATR 25%</div>
                 <button class="btn small red" onclick="clearCache()" style="margin-top:10px;">FLUSH CACHE</button>
             </div>
@@ -1097,9 +1097,9 @@ async function toggleDetail(sym, rowEl) {
                 <h4>HARMONIC BASELINE</h4>
                 <div class="row"><span class="lbl">LAST</span><span class="val orange">$${d.price.toFixed(2)}</span></div>
                 <div class="row"><span class="lbl">BID / ASK</span><span class="val">$${d.bid.toFixed(2)} / $${d.ask.toFixed(2)}</span></div>
-                <div class="row"><span class="lbl">EMA 24</span><span class="val">$${d.e24?.toFixed(2)||'—'}</span></div>
-                <div class="row"><span class="lbl">EMA 578</span><span class="val red">$${d.e578.toFixed(2)}</span></div>
-                <div class="row"><span class="lbl">EMA 963</span><span class="val gold">$${d.e963.toFixed(2)}</span></div>
+                <div class="row"><span class="lbl">MOMENTUM</span><span class="val">$${d.e24?.toFixed(2)||'—'}</span></div>
+                <div class="row"><span class="lbl">MID ANCHOR</span><span class="val red">$${d.e578.toFixed(2)}</span></div>
+                <div class="row"><span class="lbl">MACRO ANCHOR</span><span class="val gold">$${d.e963.toFixed(2)}</span></div>
                 <div class="row"><span class="lbl">DIVERGENCE</span><span class="val orange">${d.divergence>=0?'+':''}${d.divergence.toFixed(2)}%</span></div>
                 <div class="row"><span class="lbl">1Y RANGE</span><span class="val">$${d.yrLow.toFixed(2)}—$${d.yrHigh.toFixed(2)}</span></div>
             </div>
@@ -1310,12 +1310,12 @@ LIVE DATA — SML Harmonic Scanner v4.0
 - RVOL Component (35%): ${(d.rvolScore||0).toFixed(1)}
 - ATR Component (25%): ${(d.atrScore||0).toFixed(1)}
 
-**Harmonic (EMA 1/24/578/963):**
-- EMA 24: $${d.e24?.toFixed(2)||'N/A'}
-- EMA 578: $${d.e578.toFixed(2)}
-- EMA 963: $${d.e963.toFixed(2)}
-- Divergence to EMA963: ${d.divergence>=0?'+':''}${d.divergence.toFixed(2)}%
-- Direction: **${d.direction.toUpperCase()}** (price ${d.direction==='long'?'below':'above'} EMA578 + EMA963)
+**Harmonic Cascade:**
+- Momentum: $${d.e24?.toFixed(2)||'N/A'}
+- Mid Anchor: $${d.e578.toFixed(2)}
+- Macro Anchor: $${d.e963.toFixed(2)}
+- Macro Divergence: ${d.divergence>=0?'+':''}${d.divergence.toFixed(2)}%
+- Direction: **${d.direction.toUpperCase()}** (price ${d.direction==='long'?'below':'above'} the anchors)
 ${cTxt}${gTxt}${iTxt}${nTxt}
 
 ═══════════════════════════════════
@@ -1326,7 +1326,7 @@ Factor in RVOL of ${rv} — above 2x confirms institutional participation. ATR14
 
 Provide:
 ## BIAS — LONG/SHORT/NEUTRAL + conviction (High/Med/Low)
-## CATALYST — What drives this EMA963 divergence?
+## CATALYST — What drives this macro divergence?
 ## ENTRY — Specific price zone
 ## TARGET — Price target + timeframe (use ATR14 for sizing)
 ## STOP — Hard invalidation level
@@ -1514,7 +1514,7 @@ async function directScan(){
 // ============================================================
 function exportCSV(){
     if(!_results.length) return;
-    const hdrs=['Symbol','Price','EMA24','EMA578','EMA963','Divergence%','Direction','Score','DivScore','RVOLScore','ATRScore','RVOL','ATR%','Bid','Ask','Volume','YrLow','YrHigh','5dLow','5dHigh','Bars'];
+    const hdrs=['Symbol','Price','Momentum','MidAnchor','MacroAnchor','Divergence%','Direction','Score','DivScore','RVOLScore','ATRScore','RVOL','ATR%','Bid','Ask','Volume','YrLow','YrHigh','5dLow','5dHigh','Bars'];
     const rows=_results.map(r=>[
         r.symbol,r.price.toFixed(2),r.e24?.toFixed(2)||'',r.e578.toFixed(2),r.e963.toFixed(2),
         r.divergence.toFixed(2),r.direction,r.score.toFixed(2),

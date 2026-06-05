@@ -1,22 +1,13 @@
 """
-Engine 5 — Tesla / Gann Macro Frequency Filter
+Engine 5 — Macro Frequency Confirmation Filter
 ================================================
-EMAs: 1 · 42 · 369 · 578  applied to CLOSING PRICE
+Price closes only. The ultimate confirmation filter — does NOT fire on
+price position alone. Fires when a fast-tier EMA curls (slope reverses
+from descending to ascending) toward a macro-frequency anchor while
+price is in a suppressed state from Engine 1. Validates that momentum
+is re-accelerating from the loaded-elastic zone.
 
-Digital roots:
-  42  → 4+2 = 6 (Tesla)
-  369 → 3+6+9 = 18 → 1+8 = 9 (Tesla triad root — maximum resonance)
-  578 → shared with Engine 1 (dual-engine confirmation at this level)
-
-Role: The ultimate confirmation filter. Engine 5 does NOT fire on
-price position alone — it fires specifically when the 42 EMA curls
-(changes slope from descending to ascending) toward the 369 macro
-frequency while price is suppressed. This validates the violent
-snapback that Engine 1 has already detected as a stretch.
-
-The 42-toward-369 curl is the Gann confirmation: momentum is
-re-accelerating from the suppressed zone. When this aligns with
-Engine 1's maximum stretch, the elastic is fully loaded.
+Internal parameters (periods, slope window, alignment rules) are proprietary.
 """
 
 import logging
@@ -93,7 +84,7 @@ class Engine5_GannMacro:
 
         gann_confirmation = curl_up_42 and freq_wake and below_578
 
-        # ── Stretch from Tesla 369 anchor ─────────────────────────
+        # ── Stretch from macro anchor ─────────────────────────────
         stretch_369 = (price - ema369) / ema369 * 100 if ema369 else 0.0
 
         # ── Signal ────────────────────────────────────────────────
