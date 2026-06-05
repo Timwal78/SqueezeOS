@@ -66,41 +66,66 @@ def synthetic_bars(symbol: str, n: int, seed: int) -> pd.DataFrame:
     return pd.DataFrame({"symbol": symbol, "close": close, "ret": rets, "regime": regime})
 
 
-def live_bars(symbol: str, n: int) -> Optional[pd.DataFrame]:
-    """Fetch OHLC via DataManager. Returns None if provider unavailable."""
+_LIVE_DM_CACHE = {"dm": None}   # share DataManager across symbols in one run
+
+
+def _get_data_manager():
+    if _LIVE_DM_CACHE["dm"] is not None:
+        return _LIVE_DM_CACHE["dm"]
     try:
         from data_providers import DataManager
     except ImportError as e:
         print(f"  [live] DataManager import failed: {e}")
         return None
+    try:
+        _LIVE_DM_CACHE["dm"] = DataManager()
+        dm = _LIVE_DM_CACHE["dm"]
+        live = [name for name in ("tradier", "polygon", "alpaca", "alpha")
+                if getattr(getattr(dm, name, None), "available", False)]
+        print(f"  [live] DataManager ready. Active providers: {live or 'NONE'}")
+        return dm
+    except Exception as e:
+        print(f"  [live] DataManager init failed: {type(e).__name__}: {e}")
+        return None
+
+
+def live_bars(symbol: str, n: int, timeframe: str = "1D") -> Optional[pd.DataFrame]:
+    """Fetch OHLC via DataManager.get_bars (Polygon → Alpaca fallback handled internally).
+
+    Returns None on any error or empty response — caller decides whether to skip.
+    """
+    dm = _get_data_manager()
+    if dm is None:
+        return None
 
     try:
-        dm = DataManager()
-        hist = None
-
-        if getattr(dm, "polygon", None) and getattr(dm.polygon, "available", False):
-            hist = dm.polygon.get_aggregates(symbol, multiplier=1, timespan="day", limit=n)
-        if hist is None and getattr(dm, "alpaca", None) and getattr(dm.alpaca, "available", False):
-            hist = dm.alpaca.get_bars(symbol, timeframe="1Day", limit=n)
-
-        if hist is None or len(hist) == 0:
-            print(f"  [live] {symbol}: no data from any provider")
-            return None
-
-        df = pd.DataFrame(hist)
-        close_col = next((c for c in ("close", "c", "Close") if c in df.columns), None)
-        if not close_col:
-            print(f"  [live] {symbol}: no close column in {list(df.columns)}")
-            return None
-
-        df = df.rename(columns={close_col: "close"})
-        df["symbol"] = symbol
-        df["ret"] = df["close"].pct_change().fillna(0)
-        df["regime"] = "LIVE"
-        return df[["symbol", "close", "ret", "regime"]].reset_index(drop=True)
+        bars = dm.get_bars(symbol, timeframe=timeframe, limit=n)
     except Exception as e:
-        print(f"  [live] {symbol}: {type(e).__name__}: {e}")
+        print(f"  [live] {symbol}: get_bars raised {type(e).__name__}: {e}")
         return None
+
+    if not bars:
+        print(f"  [live] {symbol}: no bars returned (all providers unavailable or symbol invalid)")
+        return None
+
+    df = pd.DataFrame(bars)
+    # Tolerate provider-specific column naming
+    close_col = next((c for c in ("close", "c", "Close") if c in df.columns), None)
+    if not close_col:
+        print(f"  [live] {symbol}: no close column. Got: {list(df.columns)}")
+        return None
+
+    df = df.rename(columns={close_col: "close"})
+    df["close"] = pd.to_numeric(df["close"], errors="coerce")
+    df = df.dropna(subset=["close"]).reset_index(drop=True)
+    if len(df) < max(EMA_PERIODS) + 10:
+        print(f"  [live] {symbol}: only {len(df)} bars after parse (need >{max(EMA_PERIODS) + 10})")
+        return None
+
+    df["symbol"] = symbol
+    df["ret"]    = df["close"].pct_change().fillna(0)
+    df["regime"] = "LIVE"
+    return df[["symbol", "close", "ret", "regime"]]
 
 
 # ── Backtest core ─────────────────────────────────────────────────────────────
@@ -228,7 +253,11 @@ def main():
     parser.add_argument("--mode", choices=["synthetic", "live"], default="synthetic",
                         help="Data source mode")
     parser.add_argument("--bars", type=int, default=3000, help="Bars per symbol")
+    parser.add_argument("--timeframe", default="1D",
+                        help="Bar timeframe for live mode: 1D | 5M | 1M (default 1D)")
     parser.add_argument("--seed", type=int, default=42, help="Synthetic RNG seed")
+    parser.add_argument("--save", default=None, metavar="PATH",
+                        help="Write per-symbol results as JSON to PATH")
     args = parser.parse_args()
 
     symbols = [s.strip().upper() for s in args.symbols.split(",") if s.strip()]
@@ -236,6 +265,8 @@ def main():
     print("=" * 78)
     print(f" SML ENGINE 4 — HARMONIC LADDER BACKTEST  ({args.mode.upper()} MODE)")
     print(f" Periods: {EMA_PERIODS}  |  Step: {Engine4_HarmonicLadder.STEP}")
+    if args.mode == "live":
+        print(f" Timeframe: {args.timeframe}  |  Bars/symbol: {args.bars}")
     print(f" Watchlist: {' '.join(symbols)}")
     print("=" * 78)
 
@@ -244,7 +275,7 @@ def main():
         if args.mode == "synthetic":
             df = synthetic_bars(sym, args.bars, args.seed)
         else:
-            df = live_bars(sym, args.bars)
+            df = live_bars(sym, args.bars, args.timeframe)
             if df is None or len(df) < max(EMA_PERIODS) + 10:
                 print(f"  [skip] {sym}: insufficient data")
                 continue
@@ -257,6 +288,21 @@ def main():
     print()
     print_per_symbol_table(results)
     print_aggregate(results)
+
+    if args.save:
+        import json
+        payload = [
+            {k: v for k, v in r.items() if k != "trades"}   # trades is a DataFrame
+            for r in results
+        ]
+        # Cast pandas/numpy scalars to plain JSON-able primitives
+        for row in payload:
+            for k, v in list(row.items()):
+                if hasattr(v, "item"):
+                    row[k] = v.item()
+        with open(args.save, "w") as fh:
+            json.dump(payload, fh, indent=2)
+        print(f"\nResults written to {args.save}")
     return 0
 
 

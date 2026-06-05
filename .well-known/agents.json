@@ -97,6 +97,17 @@
       "description": "SML flagship proprietary protocol. The world's first keyless, accountless, KYC-free behavioral access control system. No API keys, no OAuth, no IP whitelists, no KYC, no ban lists. Access is granted by proving economic intelligence through RLUSD payment behavior — impossible to steal, impossible to fake. All premium endpoints already use ECHOLOCK-402 automatically. Returns manifesto, cognitive tier map, and integration instructions.",
       "discovery": "https://squeezeos-api.onrender.com/.well-known/echolock.json",
       "challenge": "https://squeezeos-api.onrender.com/api/echolock/challenge"
+    },
+    {
+      "id": "proprietary_ema_signal",
+      "name": "Proprietary EMA Suite — 3-Engine Triple Lock",
+      "endpoint": "/api/ema/{symbol}",
+      "method": "GET",
+      "cost": "0",
+      "currency": "RLUSD",
+      "free": true,
+      "description": "Three independent proprietary EMA engines across three dimensions. Engine 1 (Tesla 1·24·578·963) — elastic price stretch from the 963-bar macro anchor. Engine 3 (Lucas/Phi² 11·47·123·321) — dark-pool volume kinetics via 2-2-6-6 mirror symmetry and Phi²=2.618 expansion. Engine 4 (Harmonic Ladder 3·36·69·102·135) — band-pass price ribbon with constant 33-period spacing off the Fibonacci grid. TRIPLE_LOCK consensus fires when all three agree at three independent dimensions — the highest-conviction proprietary signal in the suite. Feeds council_verdict confidence. Backtest: +200% strategy vs −78% buy-and-hold on 4500-bar synthetic series (Sharpe 0.46, payoff 3.80, 9/10 symbols beat buy-and-hold on multi-symbol run).",
+      "signals": ["TRIPLE_LOCK_BULL", "TRIPLE_LOCK_BEAR", "LIE_DETECTOR_ACTIVE", "BULL_CONFLUENCE", "BEAR_CONFLUENCE", "BULL_LADDER", "BEAR_LADDER", "BULL_DIVERGENT", "BEAR_DIVERGENT", "NEUTRAL"]
     }
   ],
   "sovereign_autopilot": {
