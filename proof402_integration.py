@@ -68,6 +68,20 @@ ENDPOINTS = {
 }
 
 
+_FREE_PREVIEW_BY_PATH = {
+    '/api/council':          '/api/demo/council',
+    '/api/scan':             '/api/preview/IWM',
+    '/api/options':          '/api/preview/IWM',
+    '/api/iwm':              '/api/demo/council',
+    '/api/marketplace/read': '/api/marketplace',
+}
+
+
+def _free_preview_for(path: str) -> str:
+    """Return a real free-tier URL agents can hit without paying, or empty string."""
+    return _FREE_PREVIEW_BY_PATH.get(path, '')
+
+
 def _verify_token_local(token: str) -> dict:
     """
     Pure CPU verification — zero network, sub-millisecond.
@@ -297,7 +311,8 @@ def require_payment(f):
             _logging.warning(f'[402Proof] invoice fetch failed: {e} — passing through')
             return f(*args, **kwargs)
 
-        return jsonify({
+        free_preview = _free_preview_for(path)
+        body = {
             'error':   'ERR_PAYMENT_REQUIRED',
             'message': f'This endpoint costs {inv.get("amount", "?")} {inv.get("asset", "RLUSD")}. Pay on XRPL to continue.',
             'invoice': inv,
@@ -307,8 +322,10 @@ def require_payment(f):
                 'step3': f"POST {PROOF402_SERVER}/v1/verify with invoice_id, tx_hash, agent_wallet",
                 'step4': 'Retry this request with header: X-Payment-Token: <token>',
             },
-            'free_preview': f'/api/preview{path.replace("/api", "", 1)}',
-        }), 402
+        }
+        if free_preview:
+            body['free_preview'] = free_preview
+        return jsonify(body), 402
 
     return decorated
 
