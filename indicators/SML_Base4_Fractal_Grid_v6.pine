@@ -1,0 +1,293 @@
+//@version=6
+// © ScriptMasterLabs — SML Base-4 Fractal Grid
+// Discovery: Timothy Walton | ScriptMasterLabs
+// Proprietary harmonic matrix — 9 tiers × 4-layer ribbon
+// Formula and period lengths are trade secrets. Do not publish.
+indicator("SML Base-4 Fractal Grid", shorttitle="SML·B4·GRID", overlay=true)
+
+// ── Set Visibility ────────────────────────────────────────────────
+show_s1 = input.bool(false, "S1 — Tier 1", group="Active Sets", inline="r1")
+show_s2 = input.bool(false, "S2 — Tier 2", group="Active Sets", inline="r2")
+show_s3 = input.bool(false, "S3 — Tier 3", group="Active Sets", inline="r3")
+show_s4 = input.bool(false, "S4 — Tier 4", group="Active Sets", inline="r4")
+show_s5 = input.bool(false, "S5 — Tier 5", group="Active Sets", inline="r5")
+show_s6 = input.bool(true,  "S6 — Tier 6", group="Active Sets", inline="r6")
+show_s7 = input.bool(false, "S7 — Tier 7", group="Active Sets", inline="r7")
+show_s8 = input.bool(false, "S8 — Tier 8", group="Active Sets", inline="r8")
+show_s9 = input.bool(true,  "S9 — Tier 9", group="Active Sets", inline="r9")
+conv_min = input.int(3,     "Min sets for convergence", minval=2, maxval=9, group="Convergence")
+near_pct = input.float(0.5, "Near-price band %",        minval=0.1, maxval=3.0, group="Convergence")
+
+// ── Harmonic Matrix — 9 tiers × 4-layer proprietary stack ─────────
+s1t=ta.ema(close,1);  s1b=ta.ema(close,4);  s1v=ta.ema(close,8);  s1a=ta.ema(close,12)
+s2t=ta.ema(close,2);  s2b=ta.ema(close,8);  s2v=ta.ema(close,16); s2a=ta.ema(close,24)
+s3t=ta.ema(close,3);  s3b=ta.ema(close,12); s3v=ta.ema(close,24); s3a=ta.ema(close,36)
+s4t=ta.ema(close,4);  s4b=ta.ema(close,16); s4v=ta.ema(close,32); s4a=ta.ema(close,48)
+s5t=ta.ema(close,5);  s5b=ta.ema(close,20); s5v=ta.ema(close,40); s5a=ta.ema(close,60)
+s6t=ta.ema(close,6);  s6b=ta.ema(close,24); s6v=ta.ema(close,48); s6a=ta.ema(close,72)
+s7t=ta.ema(close,7);  s7b=ta.ema(close,28); s7v=ta.ema(close,56); s7a=ta.ema(close,84)
+s8t=ta.ema(close,8);  s8b=ta.ema(close,32); s8v=ta.ema(close,64); s8a=ta.ema(close,96)
+s9t=ta.ema(close,9);  s9b=ta.ema(close,36); s9v=ta.ema(close,72); s9a=ta.ema(close,108)
+
+// ── Tier colors ───────────────────────────────────────────────────
+c1=#00BFFF; c2=#00FFFF; c3=#39FF14; c4=#FFE600; c5=#FF8C00
+c6=#FF00FF; c7=#FF1744; c8=#AA00FF; c9=#7B00FF
+
+// ── Full 36-line Harmonic Ribbon ──────────────────────────────────
+// L1 = Trigger (fastest / most transparent)
+// L2 = Base
+// L3 = Vector
+// L4 = Anchor (slowest / most solid)
+// Fills between consecutive layers — proprietary visual envelope
+
+p1t=plot(show_s1?s1t:na,"S1 L1",color=color.new(c1,55),linewidth=1)
+p1b=plot(show_s1?s1b:na,"S1 L2",color=color.new(c1,42),linewidth=1)
+p1v=plot(show_s1?s1v:na,"S1 L3",color=color.new(c1,30),linewidth=1)
+p1a=plot(show_s1?s1a:na,"S1 L4",color=color.new(c1,12),linewidth=2)
+fill(p1t,p1b,color=color.new(c1,92),title="S1 F1")
+fill(p1b,p1v,color=color.new(c1,90),title="S1 F2")
+fill(p1v,p1a,color=color.new(c1,87),title="S1 F3")
+
+p2t=plot(show_s2?s2t:na,"S2 L1",color=color.new(c2,55),linewidth=1)
+p2b=plot(show_s2?s2b:na,"S2 L2",color=color.new(c2,42),linewidth=1)
+p2v=plot(show_s2?s2v:na,"S2 L3",color=color.new(c2,30),linewidth=1)
+p2a=plot(show_s2?s2a:na,"S2 L4",color=color.new(c2,12),linewidth=2)
+fill(p2t,p2b,color=color.new(c2,92),title="S2 F1")
+fill(p2b,p2v,color=color.new(c2,90),title="S2 F2")
+fill(p2v,p2a,color=color.new(c2,87),title="S2 F3")
+
+p3t=plot(show_s3?s3t:na,"S3 L1",color=color.new(c3,55),linewidth=1)
+p3b=plot(show_s3?s3b:na,"S3 L2",color=color.new(c3,42),linewidth=1)
+p3v=plot(show_s3?s3v:na,"S3 L3",color=color.new(c3,30),linewidth=1)
+p3a=plot(show_s3?s3a:na,"S3 L4",color=color.new(c3,12),linewidth=2)
+fill(p3t,p3b,color=color.new(c3,92),title="S3 F1")
+fill(p3b,p3v,color=color.new(c3,90),title="S3 F2")
+fill(p3v,p3a,color=color.new(c3,87),title="S3 F3")
+
+p4t=plot(show_s4?s4t:na,"S4 L1",color=color.new(c4,55),linewidth=1)
+p4b=plot(show_s4?s4b:na,"S4 L2",color=color.new(c4,42),linewidth=1)
+p4v=plot(show_s4?s4v:na,"S4 L3",color=color.new(c4,30),linewidth=1)
+p4a=plot(show_s4?s4a:na,"S4 L4",color=color.new(c4,12),linewidth=2)
+fill(p4t,p4b,color=color.new(c4,92),title="S4 F1")
+fill(p4b,p4v,color=color.new(c4,90),title="S4 F2")
+fill(p4v,p4a,color=color.new(c4,87),title="S4 F3")
+
+p5t=plot(show_s5?s5t:na,"S5 L1",color=color.new(c5,55),linewidth=1)
+p5b=plot(show_s5?s5b:na,"S5 L2",color=color.new(c5,42),linewidth=1)
+p5v=plot(show_s5?s5v:na,"S5 L3",color=color.new(c5,30),linewidth=1)
+p5a=plot(show_s5?s5a:na,"S5 L4",color=color.new(c5,12),linewidth=2)
+fill(p5t,p5b,color=color.new(c5,92),title="S5 F1")
+fill(p5b,p5v,color=color.new(c5,90),title="S5 F2")
+fill(p5v,p5a,color=color.new(c5,87),title="S5 F3")
+
+p6t=plot(show_s6?s6t:na,"S6 L1",color=color.new(c6,55),linewidth=1)
+p6b=plot(show_s6?s6b:na,"S6 L2",color=color.new(c6,42),linewidth=1)
+p6v=plot(show_s6?s6v:na,"S6 L3",color=color.new(c6,30),linewidth=1)
+p6a=plot(show_s6?s6a:na,"S6 L4",color=color.new(c6,12),linewidth=3)
+fill(p6t,p6b,color=color.new(c6,92),title="S6 F1")
+fill(p6b,p6v,color=color.new(c6,90),title="S6 F2")
+fill(p6v,p6a,color=color.new(c6,87),title="S6 F3")
+
+p7t=plot(show_s7?s7t:na,"S7 L1",color=color.new(c7,55),linewidth=1)
+p7b=plot(show_s7?s7b:na,"S7 L2",color=color.new(c7,42),linewidth=1)
+p7v=plot(show_s7?s7v:na,"S7 L3",color=color.new(c7,30),linewidth=1)
+p7a=plot(show_s7?s7a:na,"S7 L4",color=color.new(c7,12),linewidth=2)
+fill(p7t,p7b,color=color.new(c7,92),title="S7 F1")
+fill(p7b,p7v,color=color.new(c7,90),title="S7 F2")
+fill(p7v,p7a,color=color.new(c7,87),title="S7 F3")
+
+p8t=plot(show_s8?s8t:na,"S8 L1",color=color.new(c8,55),linewidth=1)
+p8b=plot(show_s8?s8b:na,"S8 L2",color=color.new(c8,42),linewidth=1)
+p8v=plot(show_s8?s8v:na,"S8 L3",color=color.new(c8,30),linewidth=1)
+p8a=plot(show_s8?s8a:na,"S8 L4",color=color.new(c8,12),linewidth=2)
+fill(p8t,p8b,color=color.new(c8,92),title="S8 F1")
+fill(p8b,p8v,color=color.new(c8,90),title="S8 F2")
+fill(p8v,p8a,color=color.new(c8,87),title="S8 F3")
+
+p9t=plot(show_s9?s9t:na,"S9 L1",color=color.new(c9,55),linewidth=1)
+p9b=plot(show_s9?s9b:na,"S9 L2",color=color.new(c9,42),linewidth=1)
+p9v=plot(show_s9?s9v:na,"S9 L3",color=color.new(c9,30),linewidth=1)
+p9a=plot(show_s9?s9a:na,"S9 L4",color=color.new(c9,12),linewidth=3)
+fill(p9t,p9b,color=color.new(c9,92),title="S9 F1")
+fill(p9b,p9v,color=color.new(c9,90),title="S9 F2")
+fill(p9v,p9a,color=color.new(c9,87),title="S9 F3")
+
+// ── Stack alignment (trigger vs anchor — simplified) ───────────────
+band = close * (near_pct / 100)
+
+s1_bull=close>s1t and s1t>s1a; s1_bear=close<s1t and s1t<s1a; s1_near=math.abs(close-s1a)<=band
+s2_bull=close>s2t and s2t>s2a; s2_bear=close<s2t and s2t<s2a; s2_near=math.abs(close-s2a)<=band
+s3_bull=close>s3t and s3t>s3a; s3_bear=close<s3t and s3t<s3a; s3_near=math.abs(close-s3a)<=band
+s4_bull=close>s4t and s4t>s4a; s4_bear=close<s4t and s4t<s4a; s4_near=math.abs(close-s4a)<=band
+s5_bull=close>s5t and s5t>s5a; s5_bear=close<s5t and s5t<s5a; s5_near=math.abs(close-s5a)<=band
+s6_bull=close>s6t and s6t>s6a; s6_bear=close<s6t and s6t<s6a; s6_near=math.abs(close-s6a)<=band
+s7_bull=close>s7t and s7t>s7a; s7_bear=close<s7t and s7t<s7a; s7_near=math.abs(close-s7a)<=band
+s8_bull=close>s8t and s8t>s8a; s8_bear=close<s8t and s8t<s8a; s8_near=math.abs(close-s8a)<=band
+s9_bull=close>s9t and s9t>s9a; s9_bear=close<s9t and s9t<s9a; s9_near=math.abs(close-s9a)<=band
+
+// ── Convergence Engine ────────────────────────────────────────────
+near_count = (s1_near?1:0)+(s2_near?1:0)+(s3_near?1:0)+
+             (s4_near?1:0)+(s5_near?1:0)+(s6_near?1:0)+
+             (s7_near?1:0)+(s8_near?1:0)+(s9_near?1:0)
+bull_count = (s1_bull?1:0)+(s2_bull?1:0)+(s3_bull?1:0)+
+             (s4_bull?1:0)+(s5_bull?1:0)+(s6_bull?1:0)+
+             (s7_bull?1:0)+(s8_bull?1:0)+(s9_bull?1:0)
+bear_count = (s1_bear?1:0)+(s2_bear?1:0)+(s3_bear?1:0)+
+             (s4_bear?1:0)+(s5_bear?1:0)+(s6_bear?1:0)+
+             (s7_bear?1:0)+(s8_bear?1:0)+(s9_bear?1:0)
+
+conv_lock = near_count >= conv_min
+max_conv  = near_count == 9
+dual_bull = s6_bull and s9_bull
+dual_bear = s6_bear and s9_bear
+
+bgcolor(max_conv  ? color.new(#9900FF, 55) : na, title="MAX CONVERGENCE")
+bgcolor(conv_lock and not max_conv ? color.new(#00FFFF, 82) : na, title="Convergence Lock")
+
+plotshape(dual_bull and not dual_bull[1],
+     title="Dual Tier Bull Lock", style=shape.triangleup,
+     location=location.belowbar, color=#00FF66, size=size.small)
+plotshape(dual_bear and not dual_bear[1],
+     title="Dual Tier Bear Lock", style=shape.triangledown,
+     location=location.abovebar, color=#FF0055, size=size.small)
+
+// ── Smart Table (5 cols × 16 rows) ───────────────────────────────
+var table T = table.new(position.top_left, 5, 16,
+     bgcolor=#0A0A0A, border_color=#1E1E1E, border_width=1,
+     frame_color=#333333, frame_width=2)
+
+f_d(val) =>
+    pct = (close - val) / val * 100
+    pct >= 0 ? "+" + str.tostring(pct, "#.##") + "%" : str.tostring(pct, "#.##") + "%"
+
+f_dc(val) =>
+    pct = (close - val) / val * 100
+    pct > 5.0 ? #00FF66 : pct > 1.0 ? #FFE600 : pct > -1.0 ? #FFFFFF : pct > -5.0 ? #FF8C00 : #FF0055
+
+f_status(is_bull, is_bear, is_near) =>
+    is_near ? "NEAR" : is_bull ? "BULL" : is_bear ? "BEAR" : "mixed"
+
+f_scol(is_bull, is_bear, is_near) =>
+    is_near ? #9900FF : is_bull ? #00FF66 : is_bear ? #FF0055 : #444444
+
+f_row(row, set_lbl, tier_lbl, anchor_val, is_bull, is_bear, is_near, row_col) =>
+    near_bg = is_near ? color.new(#9900FF, 75) : #0A0A0A
+    sc      = f_scol(is_bull, is_bear, is_near)
+    table.cell(T, 0, row, set_lbl,
+         bgcolor=near_bg, text_color=row_col, text_size=size.small, text_halign=text.align_center)
+    table.cell(T, 1, row, tier_lbl,
+         bgcolor=near_bg, text_color=color.new(row_col, 30), text_size=size.tiny, text_halign=text.align_left)
+    table.cell(T, 2, row, str.tostring(anchor_val, "#.##"),
+         bgcolor=#0A0A0A, text_color=#AAAAAA, text_size=size.small)
+    table.cell(T, 3, row, f_d(anchor_val),
+         bgcolor=#0A0A0A, text_color=f_dc(anchor_val), text_size=size.small)
+    table.cell(T, 4, row, f_status(is_bull, is_bear, is_near),
+         bgcolor=near_bg, text_color=sc, text_size=size.small, text_halign=text.align_right)
+
+if barstate.islast
+    // Row 0 — Header
+    conv_hdr = max_conv  ? "MAX CONV  9/9" :
+               conv_lock ? str.tostring(near_count) + "/9  CONV LOCK" :
+               str.tostring(near_count) + "/9  watching"
+    hdr_bg   = max_conv  ? color.new(#9900FF, 40) : conv_lock ? color.new(#00FFFF, 70) : #111111
+    hdr_col  = max_conv  ? #FFFFFF : conv_lock ? #00FFFF : #888888
+    table.cell(T, 0, 0, "SML  BASE-4  FRACTAL  GRID",
+         bgcolor=#111111, text_color=#AAAAAA, text_size=size.small, text_halign=text.align_left)
+    table.cell(T, 1, 0, "",  bgcolor=#111111, text_color=#AAAAAA, text_size=size.small)
+    table.cell(T, 2, 0, "$" + str.tostring(close, "#.##"),
+         bgcolor=#111111, text_color=#FFFFFF, text_size=size.small, text_halign=text.align_right)
+    table.cell(T, 3, 0, "",  bgcolor=hdr_bg, text_color=hdr_col, text_size=size.small)
+    table.cell(T, 4, 0, conv_hdr,
+         bgcolor=hdr_bg, text_color=hdr_col, text_size=size.small, text_halign=text.align_center)
+
+    // Row 1 — Column headers
+    table.cell(T, 0, 1, "SET",    bgcolor=#1A1A1A, text_color=#555555, text_size=size.tiny)
+    table.cell(T, 1, 1, "TIER",   bgcolor=#1A1A1A, text_color=#555555, text_size=size.tiny)
+    table.cell(T, 2, 1, "ANCHOR", bgcolor=#1A1A1A, text_color=#555555, text_size=size.tiny)
+    table.cell(T, 3, 1, "DIST %", bgcolor=#1A1A1A, text_color=#555555, text_size=size.tiny)
+    table.cell(T, 4, 1, "STATUS", bgcolor=#1A1A1A, text_color=#555555, text_size=size.tiny)
+
+    // Rows 2-10 — one per tier
+    f_row(2,  "S1", "Micro", s1a, s1_bull, s1_bear, s1_near, c1)
+    f_row(3,  "S2", "Micro", s2a, s2_bull, s2_bear, s2_near, c2)
+    f_row(4,  "S3", "Micro", s3a, s3_bull, s3_bear, s3_near, c3)
+    f_row(5,  "S4", "Swing", s4a, s4_bull, s4_bear, s4_near, c4)
+    f_row(6,  "S5", "Swing", s5a, s5_bull, s5_bear, s5_near, c5)
+    f_row(7,  "S6", "Swing", s6a, s6_bull, s6_bear, s6_near, c6)
+    f_row(8,  "S7", "Macro", s7a, s7_bull, s7_bear, s7_near, c7)
+    f_row(9,  "S8", "Macro", s8a, s8_bull, s8_bear, s8_near, c8)
+    f_row(10, "S9", "Macro", s9a, s9_bull, s9_bear, s9_near, c9)
+
+    // Row 11 — Summary counts
+    table.cell(T, 0, 11, "BULL  " + str.tostring(bull_count),
+         bgcolor=color.new(#00FF66, 80), text_color=#00FF66, text_size=size.small)
+    table.cell(T, 1, 11, "BEAR  " + str.tostring(bear_count),
+         bgcolor=color.new(#FF0055, 80), text_color=#FF0055, text_size=size.small)
+    table.cell(T, 2, 11, "NEAR  " + str.tostring(near_count),
+         bgcolor=color.new(#9900FF, 80), text_color=#BB66FF, text_size=size.small)
+    table.cell(T, 3, 11, "MIX  " + str.tostring(9 - bull_count - bear_count),
+         bgcolor=#111111, text_color=#555555, text_size=size.small)
+    table.cell(T, 4, 11, "", bgcolor=#0A0A0A, text_color=#0A0A0A, text_size=size.small)
+
+    // Row 12 — Cross-node separator
+    table.cell(T, 0, 12, "── HARMONIC CROSS-NODES ────────────────",
+         bgcolor=#0D0D0D, text_color=#333333, text_size=size.tiny, text_halign=text.align_left)
+    table.cell(T, 1, 12, "", bgcolor=#0D0D0D, text_color=#333333, text_size=size.tiny)
+    table.cell(T, 2, 12, "", bgcolor=#0D0D0D, text_color=#333333, text_size=size.tiny)
+    table.cell(T, 3, 12, "", bgcolor=#0D0D0D, text_color=#333333, text_size=size.tiny)
+    table.cell(T, 4, 12, "", bgcolor=#0D0D0D, text_color=#333333, text_size=size.tiny)
+
+    // Row 13 — Node Alpha (shared level: S2 anchor / S3 mid / S6 base)
+    table.cell(T, 0, 13, "NODE  α",   bgcolor=#0A0A0A, text_color=#555555, text_size=size.tiny)
+    table.cell(T, 1, 13, "S2 · S3 · S6",
+         bgcolor=#0A0A0A, text_color=#00FFFF, text_size=size.tiny)
+    table.cell(T, 2, 13, str.tostring(s2a, "#.##"),
+         bgcolor=#0A0A0A, text_color=#AAAAAA, text_size=size.tiny)
+    table.cell(T, 3, 13, f_d(s2a),
+         bgcolor=#0A0A0A, text_color=f_dc(s2a), text_size=size.tiny)
+    table.cell(T, 4, 13, s2_near ? "NEAR" : "",
+         bgcolor=#0A0A0A, text_color=#9900FF, text_size=size.tiny, text_halign=text.align_right)
+
+    // Row 14 — Node Beta (shared level: S6 anchor / S9 mid)
+    table.cell(T, 0, 14, "NODE  β",   bgcolor=#0A0A0A, text_color=#555555, text_size=size.tiny)
+    table.cell(T, 1, 14, "S6 · S9",
+         bgcolor=#0A0A0A, text_color=#FF00FF, text_size=size.tiny)
+    table.cell(T, 2, 14, str.tostring(s6a, "#.##"),
+         bgcolor=#0A0A0A, text_color=#AAAAAA, text_size=size.tiny)
+    table.cell(T, 3, 14, f_d(s6a),
+         bgcolor=#0A0A0A, text_color=f_dc(s6a), text_size=size.tiny)
+    table.cell(T, 4, 14, s6_near ? "NEAR" : "",
+         bgcolor=#0A0A0A, text_color=#9900FF, text_size=size.tiny, text_halign=text.align_right)
+
+    // Row 15 — Dual-tier lock status
+    ds_bg  = dual_bull ? color.new(#00FF66, 60) : dual_bear ? color.new(#FF0055, 60) : #111111
+    ds_txt = dual_bull ? "▲  S6 + S9  DUAL BULL  LOCK" :
+             dual_bear ? "▼  S6 + S9  DUAL BEAR  LOCK" : "S6 + S9  await alignment"
+    ds_col = dual_bull ? #FFFFFF : dual_bear ? #FFFFFF : #444444
+    table.cell(T, 0, 15, "S6+S9", bgcolor=ds_bg, text_color=#888888, text_size=size.small)
+    table.cell(T, 1, 15, "",      bgcolor=ds_bg, text_color=ds_col,   text_size=size.small)
+    table.cell(T, 2, 15, "",      bgcolor=ds_bg, text_color=ds_col,   text_size=size.small)
+    table.cell(T, 3, 15, "",      bgcolor=ds_bg, text_color=ds_col,   text_size=size.small)
+    table.cell(T, 4, 15, ds_txt,  bgcolor=ds_bg, text_color=ds_col,   text_size=size.small,
+         text_halign=text.align_right)
+
+// ── Discord JSON alert payloads ────────────────────────────────────
+f_conv_json(event_str) =>
+    col_n = max_conv ? "10027263" : "43775"
+    '{"username":"SML Base-4 Grid","embeds":[{"title":"' + event_str +
+         ' — ' + syminfo.ticker + '","color":' + col_n +
+         ',"fields":[{"name":"Price","value":"$' + str.tostring(close, "#.##") + '","inline":true},' +
+         '{"name":"Sets Near","value":"' + str.tostring(near_count) + '/9","inline":true},' +
+         '{"name":"Bull","value":"' + str.tostring(bull_count) + '","inline":true},' +
+         '{"name":"Bear","value":"' + str.tostring(bear_count) + '","inline":true}],' +
+         '"footer":{"text":"ScriptMasterLabs | Base-4 Fractal Grid | © Proprietary"}' +
+         '}]}'
+
+if conv_lock and not conv_lock[1]
+    alert(f_conv_json("CONVERGENCE LOCK"), alert.freq_once_per_bar)
+if max_conv and not max_conv[1]
+    alert(f_conv_json("MAX CONVERGENCE — ALL 9 TIERS"), alert.freq_once_per_bar)
+if dual_bull and not dual_bull[1]
+    alert(f_conv_json("DUAL BULL LOCK"), alert.freq_once_per_bar)
+if dual_bear and not dual_bear[1]
+    alert(f_conv_json("DUAL BEAR LOCK"), alert.freq_once_per_bar)
