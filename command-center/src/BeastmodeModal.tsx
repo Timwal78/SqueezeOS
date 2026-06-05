@@ -55,21 +55,21 @@ const BeastmodeModal = ({ ticker, onClose }: BeastmodeModalProps) => {
       const e963 = calculateEMA(closes, 963);
       
       const emaText = `
-**65-Minute EMAs (SqueezeOS 1-24-578-963 System):**
-- EMA 1 (Current Price): $${e1.toFixed(2)}
-- EMA 24 (Momentum): ${e24 ? '$' + e24.toFixed(2) : 'N/A'}
-- EMA 578 (Resistance): ${e578 ? '$' + e578.toFixed(2) : 'N/A (Needs 578 periods)'}
-- EMA 963 (Master Harmonic): ${e963 ? '$' + e963.toFixed(2) : 'N/A (Needs 963 periods)'}
+**65-Minute Macro Stretch Cascade:**
+- Pulse Anchor: $${e1.toFixed(2)}
+- Momentum:     ${e24 ? '$' + e24.toFixed(2) : 'N/A'}
+- Mid Anchor:   ${e578 ? '$' + e578.toFixed(2) : 'N/A (warming up)'}
+- Macro Anchor: ${e963 ? '$' + e963.toFixed(2) : 'N/A (warming up)'}
 `;
       setOutput(`Data Fetched!\n${emaText}\nInitiating Beastmode AI analysis via OpenRouter...`);
 
       // 2. Fetch AI Analysis
       const prompt = `Perform a rapid tactical analysis on ${ticker}.
 
-Here is the live 65-minute EMA data:
+Here is the live 65-minute macro stretch cascade:
 ${emaText}
 
-Given the current price relative to the 578 and 963 EMAs, provide:
+Given the current price relative to the Mid and Macro Anchors, provide:
 1. Regime Status (Squeeze or Mean Revert?)
 2. Technical Targets (Upside/Downside)
 3. 0DTE Options Flow bias (if any)

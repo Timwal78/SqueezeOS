@@ -82,7 +82,7 @@ def redact_suite_output(suite):
     return out
 
 
-# ── Engine 1 — Tesla Sequence — PRICE ONLY ────────────────────────────────────
+# ── Engine 1 — Macro Price Stretch (PRICE) ────────────────────────────────────
 
 class Engine1_TeslaStretch:
     """
@@ -155,7 +155,7 @@ class Engine1_TeslaStretch:
         }
 
 
-# ── Engine 3 — Lucas / Phi² — VOLUME ONLY ────────────────────────────────────
+# ── Engine 3 — Volume Kinetics (VOLUME) ──────────────────────────────────────
 
 class Engine3_LucasPhi:
     """
@@ -255,7 +255,7 @@ class Engine3_LucasPhi:
         }
 
 
-# ── Engine 4 — Harmonic Ladder — PRICE ONLY ───────────────────────────────────
+# ── Engine 4 — Price Ribbon Harmonics (PRICE) ─────────────────────────────────
 
 class Engine4_HarmonicLadder:
     """
@@ -365,8 +365,8 @@ def run_proprietary_suite(closes: List[float],
                           volumes: Optional[List[float]] = None,
                           symbol: str = "") -> dict:
     """
-    Run Engine 1 (Tesla price stretch), Engine 3 (Lucas volume kinetics),
-    and Engine 4 (Harmonic Ladder price ribbon) independently, then evaluate
+    Run the three proprietary engines independently — E1 (macro price stretch),
+    E3 (dark-pool volume kinetics), E4 (price ribbon harmonics) — then evaluate
     cross-engine triggers.
 
     Lie Detector:   E1 suppressed + E3 exploding → MM accumulation off-exchange.

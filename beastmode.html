@@ -412,11 +412,11 @@ let   refreshTimer, countdownTimer, secondsLeft = 45;
 
 // ── Engine config ──────────────────────────────────────────────────
 const ENGINES = [
-  { key: "e1_price_suppressed", num: "E1", name: "Price Elasticity\n1·24·578·963",   color: "green" },
-  { key: "e5_gann_curl",        num: "E5", name: "Gann Macro Filter\n42→369 Curl",    color: "orange" },
-  { key: "e3_volume_firing",    num: "E3", name: "Volume Kinetics\nVMA 11·47·123·321", color: "blue" },
-  { key: "e2_kill_zone",        num: "E2", name: "Settlement Clock\nKill Zone",        color: "red" },
-  { key: "e4_temporal_aligned", num: "E4", name: "Temporal Mirror\nFeb-22 Shadow",    color: "purple" },
+  { key: "e1_price_suppressed", num: "E1", name: "Price Elasticity\nMacro Stretch",         color: "green" },
+  { key: "e5_gann_curl",        num: "E5", name: "Macro Frequency\nIgnition Filter",        color: "orange" },
+  { key: "e3_volume_firing",    num: "E3", name: "Volume Kinetics\nDark-Pool Footprint",    color: "blue" },
+  { key: "e2_kill_zone",        num: "E2", name: "Settlement Clock\nKill Zone",             color: "red" },
+  { key: "e4_temporal_aligned", num: "E4", name: "Temporal Correlation\nHistorical Pivot",  color: "purple" },
 ];
 
 // ── Utils ──────────────────────────────────────────────────────────
@@ -515,11 +515,11 @@ function renderEngineDetail(num, engines) {
   const e2 = engines.e2 || {};
 
   switch(num) {
-    case "E1": return `<div class="engine-detail">Stretch: <span class="val">${fmtVal(e1.stretch_pct, "")+ "%"}</span><br>EMA963: <span class="val">${fmtVal(e1.ema963)}</span></div>`;
-    case "E3": return `<div class="engine-detail">Phi² ratio: <span class="val">${fmtVal(e3.phi_sq_ratio)}</span><br>Ceiling: <span class="val" style="color:${e3.ceiling_breach ? "var(--red)" : "var(--dim)"}">${e3.ceiling_breach ? "BREACH" : "—"}</span></div>`;
-    case "E4": return `<div class="engine-detail">r = <span class="val">${fmtVal(e4.correlation)}</span><br>Pivot: <span class="val">Feb 22 2026</span></div>`;
-    case "E5": return `<div class="engine-detail">42 curl: <span class="val">${e5.curl_up_42 ? "YES" : "—"}</span><br>Slope42: <span class="val">${fmtVal(e5.slope_42)}</span></div>`;
-    case "E2": return `<div class="engine-detail">C+35: <span class="val">${fmtVal(e2.c35_calendar_days_left, "")}d</span><br>T+13: <span class="val">${fmtVal(e2.t13_trading_days_left, "")}d</span></div>`;
+    case "E1": return `<div class="engine-detail">State: <span class="val">${e1.signal || "—"}</span></div>`;
+    case "E3": return `<div class="engine-detail">State: <span class="val">${e3.signal || "—"}</span><br>Ceiling: <span class="val" style="color:${e3.ceiling_breach ? "var(--red)" : "var(--dim)"}">${e3.ceiling_breach ? "BREACH" : "—"}</span></div>`;
+    case "E4": return `<div class="engine-detail">State: <span class="val">${e4.signal || "—"}</span></div>`;
+    case "E5": return `<div class="engine-detail">State: <span class="val">${e5.signal || "—"}</span></div>`;
+    case "E2": return `<div class="engine-detail">State: <span class="val">${e2.signal || "—"}</span></div>`;
     default:   return "";
   }
 }
