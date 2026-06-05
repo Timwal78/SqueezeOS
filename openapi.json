@@ -6,7 +6,7 @@
     "description": "Three-system platform: SqueezeOS (institutional AI trading intelligence), 402Proof (x402/HTTP 402 autonomous agent payment compliance firewall on XRPL), and Ghost Layer (dual-chain transparent toll gateway bridging XRPL and Base/EVM). All premium SqueezeOS endpoints follow the x402 standard \u2014 agents pay RLUSD on XRPL, no API keys required. Ghost Layer routes XRPL and Base chain USDC payments with full fee disclosure. Agent SDK: https://four02proof.onrender.com/agent/",
     "contact": {
       "name": "Script Master Labs",
-      "url": "https://scriptmasterlabs.com"
+      "url": "https://www.scriptmasterlabs.com"
     },
     "x-llm-summary": "Two-system platform: SqueezeOS delivers real-time market intelligence (squeeze scanner, options flow, IWM 0DTE, AI council verdicts). 402Proof handles x402-compliant RLUSD micropayment settlement on XRPL so autonomous agents can pay per call with no API keys. Loyalty tiers reward cumulative spend. MCP middleware available via npm @relayos/mcp-paywall."
   },
