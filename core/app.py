@@ -691,6 +691,12 @@ def create_app():
     def serve_static(path):
         return send_from_directory(app.static_folder, path)
 
+
+    @app.route('/health')
+    def health():
+        import datetime
+        return jsonify({'status': 'ok', 'service': 'squeezeos-api', 'version': '7.0', 'timestamp': datetime.datetime.utcnow().isoformat() + 'Z'})
+
     from x402_flask import register_x402_discovery
     register_x402_discovery(app)
 
