@@ -1,0 +1,15 @@
+{
+  "schema_version": "v1",
+  "name_for_human": "NeuralOS by ScriptMasterLabs",
+  "name_for_model": "neuralos_scriptmasterlabs",
+  "description_for_human": "Agentic operating system for autonomous AI agents. Available as web app and on Google Play.",
+  "description_for_model": "NeuralOS is an agentic operating system built by ScriptMasterLabs (SDVO, Kinston NC). It provides autonomous agent orchestration, market intelligence integration via SqueezeOS, and x402 payment capabilities. Built on the same payment infrastructure as Nexus-402. Full tool catalog available at api.scriptmasterlabs.com/.well-known/mcp.json.",
+  "auth": { "type": "none" },
+  "api": {
+    "type": "openapi",
+    "url": "https://api.scriptmasterlabs.com/.well-known/openapi.json"
+  },
+  "logo_url": "https://neuralosagent.com/favicon.ico",
+  "contact_email": "scriptmasterlabs@gmail.com",
+  "legal_info_url": "https://neuralosagent.com"
+}
