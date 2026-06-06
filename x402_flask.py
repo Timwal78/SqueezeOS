@@ -83,7 +83,7 @@ def _rlusd_requirements(price_rlusd: str, description: str, resource: str) -> di
         "resource": resource,
         "description": description,
         "mimeType": "application/json",
-        "payTo": "",
+        "payTo": os.environ.get("XRPL_PAY_TO", "rUJhaK2ibfTFVdAn8m9jMCcJQ1xo6FmNPZ"),
         "maxTimeoutSeconds": MAX_TIMEOUT,
         "asset": "RLUSD",
         "extra": {
