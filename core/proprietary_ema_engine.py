@@ -84,7 +84,7 @@ def redact_suite_output(suite):
 
 # ── Engine 1 — Macro Price Stretch (PRICE) ────────────────────────────────────
 
-class Engine1_TeslaStretch:
+class Engine1:
     """
     Engine 1 — macro price stretch detector.
     Price closes only. Detects elastic deviation from a long-window macro
@@ -157,7 +157,7 @@ class Engine1_TeslaStretch:
 
 # ── Engine 3 — Volume Kinetics (VOLUME) ──────────────────────────────────────
 
-class Engine3_LucasPhi:
+class Engine3:
     """
     Engine 3 — dark-pool volume kinetics detector.
     Volume bars only — never applied to price. Tracks ignition spikes
@@ -257,7 +257,7 @@ class Engine3_LucasPhi:
 
 # ── Engine 4 — Price Ribbon Harmonics (PRICE) ─────────────────────────────────
 
-class Engine4_HarmonicLadder:
+class Engine4:
     """
     Engine 4 — price ribbon harmonics.
     Price closes only. Five-tier ribbon designed as a band-pass array;
@@ -373,11 +373,11 @@ def run_proprietary_suite(closes: List[float],
     Triple Lock:    E1 stacked + E3 mirror-locked + E4 fan-expansion same direction
                     → all three engines agree at three independent dimensions.
     """
-    e1 = Engine1_TeslaStretch().analyze(closes)
-    e4 = Engine4_HarmonicLadder().analyze(closes)
+    e1 = Engine1().analyze(closes)
+    e4 = Engine4().analyze(closes)
 
     if volumes and len(volumes) >= 11:
-        e3 = Engine3_LucasPhi().analyze(volumes)
+        e3 = Engine3().analyze(volumes)
     else:
         e3 = {"engine": 3, "signal": "NO_VOLUME_DATA", "score_contrib": 0}
 
