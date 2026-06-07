@@ -27,11 +27,11 @@ import requests
 from datetime import date, timedelta
 from typing import List, Optional
 
-from core.proprietary_ema_engine import Engine1_TeslaStretch, Engine3_LucasPhi
+from core.proprietary_ema_engine import Engine1, Engine3
 from core.engine2_settlement import get_clock, stamp_ignition
 from core.engine4_temporal_mirror import Engine4_TemporalMirror
 from core.engine5_gann_macro import Engine5_GannMacro
-from core.proprietary_ema_engine import _ema, _tail
+from core.proprietary_ema_engine import _ema, _tail, redact_engine_block
 
 logger = logging.getLogger("SML.Convergence")
 
@@ -169,8 +169,8 @@ class ConvergenceEngine:
             return {"symbol": symbol, "signal": "INSUFFICIENT_DATA", "beastmode": False}
 
         # ── Run all 5 engines ─────────────────────────────────────
-        e1 = Engine1_TeslaStretch().analyze(closes)
-        e3 = Engine3_LucasPhi().analyze(volumes) if volumes and len(volumes) >= 11 \
+        e1 = Engine1().analyze(closes)
+        e3 = Engine3().analyze(volumes) if volumes and len(volumes) >= 11 \
              else {"engine": 3, "signal": "NO_VOLUME_DATA", "score_contrib": 0}
         e4 = Engine4_TemporalMirror().analyze(closes, bars_with_dates)
         e5 = Engine5_GannMacro().analyze(closes)
@@ -246,11 +246,11 @@ class ConvergenceEngine:
                 "e4_temporal_aligned": {"active": gate["e4_temporal_aligned"], "signal": e4.get("signal")},
             },
             "engines": {
-                "e1": e1,
-                "e2": e2,
-                "e3": e3,
-                "e4": e4,
-                "e5": e5,
+                "e1": redact_engine_block(e1),
+                "e2": redact_engine_block(e2),
+                "e3": redact_engine_block(e3),
+                "e4": redact_engine_block(e4),
+                "e5": redact_engine_block(e5),
             },
         }
 
