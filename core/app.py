@@ -29,6 +29,8 @@ from core.api.honeypot import honeypot_bp, honeypot_before_request
 from core.api.settlement_bp import settlement_bp
 from core.api.futures_bp import futures_bp
 from core.api.oracle_data_bp import oracle_data_bp, start_oracle_pollers
+from core.api.ftd_bp import ftd_bp
+from core.ftd_data import start_ftd_pollers
 from core.api.agent_analytics import analytics_bp, before_analytics, after_analytics
 from core.api.autopilot_bp import autopilot_bp
 from core.api.stigmergy_bp import stigmergy_bp
@@ -112,6 +114,7 @@ def create_app():
     app.register_blueprint(settlement_bp,  url_prefix='/api/settlement')
     app.register_blueprint(futures_bp,     url_prefix='/api/futures')
     app.register_blueprint(oracle_data_bp, url_prefix='/api/oracle')
+    app.register_blueprint(ftd_bp,         url_prefix='/api/ftd')
     app.register_blueprint(stigmergy_bp,  url_prefix='/api/stigmergy')
     app.register_blueprint(notary_bp,     url_prefix='/api/notary')
     app.register_blueprint(triple_lock_bp, url_prefix='/api/triple-lock')
@@ -147,6 +150,9 @@ def create_app():
 
         # Start Real-World Data Oracle pollers (SEC EDGAR, FDA, USPTO)
         start_oracle_pollers()
+
+        # Start FTD Data Oracle pollers (SEC Reg SHO FTD + Threshold list)
+        start_ftd_pollers()
 
         # Self-pinger — keeps Render free-tier warm; pings own /api/status every 10 min
         _start_self_pinger()

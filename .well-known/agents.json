@@ -129,6 +129,17 @@
       "currency": "RLUSD",
       "free": false,
       "description": "Mint any SqueezeOS verdict (council, oracle, triple-lock) as a permanent URIToken on Xahau for EU AI Act-compatible audit trails. SqueezeOS canonicalizes the verdict and proxies to Ghost Layer /v1/notarize. Three tiers: Standard (URIToken + memo), Certified (+ Ed25519 cert), Sovereign (+ SOVEREIGN grade). Zero custody — agents pay Ghost Layer directly; SqueezeOS never touches the token. Free /api/notary/info for tier discovery, free /api/notary/quote for decision_hash preview without minting."
+    },
+    {
+      "id": "ftd_data_oracle",
+      "name": "FTD Data Oracle — SEC Reg SHO Fails-To-Deliver Feed",
+      "endpoint": "/api/ftd",
+      "method": "GET",
+      "cost": "0 — 0.05",
+      "currency": "RLUSD",
+      "free": false,
+      "description": "Machine-readable SEC Fails-To-Deliver and Reg SHO Threshold Securities List data per call. Pure descriptive feed — surfaces public regulatory data normalized into JSON, not trade signals. Endpoints: /api/ftd/info (free discovery), /threshold-list and /series/{symbol} (0.02 RLUSD), /ratio/{symbol} (0.03), /etf-basket/{etf} for XRT/IWM/IJR/KRE and /cycle/{symbol} with T+21/T+35 calendar markers (0.05). All responses include explicit notes about Reg SHO 204 close-out mechanics and bona-fide market-maker exemptions. Refresh: FTD 24h, threshold list 6h.",
+      "signals": ["AWAITING_DATA", "ON_THRESHOLD_LIST", "T21_MARKER", "T35_MARKER", "RANK_PERCENTILE"]
     }
   ],
   "sovereign_autopilot": {
