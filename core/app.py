@@ -32,6 +32,7 @@ from core.api.oracle_data_bp import oracle_data_bp, start_oracle_pollers
 from core.api.agent_analytics import analytics_bp, before_analytics, after_analytics
 from core.api.autopilot_bp import autopilot_bp
 from core.api.stigmergy_bp import stigmergy_bp
+from core.api.notary_bp import notary_bp
 from core.api.nw_liq_bp import nw_liq_bp
 from core.api.keys_bp import keys_bp
 import core.signal_history as signal_history
@@ -111,6 +112,7 @@ def create_app():
     app.register_blueprint(futures_bp,     url_prefix='/api/futures')
     app.register_blueprint(oracle_data_bp, url_prefix='/api/oracle')
     app.register_blueprint(stigmergy_bp,  url_prefix='/api/stigmergy')
+    app.register_blueprint(notary_bp,     url_prefix='/api/notary')
     app.register_blueprint(nw_liq_bp,    url_prefix='/api/nwliq')
     app.register_blueprint(proprietary_ema_bp, url_prefix='/api')
     app.register_blueprint(convergence_bp,     url_prefix='/api')

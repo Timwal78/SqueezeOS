@@ -861,6 +861,47 @@
           }
         }
       }
+    },
+    {
+      "name": "notary_info",
+      "description": "Discover the Decision Notary bridge — three Xahau URIToken minting tiers exposed by SqueezeOS. Lists prices, loyalty discounts, and the Ghost Layer upstream. Zero custody: SqueezeOS canonicalizes the verdict and proxies the payment to Ghost Layer.",
+      "endpoint": "GET https://squeezeos-api.onrender.com/api/notary/info",
+      "free": true,
+      "input_schema": {"type": "object", "properties": {}}
+    },
+    {
+      "name": "notary_quote",
+      "description": "Preview the canonical decision_hash that would be minted for a given SqueezeOS verdict. Pure local canonicalization — no Ghost Layer round-trip, no payment. Useful for agents that want to verify they're about to notarize the exact bytes they expect.",
+      "endpoint": "POST https://squeezeos-api.onrender.com/api/notary/quote",
+      "free": true,
+      "input_schema": {
+        "type": "object",
+        "required": ["symbol", "verdict"],
+        "properties": {
+          "symbol":  {"type": "string", "description": "Ticker the verdict applies to"},
+          "verdict": {"type": "object", "description": "The council/oracle verdict object to notarize"},
+          "source":  {"type": "string", "description": "Origin tag (default: squeezeos)"}
+        }
+      }
+    },
+    {
+      "name": "notary_notarize",
+      "description": "Mint a SqueezeOS verdict on Xahau as a permanent URIToken. SqueezeOS canonicalizes the verdict and proxies to Ghost Layer's /v1/notarize for the actual mint. Three tiers: decision.notarize (0.001 RLUSD: URIToken + memo), decision.notarize.certified (0.010 RLUSD: + Ed25519 certificate), decision.notarize.sovereign (0.050 RLUSD: + SOVEREIGN grade). Loyalty discounts BRONZE 0% / SILVER 5% / GOLD 10% / PLATINUM 20% / DIAMOND 30%. Pay with X-Payment-Token header (issued by Ghost Layer's /v1/invoice). EU AI Act-compatible audit trail.",
+      "endpoint": "POST https://squeezeos-api.onrender.com/api/notary/notarize",
+      "price_rlusd": "0.001 (standard) / 0.010 (certified) / 0.050 (sovereign)",
+      "free": false,
+      "input_schema": {
+        "type": "object",
+        "required": ["symbol", "verdict"],
+        "properties": {
+          "symbol":       {"type": "string"},
+          "verdict":      {"type": "object"},
+          "source":       {"type": "string"},
+          "model":        {"type": "string", "description": "Model identifier for the certificate"},
+          "agent_wallet": {"type": "string"},
+          "endpoint":     {"type": "string", "description": "Context tag for the certificate"}
+        }
+      }
     }
   ],
   "sovereign_autopilot": {

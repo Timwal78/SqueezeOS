@@ -30,6 +30,8 @@ import logging
 import threading
 from flask import Blueprint, jsonify, request
 
+from core.bureau_client import discount_for_wallet
+
 logger = logging.getLogger("SqueezeOS-Futures")
 futures_bp = Blueprint('futures', __name__)
 
@@ -69,11 +71,18 @@ def _settle_future(future: dict, actual_bias: str, verdict_data: dict) -> dict:
     taker     = future["taker_wallet"]
     stake     = future["stake_rlusd"]
     pot       = stake * 2
-    fee       = round(pot * PLATFORM_FEE_PCT, 6)
-    net       = round(pot - fee, 6)
 
     winner = creator if actual_bias == predicted else taker
     loser  = taker   if actual_bias == predicted else creator
+
+    # Bureau-based fee discount for the winner. Failure-closed: a degraded
+    # bureau returns 0% discount (full PLATFORM_FEE_PCT applies). Discount
+    # caps at 20% per core.bureau_client, so the platform always retains
+    # at least 80% of its base fee from the highest-rep agents.
+    winner_discount, winner_rep_score = discount_for_wallet(winner) if winner else (0.0, 0)
+    effective_fee_pct = round(PLATFORM_FEE_PCT * (1.0 - winner_discount), 6)
+    fee = round(pot * effective_fee_pct, 6)
+    net = round(pot - fee, 6)
 
     proof = {
         "future_id":      future["id"],
@@ -87,7 +96,11 @@ def _settle_future(future: dict, actual_bias: str, verdict_data: dict) -> dict:
         "loser":          loser,
         "stake_each":     stake,
         "pot":            pot,
-        "platform_fee":   fee,
+        "platform_fee":          fee,
+        "platform_fee_pct_base": PLATFORM_FEE_PCT,
+        "platform_fee_pct_used": effective_fee_pct,
+        "winner_rep_score":      winner_rep_score,
+        "winner_rep_discount":   winner_discount,
         "net_rlusd":      net,
         "verdict_data":   verdict_data,
     }
