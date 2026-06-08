@@ -48,6 +48,7 @@ class Engine7_Parabolic:
     def _tracking_loop(cls, symbol: str):
         """High-frequency polling loop isolated from main ingestion thread."""
         from core.state import state
+        from core.legacy import get_service
         
         logger.info(f"[APEX] Engine 7 Parabolic Flight Path tracking loop started for {symbol}")
         state.push_terminal("APEX_TRACKING", "Engine 7 actively tracking geometric acceleration", symbol, score=100.0)
@@ -73,6 +74,27 @@ class Engine7_Parabolic:
                     msg = f"Parabolic flight path broken: {sig}. Terminating tracker."
                     logger.warning(f"[APEX] [{symbol}] {msg}")
                     state.push_terminal("APEX_TERMINATED", msg, symbol, score=-50.0)
+                    
+                    # ── Asynchronous Execution Payload ──
+                    if sig == "PARABOLIC_EXHAUSTION_EXIT":
+                        exec_eng = get_service("exec")
+                        if exec_eng:
+                            active_trades = exec_eng.get_active_trades()
+                            if symbol in active_trades:
+                                trade = active_trades[symbol]
+                                qty = trade.get("qty", 0)
+                                # Marketable Limit Order pegged 2% below current proxy price
+                                current_price = closes[-1]
+                                limit_price = round(current_price * 0.98, 2)
+                                
+                                logger.critical(f"[APEX] EXECUTING EMERGENCY LIQUIDATION for {symbol}: SELL {qty} @ {limit_price}")
+                                exec_eng.execute_trade(
+                                    symbol=symbol,
+                                    directive="SELL",
+                                    qty=qty,
+                                    price=limit_price,
+                                    reason=f"APEX_TERMINATED: {sig}"
+                                )
                     break
         finally:
             cls._active_trackers.discard(symbol)
