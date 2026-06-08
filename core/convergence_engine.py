@@ -32,6 +32,7 @@ from core.engine2_settlement import get_clock, stamp_ignition
 from core.engine4_temporal_mirror import Engine4_TemporalMirror
 from core.engine5_gann_macro import Engine5_GannMacro
 from core.engine6_base4_matrix import Engine6_Base4Matrix, redact_engine6_block
+from core.engine7_parabolic import Engine7_Parabolic, redact_engine7_block
 
 logger = logging.getLogger("SML.Convergence")
 
@@ -181,6 +182,9 @@ class ConvergenceEngine:
         e4 = Engine4_TemporalMirror().analyze(closes, bars_with_dates)
         e5 = Engine5_GannMacro().analyze(closes)
         e6 = Engine6_Base4Matrix().analyze(closes)
+        
+        is_singularity = e6.get("signal") in ("FRACTAL_LOCK_BULL", "FRACTAL_LOCK_BEAR", "GOD_MODE_BULL", "GOD_MODE_BEAR")
+        e7 = Engine7_Parabolic().analyze(closes, is_singularity)
 
         # Auto-stamp E2 if E3 volume fires + E1 suppressed
         e3_firing   = e3.get("signal") in ("DARK_POOL_CEILING_BREACH", "DARK_POOL_ACCUMULATION", "PHI_IGNITION")
@@ -214,13 +218,19 @@ class ConvergenceEngine:
             e4.get("score_contrib", 0) +
             e5.get("score_contrib", 0) +
             e2.get("score_contrib", 0) +
-            e6.get("score_contrib", 0)
+            e6.get("score_contrib", 0) +
+            e7.get("score_contrib", 0)
         )
         composite = max(0, min(100, 50 + raw_score))
 
         # ── Signal label ─────────────────────────────────────────
         is_god_mode = e6.get("signal") in ("GOD_MODE_BULL", "GOD_MODE_BEAR")
-        if is_god_mode:
+        is_apex = e7.get("signal") in ("QUADRATIC_LAUNCH_BULL", "QUADRATIC_LAUNCH_BEAR")
+        
+        if is_apex:
+            signal = "APEX_SINGULARITY"
+            beastmode = True
+        elif is_god_mode:
             signal = "GOD_MODE"
             beastmode = True
         elif beastmode:
@@ -260,6 +270,7 @@ class ConvergenceEngine:
                 "e2_kill_zone":        {"active": gate["e2_kill_zone"],        "status": e2.get("status")},
                 "e4_temporal_aligned": {"active": gate["e4_temporal_aligned"], "signal": e4.get("signal")},
                 "e6_fractal_lock":     {"active": gate["e6_fractal_lock"],     "signal": e6.get("signal")},
+                "e7_parabolic_flight": {"active": is_apex,                     "signal": e7.get("signal")},
             },
             "engines": {
                 "e1": _redact(e1),
@@ -268,6 +279,7 @@ class ConvergenceEngine:
                 "e4": _redact(e4),
                 "e5": _redact(e5),
                 "e6": redact_engine6_block(e6),
+                "e7": redact_engine7_block(e7),
             },
         }
 
