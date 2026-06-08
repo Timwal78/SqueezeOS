@@ -213,6 +213,23 @@
     },
 
     {
+      "id": "sml-beast-orchestrator",
+      "name": "SML Beast Orchestrator — Autonomous x402 SEO + BB7 Outreach",
+      "tagline": "Two autonomous engines in one process: multi-vertical SEO content orchestrator + no-custody backlink outreach agent.",
+      "description": "Open-source reference implementation of an x402-driven autonomous content + outreach platform. The orchestrator pays for live SERP data via internal x402 micropayments and produces vertical-keyed JSON-LD content briefs. The BB7 outreach agent demos sub-50ms XRPL settlement to acquire backlinks — fire-and-forget Payment only, never escrow. Includes TOCTOU-closed state machine, kill switch, daily ceiling, manual review gates, CAN-SPAM compliance, IMAP reply monitor, and a full operator CLI. Zero custody throughout — once the demo USDC leaves the hot wallet, SML cannot recover it.",
+      "category": ["seo", "outreach", "autonomous-agents", "x402", "xrpl"],
+      "status": "live",
+      "url": "https://sml-beast-orchestrator.onrender.com",
+      "health": "https://sml-beast-orchestrator.onrender.com/health",
+      "repository": "https://github.com/Timwal78/sml-beast-orchestrator",
+      "payment_required": false,
+      "free_tier": true,
+      "open_source": true,
+      "license": "MIT",
+      "tags": ["seo", "backlinks", "outreach", "x402", "xrpl", "rlusd", "autonomous", "zero-custody", "no-escrow", "bb7", "open-source"]
+    },
+
+    {
       "id": "harmonic-scanner",
       "name": "SML Harmonic Scanner v4.0 (Rubik's Cube)",
       "tagline": "Institutional harmonic pattern engine. AI solves the cube → XRPL payment → Xahau URIToken minted as proof.",

@@ -181,6 +181,7 @@ The SML ecosystem spans several dedicated domains handling specific network func
 - **Ghost Layer** — Dual-chain bridge (XRPL + Base). Features XRPL native escrow, Xahau URIToken minting (hand-rolled binary serializer), and Ed25519 attestation signing.
 - **SML Autonomous Agent** — Self-funding intelligence agent (`sml_agent.py`) that pays for its own market data using RLUSD.
 - **TipMaster** — Farcaster developer API to resolve usernames directly to XRPL wallets for zero-custody P2P tipping.
+- **SML Beast Orchestrator** — Open-source ([github.com/Timwal78/sml-beast-orchestrator](https://github.com/Timwal78/sml-beast-orchestrator)) reference implementation of an autonomous x402 SEO content engine + BB7 backlink outreach agent. Demos sub-50ms XRPL settlement for outreach, zero custody, fire-and-forget Payment only. MIT licensed.
 
 ---
 
