@@ -20,6 +20,8 @@ Endpoints (all free — no x402 gate):
   POST /api/sml/alert           TradingView webhook ingest
   GET  /api/sml/signal/{symbol} Current signal for a symbol (executor poll)
   GET  /api/sml/signals         All active signals
+  POST /api/sml/trade           Executor posts completed trades here
+  GET  /api/sml/trades          View recent trade history (last 100)
 
 TradingView webhook setup:
   URL:  https://squeezeos-api.onrender.com/api/sml/alert?secret=<SML_WEBHOOK_SECRET>
@@ -209,3 +211,78 @@ def get_all_signals():
         for v in sorted(_signals.values(), key=lambda x: x["conviction"], reverse=True)
     ]
     return jsonify({"count": len(result), "signals": result, "ts": now})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Trade log — executor POSTs completed trades here; operators GET to review
+# ─────────────────────────────────────────────────────────────────────────────
+
+_trades: list[dict] = []   # ring buffer, capped at 100 entries
+_MAX_TRADES = 100
+
+
+@sml_alert_bp.route("/trade", methods=["POST"])
+def record_trade():
+    """
+    Executor posts a completed trade record here.
+    Optional auth via SML_WEBHOOK_SECRET (same secret as /alert).
+    """
+    secret_env = os.environ.get("SML_WEBHOOK_SECRET", "").strip()
+    if secret_env:
+        provided = request.args.get("secret", "").strip()
+        if not hmac.compare_digest(provided, secret_env):
+            return jsonify({"error": "Unauthorized"}), 401
+
+    body = request.get_json(silent=True) or {}
+    if not body.get("symbol") or not body.get("action"):
+        return jsonify({"error": "symbol and action required"}), 400
+
+    entry = {
+        "symbol":              body.get("symbol", "").upper(),
+        "action":              body.get("action", "").upper(),   # BUY / EXIT / BUY_CALL / BUY_PUT
+        "asset_type":          body.get("asset_type", "equity"), # equity / call / put
+        "signal_type":         body.get("signal_type", ""),
+        "combined_conviction": body.get("combined_conviction", 0),
+        "sqz_bias":            body.get("sqz_bias", ""),
+        "dollars":             body.get("dollars", 0),
+        "shares":              body.get("shares", 0),
+        "price":               body.get("price", 0),
+        "pnl":                 body.get("pnl"),
+        "mode":                body.get("mode", "paper"),        # paper / live
+        # options fields (populated when asset_type != equity)
+        "strike":              body.get("strike"),
+        "expiry":              body.get("expiry"),
+        "option_type":         body.get("option_type"),
+        "contracts":           body.get("contracts"),
+        "ts":                  body.get("ts", time.time()),
+    }
+    _trades.append(entry)
+    if len(_trades) > _MAX_TRADES:
+        del _trades[0]
+
+    logger.info("[SML-Trade] %s %s %s | conviction=%s | mode=%s",
+                entry["action"], entry["symbol"], entry["asset_type"],
+                entry["combined_conviction"], entry["mode"])
+    return jsonify({"status": "recorded", "total_logged": len(_trades)})
+
+
+@sml_alert_bp.route("/trades", methods=["GET"])
+def get_trades():
+    """View recent trade history — last 100 entries, newest first."""
+    limit  = min(int(request.args.get("limit", 50)), _MAX_TRADES)
+    symbol = request.args.get("symbol", "").upper()
+    trades = list(reversed(_trades))
+    if symbol:
+        trades = [t for t in trades if t["symbol"] == symbol]
+    trades = trades[:limit]
+
+    # Simple P&L summary
+    pnl_list  = [t["pnl"] for t in _trades if t.get("pnl") is not None]
+    total_pnl = round(sum(pnl_list), 2) if pnl_list else None
+
+    return jsonify({
+        "count":      len(trades),
+        "total_pnl":  total_pnl,
+        "trades":     trades,
+        "ts":         time.time(),
+    })
