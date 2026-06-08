@@ -92,15 +92,15 @@ func handleConnection(conn net.Conn, priv ed25519.PrivateKey) {
 			return
 		}
 
-		// Blast 76 raw bytes back to Python: 12 byte Cert ID string + 64 byte raw signature
+		// Blast 80 raw bytes back to Python: 16 byte Cert ID string (padded) + 64 byte raw signature
 		rawSig, _ := hex.DecodeString(cert.Signature)
 
-		// Ensure CertificateID is exactly 12 bytes
+		// Ensure CertificateID is exactly 16 bytes for word alignment
 		certBytes := []byte(cert.CertificateID)
-		if len(certBytes) > 12 {
-			certBytes = certBytes[:12]
-		} else if len(certBytes) < 12 {
-			pad := make([]byte, 12-len(certBytes))
+		if len(certBytes) > 16 {
+			certBytes = certBytes[:16]
+		} else if len(certBytes) < 16 {
+			pad := make([]byte, 16-len(certBytes))
 			certBytes = append(certBytes, pad...)
 		}
 

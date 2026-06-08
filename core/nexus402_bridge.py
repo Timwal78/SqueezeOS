@@ -72,13 +72,13 @@ def notarize_execution(symbol: str, directive: str, qty: int, limit_price: float
         
         sock.sendall(payload)
         
-        # Expecting 76 bytes response: 12 bytes Cert ID + 64 bytes Ed25519 Signature
-        response_data = sock.recv(76)
+        # Expecting 80 bytes response: 16 bytes Cert ID (padded) + 64 bytes Ed25519 Signature
+        response_data = sock.recv(80)
         sock.close()
             
         # ── 3. Unpack Response ──
-        if len(response_data) == 76:
-            cert_id_bytes, signature_bytes = struct.unpack('<12s 64s', response_data)
+        if len(response_data) == 80:
+            cert_id_bytes, signature_bytes = struct.unpack('<16s 64s', response_data)
             cert_id = cert_id_bytes.decode('utf-8').rstrip('\0')
             signature_hex = signature_bytes.hex()
             
