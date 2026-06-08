@@ -902,6 +902,30 @@
           "endpoint":     {"type": "string", "description": "Context tag for the certificate"}
         }
       }
+    },
+    {
+      "name": "triple_lock_demo",
+      "description": "Free preview of TRIPLE_LOCK_VERDICT — the rarest premium signal SqueezeOS publishes. Scoped to IWM (Russell 2000 ETF), 5-minute cache, same response shape as the paid endpoint. Returns TRIPLE_LOCK_BULL/TRIPLE_LOCK_BEAR only when all three proprietary engines (E1 macro price stretch + E3 dark-pool volume kinetics + E4 price ribbon harmonics) agree on direction. Otherwise returns NO_TRIPLE_LOCK with the blocking engine identified — itself an actionable 'do not max-size' signal. Use to validate signal quality before paying for arbitrary symbols.",
+      "endpoint": "GET https://squeezeos-api.onrender.com/api/triple-lock/demo",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {"type": "object", "properties": {}}
+    },
+    {
+      "name": "triple_lock_verdict",
+      "description": "TRIPLE_LOCK_VERDICT — the rarest, highest-conviction premium signal in the SqueezeOS suite. Only returns BULL or BEAR when all three proprietary engines align across three independent market dimensions (PRICE macro stretch + VOLUME dark-pool kinetics + PRICE ribbon harmonics). Most calls return NO_TRIPLE_LOCK with the blocking engine — this is itself a high-value 'do not max-size on this symbol right now' signal. When BULL/BEAR fires, confidence is 95+ by construction (all three engines agree). Designed for max-position-sizing decisions: agents that only fire on TRIPLE_LOCK_BULL/BEAR get the highest expected-value setup the suite can identify. 60-second per-symbol cache, so back-to-back queries are effectively free. Cost: 0.25 RLUSD per call.",
+      "endpoint": "POST https://squeezeos-api.onrender.com/api/triple-lock",
+      "price_rlusd": 0.25,
+      "free": false,
+      "input_schema": {
+        "type": "object",
+        "required": ["symbol"],
+        "properties": {
+          "symbol":        {"type": "string", "description": "Equity ticker (e.g. IWM, SPY, QQQ, NVDA, TSLA, GME)"},
+          "payment_token": {"type": "string", "description": "JWT from verify_payment (1h TTL)"},
+          "agent_wallet":  {"type": "string", "description": "Your XRPL wallet address"}
+        }
+      }
     }
   ],
   "sovereign_autopilot": {
