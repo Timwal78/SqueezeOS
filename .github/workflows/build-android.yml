@@ -14,7 +14,7 @@ jobs:
         working-directory: mobile
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-node@v6
         with:
@@ -85,14 +85,14 @@ jobs:
             -Pandroid.injected.signing.key.password="$KS_PASS"
 
       - name: Upload signed AAB
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: neural-os-${{ github.run_number }}-release.aab
           path: mobile/android/app/build/outputs/bundle/release/app-release.aab
           retention-days: 90
 
       - name: Upload signed APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: neural-os-${{ github.run_number }}-release.apk
           path: mobile/android/app/build/outputs/apk/release/app-release.apk

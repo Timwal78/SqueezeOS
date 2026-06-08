@@ -9,7 +9,7 @@ import logging
 import time
 from flask import Blueprint, jsonify, request
 from core.legacy import get_service, clean_data
-from core.convergence_engine import ConvergenceEngine, scan_beastmode_universe, BEASTMODE_UNIVERSE
+from core.convergence_engine import ConvergenceEngine, scan_beastmode_universe
 from core.engine2_settlement import get_clock, stamp_ignition, get_all_active
 from core.discord_payload import fire_discord
 
@@ -92,7 +92,7 @@ def beastmode_scan():
 
     return jsonify(clean_data({
         "status":        "success",
-        "universe":      BEASTMODE_UNIVERSE,
+        "universe":      "DYNAMIC",
         "hits":          len(hits),
         "signals":       hits,
         "timestamp":     time.time(),

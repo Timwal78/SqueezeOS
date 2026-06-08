@@ -4,5 +4,5 @@ xrpl-py==4.5.0
 httpx==0.28.1
 aiosqlite==0.22.1
 python-dotenv==1.2.2
-apscheduler==3.10.4
+apscheduler==3.11.2
 aiofiles==25.1.0

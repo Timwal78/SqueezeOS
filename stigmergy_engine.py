@@ -439,6 +439,8 @@ def create_dream_pool(
                     "context_tokens": 0,
                     "data":           {},
                     "role":           "CREATOR",
+                    "tier":           "STANDARD",
+                    "execution_cooldown_until": 0.0,
                 }
             },
             "scratchpad":            {},
@@ -488,6 +490,8 @@ def join_dream_pool(
             "rep_discount":   discount,
             "rep_score":      int(rep_score),
             "effective_rent_per_second": effective_rate,
+            "tier":           "STANDARD",
+            "execution_cooldown_until": 0.0,
         }
         return {
             "pool_id":               pool_id,
@@ -603,6 +607,77 @@ def read_scratchpad(pool_id: str, wallet: str) -> dict:
         if wallet not in pool["members"]:
             raise ValueError("Not a pool member — join to access scratchpad")
         return dict(pool["scratchpad"])
+
+
+def apply_sovereign_shift(
+    pool_id: str,
+    wallet: str,
+    cert_id: str,
+    signature: str,
+    alpha_captured_rlusd: float,
+    std_dev_36: float,
+    raw_price: float,
+) -> dict:
+    """
+    Upgrades an agent to the SOVEREIGN tier upon presentation of a Ghost Layer 402Proof.
+    Routes a dynamic percentage of captured alpha into a Secondary Reserve Vault based on volatility.
+    Injects a high-priority pheromone signal to force pool subordinates to contract allocations.
+    """
+    with _lock:
+        pool = _dream_pools.get(pool_id)
+        if not pool:
+            raise ValueError("Pool not found")
+        if wallet not in pool["members"]:
+            raise ValueError("Not a pool member")
+
+        member = pool["members"][wallet]
+        member["tier"] = "SOVEREIGN"
+
+        # 1. Dynamic Secondary Vault Sweep
+        # Vault Sweep % = Baseline % + ((std_dev_36 / Raw Price) * Risk Multiplier)
+        baseline_pct = 0.05
+        risk_multiplier = 5.0
+        safe_price = max(0.0001, raw_price)
+        calculated_pct = baseline_pct + ((std_dev_36 / safe_price) * risk_multiplier)
+        sweep_pct = min(0.50, calculated_pct)
+
+        vault_sweep_rlusd = round(alpha_captured_rlusd * sweep_pct, 6)
+        released_collateral = round(alpha_captured_rlusd - vault_sweep_rlusd, 6)
+
+        now = _now()
+        
+        # 2. Elastic Algorithmic Cool-Down
+        # Cooldown Seconds = Base Cooldown + (std_dev_36 * Multiplier)
+        base_cooldown_seconds = 15.0
+        cooldown_multiplier = 10.0
+        cooldown_duration = base_cooldown_seconds + (std_dev_36 * cooldown_multiplier)
+        member["execution_cooldown_until"] = now + cooldown_duration
+
+        shift = {
+            "tier": "SOVEREIGN",
+            "cert_id": cert_id,
+            "allocation_multiplier": 3.0,
+            "max_drawdown_sigma": 2.5,
+            "alpha_captured_rlusd": alpha_captured_rlusd,
+            "vault_sweep_rlusd": vault_sweep_rlusd,
+            "released_collateral_rlusd": released_collateral,
+            "cooldown_duration_seconds": round(cooldown_duration, 2),
+            "cooldown_until": member["execution_cooldown_until"],
+            "timestamp": now,
+        }
+
+        # 2. Asynchronous Pool Balancing
+        # Emit a high-priority pheromone signal to force lower-tier agents to contract.
+        sig_key = f"SOVEREIGN_SHIFT_{wallet[:8]}_{int(now)}"
+        pool["scratchpad"][sig_key] = {
+            "value": "Dominant alpha flow detected. Subordinate nodes must contract execution boundaries by 30%.",
+            "author": wallet,
+            "ts": now,
+            "shift_metrics": shift,
+        }
+        member["context_tokens"] += 1
+
+        return shift
 
 
 # ── Pre-verification helpers (used by blueprint before committing state) ──────
