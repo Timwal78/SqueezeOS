@@ -27,11 +27,10 @@ import requests
 from datetime import date, timedelta
 from typing import List, Optional
 
-from core.proprietary_ema_engine import _Engine1, _Engine3, redact_engine_block as _redact
+from core.proprietary_ema_engine import _Engine1, _Engine3, _ema, _tail, redact_engine_block as _redact
 from core.engine2_settlement import get_clock, stamp_ignition
 from core.engine4_temporal_mirror import Engine4_TemporalMirror
 from core.engine5_gann_macro import Engine5_GannMacro
-from core.proprietary_ema_engine import _ema, _tail
 
 logger = logging.getLogger("SML.Convergence")
 
