@@ -1,30 +1,24 @@
-// © ScriptMasterLabs — SML Proprietary EMA Suite (Overlay Reference)
+// © ScriptMasterLabs — SML EMA Suite
 // ================================================================
-// PRICE PANE ONLY — Engine 1 Tesla Sequence
+// PRICE PANE ONLY — Macro stretch cascade overlay
 //
-// Engine 3 (Lucas Phi² Volume) lives in its own volume pane.
-// Load "SML Engine 3 — Lucas Phi² Volume" as a separate indicator.
+// Load "SML Volume Kinetics" as a separate volume pane indicator.
 //
-// DIMENSIONAL ISOLATION:
-//   Engine 1  → EMAs on PRICE  (1·24·578·963)
-//   Engine 3  → VMAs on VOLUME (11·47·123·321) ← separate script
-//   Engine 2  → Settlement Clock / FTD countdown ← backend chronometer
-//
-// Lie Detector trigger: E1 SUPPRESSED + E3 ceiling_breach firing below
+// Lie Detector trigger: price SUPPRESSED + volume ceiling breach
+// firing in the volume pane simultaneously.
 // ================================================================
 //@version=5
-indicator("SML Proprietary EMA Suite [E1 Price Overlay]",
-          shorttitle="SML·PropEMA·E1", overlay=true)
+indicator("SML EMA Suite", shorttitle="SML·EMA", overlay=true)
 
-// ── Engine 1 — Tesla Sequence (price) ────────────────────────────
-show_e1         = input.bool(true,  "Show Engine 1 EMAs",      group="Engine 1 — Tesla Stretch")
-ignition_thresh = input.float(15.0, "Ignition Stretch %",       group="Engine 1 — Tesla Stretch")
-stretch_thresh  = input.float(8.0,  "Stretch Alert %",          group="Engine 1 — Tesla Stretch")
-suppress_thresh = input.float(5.0,  "Suppression Zone %",       group="Engine 1 — Tesla Stretch")
-show_labels     = input.bool(true,  "Show Signal Labels",       group="Display")
-show_bands      = input.bool(true,  "Show Signal Backgrounds",  group="Display")
+// ── Inputs ────────────────────────────────────────────────────────
+show_e1         = input.bool(true,  "Show EMAs",             group="Macro Stretch Cascade")
+ignition_thresh = input.float(15.0, "Ignition Stretch %",    group="Macro Stretch Cascade")
+stretch_thresh  = input.float(8.0,  "Stretch Alert %",       group="Macro Stretch Cascade")
+suppress_thresh = input.float(5.0,  "Suppression Zone %",    group="Macro Stretch Cascade")
+show_labels     = input.bool(true,  "Show Signal Labels",    group="Display")
+show_bands      = input.bool(true,  "Show Signal Backgrounds", group="Display")
 
-// ── Engine 1 EMAs on price ────────────────────────────────────────
+// ── EMAs on price ─────────────────────────────────────────────────
 ema24  = ta.ema(close, 24)
 ema578 = ta.ema(close, 578)
 ema963 = ta.ema(close, 963)
@@ -41,11 +35,11 @@ bull_stretch = math.abs(stretch_pct) > stretch_thresh and bull_stack and not ela
 bear_stretch = math.abs(stretch_pct) > stretch_thresh and bear_stack and not elastic_ignition_bear
 
 // ── Plots ─────────────────────────────────────────────────────────
-plot(show_e1 ? ema24  : na, "E1 · EMA 24  (Seed × 24)",
+plot(show_e1 ? ema24  : na, "Intraday Anchor",
      color=color.new(color.yellow, 15), linewidth=1)
-plot(show_e1 ? ema578 : na, "E1 · EMA 578 (24²  Resistance)",
+plot(show_e1 ? ema578 : na, "Mid Anchor",
      color=color.new(color.orange, 10), linewidth=2)
-plot(show_e1 ? ema963 : na, "E1 · EMA 963 (Tesla Macro Floor)",
+plot(show_e1 ? ema963 : na, "Macro Floor",
      color=color.new(color.red,    5),  linewidth=3)
 
 // ── Backgrounds ───────────────────────────────────────────────────
@@ -53,19 +47,19 @@ bgcolor(show_bands and elastic_ignition_bull ? color.new(color.green,  75) : na,
 bgcolor(show_bands and elastic_ignition_bear ? color.new(color.red,    75) : na, title="Elastic Ignition Bear")
 bgcolor(show_bands and bull_stretch          ? color.new(color.teal,   88) : na, title="Bull Stretch")
 bgcolor(show_bands and bear_stretch          ? color.new(color.orange, 88) : na, title="Bear Stretch")
-bgcolor(show_bands and suppressed            ? color.new(color.gray,   90) : na, title="Suppressed — Watch E3 Volume Pane")
+bgcolor(show_bands and suppressed            ? color.new(color.gray,   90) : na, title="Suppressed — Watch Volume Pane")
 bgcolor(show_bands and compression           ? color.new(color.blue,   92) : na, title="Compression")
 
 // ── Signal label ──────────────────────────────────────────────────
 var label sig_lbl = na
 if show_labels and barstate.islast
     label.delete(sig_lbl)
-    sig_txt = elastic_ignition_bull ? "E1: ELASTIC IGNITION BULL\n+" + str.tostring(stretch_pct, "#.##") + "% from EMA963" :
-              elastic_ignition_bear ? "E1: ELASTIC IGNITION BEAR\n" + str.tostring(stretch_pct, "#.##") + "% from EMA963" :
-              bull_stretch          ? "E1: BULL STRETCH\n+" + str.tostring(stretch_pct, "#.##") + "%" :
-              bear_stretch          ? "E1: BEAR STRETCH\n" + str.tostring(stretch_pct, "#.##") + "%" :
-              suppressed            ? "E1: SUPPRESSED\nWatch E3 volume pane now" :
-              compression           ? "E1: COMPRESSION\nCoil tightening" : "E1: NEUTRAL"
+    sig_txt = elastic_ignition_bull ? "ELASTIC IGNITION BULL\n+" + str.tostring(stretch_pct, "#.##") + "% from macro floor" :
+              elastic_ignition_bear ? "ELASTIC IGNITION BEAR\n"  + str.tostring(stretch_pct, "#.##") + "% from macro floor" :
+              bull_stretch          ? "BULL STRETCH\n+"           + str.tostring(stretch_pct, "#.##") + "%" :
+              bear_stretch          ? "BEAR STRETCH\n"            + str.tostring(stretch_pct, "#.##") + "%" :
+              suppressed            ? "SUPPRESSED\nWatch volume pane now" :
+              compression           ? "COMPRESSION\nCoil tightening" : "NEUTRAL"
     lbl_col = elastic_ignition_bull ? color.green  :
               elastic_ignition_bear ? color.red     :
               bull_stretch          ? color.teal    :
@@ -78,13 +72,13 @@ if show_labels and barstate.islast
 
 // ── Alerts ────────────────────────────────────────────────────────
 alertcondition(elastic_ignition_bull,
-    "E1 Elastic Ignition Bull",
-    "{{ticker}} — ELASTIC IGNITION BULL: Price >" + str.tostring(ignition_thresh, "#") + "% above EMA963")
+    "Elastic Ignition Bull",
+    "{{ticker}} — ELASTIC IGNITION BULL: Price >" + str.tostring(ignition_thresh, "#") + "% above macro floor")
 
 alertcondition(suppressed,
-    "E1 Suppression Zone — Monitor E3",
-    "{{ticker}} — SUPPRESSED: Price coiled. Open E3 volume pane for dark-pool accumulation signal.")
+    "Suppression Zone — Monitor Volume",
+    "{{ticker}} — SUPPRESSED: Price coiled. Open volume pane for accumulation signal.")
 
 alertcondition(ta.crossover(close, ema578),
-    "E1 Price Reclaims EMA578",
-    "{{ticker}} — EMA578 RECLAIM: Price crossed above 24² elastic resistance")
+    "Price Reclaims Mid Anchor",
+    "{{ticker}} — MID ANCHOR RECLAIM: Price crossed above elastic resistance")
