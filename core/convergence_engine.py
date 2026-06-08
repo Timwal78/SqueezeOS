@@ -182,8 +182,14 @@ class ConvergenceEngine:
         e4 = Engine4_TemporalMirror().analyze(closes, bars_with_dates)
         e5 = Engine5_GannMacro().analyze(closes)
         e6 = Engine6_Base4Matrix().analyze(closes)
+        # Bifurcated APEX SINGULARITY trigger: Engine 6 (Macro) AND Engine 3 (Catalyst)
+        e6_bull_locked = e6.get("signal") in ("FRACTAL_LOCK_BULL", "GOD_MODE_BULL")
+        e3_ceiling_breach = e3.get("signal") == "DARK_POOL_CEILING_BREACH"
         
-        is_singularity = e6.get("signal") in ("FRACTAL_LOCK_BULL", "FRACTAL_LOCK_BEAR", "GOD_MODE_BULL", "GOD_MODE_BEAR")
+        e6_bear_locked = e6.get("signal") in ("FRACTAL_LOCK_BEAR", "GOD_MODE_BEAR")
+        e3_distribution = e3.get("signal") == "DISTRIBUTION"
+        
+        is_singularity = (e6_bull_locked and e3_ceiling_breach) or (e6_bear_locked and e3_distribution)
         e7 = Engine7_Parabolic().analyze(closes, is_singularity)
 
         # Auto-stamp E2 if E3 volume fires + E1 suppressed
