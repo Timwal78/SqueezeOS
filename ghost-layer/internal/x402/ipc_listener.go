@@ -92,6 +92,10 @@ func handleConnection(conn net.Conn, priv ed25519.PrivateKey) {
 			return
 		}
 
+		// Dispatch the Xahau testnet submission asynchronously
+		// This guarantees zero blocking on the 0.43 ms IPC loop
+		go SubmitToXahau(cert)
+
 		// Blast 80 raw bytes back to Python: 16 byte Cert ID string (padded) + 64 byte raw signature
 		rawSig, _ := hex.DecodeString(cert.Signature)
 

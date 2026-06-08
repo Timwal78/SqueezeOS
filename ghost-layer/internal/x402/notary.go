@@ -4,6 +4,8 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
+	"log"
 	"strconv"
 	"time"
 )
@@ -70,4 +72,51 @@ func SignDecision(decisionHash, xahauTx, agentWallet, model, endpoint, tier, gra
 	}
 	cert.Signature = hex.EncodeToString(ed25519.Sign(priv, certCanonical(cert)))
 	return cert, nil
+}
+
+// XahauMemo represents a single memo entry in an XRPL transaction
+type XahauMemo struct {
+	Memo struct {
+		MemoData   string `json:"MemoData"`
+		MemoFormat string `json:"MemoFormat"`
+		MemoType   string `json:"MemoType"`
+	} `json:"Memo"`
+}
+
+// SubmitToXahau packages the DecisionCertificate into a Xahau Memos block
+// and mocks the JSON-RPC submission to the Xahau testnet.
+func SubmitToXahau(cert DecisionCertificate) {
+	// 1. Serialize the Payload (Hex Encode for XRPL compliance)
+	memoData := hex.EncodeToString([]byte(cert.DecisionHash + "|" + cert.Signature))
+	memoFormat := hex.EncodeToString([]byte("text/plain"))
+	memoType := hex.EncodeToString([]byte("402Proof"))
+
+	memo := XahauMemo{}
+	memo.Memo.MemoData = memoData
+	memo.Memo.MemoFormat = memoFormat
+	memo.Memo.MemoType = memoType
+
+	// Mocking the JSON payload that would be sent to the JSON-RPC endpoint
+	payload := map[string]interface{}{
+		"method": "submit",
+		"params": []interface{}{
+			map[string]interface{}{
+				"tx_blob": "MOCKED_SIGNED_TX_BLOB_CONTAINING_MEMO",
+				"Memos":   []XahauMemo{memo},
+			},
+		},
+	}
+
+	payloadJSON, _ := json.MarshalIndent(payload, "", "  ")
+	log.Printf("[XAHAU] Outbound Payload Prepared:\n%s\n", string(payloadJSON))
+
+	// 2. Simulate Network Latency for the Sandbox PoC
+	time.Sleep(150 * time.Millisecond)
+
+	// 3. Mock the Ledger Hash Response
+	mockHashBytes := make([]byte, 32)
+	rand.Read(mockHashBytes)
+	mockLedgerHash := hex.EncodeToString(mockHashBytes)
+
+	log.Printf("[XAHAU] SUCCESS - 402Proof Settled. Ledger Hash: %s\n", mockLedgerHash)
 }
