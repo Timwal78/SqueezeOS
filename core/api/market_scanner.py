@@ -54,7 +54,7 @@ _analyzer = None  # singleton — load once, reuse every cycle
 # Post-filter to $1-$50 after fetch. Benchmarks always included.
 # ── INSTITUTIONAL UNIVERSE MANDATE (Law 2) ──
 # Absolutely no hardcoded watchlists. Discovery is 100% dynamic from the live tape.
-MANDATORY_TICKERS = ["IWM"] # User Primary Large Cap Focus
+MANDATORY_TICKERS = ["IWM", "GME", "AMC"] # Core focus, everything else dynamically fetched
 
 def _discover_universe(dm):
     """Dynamically discovers the active trading universe from live market feeds."""

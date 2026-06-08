@@ -186,6 +186,9 @@ The SML ecosystem spans several dedicated domains handling specific network func
 
 ## Products
 
+### The Base-4 Fractal Matrix (Core Engine)
+**The holy grail of institutional analysis.** SqueezeOS does not use arbitrary, retail-level indicators (like 9/21 EMAs) that whipsaw when volatility spikes. The entire system is built on a mathematically interlocking **Base-4 Fractal Grid**. By harmonically binding fast trigger sets to massive macro anchor sets, the matrix completely eliminates false signals. If a false breakout occurs, the macro anchors refuse to confirm it because the harmonic resonance isn't there. It is a unified, interlocking mathematical organism. 
+
 ### Rubik's Cube — Harmonic Pattern Engine
 **The proprietary freak of nature.** SML Harmonic Scanner v4.0 detects institutional harmonic patterns with multi-factor scoring. Runs live in-browser with pay-to-solve x402 attestation. When an AI solves the cube, the XRPL payment verification triggers a Xahau URIToken mint—making the solution an immutable NFT permanently on-chain.
 

@@ -34,8 +34,8 @@ from core.engine5_gann_macro import Engine5_GannMacro
 
 logger = logging.getLogger("SML.Convergence")
 
-# Monitored universe
-BEASTMODE_UNIVERSE = ["GME", "AMC", "MSTR", "PLTR", "HOOD", "IWM", "SPY", "QQQ", "NVDA", "TSLA"]
+from core.state import state
+from core.api.market_scanner import MANDATORY_TICKERS
 
 
 # ── Tradier Options Sniper ────────────────────────────────────────────────────
@@ -79,8 +79,14 @@ def scan_options(symbol: str, trade_type: str = "call") -> dict:
         if isinstance(raw_exps, str):
             raw_exps = [raw_exps]
 
-        valid_exps = [e for e in raw_exps
-                      if today.isoformat() <= e <= max_exp.isoformat()]
+        valid_exps = [e for e in raw_exps if e >= today.isoformat()]
+        
+        if symbol.upper() == "IWM" and valid_exps:
+            # Mandate 0DTE for IWM (the absolute nearest available expiration)
+            valid_exps = [valid_exps[0]]
+        else:
+            # Default 0-14 DTE for all other symbols
+            valid_exps = [e for e in valid_exps if e <= max_exp.isoformat()]
 
         if not valid_exps:
             return {"error": "No expirations in 0-14 DTE window"}
@@ -273,7 +279,17 @@ def scan_beastmode_universe(services: dict) -> list:
     engine = ConvergenceEngine()
     hits   = []
 
-    for symbol in BEASTMODE_UNIVERSE:
+    # Dynamically build universe from the live market state
+    with state.lock:
+        quotes = state.quotes
+    
+    # Sort dynamic quotes by volume ratio
+    active_syms = sorted(quotes.keys(), key=lambda s: quotes[s].get("volRatio", 0), reverse=True)
+    
+    # Take the top 12 most active tickers, plus our mandatory focus
+    universe = list(set(MANDATORY_TICKERS + active_syms[:12]))
+    
+    for symbol in universe:
         try:
             bars    = dm.get_historical_bars(symbol, timeframe="1Day", limit=400) or []
             closes  = [float(b.get("c") or b.get("close", 0)) for b in bars if b.get("c") or b.get("close")]

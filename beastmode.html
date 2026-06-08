@@ -336,15 +336,13 @@
 <div class="container">
 
   <!-- Ticker bar -->
-  <div class="controls">
-    <button class="ticker-btn active" data-sym="GME">GME</button>
-    <button class="ticker-btn" data-sym="AMC">AMC</button>
-    <button class="ticker-btn" data-sym="MSTR">MSTR</button>
-    <button class="ticker-btn" data-sym="PLTR">PLTR</button>
-    <button class="ticker-btn" data-sym="HOOD">HOOD</button>
-    <button class="ticker-btn" data-sym="IWM">IWM</button>
-    <button class="ticker-btn" data-sym="NVDA">NVDA</button>
-    <button class="ticker-btn" data-sym="TSLA">TSLA</button>
+  <div class="controls" id="ticker-controls">
+    <div id="dynamic-tickers" style="display:inline-flex;gap:8px;flex-wrap:wrap">
+      <!-- Fallback static buttons while loading -->
+      <button class="ticker-btn active" data-sym="GME">GME</button>
+      <button class="ticker-btn" data-sym="AMC">AMC</button>
+      <button class="ticker-btn" data-sym="IWM">IWM</button>
+    </div>
     <button class="refresh-btn" id="refresh-btn">↻ REFRESH</button>
     <span class="countdown" id="countdown">—</span>
   </div>
@@ -406,8 +404,8 @@
 </footer>
 
 <script>
-const SYMBOLS   = ["GME","AMC","MSTR","PLTR","HOOD","IWM","NVDA","TSLA"];
 let   activeSym = "GME";
+const MANDATORY = ["GME", "AMC", "IWM"];
 let   refreshTimer, countdownTimer, secondsLeft = 45;
 
 // ── Engine config ──────────────────────────────────────────────────
@@ -658,26 +656,61 @@ function updateCountdown() {
   $("countdown").textContent = `auto-refresh in ${secondsLeft}s`;
 }
 
-// ── Init ───────────────────────────────────────────────────────────
-document.querySelectorAll(".ticker-btn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".ticker-btn").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
-    activeSym = btn.dataset.sym;
-    $("sym-display").textContent = activeSym;
-    fetchData(activeSym);
-    startCountdown();
-  });
-});
+async function loadDynamicTickers() {
+  try {
+    const res = await fetch("/api/market/scan");
+    if (!res.ok) return;
+    const json = await res.json();
+    const quotes = json.quotes || {};
+    
+    // Sort by volume ratio descending
+    const sorted = Object.keys(quotes).sort((a,b) => (quotes[b].volRatio || 0) - (quotes[a].volRatio || 0));
+    
+    // Build final list: Mandatory first, then top 10 dynamic
+    let finalSymbols = [...MANDATORY];
+    let added = 0;
+    for(let sym of sorted) {
+      if(!finalSymbols.includes(sym)) {
+        finalSymbols.push(sym);
+        added++;
+      }
+      if(added >= 10) break;
+    }
+    
+    const container = $("dynamic-tickers");
+    container.innerHTML = ""; // clear fallbacks
+    
+    finalSymbols.forEach(sym => {
+      const btn = document.createElement("button");
+      btn.className = "ticker-btn" + (sym === activeSym ? " active" : "");
+      btn.dataset.sym = sym;
+      btn.textContent = sym;
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".ticker-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        activeSym = sym;
+        $("sym-display").textContent = activeSym;
+        fetchData(activeSym);
+        startCountdown();
+      });
+      container.appendChild(btn);
+    });
+  } catch(e) {
+    console.error("Failed to load dynamic universe", e);
+  }
+}
 
+// ── Init ───────────────────────────────────────────────────────────
 $("refresh-btn").addEventListener("click", () => {
   fetchData(activeSym);
   startCountdown();
 });
 
 // Boot
-fetchData(activeSym);
-startCountdown();
+loadDynamicTickers().then(() => {
+  fetchData(activeSym);
+  startCountdown();
+});
 </script>
 </body>
 </html>
