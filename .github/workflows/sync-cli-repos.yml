@@ -22,7 +22,7 @@ jobs:
           - dir: cli/tipmaster
             repo: tipmaster-pp-cli
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Push ${{ matrix.dir }} → ${{ matrix.repo }}
         env:
