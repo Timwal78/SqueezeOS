@@ -72,7 +72,7 @@ jobs:
               ('core.rdt_engine',             'RecurrentDepthTransformer'),
               ('core.market_graph',           'get_graph'),
               ('core.signal_history',         'record'),
-              ('core.proprietary_ema_engine', 'Engine4_HarmonicLadder'),
+              ('core.proprietary_ema_engine', '_Engine4'),
               ('core.proprietary_ema_engine', 'run_proprietary_suite'),
           ]
 
