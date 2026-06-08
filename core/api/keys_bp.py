@@ -30,38 +30,188 @@ PRICES = {
 
 PRICING_HTML = """
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>SqueezeOS API Pricing</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SqueezeOS | Institutional API</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;500;800&display=swap" rel="stylesheet">
     <style>
-        body { font-family: -apple-system, sans-serif; background: #0a0a0a; color: #fff; padding: 50px; text-align: center; }
-        .grid { display: flex; justify-content: center; gap: 20px; margin-top: 40px; }
-        .card { background: #1a1a1a; padding: 30px; border-radius: 8px; width: 300px; border: 1px solid #333; }
-        .price { font-size: 2em; margin: 20px 0; color: #f39c12; }
-        .btn { display: inline-block; background: #e67e22; color: #fff; text-decoration: none; padding: 10px 20px; border-radius: 4px; font-weight: bold; }
-        .btn:hover { background: #d35400; }
+        :root {
+            --bg: #050505;
+            --surface: rgba(20, 20, 20, 0.6);
+            --border: rgba(255, 255, 255, 0.1);
+            --accent: #00FF88;
+            --accent-glow: rgba(0, 255, 136, 0.3);
+            --text-primary: #FFFFFF;
+            --text-secondary: #888888;
+        }
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background: var(--bg); 
+            color: var(--text-primary); 
+            margin: 0; 
+            padding: 0; 
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-image: radial-gradient(circle at 50% 0%, rgba(0, 255, 136, 0.05) 0%, transparent 50%);
+        }
+        header {
+            text-align: center;
+            margin: 80px 0 40px 0;
+            animation: fadeIn 1s ease-out;
+        }
+        h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            margin: 0;
+            letter-spacing: -1px;
+            background: linear-gradient(to right, #fff, #888);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle {
+            color: var(--accent);
+            font-size: 1.1rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-top: 10px;
+        }
+        .grid { 
+            display: flex; 
+            justify-content: center; 
+            gap: 30px; 
+            flex-wrap: wrap;
+            max-width: 1200px;
+            padding: 20px;
+        }
+        .card { 
+            background: var(--surface);
+            backdrop-filter: blur(10px);
+            padding: 40px 30px; 
+            border-radius: 16px; 
+            width: 320px; 
+            border: 1px solid var(--border); 
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            text-align: left;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(255,255,255,0.3);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 3px;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .card:hover::before { opacity: 1; }
+        .card-header {
+            font-size: 1.5rem;
+            font-weight: 500;
+            margin-bottom: 15px;
+        }
+        .price { 
+            font-size: 2.5rem; 
+            font-weight: 800;
+            margin: 20px 0; 
+            color: #fff; 
+        }
+        .price span {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            font-weight: 300;
+        }
+        .features {
+            list-style: none;
+            padding: 0;
+            margin: 30px 0;
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+        .features li {
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+        }
+        .features li::before {
+            content: '✓';
+            color: var(--accent);
+            margin-right: 10px;
+            font-weight: bold;
+        }
+        .btn { 
+            display: block; 
+            text-align: center;
+            background: transparent; 
+            color: #fff; 
+            text-decoration: none; 
+            padding: 15px; 
+            border-radius: 8px; 
+            font-weight: 500; 
+            border: 1px solid var(--border);
+            transition: all 0.2s ease;
+        }
+        .btn:hover { 
+            background: rgba(255,255,255,0.05);
+            border-color: #fff;
+        }
+        .btn.primary {
+            background: var(--text-primary);
+            color: #000;
+            border: none;
+        }
+        .btn.primary:hover {
+            background: var(--accent);
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
     </style>
 </head>
 <body>
-    <h1>SqueezeOS API</h1>
-    <p>Unlock premium AI agent endpoints.</p>
+    <header>
+        <h1>SqueezeOS API</h1>
+        <div class="subtitle">Institutional Grade Data Endpoints</div>
+    </header>
     <div class="grid">
         <div class="card">
-            <h2>Dev Pack</h2>
-            <div class="price">$9.00</div>
-            <p>One-time payment for testing and development.</p>
+            <div class="card-header">Dev Pack</div>
+            <div class="price">$9<span> / one-time</span></div>
+            <ul class="features">
+                <li>Perfect for MVP testing</li>
+                <li>Full Stigmergy access</li>
+                <li>Standard latency</li>
+            </ul>
             <a class="btn" href="/api/keys/checkout?plan=dev">Buy Now</a>
         </div>
-        <div class="card">
-            <h2>Starter</h2>
-            <div class="price">$29.00 / mo</div>
-            <p>Perfect for solo agents.</p>
-            <a class="btn" href="/api/keys/checkout?plan=starter">Subscribe</a>
+        <div class="card" style="border-color: var(--accent);">
+            <div class="card-header">Starter</div>
+            <div class="price">$29<span> / mo</span></div>
+            <ul class="features">
+                <li>Solo algorithmic traders</li>
+                <li>Real-time flow streams</li>
+                <li>Priority queueing</li>
+            </ul>
+            <a class="btn primary" href="/api/keys/checkout?plan=starter">Subscribe</a>
         </div>
         <div class="card">
-            <h2>Pro</h2>
-            <div class="price">$79.00 / mo</div>
-            <p>Institutional grade volume.</p>
+            <div class="card-header">Institutional</div>
+            <div class="price">$79<span> / mo</span></div>
+            <ul class="features">
+                <li>Hedge funds & dark pools</li>
+                <li>Uncapped volume</li>
+                <li>Direct server interconnect</li>
+            </ul>
             <a class="btn" href="/api/keys/checkout?plan=pro">Subscribe</a>
         </div>
     </div>
@@ -71,20 +221,85 @@ PRICING_HTML = """
 
 SUCCESS_HTML = """
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Payment Successful</title>
+    <meta charset="UTF-8">
+    <title>SqueezeOS | Key Provisioned</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;500;800&display=swap" rel="stylesheet">
     <style>
-        body { font-family: monospace; background: #0a0a0a; color: #0f0; padding: 50px; text-align: center; }
-        .key-box { background: #1a1a1a; padding: 20px; border: 1px solid #0f0; display: inline-block; margin-top: 20px; font-size: 1.5em; letter-spacing: 2px; }
-        p { font-size: 1.2em; color: #fff; }
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background: #050505; 
+            color: #fff; 
+            padding: 0; 
+            margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        .container {
+            background: rgba(20, 20, 20, 0.8);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            border-radius: 16px;
+            padding: 50px;
+            text-align: center;
+            max-width: 600px;
+            box-shadow: 0 0 50px rgba(0, 255, 136, 0.05);
+            animation: pulse 2s infinite;
+        }
+        h1 {
+            color: #00FF88;
+            margin-top: 0;
+            font-weight: 800;
+        }
+        p {
+            color: #888;
+            font-size: 1.1rem;
+            margin-bottom: 40px;
+        }
+        .key-box { 
+            background: #000; 
+            padding: 20px; 
+            border: 1px dashed #555; 
+            border-radius: 8px;
+            display: inline-block; 
+            font-size: 1.2rem; 
+            font-family: 'JetBrains Mono', monospace;
+            color: #00FF88;
+            letter-spacing: 1px;
+            margin-bottom: 30px;
+        }
+        .code-block {
+            background: #111;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            color: #aaa;
+            text-align: left;
+        }
+        .code-block span { color: #fff; }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 30px rgba(0, 255, 136, 0.02); }
+            50% { box-shadow: 0 0 50px rgba(0, 255, 136, 0.1); }
+            100% { box-shadow: 0 0 30px rgba(0, 255, 136, 0.02); }
+        }
     </style>
 </head>
 <body>
-    <h1>✅ Payment Successful</h1>
-    <p>Here is your SqueezeOS API Key. Keep it secret.</p>
-    <div class="key-box">{{ api_key }}</div>
-    <p style="margin-top:40px; color:#aaa;">Pass this via <code>X-API-KEY: {{ api_key }}</code> or <code>Authorization: Bearer {{ api_key }}</code>.</p>
+    <div class="container">
+        <h1>ACCESS GRANTED</h1>
+        <p>Your SqueezeOS API credentials have been provisioned.</p>
+        <div class="key-box">{{ api_key }}</div>
+        
+        <div class="code-block">
+            # Pass via Headers<br>
+            <span>X-API-KEY</span>: {{ api_key }}<br><br>
+            # Or Bearer Auth<br>
+            <span>Authorization</span>: Bearer {{ api_key }}
+        </div>
+    </div>
 </body>
 </html>
 """
