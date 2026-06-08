@@ -926,6 +926,93 @@
           "agent_wallet":  {"type": "string", "description": "Your XRPL wallet address"}
         }
       }
+    },
+    {
+      "name": "ftd_info",
+      "description": "Free discovery for the FTD Data Oracle. Lists endpoint tiers, refresh cadence, supported ETF baskets, and the compliance posture (descriptive public-regulatory data only — not trade signals).",
+      "endpoint": "GET https://squeezeos-api.onrender.com/api/ftd/info",
+      "price_rlusd": 0,
+      "free": true,
+      "input_schema": {"type": "object", "properties": {}}
+    },
+    {
+      "name": "ftd_threshold_list",
+      "description": "Current SEC Reg SHO Threshold Securities List — every CUSIP currently flagged with persistent settlement failures (≥ 0.5% of TSO and ≥ 10,000 shares for ≥ 5 consecutive settlement days). Public SEC data, normalized JSON, refreshed every 6 hours.",
+      "endpoint": "GET https://squeezeos-api.onrender.com/api/ftd/threshold-list",
+      "price_rlusd": 0.02,
+      "free": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "payment_token": {"type": "string"},
+          "agent_wallet":  {"type": "string"}
+        }
+      }
+    },
+    {
+      "name": "ftd_series",
+      "description": "Historical SEC Fails-To-Deliver time series for a symbol. Default 90 days, max 180. Returns settlement_date, fail_shares, reference price, and notional. Pure descriptive data — not a trade signal. Source: SEC biweekly FTD reports.",
+      "endpoint": "GET https://squeezeos-api.onrender.com/api/ftd/series/{symbol}",
+      "price_rlusd": 0.02,
+      "free": false,
+      "input_schema": {
+        "type": "object",
+        "required": ["symbol"],
+        "properties": {
+          "symbol": {"type": "string", "description": "Equity ticker (e.g. GME, AMC, XRT, IWM)"},
+          "limit":  {"type": "integer", "description": "Records to return (default 90, max 180)"},
+          "payment_token": {"type": "string"},
+          "agent_wallet":  {"type": "string"}
+        }
+      }
+    },
+    {
+      "name": "ftd_ratio",
+      "description": "Latest FTD record for a symbol plus percentile rank within its 180-day rolling window. Returns whether the latest reading is in the top 5%, bottom 25%, etc. Also reports whether the symbol is on the current Reg SHO Threshold List. Descriptive data — not a recommendation.",
+      "endpoint": "GET https://squeezeos-api.onrender.com/api/ftd/ratio/{symbol}",
+      "price_rlusd": 0.03,
+      "free": false,
+      "input_schema": {
+        "type": "object",
+        "required": ["symbol"],
+        "properties": {
+          "symbol": {"type": "string"},
+          "payment_token": {"type": "string"},
+          "agent_wallet":  {"type": "string"}
+        }
+      }
+    },
+    {
+      "name": "ftd_etf_basket",
+      "description": "ETF constituent FTD concentration map. For the retail-meme ETF universe (XRT, IWM, IJR, KRE), returns each constituent's latest FTD notional, percentile rank, and settlement date — sorted by notional. Useful for surfacing which holding within an ETF basket carries the basket's FTD load. Pure descriptive data.",
+      "endpoint": "GET https://squeezeos-api.onrender.com/api/ftd/etf-basket/{etf}",
+      "price_rlusd": 0.05,
+      "free": false,
+      "input_schema": {
+        "type": "object",
+        "required": ["etf"],
+        "properties": {
+          "etf": {"type": "string", "description": "ETF symbol — supported: XRT, IWM, IJR, KRE"},
+          "payment_token": {"type": "string"},
+          "agent_wallet":  {"type": "string"}
+        }
+      }
+    },
+    {
+      "name": "ftd_cycle",
+      "description": "Settlement-cycle descriptive bundle for one symbol: latest FTD record + 180-day rolling stats + Reg SHO threshold list status + T+21 / T+35 calendar markers + Reg SHO 204 13-day marker. Every numeric field is descriptive arithmetic on public SEC data — not a prediction of forced buying. Response includes explicit notes about Reg SHO 204 bona-fide market-maker exemptions.",
+      "endpoint": "GET https://squeezeos-api.onrender.com/api/ftd/cycle/{symbol}",
+      "price_rlusd": 0.05,
+      "free": false,
+      "input_schema": {
+        "type": "object",
+        "required": ["symbol"],
+        "properties": {
+          "symbol": {"type": "string"},
+          "payment_token": {"type": "string"},
+          "agent_wallet":  {"type": "string"}
+        }
+      }
     }
   ],
   "sovereign_autopilot": {

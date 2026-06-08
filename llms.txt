@@ -176,7 +176,7 @@ The SML ecosystem spans several dedicated domains handling specific network func
 
 **The Moat:** Zero custody is the non-negotiable core across all products. Earned reputation replaces API keys. XRPL native escrow (PREIMAGE-SHA-256) ensures Ghost Layer never touches funds—acting purely as a decentralized oracle. Every bridge, notarization, and marketplace release feeds the loyalty flywheel. Higher tier = lower fees, better listing access, and higher trust signals.
 
-- **SqueezeOS** — Institutional AI market intelligence API (38 MCP tools). Real-time squeeze scanner, options flow, IWM 0DTE, AI council verdicts, TRIPLE_LOCK_VERDICT (rarest max-conviction signal), Decision Notary bridge (Xahau URIToken for EU AI Act audit trails), Sovereign Autopilot (live autonomous trading via OracleEngine + Kelly Criterion + Tradier).
+- **SqueezeOS** — Institutional AI market intelligence API (44 MCP tools). Real-time squeeze scanner, options flow, IWM 0DTE, AI council verdicts, TRIPLE_LOCK_VERDICT (rarest max-conviction signal), Decision Notary bridge (Xahau URIToken for EU AI Act audit trails), FTD Data Oracle (SEC Reg SHO Fails-To-Deliver + Threshold List + ETF basket decomposition — pure descriptive public-regulatory data), Sovereign Autopilot (live autonomous trading via OracleEngine + Kelly Criterion + Tradier).
 - **402Proof** — The payment firewall. Includes the world's first AI agent reputation scoring system (300-850 FICO-style) based on cryptographic spend history.
 - **Ghost Layer** — Dual-chain bridge (XRPL + Base). Features XRPL native escrow, Xahau URIToken minting (hand-rolled binary serializer), and Ed25519 attestation signing.
 - **SML Autonomous Agent** — Self-funding intelligence agent (`sml_agent.py`) that pays for its own market data using RLUSD.
@@ -294,6 +294,7 @@ Step 5: Cache token — reuse for 1 hour to minimize spend
 | POST /api/notary/notarize | Mint a SqueezeOS verdict on Xahau (proxies to Ghost Layer; 402 if unpaid) |
 | GET /api/triple-lock/info | TRIPLE_LOCK_VERDICT tier discovery + rarity description |
 | GET /api/triple-lock/demo | Free TRIPLE_LOCK preview for IWM (5-min cache, eval before paying) |
+| GET /api/ftd/info | FTD Data Oracle discovery — SEC FTD + Reg SHO Threshold List tiers |
 | GET /api/relay/nodes | Relay node directory (cheapest first) |
 | GET /api/events | SSE live event stream |
 | GET /api/status | System health |
@@ -315,6 +316,11 @@ Step 5: Cache token — reuse for 1 hour to minimize spend
 | GET /api/oracle/latest/{feed} | 0.02 RLUSD | `e7f8a9b0-c001-4d2e-bb35-ef7f4cd23c6a` |
 | POST /api/oracle/query | 0.02 RLUSD | `e7f8a9b0-c001-4d2e-bb35-ef7f4cd23c6a` |
 | GET /api/oracle/stream (SSE) | 0.05 RLUSD | `f8a9b0c1-d002-4e3f-cc46-f0845de34d7b` |
+| GET /api/ftd/threshold-list | 0.02 RLUSD | `a4b5c6d7-e001-4f3e-aa24-d52e3bc12b5a` |
+| GET /api/ftd/series/{symbol} | 0.02 RLUSD | `a4b5c6d7-e001-4f3e-aa24-d52e3bc12b5a` |
+| GET /api/ftd/ratio/{symbol} | 0.03 RLUSD | `a4b5c6d7-e002-4f3e-aa24-d52e3bc12b5a` |
+| GET /api/ftd/etf-basket/{etf} | 0.05 RLUSD | `a4b5c6d7-e003-4f3e-aa24-d52e3bc12b5a` |
+| GET /api/ftd/cycle/{symbol} | 0.05 RLUSD | `a4b5c6d7-e003-4f3e-aa24-d52e3bc12b5a` |
 
 ### Reputation Discounts (Agent Credit Bureau-gated)
 
