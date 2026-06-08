@@ -2,6 +2,8 @@ import os
 import requests
 import json
 import logging
+import threading
+import time
 from typing import List, Dict
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
@@ -13,10 +15,10 @@ class SqueezeOSSalesAgent:
     sales pitches for the SqueezeOS API.
     """
     def __init__(self):
-        # We can use the existing SqueezeOS LLM setup or Claude directly
         self.api_key = os.environ.get("ANTHROPIC_API_KEY")
         self.pricing_url = "https://squeezeos-api.onrender.com/pricing"
         self.github_url = "https://github.com/Timwal78/SqueezeOS"
+        self.webhook_url = os.environ.get("DISCORD_WEBHOOK_ALL") or os.environ.get("DISCORD_WEBHOOK_PAYMENTS")
 
     def _generate_pitch(self, developer_profile: Dict) -> str:
         """Uses Claude to generate a tailored outreach message."""
@@ -59,7 +61,6 @@ class SqueezeOSSalesAgent:
         """Scrapes GitHub for developers working on specific algo-trading keywords."""
         logger.info(f"🔍 Searching GitHub for leads using keyword: '{keyword}'...")
         
-        # Simple GitHub search API (no auth needed for low volume)
         url = f"https://api.github.com/search/repositories?q={keyword}&sort=stars&order=desc&per_page={limit}"
         response = requests.get(url)
         
@@ -76,27 +77,61 @@ class SqueezeOSSalesAgent:
                 })
         return leads
 
-    def run_campaign(self):
-        print("="*50)
-        print("🤖 SQUEEZE-OS SALES AGENT INITIALIZED")
-        print("="*50)
+    def _send_discord_alert(self, lead: dict, pitch: str):
+        """Sends the generated pitch to Discord for the user to copy/paste."""
+        if not self.webhook_url:
+            logger.warning("No Discord webhook found for Sales Agent.")
+            return
+
+        embed = {
+            "title": f"🎯 New Lead: {lead['name']}",
+            "description": f"**Repo:** {lead['repo']}\n**Bio:** {lead['bio']}\n**Link:** {lead['url']}",
+            "color": 65280, # Neon green
+            "fields": [
+                {
+                    "name": "🤖 AI Generated Pitch (Copy & Paste)",
+                    "value": f"```text\n{pitch}\n```"
+                }
+            ]
+        }
         
+        payload = {"embeds": [embed]}
+        try:
+            requests.post(self.webhook_url, json=payload, timeout=5)
+        except Exception as e:
+            logger.error(f"Failed to push lead to Discord: {e}")
+
+    def run_campaign(self):
+        logger.info("Starting Sales Agent campaign...")
         leads = self.find_leads("options flow algorithmic trading", limit=3)
         if not leads:
-            print("No leads found.")
+            logger.info("No leads found.")
             return
 
         for lead in leads:
-            print(f"\n[LEAD IDENTIFIED]: {lead['name']} ({lead['repo']})")
-            print(f"Generating personalized pitch...")
-            
             pitch = self._generate_pitch(lead)
-            
-            print("-" * 40)
-            print(f"TO: {lead['url']}")
-            print(f"MESSAGE:\n{pitch}")
-            print("-" * 40)
-            print("Action: Copy this and send via Twitter/GitHub/Email.")
+            self._send_discord_alert(lead, pitch)
+            time.sleep(2) # rate limiting
+
+def _daemon_loop():
+    """Runs the sales campaign every 24 hours."""
+    agent = SqueezeOSSalesAgent()
+    # Initial sleep to let the server start up
+    time.sleep(60)
+    while True:
+        try:
+            agent.run_campaign()
+        except Exception as e:
+            logger.error(f"Sales Agent crashed: {e}")
+        
+        # Sleep for 24 hours (86400 seconds)
+        time.sleep(86400)
+
+def start_sales_agent():
+    """Spawns the background sales agent daemon."""
+    t = threading.Thread(target=_daemon_loop, daemon=True, name="sales-agent-daemon")
+    t.start()
+    logger.info("🚀 Autonomous Sales Agent daemon started in background.")
 
 if __name__ == "__main__":
     agent = SqueezeOSSalesAgent()
