@@ -11,6 +11,8 @@ services:
         value: production
       - key: TRADIER_LIVE
         value: "true"
+      - key: SQUEEZEOS_OPERATOR_WALLET
+        value: "rsdSmbUASmWDs4NPtE8ZHoMKmk1owR1yUh"
       - key: DISCORD_WEBHOOK_URL
         sync: false
       - key: DISCORD_WEBHOOK_ALL
