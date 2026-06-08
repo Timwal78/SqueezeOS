@@ -2,8 +2,8 @@
 SQUEEZE OS — 402Proof Ghost Layer IPC Bridge
 ════════════════════════════════════════════════
 Zero-serialization-delay bridge to the Go Notary.
-Utilizes Unix Domain Sockets (UDS) with a fallback to Windows Named Pipes.
-Payloads are packed into raw C-struct binaries for maximum throughput.
+Implements strict platform gating (TCP Loopback on Windows, AF_UNIX on Linux).
+Payloads are aligned exclusively to 8-byte words for Go 64-bit architecture.
 """
 
 import os
@@ -11,76 +11,70 @@ import time
 import struct
 import logging
 import socket
+import platform
 from typing import Dict, Any, Optional
 
 logger = logging.getLogger("Nexus402.IPC")
 
-# IPC Paths
-UDS_PATH = os.environ.get("GHOST_LAYER_UDS", "/tmp/x402_notary.sock")
-NAMED_PIPE_PATH = os.environ.get("GHOST_LAYER_PIPE", r"\\.\pipe\x402_notary")
+# ── Platform Gating ──
+if platform.system() == "Windows":
+    IPC_TYPE = "tcp"
+    IPC_ADDRESS = ("127.0.0.1", 4020)
+else:
+    IPC_TYPE = "unix"
+    IPC_ADDRESS = os.environ.get("GHOST_LAYER_UDS", "/tmp/x402_notary.sock")
 
-def _connect_ipc() -> Optional[Any]:
-    """Establishes an IPC connection via UDS or Windows Named Pipe."""
-    # Try AF_UNIX if supported by the OS/Python version
-    if hasattr(socket, "AF_UNIX"):
-        try:
+def _connect_ipc() -> Optional[socket.socket]:
+    """Establishes an OS-gated IPC connection."""
+    try:
+        if IPC_TYPE == "tcp":
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(1.0)
+            sock.connect(IPC_ADDRESS)
+        else:
             sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             sock.settimeout(1.0)
-            sock.connect(UDS_PATH)
-            return ("sock", sock)
-        except Exception as e:
-            logger.debug(f"[IPC] UDS connection failed: {e}. Trying Named Pipe fallback.")
-
-    # Fallback to Windows Named Pipe
-    if os.name == 'nt':
-        try:
-            pipe = open(NAMED_PIPE_PATH, 'r+b', buffering=0)
-            return ("pipe", pipe)
-        except Exception as e:
-            logger.debug(f"[IPC] Named Pipe connection failed: {e}.")
-            
-    return None
+            sock.connect(IPC_ADDRESS)
+        return sock
+    except Exception as e:
+        logger.debug(f"[IPC] {IPC_TYPE} connection failed: {e}")
+        return None
 
 def notarize_execution(symbol: str, directive: str, qty: int, limit_price: float, reason: str, dynamic_discount: float) -> Optional[Dict[str, Any]]:
     """
-    Packs the execution receipt into a binary struct and blasts it over the IPC tunnel.
+    Packs the execution receipt into a strictly aligned 48-byte struct.
     """
     try:
-        # ── 1. Raw Byte Packing ──
+        # ── 1. Symmetrical Byte Packing ──
         # Format: < (Little Endian)
-        # d (8 bytes) : timestamp
-        # i (4 bytes) : qty
-        # d (8 bytes) : limit_price
-        # d (8 bytes) : dynamic_discount
-        # 8s (8 bytes): symbol
-        # 4s (4 bytes): directive
-        # Total payload size = 8 + 4 + 8 + 8 + 8 + 4 = 40 bytes
+        # q (8 bytes) : timestamp (int64 milliseconds)
+        # q (8 bytes) : qty (int64)
+        # d (8 bytes) : limit_price (float64)
+        # d (8 bytes) : dynamic_discount (float64)
+        # 8s (8 bytes): symbol (padded)
+        # 8s (8 bytes): directive (padded to 8 to maintain word alignment)
+        # Total payload size = 48 bytes (Perfectly aligned for Go)
         
         sym_bytes = symbol.encode('utf-8')[:8].ljust(8, b'\0')
-        dir_bytes = directive.encode('utf-8')[:4].ljust(4, b'\0')
-        ts = time.time()
+        dir_bytes = directive.encode('utf-8')[:8].ljust(8, b'\0')
+        ts_ms = int(time.time() * 1000)
+        qty_int = int(qty)
         
-        payload = struct.pack('<d i d d 8s 4s', ts, qty, limit_price, dynamic_discount, sym_bytes, dir_bytes)
+        payload = struct.pack('<q q d d 8s 8s', ts_ms, qty_int, limit_price, dynamic_discount, sym_bytes, dir_bytes)
         
         # ── 2. IPC Transmission ──
-        conn = _connect_ipc()
-        if not conn:
-            logger.warning("[402PROOF] IPC Notary unreachable (UDS/Pipe down). Execution proceeds un-notarized.")
+        sock = _connect_ipc()
+        if not sock:
+            logger.warning(f"[402PROOF] IPC Notary unreachable on {IPC_TYPE}. Execution proceeds un-notarized.")
             return None
             
-        conn_type, handler = conn
+        logger.info(f"[402PROOF] Blasting 48-byte aligned payload via {IPC_TYPE.upper()} for {symbol} execution...")
         
-        logger.info(f"[402PROOF] Blasting 40-byte binary payload via {conn_type} for {symbol} execution...")
+        sock.sendall(payload)
         
-        if conn_type == "sock":
-            handler.sendall(payload)
-            # Expecting 76 bytes response: 12 bytes Cert ID + 64 bytes Ed25519 Signature
-            response_data = handler.recv(76)
-            handler.close()
-        else: # pipe
-            handler.write(payload)
-            response_data = handler.read(76)
-            handler.close()
+        # Expecting 76 bytes response: 12 bytes Cert ID + 64 bytes Ed25519 Signature
+        response_data = sock.recv(76)
+        sock.close()
             
         # ── 3. Unpack Response ──
         if len(response_data) == 76:
@@ -92,7 +86,7 @@ def notarize_execution(symbol: str, directive: str, qty: int, limit_price: float
             return {
                 "certificate_id": cert_id,
                 "signature": signature_hex,
-                "issued_at": ts
+                "issued_at": ts_ms
             }
         else:
             logger.error(f"[402PROOF] Malformed binary response from Notary. Received {len(response_data)} bytes.")
