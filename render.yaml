@@ -9,6 +9,8 @@ services:
         sync: false
       - key: TRADIER_ENV
         value: production
+      - key: TRADIER_LIVE
+        value: "true"
       - key: DISCORD_WEBHOOK_URL
         sync: false
       - key: DISCORD_WEBHOOK_ALL
