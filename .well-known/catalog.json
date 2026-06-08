@@ -20,7 +20,7 @@
       "id": "squeezeos",
       "name": "SqueezeOS — Institutional AI Market Intelligence",
       "tagline": "Multi-engine AI trading signals for autonomous agents. Pay per call. No API keys.",
-      "description": "Squeeze scanner, institutional options flow, IWM 0DTE analysis, AI council verdicts, signal futures prediction market, regulatory event oracle (SEC 8-K, FDA, USPTO), and Stigmergy pheromone coordination. 33 MCP tools. All premium calls gated by x402 RLUSD. Free demo, preview, and SSE stream always available.",
+      "description": "Squeeze scanner, institutional options flow, IWM 0DTE analysis, AI council verdicts, TRIPLE_LOCK_VERDICT premium tier (rarest signal — all three proprietary engines aligned), Decision Notary bridge (Xahau URIToken minting for EU AI Act audit trails), signal futures prediction market, regulatory event oracle (SEC 8-K, FDA, USPTO), bureau-discounted Stigmergy Dream Pools, and Agent Credit Bureau. 38 MCP tools. All premium calls gated by x402 RLUSD. Free demo, preview, notary info/quote, and SSE stream always available.",
       "category": ["finance", "trading", "market-intelligence", "agent-economy"],
       "status": "live",
       "url": "https://squeezeos-api.onrender.com",
@@ -213,6 +213,23 @@
     },
 
     {
+      "id": "sml-beast-orchestrator",
+      "name": "SML Beast Orchestrator — Autonomous x402 SEO + BB7 Outreach",
+      "tagline": "Two autonomous engines in one process: multi-vertical SEO content orchestrator + no-custody backlink outreach agent.",
+      "description": "Open-source reference implementation of an x402-driven autonomous content + outreach platform. The orchestrator pays for live SERP data via internal x402 micropayments and produces vertical-keyed JSON-LD content briefs. The BB7 outreach agent demos sub-50ms XRPL settlement to acquire backlinks — fire-and-forget Payment only, never escrow. Includes TOCTOU-closed state machine, kill switch, daily ceiling, manual review gates, CAN-SPAM compliance, IMAP reply monitor, and a full operator CLI. Zero custody throughout — once the demo USDC leaves the hot wallet, SML cannot recover it.",
+      "category": ["seo", "outreach", "autonomous-agents", "x402", "xrpl"],
+      "status": "live",
+      "url": "https://sml-beast-orchestrator.onrender.com",
+      "health": "https://sml-beast-orchestrator.onrender.com/health",
+      "repository": "https://github.com/Timwal78/sml-beast-orchestrator",
+      "payment_required": false,
+      "free_tier": true,
+      "open_source": true,
+      "license": "MIT",
+      "tags": ["seo", "backlinks", "outreach", "x402", "xrpl", "rlusd", "autonomous", "zero-custody", "no-escrow", "bb7", "open-source"]
+    },
+
+    {
       "id": "harmonic-scanner",
       "name": "SML Harmonic Scanner v4.0 (Rubik's Cube)",
       "tagline": "Institutional harmonic pattern engine. AI solves the cube → XRPL payment → Xahau URIToken minted as proof.",
@@ -267,8 +284,8 @@
       "transport": "streamable-http",
       "payment_asset": "RLUSD",
       "payment_network": "XRPL",
-      "free_tools": ["demo_council", "signal_preview", "signal_history", "system_status", "stigmergy_sniff"],
-      "tool_count": 33,
+      "free_tools": ["demo_council", "signal_preview", "signal_history", "system_status", "stigmergy_sniff", "triple_lock_demo", "notary_info", "notary_quote"],
+      "tool_count": 38,
       "categories": ["finance", "trading", "market-data", "agent-economy"]
     },
     "google_ap2": {

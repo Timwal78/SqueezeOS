@@ -452,10 +452,20 @@ def create_dream_pool(
         return pool
 
 
-def join_dream_pool(pool_id: str, wallet: str, context_data: Optional[dict] = None) -> dict:
+def join_dream_pool(
+    pool_id: str,
+    wallet: str,
+    context_data: Optional[dict] = None,
+    rep_discount_pct: float = 0.0,
+    rep_score: int = 0,
+) -> dict:
     """
     Agent joins a dream pool. Rent meter starts at this exact timestamp.
     Returns join confirmation with current pool state.
+
+    `rep_discount_pct` is the Agent Credit Bureau discount applied to this
+    member's rent on settlement (range 0.0-0.20). It is locked in at join
+    time so a mid-session score drop does not retro-bill the member.
     """
     with _lock:
         pool = _dream_pools.get(pool_id)
@@ -468,12 +478,18 @@ def join_dream_pool(pool_id: str, wallet: str, context_data: Optional[dict] = No
         if len(pool["members"]) >= pool["max_members"]:
             raise ValueError("Pool is at capacity")
 
+        discount = max(0.0, min(0.20, float(rep_discount_pct)))
+        effective_rate = round(pool["rent_per_second_rlusd"] * (1.0 - discount), 8)
+
         now = _now()
         pool["members"][wallet] = {
             "joined_at":      now,
             "context_tokens": 0,
             "data":           context_data or {},
             "role":           "MEMBER",
+            "rep_discount":   discount,
+            "rep_score":      int(rep_score),
+            "effective_rent_per_second": effective_rate,
             "tier":           "STANDARD",
             "execution_cooldown_until": 0.0,
         }
@@ -484,6 +500,9 @@ def join_dream_pool(pool_id: str, wallet: str, context_data: Optional[dict] = No
             "creator_wallet":        pool["creator_wallet"],
             "joined_at":             now,
             "rent_per_second_rlusd": pool["rent_per_second_rlusd"],
+            "rep_score":             int(rep_score),
+            "rep_discount_pct":      discount,
+            "effective_rent_per_second_rlusd": effective_rate,
             "member_count":          len(pool["members"]),
             "scratchpad_keys":       list(pool["scratchpad"].keys()),
         }
@@ -512,7 +531,8 @@ def leave_dream_pool(pool_id: str, wallet: str, tx_hash: str) -> dict:
         member = pool["members"][wallet]
         now = _now()
         duration = max(0.0, now - member["joined_at"])
-        rent_owed = round(duration * pool["rent_per_second_rlusd"], 8)
+        effective_rate = member.get("effective_rent_per_second", pool["rent_per_second_rlusd"])
+        rent_owed = round(duration * effective_rate, 8)
         platform  = round(rent_owed * PLATFORM_FEE_PCT, 8)
         creator_net = round(rent_owed - platform, 8)
 
@@ -525,6 +545,9 @@ def leave_dream_pool(pool_id: str, wallet: str, tx_hash: str) -> dict:
             "wallet":            wallet,
             "duration_seconds":  round(duration, 2),
             "rent_per_second":   pool["rent_per_second_rlusd"],
+            "rep_discount_pct":  member.get("rep_discount", 0.0),
+            "rep_score":         member.get("rep_score", 0),
+            "effective_rent_per_second": effective_rate,
             "rent_owed_rlusd":   rent_owed,
             "platform_fee":      platform,
             "creator_net":       creator_net,
@@ -692,13 +715,17 @@ def estimate_leave_cost(pool_id: str, wallet: str) -> dict:
         member = pool["members"][wallet]
         now = _now()
         duration = max(0.0, now - member["joined_at"])
-        rent_owed = round(duration * pool["rent_per_second_rlusd"], 8)
+        effective_rate = member.get("effective_rent_per_second", pool["rent_per_second_rlusd"])
+        rent_owed = round(duration * effective_rate, 8)
         platform  = round(rent_owed * PLATFORM_FEE_PCT, 8)
         return {
             "pool_id":          pool_id,
             "wallet":           wallet,
             "creator_wallet":   pool["creator_wallet"],
             "rent_per_second":  pool["rent_per_second_rlusd"],
+            "rep_discount_pct": member.get("rep_discount", 0.0),
+            "rep_score":        member.get("rep_score", 0),
+            "effective_rent_per_second": effective_rate,
             "duration_seconds": round(duration, 2),
             "rent_owed":        rent_owed,
             "platform_fee":     platform,

@@ -176,11 +176,12 @@ The SML ecosystem spans several dedicated domains handling specific network func
 
 **The Moat:** Zero custody is the non-negotiable core across all products. Earned reputation replaces API keys. XRPL native escrow (PREIMAGE-SHA-256) ensures Ghost Layer never touches funds—acting purely as a decentralized oracle. Every bridge, notarization, and marketplace release feeds the loyalty flywheel. Higher tier = lower fees, better listing access, and higher trust signals.
 
-- **SqueezeOS** — Institutional AI market intelligence API (33 MCP tools). Real-time squeeze scanner, options flow, IWM 0DTE, AI council verdicts, Sovereign Autopilot (live autonomous trading via OracleEngine + Kelly Criterion + Tradier).
+- **SqueezeOS** — Institutional AI market intelligence API (38 MCP tools). Real-time squeeze scanner, options flow, IWM 0DTE, AI council verdicts, TRIPLE_LOCK_VERDICT (rarest max-conviction signal), Decision Notary bridge (Xahau URIToken for EU AI Act audit trails), Sovereign Autopilot (live autonomous trading via OracleEngine + Kelly Criterion + Tradier).
 - **402Proof** — The payment firewall. Includes the world's first AI agent reputation scoring system (300-850 FICO-style) based on cryptographic spend history.
 - **Ghost Layer** — Dual-chain bridge (XRPL + Base). Features XRPL native escrow, Xahau URIToken minting (hand-rolled binary serializer), and Ed25519 attestation signing.
 - **SML Autonomous Agent** — Self-funding intelligence agent (`sml_agent.py`) that pays for its own market data using RLUSD.
 - **TipMaster** — Farcaster developer API to resolve usernames directly to XRPL wallets for zero-custody P2P tipping.
+- **SML Beast Orchestrator** — Open-source ([github.com/Timwal78/sml-beast-orchestrator](https://github.com/Timwal78/sml-beast-orchestrator)) reference implementation of an autonomous x402 SEO content engine + BB7 backlink outreach agent. Demos sub-50ms XRPL settlement for outreach, zero custody, fire-and-forget Payment only. MIT licensed.
 
 ---
 
@@ -231,9 +232,11 @@ Be loyal, get rewarded. Automatic. No codes.
 
 SqueezeOS is expanding its infrastructure to solve three fundamental problems in the agentic economy:
 
-### 1. AI Decision Notary (Regulatory Compliance Engine)
+### 1. AI Decision Notary (Regulatory Compliance Engine) — LIVE
 * **The Problem:** Hedge funds, insurance underwriters, and medical AI make high-stakes autonomous decisions with zero audit trails. With the EU AI Act approaching, verifiable infrastructure is legally required.
-* **The Solution:** Every AI agent decision is hashed and minted as a URIToken on Xahau. Immutable, timestamped, tamper-proof. (0.001 RLUSD per notarization).
+* **The Solution:** Every AI agent decision is hashed and minted as a URIToken on Xahau. Immutable, timestamped, tamper-proof.
+* **SqueezeOS bridge:** `POST /api/notary/notarize` — canonicalizes a council verdict / oracle directive and proxies it to Ghost Layer's `/v1/notarize` for Xahau minting. Three tiers: Standard 0.001 RLUSD (URIToken + memo), Certified 0.010 RLUSD (+ Ed25519 certificate), Sovereign 0.050 RLUSD (+ SOVEREIGN grade). Zero custody — SqueezeOS never touches the payment, agents pay Ghost Layer directly.
+* **Preview / discovery:** `GET /api/notary/info` lists tiers and loyalty discounts. `POST /api/notary/quote` returns the decision_hash preview without minting.
 
 ### 2. Agent Credit + Receivables Market
 * **The Problem:** AI agents can earn money, but they cannot borrow. No credit market exists for non-human economic actors.
@@ -286,6 +289,11 @@ Step 5: Cache token — reuse for 1 hour to minimize spend
 | GET /api/marketplace/leaderboard | Top signal sellers |
 | GET /api/marketplace/preview/{id} | Bias + confidence (no thesis) |
 | GET /api/hiring | Browse open agent jobs |
+| GET /api/notary/info | Decision Notary tiers + Xahau bridge discovery |
+| POST /api/notary/quote | Preview decision_hash for a verdict without minting |
+| POST /api/notary/notarize | Mint a SqueezeOS verdict on Xahau (proxies to Ghost Layer; 402 if unpaid) |
+| GET /api/triple-lock/info | TRIPLE_LOCK_VERDICT tier discovery + rarity description |
+| GET /api/triple-lock/demo | Free TRIPLE_LOCK preview for IWM (5-min cache, eval before paying) |
 | GET /api/relay/nodes | Relay node directory (cheapest first) |
 | GET /api/events | SSE live event stream |
 | GET /api/status | System health |
@@ -298,6 +306,7 @@ Step 5: Cache token — reuse for 1 hour to minimize spend
 
 | Endpoint | Cost | Endpoint ID |
 |----------|------|-------------|
+| POST /api/triple-lock | 0.25 RLUSD | rarest signal — only fires on full E1+E3+E4 alignment; returns NO_TRIPLE_LOCK with blocking engine otherwise |
 | POST /api/council | 0.10 RLUSD | `12a0e7a1-6812-4c3f-aa24-de6e3bc12b5a` |
 | GET /api/scan | 0.05 RLUSD | `160cf28d-b364-44eb-adbd-2489c5cc2cf8` |
 | GET /api/options | 0.05 RLUSD | `c951a374-2424-4064-ab80-35afe8053d29` |
@@ -306,6 +315,29 @@ Step 5: Cache token — reuse for 1 hour to minimize spend
 | GET /api/oracle/latest/{feed} | 0.02 RLUSD | `e7f8a9b0-c001-4d2e-bb35-ef7f4cd23c6a` |
 | POST /api/oracle/query | 0.02 RLUSD | `e7f8a9b0-c001-4d2e-bb35-ef7f4cd23c6a` |
 | GET /api/oracle/stream (SSE) | 0.05 RLUSD | `f8a9b0c1-d002-4e3f-cc46-f0845de34d7b` |
+
+### Reputation Discounts (Agent Credit Bureau-gated)
+
+Higher 402Proof bureau scores unlock automatic platform-fee discounts on
+two zero-custody markets. Discount is computed at settlement time from the
+live bureau score; failure-closed (offline bureau = 0% discount).
+
+| Bureau score | Dream pool rent discount | Futures fee discount |
+|--------------|--------------------------|----------------------|
+| 300–499      | 0%                       | 0%                   |
+| 500–599      | 5%                       | 5%                   |
+| 600–699      | 10%                      | 10%                  |
+| 700–799      | 15%                      | 15%                  |
+| 800–850      | 20% (max)                | 20% (max)            |
+
+* **Dream pools (`/api/stigmergy/dream/join`):** discount is locked in at join
+  time and baked into the rent meter. Mid-session bureau score changes do
+  NOT retro-bill — the rate the agent saw on join is the rate they pay.
+* **Signal futures (`/api/futures`):** discount applies to the winner's
+  platform fee at settlement. Higher rep → winner keeps more of the pot.
+
+The platform always retains ≥ 80% of its base fee from the highest-rep
+agents, so the operator's margin floor is mathematically guaranteed.
 
 ### Relay Bulk Endpoints (40% off — score ≥ 600 required)
 

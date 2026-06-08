@@ -37,6 +37,7 @@ from flask import Blueprint, jsonify, request
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 import stigmergy_engine as eng
 import xrpl_verify
+from core.bureau_client import discount_for_wallet
 from core.legacy import clean_data
 
 logger = logging.getLogger("SqueezeOS-Stigmergy")
@@ -504,11 +505,15 @@ def join_dream():
     if err:
         return err
 
+    discount_pct, rep_score = discount_for_wallet(body["wallet"])
+
     try:
         confirmation = eng.join_dream_pool(
-            pool_id      = body["pool_id"],
-            wallet       = body["wallet"],
-            context_data = body.get("context_data"),
+            pool_id           = body["pool_id"],
+            wallet            = body["wallet"],
+            context_data      = body.get("context_data"),
+            rep_discount_pct  = discount_pct,
+            rep_score         = rep_score,
         )
     except ValueError as e:
         return _err(str(e))
@@ -518,7 +523,7 @@ def join_dream():
 
     logger.info(
         f"[STIGMERGY] DREAM join pool={body['pool_id'][:8]}… "
-        f"wallet={body['wallet'][:12]}…"
+        f"wallet={body['wallet'][:12]}… rep_score={rep_score} discount={discount_pct*100:.0f}%"
     )
     return jsonify(clean_data({
         "status":     "joined",

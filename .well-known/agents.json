@@ -108,6 +108,27 @@
       "free": true,
       "description": "Three independent proprietary EMA engines across three distinct market dimensions (macro price stretch, dark-pool volume kinetics, price ribbon harmonics). TRIPLE_LOCK consensus fires when all three engines agree at independent dimensions — the highest-conviction proprietary signal in the suite. LIE_DETECTOR_ACTIVE flags cross-engine divergence (institutional accumulation footprint). Feeds council_verdict confidence.",
       "signals": ["TRIPLE_LOCK_BULL", "TRIPLE_LOCK_BEAR", "LIE_DETECTOR_ACTIVE", "BULL_CONFLUENCE", "BEAR_CONFLUENCE", "BULL_LADDER", "BEAR_LADDER", "BULL_DIVERGENT", "BEAR_DIVERGENT", "NEUTRAL"]
+    },
+    {
+      "id": "triple_lock_verdict",
+      "name": "TRIPLE_LOCK_VERDICT — Rarest Premium Signal",
+      "endpoint": "/api/triple-lock",
+      "method": "POST",
+      "cost": "0.25",
+      "currency": "RLUSD",
+      "free": false,
+      "description": "The rarest, highest-conviction signal in the SqueezeOS suite. Returns TRIPLE_LOCK_BULL or TRIPLE_LOCK_BEAR ONLY when all three proprietary engines align across three independent market dimensions. Otherwise returns NO_TRIPLE_LOCK with the blocking engine identified — itself an actionable 'do not max-size' signal. Designed for max-position-sizing decisions. 60-second per-symbol cache. Free IWM preview at /api/triple-lock/demo (5-min cache).",
+      "signals": ["TRIPLE_LOCK_BULL", "TRIPLE_LOCK_BEAR", "NO_TRIPLE_LOCK"]
+    },
+    {
+      "id": "decision_notary",
+      "name": "Decision Notary — Xahau URIToken Bridge",
+      "endpoint": "/api/notary/notarize",
+      "method": "POST",
+      "cost": "0.001 / 0.010 / 0.050",
+      "currency": "RLUSD",
+      "free": false,
+      "description": "Mint any SqueezeOS verdict (council, oracle, triple-lock) as a permanent URIToken on Xahau for EU AI Act-compatible audit trails. SqueezeOS canonicalizes the verdict and proxies to Ghost Layer /v1/notarize. Three tiers: Standard (URIToken + memo), Certified (+ Ed25519 cert), Sovereign (+ SOVEREIGN grade). Zero custody — agents pay Ghost Layer directly; SqueezeOS never touches the token. Free /api/notary/info for tier discovery, free /api/notary/quote for decision_hash preview without minting."
     }
   ],
   "sovereign_autopilot": {
@@ -247,6 +268,15 @@
         "GET /api/resolve/{username} — Farcaster username → XRPL wallet (free)",
         "GET /api/leaderboard — Top tipped users (free)"
       ],
+      "status": "live"
+    },
+    "sml_beast_orchestrator": {
+      "description": "SML Beast Orchestrator — Open-source reference implementation of an autonomous x402-driven SEO content engine + BB7 backlink outreach agent. Demos sub-50ms XRPL settlement for outreach, zero custody throughout (fire-and-forget Payment only, no escrow). MIT licensed.",
+      "url": "https://sml-beast-orchestrator.onrender.com",
+      "repository": "https://github.com/Timwal78/sml-beast-orchestrator",
+      "health": "https://sml-beast-orchestrator.onrender.com/health",
+      "license": "MIT",
+      "open_source": true,
       "status": "live"
     },
     "echo_forge": {
