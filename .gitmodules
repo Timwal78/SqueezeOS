@@ -1,0 +1,4 @@
+[submodule "nexus402"]
+	path = nexus402
+	url = https://github.com/Timwal78/NEXUS402.git
+	branch = main
