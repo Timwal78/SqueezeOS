@@ -31,6 +31,7 @@ from core.proprietary_ema_engine import _Engine1, _Engine3, _ema, _tail, redact_
 from core.engine2_settlement import get_clock, stamp_ignition
 from core.engine4_temporal_mirror import Engine4_TemporalMirror
 from core.engine5_gann_macro import Engine5_GannMacro
+from core.engine6_base4_matrix import Engine6_Base4Matrix, redact_engine6_block
 
 logger = logging.getLogger("SML.Convergence")
 
@@ -179,6 +180,7 @@ class ConvergenceEngine:
              else {"engine": 3, "signal": "NO_VOLUME_DATA", "score_contrib": 0}
         e4 = Engine4_TemporalMirror().analyze(closes, bars_with_dates)
         e5 = Engine5_GannMacro().analyze(closes)
+        e6 = Engine6_Base4Matrix().analyze(closes)
 
         # Auto-stamp E2 if E3 volume fires + E1 suppressed
         e3_firing   = e3.get("signal") in ("DARK_POOL_CEILING_BREACH", "DARK_POOL_ACCUMULATION", "PHI_IGNITION")
@@ -196,6 +198,7 @@ class ConvergenceEngine:
             "e3_volume_firing":      e3_firing,
             "e2_kill_zone":          e2.get("in_kill_zone", False),
             "e4_temporal_aligned":   e4.get("aligned", False),
+            "e6_fractal_lock":       e6.get("signal") in ("FRACTAL_LOCK_BULL", "FRACTAL_LOCK_BEAR", "GOD_MODE_BULL", "GOD_MODE_BEAR"),
         }
 
         # Lie detector (E1 suppressed + E3 exploding = dark-pool accumulation)
@@ -210,13 +213,20 @@ class ConvergenceEngine:
             e3.get("score_contrib", 0) +
             e4.get("score_contrib", 0) +
             e5.get("score_contrib", 0) +
-            e2.get("score_contrib", 0)
+            e2.get("score_contrib", 0) +
+            e6.get("score_contrib", 0)
         )
         composite = max(0, min(100, 50 + raw_score))
 
         # ── Signal label ─────────────────────────────────────────
-        if beastmode:
+        is_god_mode = e6.get("signal") in ("GOD_MODE_BULL", "GOD_MODE_BEAR")
+        if is_god_mode:
+            signal = "GOD_MODE"
+            beastmode = True
+        elif beastmode:
             signal = "BEASTMODE"
+        elif e6.get("signal") in ("FRACTAL_LOCK_BULL", "FRACTAL_LOCK_BEAR"):
+            signal = "FRACTAL_LOCK"
         elif active_count >= 4:
             signal = "HIGH_CONVERGENCE"
         elif active_count >= 3:
@@ -249,6 +259,7 @@ class ConvergenceEngine:
                 "e3_volume_firing":    {"active": gate["e3_volume_firing"],    "signal": e3.get("signal")},
                 "e2_kill_zone":        {"active": gate["e2_kill_zone"],        "status": e2.get("status")},
                 "e4_temporal_aligned": {"active": gate["e4_temporal_aligned"], "signal": e4.get("signal")},
+                "e6_fractal_lock":     {"active": gate["e6_fractal_lock"],     "signal": e6.get("signal")},
             },
             "engines": {
                 "e1": _redact(e1),
@@ -256,6 +267,7 @@ class ConvergenceEngine:
                 "e3": _redact(e3),
                 "e4": _redact(e4),
                 "e5": _redact(e5),
+                "e6": redact_engine6_block(e6),
             },
         }
 
