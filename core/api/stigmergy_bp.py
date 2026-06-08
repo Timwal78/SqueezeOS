@@ -699,8 +699,9 @@ def sovereign_shift():
       signature             str   — The 64-byte Ed25519 signature
       alpha_captured_rlusd  float — The raw alpha secured during the exit
       std_dev_36            float — The volatility metric handled during execution
+      raw_price             float — The underlying asset price at execution
     """
-    body, err = _require("pool_id", "wallet", "certificate_id", "signature", "alpha_captured_rlusd", "std_dev_36")
+    body, err = _require("pool_id", "wallet", "certificate_id", "signature", "alpha_captured_rlusd", "std_dev_36", "raw_price")
     if err:
         return err
 
@@ -711,7 +712,8 @@ def sovereign_shift():
             cert_id=body["certificate_id"],
             signature=body["signature"],
             alpha_captured_rlusd=float(body["alpha_captured_rlusd"]),
-            std_dev_36=float(body["std_dev_36"])
+            std_dev_36=float(body["std_dev_36"]),
+            raw_price=float(body["raw_price"])
         )
     except ValueError as e:
         return _err(str(e))

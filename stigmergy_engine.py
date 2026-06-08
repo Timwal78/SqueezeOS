@@ -440,6 +440,7 @@ def create_dream_pool(
                     "data":           {},
                     "role":           "CREATOR",
                     "tier":           "STANDARD",
+                    "execution_cooldown_until": 0.0,
                 }
             },
             "scratchpad":            {},
@@ -474,6 +475,7 @@ def join_dream_pool(pool_id: str, wallet: str, context_data: Optional[dict] = No
             "data":           context_data or {},
             "role":           "MEMBER",
             "tier":           "STANDARD",
+            "execution_cooldown_until": 0.0,
         }
         return {
             "pool_id":               pool_id,
@@ -591,6 +593,7 @@ def apply_sovereign_shift(
     signature: str,
     alpha_captured_rlusd: float,
     std_dev_36: float,
+    raw_price: float,
 ) -> dict:
     """
     Upgrades an agent to the SOVEREIGN tier upon presentation of a Ghost Layer 402Proof.
@@ -608,13 +611,25 @@ def apply_sovereign_shift(
         member["tier"] = "SOVEREIGN"
 
         # 1. Dynamic Secondary Vault Sweep
-        # Baseline 10% sweep, geometrically expanding based on execution volatility (std_dev_36)
-        # Cap the sweep at 50% to ensure primary liquidity maintains depth.
-        sweep_pct = min(0.50, 0.10 + (std_dev_36 * 0.015))
+        # Vault Sweep % = Baseline % + ((std_dev_36 / Raw Price) * Risk Multiplier)
+        baseline_pct = 0.05
+        risk_multiplier = 5.0
+        safe_price = max(0.0001, raw_price)
+        calculated_pct = baseline_pct + ((std_dev_36 / safe_price) * risk_multiplier)
+        sweep_pct = min(0.50, calculated_pct)
+
         vault_sweep_rlusd = round(alpha_captured_rlusd * sweep_pct, 6)
         released_collateral = round(alpha_captured_rlusd - vault_sweep_rlusd, 6)
 
         now = _now()
+        
+        # 2. Elastic Algorithmic Cool-Down
+        # Cooldown Seconds = Base Cooldown + (std_dev_36 * Multiplier)
+        base_cooldown_seconds = 15.0
+        cooldown_multiplier = 10.0
+        cooldown_duration = base_cooldown_seconds + (std_dev_36 * cooldown_multiplier)
+        member["execution_cooldown_until"] = now + cooldown_duration
+
         shift = {
             "tier": "SOVEREIGN",
             "cert_id": cert_id,
@@ -623,6 +638,8 @@ def apply_sovereign_shift(
             "alpha_captured_rlusd": alpha_captured_rlusd,
             "vault_sweep_rlusd": vault_sweep_rlusd,
             "released_collateral_rlusd": released_collateral,
+            "cooldown_duration_seconds": round(cooldown_duration, 2),
+            "cooldown_until": member["execution_cooldown_until"],
             "timestamp": now,
         }
 
