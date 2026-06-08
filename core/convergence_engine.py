@@ -33,6 +33,7 @@ from core.engine4_temporal_mirror import Engine4_TemporalMirror
 from core.engine5_gann_macro import Engine5_GannMacro
 from core.engine6_base4_matrix import Engine6_Base4Matrix, redact_engine6_block
 from core.engine7_parabolic import Engine7_Parabolic, redact_engine7_block
+from core.state import state
 
 logger = logging.getLogger("SML.Convergence")
 
@@ -182,14 +183,20 @@ class ConvergenceEngine:
         e4 = Engine4_TemporalMirror().analyze(closes, bars_with_dates)
         e5 = Engine5_GannMacro().analyze(closes)
         e6 = Engine6_Base4Matrix().analyze(closes)
-        # Bifurcated APEX SINGULARITY trigger: Engine 6 (Macro) AND Engine 3 (Catalyst)
+        
+        # ── Temporal Validation Layer (TTL Buffer) ──
+        e3_sig = e3.get("signal")
+        if e3_sig in ("DARK_POOL_CEILING_BREACH", "DISTRIBUTION"):
+            state.update_engine3_buffer(symbol, e3_sig)
+
+        # Bifurcated APEX SINGULARITY trigger with 250ms Temporal Decay Window
         e6_bull_locked = e6.get("signal") in ("FRACTAL_LOCK_BULL", "GOD_MODE_BULL")
-        e3_ceiling_breach = e3.get("signal") == "DARK_POOL_CEILING_BREACH"
+        e3_breach_active = state.check_engine3_buffer(symbol, "DARK_POOL_CEILING_BREACH", ttl=0.250)
         
         e6_bear_locked = e6.get("signal") in ("FRACTAL_LOCK_BEAR", "GOD_MODE_BEAR")
-        e3_distribution = e3.get("signal") == "DISTRIBUTION"
+        e3_dist_active = state.check_engine3_buffer(symbol, "DISTRIBUTION", ttl=0.250)
         
-        is_singularity = (e6_bull_locked and e3_ceiling_breach) or (e6_bear_locked and e3_distribution)
+        is_singularity = (e6_bull_locked and e3_breach_active) or (e6_bear_locked and e3_dist_active)
         e7 = Engine7_Parabolic().analyze(closes, is_singularity)
 
         # Auto-stamp E2 if E3 volume fires + E1 suppressed
@@ -236,6 +243,10 @@ class ConvergenceEngine:
         if is_apex:
             signal = "APEX_SINGULARITY"
             beastmode = True
+            
+            # Spin up the high-frequency Engine 7 tracker in the background
+            Engine7_Parabolic.launch_tracking_thread(symbol)
+            
         elif is_god_mode:
             signal = "GOD_MODE"
             beastmode = True

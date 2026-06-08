@@ -40,7 +40,8 @@ class GlobalState:
         self.scan_results: List[dict] = [] # Squeeze candidates
         self.flow_results: List[dict] = [] # Option flow alerts
         
-        # ── 3. Strategic Telemetry ──
+        # ── 3. Strategic Telemetry & Micro-Buffers ──
+        self.engine3_buffer: Dict[str, dict] = {} # TTL micro-buffer for Engine 3
         self.whale_stalker_results: List[dict] = []
         self.left_wing_telemetry: List[dict] = []
         self.discovery_results: List[dict] = []
@@ -141,6 +142,28 @@ class GlobalState:
         with self.lock:
             self.audit["universe_size"] = len(self.universe)
             self.audit["terminal_depth"] = len(self.terminal_feed)
+
+    def update_engine3_buffer(self, symbol: str, signal: str):
+        """Stores a high-frequency Engine 3 event with an exact timestamp."""
+        with self.lock:
+            if symbol not in self.engine3_buffer:
+                self.engine3_buffer[symbol] = {}
+            self.engine3_buffer[symbol] = {
+                "signal": signal,
+                "ts": time.time()
+            }
+
+    def check_engine3_buffer(self, symbol: str, target_signal: str, ttl: float = 0.25) -> bool:
+        """Evaluates if a specific Engine 3 signal occurred within the TTL window."""
+        with self.lock:
+            event = self.engine3_buffer.get(symbol)
+            if not event:
+                return False
+            if event["signal"] != target_signal:
+                return False
+            
+            # Check temporal decay (TTL)
+            return (time.time() - event["ts"]) <= ttl
 
 # ── Global Synchronization Primitives ──
 state = GlobalState()

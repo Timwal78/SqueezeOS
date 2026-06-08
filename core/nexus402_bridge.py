@@ -70,11 +70,18 @@ def notarize_execution(symbol: str, directive: str, qty: int, limit_price: float
             
         logger.info(f"[402PROOF] Blasting 48-byte aligned payload via {IPC_TYPE.upper()} for {symbol} execution...")
         
+        # RAW HEX DUMP
+        hex_dump = ' '.join(f'{b:02x}' for b in payload)
+        logger.info(f"[402PROOF-HEX-OUT] {hex_dump}")
+        
         sock.sendall(payload)
         
         # Expecting 80 bytes response: 16 bytes Cert ID (padded) + 64 bytes Ed25519 Signature
         response_data = sock.recv(80)
         sock.close()
+        
+        hex_dump_in = ' '.join(f'{b:02x}' for b in response_data)
+        logger.info(f"[402PROOF-HEX-IN ] {hex_dump_in}")
             
         # ── 3. Unpack Response ──
         if len(response_data) == 80:
