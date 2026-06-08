@@ -83,11 +83,15 @@ class Engine7_Parabolic:
                             if symbol in active_trades:
                                 trade = active_trades[symbol]
                                 qty = trade.get("qty", 0)
-                                # Marketable Limit Order pegged 2% below current proxy price
+                                # Marketable Limit Order dynamically pegged using the Golden Ratio multiplier of active volatility
                                 current_price = closes[-1]
-                                limit_price = round(current_price * 0.98, 2)
+                                raw_bands = result.get("_raw_bands", {})
+                                std_dev_36 = raw_bands.get("std_dev_36", current_price * 0.02) # Fallback to 2% if missing
                                 
-                                logger.critical(f"[APEX] EXECUTING EMERGENCY LIQUIDATION for {symbol}: SELL {qty} @ {limit_price}")
+                                dynamic_discount = 1.618 * std_dev_36
+                                limit_price = round(current_price - dynamic_discount, 2)
+                                
+                                logger.critical(f"[APEX] EXECUTING EMERGENCY LIQUIDATION for {symbol}: SELL {qty} @ {limit_price} (Dynamic Discount: -${dynamic_discount:.2f})")
                                 exec_eng.execute_trade(
                                     symbol=symbol,
                                     directive="SELL",
@@ -95,6 +99,16 @@ class Engine7_Parabolic:
                                     price=limit_price,
                                     reason=f"APEX_TERMINATED: {sig}"
                                 )
+                                
+                                # ── 402Proof Settlement Attestation ──
+                                try:
+                                    from core.nexus402_bridge import notarize_execution
+                                    cert = notarize_execution(symbol, "SELL", qty, limit_price, sig, dynamic_discount)
+                                    if cert:
+                                        state.push_terminal("402PROOF_MINTED", f"Proof of Settlement secured. Cert: {cert.get('certificate_id')}", symbol, score=100.0)
+                                except ImportError:
+                                    logger.warning("[APEX] core.nexus402_bridge missing. Execution untracked by Ghost Layer.")
+                                    
                     break
         finally:
             cls._active_trackers.discard(symbol)
