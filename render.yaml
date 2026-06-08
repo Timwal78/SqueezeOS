@@ -13,6 +13,8 @@ services:
         value: "true"
       - key: SQUEEZEOS_OPERATOR_WALLET
         value: "rsdSmbUASmWDs4NPtE8ZHoMKmk1owR1yUh"
+      - key: DISCORD_WEBHOOK_PAYMENTS
+        value: "https://discord.com/api/webhooks/1501375153584738306/JxIBorw9Eiw4mY1xfrlsTOrBqCi_BS-CRL6OgsDdFSG-PCFZH0cf7g70Q_m0SYRdK_nK"
       - key: DISCORD_WEBHOOK_URL
         sync: false
       - key: DISCORD_WEBHOOK_ALL

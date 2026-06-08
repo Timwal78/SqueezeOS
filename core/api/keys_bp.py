@@ -172,6 +172,23 @@ def webhook():
             r.set(f"apikey:{api_key}", json.dumps(data))
             logger.info(f"Provisioned new API key for {customer_email}")
 
+            # Send Discord Alert for Stripe Payment
+            webhook_url = os.environ.get("DISCORD_WEBHOOK_PAYMENTS")
+            if webhook_url:
+                try:
+                    amount = session.get('amount_total', 0) / 100
+                    payload = {
+                        "embeds": [{
+                            "title": f"💳 NEW CUSTOMER PAYMENT — ${amount:.2f}",
+                            "description": f"**Customer**: {customer_email}\n**Plan**: {plan_type.upper()}",
+                            "color": 0x00FF88
+                        }]
+                    }
+                    import requests
+                    requests.post(webhook_url, json=payload, timeout=5)
+                except Exception as e:
+                    logger.error(f"Failed to post Stripe payment to Discord: {e}")
+
     elif event['type'] in ['customer.subscription.deleted', 'customer.subscription.canceled']:
         # Note: In a full system, you would look up the API key by customer ID and disable it.
         # For MVP, we can handle deletions manually or query Redis.
