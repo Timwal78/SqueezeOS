@@ -643,23 +643,73 @@ def create_app():
             data   = engine.analyze(symbol)
             bias   = data.get("bias") or data.get("directive", "NEUTRAL")
             regime = data.get("regime", "UNKNOWN")
+            trend_score = data.get("trend_score", 0.0)
+            
+            # Determine Conviction Tier
+            if abs(trend_score) > 0.8: conviction = "EXTREME"
+            elif abs(trend_score) > 0.5: conviction = "HIGH"
+            elif abs(trend_score) > 0.2: conviction = "MODERATE"
+            else: conviction = "LOW"
+            
+            # Extract top signals
+            signals = data.get("signals", [])
+            top_signals = signals[:3] if isinstance(signals, list) else []
+            
         except Exception:
-            bias, regime = "NEUTRAL", "UNKNOWN"
+            bias, regime, conviction, top_signals = "NEUTRAL", "UNKNOWN", "LOW", []
+            
         result = {
             "symbol":  symbol,
             "bias":    bias,
             "regime":  regime,
+            "conviction_tier": conviction,
+            "top_signals_detected": len(top_signals),
+            "top_signals_preview": top_signals,
             "ts":      now,
             "preview": True,
             "upgrade": {
                 "full_verdict": "/api/council",
                 "price_rlusd":  "0.10",
-                "includes":     ["confidence", "thesis", "engine_breakdown", "gamma_wall", "vpin"],
+                "includes":     ["confidence", "thesis", "full_engine_breakdown", "gamma_wall_levels", "vpin_exact_value", "institutional_flow_data", "dark_pool_prints"],
                 "gateway":      "https://four02proof.onrender.com",
+                "view_example": "/api/council/example"
             },
         }
         _preview_cache[symbol] = result
         return jsonify(result)
+
+    @app.route('/api/council/example', methods=['GET'])
+    def council_example():
+        """Returns a mocked, highly detailed 'Full Council' response for pre-flight conversion."""
+        return jsonify({
+            "status": "READY",
+            "symbol": "SPY",
+            "verdict": {
+                "symbol": "SPY",
+                "bias": "BULLISH",
+                "regime": "GAMMA_SQUEEZE",
+                "confidence": 92,
+                "thesis": "SPY live data feed indicates a severe Gamma Compression at 530. Dealer positioning is aggressively short gamma, forcing reflexive buying into upward ticks. VPIN is elevated at 0.89 indicating massive institutional accumulation.",
+                "timestamp": time.time()
+            },
+            "engines": {
+                "sml": {
+                    "regime": "GAMMA_SQUEEZE",
+                    "trend_score": 0.92,
+                    "vpin": 0.89,
+                    "gamma_wall_above": 535.0,
+                    "gamma_wall_below": 525.0,
+                    "bias": "BULLISH",
+                    "directive": "LONG",
+                    "signals": [
+                        "Harmonic Convergence Detected",
+                        "Dark Pool Block Print (531.05) - $500M+",
+                        "Call Buying Anomaly (> 1000% Avg Vol)"
+                    ]
+                }
+            },
+            "note": "This is a mocked example of the data you receive when paying 0.10 RLUSD for /api/council. Run the actual endpoint to get live market data."
+        })
 
     @app.route('/api/history', methods=['GET'])
     def signal_history_all():
