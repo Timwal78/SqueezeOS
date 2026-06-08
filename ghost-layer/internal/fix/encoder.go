@@ -6,79 +6,54 @@ import (
 	"time"
 )
 
-// ExecutionReport represents the fields needed for the SqueezeOS Drop-Copy FIX message.
-type ExecutionReport struct {
-	CertID           string
-	ClientOrderID    string
-	Symbol           string
-	Qty              float64
-	Price            float64
-	AlphaRetainedPct float64
-	Timestamp        int64
+// ExecutionTelemetry represents the internal SqueezeOS execution data
+type ExecutionTelemetry struct {
+	ClientOrderID   string
+	Symbol          string
+	Qty             float64
+	TriggerPrice    float64
+	CertID          string
+	AlphaRetained   float64
+	Timestamp       int64
 }
 
-// EncodeExecutionReport transforms the JSON payload into a SOH-delimited FIX 4.4 message.
-func EncodeExecutionReport(report ExecutionReport) string {
+// EncodeExecutionReport serializes the telemetry into a compliant FIX 4.4 message
+func EncodeExecutionReport(sender, target string, data ExecutionTelemetry) string {
 	var body bytes.Buffer
+	soh := "\x01"
 
-	// Hardcoded headers for SqueezeOS Drop-Copy Sender
-	senderCompID := "SQUEEZEOS_PROD"
-	targetCompID := "INSTITUTIONAL_PB"
-	msgType := "8" // Execution Report
+	// 1. Construct Body Fields
+	body.WriteString(fmt.Sprintf("35=8%s", soh)) // MsgType = Execution Report
+	body.WriteString(fmt.Sprintf("49=%s%s", sender, soh))
+	body.WriteString(fmt.Sprintf("56=%s%s", target, soh))
+	body.WriteString(fmt.Sprintf("34=1%s", soh)) // Dummy SeqNum
+	body.WriteString(fmt.Sprintf("52=%s%s", time.Now().UTC().Format("20060102-15:04:05"), soh))
+	body.WriteString(fmt.Sprintf("11=%s%s", data.ClientOrderID, soh))
+	body.WriteString(fmt.Sprintf("17=%s%s", data.CertID, soh))
+	body.WriteString(fmt.Sprintf("37=%s%s", data.CertID, soh)) // OrderID mirrors CertID
+	body.WriteString(fmt.Sprintf("39=2%s", soh))              // OrdStatus = Filled
+	body.WriteString(fmt.Sprintf("55=%s%s", data.Symbol, soh))
+	body.WriteString(fmt.Sprintf("38=%.4f%s", data.Qty, soh))
+	body.WriteString(fmt.Sprintf("44=%.2f%s", data.TriggerPrice, soh))
+	body.WriteString(fmt.Sprintf("60=%s%s", time.Unix(data.Timestamp, 0).UTC().Format("20060102-15:04:05"), soh))
+	body.WriteString(fmt.Sprintf("58=AlphaRetained:%.2f%%%s", data.AlphaRetained, soh)) // Custom telemetry note
 
-	// Convert Unix timestamp to strict UTC format (YYYYMMDD-HH:MM:SS)
-	t := time.Unix(report.Timestamp, 0).UTC()
-	transactTime := t.Format("20060102-15:04:05")
-	sendingTime := time.Now().UTC().Format("20060102-15:04:05")
-
-	// Construct Body fields (SOH separated)
-	appendTag(&body, 35, msgType)
-	appendTag(&body, 49, senderCompID)
-	appendTag(&body, 56, targetCompID)
-	appendTag(&body, 34, "1") // Dummy SeqNum for PoC
-	appendTag(&body, 52, sendingTime)
-	
-	// Payload Fields
-	appendTag(&body, 17, report.CertID)
-	appendTag(&body, 11, report.ClientOrderID)
-	appendTag(&body, 39, "2") // 2 = Filled
-	appendTag(&body, 55, report.Symbol)
-	appendTag(&body, 38, fmt.Sprintf("%.4f", report.Qty))
-	appendTag(&body, 44, fmt.Sprintf("%.2f", report.Price))
-	appendTag(&body, 60, transactTime)
-	
-	// Injecting Alpha Retained Pct into Tag 58 (Text)
-	appendTag(&body, 58, fmt.Sprintf("ALPHA_RETAINED_PCT=%.2f", report.AlphaRetainedPct))
-
-	// Calculate Body Length
 	bodyStr := body.String()
-	bodyLength := len(bodyStr)
 
-	// Construct Full Message (Header + Body)
-	var msg bytes.Buffer
-	appendTag(&msg, 8, "FIX.4.4")
-	appendTag(&msg, 9, fmt.Sprintf("%d", bodyLength))
-	msg.WriteString(bodyStr)
+	// 2. Construct Header Fields (Prefixing the Body)
+	var header bytes.Buffer
+	header.WriteString(fmt.Sprintf("8=FIX.4.4%s", soh))
+	header.WriteString(fmt.Sprintf("9=%d%s", len(bodyStr), soh)) // Tag 9 BodyLength
 
-	// Calculate Checksum over the entire message
-	checksum := calculateChecksum(msg.String())
-	
-	// Append Checksum (Tag 10)
-	appendTag(&msg, 10, checksum)
+	fullMessageBeforeChecksum := header.String() + bodyStr
 
-	return msg.String()
-}
-
-// appendTag appends a standard FIX tag and value followed by the SOH delimiter (\x01)
-func appendTag(buf *bytes.Buffer, tag int, value string) {
-	buf.WriteString(fmt.Sprintf("%d=%s\x01", tag, value))
-}
-
-// calculateChecksum computes the modulo 256 sum of all characters in the string, returned as a 3-digit string.
-func calculateChecksum(msg string) string {
-	sum := 0
-	for _, char := range msg {
-		sum += int(char)
+	// 3. Calculate Modulo-256 Checksum
+	var checksum int
+	for i := 0; i < len(fullMessageBeforeChecksum); i++ {
+		checksum += int(fullMessageBeforeChecksum[i])
 	}
-	return fmt.Sprintf("%03d", sum%256)
+	checksum = checksum % 256
+
+	// 4. Append Trailer
+	return fmt.Sprintf("%s10=%03d%s", fullMessageBeforeChecksum, checksum, soh)
 }

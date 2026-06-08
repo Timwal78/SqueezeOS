@@ -11,6 +11,8 @@ import (
 	"net"
 	"os"
 	"runtime"
+
+	"ghost-layer-core/internal/fix"
 )
 
 // ExecutionPayload must mirror the Python struct layout exactly (48 bytes, LittleEndian)
@@ -95,6 +97,19 @@ func handleConnection(conn net.Conn, priv ed25519.PrivateKey) {
 		// Dispatch the Xahau testnet submission asynchronously
 		// This guarantees zero blocking on the 0.43 ms IPC loop
 		go SubmitToXahau(cert)
+
+		// Dispatch to the Drop-Copy FIX stream asynchronously via the OutboundQueue
+		if fix.GlobalServer != nil {
+			fix.GlobalServer.OutboundQueue <- fix.ExecutionTelemetry{
+				CertID:        cert.CertificateID,
+				ClientOrderID: fmt.Sprintf("EX-%d", payload.Timestamp),
+				Symbol:        symbol,
+				Qty:           float64(payload.Qty),
+				TriggerPrice:  payload.LimitPrice,
+				AlphaRetained: payload.DynamicDiscount,
+				Timestamp:     payload.Timestamp,
+			}
+		}
 
 		// Blast 80 raw bytes back to Python: 16 byte Cert ID string (padded) + 64 byte raw signature
 		rawSig, _ := hex.DecodeString(cert.Signature)
