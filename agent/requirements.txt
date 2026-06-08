@@ -1,4 +1,4 @@
 anthropic>=0.107.1
-xrpl-py>=4.5.0
+xrpl-py>=5.0.0
 requests>=2.34.2
 APScheduler>=3.11.2
