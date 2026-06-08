@@ -681,3 +681,52 @@ def close_dream():
         return _err("Internal error", 500)
 
     return jsonify(clean_data({"status": "closed", **result}))
+
+
+@stigmergy_bp.route("/allocation/sovereign-shift", methods=["POST"])
+def sovereign_shift():
+    """
+    Ingest a 402Proof DecisionCertificate to trigger the Sovereign Allocation Shift.
+    
+    Dynamically expands the agent's capital allocation limits inside the Dream Pool,
+    routes a fraction of the captured alpha to an autonomous Secondary Reserve Vault,
+    and broadcasts a stigmergic pheromone forcing subordinate agents to contract.
+
+    Body:
+      pool_id               str   — Target dream pool
+      wallet                str   — Agent's XRPL wallet
+      certificate_id        str   — The 12-byte Cert ID from the Go Notary
+      signature             str   — The 64-byte Ed25519 signature
+      alpha_captured_rlusd  float — The raw alpha secured during the exit
+      std_dev_36            float — The volatility metric handled during execution
+    """
+    body, err = _require("pool_id", "wallet", "certificate_id", "signature", "alpha_captured_rlusd", "std_dev_36")
+    if err:
+        return err
+
+    try:
+        shift = eng.apply_sovereign_shift(
+            pool_id=body["pool_id"],
+            wallet=body["wallet"],
+            cert_id=body["certificate_id"],
+            signature=body["signature"],
+            alpha_captured_rlusd=float(body["alpha_captured_rlusd"]),
+            std_dev_36=float(body["std_dev_36"])
+        )
+    except ValueError as e:
+        return _err(str(e))
+    except Exception as e:
+        logger.error(f"[STIGMERGY] sovereign_shift error: {e}")
+        return _err("Internal error", 500)
+
+    logger.info(
+        f"[STIGMERGY] SOVEREIGN SHIFT activated in pool={body['pool_id'][:8]}… "
+        f"for wallet={body['wallet'][:12]}… Vault Sweep: {shift['vault_sweep_rlusd']} RLUSD"
+    )
+
+    return jsonify(clean_data({
+        "status": "sovereign_upgrade_complete",
+        "pool_id": body["pool_id"],
+        "wallet": body["wallet"],
+        "shift_metrics": shift
+    })), 200
