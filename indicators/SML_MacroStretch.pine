@@ -1,20 +1,12 @@
-// © ScriptMasterLabs — SML Engine 1: Tesla Elastic Stretch
+// © ScriptMasterLabs — SML Macro Stretch
 // ================================================================
 // PRICE DIMENSION ONLY
-// Sequence: 1 · 24 · 578 · 963
-//
-// 24x seed → 24x² ≈ 578 → macro anchor 963
-// Tesla triad: digits of 963 = 9·6·3 (descending Tesla sequence)
-//
-// Measures how far price has been elastically dragged from the
-// 963-bar macro floor by market-maker suppression.
-//
-// When price is SUPPRESSED (coiled below 578, minimal stretch),
-// watch SML Engine 3 volume pane for dark-pool kinetics.
+// Measures elastic deviation of price from a long-window macro anchor.
+// When price is SUPPRESSED (coiling, minimal stretch), watch the
+// volume pane for institutional accumulation kinetics.
 // ================================================================
 //@version=5
-indicator("SML Engine 1 — Tesla Elastic Stretch [Price]",
-          shorttitle="SML·E1·Tesla", overlay=true)
+indicator("SML Macro Stretch", shorttitle="SML·Stretch", overlay=true)
 
 // ── Inputs ───────────────────────────────────────────────────────
 ignition_thresh = input.float(15.0, "Ignition Stretch %",   minval=1.0)
@@ -44,14 +36,14 @@ bull_stretch = math.abs(stretch_pct) > stretch_thresh and bull_stack and not ela
 bear_stretch = math.abs(stretch_pct) > stretch_thresh and bear_stack and not elastic_ignition_bear
 
 // ── Plots ─────────────────────────────────────────────────────────
-plot(ema24,  "E1 · EMA 24  (Seed × 24)",
+plot(ema24,  "Intraday Anchor",
      color=color.new(color.yellow, 15), linewidth=1)
-plot(ema578, "E1 · EMA 578 (24²)",
+plot(ema578, "Mid Anchor",
      color=color.new(color.orange, 10), linewidth=2)
-plot(ema963, "E1 · EMA 963 (Tesla Macro Floor)",
+plot(ema963, "Macro Floor",
      color=color.new(color.red,    5),  linewidth=3)
 
-// ── Stretch meter line (price vs macro floor) ─────────────────────
+// ── Stretch meter line ────────────────────────────────────────────
 hline(0, "Zero", color=color.gray, linestyle=hline.style_dotted)
 
 // ── Signal backgrounds ────────────────────────────────────────────
@@ -59,18 +51,18 @@ bgcolor(show_bands and elastic_ignition_bull ? color.new(color.green,  75) : na,
 bgcolor(show_bands and elastic_ignition_bear ? color.new(color.red,    75) : na, title="Elastic Ignition Bear")
 bgcolor(show_bands and bull_stretch          ? color.new(color.teal,   88) : na, title="Bull Stretch")
 bgcolor(show_bands and bear_stretch          ? color.new(color.orange, 88) : na, title="Bear Stretch")
-bgcolor(show_bands and suppressed            ? color.new(color.gray,   90) : na, title="Suppressed — Watch E3 Volume")
+bgcolor(show_bands and suppressed            ? color.new(color.gray,   90) : na, title="Suppressed")
 bgcolor(show_bands and compression           ? color.new(color.blue,   92) : na, title="Compression")
 
 // ── Signal label ──────────────────────────────────────────────────
 var label sig_lbl = na
 if show_labels and barstate.islast
     label.delete(sig_lbl)
-    sig_txt = elastic_ignition_bull ? "ELASTIC IGNITION BULL\n+" + str.tostring(stretch_pct, "#.##") + "% from EMA963" :
-              elastic_ignition_bear ? "ELASTIC IGNITION BEAR\n" + str.tostring(stretch_pct, "#.##") + "% from EMA963" :
-              bull_stretch          ? "BULL STRETCH\n+" + str.tostring(stretch_pct, "#.##") + "% above floor" :
-              bear_stretch          ? "BEAR STRETCH\n" + str.tostring(stretch_pct, "#.##") + "% below floor" :
-              suppressed            ? "SUPPRESSED\nCoiling — watch E3 volume" :
+    sig_txt = elastic_ignition_bull ? "ELASTIC IGNITION BULL\n+" + str.tostring(stretch_pct, "#.##") + "% from macro floor" :
+              elastic_ignition_bear ? "ELASTIC IGNITION BEAR\n"  + str.tostring(stretch_pct, "#.##") + "% from macro floor" :
+              bull_stretch          ? "BULL STRETCH\n+"           + str.tostring(stretch_pct, "#.##") + "% above floor" :
+              bear_stretch          ? "BEAR STRETCH\n"            + str.tostring(stretch_pct, "#.##") + "% below floor" :
+              suppressed            ? "SUPPRESSED\nCoiling — watch volume" :
               compression           ? "COMPRESSION\nCoil tightening" : "NEUTRAL"
     lbl_col = elastic_ignition_bull ? color.green  :
               elastic_ignition_bear ? color.red     :
@@ -84,17 +76,17 @@ if show_labels and barstate.islast
 
 // ── Alerts ────────────────────────────────────────────────────────
 alertcondition(elastic_ignition_bull,
-    "E1 Elastic Ignition Bull",
-    "{{ticker}} — ELASTIC IGNITION BULL: Price >" + str.tostring(ignition_thresh) + "% above EMA963 with full Tesla stack")
+    "Elastic Ignition Bull",
+    "{{ticker}} — ELASTIC IGNITION BULL: Price >" + str.tostring(ignition_thresh) + "% above macro floor with full stack")
 
 alertcondition(elastic_ignition_bear,
-    "E1 Elastic Ignition Bear",
-    "{{ticker}} — ELASTIC IGNITION BEAR: Price >" + str.tostring(ignition_thresh) + "% below EMA963")
+    "Elastic Ignition Bear",
+    "{{ticker}} — ELASTIC IGNITION BEAR: Price >" + str.tostring(ignition_thresh) + "% below macro floor")
 
 alertcondition(suppressed,
-    "E1 Suppression Zone Active",
-    "{{ticker}} — SUPPRESSED: Price coiled below 578 EMA. Monitor Engine 3 volume for dark-pool accumulation.")
+    "Suppression Zone Active",
+    "{{ticker}} — SUPPRESSED: Price coiling below mid anchor. Watch volume pane.")
 
 alertcondition(ta.crossover(close, ema578),
-    "E1 Price Reclaims 578 EMA",
-    "{{ticker}} — EMA578 RECLAIM: Price crossed above the 24² elastic resistance line")
+    "Price Reclaims Mid Anchor",
+    "{{ticker}} — MID ANCHOR RECLAIM: Price crossed above elastic resistance line")
