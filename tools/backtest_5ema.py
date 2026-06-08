@@ -33,9 +33,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from core.proprietary_ema_engine import Engine4
+from core.proprietary_ema_engine import _Engine4
 
-EMA_PERIODS = list(Engine4.PERIODS)   # [3, 36, 69, 102, 135]
+EMA_PERIODS = list(_Engine4.PERIODS)
 
 DEFAULT_WATCHLIST = ["IWM", "SPY", "QQQ", "GME", "AMC", "NVDA", "TSLA", "PLTR", "HOOD", "MSTR"]
 
@@ -132,7 +132,7 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df["stack_bull"] = (e3 > e36) & (e36 > e69) & (e69 > e102) & (e102 > e135)
     df["stack_bear"] = (e3 < e36) & (e36 < e69) & (e69 < e102) & (e102 < e135)
     df["fan_width"] = (e3 - e135).abs() / df["close"]
-    df["compressed"] = df["fan_width"] < Engine4.COMPRESSION_PCT
+    df["compressed"] = df["fan_width"] < _Engine4.COMPRESSION_PCT
     return df
 
 
@@ -259,7 +259,7 @@ def main():
 
     print("=" * 78)
     print(f" SML ENGINE 4 — HARMONIC LADDER BACKTEST  ({args.mode.upper()} MODE)")
-    print(f" Periods: {EMA_PERIODS}  |  Step: {Engine4.STEP}")
+    print(f" Periods: {EMA_PERIODS}  |  Step: {_Engine4.STEP}")
     if args.mode == "live":
         print(f" Timeframe: {args.timeframe}  |  Bars/symbol: {args.bars}")
     print(f" Watchlist: {' '.join(symbols)}")
