@@ -118,6 +118,33 @@ class SMLEngine:
         clamped = max(-1.0, min(1.0, float(x) / float(divisor)))
         return 50.0 + 50.0 * clamped
 
+    def _sigmoid(self, x: float) -> float:
+        return 1.0 / (1.0 + math.exp(-x))
+
+    def generate_kinetic_matrix(self):
+        """
+        Dynamically generates the God Grid 369 Harmonic Permutations.
+        Linear sequences: sequence = [x + (gap * i) for i in range(depth)]
+        """
+        target_sets = [9, 6, 3] # Ordered for highest priority
+        kinetic_gaps = [3, 6, 9]
+        depths = [5, 4]
+        
+        matrix_config = {}
+        
+        for x in target_sets:
+            for gap in kinetic_gaps:
+                for depth in depths:
+                    sequence = [x + (gap * i) for i in range(depth)]
+                    set_id = f"SET{x}_GAP{gap}_{depth}EMA"
+                    matrix_config[set_id] = {
+                        "set_level": x,
+                        "gap": gap,
+                        "depth": depth,
+                        "sequence": sequence
+                    }
+        return matrix_config
+
     def f_trend_score(self, close_series):
         """EMA-diff + ROC z-score fusion."""
         slow_len = int(self.settings.get('slow_len', 21))
@@ -836,6 +863,45 @@ class SMLEngine:
                     'cascade_active_tfs': cascade_detail.get('active_tfs', 0)
                 }
 
+        # ═══════════════════════════════════════════════════════════
+        # KINETIC GAP MATRIX EVALUATION
+        # ═══════════════════════════════════════════════════════════
+        kinetic_matrix_config = self.generate_kinetic_matrix()
+        kinetic_results = {}
+        max_stacked_set = 0
+        
+        if len(target_c) >= 85:
+            for set_name, config in kinetic_matrix_config.items():
+                seq = config["sequence"]
+                try:
+                    # Calculate EMAs
+                    emas = [target_c.ewm(span=length, adjust=False).mean().iloc[-1] for length in seq]
+                    
+                    # Dynamic stacking evaluation
+                    is_stacked = True
+                    for i in range(len(emas) - 1):
+                        if emas[i] <= emas[i+1]:
+                            is_stacked = False
+                            break
+                    if is_stacked and target_c.iloc[-1] <= emas[-1]:
+                        is_stacked = False
+
+                    if is_stacked:
+                        max_stacked_set = max(max_stacked_set, config["set_level"])
+                    
+                    kinetic_results[set_name] = {
+                        "set_level": config["set_level"],
+                        "gap": config["gap"],
+                        "lengths": seq,
+                        "values": [self.f_round(float(e), 2) for e in emas],
+                        "stacked": is_stacked
+                    }
+                except Exception as e:
+                    logger.error(f"[SML] Kinetic Matrix calculation error on {set_name}: {e}")
+
+        # Map to original Harmonic Convergence state
+        harmonic_convergence_state = bool(max_stacked_set >= 4 and compression_score > 0.85 and mtf_align > 85.0 and net_pressure > 30.0)
+
         result = {
             "symbol": str(target_symbol),
             "regime": regime,
@@ -874,7 +940,12 @@ class SMLEngine:
             "bear_count": bear_count,
             "avoid_count": avoid_count,
             "cascade_bias": cascade_bias,
-            "cascade_meaning": cascade_meaning
+            "cascade_meaning": cascade_meaning,
+            "kinetic_matrix": {
+                "matrix": kinetic_results,
+                "highest_stacked_set": max_stacked_set,
+                "harmonic_convergence": harmonic_convergence_state
+            }
         }
 
         # Merge cascade data if available

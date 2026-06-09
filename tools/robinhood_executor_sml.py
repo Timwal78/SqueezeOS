@@ -30,7 +30,7 @@ from urllib.request import urlopen, Request as URLRequest
 from urllib.error import URLError
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(dotenv_path=os.environ.get("DOTENV_PATH", os.path.join(os.path.dirname(__file__), "executor.env")))
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",

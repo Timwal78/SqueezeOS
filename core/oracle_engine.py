@@ -166,12 +166,14 @@ class OracleEngine:
                         
             result = sml.compute_all(symbol, market_history=market_history)
             score = result.get("fractal_score", 0) if isinstance(result, dict) else 0
+            lifecycle = result.get("lifecycle_text", "DORMANT") if isinstance(result, dict) else "DORMANT"
             anchors = FRACTAL_ANCHORS.get(symbol, [])
             best = max(anchors, key=lambda a: a["multiplier"] * score, default=None)
             return {
                 "fractal_score": score,
                 "fractal_match": best["name"] if best else "None",
                 "target_pct": best["target_pct"] if best else 0,
+                "lifecycle": lifecycle,
             }
         except Exception as e:
             logger.warning(f"[Oracle] Fractal signal unavailable for {symbol}: {e}")
@@ -363,6 +365,12 @@ class OracleEngine:
         vpin = mmle.get("vpin", 0)
         gamma_flip = gflow.get("gamma_flip", False)
         directive = self._score_to_directive(score, regime, gamma_flip, vpin)
+        
+        # [!!!] HARMONIC CONVERGENCE OVERRIDE [!!!]
+        if fractal.get("lifecycle") == "HARMONIC_CONVERGENCE":
+            directive = "BUY"
+            score = 100.0
+            regime = "ALPHA_EXPANSION"  # Force through CEO regime gates
 
         # 5. Price targets
         mults = REGIME_MULTIPLIERS.get(regime, REGIME_MULTIPLIERS["NEUTRAL"])
@@ -387,6 +395,9 @@ class OracleEngine:
             gamma_flip, vpin, regime, score,
             prop_consensus=prop_ema.get("consensus", "NEUTRAL"),
         )
+        
+        if fractal.get("lifecycle") == "HARMONIC_CONVERGENCE":
+            reason = f"[!!!] HARMONIC CONVERGENCE DETECTED [!!!] {reason}"
 
         payload = {
             "symbol":           symbol,
