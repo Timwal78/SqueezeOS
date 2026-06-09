@@ -11,16 +11,18 @@
 <style>
   :root {
     --bg:       #000000;
-    --surface:  #0a0a0a;
-    --surface2: #111111;
-    --border:   #1a1a1a;
+    --panel:    #0d0518;
+    --surface:  #0d0518;
+    --surface2: #1a0a2e;
+    --border:   #9900ff;
     --green:    #00ff66;
     --red:      #ff0055;
     --blue:     #00aaff;
+    --cyan:     #00ffff;
     --orange:   #ff8800;
     --purple:   #9900ff;
-    --white:    #f0f0f0;
-    --dim:      #555;
+    --dim:      #cccccc;
+    --white:    #ffffff;
     --font:     'JetBrains Mono', 'Courier New', monospace;
   }
 
@@ -30,7 +32,7 @@
     background: var(--bg);
     color: var(--white);
     font-family: var(--font);
-    font-size: 13px;
+    font-size: 15px;
     min-height: 100vh;
     overflow-x: hidden;
   }
@@ -69,12 +71,109 @@
     50%       { opacity: 0.3; }
   }
 
+  
+  /* ── SML Matrix ── */
+  .sml-card {
+    background: var(--surface);
+    border: 1px solid var(--purple);
+    border-radius: 6px;
+    padding: 14px;
+    margin-bottom: 12px;
+    box-shadow: inset 0 0 10px rgba(153,0,255,0.1);
+  }
+  /* ── SML 5-EMA MATRIX (The New Component) ── */
+  /* This is explicitly locked to 6 columns so the Set Label + 5 EMAs always span perfectly */
+  .sml-grid {
+    display: grid;
+    grid-template-columns: 80px repeat(5, 1fr);
+    gap: 10px;
+    text-align: center;
+  }
+  @media (max-width: 600px) {
+    .sml-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+  .sml-item { background: rgba(153,0,255,0.05); border: 1px solid rgba(153,0,255,0.2); padding: 8px; border-radius: 4px; }
+  .sml-label { font-size: 12px; color: var(--dim); margin-bottom: 4px; }
+  .sml-val { font-size: 18px; font-weight: bold; color: var(--white); }
+  
+  .flash-update {
+    animation: flashGreen 0.8s ease-out;
+  }
+  @keyframes flashGreen {
+    0% { background-color: rgba(0, 255, 102, 0.4); box-shadow: 0 0 20px rgba(0, 255, 102, 0.6); }
+    100% { background-color: transparent; box-shadow: none; }
+  }
+
   /* ── Layout ── */
   .container {
-    max-width: 1400px;
-    margin: 0 auto;
+    max-width: 100%;
+    margin: 0;
     padding: 12px;
   }
+  .terminal-layout {
+    display: grid;
+    grid-template-columns: 280px 1fr 300px;
+    gap: 16px;
+    height: calc(100vh - 65px);
+  }
+  @media (max-width: 1200px) {
+    .terminal-layout { grid-template-columns: 200px 1fr 220px; }
+  }
+  @media (max-width: 900px) {
+    .terminal-layout { grid-template-columns: 1fr; }
+    .sidebar-left, .sidebar-right { display: none !important; }
+  }
+  .sidebar-left, .sidebar-right {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow-y: hidden;
+    position: relative;
+    border: 1px solid var(--purple);
+    border-radius: 6px;
+    background: var(--surface);
+    box-shadow: inset 0 0 10px rgba(153,0,255,0.05);
+  }
+  .sidebar-title {
+    padding: 10px;
+    border-bottom: 1px solid var(--purple);
+    font-weight: bold;
+    font-size: 12px;
+    letter-spacing: 1px;
+    color: var(--dim);
+    text-align: center;
+    background: rgba(153,0,255,0.1);
+  }
+  .scroll-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .scroll-container::-webkit-scrollbar { width: 4px; }
+  .scroll-container::-webkit-scrollbar-thumb { background: rgba(153,0,255,0.3); border-radius: 2px; }
+  
+  .stream-item {
+    border: 1px solid #333;
+    padding: 8px;
+    border-radius: 4px;
+    background: rgba(0,0,0,0.5);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .stream-item:hover {
+    border-color: var(--dim);
+    background: rgba(0, 240, 255, 0.05);
+  }
+  .stream-item.bullish { border-color: var(--green); }
+  .stream-item.bearish { border-color: var(--red); }
+  .stream-item.purple { border-color: var(--purple); }
+  .stream-item.neutral { border-color: #444; }
+  .stream-header { display: flex; justify-content: space-between; margin-bottom: 4px; font-weight: bold; font-size: 14px; }
+  .stream-data { display: flex; justify-content: space-between; color: var(--white); font-weight: bold; }
 
   /* ── Symbol selector ── */
   .controls {
@@ -92,7 +191,7 @@
     border-radius: 4px;
     cursor: pointer;
     font-family: var(--font);
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 700;
     letter-spacing: 1px;
     transition: all 0.15s;
@@ -101,6 +200,28 @@
     border-color: var(--green);
     color: var(--green);
     background: rgba(0,255,102,0.05);
+  }
+  .tf-tabs {
+    display: flex;
+    gap: 5px;
+    margin-left: 20px;
+  }
+  .tf-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--dim);
+    padding: 6px 12px;
+    cursor: pointer;
+    font-family: var(--font);
+    font-size: 13px;
+    transition: 0.2s;
+  }
+  .tf-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+  .tf-btn.active {
+    border-color: var(--cyan);
+    color: var(--cyan);
+    background: rgba(0, 255, 255, 0.05);
+    box-shadow: 0 0 10px rgba(0,255,255,0.2);
   }
   .refresh-btn {
     margin-left: auto;
@@ -111,12 +232,12 @@
     border-radius: 4px;
     cursor: pointer;
     font-family: var(--font);
-    font-size: 12px;
+    font-size: 14px;
   }
   .refresh-btn:hover { background: rgba(0,255,102,0.1); }
   .countdown {
     color: var(--dim);
-    font-size: 11px;
+    font-size: 14px;
     margin-left: 8px;
   }
 
@@ -134,11 +255,11 @@
   .beast-banner.visible { display: block; }
   .beast-banner h2 {
     color: var(--purple);
-    font-size: 20px;
+    font-size: 24px;
     letter-spacing: 4px;
     text-shadow: 0 0 20px var(--purple);
   }
-  .beast-banner p { color: var(--white); margin-top: 6px; font-size: 12px; }
+  .beast-banner p { color: var(--white); margin-top: 6px; font-size: 14px; }
   @keyframes beastpulse {
     0%, 100% { box-shadow: 0 0 15px rgba(153,0,255,0.3); }
     50%       { box-shadow: 0 0 40px rgba(153,0,255,0.7); }
@@ -149,7 +270,7 @@
     display: inline-block;
     padding: 3px 10px;
     border-radius: 3px;
-    font-size: 11px;
+    font-size: 14px;
     font-weight: 700;
     letter-spacing: 1px;
     border: 1px solid currentColor;
@@ -164,12 +285,12 @@
   /* ── Engine grid ── */
   .engine-grid {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
     gap: 8px;
     margin-bottom: 12px;
   }
   @media (max-width: 900px) {
-    .engine-grid { grid-template-columns: repeat(3, 1fr); }
+    .engine-grid { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
   }
   @media (max-width: 480px) {
     .engine-grid { grid-template-columns: 1fr 1fr; }
@@ -187,27 +308,27 @@
   .engine-card.warning  { border-color: var(--orange); }
 
   .engine-num {
-    font-size: 10px;
+    font-size: 13px;
     color: var(--dim);
     letter-spacing: 2px;
     margin-bottom: 4px;
   }
   .engine-name {
-    font-size: 11px;
+    font-size: 14px;
     font-weight: 700;
     margin-bottom: 8px;
     color: var(--white);
   }
   .engine-status {
-    font-size: 10px;
+    font-size: 13px;
     padding: 2px 8px;
     border-radius: 2px;
     display: inline-block;
     font-weight: 700;
   }
   .status-on  { background: rgba(0,255,102,0.1); color: var(--green); }
-  .status-off { background: rgba(85,85,85,0.1);  color: var(--dim); }
-  .engine-detail { font-size: 10px; color: var(--dim); margin-top: 6px; line-height: 1.5; }
+  .status-off { background: rgba(153,0,255,0.1);  color: var(--dim); }
+  .engine-detail { font-size: 13px; color: var(--dim); margin-top: 6px; line-height: 1.5; }
   .engine-detail .val { color: var(--white); }
 
   /* ── Options sniper ── */
@@ -228,7 +349,7 @@
     margin-bottom: 12px;
   }
   .sniper-title {
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 700;
     letter-spacing: 1px;
     color: var(--white);
@@ -242,9 +363,9 @@
     .sniper-grid { grid-template-columns: 1fr 1fr; }
   }
   .sniper-item { }
-  .sniper-label { font-size: 10px; color: var(--dim); margin-bottom: 3px; letter-spacing: 1px; }
+  .sniper-label { font-size: 13px; color: var(--dim); margin-bottom: 3px; letter-spacing: 1px; }
   .sniper-value {
-    font-size: 16px;
+    font-size: 24px;
     font-weight: 700;
   }
   .val-call { color: var(--green); }
@@ -267,9 +388,9 @@
     margin-top: 10px;
   }
   .clock-item { }
-  .clock-label { font-size: 10px; color: var(--dim); letter-spacing: 1px; margin-bottom: 4px; }
-  .clock-val   { font-size: 22px; font-weight: 700; }
-  .clock-sub   { font-size: 10px; color: var(--dim); margin-top: 2px; }
+  .clock-label { font-size: 13px; color: var(--dim); letter-spacing: 1px; margin-bottom: 4px; }
+  .clock-val   { font-size: 28px; font-weight: 700; }
+  .clock-sub   { font-size: 13px; color: var(--dim); margin-top: 2px; }
 
   /* ── Score bar ── */
   .score-row {
@@ -278,7 +399,7 @@
     gap: 12px;
     margin-bottom: 12px;
   }
-  .score-label { font-size: 11px; color: var(--dim); width: 100px; flex-shrink: 0; }
+  .score-label { font-size: 14px; color: var(--dim); width: 100px; flex-shrink: 0; }
   .score-bar-wrap {
     flex: 1;
     height: 6px;
@@ -297,7 +418,7 @@
 
   /* ── Section header ── */
   .section-hdr {
-    font-size: 10px;
+    font-size: 13px;
     letter-spacing: 2px;
     color: var(--dim);
     text-transform: uppercase;
@@ -307,14 +428,14 @@
   }
 
   /* ── Error / loading ── */
-  .loading { color: var(--dim); font-size: 12px; padding: 20px; text-align: center; }
-  .err-msg { color: var(--red); font-size: 11px; padding: 10px; }
+  .loading { color: var(--dim); font-size: 14px; padding: 20px; text-align: center; }
+  .err-msg { color: var(--red); font-size: 14px; padding: 10px; }
 
   /* ── Footer ── */
   footer {
     text-align: center;
     padding: 20px;
-    font-size: 10px;
+    font-size: 13px;
     color: var(--dim);
     letter-spacing: 1px;
     border-top: 1px solid var(--border);
@@ -334,14 +455,35 @@
 </header>
 
 <div class="container">
+  <div class="terminal-layout">
+    
+    <!-- LEFT SIDEBAR: TICKER STREAM -->
+    <div class="sidebar-left">
+      <div class="sidebar-title">DYNAMIC TICKER STREAM</div>
+      <div class="scroll-container" id="ticker-stream">
+        <div style="color:var(--dim);text-align:center;margin-top:20px;font-size:12px;">Initializing Flow...</div>
+      </div>
+    </div>
+
+    <!-- MAIN CENTER CONTENT -->
+    <div class="main-content" style="overflow-y:auto; padding-right:8px; padding-bottom: 20px;">
 
   <!-- Ticker bar -->
   <div class="controls" id="ticker-controls">
     <div id="dynamic-tickers" style="display:inline-flex;gap:8px;flex-wrap:wrap">
-      <!-- Fallback static buttons while loading -->
-      <button class="ticker-btn active" data-sym="GME">GME</button>
-      <button class="ticker-btn" data-sym="AMC">AMC</button>
-      <button class="ticker-btn" data-sym="IWM">IWM</button>
+      <div class="ticker-btns" id="ticker-btns">
+        <button class="ticker-btn active" data-sym="GME">GME</button>
+        <button class="ticker-btn" data-sym="AMC">AMC</button>
+        <button class="ticker-btn" data-sym="IWM">IWM</button>
+      </div>
+      <div class="tf-tabs" id="tf-tabs">
+        <button class="tf-btn" data-tf="1M">1M</button>
+        <button class="tf-btn" data-tf="5M">5M</button>
+        <button class="tf-btn" data-tf="15M">15M</button>
+        <button class="tf-btn" data-tf="65M">65M</button>
+        <button class="tf-btn" data-tf="4H">4H</button>
+        <button class="tf-btn active" data-tf="1D">1D</button>
+      </div>
     </div>
     <button class="refresh-btn" id="refresh-btn">↻ REFRESH</button>
     <span class="countdown" id="countdown">—</span>
@@ -362,6 +504,42 @@
       <div class="score-label">COMPOSITE</div>
       <div class="score-bar-wrap"><div class="score-bar-fill" id="score-fill" style="width:0%"></div></div>
       <div class="score-number" id="score-num">—</div>
+    </div>
+  </div>
+
+  
+  <!-- SML Matrix -->
+  <div class="section-hdr">SML 5-EMA MATRIX</div>
+  <div class="sml-card" id="sml-card">
+    <div class="sml-grid" id="sml-grid"><div class="loading">Awaiting data...</div></div>
+    <!-- MATRIX INTERPRETATION GUIDE -->
+    <div class="sml-box" style="margin-top: 10px; font-size: 11px; color: var(--dim); display: flex; justify-content: space-between;">
+      <span>1. <b>TRIGGER:</b> Fast reactivity.</span>
+      <span>2. <b>BASELINE:</b> The immediate trend</span>
+      <span>3. <b>VALIDATOR:</b> Confirms the setup</span>
+      <span>4. <b>ANCHOR:</b> Medium-term stability</span>
+      <span>5. <b>MACRO:</b> The heavy trend</span>
+    </div>
+
+    <!-- AI COUNSEL PANEL -->
+    <div class="sml-title" style="margin-top:20px;">SQUEEZE.OS AI COUNSEL</div>
+    <div class="sml-box" id="ai-counsel-box" style="margin-bottom: 20px; font-size: 14px; line-height: 1.6; color: var(--white); border-color: var(--blue);">
+      Awaiting Telemetry...
+    </div>
+  </div>
+  
+  <!-- SML Matrix Legend -->
+  <div style="background: var(--panel); border: 1px solid var(--border); border-radius: 4px; padding: 12px; margin-bottom: 20px; font-size: 12px; line-height: 1.5;">
+    <div style="color: var(--white); font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid var(--border); padding-bottom: 4px; letter-spacing: 1px;">MATRIX INTERPRETATION GUIDE</div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 10px;">
+      <div><span style="color: var(--dim); font-weight: bold;">1. TRIGGER:</span> Fast reactivity. Crosses the Baseline to initiate the earliest signal.</div>
+      <div><span style="color: var(--dim); font-weight: bold;">2. BASELINE:</span> The immediate trend direction. Defines short-term momentum.</div>
+      <div><span style="color: var(--dim); font-weight: bold;">3. VALIDATOR:</span> Confirms the momentum. Breakouts here show true conviction.</div>
+      <div><span style="color: var(--dim); font-weight: bold;">4. ANCHOR:</span> Medium-term structural support. The "buy the dip" zone.</div>
+      <div><span style="color: var(--dim); font-weight: bold;">5. MACRO:</span> The heavy trend filter. Prevents buying into long-term downtrends.</div>
+    </div>
+    <div style="background: rgba(0,255,102,0.1); border: 1px solid rgba(0,255,102,0.3); padding: 8px; border-radius: 4px; color: var(--green);">
+      <strong>HOW TO TRADE:</strong> A single Set becomes <span style="color: var(--white);">"STACKED"</span> (Glows Green) when all 5 EMAs are perfectly aligned in numerical order. When <strong>4 or more Sets</strong> stack simultaneously, the Engine achieves <span style="color: var(--white);">HARMONIC CONVERGENCE</span> and issues an immediate <strong>BUY NOW</strong> signal. If Convergence is lost, the signal reverts to <strong>WAIT</strong>.
     </div>
   </div>
 
@@ -394,8 +572,19 @@
       <span style="color:var(--orange);font-weight:700;letter-spacing:1px">🎯 LIE DETECTOR ACTIVE</span>
       <span style="color:var(--dim);font-size:11px;margin-left:10px">Price suppressed · Volume exploding off-exchange</span>
     </div>
-  </div>
+    </div> <!-- End lie-detector-row -->
 
+    </div> <!-- End Main Content -->
+
+    <!-- RIGHT SIDEBAR: OPTIONS FLOW -->
+    <div class="sidebar-right">
+      <div class="sidebar-title">LIVE OPTIONS SWEEPS</div>
+      <div class="scroll-container" id="options-stream">
+        <div style="color:var(--dim);text-align:center;margin-top:20px;font-size:12px;">Intercepting Tapes...</div>
+      </div>
+    </div>
+
+  </div> <!-- End Terminal Layout -->
 </div>
 
 <footer>
@@ -404,6 +593,11 @@
 </footer>
 
 <script>
+// Auto-detect base URL — works whether opened as file:// or served from Render
+const API_BASE = window.location.protocol === "file:"
+  ? "https://squeezeos-api.onrender.com"
+  : "";
+
 let   activeSym = "GME";
 const MANDATORY = ["GME", "AMC", "IWM"];
 let   refreshTimer, countdownTimer, secondsLeft = 45;
@@ -411,10 +605,10 @@ let   refreshTimer, countdownTimer, secondsLeft = 45;
 // ── Engine config ──────────────────────────────────────────────────
 const ENGINES = [
   { key: "e1_price_suppressed", num: "E1", name: "Price Elasticity\nMacro Stretch",         color: "green" },
-  { key: "e5_gann_curl",        num: "E5", name: "Macro Frequency\nIgnition Filter",        color: "orange" },
-  { key: "e3_volume_firing",    num: "E3", name: "Volume Kinetics\nDark-Pool Footprint",    color: "blue" },
   { key: "e2_kill_zone",        num: "E2", name: "Settlement Clock\nKill Zone",             color: "red" },
+  { key: "e3_volume_firing",    num: "E3", name: "Volume Kinetics\nDark-Pool Footprint",    color: "blue" },
   { key: "e4_temporal_aligned", num: "E4", name: "Temporal Correlation\nHistorical Pivot",  color: "purple" },
+  { key: "e5_gann_curl",        num: "E5", name: "Macro Frequency\nIgnition Filter",        color: "orange" }
 ];
 
 // ── Utils ──────────────────────────────────────────────────────────
@@ -449,6 +643,14 @@ function render(data) {
   const engines= result.engines || {};
   const sniper = result.options_sniper || null;
   const e2     = engines.e2 || {};
+
+  // Render AI Counsel
+  if (data.result && data.result.ai_counsel) {
+    // Convert newlines to breaks for HTML
+    $("ai-counsel-box").innerHTML = data.result.ai_counsel.replace(/\n/g, "<br>");
+  } else {
+    $("ai-counsel-box").innerHTML = "No counsel data available for this ticker.";
+  }
 
   // Symbol + signal
   $("sym-display").textContent = activeSym;
@@ -498,6 +700,8 @@ function render(data) {
     grid.appendChild(card);
   });
 
+  renderSmlMatrix(result.sml_matrix);
+
   // Settlement clock
   renderClock(e2);
 
@@ -520,6 +724,95 @@ function renderEngineDetail(num, engines) {
     case "E2": return `<div class="engine-detail">State: <span class="val">${e2.signal || "—"}</span></div>`;
     default:   return "";
   }
+}
+
+
+function renderSmlMatrix(sml) {
+  const grid = $("sml-grid");
+  const card = $("sml-card");
+  
+  if (!sml || !sml.matrix) {
+    grid.innerHTML = "<div class='loading'>SML Matrix data unavailable</div>";
+    card.style.borderColor = "var(--border)";
+    card.style.boxShadow = "none";
+    return;
+  }
+  
+  const hcs = sml.harmonic_convergence;
+  const highest = sml.highest_stacked_set || 0;
+  
+  card.style.borderColor = hcs ? "var(--green)" : "var(--purple)";
+  card.style.boxShadow = hcs ? "inset 0 0 15px rgba(0,255,102,0.2)" : "inset 0 0 10px rgba(153,0,255,0.1)";
+  
+  let html = ``;
+  
+  // Header row
+  html += `
+    <div style="font-size:12px;color:var(--dim);margin-bottom:4px;grid-column:1;">SET / GAP</div>
+    <div style="font-size:12px;color:var(--dim);margin-bottom:4px;grid-column:2;">TRIGGER</div>
+    <div style="font-size:12px;color:var(--dim);margin-bottom:4px;grid-column:3;">BASELINE</div>
+    <div style="font-size:12px;color:var(--dim);margin-bottom:4px;grid-column:4;">VALIDATOR</div>
+    <div style="font-size:12px;color:var(--dim);margin-bottom:4px;grid-column:5;">ANCHOR</div>
+    <div style="font-size:12px;color:var(--dim);margin-bottom:4px;grid-column:6;">MACRO</div>
+  `;
+
+  for (const key of Object.keys(sml.matrix)) {
+    const set_data = sml.matrix[key];
+    const is_stacked = set_data.stacked;
+    const bg = is_stacked ? "rgba(0,255,102,0.05)" : "rgba(153,0,255,0.05)";
+    const color = is_stacked ? "var(--green)" : "var(--white)";
+    
+    html += `<div style="background:${bg};border:1px solid ${is_stacked ? 'rgba(0,255,102,0.2)' : 'rgba(153,0,255,0.2)'};padding:6px;border-radius:4px;color:${color};font-weight:bold;font-size:13px;display:flex;align-items:center;justify-content:center;text-align:center;">SET ${set_data.set_level}<br><span style="font-size:10px;font-weight:normal;color:var(--dim)">GAP: ${set_data.gap} | ${set_data.depth}EMA</span></div>`;
+    
+    for (let v = 0; v < 5; v++) {
+      if (v < set_data.lengths.length) {
+        const length = set_data.lengths[v];
+        const val = set_data.values[v];
+        html += `
+          <div style="background:${bg};border:1px solid ${is_stacked ? 'rgba(0,255,102,0.2)' : 'var(--border)'};padding:6px;border-radius:4px;color:${is_stacked ? 'var(--white)' : 'var(--dim)'};">
+            <div style="font-size:10px;color:var(--dim);margin-bottom:2px;">EMA ${length}</div>
+            <div style="font-size:14px;font-weight:bold;">${val}</div>
+          </div>
+        `;
+      } else {
+        html += `<div></div>`;
+      }
+    }
+  }
+
+  // Banner
+  html += `
+    <div style="grid-column: 1 / -1; background: ${hcs ? 'rgba(0,255,102,0.1)' : 'rgba(255,136,0,0.1)'}; color: ${hcs ? 'var(--green)' : 'var(--orange)'}; padding: 10px; font-weight: bold; border-radius:4px; border: 1px solid ${hcs ? 'var(--green)' : 'var(--orange)'}; margin-top:8px;">
+      HARMONIC CONVERGENCE: ${hcs ? 'YES — BULLISH ALIGNMENT' : 'NO — MATRIX UNALIGNED'} (HIGHEST STACKED SET: ${highest})
+    </div>
+  `;
+  
+  if (sml.decision && sml.levels) {
+    const dec = sml.decision;
+    const decColor = dec.includes("BUY") ? "var(--green)" : "var(--orange)";
+    html += `
+      <div style="grid-column: 1 / -1; display:flex; justify-content:space-between; margin-top:8px; border: 1px solid var(--border); padding: 10px; border-radius: 4px; background: rgba(0,0,0,0.3);">
+        <div style="text-align:left;">
+          <div style="font-size:10px; color:var(--dim); margin-bottom:4px;">ENGINE DECISION</div>
+          <div style="font-size:16px; font-weight:bold; color:${decColor};">${dec}</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:10px; color:var(--dim); margin-bottom:4px;">STOP LOSS</div>
+          <div style="font-size:16px; font-weight:bold; color:var(--red);">${sml.levels.invalidation}</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:10px; color:var(--dim); margin-bottom:4px;">PRICE TARGET 1</div>
+          <div style="font-size:16px; font-weight:bold; color:var(--green);">${sml.levels.tp1}</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:10px; color:var(--dim); margin-bottom:4px;">PRICE TARGET 2</div>
+          <div style="font-size:16px; font-weight:bold; color:var(--green);">${sml.levels.tp2}</div>
+        </div>
+      </div>
+    `;
+  }
+  
+  grid.innerHTML = html;
 }
 
 function renderClock(e2) {
@@ -625,8 +918,8 @@ function renderSniper(sniper) {
 // ── Data fetch ─────────────────────────────────────────────────────
 async function fetchData(sym) {
   try {
-    $("live-status").textContent = "FETCHING…";
-    const resp = await fetch(`/api/convergence/${sym}?sniper=true`);
+    $("live-status").textContent = "FETCHING.";
+    const resp = await fetch(`${API_BASE}/api/convergence/${sym}?sniper=true&tf=${currentTF}`);
     if (!resp.ok) throw new Error(resp.status);
     const json = await resp.json();
     render(json);
@@ -658,7 +951,7 @@ function updateCountdown() {
 
 async function loadDynamicTickers() {
   try {
-    const res = await fetch("/api/market/scan");
+    const res = await fetch(`${API_BASE}/api/market/scan`);
     if (!res.ok) return;
     const json = await res.json();
     const quotes = json.quotes || {};
@@ -700,16 +993,113 @@ async function loadDynamicTickers() {
   }
 }
 
+let currentTF = "1D";
+
+document.querySelectorAll(".tf-btn").forEach(b => {
+  b.addEventListener("click", () => {
+    document.querySelectorAll(".tf-btn").forEach(btn => btn.classList.remove("active"));
+    b.classList.add("active");
+    currentTF = b.dataset.tf;
+    fetchTickerStream();
+    fetchData(activeSym);
+    startCountdown();
+  });
+});
+
 // ── Init ───────────────────────────────────────────────────────────
 $("refresh-btn").addEventListener("click", () => {
   fetchData(activeSym);
   startCountdown();
 });
 
+// ── Stream Logic ───────────────────────────────────────────────────
+async function fetchTickerStream() {
+  try {
+    const res = await fetch(`${API_BASE}/api/beastmode?tf=${currentTF}`);
+    if (!res.ok) return;
+    const json = await res.json();
+    const signals = json.signals || [];
+    
+    const container = $("ticker-stream");
+    container.innerHTML = "";
+    
+    if(signals.length === 0) {
+      container.innerHTML = "<div style='color:var(--dim);text-align:center;padding:10px;'>Scanning Universe... No Convergence.</div>";
+      return;
+    }
+    
+    signals.forEach(sig => {
+      const isCall = sig.options_sniper?.type === "CALL";
+      const cls = isCall ? "bullish" : "bearish";
+      const div = document.createElement("div");
+      div.className = `stream-item ${cls}`;
+      div.innerHTML = `
+        <div class="stream-header">
+          <span>${sig.symbol}</span>
+          <span style="color:var(--${isCall ? 'green' : 'red'})">${isCall ? 'BUY' : 'SELL'}</span>
+        </div>
+        <div class="stream-data">
+          <span>Bias: ${sig.signal || 'NEUTRAL'}</span>
+          <span>${sig.highest_stacked_set || 0} STACKS</span>
+        </div>
+      `;
+      div.onclick = () => {
+        document.querySelectorAll(".ticker-btn").forEach(b => b.classList.remove("active"));
+        activeSym = sig.symbol;
+        $("sym-display").textContent = activeSym;
+        fetchData(activeSym);
+        startCountdown();
+      };
+      container.appendChild(div);
+    });
+  } catch(e) { console.error("Ticker stream error:", e); }
+}
+
+async function fetchOptionsStream() {
+  try {
+    const res = await fetch(`${API_BASE}/api/market/scan`);
+    if (!res.ok) return;
+    const json = await res.json();
+    const options = json.options || [];
+    
+    const container = $("options-stream");
+    container.innerHTML = "";
+    
+    if(options.length === 0) {
+      container.innerHTML = "<div style='color:var(--dim);text-align:center;padding:10px;'>Listening for Sweeps...</div>";
+      return;
+    }
+    
+    options.forEach(opt => {
+      const isCall = (opt.type || opt.option_type || "CALL").toUpperCase() === "CALL";
+      const cls = isCall ? "bullish" : "bearish";
+      const div = document.createElement("div");
+      div.className = `stream-item ${cls}`;
+      div.innerHTML = `
+        <div class="stream-header">
+          <span>${opt.symbol || activeSym}</span>
+          <span style="color:var(--${isCall ? 'green' : 'red'})">${isCall ? 'CALL' : 'PUT'}</span>
+        </div>
+        <div class="stream-data">
+          <span>Strike: $${opt.strike || 'N/A'}</span>
+          <span>Exp: ${opt.expiration || opt.expiration_date || 'N/A'}</span>
+        </div>
+        ${opt.grade ? `<div style="font-size:10px;margin-top:4px;color:var(--dim)">Grade: ${opt.grade}</div>` : ''}
+      `;
+      container.appendChild(div);
+    });
+  } catch(e) { console.error("Options stream error:", e); }
+}
+
+setInterval(fetchTickerStream, 20000);
+setInterval(fetchOptionsStream, 20000);
+
 // Boot
 loadDynamicTickers().then(() => {
   fetchData(activeSym);
   startCountdown();
+  fetchTickerStream();
+  fetchOptionsStream();
 });
 </script>
 </body>
