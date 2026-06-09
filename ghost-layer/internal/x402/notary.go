@@ -9,27 +9,14 @@ import (
 	"log"
 	"strconv"
 	"sync/atomic"
-	"syscall"
 	"time"
-	"unsafe"
 )
 
-// LockKeyMemory utilizes VirtualLock (Windows mlock equivalent) to isolate the Ed25519
-// private seed in volatile RAM, preventing swap-disk leaks of cryptographic material.
-func LockKeyMemory(priv ed25519.PrivateKey) error {
-	if len(priv) == 0 {
-		return nil
-	}
-	return syscall.VirtualLock(uintptr(unsafe.Pointer(&priv[0])), uintptr(len(priv)))
-}
-
-// UnlockKeyMemory releases the VirtualLock.
-func UnlockKeyMemory(priv ed25519.PrivateKey) error {
-	if len(priv) == 0 {
-		return nil
-	}
-	return syscall.VirtualUnlock(uintptr(unsafe.Pointer(&priv[0])), uintptr(len(priv)))
-}
+// LockKeyMemory is a no-op on Linux/container environments.
+// VirtualLock is Windows-only and unavailable on Render (Linux).
+// mlock(2) requires CAP_IPC_LOCK which Render containers do not grant.
+func LockKeyMemory(_ ed25519.PrivateKey) error   { return nil }
+func UnlockKeyMemory(_ ed25519.PrivateKey) error { return nil }
 
 var globalNonceCounter uint64
 
