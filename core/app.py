@@ -524,7 +524,7 @@ def create_app():
             }
             engine = OracleEngine(services)
             snapshots = {}
-            active_universe = list(state.quotes.keys())[:20] if state.quotes else ORACLE_SYMBOLS
+            active_universe = list(state.quotes.keys()) if state.quotes else ORACLE_SYMBOLS
             for sym in active_universe:
                 try:
                     oracle_data = engine.analyze(sym)
@@ -695,36 +695,9 @@ def create_app():
 
     @app.route('/api/council/example', methods=['GET'])
     def council_example():
-        """Returns a mocked, highly detailed 'Full Council' response for pre-flight conversion."""
-        return jsonify({
-            "status": "READY",
-            "symbol": "SPY",
-            "verdict": {
-                "symbol": "SPY",
-                "bias": "BULLISH",
-                "regime": "GAMMA_SQUEEZE",
-                "confidence": 92,
-                "thesis": "SPY live data feed indicates a severe Gamma Compression at 530. Dealer positioning is aggressively short gamma, forcing reflexive buying into upward ticks. VPIN is elevated at 0.89 indicating massive institutional accumulation.",
-                "timestamp": time.time()
-            },
-            "engines": {
-                "sml": {
-                    "regime": "GAMMA_SQUEEZE",
-                    "trend_score": 0.92,
-                    "vpin": 0.89,
-                    "gamma_wall_above": 535.0,
-                    "gamma_wall_below": 525.0,
-                    "bias": "BULLISH",
-                    "directive": "LONG",
-                    "signals": [
-                        "Harmonic Convergence Detected",
-                        "Dark Pool Block Print (531.05) - $500M+",
-                        "Call Buying Anomaly (> 1000% Avg Vol)"
-                    ]
-                }
-            },
-            "note": "This is a mocked example of the data you receive when paying 0.10 RLUSD for /api/council. Run the actual endpoint to get live market data."
-        })
+        """Redirects to the live SPY council endpoint — no mock data per DEVELOPER_MANIFESTO."""
+        from flask import redirect
+        return redirect('/api/council/SPY', code=302)
 
     @app.route('/api/history', methods=['GET'])
     def signal_history_all():

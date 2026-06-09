@@ -60,39 +60,11 @@ def scan_options(symbol: str, trade_type: str = "call", current_price: float = 0
     """
     Snipe the 0-14 DTE option with delta closest to 0.40 center.
     Returns the exact contract: strike, expiry, delta, premium.
-    If API is missing or fails, generates a Synthetic Option.
+    Never returns fake or synthetic data — returns error dict if API unavailable.
     """
     headers = _tradier_headers()
-    
-    def generate_synthetic():
-        # Synthetic fallback if API fails or missing
-        today = date.today()
-        exp = today + timedelta(days=5)
-        if today.weekday() > 4: # Weekend adjustment
-            exp = exp + timedelta(days=2)
-            
-        strike = round((current_price * 1.05) * 2) / 2 if trade_type.lower() == "call" else round((current_price * 0.95) * 2) / 2
-        premium = round(current_price * 0.02, 2)
-        
-        return {
-            "symbol":        symbol,
-            "type":          trade_type.upper(),
-            "strike":        strike,
-            "expiration":    exp.isoformat(),
-            "delta":         0.4000,
-            "gamma":         0.0500,
-            "theta":         -0.0200,
-            "iv":            0.8500,
-            "premium":       premium,
-            "bid":           premium - 0.05,
-            "ask":           premium + 0.05,
-            "volume":        1500,
-            "open_interest": 4500,
-            "description":   "SYNTHETIC FALLBACK (No API Key)",
-        }
-        
     if not headers:
-        return generate_synthetic()
+        return {"error": "TRADIER_API_KEY not configured — live options data unavailable"}
     base    = _tradier_base()
     today   = date.today()
     max_exp = today + timedelta(days=14)
@@ -105,7 +77,7 @@ def scan_options(symbol: str, trade_type: str = "call", current_price: float = 0
             headers=headers, timeout=10,
         )
         if exp_resp.status_code != 200:
-            return generate_synthetic()
+            return {"error": f"Tradier expirations returned HTTP {exp_resp.status_code}"}
 
         raw_exps = exp_resp.json().get("expirations", {}).get("date", []) or []
         if isinstance(raw_exps, str):
@@ -181,7 +153,7 @@ def scan_options(symbol: str, trade_type: str = "call", current_price: float = 0
 
     except Exception as e:
         logger.error(f"[Sniper] Fatal error for {symbol}: {e}")
-        return generate_synthetic()
+        return {"error": f"Options scan failed: {e}"}
 
 
 # ── Convergence Engine ────────────────────────────────────────────────────────
@@ -463,7 +435,4 @@ def scan_beastmode_universe(services: dict, tf: str = "1D") -> list:
             logger.warning(f"[Convergence] {symbol} scan error: {e}")
 
     # Sort strictly by highest stacked sets (9 down to 4), then by composite score
-    sorted_hits = sorted(hits, key=lambda x: (x.get("highest_stacked_set", 0), x.get("composite_score", 0)), reverse=True)
-    
-    # Return only the Top 50 of the sorted list
-    return sorted_hits[:50]
+    return sorted(hits, key=lambda x: (x.get("highest_stacked_set", 0), x.get("composite_score", 0)), reverse=True)

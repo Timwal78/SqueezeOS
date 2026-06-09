@@ -34,7 +34,7 @@ def generate_ai_counsel(result: dict) -> str:
     strike     = sniper.get("strike")
     exp        = sniper.get("expiration")
     premium    = sniper.get("premium")
-    is_synth   = "SYNTHETIC" in str(sniper.get("description", ""))
+    has_error  = bool(sniper.get("error"))
 
     strike_str  = f"${strike}"  if strike  is not None else "pending"
     exp_str     = str(exp)      if exp     is not None else "pending"
@@ -60,10 +60,10 @@ def generate_ai_counsel(result: dict) -> str:
     # Action directive
     if stacks >= 4:
         intro = f"SqueezeOS detected a high-probability {stacks}-Stack Bullish Convergence on {symbol} (Composite: {score})."
-        synth_warn = " [SYNTHETIC CONTRACT — verify with broker before executing]" if is_synth else ""
+        sniper_warn = " [OPTIONS DATA UNAVAILABLE — verify with broker]" if has_error else ""
         action = (
             f"EXECUTE: {strike_str} {trade_type} expiring {exp_str} "
-            f"for ~{premium_str} premium.{synth_warn}"
+            f"for ~{premium_str} premium.{sniper_warn}"
         )
     elif signal in ("BEASTMODE", "GOD_MODE", "APEX_SINGULARITY"):
         intro = f"SqueezeOS has achieved {signal} on {symbol} (Composite: {score}) — maximum convergence state."
