@@ -221,6 +221,60 @@ def _circuit_open(flags: dict) -> bool:
     return False
 
 
+# ── Discord Execution Alert ───────────────────────────────────────────────────
+
+_DISCORD_BEAST_URL = os.environ.get("DISCORD_WEBHOOK_BEAST", "") or os.environ.get("DISCORD_WEBHOOK_ALL", "")
+
+def _fire_execution_discord(symbol: str, action: str, mode: str,
+                             god_stacked: int, harmonic_score: float,
+                             flags: dict, result: dict):
+    """Fire a Discord alert every time a GOD_MODE trade executes or is paper-logged."""
+    url = _DISCORD_BEAST_URL
+    if not url:
+        logger.warning("[Discord] No DISCORD_WEBHOOK_BEAST or DISCORD_WEBHOOK_ALL set — execution alert skipped")
+        return
+
+    paper  = flags.get("PAPER_MODE", False)
+    error  = result.get("error")
+    placed = result.get("placed") or result.get("paper")
+
+    mode_label = "📋 PAPER" if paper else "🔴 LIVE"
+    status_val = "✅ EXECUTED" if placed else (f"❌ ERROR: {error}" if error else "⏭️ SKIPPED")
+    color      = 0x00FF66 if placed and not error else (0xFF0055 if error else 0xFF8800)
+
+    payload = {
+        "embeds": [{
+            "title":       f"⚡ GOD MODE {action} — {symbol} [{mode_label}]",
+            "color":       color,
+            "description": (
+                f"**SML Harmonic Matrix** confirmed GOD_MODE execution gate on **{symbol}**.\n"
+                f"Mode: `{mode.upper()}` · Action: `{action}`"
+            ),
+            "fields": [
+                {"name": "Status",          "value": status_val,                         "inline": True},
+                {"name": "Mode",            "value": f"**{mode_label}**",                 "inline": True},
+                {"name": "SET9 Stacked",    "value": f"**{god_stacked}/6** INSTITUTIONAL", "inline": True},
+                {"name": "Harmonic Score",  "value": f"**{harmonic_score}**",              "inline": True},
+                {"name": "Execution Type",  "value": mode.upper(),                         "inline": True},
+                {"name": "KILL_SWITCH",     "value": str(flags.get("KILL_SWITCH", False)), "inline": True},
+            ],
+            "footer": {
+                "text": f"ScriptMasterLabs | SqueezeOS GOD_MODE Executor | squeezeos-api.onrender.com"
+            },
+            "timestamp": datetime.now().isoformat(),
+        }]
+    }
+
+    try:
+        import urllib.request as _ul
+        data = json.dumps(payload).encode()
+        req  = _ul.Request(url, data=data, headers={"Content-Type": "application/json"})
+        with _ul.urlopen(req, timeout=8) as resp:
+            logger.info(f"[Discord] Execution alert fired — {resp.status}")
+    except Exception as e:
+        logger.warning(f"[Discord] Execution alert failed: {e}")
+
+
 # ── Webhook Request Handler ───────────────────────────────────────────────────
 
 def _verify_signature(raw_body: bytes, sig_header: str) -> bool:
@@ -318,6 +372,7 @@ class AlertHandler(BaseHTTPRequestHandler):
             result = execute_equity(symbol, action, flags)
 
         logger.info(f"[RESULT] {symbol} {action} → {result}")
+        _fire_execution_discord(symbol, action, mode, god_stacked, harmonic_score, flags, result)
 
 
 # ── Config refresh thread ─────────────────────────────────────────────────────

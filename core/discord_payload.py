@@ -27,12 +27,27 @@ COLOR_BEAST  = 0x9900ff   # Purple — full Beastmode
 # Engine status icons
 _ENGINE_ICONS = {True: "🟢", False: "⚫"}
 _SIGNAL_ICONS = {
-    "BEASTMODE":             "⚡",
-    "HIGH_CONVERGENCE":      "🔥",
-    "CONVERGENCE":           "📡",
-    "LIE_DETECTOR_ACTIVE":   "🎯",
-    "PARTIAL_ALIGNMENT":     "👁",
-    "NEUTRAL":               "—",
+    # Harmonic Matrix tier signals (new ranked engine)
+    "APEX_SINGULARITY":          "💎",
+    "GOD_MODE":                  "⚡",
+    "GOD_MODE_BULL":             "⚡",
+    "GOD_MODE_BEAR":             "🔻",
+    "INSTITUTIONAL_CONVERGENCE": "🏛️",
+    "FRACTAL_LOCK":              "🔒",
+    "FRACTAL_LOCK_BULL":         "🔒",
+    "FRACTAL_LOCK_BEAR":         "🔒",
+    "PRIME_CONVERGENCE":         "🔥",
+    "PRIME_ALIGNMENT":           "🔥",
+    "PRIME_PARTIAL":             "📡",
+    "WATCH_ACTIVE":              "👁",
+    "WATCH_PARTIAL":             "👁",
+    # Legacy engine signals
+    "BEASTMODE":                 "⚡",
+    "HIGH_CONVERGENCE":          "🔥",
+    "CONVERGENCE":               "📡",
+    "LIE_DETECTOR_ACTIVE":       "🎯",
+    "PARTIAL_ALIGNMENT":         "👁",
+    "NEUTRAL":                   "—",
 }
 
 
@@ -73,12 +88,22 @@ def build_beastmode_embed(convergence_result: dict,
     e2      = (convergence_result.get("engines") or {}).get("e2", {})
     e4      = (convergence_result.get("engines") or {}).get("e4", {})
 
-    # Color selection
-    if beast:
+    # Harmonic Matrix tier data (new ranked engine)
+    sml          = convergence_result.get("sml_matrix") or {}
+    matrix_tier  = sml.get("tier", "NONE")
+    god_stacked  = sml.get("god_stacked", 0)
+    execute_gate = sml.get("execute_gate", False)
+    harm_score   = sml.get("harmonic_score", 0)
+
+    # Color selection — GOD_MODE always gets purple beast color
+    is_god = matrix_tier == "GOD_MODE" or signal in ("GOD_MODE", "GOD_MODE_BULL", "APEX_SINGULARITY", "INSTITUTIONAL_CONVERGENCE")
+    if execute_gate or is_god:
+        color = COLOR_BEAST    # Purple — institutional GOD_MODE
+    elif beast:
         color = COLOR_BEAST
     elif trade_type == "put":
         color = COLOR_PUT
-    elif active >= 4:
+    elif active >= 4 or matrix_tier == "PRIME":
         color = COLOR_CALL
     elif lie_det:
         color = COLOR_WATCH
@@ -87,7 +112,9 @@ def build_beastmode_embed(convergence_result: dict,
 
     sig_icon  = _SIGNAL_ICONS.get(signal, "📡")
     title_str = f"{sig_icon} {signal} — {symbol}"
-    if beast:
+    if execute_gate and matrix_tier == "GOD_MODE":
+        title_str = f"⚡ GOD MODE EXECUTE — {symbol} ⚡ [{god_stacked}/6 SET9 STACKED]"
+    elif beast:
         title_str = f"⚡ BEASTMODE LOCKED — {symbol} ⚡"
 
     # Engine status block
@@ -118,7 +145,25 @@ def build_beastmode_embed(convergence_result: dict,
         premium_str  = "—"
         sniper_error = sniper.get("error") if sniper else None
 
+    # Harmonic Matrix field
+    if matrix_tier and matrix_tier != "NONE":
+        tier_display = {
+            "GOD_MODE": f"⚡ **GOD MODE** — {god_stacked}/6 SET9 stacked | Harmonic: {harm_score}",
+            "PRIME":    f"◆ **PRIME** — {sml.get('prime_stacked',0)} SET6 stacked | Harmonic: {harm_score}",
+            "WATCH":    f"● **WATCH** — {sml.get('watch_stacked',0)} SET3 stacked",
+        }
+        matrix_field_val = tier_display.get(matrix_tier, matrix_tier)
+        if execute_gate:
+            matrix_field_val += "\n🏛️ **EXECUTE GATE OPEN — INSTITUTIONAL CONFIRMED**"
+    else:
+        matrix_field_val = "Scanning — insufficient data"
+
     fields = [
+        {
+            "name":   "🏛️ SML Harmonic Matrix",
+            "value":  matrix_field_val,
+            "inline": False,
+        },
         {
             "name":   "⚙️ Engine Status Matrix",
             "value":  engine_status,
@@ -202,9 +247,22 @@ def fire_discord(convergence_result: dict,
     webhook_url falls back to DISCORD_WEBHOOK_ALL env var.
     Returns True on success.
     """
-    url = webhook_url or os.environ.get("DISCORD_WEBHOOK_ALL", "")
+    # Route GOD_MODE signals to DISCORD_WEBHOOK_BEAST if available
+    signal = convergence_result.get("signal", "")
+    sml    = convergence_result.get("sml_matrix") or {}
+    is_god = sml.get("tier") == "GOD_MODE" or sml.get("execute_gate") or \
+             signal in ("GOD_MODE", "GOD_MODE_BULL", "APEX_SINGULARITY", "INSTITUTIONAL_CONVERGENCE")
+
+    if not webhook_url:
+        if is_god:
+            webhook_url = (os.environ.get("DISCORD_WEBHOOK_BEAST") or
+                           os.environ.get("DISCORD_WEBHOOK_ALL") or "")
+        else:
+            webhook_url = os.environ.get("DISCORD_WEBHOOK_ALL", "")
+    url = webhook_url
+
     if not url:
-        logger.warning("[Discord] No webhook URL configured (DISCORD_WEBHOOK_ALL)")
+        logger.warning("[Discord] No webhook URL configured — set DISCORD_WEBHOOK_ALL or DISCORD_WEBHOOK_BEAST")
         return False
 
     payload = build_beastmode_embed(convergence_result, trade_type)
