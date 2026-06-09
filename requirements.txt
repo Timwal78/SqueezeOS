@@ -13,3 +13,4 @@ anthropic>=0.25
 cryptography>=48.0.0
 stripe>=10.1.0
 redis>=8.0.0
+websocket-client>=1.7.0
