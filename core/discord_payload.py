@@ -27,6 +27,8 @@ COLOR_BEAST  = 0x9900ff   # Purple — full Beastmode
 # Engine status icons
 _ENGINE_ICONS = {True: "🟢", False: "⚫"}
 _SIGNAL_ICONS = {
+    # DUAL GRID LOCK — highest signal in the system
+    "DUAL_GRID_LOCK":            "💎",
     # Harmonic Matrix tier signals (new ranked engine)
     "APEX_SINGULARITY":          "💎",
     "GOD_MODE":                  "⚡",
@@ -96,7 +98,11 @@ def build_beastmode_embed(convergence_result: dict,
     harm_score   = sml.get("harmonic_score", 0)
 
     # Color selection — GOD_MODE always gets purple beast color
-    is_god = matrix_tier == "GOD_MODE" or signal in ("GOD_MODE", "GOD_MODE_BULL", "APEX_SINGULARITY", "INSTITUTIONAL_CONVERGENCE")
+    is_god      = matrix_tier == "GOD_MODE" or signal in ("GOD_MODE", "GOD_MODE_BULL", "APEX_SINGULARITY", "INSTITUTIONAL_CONVERGENCE", "DUAL_GRID_LOCK")
+    dual_lock   = signal == "DUAL_GRID_LOCK"
+    grid369     = convergence_result.get("grid369") or {}
+    base9_count = grid369.get("base9_stacked", 0)
+
     if execute_gate or is_god:
         color = COLOR_BEAST    # Purple — institutional GOD_MODE
     elif beast:
@@ -112,7 +118,9 @@ def build_beastmode_embed(convergence_result: dict,
 
     sig_icon  = _SIGNAL_ICONS.get(signal, "📡")
     title_str = f"{sig_icon} {signal} — {symbol}"
-    if execute_gate and matrix_tier == "GOD_MODE":
+    if dual_lock:
+        title_str = f"💎 DUAL GRID LOCK — {symbol} 💎 [GRID1 + GRID2 CONFIRMED]"
+    elif execute_gate and matrix_tier == "GOD_MODE":
         title_str = f"⚡ GOD MODE EXECUTE — {symbol} ⚡ [{god_stacked}/6 SET9 STACKED]"
     elif beast:
         title_str = f"⚡ BEASTMODE LOCKED — {symbol} ⚡"
@@ -145,6 +153,19 @@ def build_beastmode_embed(convergence_result: dict,
         premium_str  = "—"
         sniper_error = sniper.get("error") if sniper else None
 
+    # Grid 369 / Dual Lock field
+    if dual_lock:
+        grid369_val = (
+            f"💎 **DUAL GRID LOCK ACHIEVED**\n"
+            f"Grid 1 GOD_MODE: {god_stacked}/6 SET9 stacked\n"
+            f"Grid 2 Base-9: {base9_count}/3 configs stacked\n"
+            f"**Two independent methodologies — same sequence confirmed.**"
+        )
+    elif base9_count > 0:
+        grid369_val = f"◆ Grid 2 active — Base-9: **{base9_count}/3** stacked | Base-6: {grid369.get('base6_stacked',0)}/3 | Base-3: {grid369.get('base3_stacked',0)}/3"
+    else:
+        grid369_val = f"Scanning — Base-9: 0/3 | Base-6: {grid369.get('base6_stacked',0)}/3 | Base-3: {grid369.get('base3_stacked',0)}/3"
+
     # Harmonic Matrix field
     if matrix_tier and matrix_tier != "NONE":
         tier_display = {
@@ -160,7 +181,12 @@ def build_beastmode_embed(convergence_result: dict,
 
     fields = [
         {
-            "name":   "🏛️ SML Harmonic Matrix",
+            "name":   "💎 Grid 369 — 3×3 Anchor Matrix",
+            "value":  grid369_val,
+            "inline": False,
+        },
+        {
+            "name":   "🏛️ SML Harmonic Matrix (Grid 1)",
             "value":  matrix_field_val,
             "inline": False,
         },
