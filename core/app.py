@@ -20,6 +20,7 @@ from core.api.v2_bridge import v2_bp
 from core.api.premium_bp import premium_bp
 from core.api.relay_bp import relay_bp
 from core.api.webhook_bp import webhook_bp, start_webhook_engine
+from core.api.tradingview_webhook_bp import tradingview_webhook_bp
 from core.api.marketplace_bp import marketplace_bp
 from core.api.hiring_bp import hiring_bp
 from core.api.mcp_bp import mcp_bp
@@ -38,6 +39,7 @@ from core.api.notary_bp import notary_bp
 from core.api.triple_lock_bp import triple_lock_bp
 from core.api.nw_liq_bp import nw_liq_bp
 from core.api.keys_bp import keys_bp
+from core.api.config_bp import config_bp
 import core.signal_history as signal_history
 from core.legacy import start_whale_stalker, init_services, get_service, clean_data
 from core.market_graph import get_graph
@@ -108,6 +110,7 @@ def create_app():
     app.register_blueprint(premium_bp, url_prefix='/api')
     app.register_blueprint(relay_bp, url_prefix='/api/relay')
     app.register_blueprint(webhook_bp,     url_prefix='/api/webhooks')
+    app.register_blueprint(tradingview_webhook_bp, url_prefix='/api/webhooks')
     app.register_blueprint(marketplace_bp, url_prefix='/api/marketplace')
     app.register_blueprint(hiring_bp,     url_prefix='/api/hiring')
     app.register_blueprint(mcp_bp,        url_prefix='/mcp')
@@ -124,6 +127,7 @@ def create_app():
     app.register_blueprint(autopilot_bp)
     app.register_blueprint(analytics_bp)
     app.register_blueprint(keys_bp)
+    app.register_blueprint(config_bp, url_prefix='/api')
     app.register_blueprint(v2_bp, url_prefix='/api')
     app.register_blueprint(v2_bp, url_prefix='/api/v1', name='v2_bridge_v1')
 
@@ -188,6 +192,7 @@ def create_app():
     def serve_index():
         return send_from_directory(app.static_folder, 'index.html')
 
+    @app.route('/terminal')
     @app.route('/beastmode')
     def serve_beastmode():
         return send_from_directory(app.static_folder, 'beastmode.html')
