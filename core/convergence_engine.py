@@ -32,6 +32,8 @@ from core.engine2_settlement import get_clock, stamp_ignition
 from core.engine4_temporal_mirror import Engine4_TemporalMirror
 from core.engine5_gann_macro import Engine5_GannMacro
 from core.engine6_base4_matrix import Engine6_Base4Matrix, redact_engine6_block
+import core.harmonic_matrix_engine as _harmonic
+import core.grid369_engine as _grid369
 from core.engine7_parabolic import Engine7_Parabolic, redact_engine7_block
 from core.state import state
 
@@ -39,6 +41,7 @@ logger = logging.getLogger("SML.Convergence")
 
 from core.state import state
 from core.api.market_scanner import MANDATORY_TICKERS
+from core.legacy import get_service
 
 
 # ── Tradier Options Sniper ────────────────────────────────────────────────────
@@ -55,15 +58,15 @@ def _tradier_base():
     return "https://api.tradier.com/v1" if env == "production" else "https://sandbox.tradier.com/v1"
 
 
-def scan_options(symbol: str, trade_type: str = "call") -> dict:
+def scan_options(symbol: str, trade_type: str = "call", current_price: float = 0.0) -> dict:
     """
     Snipe the 0-14 DTE option with delta closest to 0.40 center.
     Returns the exact contract: strike, expiry, delta, premium.
+    Never returns fake or synthetic data — returns error dict if API unavailable.
     """
     headers = _tradier_headers()
     if not headers:
-        return {"error": "TRADIER_API_KEY not configured"}
-
+        return {"error": "TRADIER_API_KEY not configured — live options data unavailable"}
     base    = _tradier_base()
     today   = date.today()
     max_exp = today + timedelta(days=14)
@@ -76,7 +79,7 @@ def scan_options(symbol: str, trade_type: str = "call") -> dict:
             headers=headers, timeout=10,
         )
         if exp_resp.status_code != 200:
-            return {"error": f"Expirations unavailable ({exp_resp.status_code})"}
+            return {"error": f"Tradier expirations returned HTTP {exp_resp.status_code}"}
 
         raw_exps = exp_resp.json().get("expirations", {}).get("date", []) or []
         if isinstance(raw_exps, str):
@@ -152,7 +155,7 @@ def scan_options(symbol: str, trade_type: str = "call") -> dict:
 
     except Exception as e:
         logger.error(f"[Sniper] Fatal error for {symbol}: {e}")
-        return {"error": str(e)}
+        return {"error": f"Options scan failed: {e}"}
 
 
 # ── Convergence Engine ────────────────────────────────────────────────────────
@@ -267,9 +270,32 @@ class ConvergenceEngine:
 
         # ── Options Sniper (Phase 3) ──────────────────────────────
         sniper_result = None
-        if run_sniper and (beastmode or active_count >= 4):
+        if run_sniper:
             trade_type = "call" if not e1.get("bear_stack") else "put"
-            sniper_result = scan_options(symbol, trade_type)
+            sniper_result = scan_options(symbol, trade_type, current_price=closes[-1])
+
+        # ── SML Harmonic Matrix — Proprietary Ranked Engine (Grid 1) ────────────
+        try:
+            sml_data = _harmonic.analyze(closes)
+        except Exception as e:
+            import traceback
+            logger.error(f"[SML] {symbol} harmonic matrix error: {e}\n{traceback.format_exc()}")
+            sml_data = {"error": str(e), "matrix": {}}
+
+        # ── Grid 369 — Proprietary 3×3 Anchor Matrix (Grid 2) ────────────────
+        try:
+            god_stacked_g1 = sml_data.get("god_stacked", 0)
+            grid369_data   = _grid369.analyze(closes, grid1_god_stacked=god_stacked_g1)
+        except Exception as e:
+            import traceback
+            logger.error(f"[Grid369] {symbol} error: {e}\n{traceback.format_exc()}")
+            grid369_data = {"error": str(e), "grid": {}}
+
+        # Elevate signal to DUAL_GRID_LOCK when both grids confirm
+        if grid369_data.get("dual_grid_lock"):
+            signal    = "DUAL_GRID_LOCK"
+            beastmode = True
+            logger.info(f"[DUAL_GRID_LOCK] {symbol} — Grid 1 GOD_MODE + Grid 2 Base-9 all stacked")
 
         result = {
             "symbol":            symbol,
@@ -298,6 +324,8 @@ class ConvergenceEngine:
                 "e6": redact_engine6_block(e6),
                 "e7": redact_engine7_block(e7),
             },
+            "sml_matrix": sml_data,
+            "grid369":    grid369_data,
         }
 
         if sniper_result:
@@ -308,7 +336,7 @@ class ConvergenceEngine:
 
 # ── Multi-symbol Beastmode scan ───────────────────────────────────────────────
 
-def scan_beastmode_universe(services: dict) -> list:
+def scan_beastmode_universe(services: dict, tf: str = "1D") -> list:
     """
     Scan all symbols in BEASTMODE_UNIVERSE.
     Returns only symbols with HIGH_CONVERGENCE or BEASTMODE signals.
@@ -327,12 +355,17 @@ def scan_beastmode_universe(services: dict) -> list:
     # Sort dynamic quotes by volume ratio
     active_syms = sorted(quotes.keys(), key=lambda s: quotes[s].get("volRatio", 0), reverse=True)
     
-    # Take the top 12 most active tickers, plus our mandatory focus
-    universe = list(set(MANDATORY_TICKERS + active_syms[:12]))
+    # Take the top 500 most active tickers, plus our mandatory focus
+    universe = list(set(MANDATORY_TICKERS + active_syms[:500]))
     
     for symbol in universe:
         try:
-            bars    = dm.get_historical_bars(symbol, timeframe="1Day", limit=400) or []
+            if hasattr(dm, "get_bars"):
+                bars = dm.get_bars(symbol, timeframe=tf, limit=400) or []
+                if not bars and tf == "1D":
+                    bars = dm.get_bars(symbol, timeframe="1Min", limit=400) or []
+            else:
+                bars = dm.get_historical_bars(symbol, timeframe=tf, limit=400) or []
             closes  = [float(b.get("c") or b.get("close", 0)) for b in bars if b.get("c") or b.get("close")]
             volumes = [float(b.get("v") or b.get("volume", 0)) for b in bars if b.get("v") or b.get("volume")]
 
@@ -340,9 +373,14 @@ def scan_beastmode_universe(services: dict) -> list:
                 continue
 
             result = engine.analyze(symbol, closes, volumes, bars_with_dates=bars, run_sniper=True)
-            if result.get("signal") in ("BEASTMODE", "HIGH_CONVERGENCE", "LIE_DETECTOR_ACTIVE"):
+            highest_stacks = result.get("sml_matrix", {}).get("highest_stacked_set", 0)
+            
+            if highest_stacks >= 4 or symbol in MANDATORY_TICKERS:
+                # Store the stack count on the top level for easy frontend access
+                result["highest_stacked_set"] = highest_stacks
                 hits.append(result)
         except Exception as e:
             logger.warning(f"[Convergence] {symbol} scan error: {e}")
 
-    return sorted(hits, key=lambda x: x.get("composite_score", 0), reverse=True)
+    # Sort strictly by highest stacked sets (9 down to 4), then by composite score
+    return sorted(hits, key=lambda x: (x.get("highest_stacked_set", 0), x.get("composite_score", 0)), reverse=True)

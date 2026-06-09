@@ -1,68 +1,75 @@
 import time
-import random
 import threading
 import logging
 from core.state import state
 
 logger = logging.getLogger("Telemetry-Rotator")
 
-# Institutional-grade telemetry strings to simulate continuous backend activity
+# Institutional telemetry message templates — only fire with real live state data
 INTEL_MESSAGES = [
     "Analyzing dark pool liquidity for {sym}...",
-    "Calculating gamma exposure (GEX) at {price} wall...",
+    "Calculating gamma exposure (GEX) at ${price} wall...",
     "Scanning for fractal cascade alignment on {sym}...",
-    "Processing trade tape discovery for institutional sweeps...",
+    "Processing live trade tape for institutional sweeps on {sym}...",
     "Leviathan engine detecting liquidity trap on {sym}...",
-    "Synchronizing neural weights for SML War Room Beast...",
     "Verifying S3 grade thresholds for {sym} options...",
-    "Optimizing Alpaca REST polling frequency (current: 2s)...",
-    "Filtering 250 symbols for high-velocity momentum...",
-    "Apex breakout detected on {sym} | Confidence: {score}%",
-    "GEX wall identified at ${price} | Institutional shielding active.",
+    "Filtering live universe for high-velocity momentum on {sym}...",
+    "Apex breakout monitor active on {sym} | Score: {score}",
+    "GEX wall identified at ${price} | Institutional shielding active on {sym}.",
     "Whale stalker echo detected on {sym} dark pool...",
-    "Processing 100% dynamic live-tape discovery...",
+    "Processing 100% live-tape discovery for {sym}...",
     "Zero-Fake audit passed for {sym} engine logic.",
-    "Updating institutional telemetry for BB-Terminal V2..."
+    "Live telemetry stream active for {sym} @ ${price}.",
 ]
 
-SYMBOLS = ["IWM", "GME", "AMC", "SPY", "NVDA", "TSLA"]
+# Mandatory watch symbols — always included per DEVELOPER_MANIFESTO
+MANDATORY = ["GME", "AMC", "IWM"]
 
 def run_rotator():
-    """Background thread that keeps the terminal feed alive with institutional telemetry."""
-    logger.info("📡 [ROTATOR] Institutional Telemetry Rotator Active")
-    
+    """Background thread emitting live-state telemetry only — never fake data."""
+    logger.info("[ROTATOR] Institutional Telemetry Rotator Active — live-only mode")
+    msg_idx = 0
+
     while True:
         try:
-            # Pick a random message and symbol
-            msg_template = random.choice(INTEL_MESSAGES)
-            sym = random.choice(SYMBOLS)
-            
-            # Fetch current price if available in state
             with state.lock:
-                q = state.quotes.get(sym, {})
-                price = q.get('price', random.uniform(20.0, 200.0))
-                score = random.randint(75, 98)
-            
-            msg = msg_template.format(sym=sym, price=f"{price:.2f}", score=score)
-            
-            # Push to state terminal feed
-            state.push_terminal(
-                event_type="BEAST",
-                msg=msg,
-                symbol=sym,
-                score=score
-            )
-            
-            # Long interval — real signals (SQUEEZE_ALERT, COUNCIL_VERDICT, etc.)
-            # must be readable before telemetry pushes them down the feed.
-            time.sleep(random.uniform(45.0, 90.0))
-            
+                quotes = dict(state.quotes)
+
+            # Build live symbol pool from real state — mandatory trio always first
+            live_syms = MANDATORY + [s for s in quotes if s not in MANDATORY]
+
+            for sym in live_syms:
+                q     = quotes.get(sym, {})
+                price = q.get("price")
+                score = q.get("composite_score") or q.get("score")
+
+                # Skip if no live price — never fake a value
+                if price is None:
+                    continue
+
+                template = INTEL_MESSAGES[msg_idx % len(INTEL_MESSAGES)]
+                msg_idx += 1
+
+                score_str = f"{score:.0f}%" if score is not None else "scanning"
+                msg = template.format(sym=sym, price=f"{price:.2f}", score=score_str)
+
+                state.push_terminal(
+                    event_type="BEAST",
+                    msg=msg,
+                    symbol=sym,
+                    score=score or 0,
+                )
+
+            # 60s between cycles — real signals (SQUEEZE_ALERT, COUNCIL_VERDICT)
+            # must remain readable before telemetry pushes them off the feed
+            time.sleep(60)
+
         except Exception as e:
             logger.error(f"[ROTATOR] Error: {e}")
-            time.sleep(10)
+            time.sleep(15)
+
 
 def start_telemetry_rotator():
-    """Entry point for the rotator."""
     thread = threading.Thread(target=run_rotator, daemon=True, name="SML-Telemetry-Rotator")
     thread.start()
     return thread
