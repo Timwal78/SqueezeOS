@@ -600,7 +600,8 @@ const API_BASE = window.location.protocol === "file:"
 
 let   activeSym = "GME";
 const MANDATORY = ["GME", "AMC", "IWM"];
-let   refreshTimer, countdownTimer, secondsLeft = 45;
+let   countdownTimer, secondsLeft = 45;
+let   _consecutiveErrors = 0;
 
 // ── Engine config ──────────────────────────────────────────────────
 const ENGINES = [
@@ -730,11 +731,17 @@ function renderEngineDetail(num, engines) {
 function renderSmlMatrix(sml) {
   const grid = $("sml-grid");
   const card = $("sml-card");
-  
-  if (!sml || !sml.matrix) {
-    grid.innerHTML = "<div class='loading'>SML Matrix data unavailable</div>";
+
+  const hasMatrix = sml && sml.matrix && Object.keys(sml.matrix).length > 0;
+  if (!hasMatrix) {
+    const reason = sml?.error
+      ? (sml.error.startsWith("insufficient_bars:")
+          ? `Waiting for data — ${sml.error.split(":")[1]} bars received, 20+ needed`
+          : `Matrix error: ${sml.error}`)
+      : "SML Matrix — awaiting first data cycle";
+    grid.innerHTML = `<div class='loading' style='color:var(--orange)'>${reason}</div>`;
     card.style.borderColor = "var(--border)";
-    card.style.boxShadow = "none";
+    card.style.boxShadow   = "none";
     return;
   }
   
@@ -918,15 +925,30 @@ function renderSniper(sniper) {
 // ── Data fetch ─────────────────────────────────────────────────────
 async function fetchData(sym) {
   try {
-    $("live-status").textContent = "FETCHING.";
+    $("live-status").textContent = "FETCHING…";
     const resp = await fetch(`${API_BASE}/api/convergence/${sym}?sniper=true&tf=${currentTF}`);
-    if (!resp.ok) throw new Error(resp.status);
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => resp.status);
+      throw new Error(`HTTP ${resp.status}: ${errText}`);
+    }
     const json = await resp.json();
+    if (!json || json.status === "error") throw new Error(json?.message || "API returned error");
     render(json);
     setLive(true);
+    _consecutiveErrors = 0;
   } catch(e) {
+    _consecutiveErrors++;
     setLive(false);
-    console.error(e);
+    $("live-status").title = e.message; // hover to see full error
+    console.error("[BeastMode] fetchData error:", e.message);
+    // Surface the error into the engine grid so it's visible
+    const grid = $("engine-grid");
+    if (grid && grid.children.length <= 1) {
+      grid.innerHTML = `<div class="err-msg" style="grid-column:1/-1">
+        ⚠ API error (attempt ${_consecutiveErrors}): ${e.message}<br>
+        <span style="color:var(--dim);font-size:12px">Retrying in ${secondsLeft}s — hover ERROR dot for details</span>
+      </div>`;
+    }
   }
 }
 
@@ -936,6 +958,7 @@ function startCountdown() {
   secondsLeft = 45;
   updateCountdown();
   countdownTimer = setInterval(() => {
+    if (document.hidden) return; // don't burn cycles or Render budget while tabbed out
     secondsLeft--;
     updateCountdown();
     if (secondsLeft <= 0) {
@@ -948,6 +971,14 @@ function startCountdown() {
 function updateCountdown() {
   $("countdown").textContent = `auto-refresh in ${secondsLeft}s`;
 }
+
+// Resume immediately when user tabs back in
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && secondsLeft <= 0) {
+    fetchData(activeSym);
+    secondsLeft = 45;
+  }
+});
 
 async function loadDynamicTickers() {
   try {
