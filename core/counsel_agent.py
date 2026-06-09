@@ -4,9 +4,13 @@ def generate_ai_counsel(result: dict) -> str:
     Safe against missing or partial sml_matrix data.
     """
     symbol   = result.get("symbol", "UNKNOWN")
-    matrix   = result.get("sml_matrix") or {}
-    decision = matrix.get("decision", "WAIT")
-    stacks   = matrix.get("highest_stacked_set", 0)
+    matrix        = result.get("sml_matrix") or {}
+    decision      = matrix.get("decision", "WAIT")
+    stacks        = matrix.get("highest_stacked_set", 0)
+    matrix_tier   = matrix.get("tier", "NONE")
+    god_stacked   = matrix.get("god_stacked", 0)
+    execute_gate  = matrix.get("execute_gate", False)
+    harmonic_score= matrix.get("harmonic_score", 0)
     signal   = result.get("signal", "NEUTRAL")
     score    = result.get("composite_score", 0)
 
@@ -57,23 +61,33 @@ def generate_ai_counsel(result: dict) -> str:
         elif err:
             matrix_note = f"\n\nNOTE: SML matrix computation encountered an issue ({err}). Engines 1–7 are operating normally."
 
-    # Action directive
-    if stacks >= 4:
-        intro = f"SqueezeOS detected a high-probability {stacks}-Stack Bullish Convergence on {symbol} (Composite: {score})."
+    # Action directive — GOD_MODE tier is the institutional execution threshold
+    if execute_gate and matrix_tier == "GOD_MODE":
+        intro = (f"SqueezeOS SML Harmonic Matrix has confirmed GOD_MODE on {symbol} — "
+                 f"{god_stacked}/6 SET9 INSTITUTIONAL configurations stacked "
+                 f"(Harmonic Score: {harmonic_score} · Composite: {score}).")
         sniper_warn = " [OPTIONS DATA UNAVAILABLE — verify with broker]" if has_error else ""
         action = (
-            f"EXECUTE: {strike_str} {trade_type} expiring {exp_str} "
+            f"EXECUTE NOW: {strike_str} {trade_type} expiring {exp_str} "
             f"for ~{premium_str} premium.{sniper_warn}"
         )
+    elif matrix_tier == "GOD_MODE" and god_stacked > 0:
+        intro = (f"SqueezeOS SML Harmonic Matrix: GOD_MODE tier active on {symbol} — "
+                 f"{god_stacked}/6 SET9 configurations stacked (need 3+ to execute). "
+                 f"Composite: {score}.")
+        action = f"BUILDING: {god_stacked} SET9 stack(s) confirmed. Execution gate opens at 3+. Monitor {strike_str} {trade_type} exp {exp_str}."
     elif signal in ("BEASTMODE", "GOD_MODE", "APEX_SINGULARITY"):
         intro = f"SqueezeOS has achieved {signal} on {symbol} (Composite: {score}) — maximum convergence state."
         action = f"HIGH ALERT: All engines locked. Monitor {strike_str} {trade_type} expiring {exp_str} for entry."
+    elif matrix_tier == "PRIME":
+        intro = f"SqueezeOS SML Harmonic Matrix: PRIME tier alignment on {symbol} (Composite: {score}). SET6 family confirmed — awaiting SET9 institutional confirmation."
+        action = f"STANDBY: PRIME tier active. Position for GOD_MODE entry at {strike_str} {trade_type} exp {exp_str}."
     elif signal in ("HIGH_CONVERGENCE", "FRACTAL_LOCK"):
         intro = f"SqueezeOS detects {signal} on {symbol} (Composite: {score}) — approaching execution threshold."
         action = f"STANDBY: {stacks} stacks confirmed. One more convergence event triggers full execution protocol."
     else:
-        intro = f"SqueezeOS detects Partial Alignment ({stacks} stacks) on {symbol} (Composite: {score}). Does not meet the 4-stack execution threshold."
-        action = f"DO NOT EXECUTE. Maintain standby. Theoretical setup: {strike_str} {trade_type} exp {exp_str}."
+        intro = f"SqueezeOS SML Harmonic Matrix: {matrix_tier} tier on {symbol} (Composite: {score}). Does not meet GOD_MODE execution threshold."
+        action = f"DO NOT EXECUTE. Maintain watch. Theoretical setup: {strike_str} {trade_type} exp {exp_str}."
 
     return (
         f"{intro}\n\n"

@@ -286,7 +286,29 @@ class AlertHandler(BaseHTTPRequestHandler):
         if _circuit_open(flags):
             return
 
-        logger.info(f"[ALERT] Processing {action} on {symbol}")
+        # ── Harmonic Matrix Execution Gate ────────────────────────────────────
+        # Only execute if the SML Harmonic Matrix confirms GOD_MODE tier.
+        # Requires: tier=GOD_MODE AND god_stacked ≥ 3 (≥3 SET9 configs stacked).
+        # Alerts from lower tiers (PRIME, WATCH) are logged but never executed.
+        sml = payload.get("sml_matrix") or {}
+        matrix_tier    = sml.get("tier", "NONE")
+        god_stacked    = sml.get("god_stacked", 0)
+        execute_gate   = sml.get("execute_gate", False)
+        harmonic_score = sml.get("harmonic_score", 0)
+
+        if not execute_gate or matrix_tier != "GOD_MODE":
+            logger.warning(
+                f"[GATE] {symbol} BLOCKED — tier={matrix_tier} god_stacked={god_stacked} "
+                f"execute_gate={execute_gate} harmonic_score={harmonic_score} "
+                f"(GOD_MODE + ≥3 SET9 stacked required)"
+            )
+            return
+
+        logger.info(
+            f"[GATE] {symbol} CLEARED — GOD_MODE CONFIRMED "
+            f"god_stacked={god_stacked}/6 harmonic_score={harmonic_score} "
+            f"Processing {action}..."
+        )
 
         mode = payload.get("mode", "equity")  # "equity" | "options"
 

@@ -744,81 +744,165 @@ function renderSmlMatrix(sml) {
     card.style.boxShadow   = "none";
     return;
   }
-  
-  const hcs = sml.harmonic_convergence;
-  const highest = sml.highest_stacked_set || 0;
-  
-  card.style.borderColor = hcs ? "var(--green)" : "var(--purple)";
-  card.style.boxShadow = hcs ? "inset 0 0 15px rgba(0,255,102,0.2)" : "inset 0 0 10px rgba(153,0,255,0.1)";
-  
-  let html = ``;
-  
-  // Header row
-  html += `
-    <div style="font-size:12px;color:var(--dim);margin-bottom:4px;grid-column:1;">SET / GAP</div>
-    <div style="font-size:12px;color:var(--dim);margin-bottom:4px;grid-column:2;">TRIGGER</div>
-    <div style="font-size:12px;color:var(--dim);margin-bottom:4px;grid-column:3;">BASELINE</div>
-    <div style="font-size:12px;color:var(--dim);margin-bottom:4px;grid-column:4;">VALIDATOR</div>
-    <div style="font-size:12px;color:var(--dim);margin-bottom:4px;grid-column:5;">ANCHOR</div>
-    <div style="font-size:12px;color:var(--dim);margin-bottom:4px;grid-column:6;">MACRO</div>
-  `;
 
-  for (const key of Object.keys(sml.matrix)) {
-    const set_data = sml.matrix[key];
-    const is_stacked = set_data.stacked;
-    const bg = is_stacked ? "rgba(0,255,102,0.05)" : "rgba(153,0,255,0.05)";
-    const color = is_stacked ? "var(--green)" : "var(--white)";
-    
-    html += `<div style="background:${bg};border:1px solid ${is_stacked ? 'rgba(0,255,102,0.2)' : 'rgba(153,0,255,0.2)'};padding:6px;border-radius:4px;color:${color};font-weight:bold;font-size:13px;display:flex;align-items:center;justify-content:center;text-align:center;">SET ${set_data.set_level}<br><span style="font-size:10px;font-weight:normal;color:var(--dim)">GAP: ${set_data.gap} | ${set_data.depth}EMA</span></div>`;
-    
-    for (let v = 0; v < 5; v++) {
-      if (v < set_data.lengths.length) {
-        const length = set_data.lengths[v];
-        const val = set_data.values[v];
-        html += `
-          <div style="background:${bg};border:1px solid ${is_stacked ? 'rgba(0,255,102,0.2)' : 'var(--border)'};padding:6px;border-radius:4px;color:${is_stacked ? 'var(--white)' : 'var(--dim)'};">
-            <div style="font-size:10px;color:var(--dim);margin-bottom:2px;">EMA ${length}</div>
-            <div style="font-size:14px;font-weight:bold;">${val}</div>
-          </div>
-        `;
-      } else {
-        html += `<div></div>`;
-      }
-    }
-  }
+  const signal     = sml.signal || "NEUTRAL";
+  const tier       = sml.tier || "NONE";
+  const godCount   = sml.god_stacked   || 0;
+  const primeCount = sml.prime_stacked || 0;
+  const watchCount = sml.watch_stacked || 0;
+  const execGate   = sml.execute_gate  || false;
+  const hScore     = sml.harmonic_score || 0;
 
-  // Banner
-  html += `
-    <div style="grid-column: 1 / -1; background: ${hcs ? 'rgba(0,255,102,0.1)' : 'rgba(255,136,0,0.1)'}; color: ${hcs ? 'var(--green)' : 'var(--orange)'}; padding: 10px; font-weight: bold; border-radius:4px; border: 1px solid ${hcs ? 'var(--green)' : 'var(--orange)'}; margin-top:8px;">
-      HARMONIC CONVERGENCE: ${hcs ? 'YES — BULLISH ALIGNMENT' : 'NO — MATRIX UNALIGNED'} (HIGHEST STACKED SET: ${highest})
-    </div>
-  `;
-  
-  if (sml.decision && sml.levels) {
-    const dec = sml.decision;
-    const decColor = dec.includes("BUY") ? "var(--green)" : "var(--orange)";
+  // Card border by tier
+  const tierColors = { GOD_MODE: "var(--green)", PRIME: "var(--cyan)", WATCH: "var(--orange)", NONE: "var(--border)" };
+  const tierGlow   = { GOD_MODE: "rgba(0,255,102,0.25)", PRIME: "rgba(0,212,255,0.15)", WATCH: "rgba(255,136,0,0.1)", NONE: "transparent" };
+  card.style.borderColor = tierColors[tier] || "var(--border)";
+  card.style.boxShadow   = `inset 0 0 20px ${tierGlow[tier] || "transparent"}`;
+
+  let html = "";
+
+  // ── Execution Status Banner ────────────────────────────────────────────────
+  if (execGate) {
     html += `
-      <div style="grid-column: 1 / -1; display:flex; justify-content:space-between; margin-top:8px; border: 1px solid var(--border); padding: 10px; border-radius: 4px; background: rgba(0,0,0,0.3);">
-        <div style="text-align:left;">
-          <div style="font-size:10px; color:var(--dim); margin-bottom:4px;">ENGINE DECISION</div>
-          <div style="font-size:16px; font-weight:bold; color:${decColor};">${dec}</div>
-        </div>
-        <div style="text-align:center;">
-          <div style="font-size:10px; color:var(--dim); margin-bottom:4px;">STOP LOSS</div>
-          <div style="font-size:16px; font-weight:bold; color:var(--red);">${sml.levels.invalidation}</div>
-        </div>
-        <div style="text-align:center;">
-          <div style="font-size:10px; color:var(--dim); margin-bottom:4px;">PRICE TARGET 1</div>
-          <div style="font-size:16px; font-weight:bold; color:var(--green);">${sml.levels.tp1}</div>
-        </div>
-        <div style="text-align:right;">
-          <div style="font-size:10px; color:var(--dim); margin-bottom:4px;">PRICE TARGET 2</div>
-          <div style="font-size:16px; font-weight:bold; color:var(--green);">${sml.levels.tp2}</div>
-        </div>
-      </div>
-    `;
+      <div style="grid-column:1/-1;background:rgba(0,255,102,0.15);border:2px solid var(--green);border-radius:6px;padding:14px;text-align:center;margin-bottom:8px;">
+        <div style="font-size:22px;font-weight:900;color:var(--green);letter-spacing:3px;text-shadow:0 0 20px rgba(0,255,102,0.8);">⚡ GOD MODE — EXECUTE</div>
+        <div style="font-size:11px;color:var(--dim);margin-top:4px;">SET9 INSTITUTIONAL CONVERGENCE CONFIRMED · ${godCount}/6 CONFIGURATIONS STACKED</div>
+      </div>`;
+  } else if (tier === "PRIME") {
+    html += `
+      <div style="grid-column:1/-1;background:rgba(0,212,255,0.08);border:1px solid var(--cyan);border-radius:6px;padding:10px;text-align:center;margin-bottom:8px;">
+        <div style="font-size:16px;font-weight:700;color:var(--cyan);">PRIME ALIGNMENT — STANDBY</div>
+        <div style="font-size:11px;color:var(--dim);margin-top:2px;">SET6 PRIME TIER · ${primeCount} CONFIGS STACKED · Waiting for SET9 confirmation</div>
+      </div>`;
+  } else if (tier === "WATCH") {
+    html += `
+      <div style="grid-column:1/-1;background:rgba(255,136,0,0.06);border:1px solid var(--orange);border-radius:6px;padding:10px;text-align:center;margin-bottom:8px;">
+        <div style="font-size:14px;font-weight:700;color:var(--orange);">WATCH — MOMENTUM BUILDING</div>
+        <div style="font-size:11px;color:var(--dim);margin-top:2px;">SET3 WATCH TIER · ${watchCount} CONFIGS STACKED</div>
+      </div>`;
+  } else {
+    html += `
+      <div style="grid-column:1/-1;background:rgba(100,100,100,0.06);border:1px solid var(--border);border-radius:6px;padding:10px;text-align:center;margin-bottom:8px;">
+        <div style="font-size:14px;font-weight:700;color:var(--dim);">MATRIX SCANNING — NO ALIGNMENT</div>
+        <div style="font-size:11px;color:var(--dim);margin-top:2px;">Signal: ${signal} · GOD:${godCount} PRIME:${primeCount} WATCH:${watchCount}</div>
+      </div>`;
   }
-  
+
+  // ── Tier Summary Bar ──────────────────────────────────────────────────────
+  html += `
+    <div style="grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;">
+      <div style="background:rgba(0,255,102,0.05);border:1px solid rgba(0,255,102,${godCount>0?'0.5':'0.15'});border-radius:6px;padding:10px;text-align:center;">
+        <div style="font-size:10px;color:var(--dim);letter-spacing:1px;margin-bottom:4px;">GOD MODE · SET9</div>
+        <div style="font-size:28px;font-weight:900;color:${godCount>0?'var(--green)':'var(--dim)'};">${godCount}<span style="font-size:14px;font-weight:400;">/6</span></div>
+        <div style="font-size:9px;color:var(--dim);margin-top:2px;">INSTITUTIONAL GRADE</div>
+        ${execGate ? `<div style="font-size:10px;color:var(--green);font-weight:700;margin-top:4px;">✓ EXECUTE GATE OPEN</div>` : `<div style="font-size:10px;color:var(--dim);margin-top:4px;">Need ≥3 for execution</div>`}
+      </div>
+      <div style="background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,${primeCount>0?'0.4':'0.12'});border-radius:6px;padding:10px;text-align:center;">
+        <div style="font-size:10px;color:var(--dim);letter-spacing:1px;margin-bottom:4px;">PRIME · SET6</div>
+        <div style="font-size:28px;font-weight:900;color:${primeCount>0?'var(--cyan)':'var(--dim)'};">${primeCount}<span style="font-size:14px;font-weight:400;">/6</span></div>
+        <div style="font-size:9px;color:var(--dim);margin-top:2px;">PRIME TIER</div>
+      </div>
+      <div style="background:rgba(255,136,0,0.04);border:1px solid rgba(255,136,0,${watchCount>0?'0.4':'0.12'});border-radius:6px;padding:10px;text-align:center;">
+        <div style="font-size:10px;color:var(--dim);letter-spacing:1px;margin-bottom:4px;">WATCH · SET3</div>
+        <div style="font-size:28px;font-weight:900;color:${watchCount>0?'var(--orange)':'var(--dim)'};">${watchCount}<span style="font-size:14px;font-weight:400;">/6</span></div>
+        <div style="font-size:9px;color:var(--dim);margin-top:2px;">WATCH TIER</div>
+      </div>
+    </div>`;
+
+  // ── Ranked Configuration Table ────────────────────────────────────────────
+  // Sort by rank (already sorted from backend), render each config row
+  const allConfigs = Object.values(sml.matrix).sort((a, b) => a.rank - b.rank);
+
+  const tierLabel  = { GOD_MODE: "GOD", PRIME: "PRIME", WATCH: "WATCH" };
+  const tierBorder = { GOD_MODE: "rgba(0,255,102,", PRIME: "rgba(0,212,255,", WATCH: "rgba(255,136,0," };
+  const tierText   = { GOD_MODE: "var(--green)", PRIME: "var(--cyan)", WATCH: "var(--orange)" };
+
+  // Section headers
+  let lastTier = null;
+  for (const cfg of allConfigs) {
+    if (cfg.tier !== lastTier) {
+      lastTier = cfg.tier;
+      const sectionColor = tierText[cfg.tier] || "var(--dim)";
+      const sectionLabel = cfg.tier === "GOD_MODE" ? "⚡ GOD MODE TIER — INSTITUTIONAL GRADE (SET9)"
+                         : cfg.tier === "PRIME"    ? "◆ PRIME TIER (SET6)"
+                         : "● WATCH TIER (SET3)";
+      html += `<div style="grid-column:1/-1;font-size:11px;font-weight:700;color:${sectionColor};letter-spacing:2px;padding:6px 0 2px;border-bottom:1px solid ${sectionColor}40;margin:4px 0;">${sectionLabel}</div>`;
+    }
+
+    const stacked  = cfg.stacked;
+    const tBorder  = tierBorder[cfg.tier] || "rgba(128,128,128,";
+    const tText    = tierText[cfg.tier]   || "var(--dim)";
+    const opacity  = stacked ? "0.5)" : "0.15)";
+    const bgOpacity= stacked ? "0.08" : "0.02";
+    const bg       = `rgba(${cfg.tier==="GOD_MODE"?"0,255,102":cfg.tier==="PRIME"?"0,212,255":"255,136,0"},${bgOpacity})`;
+
+    const isFlag   = cfg.id === "SET9_GAP3_5EMA";  // Rank 1 INSTITUTIONAL flagship
+    const flagBadge= isFlag ? `<span style="font-size:8px;background:var(--green);color:#000;padding:1px 4px;border-radius:2px;font-weight:900;margin-left:4px;">φ0.987</span>` : "";
+    const gradeBadge = stacked ? `<span style="font-size:8px;background:${tText};color:#000;padding:1px 5px;border-radius:2px;font-weight:900;margin-left:4px;">${cfg.grade}</span>` : "";
+
+    // EMA sequence display (up to 5 values)
+    const seqStr = cfg.sequence.join("-");
+    const emasDisplay = cfg.ema_values
+      .map((v, i) => `<span style="font-size:10px;color:var(--dim)">EMA${cfg.sequence[i]}:<span style="color:${stacked?tText:'var(--white)'}"> ${v}</span></span>`)
+      .join("  ");
+
+    html += `
+      <div style="grid-column:1/-1;background:${bg};border:1px solid ${tBorder}${opacity};border-radius:5px;padding:8px 10px;display:flex;align-items:center;justify-content:space-between;margin-bottom:3px;">
+        <div style="display:flex;align-items:center;gap:8px;min-width:200px;">
+          <span style="font-size:10px;color:var(--dim);width:22px;text-align:right;">#${cfg.rank}</span>
+          <span style="font-size:12px;font-weight:700;color:${stacked?tText:'var(--white)'};">${cfg.id}</span>
+          ${flagBadge}${gradeBadge}
+        </div>
+        <div style="font-size:10px;color:var(--dim);flex:1;padding:0 12px;">[${seqStr}]&nbsp;&nbsp;${emasDisplay}</div>
+        <div style="display:flex;align-items:center;gap:16px;text-align:right;">
+          <div>
+            <div style="font-size:9px;color:var(--dim);">SCORE</div>
+            <div style="font-size:13px;font-weight:700;color:${stacked?tText:'var(--dim)'};">${cfg.score}</div>
+          </div>
+          <div>
+            <div style="font-size:9px;color:var(--dim);">PF</div>
+            <div style="font-size:13px;font-weight:700;color:${stacked?tText:'var(--dim)'};">${cfg.pf}x</div>
+          </div>
+          <div style="width:70px;text-align:center;">
+            ${stacked
+              ? `<span style="font-size:11px;font-weight:900;color:${tText};background:${tBorder}0.12);padding:3px 8px;border-radius:3px;">● STACKED</span>`
+              : `<span style="font-size:11px;color:var(--dim);">○ flat</span>`
+            }
+          </div>
+        </div>
+      </div>`;
+  }
+
+  // ── Decision + Levels Footer ──────────────────────────────────────────────
+  if (sml.decision && sml.levels) {
+    const dec      = sml.decision;
+    const decColor = execGate ? "var(--green)" : tier === "PRIME" ? "var(--cyan)" : "var(--orange)";
+    html += `
+      <div style="grid-column:1/-1;display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr;gap:8px;margin-top:10px;border:1px solid var(--border);padding:12px;border-radius:6px;background:rgba(0,0,0,0.3);">
+        <div>
+          <div style="font-size:9px;color:var(--dim);letter-spacing:1px;margin-bottom:4px;">ENGINE DECISION</div>
+          <div style="font-size:15px;font-weight:900;color:${decColor};">${dec}</div>
+          <div style="font-size:10px;color:var(--dim);margin-top:2px;">Harmonic Score: ${hScore}</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:9px;color:var(--dim);letter-spacing:1px;margin-bottom:4px;">STOP LOSS</div>
+          <div style="font-size:15px;font-weight:700;color:var(--red);">${sml.levels.invalidation}</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:9px;color:var(--dim);letter-spacing:1px;margin-bottom:4px;">TARGET 1</div>
+          <div style="font-size:15px;font-weight:700;color:var(--green);">${sml.levels.tp1}</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:9px;color:var(--dim);letter-spacing:1px;margin-bottom:4px;">TARGET 2</div>
+          <div style="font-size:15px;font-weight:700;color:var(--green);">${sml.levels.tp2}</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:9px;color:var(--dim);letter-spacing:1px;margin-bottom:4px;">ATR</div>
+          <div style="font-size:15px;font-weight:700;color:var(--white);">${sml.atr}</div>
+        </div>
+      </div>`;
+  }
+
   grid.innerHTML = html;
 }
 

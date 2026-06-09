@@ -32,6 +32,7 @@ from core.engine2_settlement import get_clock, stamp_ignition
 from core.engine4_temporal_mirror import Engine4_TemporalMirror
 from core.engine5_gann_macro import Engine5_GannMacro
 from core.engine6_base4_matrix import Engine6_Base4Matrix, redact_engine6_block
+import core.harmonic_matrix_engine as _harmonic
 from core.engine7_parabolic import Engine7_Parabolic, redact_engine7_block
 from core.state import state
 
@@ -272,82 +273,12 @@ class ConvergenceEngine:
             trade_type = "call" if not e1.get("bear_stack") else "put"
             sniper_result = scan_options(symbol, trade_type, current_price=closes[-1])
 
-        # ── Fetch Full SML 5-EMA Matrix ───────────────────────────
-        # Minimum bars needed: longest EMA span = 9 + 9*4 = 45. Use 20 as floor
-        # so partial Polygon data still renders rather than silently returning {}.
-        sml_data = {}
-        _MIN_BARS = 20
+        # ── SML Harmonic Matrix — Proprietary Ranked Engine ──────────────────────
         try:
-            import pandas as pd
-            import traceback
-            if len(closes) >= _MIN_BARS:
-                c_series = pd.Series([float(c) for c in closes])  # guarantee Python floats
-
-                # God Grid 369 — 18 permutations across x∈{9,6,3}, gap∈{3,6,9}, depth∈{5,4}
-                matrix_config = {}
-                for x in [9, 6, 3]:
-                    for gap in [3, 6, 9]:
-                        for depth in [5, 4]:
-                            seq = [x + (gap * i) for i in range(depth)]
-                            matrix_config[f"SET{x}_GAP{gap}_{depth}EMA"] = {
-                                "set_level": x, "gap": gap, "sequence": seq, "depth": depth
-                            }
-
-                kinetic_results = {}
-                max_stacked_set = 0
-
-                for set_name, config in matrix_config.items():
-                    seq = config["sequence"]
-                    emas = [float(c_series.ewm(span=length, adjust=False).mean().iloc[-1])
-                            for length in seq]
-
-                    is_stacked = all(emas[i] > emas[i+1] for i in range(len(emas) - 1))
-                    # Price must be above the slowest EMA to qualify as stacked
-                    if is_stacked and float(closes[-1]) <= emas[-1]:
-                        is_stacked = False
-
-                    if is_stacked:
-                        max_stacked_set = max(max_stacked_set, config["set_level"])
-
-                    kinetic_results[set_name] = {
-                        "set_level": config["set_level"],
-                        "gap":       config["gap"],
-                        "lengths":   seq,
-                        "values":    [round(e, 2) for e in emas],
-                        "stacked":   is_stacked,
-                    }
-
-                decision = "BUY NOW" if max_stacked_set >= 4 else "WAIT"
-                last_c   = float(closes[-1])
-
-                # Real ATR from last 14 bars instead of hardcoded 2.5
-                if len(closes) >= 15:
-                    highs  = [float(closes[i]) for i in range(-15, 0)]
-                    lows   = highs  # single-series fallback — spread is intra-bar
-                    ranges = [abs(highs[i] - highs[i-1]) for i in range(1, len(highs))]
-                    atr    = round(sum(ranges) / len(ranges), 4) if ranges else last_c * 0.015
-                else:
-                    atr = last_c * 0.015  # 1.5% fallback for very thin datasets
-
-                sml_data = {
-                    "matrix":              kinetic_results,
-                    "highest_stacked_set": max_stacked_set,
-                    "harmonic_convergence": max_stacked_set >= 4,
-                    "decision":            decision,
-                    "bars_used":           len(closes),
-                    "atr":                 atr,
-                    "levels": {
-                        "invalidation": round(last_c - atr * 1.5, 4),
-                        "tp1":          round(last_c + atr * 2.0, 4),
-                        "tp2":          round(last_c + atr * 4.0, 4),
-                    },
-                }
-            else:
-                logger.warning(f"[SML] {symbol}: only {len(closes)} bars — need {_MIN_BARS}+. Matrix skipped.")
-                sml_data = {"error": f"insufficient_bars:{len(closes)}", "matrix": {}}
+            sml_data = _harmonic.analyze(closes)
         except Exception as e:
-            err_detail = traceback.format_exc()
-            logger.error(f"[SML] {symbol} matrix error: {e}\n{err_detail}")
+            import traceback
+            logger.error(f"[SML] {symbol} harmonic matrix error: {e}\n{traceback.format_exc()}")
             sml_data = {"error": str(e), "matrix": {}}
 
         result = {
