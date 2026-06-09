@@ -40,6 +40,7 @@ from core.api.triple_lock_bp import triple_lock_bp
 from core.api.nw_liq_bp import nw_liq_bp
 from core.api.keys_bp import keys_bp
 from core.api.config_bp import config_bp
+from core.api.sml_alert_bp import sml_alert_bp
 import core.signal_history as signal_history
 from core.legacy import start_whale_stalker, init_services, get_service, clean_data
 from core.market_graph import get_graph
@@ -121,7 +122,8 @@ def create_app():
     app.register_blueprint(stigmergy_bp,  url_prefix='/api/stigmergy')
     app.register_blueprint(notary_bp,     url_prefix='/api/notary')
     app.register_blueprint(triple_lock_bp, url_prefix='/api/triple-lock')
-    app.register_blueprint(nw_liq_bp,    url_prefix='/api/nwliq')
+    app.register_blueprint(nw_liq_bp,      url_prefix='/api/nwliq')
+    app.register_blueprint(sml_alert_bp,  url_prefix='/api/sml')
     app.register_blueprint(proprietary_ema_bp, url_prefix='/api')
     app.register_blueprint(convergence_bp,     url_prefix='/api')
     app.register_blueprint(autopilot_bp)
