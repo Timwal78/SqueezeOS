@@ -528,13 +528,43 @@ if show_hud and barstate.islast
     table.cell(hud,2,32, "")
     table.merge_cells(hud,0,32,2,32)
 
-// ── Alert Conditions ──────────────────────────────────────────────────────────
-alertcondition(evt_convergence and vol_confirm,                    "SML: Convergence",             "CONVERGENCE — {{ticker}} {{interval}} [SML v8.0]")
-alertcondition(evt_critical    and vol_confirm,                    "SML: Critical Mass",           "CRITICAL MASS — {{ticker}} {{interval}} [SML v8.0]")
-alertcondition(evt_apex        and vol_confirm,                    "SML: Apex Singularity",        "APEX SINGULARITY — {{ticker}} {{interval}} [SML v8.0 PROPRIETARY]")
-alertcondition(evt_full,                                           "SML: Full Spectrum",           "FULL SPECTRUM — ALL 9 — {{ticker}} {{interval}} [SML v8.0]")
-alertcondition(exit_convergence,                                   "SML: Released",                "CONVERGENCE RELEASED — {{ticker}} {{interval}} [SML v8.0]")
-alertcondition(dgl_fire,                                           "SML: Dual Grid Lock",          "💎 DUAL GRID LOCK — GOD TIER CONFIRMED — {{ticker}} {{interval}} [SML v8.0]")
-alertcondition(evt_apex and regime_compressed and vol_confirm,     "SML: Prime Signal",            "PRIME SIGNAL — APEX + COMPRESSED — {{ticker}} {{interval}} [SML v8.0]")
-alertcondition(is_prime_setup  and full_mtf_stack and vol_confirm, "SML: Prime Institutional",     "PRIME INSTITUTIONAL — FULL MTF STACK — {{ticker}} {{interval}} [SML v8.0 PROPRIETARY]")
-alertcondition(mtf_stack_fired and state_convergence,              "SML: MTF Stack Confirmed",     "MTF STACK — FULL TF ALIGNMENT — {{ticker}} {{interval}} [SML v8.0]")
+// ── alertcondition (legacy / individual setup) ────────────────────────────────
+alertcondition(evt_convergence and vol_confirm,                    "SML: Convergence",         "CONVERGENCE — {{ticker}} {{interval}} [SML v8.0]")
+alertcondition(evt_critical    and vol_confirm,                    "SML: Critical Mass",       "CRITICAL MASS — {{ticker}} {{interval}} [SML v8.0]")
+alertcondition(evt_apex        and vol_confirm,                    "SML: Apex Singularity",    "APEX SINGULARITY — {{ticker}} {{interval}} [SML v8.0]")
+alertcondition(evt_full,                                           "SML: Full Spectrum",       "FULL SPECTRUM — ALL 9 — {{ticker}} {{interval}} [SML v8.0]")
+alertcondition(exit_convergence,                                   "SML: Released",            "CONVERGENCE RELEASED — {{ticker}} {{interval}} [SML v8.0]")
+alertcondition(dgl_fire,                                           "SML: Dual Grid Lock",      "DUAL GRID LOCK — GOD TIER — {{ticker}} {{interval}} [SML v8.0]")
+alertcondition(evt_apex and regime_compressed and vol_confirm,     "SML: Prime Signal",        "PRIME SIGNAL — {{ticker}} {{interval}} [SML v8.0]")
+alertcondition(is_prime_setup  and full_mtf_stack and vol_confirm, "SML: Prime Institutional", "PRIME INSTITUTIONAL — {{ticker}} {{interval}} [SML v8.0]")
+alertcondition(mtf_stack_fired and state_convergence,              "SML: MTF Stack",           "MTF STACK — {{ticker}} {{interval}} [SML v8.0]")
+
+// ── alert() — Discord JSON webhooks (use ONE alert set to "alert() function calls") ──
+string _px  = str.tostring(math.round(close * 100.0) / 100.0)
+string _set = str.tostring(total_coiled)
+string _ci  = str.tostring(math.round(harmonic_score))
+string _sq  = str.tostring(math.round(sqi_total))
+string _tf  = timeframe.period
+string _tk  = syminfo.ticker
+string _ftx = ",\"footer\":{\"text\":\"SML v8.0  |  ScriptMaster Labs  |  PROPRIETARY\"}}"
+
+if dgl_fire
+    alert("{\"username\":\"SML SOVEREIGN MATRIX\",\"embeds\":[{\"title\":\"\\ud83d\\udc8e  DUAL GRID LOCK  \\u2014  " + _tk + "\",\"description\":\"**GOD TIER ALL 3 COMPRESSED**\\nPrice: **$" + _px + "** | TF: **" + _tf + "** | CI: **" + _ci + "**\",\"color\":16766720" + _ftx + "]}", alert.freq_once_per_bar_close)
+
+else if evt_full
+    alert("{\"username\":\"SML SOVEREIGN MATRIX\",\"embeds\":[{\"title\":\"\\ud83d\\udfe1  FULL SPECTRUM  \\u2014  " + _tk + "\",\"description\":\"**ALL 9 SETS COMPRESSED**\\nPrice: **$" + _px + "** | TF: **" + _tf + "** | CI: **" + _ci + "** | SQI: **" + _sq + "**\",\"color\":16766720" + _ftx + "]}", alert.freq_once_per_bar_close)
+
+else if evt_apex and vol_confirm
+    alert("{\"username\":\"SML SOVEREIGN MATRIX\",\"embeds\":[{\"title\":\"\\u26aa  APEX SINGULARITY  \\u2014  " + _tk + "\",\"description\":\"Sets: **" + _set + "/9** compressed\\nPrice: **$" + _px + "** | TF: **" + _tf + "** | CI: **" + _ci + "** | SQI: **" + _sq + "**\",\"color\":16777215" + _ftx + "]}", alert.freq_once_per_bar_close)
+
+else if evt_critical and vol_confirm
+    alert("{\"username\":\"SML SOVEREIGN MATRIX\",\"embeds\":[{\"title\":\"\\ud83d\\udfe3  CRITICAL MASS  \\u2014  " + _tk + "\",\"description\":\"Sets: **" + _set + "/9** compressed\\nPrice: **$" + _px + "** | TF: **" + _tf + "** | CI: **" + _ci + "**\",\"color\":16717203" + _ftx + "]}", alert.freq_once_per_bar_close)
+
+else if evt_convergence and vol_confirm
+    alert("{\"username\":\"SML SOVEREIGN MATRIX\",\"embeds\":[{\"title\":\"\\ud83d\\udfe2  CONVERGENCE  \\u2014  " + _tk + "\",\"description\":\"Sets: **" + _set + "/9** compressed\\nPrice: **$" + _px + "** | TF: **" + _tf + "** | CI: **" + _ci + "**\",\"color\":65407" + _ftx + "]}", alert.freq_once_per_bar_close)
+
+else if is_prime_setup and full_mtf_stack and vol_confirm
+    alert("{\"username\":\"SML SOVEREIGN MATRIX\",\"embeds\":[{\"title\":\"\\ud83d\\udd35  PRIME INSTITUTIONAL  \\u2014  " + _tk + "\",\"description\":\"**FULL MTF STACK + PRIME SETUP**\\nPrice: **$" + _px + "** | TF: **" + _tf + "** | SQI: **" + _sq + "**\",\"color\":52479" + _ftx + "]}", alert.freq_once_per_bar_close)
+
+else if exit_convergence
+    alert("{\"username\":\"SML SOVEREIGN MATRIX\",\"embeds\":[{\"title\":\"\\u26aa  RELEASED  \\u2014  " + _tk + "\",\"description\":\"Compression released\\nPrice: **$" + _px + "** | TF: **" + _tf + "**\",\"color\":6710886" + _ftx + "]}", alert.freq_once_per_bar_close)
