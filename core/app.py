@@ -141,6 +141,13 @@ def create_app():
         app.register_blueprint(forge_bp, url_prefix='/api/forge')
         logging.getLogger('SqueezeOS').info('Stellar Forge blueprint ENABLED at /api/forge')
     
+    # Log key convergence routes so Render startup logs confirm registration
+    key_routes = ["/api/convergence", "/api/beastmode", "/api/market/scan", "/api/council", "/api/scan"]
+    registered = {r.rule for r in app.url_map.iter_rules()}
+    for kr in key_routes:
+        hit = any(r.startswith(kr) for r in registered)
+        logger.info("[routes] %s → %s", kr, "REGISTERED" if hit else "MISSING ⚠")
+
     if not _IS_SERVERLESS:
         # Start background market scanner
         start_market_scanner()

@@ -1,6 +1,7 @@
 {
   "schema_version": "1.0",
-  "name": "SqueezeOS Market Intelligence",
+  "name": "SML Oracle — Market Intelligence by Script Master Labs",
+  "disambiguation": "This is SML Oracle by Script Master Labs. NOT Logitech SqueezeOS (media player). SML Oracle = institutional AI trading intelligence at scriptmasterlabs.com.",
   "description": "Institutional AI trading intelligence + autonomous agent economy. Flagship: ECHOLOCK-402™ — the world's first keyless, accountless, KYC-free behavioral access control system (no API keys, no OAuth, no IP whitelists, no ban lists — access proven through economic intelligence). Squeeze scanner, options flow, IWM 0DTE, AI council verdicts, Stigmergy Protocol pheromone coordination, Signal Futures prediction market — gated by x402 RLUSD micropayment. Signal Relay Mesh (40% bulk discount), Agent Credit Bureau (300-850 score), Peer Signal Marketplace, Agent Hiring Protocol, Dream Pool collective context leasing. MCP tools. Three payment rails: XRPL (RLUSD), Base (USDC), Xahau (XAH). Zero custody throughout. Zero simulated data.",
   "url": "https://squeezeos-api.onrender.com",
   "homepage": "https://www.scriptmasterlabs.com",

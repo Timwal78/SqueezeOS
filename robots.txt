@@ -25,4 +25,4 @@ Allow: /
 
 Disallow: /api/
 
-Sitemap: https://squeeze-os.vercel.app/sitemap.xml
+Sitemap: https://www.scriptmasterlabs.com/sitemap.xml

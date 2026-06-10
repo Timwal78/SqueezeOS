@@ -9,7 +9,7 @@ echo   URL:  https://127.0.0.1:8182
 echo  ================================================
 echo.
 
-cd /d "C:\Users\timot\.gemini\antigravity\scratch\SqueezeOS"
+cd /d "C:\Users\timot\Downloads\SqueezeOS_Github"
 
 echo [*] Checking dependencies...
 pip install -r requirements.txt -q

@@ -982,13 +982,25 @@ class DataManager:
                 if timeframe.upper() == '1D':
                     timespan = 'day'
                     days_back = limit * 2
-                elif timeframe.upper() == '1MIN' or timeframe.upper() == '1M':
+                elif timeframe.upper() in ['1MIN', '1M']:
                     timespan = 'minute'
                     days_back = max(2, int(limit / 390)) + 1
-                elif timeframe.upper() == '5MIN' or timeframe.upper() == '5M':
+                elif timeframe.upper() in ['5MIN', '5M']:
                     multiplier = 5
                     timespan = 'minute'
                     days_back = max(2, int(limit / 78)) + 1
+                elif timeframe.upper() in ['15MIN', '15M']:
+                    multiplier = 15
+                    timespan = 'minute'
+                    days_back = max(2, int(limit / 26)) + 1
+                elif timeframe.upper() in ['65MIN', '65M']:
+                    multiplier = 65
+                    timespan = 'minute'
+                    days_back = max(2, int(limit / 6)) + 1
+                elif timeframe.upper() in ['4HOUR', '4H']:
+                    multiplier = 4
+                    timespan = 'hour'
+                    days_back = max(2, int((limit * 4) / 7)) + 1
                     
                 bars = self.polygon.get_aggregates(symbol, multiplier=multiplier, timespan=timespan, limit=limit, days_back=days_back)
                 if bars:

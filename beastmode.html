@@ -521,8 +521,8 @@
       <span>5. <b>MACRO:</b> The heavy trend</span>
     </div>
 
-    <!-- GRID 369 — 3x3 Anchor Matrix -->
-    <div class="sml-title" style="margin-top:20px;letter-spacing:2px;">GRID 369 — PROPRIETARY 3×3 ANCHOR MATRIX</div>
+    <!-- APEX ANCHOR MATRIX -->
+    <div class="sml-title" style="margin-top:20px;letter-spacing:2px;">APEX ANCHOR MATRIX — PROPRIETARY</div>
     <div id="grid369-card" style="border:1px solid var(--border);border-radius:6px;padding:14px;margin-bottom:16px;background:var(--panel);transition:border-color 0.3s,box-shadow 0.3s;">
       <div id="grid369-content"><div class="loading">Awaiting data...</div></div>
     </div>
@@ -923,7 +923,7 @@ function renderGrid369(g, sml) {
     content.innerHTML = `<div class='loading' style='color:var(--orange)'>${
       err.startsWith("insufficient_bars:")
         ? `Waiting for data — ${err.split(":")[1]} bars, 20+ needed`
-        : "Grid 369 — awaiting first data cycle"
+        : "Apex Anchor Matrix — awaiting first data cycle"
     }</div>`;
     return;
   }
@@ -1306,7 +1306,11 @@ async function fetchTickerStream() {
       };
       container.appendChild(div);
     });
-  } catch(e) { console.error("Ticker stream error:", e); }
+  } catch(e) {
+    console.error("Ticker stream error:", e);
+    const container = $("ticker-stream");
+    if (container) container.innerHTML = "<div style='color:var(--dim);text-align:center;padding:10px;font-size:11px;'>API offline — awaiting deploy</div>";
+  }
 }
 
 async function fetchOptionsStream() {

@@ -331,10 +331,14 @@ class CEOTrader:
 
         logger.info("[CEO] Loop thread exited")
 
-    def _scan_watchlist(self, active_trades: dict):
+    def _scan_watchlist(self, active_trades):
         """Runs Oracle on every symbol. Fires on first qualifying signal."""
-        occupied_symbols = {t["symbol"] for t in active_trades.values()}
-
+        # Check if active_trades is a dict or list to handle both gracefully
+        if isinstance(active_trades, dict):
+            occupied_symbols = {t["symbol"] for t in active_trades.values() if "symbol" in t}
+        else:
+            occupied_symbols = {t["symbol"] for t in active_trades if isinstance(t, dict) and "symbol" in t}
+            
         for symbol in _symbols():
             if not self.active:
                 break
