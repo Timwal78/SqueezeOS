@@ -331,3 +331,26 @@ def exec_status():
         })
     except Exception as e:
         return {"error": str(e)}, 500
+
+
+@convergence_bp.route("/exec/dry-run", methods=["GET"])
+def exec_dry_run():
+    """
+    Runs the full auto-execution analysis on current top candidates but places
+    NO orders. Shows exactly what the system WOULD trade right now. Safe anytime.
+    """
+    from flask import jsonify
+    dm = get_service("dm")
+    if not dm:
+        return jsonify({"status": "error", "message": "DataManager not initialized"}), 503
+    try:
+        from core.api import auto_exec
+        from core.api.market_scanner import _scan_cache
+        quotes = _scan_cache.get("quotes", {}) or {}
+        if not quotes:
+            return jsonify({"status": "warming_up", "message": "Scanner cache empty — try again in ~30s (or market closed)."})
+        sorted_syms = sorted(quotes.keys(), key=lambda s: quotes[s].get("volRatio", 0), reverse=True)
+        report = auto_exec.dry_run(quotes, sorted_syms, dm)
+        return jsonify(report)
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500

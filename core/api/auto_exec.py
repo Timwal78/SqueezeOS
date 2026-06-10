@@ -153,3 +153,58 @@ def run_auto_execution(sweet: dict, sorted_syms: list, dm) -> int:
     if fired:
         logger.info(f"[AUTOEXEC] cycle fired {fired} order(s) | today: {_state['orders_today']}/{MAX_EXEC_PER_DAY}")
     return fired
+
+
+def dry_run(sweet: dict, sorted_syms: list, dm, limit: int = None) -> dict:
+    """
+    Runs the FULL analysis pipeline on top candidates but places NO orders.
+    Returns what the system WOULD trade right now. Safe to call anytime —
+    ignores the arm switch entirely (it never executes).
+    """
+    limit = limit or CANDIDATES_PER_CYCLE
+    out = {
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "market_hours_now": _is_market_hours(),
+        "candidates_analyzed": 0,
+        "would_execute": [],
+        "near_misses": [],
+        "errors": [],
+    }
+    try:
+        from core.convergence_engine import ConvergenceEngine
+        from core.api.convergence_bp import _fetch_bars
+    except Exception as e:
+        out["errors"].append(f"import_failed: {e}")
+        return out
+
+    engine = ConvergenceEngine()
+    for sym in sorted_syms[:limit]:
+        try:
+            closes, volumes, bars = _fetch_bars(dm, sym, tf="1D")
+            if len(closes) < 11:
+                continue
+            out["candidates_analyzed"] += 1
+            result = engine.analyze(sym, closes, volumes, bars_with_dates=bars, run_sniper=True)
+            sml = result.get("sml_matrix") or {}
+            row = {
+                "symbol": sym,
+                "signal": result.get("signal"),
+                "tier": sml.get("tier"),
+                "god_stacked": sml.get("god_stacked"),
+                "execute_gate": sml.get("execute_gate"),
+            }
+            if sml.get("execute_gate") and sml.get("tier") == "GOD_MODE":
+                out["would_execute"].append(row)
+            elif sml.get("god_stacked", 0) >= 3:  # show what's getting close
+                out["near_misses"].append(row)
+        except Exception as e:
+            out["errors"].append(f"{sym}: {str(e)[:80]}")
+            continue
+
+    out["would_execute_count"] = len(out["would_execute"])
+    out["verdict"] = (
+        f"{len(out['would_execute'])} GOD MODE signal(s) would fire right now"
+        if out["would_execute"] else
+        "No GOD MODE signals at this moment (this is normal — GOD MODE is rare by design)"
+    )
+    return out
