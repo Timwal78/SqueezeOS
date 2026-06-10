@@ -265,6 +265,112 @@ def get_option_chain_schwab_format(
     }
 
 
+def _post(path: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    headers = _headers()
+    if not headers:
+        return None
+    headers["Content-Type"] = "application/x-www-form-urlencoded"
+    _rate_limit()
+    url = f"{_base_url()}{path}"
+    try:
+        r = requests.post(url, headers=headers, data=data, timeout=15)
+        if r.status_code in (200, 201):
+            return r.json()
+        if r.status_code == 401:
+            logger.error("[TRADIER] 401 Unauthorized — TRADIER_API_KEY rejected")
+            return None
+        logger.warning(f"[TRADIER] POST {path} HTTP {r.status_code}: {r.text[:400]}")
+    except requests.RequestException as e:
+        logger.warning(f"[TRADIER] POST {path} network error: {e}")
+    return None
+
+
+def _account_id() -> Optional[str]:
+    acct = os.environ.get("TRADIER_ACCOUNT_ID")
+    return acct.strip() if acct and acct.strip() else None
+
+
+def place_equity_order(symbol: str, quantity: int, side: str,
+                       order_type: str = "market", duration: str = "day") -> Dict[str, Any]:
+    """
+    Place a live equity order via Tradier.
+    side: 'buy' | 'sell'
+    Returns {'status': 'success', 'order_id': ...} or {'status': 'error', 'message': ...}
+    """
+    acct = _account_id()
+    if not acct:
+        return {"status": "error", "message": "TRADIER_ACCOUNT_ID not set"}
+    if not _api_key():
+        return {"status": "error", "message": "TRADIER_API_KEY not set"}
+
+    payload = {
+        "class":    "equity",
+        "symbol":   symbol.upper(),
+        "side":     side.lower(),
+        "quantity": str(quantity),
+        "type":     order_type,
+        "duration": duration,
+    }
+    logger.info(f"[TRADIER] Placing equity order: {side.upper()} {quantity}x {symbol} ({order_type})")
+    resp = _post(f"/accounts/{acct}/orders", payload)
+    if resp and resp.get("order", {}).get("id"):
+        order_id = resp["order"]["id"]
+        logger.info(f"[TRADIER] Order placed ✅ order_id={order_id}")
+        return {"status": "success", "order_id": order_id, "raw": resp}
+    err = (resp or {}).get("errors", {}).get("error", "unknown error")
+    logger.error(f"[TRADIER] Order failed: {err}")
+    return {"status": "error", "message": str(err)}
+
+
+def place_option_order(option_symbol: str, quantity: int, side: str,
+                       limit_price: Optional[float] = None,
+                       duration: str = "day") -> Dict[str, Any]:
+    """
+    Place a 0DTE option order via Tradier.
+    option_symbol: OCC format e.g. 'IWM260610C00210000'
+    side: 'buy_to_open' | 'sell_to_close'
+    """
+    acct = _account_id()
+    if not acct:
+        return {"status": "error", "message": "TRADIER_ACCOUNT_ID not set"}
+    if not _api_key():
+        return {"status": "error", "message": "TRADIER_API_KEY not set"}
+
+    order_type = "limit" if limit_price else "market"
+    payload = {
+        "class":    "option",
+        "symbol":   option_symbol,
+        "side":     side.lower(),
+        "quantity": str(quantity),
+        "type":     order_type,
+        "duration": duration,
+    }
+    if limit_price:
+        payload["price"] = f"{limit_price:.2f}"
+
+    logger.info(f"[TRADIER] Placing option order: {side} {quantity}x {option_symbol} ({order_type})")
+    resp = _post(f"/accounts/{acct}/orders", payload)
+    if resp and resp.get("order", {}).get("id"):
+        order_id = resp["order"]["id"]
+        logger.info(f"[TRADIER] Option order placed ✅ order_id={order_id}")
+        return {"status": "success", "order_id": order_id, "raw": resp}
+    err = (resp or {}).get("errors", {}).get("error", "unknown error")
+    logger.error(f"[TRADIER] Option order failed: {err}")
+    return {"status": "error", "message": str(err)}
+
+
+class TradierBroker:
+    """
+    Thin broker wrapper so ExecutionEngine can call self.broker.place_order()
+    without knowing the underlying provider.
+    """
+    def __init__(self):
+        self.available = bool(_api_key() and _account_id())
+
+    def place_order(self, symbol: str, quantity: int, side: str) -> Dict[str, Any]:
+        return place_equity_order(symbol, quantity, side)
+
+
 def get_quotes_batch(symbols: List[str]) -> Dict[str, Dict[str, Any]]:
     """Fetch quotes for multiple symbols in a single API call."""
     if not symbols:
