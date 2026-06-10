@@ -43,6 +43,24 @@ pub async fn pricing(State(state): State<AppState>) -> Json<Value> {
         "grace_tip_max": 1_000_000,
         "platform_fee_pct": state.config.platform_fee_pct,
         "auction_window_ms": state.config.auction_window_ms,
+        "premium_offerings": [
+            {
+                "id": "matrix.signal",
+                "name": "APEX Anchor Matrix — Dual Grid Lock Signal",
+                "endpoint": "/v1/matrix",
+                "base_price_sats": 25000,
+                "description": "Graded Dual Grid Lock signal. Two independently-constructed proprietary grids cross-verify. Bid Grace-Tip for priority execution.",
+                "auctionable": true
+            },
+            {
+                "id": "matrix.institutional",
+                "name": "APEX Anchor Matrix — Institutional Convergence Feed",
+                "endpoint": "/v1/matrix?tier=institutional",
+                "base_price_sats": 500000,
+                "description": "Full both-grid convergence read for institutions. Proprietary EMA sequences patent-pending, never disclosed.",
+                "auctionable": true
+            }
+        ],
     }))
 }
 
