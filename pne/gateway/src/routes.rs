@@ -282,6 +282,123 @@ pub async fn proxy_market_data(
 
 const EMBARGO_SECS: u64 = 30;
 
+// ─── APEX Anchor Matrix (Dual Grid Lock) — auctionable premium feed ──────────
+#[derive(Deserialize)]
+pub struct MatrixQuery {
+    pub ticker: Option<String>,
+    pub tier: Option<String>,
+}
+
+pub async fn proxy_matrix(
+    State(state): State<AppState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    Extension(_claims): Extension<MacaroonClaims>,
+    Query(q): Query<MatrixQuery>,
+) -> Result<Response, PneError> {
+    let ticker = q.ticker.as_deref().unwrap_or("SPY");
+    let institutional = q.tier.as_deref() == Some("institutional");
+    let grace_tip = parse_grace_tip(&headers);
+    let wallet_hash = headers
+        .get("X-Agent-Wallet")
+        .and_then(|v| v.to_str().ok())
+        .map(wallet_hash_or_default)
+        .unwrap_or_else(|| "anonymous".to_string());
+
+    // Enter the Sovereign Intent Auction — priority by Grace-Tip
+    let endpoint = if institutional { "/v1/matrix?tier=institutional" } else { "/v1/matrix" };
+    let auction_result = auction::enter_auction(
+        state.redis.clone(),
+        endpoint,
+        grace_tip,
+        &wallet_hash,
+        state.config.auction_window_ms,
+    )
+    .await
+    .map_err(|e| PneError::Internal(e))?;
+
+    // Call upstream SqueezeOS matrix (convergence engine). Upstream returns the
+    // GRADED signal only — proprietary EMA sequences never traverse the wire.
+    let upstream_url = format!(
+        "{}/api/convergence/{}",
+        state.config.upstream_base_url, ticker
+    );
+
+    let client = reqwest::Client::new();
+    let upstream_resp = client
+        .get(&upstream_url)
+        .timeout(std::time::Duration::from_secs(12))
+        .send()
+        .await
+        .map_err(|e| PneError::UpstreamUnavailable(e.to_string()))?;
+
+    let status = upstream_resp.status();
+    let upstream_bytes = upstream_resp
+        .bytes()
+        .await
+        .map_err(|e| PneError::UpstreamUnavailable(e.to_string()))?;
+
+    // Wrap upstream convergence read in the Matrix product envelope.
+    let upstream_json: serde_json::Value =
+        serde_json::from_slice(&upstream_bytes).unwrap_or(json!({ "raw": "unavailable" }));
+    let envelope = if institutional {
+        json!({
+            "product": "APEX_ANCHOR_MATRIX_INSTITUTIONAL",
+            "ticker": ticker,
+            "dual_grid_lock": true,
+            "convergence": upstream_json,
+            "tier": "institutional",
+            "note": "Full both-grid convergence. Proprietary EMA sequences patent-pending — never disclosed.",
+            "snapshot_ts": epoch_ms() / 1000,
+        })
+    } else {
+        json!({
+            "product": "APEX_ANCHOR_MATRIX",
+            "ticker": ticker,
+            "dual_grid_lock": true,
+            "signal": upstream_json,
+            "tier": "signal",
+            "note": "Graded Dual Grid Lock signal. Proprietary EMA sequences never disclosed.",
+            "snapshot_ts": epoch_ms() / 1000,
+        })
+    };
+    let body_bytes = Bytes::from(serde_json::to_vec(&envelope).unwrap_or_default());
+
+    // Merkle audit leaf — tamper-evident proof of this auctioned dispatch
+    let response_hash = merkle::hash_response(&body_bytes);
+    let leaf = merkle::compute_leaf(
+        &auction_result.request_id,
+        &wallet_hash,
+        grace_tip,
+        &response_hash,
+        epoch_ms(),
+    );
+    let date = chrono_date();
+    let _ = state.redis.append_merkle_leaf(&date, &leaf).await;
+
+    let mut response = (
+        StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::OK),
+        body_bytes,
+    )
+        .into_response();
+
+    let h = response.headers_mut();
+    h.insert("Content-Type", "application/json".parse().unwrap());
+    h.insert("X-Auction-Rank", auction_result.rank.to_string().parse().unwrap());
+    h.insert("X-Auction-Window", auction_result.window_id.to_string().parse().unwrap());
+    h.insert(
+        "X-Execution-Latency",
+        format!("{}ms", auction_result.execution_latency_ms as u64).parse().unwrap(),
+    );
+    h.insert("X-Grace-Tip-Paid", grace_tip.to_string().parse().unwrap());
+    h.insert("X-Merkle-Leaf", leaf.parse().unwrap());
+    h.insert("X-PNE-Version", "1.0.0".parse().unwrap());
+    h.insert("X-Data-Source", "SML-Oracle-APEX-Anchor-Matrix".parse().unwrap());
+    h.insert("X-Product", if institutional { "matrix.institutional".parse().unwrap() } else { "matrix.signal".parse().unwrap() });
+
+    Ok(response)
+}
+
 pub async fn proxy_council(
     State(state): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,

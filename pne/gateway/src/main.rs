@@ -82,6 +82,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/certificates/:auction_id", get(routes::latency_certificate))
         // Premium proxied endpoints (L402 required)
         .route("/v1/market-data", get(routes::proxy_market_data))
+        .route("/v1/matrix", get(routes::proxy_matrix))
         .route("/v1/council", post(routes::proxy_council))
         .route("/v1/options", get(routes::proxy_options))
         .route("/v1/scan", get(routes::proxy_scan))
