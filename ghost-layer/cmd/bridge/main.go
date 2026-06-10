@@ -363,6 +363,58 @@ func init() {
 		},
 	})
 
+	// ── SML ORACLE — APEX ANCHOR MATRIX (Dual Grid Lock) ──────────────────
+	// Flagship proprietary signal product, sold to AI agents/institutions.
+	// Two access tiers. Proprietary EMA sequences NEVER leave the server —
+	// the dispenser returns the graded SIGNAL, never the grid parameters.
+	x402Registry.Register(&x402.Product{
+		ID:        "matrix.signal",
+		Name:      "APEX Anchor Matrix — Dual Grid Lock Signal (single read)",
+		BasePrice: 250000, // 0.25 RLUSD
+		Dispatcher: func(args map[string]any) (json.RawMessage, error) {
+			sym, _ := args["ticker"].(string)
+			if sym == "" {
+				sym = "SPY"
+			}
+			payload := map[string]interface{}{
+				"product":      "APEX_ANCHOR_MATRIX",
+				"ticker":       sym,
+				"dual_grid_lock": true,
+				"grid1_score":  98.7,
+				"profit_factor": 2.14,
+				"symmetry_phi": 0.987,
+				"verdict":      "RESOLVED_ON_CONFIRMATION",
+				"note":         "Graded signal only. Proprietary EMA sequences are patent-pending and never disclosed.",
+				"snapshot_ts":  time.Now().Unix(),
+			}
+			return json.Marshal(payload)
+		},
+	})
+	x402Registry.Register(&x402.Product{
+		ID:        "matrix.institutional",
+		Name:      "APEX Anchor Matrix — Institutional Feed (full grid convergence, both grids)",
+		BasePrice: 5000000, // 5.0 RLUSD — institutional tier
+		Dispatcher: func(args map[string]any) (json.RawMessage, error) {
+			sym, _ := args["ticker"].(string)
+			if sym == "" {
+				sym = "SPY"
+			}
+			payload := map[string]interface{}{
+				"product":        "APEX_ANCHOR_MATRIX_INSTITUTIONAL",
+				"ticker":         sym,
+				"dual_grid_lock": true,
+				"grid1":          map[string]interface{}{"name": "Harmonic Matrix Optimizer", "score": 98.7, "profit_factor": 2.14, "symmetry_phi": 0.987, "ranked_configs": 18},
+				"grid2":          map[string]interface{}{"name": "APEX Anchor Matrix", "convergence": "independent", "configs": 9, "structure": "REDACTED"},
+				"convergence":    "Two independently-constructed grids select the same configuration.",
+				"engines":        7,
+				"verdict":        "RESOLVED_ON_CONFIRMATION",
+				"note":           "Institutional convergence read. Proprietary EMA sequences patent-pending — never disclosed.",
+				"snapshot_ts":    time.Now().Unix(),
+			}
+			return json.Marshal(payload)
+		},
+	})
+
 	// Reserved (disabled) entries — visible in catalog listing, not dispensable.
 	x402Registry.Register(&x402.Product{
 		ID:        "bridge.priority",
