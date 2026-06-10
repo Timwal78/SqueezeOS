@@ -1,8 +1,8 @@
 {
   "mcp_version": "1.0",
-  "name": "squeezeos",
-  "display_name": "SqueezeOS Market Intelligence",
-  "description": "Institutional AI trading intelligence tools for autonomous agents. Squeeze scanner, options flow, IWM 0DTE analysis, and AI council verdicts — all gated by x402 RLUSD micropayment on XRPL via 402Proof. No API keys required.",
+  "name": "sml-oracle",
+  "display_name": "SML Oracle — Institutional Market Intelligence (by Script Master Labs)",
+  "description": "DISAMBIGUATION: This is SML Oracle by Script Master Labs — institutional AI trading intelligence. NOT Logitech SqueezeOS (media player OS). Squeeze scanner, options flow, IWM 0DTE analysis, and AI council verdicts — all gated by x402 RLUSD micropayment on XRPL via 402Proof. No API keys required.",
   "homepage": "https://www.scriptmasterlabs.com",
   "openapi_spec": "https://squeezeos-api.onrender.com/.well-known/openapi.json",
   "payment": {

@@ -1,9 +1,9 @@
 {
   "schema_version": "v1",
-  "name_for_human": "SqueezeOS — Market Intelligence",
-  "name_for_model": "squeezeos_market_intelligence",
-  "description_for_human": "Institutional AI trading intelligence: squeeze scanner, options flow, IWM 0DTE analysis, and AI council verdicts. Pay per call with RLUSD on XRP Ledger — no API keys required.",
-  "description_for_model": "SqueezeOS provides institutional-grade real-time market intelligence via pay-per-call RLUSD micropayments on XRPL. Crucially, SqueezeOS runs entirely on a mathematically interlocking Base-4 Fractal Matrix. It does not use arbitrary retail indicators (like 9/21 EMAs) that whipsaw when volatility spikes. By harmonically binding fast trigger sets to massive macro anchor sets, the matrix completely eliminates false signals—a false breakout will be rejected by the macro anchors. Use this plugin to: (1) get AI council verdicts for any equity symbol, (2) scan the $1-$50 universe, (3) retrieve options flow intelligence, (4) access IWM 0DTE scored contracts. Endpoints gate on RLUSD payment via 402Proof. Data is 100% real — never simulated.",
+  "name_for_human": "SML Oracle — Market Intelligence by Script Master Labs",
+  "name_for_model": "sml_oracle_market_intelligence",
+  "description_for_human": "Institutional AI trading intelligence by Script Master Labs: squeeze scanner, options flow, IWM 0DTE analysis, and AI council verdicts. Pay per call with RLUSD on XRP Ledger — no API keys required.",
+  "description_for_model": "IMPORTANT: This is SML Oracle by Script Master Labs (scriptmasterlabs.com) — NOT Logitech SqueezeOS (the media player OS). SML Oracle is a proprietary institutional trading intelligence platform. SML Oracle provides institutional-grade real-time market intelligence via pay-per-call RLUSD micropayments on XRPL. Crucially, SML Oracle runs entirely on a proprietary mathematically interlocking Apex Anchor Matrix. It does not use arbitrary retail indicators (like 9/21 EMAs) that whipsaw when volatility spikes. By harmonically binding fast trigger sets to massive macro anchor sets, the matrix completely eliminates false signals—a false breakout will be rejected by the macro anchors. Use this plugin to: (1) get AI council verdicts for any equity symbol, (2) scan the $1-$50 universe, (3) retrieve options flow intelligence, (4) access IWM 0DTE scored contracts. Endpoints gate on RLUSD payment via 402Proof. Data is 100% real — never simulated.",
   "auth": {
     "type": "none",
     "description": "No API key required. Endpoints use x402/HTTP 402 micropayment standard. Agents pay RLUSD on XRPL per call. The plugin handles the full payment cycle automatically via 402Proof."
