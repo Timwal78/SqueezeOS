@@ -17,9 +17,16 @@ Logs to: C:\\SqueezeOS\\robinhood_executor.log
 """
 
 import os
+import sys
 import json
 import time
 import logging
+
+# Force UTF-8 output so emoji in log messages don't crash on Windows cp1252
+if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+if sys.stderr and hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 import hmac
 import hashlib
 import threading
@@ -37,7 +44,7 @@ LOG_DIR  = os.environ.get("LOG_DIR", r"C:\SqueezeOS")
 LOG_FILE = os.path.join(LOG_DIR, "robinhood_executor.log")
 os.makedirs(LOG_DIR, exist_ok=True)
 
-_handler = RotatingFileHandler(LOG_FILE, maxBytes=5_000_000, backupCount=3)
+_handler = RotatingFileHandler(LOG_FILE, maxBytes=5_000_000, backupCount=3, encoding='utf-8')
 _handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s — %(message)s"))
 logging.basicConfig(level=logging.INFO, handlers=[_handler, logging.StreamHandler()])
 logger = logging.getLogger("RH.Executor")
@@ -79,7 +86,7 @@ def _ensure_login() -> bool:
         import robin_stocks.robinhood as rh
         rh.login(ROBINHOOD_USER, ROBINHOOD_PASS)
         _rh_logged_in = True
-        logger.info("[RH] Logged in ✅")
+        logger.info("[RH] Logged in OK")
         return True
     except Exception as e:
         logger.error(f"[RH] Login failed: {e}")
