@@ -153,7 +153,7 @@ def build_beastmode_embed(convergence_result: dict,
         premium_str  = "—"
         sniper_error = sniper.get("error") if sniper else None
 
-    # Grid 369 / Dual Lock field
+    # Apex Anchor Matrix / Dual Lock field
     if dual_lock:
         grid369_val = (
             f"💎 **DUAL GRID LOCK ACHIEVED**\n"
@@ -181,7 +181,7 @@ def build_beastmode_embed(convergence_result: dict,
 
     fields = [
         {
-            "name":   "💎 Grid 369 — 3×3 Anchor Matrix",
+            "name":   "💎 APEX ANCHOR MATRIX",
             "value":  grid369_val,
             "inline": False,
         },
