@@ -362,3 +362,52 @@ def exec_dry_run():
         return jsonify(report)
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@convergence_bp.route("/exec/test-alert", methods=["GET"])
+def exec_test_alert():
+    """
+    Fires a SAMPLE GOD MODE manual alert to Discord so you can confirm the
+    alert pipe works + see the format. Uses realistic placeholder data.
+    Trades nothing. Safe anytime.
+    """
+    from flask import jsonify
+    try:
+        from core.api.manual_alert import fire_manual_alert
+        sample = {
+            "symbol": "AMC",
+            "signal": "DUAL_GRID_LOCK",
+            "price": 3.42,
+            "sml_matrix": {
+                "tier": "GOD_MODE",
+                "execute_gate": True,
+                "god_stacked": 6,
+                "harmonic_score": 98.7,
+                "price": 3.42,
+            },
+            "options_sniper": {
+                "symbol": "AMC",
+                "type": "CALL",
+                "strike": 3.50,
+                "expiration": "2026-06-12",
+                "delta": 0.42,
+                "gamma": 0.18,
+                "theta": -0.03,
+                "iv": 0.95,
+                "premium": 0.28,
+                "bid": 0.26,
+                "ask": 0.30,
+                "volume": 1240,
+                "open_interest": 8800,
+                "description": "AMC Jun 12 2026 $3.50 Call",
+            },
+        }
+        ok = fire_manual_alert(sample)
+        return jsonify({
+            "test": "manual_alert",
+            "fired": ok,
+            "message": "Sample GOD MODE alert sent to Discord — check your channel." if ok
+                       else "Alert NOT sent — no Discord webhook configured (set DISCORD_WEBHOOK_BEAST or DISCORD_WEBHOOK_ALL).",
+        })
+    except Exception as e:
+        return jsonify({"test": "manual_alert", "fired": False, "error": str(e)}), 500
