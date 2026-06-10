@@ -178,11 +178,9 @@ def _run_scan():
                 _broadcast_sse(evt)
                 signal_history.record(r['symbol'], 'SQUEEZE_ALERT', evt)
 
-        if squeeze_hits and _discord:
-            try:
-                _discord.fire_squeeze_alerts(squeeze_hits)
-            except Exception as _de:
-                logger.warning(f"[DISCORD] squeeze alert failed: {_de}")
+        # NOTE: Discord firing moved OUTSIDE state.lock (see below) —
+        # blocking webhooks while holding the lock starved gunicorn web
+        # threads and caused Render health-check kills.
 
         # B) Add High-Grade Options
         flow_hits = []
@@ -226,12 +224,6 @@ def _run_scan():
                     'source': 'Tradier',
                 })
 
-        if flow_hits and _discord:
-            try:
-                _discord.fire_flow_alerts(flow_hits)
-            except Exception as _de:
-                logger.warning(f"[DISCORD] flow alert failed: {_de}")
-                
         if ceo_triggers:
             # Sort highest scores first
             ceo_triggers.sort(key=lambda x: x.get('squeeze_score', 0), reverse=True)
@@ -248,6 +240,20 @@ def _run_scan():
             state.scan_results = deduped
             if len(state.scan_results) > 200:
                 del state.scan_results[200:]
+
+    # ── Discord alerts: fired AFTER state.lock releases, on a detached
+    #    thread so neither web requests nor the scan loop ever wait on
+    #    webhook rate-limit sleeps. (Fix for Render health-check kills.)
+    if (squeeze_hits or flow_hits) and _discord:
+        def _fire_alerts(_squeeze=list(squeeze_hits), _flow=list(flow_hits)):
+            try:
+                if _squeeze:
+                    _discord.fire_squeeze_alerts(_squeeze)
+                if _flow:
+                    _discord.fire_flow_alerts(_flow)
+            except Exception as _de:
+                logger.warning(f"[DISCORD] alert dispatch failed: {_de}")
+        threading.Thread(target=_fire_alerts, daemon=True, name="discord-alerts").start()
 
     logger.info(f"[SCAN] {len(sweet)} symbols | {len(options_picks)} options picks | {len(technical_results)} technical scans | cycle #{_scan_cache['scan_count']}")
 
