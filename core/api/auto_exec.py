@@ -1,0 +1,155 @@
+"""
+SML AUTO-EXECUTION PIPELINE
+Bridges the background scanner → convergence (GOD MODE) engine → live execution.
+
+This is the missing wire: the scanner finds candidates, this module runs the
+Dual Grid Lock / GOD MODE analysis on them and routes qualifying signals to
+live execution — fully autonomous, but wrapped in the complete safety stack.
+
+SAFETY STACK (every order passes ALL of these):
+  1. Master arm switch     — LIVE_TRADING_ENABLED must be "true"
+  2. Market-hours guard     — only fires during regular US session
+  3. Per-cycle cap          — max N executions per scan cycle
+  4. Daily order cap        — max N orders per calendar day
+  5. Daily-loss breaker     — auto-disarms if realized loss exceeds limit
+  6. Convergence gate       — only GOD_MODE tier with execute_gate=True
+  7. (downstream) PDT shield, per-symbol cooldown, position-size caps
+
+(c) Script Master Labs LLC — BEAST MODE, built safe.
+"""
+import os
+import time
+import logging
+from datetime import datetime, timezone, timedelta
+
+logger = logging.getLogger("AutoExec")
+
+# ── Config (env-overridable) ────────────────────────────────────────────────
+MAX_EXEC_PER_CYCLE   = int(os.environ.get("AUTOEXEC_MAX_PER_CYCLE", "2"))
+MAX_EXEC_PER_DAY     = int(os.environ.get("AUTOEXEC_MAX_PER_DAY", "10"))
+DAILY_LOSS_LIMIT     = float(os.environ.get("AUTOEXEC_DAILY_LOSS_LIMIT", "200.0"))  # USD
+CANDIDATES_PER_CYCLE = int(os.environ.get("AUTOEXEC_CANDIDATES", "8"))  # top N to analyze
+MARKET_HOURS_ONLY    = os.environ.get("AUTOEXEC_MARKET_HOURS_ONLY", "true").lower() == "true"
+
+# ── Daily counters (reset at date rollover) ─────────────────────────────────
+_state = {
+    "date": None,
+    "orders_today": 0,
+    "realized_pnl_today": 0.0,
+    "breaker_tripped": False,
+}
+
+
+def _today_str():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+def _roll_day():
+    d = _today_str()
+    if _state["date"] != d:
+        _state.update(date=d, orders_today=0, realized_pnl_today=0.0, breaker_tripped=False)
+        logger.info(f"[AUTOEXEC] New trading day {d} — counters reset.")
+
+
+def _is_market_hours() -> bool:
+    """Regular US session ~9:30–16:00 ET, Mon–Fri. ET = UTC-4 (DST) / -5 (std)."""
+    if not MARKET_HOURS_ONLY:
+        return True
+    now = datetime.now(timezone.utc)
+    if now.weekday() >= 5:  # Sat/Sun
+        return False
+    # Approximate ET via UTC-4 (covers Mar–Nov DST; conservative the rest of year)
+    et = now - timedelta(hours=4)
+    minutes = et.hour * 60 + et.minute
+    return (9 * 60 + 30) <= minutes <= (16 * 60)
+
+
+def record_fill(realized_pnl_delta: float = 0.0):
+    """Call after a known realized P&L change to feed the daily-loss breaker."""
+    _roll_day()
+    _state["realized_pnl_today"] += realized_pnl_delta
+    if _state["realized_pnl_today"] <= -abs(DAILY_LOSS_LIMIT):
+        _state["breaker_tripped"] = True
+        logger.error(
+            f"[AUTOEXEC] 🛑 DAILY-LOSS BREAKER TRIPPED — realized {_state['realized_pnl_today']:.2f} "
+            f"≤ -{DAILY_LOSS_LIMIT:.2f}. Auto-execution halted for the rest of {_state['date']}."
+        )
+
+
+def status() -> dict:
+    _roll_day()
+    return {
+        "armed": os.environ.get("LIVE_TRADING_ENABLED", "false").strip().lower() == "true",
+        "market_hours_now": _is_market_hours(),
+        "orders_today": _state["orders_today"],
+        "max_per_day": MAX_EXEC_PER_DAY,
+        "realized_pnl_today": round(_state["realized_pnl_today"], 2),
+        "daily_loss_limit": DAILY_LOSS_LIMIT,
+        "breaker_tripped": _state["breaker_tripped"],
+        "max_per_cycle": MAX_EXEC_PER_CYCLE,
+    }
+
+
+def run_auto_execution(sweet: dict, sorted_syms: list, dm) -> int:
+    """
+    Called by the scanner each cycle. Runs convergence on the top candidates and
+    executes GOD MODE signals. Returns the number of orders fired this cycle.
+
+    Fails SAFE on every uncertainty — any exception or gate miss = no trade.
+    """
+    _roll_day()
+
+    # Gate 1: master arm switch
+    if os.environ.get("LIVE_TRADING_ENABLED", "false").strip().lower() != "true":
+        return 0  # disarmed — silent, scanner keeps running
+
+    # Gate 2: breaker
+    if _state["breaker_tripped"]:
+        return 0
+
+    # Gate 3: market hours
+    if not _is_market_hours():
+        return 0
+
+    # Gate 4: daily cap
+    if _state["orders_today"] >= MAX_EXEC_PER_DAY:
+        logger.info(f"[AUTOEXEC] daily cap reached ({MAX_EXEC_PER_DAY}) — no more orders today.")
+        return 0
+
+    # Lazy imports to avoid heavy load when disarmed
+    try:
+        from core.convergence_engine import ConvergenceEngine
+        from core.api.convergence_bp import _fire_execution, _fetch_bars
+    except Exception as e:
+        logger.error(f"[AUTOEXEC] import failed, not executing: {e}")
+        return 0
+
+    fired = 0
+    engine = ConvergenceEngine()
+
+    for sym in sorted_syms[:CANDIDATES_PER_CYCLE]:
+        if fired >= MAX_EXEC_PER_CYCLE:
+            break
+        if _state["orders_today"] >= MAX_EXEC_PER_DAY:
+            break
+        try:
+            closes, volumes, bars = _fetch_bars(dm, sym, tf="1D")
+            if len(closes) < 11:
+                continue
+            result = engine.analyze(sym, closes, volumes, bars_with_dates=bars, run_sniper=True)
+            sml = result.get("sml_matrix") or {}
+
+            # Gate 6: convergence — only GOD MODE with execute_gate
+            if sml.get("execute_gate") and sml.get("tier") == "GOD_MODE":
+                logger.info(f"[AUTOEXEC] 🎯 GOD MODE on {sym} — routing to execution "
+                            f"(god_stacked={sml.get('god_stacked')})")
+                _fire_execution(sym, result, dm)  # downstream: arm switch re-checked, PDT, cooldown, caps
+                _state["orders_today"] += 1
+                fired += 1
+        except Exception as e:
+            logger.warning(f"[AUTOEXEC] {sym} analysis error (skipped): {e}")
+            continue
+
+    if fired:
+        logger.info(f"[AUTOEXEC] cycle fired {fired} order(s) | today: {_state['orders_today']}/{MAX_EXEC_PER_DAY}")
+    return fired

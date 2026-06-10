@@ -308,12 +308,18 @@ def exec_status():
     rh_url = os.environ.get("ROBINHOOD_EXECUTOR_URL", "")
     try:
         from flask import jsonify
+        try:
+            from core.api import auto_exec
+            pipeline = auto_exec.status()
+        except Exception:
+            pipeline = {"error": "auto_exec unavailable"}
         return jsonify({
             "live_trading_armed": armed,
             "status": "LIVE — real orders WILL place on GOD MODE" if armed else "SAFE — no autonomous orders (logging only)",
             "tradier_env": tradier_env,
             "tradier_data_live": tradier_env == "production",
             "robinhood_executor_connected": bool(rh_url),
+            "auto_execution_pipeline": pipeline,
             "safety_rails": {
                 "min_god_stacked": _MIN_GOD_STACKED,
                 "max_shares": _BEAST_MAX_SHARES,

@@ -257,6 +257,15 @@ def _run_scan():
 
     logger.info(f"[SCAN] {len(sweet)} symbols | {len(options_picks)} options picks | {len(technical_results)} technical scans | cycle #{_scan_cache['scan_count']}")
 
+    # ── AUTO-EXECUTION HOOK ──────────────────────────────────────────────────
+    # Bridge scan → convergence → live execution. Fails safe: disarmed by
+    # default, every order passes the full safety stack in auto_exec.
+    try:
+        from core.api import auto_exec
+        auto_exec.run_auto_execution(sweet, sorted_syms, dm)
+    except Exception as _ae:
+        logger.warning(f"[SCAN] auto-exec hook error (non-fatal, scan continues): {_ae}")
+
 
 def _grade_options(symbol, price, quote, options):
     """
