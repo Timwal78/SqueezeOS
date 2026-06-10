@@ -18,81 +18,128 @@ from core.discord_payload import fire_discord
 logger = logging.getLogger("SML.Convergence.API")
 convergence_bp = Blueprint("convergence", __name__)
 
-# ── Execution cooldown — prevents duplicate orders on rapid calls ────────────
-_last_execution: dict = {}   # symbol → epoch
-_EXECUTION_COOLDOWN = 300    # 5 minutes between GOD MODE executions per symbol
+# ── Execution config ─────────────────────────────────────────────────────────
+_last_execution: dict = {}        # symbol → epoch of last executed trade
+_pdt_day_trades: list = []        # epoch timestamps of day trades (5-day window)
+_EXECUTION_COOLDOWN  = 300        # 5 min cooldown per symbol between executions
+_PDT_BALANCE_LIMIT   = 2100.0     # enforce PDT rule when account balance below this
+_PDT_MAX_DAY_TRADES  = 3          # max day trades in 5-day rolling window
+_PDT_WINDOW_SECS     = 5 * 86400  # 5 days in seconds
+_MIN_GOD_STACKED     = int(os.environ.get("MIN_GOD_STACKED", "5"))  # min SET9 configs stacked to execute (5 or 6)
+_BEAST_MAX_SHARES    = int(os.environ.get("BEAST_MAX_SHARES", "5"))
+_BEAST_MAX_PRICE     = float(os.environ.get("BEAST_MAX_PRICE", "500.0"))
 
-_BEAST_MAX_SHARES = int(os.environ.get("BEAST_MAX_SHARES", "5"))
-_BEAST_MAX_PRICE  = float(os.environ.get("BEAST_MAX_PRICE", "500.0"))  # max order $ value
 
-
-def _fire_execution(symbol: str, result: dict, dm) -> None:
+def _pdt_check_and_record() -> bool:
     """
-    Called when GOD MODE + execute_gate confirmed.
-    1. Tradier (cloud, 24/7) — equity market order via Tradier API.
-    2. Robinhood (Windows executor) — webhook POST to local executor if configured.
+    Returns True if trade is allowed under PDT rules.
+    Enforces PDT when Tradier balance < $2,100: max 3 day trades per 5 days.
+    Always records the trade if allowed.
     """
+    import tradier_api as _t
     now = time.time()
+
+    # Prune trades older than 5 days
+    cutoff = now - _PDT_WINDOW_SECS
+    _pdt_day_trades[:] = [t for t in _pdt_day_trades if t > cutoff]
+
+    # Check account balance
+    balance = _t.get_account_balance()
+    if balance is not None and balance < _PDT_BALANCE_LIMIT:
+        if len(_pdt_day_trades) >= _PDT_MAX_DAY_TRADES:
+            logger.warning(
+                f"[PDT] BLOCKED — balance ${balance:.2f} < ${_PDT_BALANCE_LIMIT} "
+                f"and {len(_pdt_day_trades)}/{_PDT_MAX_DAY_TRADES} day trades used in 5-day window"
+            )
+            return False
+        logger.info(f"[PDT] Balance ${balance:.2f} < ${_PDT_BALANCE_LIMIT} — PDT active: {len(_pdt_day_trades)+1}/{_PDT_MAX_DAY_TRADES} used")
+    else:
+        logger.info(f"[PDT] Balance ${balance:.2f} — above PDT threshold, full trading allowed")
+
+    _pdt_day_trades.append(now)
+    return True
+
+
+def _fire_execution(symbol: str, result: dict, dm=None) -> None:
+    """
+    Fires live trades when GOD MODE confirmed with god_stacked >= MIN_GOD_STACKED (default 5).
+    Routes to:
+      1. Tradier (cloud, 24/7) — equity market order
+      2. Robinhood Windows executor — webhook POST (if ROBINHOOD_EXECUTOR_URL set)
+    PDT shield active when Tradier balance < $2,100.
+    """
+    import tradier_api as _t
+
+    sml        = result.get("sml_matrix") or {}
+    god_count  = sml.get("god_stacked", 0)
+
+    # ── Tiered execution gate: require MIN_GOD_STACKED (default 5 or 6 of 6) ─
+    if god_count < _MIN_GOD_STACKED:
+        logger.info(f"[EXEC] {symbol} god_stacked={god_count} < {_MIN_GOD_STACKED} — not executing")
+        return
+
+    # ── Per-symbol cooldown ──────────────────────────────────────────────────
+    now  = time.time()
     last = _last_execution.get(symbol, 0)
     if now - last < _EXECUTION_COOLDOWN:
-        logger.info(f"[EXEC] {symbol} GOD_MODE cooldown active — {int(_EXECUTION_COOLDOWN - (now-last))}s remaining")
+        logger.info(f"[EXEC] {symbol} cooldown — {int(_EXECUTION_COOLDOWN-(now-last))}s remaining")
         return
     _last_execution[symbol] = now
 
-    signal    = result.get("signal", "")
-    side      = "buy" if "BULL" in signal or signal in ("BEASTMODE", "GOD_MODE") else "sell"
-    sml       = result.get("sml_matrix") or {}
-    god_count = sml.get("god_stacked", 0)
+    # ── PDT shield ──────────────────────────────────────────────────────────
+    if not _pdt_check_and_record():
+        return
 
-    # ── Get current price ────────────────────────────────────────────────────
+    signal = result.get("signal", "")
+    side   = "buy" if "BULL" in signal or signal in ("BEASTMODE", "GOD_MODE", "DUAL_GRID_LOCK") else "sell"
+
+    # ── Live price ───────────────────────────────────────────────────────────
     try:
-        import tradier_api as _t
-        q = _t.get_quote(symbol)
+        q     = _t.get_quote(symbol)
         price = float(q.get("last") or q.get("ask") or 0) if q else 0.0
     except Exception:
         price = 0.0
 
     if price <= 0:
-        logger.warning(f"[EXEC] {symbol} could not get live price — aborting execution")
+        logger.warning(f"[EXEC] {symbol} no live price — aborting")
         return
 
     quantity = max(1, int(_BEAST_MAX_PRICE // price))
     quantity = min(quantity, _BEAST_MAX_SHARES)
 
-    logger.info(f"[EXEC] 🚀 GOD MODE FIRE — {side.upper()} {quantity}x {symbol} @ ${price:.2f} | SET9:{god_count}/6")
+    logger.info(
+        f"[EXEC] 🚀 GOD MODE FIRE — {side.upper()} {quantity}x {symbol} @ ${price:.2f} "
+        f"| SET9:{god_count}/6 | signal:{signal}"
+    )
 
     # ── 1. Tradier cloud execution ───────────────────────────────────────────
     try:
-        import tradier_api as _t
         tradier_result = _t.place_equity_order(symbol, quantity, side)
-        logger.info(f"[EXEC] Tradier result: {tradier_result}")
+        logger.info(f"[EXEC] Tradier → {tradier_result.get('status')} order_id={tradier_result.get('order_id','')}")
     except Exception as e:
-        logger.error(f"[EXEC] Tradier execution error: {e}")
-        tradier_result = {"status": "error", "message": str(e)}
+        logger.error(f"[EXEC] Tradier error: {e}")
 
     # ── 2. Robinhood Windows executor webhook ────────────────────────────────
     rh_url = os.environ.get("ROBINHOOD_EXECUTOR_URL", "")
     if rh_url:
         try:
             import json, urllib.request as _ul, hmac as _hmac, hashlib as _hl
-            secret = os.environ.get("WEBHOOK_SECRET", "squeezeos-webhook-default-secret")
-            webhook_payload = json.dumps({
+            secret  = os.environ.get("WEBHOOK_SECRET", "squeezeos-webhook-default-secret")
+            payload = json.dumps({
                 "ticker":         symbol,
                 "action":         side.upper(),
                 "mode":           "equity",
                 "sml_matrix":     sml,
                 "harmonic_score": sml.get("harmonic_score", 0),
             }).encode()
-            sig = "sha256=" + _hmac.new(secret.encode(), webhook_payload, _hl.sha256).hexdigest()
-            req = _ul.Request(
-                rh_url,
-                data=webhook_payload,
-                headers={"Content-Type": "application/json", "X-SqueezeOS-Signature": sig},
-            )
+            sig = "sha256=" + _hmac.new(secret.encode(), payload, _hl.sha256).hexdigest()
+            req = _ul.Request(rh_url, data=payload,
+                              headers={"Content-Type": "application/json",
+                                       "X-SqueezeOS-Signature": sig})
             with _ul.urlopen(req, timeout=5) as resp:
-                logger.info(f"[EXEC] Robinhood executor webhook → {resp.status}")
+                logger.info(f"[EXEC] Robinhood webhook → {resp.status}")
         except Exception as e:
-            logger.warning(f"[EXEC] Robinhood executor webhook failed: {e}")
+            logger.warning(f"[EXEC] Robinhood webhook failed: {e}")
 
 
 @convergence_bp.route("/market/scan", methods=["GET"])
@@ -189,10 +236,19 @@ def beastmode_scan():
 
     hits = scan_beastmode_universe({"dm": dm}, tf=tf)
 
-    # Fire Discord for every convergence hit
+    # Fire Discord + execution for every convergence hit
     for hit in hits:
         sniper_data = hit.get("options_sniper") or {}
         fire_discord(hit, trade_type=sniper_data.get("type", "CALL").lower())
+
+        # ── Market-wide execution gate ────────────────────────────────────
+        # Executes on GOD_MODE tier with god_stacked >= MIN_GOD_STACKED (default 5)
+        # Skips god_stacked ≤ 4 per operator config
+        sml = hit.get("sml_matrix") or {}
+        if sml.get("execute_gate") and sml.get("tier") == "GOD_MODE":
+            sym = hit.get("symbol", "")
+            if sym:
+                _fire_execution(sym, hit)
 
     return jsonify(clean_data({
         "status":        "success",

@@ -290,6 +290,27 @@ def _account_id() -> Optional[str]:
     return acct.strip() if acct and acct.strip() else None
 
 
+def get_account_balance() -> Optional[float]:
+    """
+    Return the total cash/equity balance for the configured account.
+    Used by PDT shield: if balance < $2,100 → enforce 3-trade-per-5-day PDT rule.
+    Returns None if unavailable.
+    """
+    acct = _account_id()
+    if not acct:
+        return None
+    data = _get(f"/accounts/{acct}/balances", {})
+    if not data:
+        return None
+    balances = data.get("balances") or {}
+    # Tradier returns total_equity for margin accounts, total_cash for cash accounts
+    equity = balances.get("total_equity") or balances.get("total_cash") or balances.get("equity")
+    try:
+        return float(equity)
+    except (TypeError, ValueError):
+        return None
+
+
 def place_equity_order(symbol: str, quantity: int, side: str,
                        order_type: str = "market", duration: str = "day") -> Dict[str, Any]:
     """
