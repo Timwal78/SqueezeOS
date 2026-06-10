@@ -7,6 +7,8 @@ services:
     envVars:
       - key: TRADIER_API_KEY
         sync: false
+      - key: TRADIER_ACCOUNT_ID
+        sync: false
       - key: TRADIER_ENV
         value: production
       - key: TRADIER_LIVE
