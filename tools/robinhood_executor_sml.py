@@ -1,20 +1,19 @@
 """
-SqueezeOS Robinhood Executor — SML Signal Receiver
-════════════════════════════════════════════════════
-Runs on the Windows machine. Listens for SML webhook alerts from
-squeezeos-api.onrender.com, pulls live feature flags from the remote
-config endpoint, and executes equity + options trades via robin_stocks.
+SqueezeOS Robinhood Executor — SML Polling Engine
+══════════════════════════════════════════════════
+Runs as a Windows Service (NSSM). No inbound ports, no tunnel needed.
+Polls squeezeos-api.onrender.com/api/beastmode every POLL_INTERVAL_S seconds.
+Executes equity orders on Robinhood when GOD_MODE confirmed.
 
-Remote config:  GET https://squeezeos-api.onrender.com/api/config
-  OPTIONS_ENABLED    — enable/disable options execution (default: False)
-  EQUITY_ENABLED     — enable/disable equity execution (default: True)
-  KILL_SWITCH        — emergency halt all execution (default: False)
-  MAX_EQUITY_SHARES  — max shares per equity order
-  MAX_CONTRACTS      — max contracts per options order
-  PAPER_MODE         — log-only, no real orders sent
+Safety gates:
+  - GOD_MODE tier + god_stacked >= MIN_GOD_STACKED (default 5)
+  - PDT shield: checks Robinhood portfolio value; if < $2,100 → max 3 day trades / 5 days
+  - 5-min per-symbol cooldown
+  - KILL_SWITCH env var halts all execution immediately
+  - PAPER_MODE logs orders without sending to Robinhood
 
-Local .env fallback — used if Render is unreachable at startup or on a call.
-Set SQUEEZEOS_API_URL to override the Render endpoint for testing.
+Runs forever. NSSM restarts it if it crashes.
+Logs to: C:\\SqueezeOS\\robinhood_executor.log
 """
 
 import os
@@ -25,399 +24,265 @@ import hmac
 import hashlib
 import threading
 from datetime import datetime
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from logging.handlers import RotatingFileHandler
 from urllib.request import urlopen, Request as URLRequest
 from urllib.error import URLError
+
 from dotenv import load_dotenv
+load_dotenv(dotenv_path=os.environ.get("DOTENV_PATH",
+            os.path.join(os.path.dirname(__file__), "executor.env")))
 
-load_dotenv(dotenv_path=os.environ.get("DOTENV_PATH", os.path.join(os.path.dirname(__file__), "executor.env")))
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
-)
-logger = logging.getLogger("RobinhoodExecutor")
+# ── Logging ────────────────────────────────────────────────────────────────────
+LOG_DIR  = os.environ.get("LOG_DIR", r"C:\SqueezeOS")
+LOG_FILE = os.path.join(LOG_DIR, "robinhood_executor.log")
+os.makedirs(LOG_DIR, exist_ok=True)
 
-# ── Configuration ─────────────────────────────────────────────────────────────
+_handler = RotatingFileHandler(LOG_FILE, maxBytes=5_000_000, backupCount=3)
+_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s — %(message)s"))
+logging.basicConfig(level=logging.INFO, handlers=[_handler, logging.StreamHandler()])
+logger = logging.getLogger("RH.Executor")
 
+# ── Configuration ──────────────────────────────────────────────────────────────
 SQUEEZEOS_API_URL  = os.environ.get("SQUEEZEOS_API_URL", "https://squeezeos-api.onrender.com")
 ROBINHOOD_USER     = os.environ.get("ROBINHOOD_USERNAME", "")
 ROBINHOOD_PASS     = os.environ.get("ROBINHOOD_PASSWORD", "")
-WEBHOOK_SECRET     = os.environ.get("WEBHOOK_SECRET", "squeezeos-webhook-default-secret")
-EXECUTOR_PORT      = int(os.environ.get("EXECUTOR_PORT", "9182"))
-CONFIG_TTL_S       = int(os.environ.get("CONFIG_TTL_S", "60"))   # re-fetch flags every 60 s
+POLL_INTERVAL_S    = int(os.environ.get("POLL_INTERVAL_S", "300"))     # poll every 5 minutes
+MIN_GOD_STACKED    = int(os.environ.get("MIN_GOD_STACKED", "5"))       # min SET9 stacked to execute
+PDT_BALANCE_LIMIT  = float(os.environ.get("PDT_BALANCE_LIMIT", "2100.0"))
+PDT_MAX_TRADES     = int(os.environ.get("PDT_MAX_TRADES", "3"))
+PAPER_MODE         = os.environ.get("ROBINHOOD_PAPER_MODE", "false").lower() == "true"
+KILL_SWITCH        = os.environ.get("KILL_SWITCH", "false").lower() == "true"
+MAX_EQUITY_SHARES  = int(os.environ.get("MAX_EQUITY_SHARES", "3"))
+MAX_ORDER_USD      = float(os.environ.get("MAX_ORDER_USD", "300.0"))
+MAX_DAILY_LOSS_USD = float(os.environ.get("MAX_DAILY_LOSS_USD", "500.0"))
 
-# Local .env fallback values (used when Render is unreachable)
-_LOCAL_DEFAULTS = {
-    "OPTIONS_ENABLED":    os.environ.get("OPTIONS_ENABLED", "false").lower() == "true",
-    "EQUITY_ENABLED":     os.environ.get("EQUITY_ENABLED", "true").lower() == "true",
-    "PAPER_MODE":         os.environ.get("ROBINHOOD_PAPER_MODE", "false").lower() == "true",
-    "PDT_SHIELD":         os.environ.get("PDT_SHIELD_ENABLED", "true").lower() == "true",
-    "MAX_EQUITY_SHARES":  int(os.environ.get("MAX_EQUITY_SHARES", "5")),
-    "MAX_CONTRACTS":      int(os.environ.get("MAX_CONTRACTS", "1")),
-    "CIRCUIT_BREAKER":    True,
-    "MAX_DAILY_LOSS_USD": float(os.environ.get("MAX_DAILY_LOSS_USD", "500")),
-    "KILL_SWITCH":        os.environ.get("KILL_SWITCH", "false").lower() == "true",
-}
+# ── State ──────────────────────────────────────────────────────────────────────
+_rh_logged_in   = False
+_last_execution = {}        # symbol → epoch
+_pdt_trades     = []        # epoch timestamps of day trades
+_daily_loss_usd = 0.0
+_lock           = threading.Lock()
 
-
-# ── Remote Config Cache ───────────────────────────────────────────────────────
-
-_config_lock     = threading.Lock()
-_config_cache    = dict(_LOCAL_DEFAULTS)
-_config_fetched  = 0.0   # epoch of last successful fetch
+COOLDOWN_S     = 300        # 5-min per-symbol cooldown
+PDT_WINDOW_S   = 5 * 86400 # 5-day rolling window
 
 
-def fetch_remote_config() -> dict:
-    """Pull feature flags from Render. Returns cached value on failure."""
-    global _config_fetched
-    url = f"{SQUEEZEOS_API_URL}/api/config"
-    try:
-        req = URLRequest(url, headers={"User-Agent": "SqueezeOS-Executor/1.0"})
-        with urlopen(req, timeout=8) as resp:
-            data = json.loads(resp.read())
-        flags = data.get("flags", {})
-        with _config_lock:
-            _config_cache.update(flags)
-            _config_fetched = time.time()
-        logger.info(f"[CONFIG] Remote flags loaded: OPTIONS={flags.get('OPTIONS_ENABLED')} "
-                    f"EQUITY={flags.get('EQUITY_ENABLED')} KILL={flags.get('KILL_SWITCH')}")
-        return dict(_config_cache)
-    except Exception as e:
-        logger.warning(f"[CONFIG] Remote fetch failed ({e}) — using cached/local flags")
-        return dict(_config_cache)
-
-
-def get_flags() -> dict:
-    """Return current flags, refreshing from remote if TTL expired."""
-    now = time.time()
-    with _config_lock:
-        stale = (now - _config_fetched) > CONFIG_TTL_S
-    if stale:
-        return fetch_remote_config()
-    with _config_lock:
-        return dict(_config_cache)
-
-
-# ── Robinhood Session ─────────────────────────────────────────────────────────
-
-_rh_logged_in = False
-
-def _ensure_login():
+# ── Robinhood login ────────────────────────────────────────────────────────────
+def _ensure_login() -> bool:
     global _rh_logged_in
     if _rh_logged_in:
         return True
     if not ROBINHOOD_USER or not ROBINHOOD_PASS:
-        logger.error("[RH] ROBINHOOD_USERNAME / ROBINHOOD_PASSWORD not set in .env")
+        logger.error("[RH] ROBINHOOD_USERNAME / ROBINHOOD_PASSWORD not set in executor.env")
         return False
     try:
         import robin_stocks.robinhood as rh
         rh.login(ROBINHOOD_USER, ROBINHOOD_PASS)
         _rh_logged_in = True
-        logger.info("[RH] Logged in successfully")
+        logger.info("[RH] Logged in ✅")
         return True
     except Exception as e:
         logger.error(f"[RH] Login failed: {e}")
         return False
 
 
-# ── Equity Execution ──────────────────────────────────────────────────────────
-
-def execute_equity(symbol: str, action: str, flags: dict) -> dict:
-    if not flags.get("EQUITY_ENABLED"):
-        return {"skipped": "EQUITY_ENABLED=false"}
-
-    max_shares = flags.get("MAX_EQUITY_SHARES", 5)
-
-    if flags.get("PAPER_MODE"):
-        logger.info(f"[PAPER] equity {action} {max_shares}x {symbol}")
-        return {"paper": True, "action": action, "symbol": symbol, "qty": max_shares}
-
-    if not _ensure_login():
-        return {"error": "login_failed"}
-
+# ── Portfolio value (for PDT check) ───────────────────────────────────────────
+def _get_rh_portfolio_value() -> float:
     try:
         import robin_stocks.robinhood as rh
-        if action in ("BUY", "BUY_PRIME"):
-            result = rh.order_buy_market(symbol, max_shares)
-        elif action in ("SELL", "EXIT"):
-            result = rh.order_sell_market(symbol, max_shares)
-        else:
-            return {"skipped": f"no equity handler for action={action}"}
-
-        logger.info(f"[RH] Equity order placed: {symbol} {action} x{max_shares} → {result}")
-        return {"placed": True, "result": result}
+        profile = rh.profiles.load_portfolio_profile()
+        equity  = profile.get("equity") or profile.get("extended_hours_equity") or "0"
+        return float(equity)
     except Exception as e:
-        logger.error(f"[RH] Equity order error: {e}")
-        return {"error": str(e)}
+        logger.warning(f"[RH] Could not fetch portfolio value: {e}")
+        return 9999.0  # assume above PDT limit if we can't check
 
 
-# ── Options Execution ─────────────────────────────────────────────────────────
-
-def execute_options(symbol: str, action: str, payload: dict, flags: dict) -> dict:
-    if not flags.get("OPTIONS_ENABLED"):
-        return {"skipped": "OPTIONS_ENABLED=false"}
-
-    max_contracts = flags.get("MAX_CONTRACTS", 1)
-    expiry        = payload.get("expiry")          # e.g. "2026-06-20"
-    strike        = payload.get("strike")           # e.g. 190.0
-    opt_type      = payload.get("option_type", "call").lower()  # call | put
-
-    if not expiry or not strike:
-        return {"error": "options require expiry and strike in payload"}
-
-    if flags.get("PAPER_MODE"):
-        logger.info(f"[PAPER] options {action} {max_contracts}x {symbol} {strike} {opt_type} exp={expiry}")
-        return {"paper": True, "action": action, "symbol": symbol,
-                "strike": strike, "expiry": expiry, "type": opt_type, "qty": max_contracts}
-
-    if not _ensure_login():
-        return {"error": "login_failed"}
-
-    try:
-        import robin_stocks.robinhood as rh
-        if action in ("BUY", "BUY_PRIME"):
-            result = rh.order_buy_option_limit(
-                "open", "debit", float(strike) * 0.05,  # ~5% of strike as limit price
-                symbol, max_contracts, expiry, float(strike), opt_type
-            )
-        elif action in ("SELL", "EXIT"):
-            result = rh.order_sell_option_limit(
-                "close", "credit", float(strike) * 0.03,
-                symbol, max_contracts, expiry, float(strike), opt_type
-            )
+# ── PDT shield ─────────────────────────────────────────────────────────────────
+def _pdt_allowed() -> bool:
+    now = time.time()
+    cutoff = now - PDT_WINDOW_S
+    with _lock:
+        _pdt_trades[:] = [t for t in _pdt_trades if t > cutoff]
+        balance = _get_rh_portfolio_value()
+        if balance < PDT_BALANCE_LIMIT:
+            if len(_pdt_trades) >= PDT_MAX_TRADES:
+                logger.warning(
+                    f"[PDT] BLOCKED — balance ${balance:.2f} < ${PDT_BALANCE_LIMIT} "
+                    f"and {len(_pdt_trades)}/{PDT_MAX_TRADES} day trades used"
+                )
+                return False
+            logger.info(f"[PDT] Balance ${balance:.2f} — PDT active: {len(_pdt_trades)+1}/{PDT_MAX_TRADES}")
         else:
-            return {"skipped": f"no options handler for action={action}"}
-
-        logger.info(f"[RH] Options order placed: {symbol} {action} {opt_type} {strike} exp={expiry} → {result}")
-        return {"placed": True, "result": result}
-    except Exception as e:
-        logger.error(f"[RH] Options order error: {e}")
-        return {"error": str(e)}
+            logger.info(f"[PDT] Balance ${balance:.2f} — above PDT limit, full trading allowed")
+        _pdt_trades.append(now)
+    return True
 
 
-# ── Circuit Breaker ───────────────────────────────────────────────────────────
-
-_daily_loss_usd  = 0.0
-_daily_loss_lock = threading.Lock()
-
-
-def _record_loss(amount_usd: float):
-    global _daily_loss_usd
-    with _daily_loss_lock:
-        _daily_loss_usd += amount_usd
-
-
-def _circuit_open(flags: dict) -> bool:
-    if flags.get("KILL_SWITCH"):
-        logger.warning("[CIRCUIT] KILL_SWITCH active — all execution halted")
+# ── Circuit breaker ────────────────────────────────────────────────────────────
+def _circuit_open() -> bool:
+    if KILL_SWITCH:
+        logger.warning("[CIRCUIT] KILL_SWITCH=true — all execution halted")
         return True
-    if flags.get("CIRCUIT_BREAKER"):
-        with _daily_loss_lock:
-            loss = _daily_loss_usd
-        limit = flags.get("MAX_DAILY_LOSS_USD", 500.0)
-        if loss >= limit:
-            logger.warning(f"[CIRCUIT] Daily loss ${loss:.2f} ≥ limit ${limit:.2f} — halted")
+    with _lock:
+        if _daily_loss_usd >= MAX_DAILY_LOSS_USD:
+            logger.warning(f"[CIRCUIT] Daily loss ${_daily_loss_usd:.2f} >= limit ${MAX_DAILY_LOSS_USD}")
             return True
     return False
 
 
-# ── Discord Execution Alert ───────────────────────────────────────────────────
+# ── Discord alert ──────────────────────────────────────────────────────────────
+_DISCORD_URL = os.environ.get("DISCORD_WEBHOOK_BEAST", "") or os.environ.get("DISCORD_WEBHOOK_ALL", "")
 
-_DISCORD_BEAST_URL = os.environ.get("DISCORD_WEBHOOK_BEAST", "") or os.environ.get("DISCORD_WEBHOOK_ALL", "")
-
-def _fire_execution_discord(symbol: str, action: str, mode: str,
-                             god_stacked: int, harmonic_score: float,
-                             flags: dict, result: dict):
-    """Fire a Discord alert every time a GOD_MODE trade executes or is paper-logged."""
-    url = _DISCORD_BEAST_URL
-    if not url:
-        logger.warning("[Discord] No DISCORD_WEBHOOK_BEAST or DISCORD_WEBHOOK_ALL set — execution alert skipped")
+def _discord(symbol: str, side: str, qty: int, price: float, sml: dict, result: dict):
+    if not _DISCORD_URL:
         return
-
-    paper  = flags.get("PAPER_MODE", False)
-    error  = result.get("error")
+    mode   = "📋 PAPER" if PAPER_MODE else "🔴 LIVE"
     placed = result.get("placed") or result.get("paper")
-
-    mode_label = "📋 PAPER" if paper else "🔴 LIVE"
-    status_val = "✅ EXECUTED" if placed else (f"❌ ERROR: {error}" if error else "⏭️ SKIPPED")
-    color      = 0x00FF66 if placed and not error else (0xFF0055 if error else 0xFF8800)
-
-    payload = {
-        "embeds": [{
-            "title":       f"⚡ GOD MODE {action} — {symbol} [{mode_label}]",
-            "color":       color,
-            "description": (
-                f"**SML Harmonic Matrix** confirmed GOD_MODE execution gate on **{symbol}**.\n"
-                f"Mode: `{mode.upper()}` · Action: `{action}`"
-            ),
-            "fields": [
-                {"name": "Status",          "value": status_val,                         "inline": True},
-                {"name": "Mode",            "value": f"**{mode_label}**",                 "inline": True},
-                {"name": "SET9 Stacked",    "value": f"**{god_stacked}/6** INSTITUTIONAL", "inline": True},
-                {"name": "Harmonic Score",  "value": f"**{harmonic_score}**",              "inline": True},
-                {"name": "Execution Type",  "value": mode.upper(),                         "inline": True},
-                {"name": "KILL_SWITCH",     "value": str(flags.get("KILL_SWITCH", False)), "inline": True},
-            ],
-            "footer": {
-                "text": f"ScriptMasterLabs | SqueezeOS GOD_MODE Executor | squeezeos-api.onrender.com"
-            },
-            "timestamp": datetime.now().isoformat(),
-        }]
-    }
-
+    error  = result.get("error")
+    status = "✅ EXECUTED" if placed else (f"❌ {error}" if error else "⏭️ SKIPPED")
+    payload = {"embeds": [{"title": f"⚡ GOD MODE {side.upper()} — {symbol} [{mode}]",
+        "color": 0x00FF66 if placed else 0xFF0055,
+        "fields": [
+            {"name": "Status",       "value": status,                          "inline": True},
+            {"name": "Mode",         "value": mode,                            "inline": True},
+            {"name": "Order",        "value": f"{qty}x {symbol} @ ${price:.2f}", "inline": True},
+            {"name": "SET9 Stacked", "value": f"{sml.get('god_stacked',0)}/6", "inline": True},
+            {"name": "Score",        "value": str(sml.get("harmonic_score",0)),"inline": True},
+        ],
+        "footer": {"text": "ScriptMaster Labs | SqueezeOS | Robinhood Executor"},
+        "timestamp": datetime.now().isoformat(),
+    }]}
     try:
         import urllib.request as _ul
         data = json.dumps(payload).encode()
-        req  = _ul.Request(url, data=data, headers={"Content-Type": "application/json"})
-        with _ul.urlopen(req, timeout=8) as resp:
-            logger.info(f"[Discord] Execution alert fired — {resp.status}")
+        req  = _ul.Request(_DISCORD_URL, data=data, headers={"Content-Type": "application/json"})
+        with _ul.urlopen(req, timeout=8):
+            pass
     except Exception as e:
-        logger.warning(f"[Discord] Execution alert failed: {e}")
+        logger.warning(f"[Discord] Failed: {e}")
 
 
-# ── Webhook Request Handler ───────────────────────────────────────────────────
+# ── Order execution ────────────────────────────────────────────────────────────
+def _execute(symbol: str, side: str, sml: dict):
+    if _circuit_open():
+        return
 
-def _verify_signature(raw_body: bytes, sig_header: str) -> bool:
-    expected = "sha256=" + hmac.new(
-        WEBHOOK_SECRET.encode(), raw_body, hashlib.sha256
-    ).hexdigest()
-    return hmac.compare_digest(expected, sig_header)
+    now  = time.time()
+    last = _last_execution.get(symbol, 0)
+    if now - last < COOLDOWN_S:
+        logger.info(f"[EXEC] {symbol} cooldown — {int(COOLDOWN_S-(now-last))}s left")
+        return
 
+    god_count = sml.get("god_stacked", 0)
+    if god_count < MIN_GOD_STACKED:
+        logger.info(f"[EXEC] {symbol} god_stacked={god_count} < {MIN_GOD_STACKED} — skip")
+        return
 
-class AlertHandler(BaseHTTPRequestHandler):
-    def log_message(self, fmt, *args):
-        logger.debug(fmt % args)
+    if not _pdt_allowed():
+        return
 
-    def do_POST(self):
-        length   = int(self.headers.get("Content-Length", 0))
-        raw_body = self.rfile.read(length)
-        sig      = self.headers.get("X-SqueezeOS-Signature", "")
+    _last_execution[symbol] = now
 
-        if sig and not _verify_signature(raw_body, sig):
-            logger.warning(f"[WEBHOOK] Signature mismatch from {self.client_address[0]}")
-            self._respond(401, {"error": "invalid_signature"})
-            return
+    # Get live price from Robinhood
+    try:
+        import robin_stocks.robinhood as rh
+        price = float(rh.stocks.get_latest_price(symbol)[0] or 0)
+    except Exception:
+        price = 0.0
 
-        try:
-            payload = json.loads(raw_body)
-        except Exception:
-            self._respond(400, {"error": "invalid_json"})
-            return
+    if price <= 0:
+        logger.warning(f"[EXEC] {symbol} no live price — abort")
+        return
 
-        logger.info(f"[WEBHOOK] Received: {payload}")
-        threading.Thread(target=self._handle_alert, args=(payload,), daemon=True).start()
-        self._respond(200, {"status": "queued"})
+    qty = max(1, int(MAX_ORDER_USD // price))
+    qty = min(qty, MAX_EQUITY_SHARES)
 
-    def do_GET(self):
-        if self.path == "/health":
-            flags = get_flags()
-            self._respond(200, {
-                "status":   "operational",
-                "flags":    flags,
-                "rh_login": _rh_logged_in,
-                "ts":       datetime.now().isoformat(),
-            })
+    logger.info(f"[EXEC] 🚀 RH GOD MODE — {side.upper()} {qty}x {symbol} @ ${price:.2f} | SET9:{god_count}/6")
+
+    result = {}
+    if PAPER_MODE:
+        logger.info(f"[PAPER] Would {side.upper()} {qty}x {symbol} @ ${price:.2f}")
+        result = {"paper": True}
+    else:
+        if not _ensure_login():
+            result = {"error": "login_failed"}
         else:
-            self._respond(404, {"error": "not_found"})
+            try:
+                import robin_stocks.robinhood as rh
+                if side == "buy":
+                    r = rh.orders.order_buy_market(symbol, qty)
+                else:
+                    r = rh.orders.order_sell_market(symbol, qty)
+                result = {"placed": True, "raw": r}
+                logger.info(f"[RH] Order placed ✅ {symbol} {side} x{qty}")
+            except Exception as e:
+                logger.error(f"[RH] Order error: {e}")
+                result = {"error": str(e)}
 
-    def _respond(self, code: int, body: dict):
-        data = json.dumps(body).encode()
-        self.send_response(code)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", len(data))
-        self.end_headers()
-        self.wfile.write(data)
-
-    def _handle_alert(self, payload: dict):
-        flags  = get_flags()
-        symbol = payload.get("ticker", payload.get("symbol", "")).upper().strip()
-        action = payload.get("action", payload.get("directive", "")).upper().strip()
-
-        if not symbol or not action:
-            logger.warning(f"[ALERT] Missing symbol or action in payload: {payload}")
-            return
-
-        if _circuit_open(flags):
-            return
-
-        # ── Harmonic Matrix Execution Gate ────────────────────────────────────
-        # Only execute if the SML Harmonic Matrix confirms GOD_MODE tier.
-        # Requires: tier=GOD_MODE AND god_stacked ≥ 3 (≥3 SET9 configs stacked).
-        # Alerts from lower tiers (PRIME, WATCH) are logged but never executed.
-        sml = payload.get("sml_matrix") or {}
-        matrix_tier    = sml.get("tier", "NONE")
-        god_stacked    = sml.get("god_stacked", 0)
-        execute_gate   = sml.get("execute_gate", False)
-        harmonic_score = sml.get("harmonic_score", 0)
-
-        if not execute_gate or matrix_tier != "GOD_MODE":
-            logger.warning(
-                f"[GATE] {symbol} BLOCKED — tier={matrix_tier} god_stacked={god_stacked} "
-                f"execute_gate={execute_gate} harmonic_score={harmonic_score} "
-                f"(GOD_MODE + ≥3 SET9 stacked required)"
-            )
-            return
-
-        logger.info(
-            f"[GATE] {symbol} CLEARED — GOD_MODE CONFIRMED "
-            f"god_stacked={god_stacked}/6 harmonic_score={harmonic_score} "
-            f"Processing {action}..."
-        )
-
-        mode = payload.get("mode", "equity")  # "equity" | "options"
-
-        if mode == "options" or payload.get("option_type"):
-            result = execute_options(symbol, action, payload, flags)
-        else:
-            result = execute_equity(symbol, action, flags)
-
-        logger.info(f"[RESULT] {symbol} {action} → {result}")
-        _fire_execution_discord(symbol, action, mode, god_stacked, harmonic_score, flags, result)
+    _discord(symbol, side, qty, price, sml, result)
 
 
-# ── Config refresh thread ─────────────────────────────────────────────────────
+# ── Beastmode poll ─────────────────────────────────────────────────────────────
+def _poll_beastmode():
+    url = f"{SQUEEZEOS_API_URL}/api/beastmode"
+    try:
+        req = URLRequest(url, headers={"User-Agent": "SqueezeOS-RH-Executor/2.0"})
+        with urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read())
+    except Exception as e:
+        logger.warning(f"[POLL] beastmode fetch failed: {e}")
+        return
 
-def _config_refresh_loop():
-    while True:
-        time.sleep(CONFIG_TTL_S)
-        fetch_remote_config()
+    signals = data.get("signals") or data.get("hits") or []
+    if not signals:
+        logger.info("[POLL] No signals this cycle")
+        return
+
+    logger.info(f"[POLL] {len(signals)} signals — checking GOD MODE gate...")
+    for hit in signals:
+        symbol = (hit.get("symbol") or "").upper().strip()
+        sml    = hit.get("sml_matrix") or {}
+        tier   = sml.get("tier", "")
+        gate   = sml.get("execute_gate", False)
+
+        if not symbol or tier != "GOD_MODE" or not gate:
+            continue
+
+        signal = hit.get("signal", "")
+        side   = "buy" if "BULL" in signal or signal in ("BEASTMODE", "GOD_MODE", "DUAL_GRID_LOCK") else "sell"
+        logger.info(f"[POLL] GOD MODE: {symbol} {side.upper()} god_stacked={sml.get('god_stacked',0)}/6")
+        _execute(symbol, side, sml)
 
 
-# ── Entry Point ───────────────────────────────────────────────────────────────
-
+# ── Main loop ──────────────────────────────────────────────────────────────────
 def main():
     logger.info("=" * 60)
-    logger.info("SqueezeOS Robinhood Executor starting")
-    logger.info(f"  API endpoint : {SQUEEZEOS_API_URL}")
-    logger.info(f"  Listener port: {EXECUTOR_PORT}")
-    logger.info(f"  Config TTL   : {CONFIG_TTL_S}s")
+    logger.info("SqueezeOS Robinhood Executor v2.0 — Polling Mode")
+    logger.info(f"  API         : {SQUEEZEOS_API_URL}")
+    logger.info(f"  Poll every  : {POLL_INTERVAL_S}s")
+    logger.info(f"  MIN_GOD     : {MIN_GOD_STACKED}/6 SET9 stacked")
+    logger.info(f"  PDT limit   : ${PDT_BALANCE_LIMIT}")
+    logger.info(f"  Max order   : ${MAX_ORDER_USD} / {MAX_EQUITY_SHARES} shares")
+    logger.info(f"  Paper mode  : {PAPER_MODE}")
+    logger.info(f"  Kill switch : {KILL_SWITCH}")
     logger.info("=" * 60)
 
-    # Fetch remote config immediately at startup
-    flags = fetch_remote_config()
-    logger.info(f"[STARTUP] FLAGS → {flags}")
+    if KILL_SWITCH:
+        logger.warning("[STARTUP] KILL_SWITCH=true — executor will log but not trade")
 
-    # Warn if kill switch is on
-    if flags.get("KILL_SWITCH"):
-        logger.warning("[STARTUP] KILL_SWITCH is ON — no trades will execute until cleared via POST /api/config")
-
-    # Start background config refresh
-    threading.Thread(target=_config_refresh_loop, daemon=True, name="ConfigRefresh").start()
-
-    # Pre-warm Robinhood login
-    if flags.get("EQUITY_ENABLED") or flags.get("OPTIONS_ENABLED"):
+    # Pre-warm login
+    if not PAPER_MODE:
         _ensure_login()
 
-    # Start webhook listener
-    server = HTTPServer(("0.0.0.0", EXECUTOR_PORT), AlertHandler)
-    logger.info(f"[SERVER] Listening on http://0.0.0.0:{EXECUTOR_PORT}")
-    logger.info(f"[SERVER] Health check: http://localhost:{EXECUTOR_PORT}/health")
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        logger.info("[SERVER] Shutdown requested")
-    finally:
-        server.server_close()
+    while True:
+        try:
+            logger.info(f"[POLL] Scanning market universe...")
+            _poll_beastmode()
+        except Exception as e:
+            logger.error(f"[LOOP] Unexpected error: {e}")
+        logger.info(f"[POLL] Next scan in {POLL_INTERVAL_S}s")
+        time.sleep(POLL_INTERVAL_S)
 
 
 if __name__ == "__main__":
