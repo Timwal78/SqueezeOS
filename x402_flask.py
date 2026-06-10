@@ -142,6 +142,27 @@ def x402_guard(price_usdc: str, description: str, discoverable: bool = True):
             resource = request.base_url
             reqs = _payment_requirements(price_usdc, description, resource)
 
+            # ── AP2 mandate gate (Google Agent Payments Protocol) ──
+            # Modes via env AP2_MODE: "off" | "optional" (default) | "required"
+            ap2_mode = os.environ.get("AP2_MODE", "optional").lower()
+            if ap2_mode != "off":
+                try:
+                    from ap2_mandate import verify_mandate, mandate_from_request
+                    mandate = mandate_from_request(request.headers)
+                    if mandate is not None:
+                        verdict = verify_mandate(mandate, {
+                            "resource": resource,
+                            "amountAtomicUSDC": int(reqs["maxAmountRequired"]),
+                            "payTo": PAY_TO,
+                            "trustedIssuers": json.loads(os.environ.get("AP2_TRUSTED_ISSUERS", "{}")),
+                        })
+                        if not verdict["valid"]:
+                            return _402(reqs, f"AP2 mandate invalid: {verdict['reason']}")
+                    elif ap2_mode == "required":
+                        return _402(reqs, "AP2 mandate required: send X-AP2-MANDATE header (base64 VC bundle)")
+                except ImportError:
+                    pass  # ap2 module unavailable — fall through to pure x402
+
             header = request.headers.get("X-PAYMENT")
             if not header:
                 return _402(reqs, "payment required")
@@ -175,6 +196,13 @@ def register_x402_discovery(app):
             "x402Version": X402_VERSION,
             "operator": "ScriptMasterLabs",
             "discoverable": True,
+            "ap2": {
+                "supported": True,
+                "mode": os.environ.get("AP2_MODE", "optional"),
+                "mandate_header": "X-AP2-MANDATE",
+                "spec": "https://ap2-protocol.org/specification/",
+                "note": "AP2 Intent/Cart/Payment mandates (W3C VCs) verified before honoring agent payments.",
+            },
             "rails": [
                 {
                     "name": "Base / USDC (x402 standard)",
