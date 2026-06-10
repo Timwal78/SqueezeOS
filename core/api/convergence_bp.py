@@ -54,7 +54,14 @@ def _pdt_check_and_record() -> bool:
 
     # Check account balance
     balance = _t.get_account_balance()
-    if balance is not None and balance < _PDT_BALANCE_LIMIT:
+    if balance is None:
+        # FAIL-SAFE: if we can't confirm the balance, assume PDT applies.
+        # An API hiccup must never widen permissions. Treat as restricted.
+        if len(_pdt_day_trades) >= _PDT_MAX_DAY_TRADES:
+            logger.warning("[PDT] BLOCKED — balance unknown (API error), enforcing PDT cap as precaution")
+            return False
+        logger.warning("[PDT] Balance unknown (API error) — treating as PDT-restricted (fail-safe)")
+    elif balance < _PDT_BALANCE_LIMIT:
         if len(_pdt_day_trades) >= _PDT_MAX_DAY_TRADES:
             logger.warning(
                 f"[PDT] BLOCKED — balance ${balance:.2f} < ${_PDT_BALANCE_LIMIT} "

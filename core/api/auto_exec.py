@@ -30,12 +30,14 @@ MAX_EXEC_PER_DAY     = int(os.environ.get("AUTOEXEC_MAX_PER_DAY", "10"))
 DAILY_LOSS_LIMIT     = float(os.environ.get("AUTOEXEC_DAILY_LOSS_LIMIT", "200.0"))  # USD
 CANDIDATES_PER_CYCLE = int(os.environ.get("AUTOEXEC_CANDIDATES", "8"))  # top N to analyze
 MARKET_HOURS_ONLY    = os.environ.get("AUTOEXEC_MARKET_HOURS_ONLY", "true").lower() == "true"
+MAX_NOTIONAL_PER_DAY = float(os.environ.get("AUTOEXEC_MAX_NOTIONAL_PER_DAY", "2500.0"))  # total $ deployed/day
 
 # ── Daily counters (reset at date rollover) ─────────────────────────────────
 _state = {
     "date": None,
     "orders_today": 0,
     "realized_pnl_today": 0.0,
+    "notional_today": 0.0,
     "breaker_tripped": False,
 }
 
@@ -47,7 +49,7 @@ def _today_str():
 def _roll_day():
     d = _today_str()
     if _state["date"] != d:
-        _state.update(date=d, orders_today=0, realized_pnl_today=0.0, breaker_tripped=False)
+        _state.update(date=d, orders_today=0, realized_pnl_today=0.0, notional_today=0.0, breaker_tripped=False)
         logger.info(f"[AUTOEXEC] New trading day {d} — counters reset.")
 
 
@@ -86,6 +88,8 @@ def status() -> dict:
         "realized_pnl_today": round(_state["realized_pnl_today"], 2),
         "daily_loss_limit": DAILY_LOSS_LIMIT,
         "breaker_tripped": _state["breaker_tripped"],
+        "notional_today": round(_state["notional_today"], 2),
+        "max_notional_per_day": MAX_NOTIONAL_PER_DAY,
         "max_per_cycle": MAX_EXEC_PER_CYCLE,
     }
 
@@ -141,10 +145,24 @@ def run_auto_execution(sweet: dict, sorted_syms: list, dm) -> int:
 
             # Gate 6: convergence — only GOD MODE with execute_gate
             if sml.get("execute_gate") and sml.get("tier") == "GOD_MODE":
+                # Gate 5b: daily notional cap — estimate this order's $ and check ceiling
+                try:
+                    px = float((result.get("price") or sml.get("price") or 0) or 0)
+                except (TypeError, ValueError):
+                    px = 0.0
+                # conservative estimate using configured max sizing
+                est_notional = px * float(os.environ.get("BEAST_MAX_SHARES", "5")) if px > 0 else 0.0
+                if est_notional > 0 and (_state["notional_today"] + est_notional) > MAX_NOTIONAL_PER_DAY:
+                    logger.warning(
+                        f"[AUTOEXEC] {sym} skipped — would exceed daily notional cap "
+                        f"(${_state['notional_today']:.0f}+${est_notional:.0f} > ${MAX_NOTIONAL_PER_DAY:.0f})"
+                    )
+                    continue
                 logger.info(f"[AUTOEXEC] 🎯 GOD MODE on {sym} — routing to execution "
                             f"(god_stacked={sml.get('god_stacked')})")
                 _fire_execution(sym, result, dm)  # downstream: arm switch re-checked, PDT, cooldown, caps
                 _state["orders_today"] += 1
+                _state["notional_today"] += est_notional
                 fired += 1
         except Exception as e:
             logger.warning(f"[AUTOEXEC] {sym} analysis error (skipped): {e}")
