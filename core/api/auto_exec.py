@@ -103,11 +103,15 @@ def run_auto_execution(sweet: dict, sorted_syms: list, dm) -> int:
     """
     _roll_day()
 
-    # Gate 1: master arm switch
-    if os.environ.get("LIVE_TRADING_ENABLED", "false").strip().lower() != "true":
-        return 0  # disarmed — silent, scanner keeps running
+    exec_mode = os.environ.get("EXECUTION_MODE", "alert").strip().lower()
+    armed = os.environ.get("LIVE_TRADING_ENABLED", "false").strip().lower() == "true"
 
-    # Gate 2: breaker
+    # Gate 1: in AUTO mode, require the master arm switch. In ALERT mode, no
+    # arm needed — alerts are safe (they never place orders).
+    if exec_mode == "auto" and not armed:
+        return 0  # auto execution disarmed
+
+    # Gate 2: breaker (applies to both modes — stop alerting on a blown day too)
     if _state["breaker_tripped"]:
         return 0
 
@@ -115,9 +119,9 @@ def run_auto_execution(sweet: dict, sorted_syms: list, dm) -> int:
     if not _is_market_hours():
         return 0
 
-    # Gate 4: daily cap
+    # Gate 4: daily cap (counts orders AND alerts)
     if _state["orders_today"] >= MAX_EXEC_PER_DAY:
-        logger.info(f"[AUTOEXEC] daily cap reached ({MAX_EXEC_PER_DAY}) — no more orders today.")
+        logger.info(f"[AUTOEXEC] daily cap reached ({MAX_EXEC_PER_DAY}) — no more {'orders' if exec_mode=='auto' else 'alerts'} today.")
         return 0
 
     # Lazy imports to avoid heavy load when disarmed
@@ -145,6 +149,22 @@ def run_auto_execution(sweet: dict, sorted_syms: list, dm) -> int:
 
             # Gate 6: convergence — only GOD MODE with execute_gate
             if sml.get("execute_gate") and sml.get("tier") == "GOD_MODE":
+                # MANUAL ALERT MODE: if EXECUTION_MODE=alert (or arm switch off for
+                # auto), send a copy-paste Discord alert for hand-execution on
+                # Robinhood instead of placing an autonomous order.
+                exec_mode = os.environ.get("EXECUTION_MODE", "alert").strip().lower()
+                if exec_mode != "auto":
+                    try:
+                        from core.api.manual_alert import fire_manual_alert
+                        fire_manual_alert(result)
+                        logger.info(f"[AUTOEXEC] 📲 MANUAL ALERT sent for {sym} (EXECUTION_MODE={exec_mode}, no auto-trade)")
+                    except Exception as _ma:
+                        logger.warning(f"[AUTOEXEC] manual alert failed for {sym}: {_ma}")
+                    _state["orders_today"] += 1  # count alerts toward daily cap too
+                    fired += 1
+                    continue
+
+                # AUTO MODE (EXECUTION_MODE=auto): place the live order
                 # Gate 5b: daily notional cap — estimate this order's $ and check ceiling
                 try:
                     px = float((result.get("price") or sml.get("price") or 0) or 0)

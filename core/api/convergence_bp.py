@@ -321,6 +321,7 @@ def exec_status():
         except Exception:
             pipeline = {"error": "auto_exec unavailable"}
         return jsonify({
+            "execution_mode": os.environ.get("EXECUTION_MODE", "alert"),
             "live_trading_armed": armed,
             "status": "LIVE — real orders WILL place on GOD MODE" if armed else "SAFE — no autonomous orders (logging only)",
             "tradier_env": tradier_env,
