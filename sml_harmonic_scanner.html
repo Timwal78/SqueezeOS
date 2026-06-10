@@ -455,9 +455,9 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); f
 // ============================================================
 // CONFIG
 // ============================================================
-const TRADIER_KEY  = 'cs0qmztn5VhcF5G2AZE5GwDhFcho';
+const TRADIER_KEY  = localStorage.getItem('TRADIER_KEY') || ''; // SECURITY: was hardcoded; rotate old key + set via UI/localStorage
 const TRADIER_BASE = 'https://api.tradier.com/v1';
-const FINNHUB_KEY  = 'd3jepv1r01qkv9jvd0lgd3jepv1r01qkv9jvd0m0';
+const FINNHUB_KEY  = localStorage.getItem('FINNHUB_KEY') || ''; // SECURITY: was hardcoded; rotate old key + set via UI/localStorage
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 
 const IWM_URL   = 'https://www.ishares.com/us/products/239710/ishares-russell-2000-etf/1467271812596.ajax?fileType=csv&fileName=IWM_holdings&dataType=fund';
