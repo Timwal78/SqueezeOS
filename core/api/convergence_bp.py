@@ -29,6 +29,15 @@ _MIN_GOD_STACKED     = int(os.environ.get("MIN_GOD_STACKED", "5"))  # min SET9 c
 _BEAST_MAX_SHARES    = int(os.environ.get("BEAST_MAX_SHARES", "5"))
 _BEAST_MAX_PRICE     = float(os.environ.get("BEAST_MAX_PRICE", "500.0"))
 
+# ── MASTER ARM SWITCH ────────────────────────────────────────────────────────
+# Decouples live DATA (TRADIER_ENV=production) from live EXECUTION.
+# Live trades ONLY fire when LIVE_TRADING_ENABLED is explicitly "true".
+# Default is OFF (safe): production data feed still works, but no orders place.
+# This is the kill switch — set the env var to "false" (or unset) to halt all
+# autonomous execution instantly on next deploy, without touching data feeds.
+def _live_trading_armed() -> bool:
+    return (os.environ.get("LIVE_TRADING_ENABLED", "false").strip().lower() == "true")
+
 
 def _pdt_check_and_record() -> bool:
     """
@@ -69,6 +78,16 @@ def _fire_execution(symbol: str, result: dict, dm=None) -> None:
     PDT shield active when Tradier balance < $2,100.
     """
     import tradier_api as _t
+
+    # ── MASTER ARM SWITCH — first gate, before anything else ─────────────────
+    # Even with GOD MODE stacked and production data live, NO order places
+    # unless live trading is explicitly armed. This is the kill switch.
+    if not _live_trading_armed():
+        logger.info(
+            f"[EXEC] {symbol} signal qualified but LIVE_TRADING_ENABLED is OFF — "
+            f"logging only, no order placed. (Set LIVE_TRADING_ENABLED=true to arm.)"
+        )
+        return
 
     sml        = result.get("sml_matrix") or {}
     god_count  = sml.get("god_stacked", 0)
@@ -275,3 +294,34 @@ def all_clocks():
         "clocks": get_all_active(),
         "ts":     time.time(),
     }))
+
+
+@convergence_bp.route("/exec/status", methods=["GET"])
+def exec_status():
+    """
+    Live-execution safety status. Check this anytime to see if real money
+    is armed. GREEN = safe (no autonomous trading), RED = live trades active.
+    """
+    import tradier_api as _t
+    armed = _live_trading_armed()
+    tradier_env = (os.environ.get("TRADIER_ENV") or "sandbox").strip().lower()
+    rh_url = os.environ.get("ROBINHOOD_EXECUTOR_URL", "")
+    try:
+        from flask import jsonify
+        return jsonify({
+            "live_trading_armed": armed,
+            "status": "LIVE — real orders WILL place on GOD MODE" if armed else "SAFE — no autonomous orders (logging only)",
+            "tradier_env": tradier_env,
+            "tradier_data_live": tradier_env == "production",
+            "robinhood_executor_connected": bool(rh_url),
+            "safety_rails": {
+                "min_god_stacked": _MIN_GOD_STACKED,
+                "max_shares": _BEAST_MAX_SHARES,
+                "max_price_per_share": _BEAST_MAX_PRICE,
+                "cooldown_secs": _EXECUTION_COOLDOWN,
+                "pdt_shield_below": _PDT_BALANCE_LIMIT,
+            },
+            "kill_switch": "Set LIVE_TRADING_ENABLED=false (or unset) and redeploy to halt all execution.",
+        })
+    except Exception as e:
+        return {"error": str(e)}, 500
