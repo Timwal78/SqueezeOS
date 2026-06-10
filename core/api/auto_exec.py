@@ -28,7 +28,7 @@ logger = logging.getLogger("AutoExec")
 MAX_EXEC_PER_CYCLE   = int(os.environ.get("AUTOEXEC_MAX_PER_CYCLE", "2"))
 MAX_EXEC_PER_DAY     = int(os.environ.get("AUTOEXEC_MAX_PER_DAY", "10"))
 DAILY_LOSS_LIMIT     = float(os.environ.get("AUTOEXEC_DAILY_LOSS_LIMIT", "200.0"))  # USD
-CANDIDATES_PER_CYCLE = int(os.environ.get("AUTOEXEC_CANDIDATES", "8"))  # top N to analyze
+CANDIDATES_PER_CYCLE = int(os.environ.get("AUTOEXEC_CANDIDATES", "5"))  # top N to analyze
 MARKET_HOURS_ONLY    = os.environ.get("AUTOEXEC_MARKET_HOURS_ONLY", "true").lower() == "true"
 MAX_NOTIONAL_PER_DAY = float(os.environ.get("AUTOEXEC_MAX_NOTIONAL_PER_DAY", "2500.0"))  # total $ deployed/day
 

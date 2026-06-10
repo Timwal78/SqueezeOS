@@ -40,6 +40,7 @@ logger = logging.getLogger("Market-Scanner")
 market_bp = Blueprint('market', __name__)
 
 # ── Cached scan results (refreshed by background thread) ──
+_autoexec_running = False  # single-run guard for the detached auto-exec worker
 _scan_cache = {
     "quotes": {},
     "options": [],
@@ -257,14 +258,28 @@ def _run_scan():
 
     logger.info(f"[SCAN] {len(sweet)} symbols | {len(options_picks)} options picks | {len(technical_results)} technical scans | cycle #{_scan_cache['scan_count']}")
 
-    # ── AUTO-EXECUTION HOOK ──────────────────────────────────────────────────
-    # Bridge scan → convergence → live execution. Fails safe: disarmed by
-    # default, every order passes the full safety stack in auto_exec.
-    try:
-        from core.api import auto_exec
-        auto_exec.run_auto_execution(sweet, sorted_syms, dm)
-    except Exception as _ae:
-        logger.warning(f"[SCAN] auto-exec hook error (non-fatal, scan continues): {_ae}")
+    # ── AUTO-EXECUTION HOOK (non-blocking) ───────────────────────────────────
+    # Runs convergence analysis + alerting/execution on a DETACHED thread so it
+    # NEVER blocks the scan loop or starves gunicorn health checks. A single-run
+    # guard ensures only one auto-exec pass runs at a time (skips if the prior
+    # one is still working — prevents pile-up under slow upstream APIs).
+    global _autoexec_running
+    if not _autoexec_running:
+        _autoexec_running = True
+        _syms_snapshot = list(sorted_syms)
+        _sweet_snapshot = dict(sweet)
+
+        def _autoexec_worker():
+            global _autoexec_running
+            try:
+                from core.api import auto_exec
+                auto_exec.run_auto_execution(_sweet_snapshot, _syms_snapshot, dm)
+            except Exception as _ae:
+                logger.warning(f"[SCAN] auto-exec worker error (non-fatal): {_ae}")
+            finally:
+                _autoexec_running = False
+
+        threading.Thread(target=_autoexec_worker, daemon=True, name="SML-AutoExec").start()
 
 
 def _grade_options(symbol, price, quote, options):
