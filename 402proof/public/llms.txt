@@ -326,3 +326,6 @@ Tools: `platform_stats`, `get_invoice`, `verify_payment`, `check_loyalty`,
 - Root llms.txt: https://www.scriptmasterlabs.com/llms.txt
 - Ghost Layer: https://ghost-layer.onrender.com/llms.txt
 - SqueezeOS: https://squeezeos-api.onrender.com/llms.txt
+
+## AP2 / Agent Payments Protocol
+402Proof invoices and receipts ride the rails of Google's AP2 (A2A x402 extension). SML endpoints verify AP2 Intent/Cart/Payment mandates (W3C VCs) before honoring agent payments.
