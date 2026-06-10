@@ -402,12 +402,16 @@ def exec_test_alert():
                 "description": "AMC Jun 12 2026 $3.50 Call",
             },
         }
-        ok = fire_manual_alert(sample)
+        import threading as _th
+        webhook_set = bool(os.environ.get("DISCORD_WEBHOOK_MANUAL") or os.environ.get("DISCORD_WEBHOOK_BEAST") or os.environ.get("DISCORD_WEBHOOK_ALL"))
+        # fire on a background thread so the HTTP response returns instantly
+        _th.Thread(target=lambda: fire_manual_alert(sample), daemon=True, name="test-alert").start()
         return jsonify({
             "test": "manual_alert",
-            "fired": ok,
-            "message": "Sample GOD MODE alert sent to Discord — check your channel." if ok
-                       else "Alert NOT sent — no Discord webhook configured (set DISCORD_WEBHOOK_BEAST or DISCORD_WEBHOOK_ALL).",
+            "dispatched": True,
+            "webhook_configured": webhook_set,
+            "message": ("Alert dispatched to Discord — check your channel in a few seconds." if webhook_set
+                        else "No Discord webhook configured. Set DISCORD_WEBHOOK_BEAST (or _ALL) on Render, then retry."),
         })
     except Exception as e:
         return jsonify({"test": "manual_alert", "fired": False, "error": str(e)}), 500
