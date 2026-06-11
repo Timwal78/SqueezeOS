@@ -745,7 +745,7 @@ def create_app():
         })
 
 
-@app.route('/<path:path>')
+    @app.route('/<path:path>')
     def serve_static(path):
         return send_from_directory(app.static_folder, path)
 
