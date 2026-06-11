@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: sml-pne-gateway
+    env: docker
+    plan: starter
+    rootDir: pne/gateway
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /v1/status
+    envVars:
+      - key: PORT
+        value: "8402"
+      - key: UPSTREAM_BASE_URL
+        value: "https://squeezeos-api.onrender.com"
+      - key: MACAROON_SECRET
+        sync: false
+      - key: RATE_LIMIT_UNAUTH
+        value: "100"
+      - key: AUCTION_WINDOW_MS
+        value: "5"
+      - key: BASE_PRICE_SATS
+        value: "100"
+      - key: PLATFORM_FEE_PCT
+        value: "1.0"
+      - key: RUST_LOG
+        value: "pne_gateway=info,tower_http=warn"

@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: echolock-402
+    runtime: node
+    plan: starter
+    rootDir: echolock
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: "3000"
+      - key: ECHOLOCK_SECRET
+        sync: false
+      - key: ECHOLOCK_RECIPIENT
+        value: "rUJhaK2ibfTFVdAn8m9jMCcJQ1xo6FmNPZ"
+      - key: NODE_ENV
+        value: production

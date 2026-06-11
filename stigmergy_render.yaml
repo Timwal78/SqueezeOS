@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: dream-pool-stigmergy
+    runtime: python
+    plan: starter
+    buildCommand: pip install fastapi uvicorn xrpl-py --break-system-packages
+    startCommand: python stigmergy_server.py
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: XRPL_RPC_URL
+        value: "https://xrplcluster.com"
+      - key: RLUSD_ISSUER
+        value: "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De"

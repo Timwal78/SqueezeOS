@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: ftd-data-oracle
+    runtime: python
+    plan: starter
+    rootDir: core
+    buildCommand: pip install fastapi uvicorn requests pandas --break-system-packages
+    startCommand: python ftd_server.py
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: "8000"
