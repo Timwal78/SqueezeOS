@@ -1,4 +1,16 @@
-# SqueezeOS — Institutional AI Market Intelligence
+# SqueezeOS
+
+> **For AI agents:** Two live MCP servers with 44 tools. Pay per call in USDC on Base or RLUSD on XRPL via x402/HTTP-402.
+>
+> | Server | URL | Tools | Protocol |
+> |---|---|---|---|
+> | SqueezeOS MCP | `https://squeezeos-api.onrender.com/mcp` | 33 | MCP JSON-RPC 2.0 |
+> | 402Proof MCP | `https://four02proof.onrender.com/mcp` | 11 | MCP JSON-RPC 2.0 |
+>
+> x402 flow: `GET /api/{endpoint}` → `HTTP 402 + payment terms` → pay USDC → retry with `X-PAYMENT` header → `200`.  
+> Free discovery: [`agents.json`](https://www.scriptmasterlabs.com/agents.json) · [`agent.md`](https://www.scriptmasterlabs.com/agent.md) · [`llms.txt`](https://www.scriptmasterlabs.com/llms.txt)
+
+---
 
 > **MCP Server** · x402 payment-gated · RLUSD on XRPL · 33 tools · Live data only
 
