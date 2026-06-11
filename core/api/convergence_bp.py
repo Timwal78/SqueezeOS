@@ -202,8 +202,10 @@ def convergence_signal(symbol):
     # Add AI Counsel string
     result["ai_counsel"] = generate_ai_counsel(result)
 
-    # Fire Discord on any signal above NEUTRAL
-    if result.get("signal") not in ("NEUTRAL", "INSUFFICIENT_DATA"):
+    # Fire Discord — HIGH TIER ONLY (GOD_MODE or DUAL_GRID_LOCK) on 4H or Daily
+    _HIGH_TIER_SIGNALS = {"GOD_MODE", "DUAL_GRID_LOCK"}
+    _HIGH_TIER_TF      = {"4H", "4HR", "240", "1D", "D", "DAILY"}
+    if result.get("signal") in _HIGH_TIER_SIGNALS and tf.upper() in _HIGH_TIER_TF:
         sniper_data = result.get("options_sniper") or {}
         trade_type  = sniper_data.get("type", "CALL").lower()
         fire_discord(result, trade_type=trade_type)
@@ -236,10 +238,13 @@ def beastmode_scan():
 
     hits = scan_beastmode_universe({"dm": dm}, tf=tf)
 
-    # Fire Discord + execution for every convergence hit
+    # Fire Discord — HIGH TIER ONLY (GOD_MODE or DUAL_GRID_LOCK) on 4H or Daily
+    _HIGH_TIER_SIGNALS = {"GOD_MODE", "DUAL_GRID_LOCK"}
+    _HIGH_TIER_TF      = {"4H", "4HR", "240", "1D", "D", "DAILY"}
     for hit in hits:
-        sniper_data = hit.get("options_sniper") or {}
-        fire_discord(hit, trade_type=sniper_data.get("type", "CALL").lower())
+        if hit.get("signal") in _HIGH_TIER_SIGNALS and tf in _HIGH_TIER_TF:
+            sniper_data = hit.get("options_sniper") or {}
+            fire_discord(hit, trade_type=sniper_data.get("type", "CALL").lower())
 
         # ── Market-wide execution gate ────────────────────────────────────
         # Executes on GOD_MODE tier with god_stacked >= MIN_GOD_STACKED (default 5)
