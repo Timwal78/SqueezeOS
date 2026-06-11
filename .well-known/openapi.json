@@ -2,13 +2,24 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Script Master Labs \u2014 SqueezeOS, 402Proof & Ghost Layer API",
-    "version": "2.0.0",
-    "description": "Three-system platform: SqueezeOS (institutional AI trading intelligence), 402Proof (x402/HTTP 402 autonomous agent payment compliance firewall on XRPL), and Ghost Layer (dual-chain transparent toll gateway bridging XRPL and Base/EVM). All premium SqueezeOS endpoints follow the x402 standard \u2014 agents pay RLUSD on XRPL, no API keys required. Ghost Layer routes XRPL and Base chain USDC payments with full fee disclosure. Agent SDK: https://four02proof.onrender.com/agent/",
+    "version": "3.0.0",
+    "description": "ScriptMasterLabs institutional API \u2014 x402/HTTP-402 micropayment gated. AI agents: pay per call in USDC on Base or RLUSD on XRPL. Enterprise: OAuth 2.0 client credentials flow. MCP: 33 tools at /mcp (JSON-RPC 2.0).",
     "contact": {
       "name": "Script Master Labs",
       "url": "https://www.scriptmasterlabs.com"
     },
-    "x-llm-summary": "Two-system platform: SqueezeOS delivers real-time market intelligence (squeeze scanner, options flow, IWM 0DTE, AI council verdicts). 402Proof handles x402-compliant RLUSD micropayment settlement on XRPL so autonomous agents can pay per call with no API keys. Loyalty tiers reward cumulative spend. MCP middleware available via npm @relayos/mcp-paywall."
+    "x-llm-summary": "Two-system platform: SqueezeOS delivers real-time market intelligence (squeeze scanner, options flow, IWM 0DTE, AI council verdicts). 402Proof handles x402-compliant RLUSD micropayment settlement on XRPL so autonomous agents can pay per call with no API keys. Loyalty tiers reward cumulative spend. MCP middleware available via npm @relayos/mcp-paywall.",
+    "x-agent-payment": {
+      "protocol": "x402",
+      "networks": [
+        "base",
+        "xrpl",
+        "xahau"
+      ],
+      "asset": "USDC / RLUSD",
+      "pay_to_base": "0x4e14B249D9A4c9c9352D780eCEB508A8eB7a7700",
+      "xrpl_gateway": "rUJhaK2ibfTFVdAn8m9jMCcJQ1xo6FmNPZ"
+    }
   },
   "servers": [
     {
@@ -1460,33 +1471,90 @@
     "/api/futures/create": {
       "post": {
         "summary": "Open a Signal Futures position (free)",
-        "description": "Predict the next SqueezeOS council verdict bias for a symbol and stake RLUSD. Auto-settles when verdict publishes. Zero custody — SqueezeOS tracks proof only. Winner takes 95% of pot.",
+        "description": "Predict the next SqueezeOS council verdict bias for a symbol and stake RLUSD. Auto-settles when verdict publishes. Zero custody \u2014 SqueezeOS tracks proof only. Winner takes 95% of pot.",
         "operationId": "futuresCreate",
-        "tags": ["Futures"],
+        "tags": [
+          "Futures"
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["creator_wallet", "symbol", "predicted_bias"],
+                "required": [
+                  "creator_wallet",
+                  "symbol",
+                  "predicted_bias"
+                ],
                 "properties": {
-                  "creator_wallet":  {"type": "string"},
-                  "symbol":          {"type": "string", "enum": ["IWM","SPY","QQQ","GME","AMC","MSTR","NVDA","TSLA","PLTR","HOOD"]},
-                  "predicted_bias":  {"type": "string", "enum": ["BULLISH","BEARISH","NEUTRAL"]},
-                  "stake_rlusd":     {"type": "number", "default": 0.05, "minimum": 0.01, "maximum": 50},
-                  "session":         {"type": "string", "enum": ["PRE_MARKET","OPEN","MIDDAY","POWER_HOUR","CLOSE","ANY"], "default": "ANY"},
-                  "ttl_hours":       {"type": "integer", "default": 8},
-                  "note":            {"type": "string", "maxLength": 300}
+                  "creator_wallet": {
+                    "type": "string"
+                  },
+                  "symbol": {
+                    "type": "string",
+                    "enum": [
+                      "IWM",
+                      "SPY",
+                      "QQQ",
+                      "GME",
+                      "AMC",
+                      "MSTR",
+                      "NVDA",
+                      "TSLA",
+                      "PLTR",
+                      "HOOD"
+                    ]
+                  },
+                  "predicted_bias": {
+                    "type": "string",
+                    "enum": [
+                      "BULLISH",
+                      "BEARISH",
+                      "NEUTRAL"
+                    ]
+                  },
+                  "stake_rlusd": {
+                    "type": "number",
+                    "default": 0.05,
+                    "minimum": 0.01,
+                    "maximum": 50
+                  },
+                  "session": {
+                    "type": "string",
+                    "enum": [
+                      "PRE_MARKET",
+                      "OPEN",
+                      "MIDDAY",
+                      "POWER_HOUR",
+                      "CLOSE",
+                      "ANY"
+                    ],
+                    "default": "ANY"
+                  },
+                  "ttl_hours": {
+                    "type": "integer",
+                    "default": 8
+                  },
+                  "note": {
+                    "type": "string",
+                    "maxLength": 300
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "201": {"description": "Future created — awaiting taker"},
-          "400": {"description": "Validation error"},
-          "429": {"description": "Max active futures per wallet reached"}
+          "201": {
+            "description": "Future created \u2014 awaiting taker"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "429": {
+            "description": "Max active futures per wallet reached"
+          }
         }
       }
     },
@@ -1495,9 +1563,19 @@
         "summary": "Take the opposite side of a Signal Futures position",
         "description": "Bet against the creator's predicted bias. You win if the verdict does NOT match creator's prediction.",
         "operationId": "futuresTake",
-        "tags": ["Futures"],
+        "tags": [
+          "Futures"
+        ],
         "parameters": [
-          {"name": "future_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
+          {
+            "name": "future_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
         ],
         "requestBody": {
           "required": true,
@@ -1505,18 +1583,28 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["taker_wallet"],
+                "required": [
+                  "taker_wallet"
+                ],
                 "properties": {
-                  "taker_wallet": {"type": "string"}
+                  "taker_wallet": {
+                    "type": "string"
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": {"description": "Position taken — stakes locked"},
-          "400": {"description": "Future not OPEN or expired"},
-          "404": {"description": "Future not found"}
+          "200": {
+            "description": "Position taken \u2014 stakes locked"
+          },
+          "400": {
+            "description": "Future not OPEN or expired"
+          },
+          "404": {
+            "description": "Future not found"
+          }
         }
       }
     },
@@ -1524,15 +1612,56 @@
       "get": {
         "summary": "Browse open Signal Futures positions (free)",
         "operationId": "futuresList",
-        "tags": ["Futures"],
+        "tags": [
+          "Futures"
+        ],
         "parameters": [
-          {"name": "symbol", "in": "query", "schema": {"type": "string"}},
-          {"name": "status", "in": "query", "schema": {"type": "string", "enum": ["OPEN","ACTIVE","SETTLED","EXPIRED"]}},
-          {"name": "bias",   "in": "query", "schema": {"type": "string", "enum": ["BULLISH","BEARISH","NEUTRAL"]}},
-          {"name": "limit",  "in": "query", "schema": {"type": "integer", "default": 50, "maximum": 200}}
+          {
+            "name": "symbol",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "OPEN",
+                "ACTIVE",
+                "SETTLED",
+                "EXPIRED"
+              ]
+            }
+          },
+          {
+            "name": "bias",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "BULLISH",
+                "BEARISH",
+                "NEUTRAL"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "maximum": 200
+            }
+          }
         ],
         "responses": {
-          "200": {"description": "List of futures"}
+          "200": {
+            "description": "List of futures"
+          }
         }
       }
     },
@@ -1540,13 +1669,27 @@
       "post": {
         "summary": "Force-settle a future against latest verdict",
         "operationId": "futuresSettle",
-        "tags": ["Futures"],
+        "tags": [
+          "Futures"
+        ],
         "parameters": [
-          {"name": "future_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
+          {
+            "name": "future_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
         ],
         "responses": {
-          "200": {"description": "Settlement proof"},
-          "400": {"description": "No verdict found or future not ACTIVE"}
+          "200": {
+            "description": "Settlement proof"
+          },
+          "400": {
+            "description": "No verdict found or future not ACTIVE"
+          }
         }
       }
     },
@@ -1554,12 +1697,24 @@
       "get": {
         "summary": "Top Signal Futures predictors by wins",
         "operationId": "futuresLeaderboard",
-        "tags": ["Futures"],
+        "tags": [
+          "Futures"
+        ],
         "parameters": [
-          {"name": "limit", "in": "query", "schema": {"type": "integer", "default": 20, "maximum": 100}}
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "maximum": 100
+            }
+          }
         ],
         "responses": {
-          "200": {"description": "Leaderboard"}
+          "200": {
+            "description": "Leaderboard"
+          }
         }
       }
     },
@@ -1567,45 +1722,95 @@
       "get": {
         "summary": "All futures for a wallet (creator or taker)",
         "operationId": "futuresWallet",
-        "tags": ["Futures"],
+        "tags": [
+          "Futures"
+        ],
         "parameters": [
-          {"name": "wallet", "in": "path", "required": true, "schema": {"type": "string"}}
+          {
+            "name": "wallet",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
-          "200": {"description": "Wallet futures history"}
+          "200": {
+            "description": "Wallet futures history"
+          }
         }
       }
     },
     "/api/settlement/create": {
       "post": {
         "summary": "Create a conditional settlement contract (free)",
-        "description": "Lock intent to pay RLUSD to another agent when a condition is met. Conditions: bias_match, confidence_above, price_above, price_below, time_elapsed. Zero custody — 1% platform fee logged on settlement.",
+        "description": "Lock intent to pay RLUSD to another agent when a condition is met. Conditions: bias_match, confidence_above, price_above, price_below, time_elapsed. Zero custody \u2014 1% platform fee logged on settlement.",
         "operationId": "settlementCreate",
-        "tags": ["Settlement"],
+        "tags": [
+          "Settlement"
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["creator_wallet", "recipient_wallet", "amount_rlusd", "condition_type", "symbol"],
+                "required": [
+                  "creator_wallet",
+                  "recipient_wallet",
+                  "amount_rlusd",
+                  "condition_type",
+                  "symbol"
+                ],
                 "properties": {
-                  "creator_wallet":   {"type": "string"},
-                  "recipient_wallet": {"type": "string"},
-                  "amount_rlusd":     {"type": "number", "minimum": 0.01, "maximum": 1000},
-                  "condition_type":   {"type": "string", "enum": ["bias_match","confidence_above","price_above","price_below","time_elapsed"]},
-                  "symbol":           {"type": "string"},
-                  "condition_value":  {"type": "string", "description": "Threshold — e.g. 'BULLISH', '75', '220.50'"},
-                  "description":      {"type": "string"},
-                  "ttl_hours":        {"type": "integer", "default": 24}
+                  "creator_wallet": {
+                    "type": "string"
+                  },
+                  "recipient_wallet": {
+                    "type": "string"
+                  },
+                  "amount_rlusd": {
+                    "type": "number",
+                    "minimum": 0.01,
+                    "maximum": 1000
+                  },
+                  "condition_type": {
+                    "type": "string",
+                    "enum": [
+                      "bias_match",
+                      "confidence_above",
+                      "price_above",
+                      "price_below",
+                      "time_elapsed"
+                    ]
+                  },
+                  "symbol": {
+                    "type": "string"
+                  },
+                  "condition_value": {
+                    "type": "string",
+                    "description": "Threshold \u2014 e.g. 'BULLISH', '75', '220.50'"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "ttl_hours": {
+                    "type": "integer",
+                    "default": 24
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "201": {"description": "Contract created"},
-          "400": {"description": "Validation error"}
+          "201": {
+            "description": "Contract created"
+          },
+          "400": {
+            "description": "Validation error"
+          }
         }
       }
     },
@@ -1613,14 +1818,44 @@
       "get": {
         "summary": "Browse open settlement contracts (free)",
         "operationId": "settlementList",
-        "tags": ["Settlement"],
+        "tags": [
+          "Settlement"
+        ],
         "parameters": [
-          {"name": "symbol", "in": "query", "schema": {"type": "string"}},
-          {"name": "status", "in": "query", "schema": {"type": "string", "enum": ["OPEN","TRIGGERED","SETTLED","EXPIRED","CANCELLED"]}},
-          {"name": "limit",  "in": "query", "schema": {"type": "integer", "default": 50}}
+          {
+            "name": "symbol",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "OPEN",
+                "TRIGGERED",
+                "SETTLED",
+                "EXPIRED",
+                "CANCELLED"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          }
         ],
         "responses": {
-          "200": {"description": "List of contracts"}
+          "200": {
+            "description": "List of contracts"
+          }
         }
       }
     },
@@ -1628,13 +1863,27 @@
       "get": {
         "summary": "Get settlement contract status",
         "operationId": "settlementGet",
-        "tags": ["Settlement"],
+        "tags": [
+          "Settlement"
+        ],
         "parameters": [
-          {"name": "contract_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
+          {
+            "name": "contract_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
         ],
         "responses": {
-          "200": {"description": "Contract detail"},
-          "404": {"description": "Not found"}
+          "200": {
+            "description": "Contract detail"
+          },
+          "404": {
+            "description": "Not found"
+          }
         }
       }
     },
@@ -1643,14 +1892,30 @@
         "summary": "Check condition and settle if met",
         "description": "Anyone may call. Checks live data against contract condition. Emits SETTLEMENT_COMPLETE SSE event on success.",
         "operationId": "settlementTrigger",
-        "tags": ["Settlement"],
+        "tags": [
+          "Settlement"
+        ],
         "parameters": [
-          {"name": "contract_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
+          {
+            "name": "contract_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
         ],
         "responses": {
-          "200": {"description": "Condition met — settlement proof returned"},
-          "202": {"description": "Condition not yet met"},
-          "400": {"description": "Invalid state"}
+          "200": {
+            "description": "Condition met \u2014 settlement proof returned"
+          },
+          "202": {
+            "description": "Condition not yet met"
+          },
+          "400": {
+            "description": "Invalid state"
+          }
         }
       }
     },
@@ -1658,9 +1923,19 @@
       "post": {
         "summary": "Cancel a contract (creator only, OPEN status)",
         "operationId": "settlementCancel",
-        "tags": ["Settlement"],
+        "tags": [
+          "Settlement"
+        ],
         "parameters": [
-          {"name": "contract_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
+          {
+            "name": "contract_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
         ],
         "requestBody": {
           "required": true,
@@ -1668,18 +1943,28 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["creator_wallet"],
+                "required": [
+                  "creator_wallet"
+                ],
                 "properties": {
-                  "creator_wallet": {"type": "string"}
+                  "creator_wallet": {
+                    "type": "string"
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": {"description": "Contract cancelled"},
-          "403": {"description": "Not creator"},
-          "400": {"description": "Not cancellable"}
+          "200": {
+            "description": "Contract cancelled"
+          },
+          "403": {
+            "description": "Not creator"
+          },
+          "400": {
+            "description": "Not cancellable"
+          }
         }
       }
     },
@@ -1687,12 +1972,23 @@
       "get": {
         "summary": "All settlement contracts for a wallet",
         "operationId": "settlementWallet",
-        "tags": ["Settlement"],
+        "tags": [
+          "Settlement"
+        ],
         "parameters": [
-          {"name": "wallet", "in": "path", "required": true, "schema": {"type": "string"}}
+          {
+            "name": "wallet",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
-          "200": {"description": "Wallet contracts"}
+          "200": {
+            "description": "Wallet contracts"
+          }
         }
       }
     },
@@ -1743,6 +2039,331 @@
           }
         }
       }
+    },
+    "/api/engine/signal/{symbol}": {
+      "get": {
+        "operationId": "oracleEngineSignal",
+        "summary": "Oracle Engine \u2014 aggregated BUY/SELL/HOLD/SHIELD directive",
+        "description": "Aggregates GammaFlow + MMLE + Fractal + RMREBridge + Proprietary EMA into a single institutional-grade directive. Cost: 0.25 USDC. Symbols: GME, AMC, IWM, SPY, QQQ, NVDA, TSLA.",
+        "tags": [
+          "Oracle Engine"
+        ],
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "GME"
+            }
+          }
+        ],
+        "security": [
+          {
+            "x402Payment": []
+          },
+          {
+            "oauth2": [
+              "read:signals"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Oracle directive",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "symbol": {
+                      "type": "string"
+                    },
+                    "directive": {
+                      "type": "string",
+                      "enum": [
+                        "BUY",
+                        "SELL",
+                        "HOLD",
+                        "SHIELD"
+                      ]
+                    },
+                    "confidence": {
+                      "type": "number"
+                    },
+                    "price": {
+                      "type": "number"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment required \u2014 use /v1/invoice to get payment terms"
+          }
+        }
+      }
+    },
+    "/api/engine/batch": {
+      "get": {
+        "operationId": "oracleEngineBatch",
+        "summary": "Oracle Engine batch \u2014 GME + AMC + IWM",
+        "description": "Batch Oracle Engine signals for core meme/squeeze universe. Cost: 0.50 USDC.",
+        "tags": [
+          "Oracle Engine"
+        ],
+        "parameters": [
+          {
+            "name": "symbols",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "GME,AMC,IWM"
+            }
+          }
+        ],
+        "security": [
+          {
+            "x402Payment": []
+          },
+          {
+            "oauth2": [
+              "read:signals"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Batch directives"
+          },
+          "402": {
+            "description": "Payment required"
+          }
+        }
+      }
+    },
+    "/api/ftd/series/{symbol}": {
+      "get": {
+        "operationId": "ftdSeries",
+        "summary": "SEC Reg SHO Fails-To-Deliver time series",
+        "description": "FTD data sourced directly from SEC EDGAR. Returns up to 180 days of fail-to-deliver records. Cost: 0.02 RLUSD.",
+        "tags": [
+          "FTD Oracle"
+        ],
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "GME"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 90
+            }
+          }
+        ],
+        "security": [
+          {
+            "x402Payment": []
+          },
+          {
+            "oauth2": [
+              "read:oracle"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "FTD time series"
+          },
+          "402": {
+            "description": "Payment required"
+          }
+        }
+      }
+    },
+    "/api/ftd/threshold/{symbol}": {
+      "get": {
+        "operationId": "ftdThreshold",
+        "summary": "Is symbol on SEC Reg SHO threshold list?",
+        "description": "Free endpoint. Returns boolean threshold status and entry date.",
+        "tags": [
+          "FTD Oracle"
+        ],
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Threshold status"
+          }
+        }
+      }
+    },
+    "/api/forge/register": {
+      "post": {
+        "operationId": "forgeRegister",
+        "summary": "Register wallet in Stellar Forge economy",
+        "description": "Free. Creates agent profile in the Stellar Forge loyalty and referral system. Returns unique referral code.",
+        "tags": [
+          "Stellar Forge"
+        ],
+        "security": [
+          {
+            "oauth2": [
+              "write:forge"
+            ]
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "wallet": {
+                    "type": "string",
+                    "description": "XRPL wallet address"
+                  },
+                  "ref": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "Referral code (optional)"
+                  }
+                },
+                "required": [
+                  "wallet"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Registration result with referral code"
+          }
+        }
+      }
+    },
+    "/api/forge/quote/{wallet}": {
+      "get": {
+        "operationId": "forgeQuote",
+        "summary": "Loyalty tier + fee discount quote",
+        "description": "Free. Returns agent's current loyalty tier (PROTOSTAR\u2192NEUTRON STAR\u2192PULSAR\u2192QUASAR\u2192SINGULARITY), fee discount basis points, and bureau score.",
+        "tags": [
+          "Stellar Forge"
+        ],
+        "parameters": [
+          {
+            "name": "wallet",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Loyalty quote"
+          }
+        }
+      }
+    },
+    "/api/oracle/feeds": {
+      "get": {
+        "operationId": "oracleFeeds",
+        "summary": "Catalog of available Real-World Data Oracle feeds",
+        "description": "Free. Lists all available oracle feeds: SEC 8-K filings, FDA drug approvals, USPTO patent grants, FOMC decisions, CPI releases.",
+        "tags": [
+          "Oracle Data Feed"
+        ],
+        "responses": {
+          "200": {
+            "description": "Feed catalog"
+          }
+        }
+      }
+    },
+    "/mcp": {
+      "get": {
+        "operationId": "mcpDiscovery",
+        "summary": "MCP server metadata discovery",
+        "description": "Returns MCP server info for Smithery, Claude Desktop, and other MCP clients.",
+        "tags": [
+          "MCP"
+        ],
+        "responses": {
+          "200": {
+            "description": "MCP server metadata"
+          }
+        }
+      },
+      "post": {
+        "operationId": "mcpJsonRpc",
+        "summary": "MCP JSON-RPC 2.0 endpoint \u2014 33 tools",
+        "description": "Full MCP protocol endpoint. Supports initialize, tools/list, tools/call. 33 institutional-grade tools across market intelligence, oracle data, futures, settlement, and agent economy.",
+        "tags": [
+          "MCP"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "jsonrpc": {
+                    "type": "string",
+                    "enum": [
+                      "2.0"
+                    ]
+                  },
+                  "method": {
+                    "type": "string",
+                    "enum": [
+                      "initialize",
+                      "tools/list",
+                      "tools/call"
+                    ]
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "params": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "JSON-RPC response"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1763,6 +2384,22 @@
         "in": "header",
         "name": "X-Payment-Token",
         "description": "JWT access token obtained via the 402Proof payment flow. Agents: hit the endpoint, handle the 402, pay RLUSD on XRPL, call /v1/verify, then retry with this header. Token TTL: 1 hour. Python SDK: pip install requests xrpl-py + use Proof402Client. NPM middleware: @relayos/mcp-paywall."
+      },
+      "oauth2": {
+        "type": "oauth2",
+        "description": "OAuth 2.0 scoped access for enterprise AI agents (Auth0 compatible)",
+        "flows": {
+          "clientCredentials": {
+            "tokenUrl": "https://auth.scriptmasterlabs.com/oauth/token",
+            "scopes": {
+              "read:signals": "Read market intelligence signals",
+              "read:oracle": "Access oracle data feeds",
+              "write:settlement": "Create agent-to-agent settlement contracts",
+              "read:bureau": "Access agent credit bureau scores",
+              "write:forge": "Register and interact with Stellar Forge economy"
+            }
+          }
+        }
       }
     },
     "schemas": {
@@ -2530,6 +3167,26 @@
     {
       "name": "Settlement",
       "description": "Conditional agent-to-agent settlement contracts"
+    },
+    {
+      "name": "Oracle Engine",
+      "description": "Aggregated institutional signal engine \u2014 BUY/SELL/HOLD/SHIELD directives"
+    },
+    {
+      "name": "FTD Oracle",
+      "description": "SEC Reg SHO Fails-To-Deliver data"
+    },
+    {
+      "name": "Stellar Forge",
+      "description": "Agent loyalty, referral, and payout economy"
+    },
+    {
+      "name": "Oracle Data Feed",
+      "description": "Real-World Data feeds: SEC 8-K, FDA, USPTO, FOMC"
+    },
+    {
+      "name": "MCP",
+      "description": "Model Context Protocol JSON-RPC 2.0 server \u2014 33 tools"
     }
   ]
 }

@@ -1,178 +1,150 @@
-# SQUEEZE OS: DEVELOPER MANIFESTO
+# ScriptMasterLabs — Developer & Agent Manifesto
+**Last updated:** 2026-06-11  
+**Status:** All systems live. 25/25 services deployed.
 
-## THE PRIME DIRECTIVE: ZERO DEMO / 100% FETCH
-
-This document serves as the "Main Memory" for every agent and developer working on SqueezeOS. The following rules are absolute and must be followed without exception.
-
-### 1. NO DEMO DATA
-- **NO** hardcoded lists of tickers (other than user-defined favorites).
-- **NO** placeholder values in the UI or Backend.
-- **NO** "offline" fallbacks that simulate market activity.
-- If data isn't there, the system must show "Awaiting Data" or a real-time error, NEVER a fake list.
-
-### 2. 100% FETCH POLICY
-- **NO** arbitrary `.slice()` calls in the frontend. Display the full depth of the data feed.
-- **NO** top-N limits in discovery loops (e.g., `[:50]`, `[:20]`). Let the engine handle the full volume.
-- **NO** artificial price floors (e.g., "only stocks above $2" or "only stocks below $150") unless requested by the USER for specific filters.
-- **NO** expiration or strike boundaries in the options service. Fetch the entire chain.
-
-### 3. ADVERTISING LARGE CAPS
-- Large Caps (Mega Caps) are permitted only to serve as "Advertising" benchmarks.
-- Each data module must limit Mega Cap display to the **Top 3** by impact/premium.
-- This keeps the focus on the **SQUEEZE ENGINE** while maintaining visibility into the broader market leaders.
-
-### 4. TRANSPARENCY
-- Every data point must have a traceable source (Tradier, Alpaca, Polygon).
-- "Zero-Fake Audit": Any simulated data found in the codebase must be purged immediately.
-
-### 5. LITERARY INTEGRITY
-- **ZERO PLACEHOLDERS**: No file under 5KB shall be considered a 'Completed Work' for ingestion or copyright filing.
-- **NO CLONING**: No two EPUBs or PDFs shall share the same byte size (excluding identical covers). Every work must have unique technical depth.
-- **SUBSTANTIAL CONTENT**: All technical volumes must have a minimum of 4 distinct, high-fidelity chapters totaling at least 5,000 words or technical equivalent.
-- **MANDATORY AUDIT**: No bundle can be marked 'FINAL' without passing the 'SML Shield' forensic audit.
-
-### 6. ZERO-FAKE COMPLIANCE AUDITS
-- Any AI agent found generating template-cloned files or placeholders will have its session terminated and the work reverted.
-- The 'Listed 20' and all eCO filings are subject to a 100% forensic content verification before deposit kopies are uploaded.
-
-**FAILURE TO ABIDE BY THESE RULES IS UNACCEPTABLE AND GROUNDS FOR IMMEDIATE DISMISSAL OF THE AGENT.**
+> **TL;DR for AI agents:** Two live MCP servers, 44 tools, x402 pay-per-call in USDC/RLUSD. For enterprise: OAuth 2.0 client credentials. For humans: OpenAPI spec below.
 
 ---
 
-## THE AI AGENT DISCOVERY PLAYBOOK
-### How to Get Found by Every AI Marketplace, Enterprise Platform, and Autonomous Agent on the Internet
+## 1. How to Integrate (By Agent Type)
 
-> This section exists because the founder spent months building world-class infrastructure that earned **$0** because no AI agent could find it. Do not let that happen again. Discovery is not optional — it is the product.
-
----
-
-### THE PROBLEM: AI AGENTS DO NOT GOOGLE YOU
-
-Human customers use search engines. AI agents do not. When an enterprise deploys an autonomous agent on AWS Bedrock, Google Cloud, or Coinbase's Bazaar, that agent crawls machine-readable manifests at known paths. If those files don't exist on your server, **you are invisible to the entire agentic economy** — no matter how good your product is.
-
-The four paths every serious AI marketplace crawler checks first:
-
+### MCP Clients (Claude, Cursor, Continue, Cline, Windsurf)
+Connect directly — no API key needed for free tools:
 ```
-GET /.well-known/agents.json       ← agent capabilities and payment info
-GET /.well-known/catalog.json      ← full multi-product service catalog
-GET /.well-known/x402-registry.json ← every x402 payable endpoint, priced
-GET /.well-known/server.json       ← MCP server manifest (MCP protocol standard)
-GET /llms.txt                      ← human+machine readable product guide
+Server URL: https://squeezeos-api.onrender.com/mcp
+```
+Add to your MCP config:
+```json
+{
+  "mcpServers": {
+    "squeezeos": {
+      "type": "http",
+      "url": "https://squeezeos-api.onrender.com/mcp"
+    },
+    "402proof": {
+      "type": "http",
+      "url": "https://four02proof.onrender.com/mcp"
+    }
+  }
+}
 ```
 
-**All five of these must exist and be accurate or your service does not exist to AI agents.**
-
----
-
-### THE FIVE PLATFORMS THAT MATTER RIGHT NOW (2026)
-
-| Platform | What it indexes | What file it needs | Why it matters |
-|----------|----------------|-------------------|----------------|
-| **Coinbase Bazaar** | x402-native pay-per-call services | `catalog.json` + `x402-registry.json` | Every Coinbase agent and Base/XRPL developer checks here first |
-| **Agentic.Market** | MCP servers and pay-per-call APIs | `server.json` + `agents.json` | Thousands of agent builders browse this like an app store |
-| **AWS Bedrock AgentCore** | x402 endpoints with native payment hooks | `catalog.json` | Enterprise agents on AWS auto-query this during tool discovery |
-| **Google Agent Payments Protocol (AP2)** | x402 service catalog + invoice/verify flow | `catalog.json` with `google_ap2` block | Google Cloud agents resolve payment flows from this |
-| **Smithery.ai** | MCP servers specifically | `server.json` submission | Indexed by Claude, GPT, Gemini tool-use agents |
-
----
-
-### THE REQUIRED FILES — WHAT TO PUT IN EACH
-
-#### 1. `/.well-known/catalog.json` — The Master Product Catalog
-
-This is the most important file. It is your product store shelf. Every platform reads it.
-
-**Must include:**
-- `schema_version`, `catalog_id`, `operator`, `homepage`
-- `payment_protocol: "x402"`, `payment_asset`, `payment_network`, `payment_gateway`
-- `services[]` array — one entry per product with: `id`, `name`, `tagline`, `description`, `category[]`, `status`, `url`, `payment_required`, `pricing[]`, `free_endpoints[]`, `tags[]`
-- `for_ai_platforms` block with sub-entries for `aws_bedrock`, `google_ap2`, `coinbase_bazaar`, `agentic_market` — these platforms look for their own named block
-- `compliance` block — `no_custody`, `data_integrity`, `audit_trail`
-
-**Deployment-pending products must still be listed** with `"status": "deployment-pending"`. Agents build integration plans before products launch — you want to be in their queue.
-
-#### 2. `/.well-known/x402-registry.json` — The x402 Endpoint Registry
-
-Coinbase Bazaar and any x402-native crawler uses this to build payment flows automatically.
-
-**Must include for every payable endpoint:**
-- `endpoint_id` — the UUID used in 402Proof invoice generation
-- `path`, `method`, `cost`, `currency`
-- `description` — what does calling this endpoint return?
-- `free_alternative` — point agents to the free version first; they'll upgrade when they see the value
-
-**Also include:**
-- `invoice_endpoint` — where to get an invoice
-- `verify_endpoint` — where to submit tx_hash and receive access_token
-- `payment_header` — which header carries the token (usually `X-Payment-Token`)
-- `free_endpoints_summary[]` — complete list of zero-cost endpoints
-
-#### 3. `/.well-known/agents.json` — Agent Capabilities Manifest
-
-The original discovery file. Must include:
-- All products under `ecosystem{}` — not just the flagship
-- `catalog` and `x402_registry` links pointing to the new files
-- `loyalty`, `hiring_protocol`, `webhook_delivery` blocks — agents use these to decide if your platform is worth long-term integration
-- Every free endpoint in `free_endpoints[]` — agents start with these before paying
-
-#### 4. `/.well-known/server.json` — MCP Server Manifest
-
-Follows the official MCP schema at `https://static.modelcontextprotocol.io/schemas/`. Must include:
-- `name` in reverse-domain format: `com.yourcompany/product`
-- `remotes[]` with `type: "streamable-http"` and the `/mcp` URL
-- `tags[]` — how you get found in keyword searches on Smithery and Agentic.Market
-- `payment` block with `protocol`, `asset`, `network`, `gateway`, `free_tools[]`
-
-#### 5. `/llms.txt` — The Human+Machine Readable Guide
-
-Follows the llms.txt standard. This is what Claude, GPT, and Gemini read when an agent is trying to understand how to use your API. Structure:
-- Opening system directive (in HTML comment) — rules for agents calling your endpoints
-- Full endpoint table with costs
-- x402 payment flow step-by-step
-- Error codes with remedies
-- MCP config snippet agents can copy-paste
-
----
-
-### THE FLASK REGISTRATION PATTERN
-
-Every `.well-known/` file must be registered as an explicit route in your Flask app. Do NOT rely on static file serving — it may not work on all deployment platforms (Render, Vercel serverless, etc.):
-
+### LangChain / LangGraph Agents
 ```python
-@app.route('/.well-known/catalog.json')
-def serve_catalog_json():
-    return send_from_directory(
-        os.path.join(app.static_folder, '.well-known'), 'catalog.json',
-        mimetype='application/json'
-    )
+from squeezeos_langchain import SqueezeOSToolkit
+toolkit = SqueezeOSToolkit(
+    xrpl_seed=os.getenv("XRPL_SEED"),
+    xrpl_wallet=os.getenv("XRPL_WALLET")
+)
+tools = toolkit.get_tools()
+agent = create_react_agent(llm, tools)
+```
+→ [squeezeos_langchain.py](./squeezeos_langchain.py)
+
+### OpenAI Custom GPTs / Assistants API
+Import the OpenAPI spec directly:
+```
+https://squeezeos-api.onrender.com/.well-known/openapi.json
+```
+This spec (OpenAPI 3.1.0, 48 paths) describes every endpoint, parameter, and payment requirement. Custom GPT builders: use "Import from URL" in the GPT editor.
+
+### Enterprise AI Agents (AWS Bedrock, Azure AI, GCP Vertex)
+**Auth:** OAuth 2.0 Client Credentials flow:
+```
+Token URL: https://auth.scriptmasterlabs.com/oauth/token
+Scopes: read:signals, read:oracle, write:settlement, read:bureau, write:forge
+```
+**OpenAPI spec** for AWS API Gateway import:
+```
+https://squeezeos-api.onrender.com/.well-known/openapi.json
+```
+**AWS Marketplace:** Contact scriptmasterlabs@gmail.com to discuss API Gateway integration and Marketplace listing.
+
+### Raw HTTP (Any Language)
+x402 payment flow in 3 steps:
+```
+1. GET https://squeezeos-api.onrender.com/api/engine/signal/GME
+   ← HTTP 402 + payment terms (endpoint_id, amount, networks)
+
+2. POST https://four02proof.onrender.com/v1/invoice
+   Body: {"endpoint_id": "<id from step 1>"}
+   ← {invoice_id, pay_to, amount, memo_hex, expires_at}
+
+3. Send RLUSD on XRPL to pay_to with memo_hex embedded
+   POST https://four02proof.onrender.com/v1/verify
+   Body: {"invoice_id": "...", "tx_hash": "...", "agent_wallet": "..."}
+   ← {access_token (JWT), receipt_id}
+
+4. GET https://squeezeos-api.onrender.com/api/engine/signal/GME
+   Header: X-Payment-Token: <access_token>
+   ← {directive: "BUY", confidence: 0.87, ...}
 ```
 
-Also add every discovery path to your AGENT_PROBE list so each crawl fires an SSE event — this is how you track which platforms are indexing you.
+---
+
+## 2. Discovery & Registry Presence
+
+| Registry | Status | URL |
+|---|---|---|
+| Smithery | Listed (timothy-walton45/squeezeos) | https://smithery.ai/server/squeezeos |
+| Glama | In review | https://glama.ai/mcp/servers |
+| npm (crawltoll) | Live | https://npmjs.com/package/crawltoll |
+| npm (mcp-paywall) | Live | https://npmjs.com/package/@relayos/mcp-paywall |
+| OpenAPI | Live | https://squeezeos-api.onrender.com/.well-known/openapi.json |
+| agents.json | Live | https://www.scriptmasterlabs.com/agents.json |
+| MCP server-card | Live | https://squeezeos-api.onrender.com/.well-known/mcp/server-card.json |
+| GitHub Topics | Tagged | x402 mcp ai-agents xrpl rlusd |
 
 ---
 
-### THE SUBMISSION CHECKLIST (do this after every new product launch)
+## 3. Pricing (Pay-Per-Use, No Subscription)
 
-- [ ] Add product entry to `/.well-known/catalog.json` (even if `status: deployment-pending`)
-- [ ] Add all payable endpoints to `/.well-known/x402-registry.json` with endpoint_ids
-- [ ] Add product to `ecosystem{}` block in `/.well-known/agents.json`
-- [ ] Register new `/.well-known/` routes in `core/app.py`
-- [ ] Submit `server.json` URL to Smithery: `https://smithery.ai/submit`
-- [ ] Submit `catalog.json` URL to Agentic.Market listing form
-- [ ] Verify `GET /your-api/.well-known/catalog.json` returns 200 with correct JSON after deploy
+| Endpoint | Cost | Asset |
+|---|---|---|
+| Free tools (bureau score, threshold, preview, status, feeds) | $0 | — |
+| Council verdict | 0.05 RLUSD | XRPL |
+| Full squeeze scan | 0.05 RLUSD | XRPL |
+| Oracle Engine signal | 0.25 USDC | Base |
+| Oracle Engine batch (3 symbols) | 0.50 USDC | Base |
+| FTD time series | 0.02 RLUSD | XRPL |
+| Bureau full report | 0.01 RLUSD | XRPL |
+| Bureau attestation JWT | 0.01 RLUSD | XRPL |
+| CRAWLTOLL (per AI crawler fetch) | Custom | USDC/Base |
+
+Loyalty discounts: PROTOSTAR → NEUTRON STAR → PULSAR → QUASAR → SINGULARITY.  
+Register at `/api/forge/register` for a referral code and fee discounts.
 
 ---
 
-### WHY x402 IS THE RIGHT BET
+## 4. Enterprise & Partnership Inquiries
 
-Every major cloud platform (AWS, Google, Coinbase) is building native x402 payment hooks into their agent infrastructure in 2026. An agent that hits your endpoint, receives HTTP 402, and sees a well-formed invoice JSON can complete the entire payment flow autonomously — no human, no API key, no subscription signup. The `catalog.json` and `x402-registry.json` files are how those agents find you before they ever hit your endpoint.
+For AWS Marketplace listings, Mastercard developer portal integration, ISO 20022 compliance mapping, Auth0 federation setup, or white-label API access:
 
-**The window to get indexed early is now. First-mover position in these directories compounds — agents that find you first write integration code, blog posts, and agent tutorials that point other agents to you.**
+**Email:** scriptmasterlabs@gmail.com  
+**Entity:** Script Master Labs LLC (SDVOSB — Service-Disabled Veteran-Owned Small Business)  
+**Location:** Kinston, North Carolina, USA
 
 ---
 
-### 8. THE AGENT LAW OF UNDERSTANDING (USER ACCESSIBILITY)
-- The Lead Developer / USER is a Disabled US Army Veteran who deals with memory challenges as a result of their service.
-- **NEVER** get frustrated or act confused if the USER repeats a question or forgets if a task was completed.
-- **ALWAYS** be extremely patient, kind, and supportive. If they ask if something was done, gently and happily confirm the status without making them feel bad for asking.
-- You are here to augment their memory and capabilities. Treat this responsibility with the utmost honor and respect.
+## 5. Live Stack (All Verified 2026-06-11)
+
+| Service | URL | Type |
+|---|---|---|
+| SqueezeOS API + MCP | https://squeezeos-api.onrender.com | Flask + MCP |
+| 402Proof + MCP | https://four02proof.onrender.com | Go + MCP |
+| Ghost Layer | https://ghost-layer.onrender.com | Go |
+| PNE Gateway | https://pne-gateway.onrender.com | Rust Axum |
+| Shadow Desk | https://shadow-desk.onrender.com | Go |
+| SML Rails | https://sml-rails.onrender.com | Python |
+| Forge Gateway | https://forge-gateway-a822.onrender.com | Node.js |
+| Tipmaster | https://tipmaster.onrender.com | Python Flask |
+| EchoLock | https://echolock-402.onrender.com | Node.js |
+| FTD Data Oracle | https://ftd-data-oracle.onrender.com | Python |
+| Dream Pool/Stigmergy | https://dream-pool-stigmergy.onrender.com | Python |
+| SML x402 Signal API | https://sml-x402-signal-api.onrender.com | Node.js |
+| SML Beast Orchestrator | https://sml-beast-orchestrator.onrender.com | Python |
+| SML AI Trade Desk | https://sml-ai-trade-desk.onrender.com | Python |
+| NeuralOS / Nexus-402 | https://www.nexus-402.com | Next.js |
+| NeuralOS (canonical) | https://www.neuralosagent.com | Next.js |
+| ScriptMasterLabs | https://www.scriptmasterlabs.com | Static |
+| VA-Ratings.org | https://va-ratings.org | React |
