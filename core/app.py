@@ -743,10 +743,17 @@ def create_app():
     
 @app.route('/.well-known/mcp/server-card.json')
 def serve_mcp_server_card():
-    import os
-    return send_from_directory(
-        os.path.join(app.static_folder, '.well-known', 'mcp'),
-        'server-card.json', mimetype='application/json')
+    card = {
+        "name": "SqueezeOS",
+        "description": "Institutional market intelligence for AI agents — 33 tools including council verdicts, squeeze scanner, options flow, oracle data, futures, settlement, and x402 micropayments via USDC on Base or RLUSD on XRPL.",
+        "version": "7.0.0",
+        "url": "https://squeezeos-api.onrender.com/mcp",
+        "protocol": "MCP JSON-RPC 2.0",
+        "homepage": "https://www.scriptmasterlabs.com/stack",
+        "payment": {"protocol": "x402", "networks": ["base", "xrpl", "xahau"], "asset": "USDC / RLUSD"},
+        "tools_count": 33
+    }
+    return jsonify(card)
 
 @app.route('/<path:path>')
     def serve_static(path):
