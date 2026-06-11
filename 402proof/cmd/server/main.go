@@ -1192,7 +1192,8 @@ func main() {
 
 	// ── STATIC DASHBOARD ──────────────────────────────────────────────────────────
 	fs := http.FileServer(http.Dir("./public"))
-	r.Handle("/*", fs)
+	// NotFound handler: file server only fires when no explicit route matches
+	r.NotFound(func(w http.ResponseWriter, req *http.Request) { fs.ServeHTTP(w, req) })
 
 	// ── GRACEFUL SHUTDOWN ─────────────────────────────────────────────────────────
 	srv := &http.Server{
