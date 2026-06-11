@@ -57,24 +57,22 @@ _analyzer = None  # singleton — load once, reuse every cycle
 MANDATORY_TICKERS = ["IWM", "GME", "AMC"] # Core focus, everything else dynamically fetched
 
 def _discover_universe(dm):
-    """Dynamically discovers the active trading universe from live market feeds."""
-    universe = set(MANDATORY_TICKERS)
-    alpaca = getattr(dm, 'alpaca', None)
-    
-    if alpaca and alpaca.available:
-        try:
-            # 100% FETCH: Pulling live market breadth
-            actives = alpaca.get_most_actives(top=100)
-            movers = alpaca.get_movers(top=100)
-            
-            universe.update([a['symbol'] for a in actives if a.get('symbol')])
-            universe.update([m['symbol'] for m in movers.get('gainers', []) if m.get('symbol')])
-            universe.update([m['symbol'] for m in movers.get('losers', []) if m.get('symbol')])
-        except Exception as e:
-            logger.error(f"[DISCOVERY] Live tape fetch failed: {e}")
-            
-    # SqueezeOS Compliance: Return up to 250 high-velocity candidates
-    return list(universe)[:250]
+    """
+    100% FETCH — calls dm.discover_universe() which runs:
+      1. Polygon grouped daily  — entire US market OHLCV in one call, sorted by momentum heat
+      2. Alpaca most-actives + movers — live gainers/losers
+      3. Tradier quotes — execution-grade data
+    Returns the full live symbol list. Mandatory tickers always included.
+    """
+    try:
+        discovered = dm.discover_universe()
+        symbols = set(discovered.keys())
+        symbols.update(MANDATORY_TICKERS)
+        logger.info(f"[DISCOVERY] Live universe: {len(symbols)} tickers")
+        return list(symbols)
+    except Exception as e:
+        logger.error(f"[DISCOVERY] dm.discover_universe() failed: {e}")
+        return list(MANDATORY_TICKERS)
 
 def _run_scan():
     """Background scanner: batch quote + options chain fetch (100% Dynamic)."""
