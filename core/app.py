@@ -740,7 +740,15 @@ def create_app():
             "ts":       time.time(),
         })
 
-    @app.route('/<path:path>')
+    
+@app.route('/.well-known/mcp/server-card.json')
+def serve_mcp_server_card():
+    import os
+    return send_from_directory(
+        os.path.join(app.static_folder, '.well-known', 'mcp'),
+        'server-card.json', mimetype='application/json')
+
+@app.route('/<path:path>')
     def serve_static(path):
         return send_from_directory(app.static_folder, path)
 
