@@ -1,9 +1,9 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "com.scriptmasterlabs/ghost-layer",
-  "title": "Ghost Layer — $XAH Institutional Stack v4.0",
-  "description": "The sovereign trading OS. GOD MODE + DUAL GRID LOCK patent-pending signal intelligence. Dark pool stealth trade. Institutional copy trade mirroring. Xahau Hook-armed on-chain automation. Dual-chain bridge (XRPL RLUSD + Base USDC). X402 payment rail. AI Decision Notary. Agent credit marketplace. 100% live dynamic market universe. Operated by Script Master Labs — Disabled US Army Veteran.",
-  "version": "4.0.0",
+  "name": "com.scriptmasterlabs/xah-institutional-stack",
+  "title": "$XAH Institutional Stack v4.1 — Script Master Labs",
+  "description": "Sovereign trading OS. x402 dual-rail: USDC/Base (CDP Bazaar-ready) + RLUSD/XRPL (402Proof). TRIPLE_LOCK_VERDICT (highest conviction — E1+E3+E4). GOD MODE (5-6/6 SET9). DUAL GRID LOCK. Full dynamic beastmode scanner. Dark pool stealth trade. Copy trade institutional mirror. Xahau Hook automation. FTD Data Oracle (SEC Reg SHO). Oracle regulatory feed. Dream Pool (bureau-discounted rent). Futures market. AI Council. Decision Notary on Xahau. FICO credit bureau. Agent credit marketplace. Neural_OS Android terminal. Operated by Script Master Labs — Disabled US Army Veteran.",
+  "version": "4.1.0",
   "websiteUrl": "https://ghost-layer.onrender.com",
   "repository": {
     "type": "git",
@@ -22,56 +22,50 @@
     "sampling": false
   },
   "tags": [
-    "god-mode",
-    "dual-grid-lock",
-    "stealth-trade",
-    "copy-trade",
-    "xah-hooks",
-    "dark-pool",
-    "signal-intelligence",
-    "patent-pending",
-    "beastmode-scanner",
-    "bridge",
-    "cross-chain",
-    "xrpl",
-    "rlusd",
-    "base",
-    "usdc",
-    "eip-3009",
-    "xahau",
-    "xah",
-    "micropayment",
-    "x402",
-    "defi",
-    "agent-economy",
-    "institutional",
-    "options-intelligence",
-    "tradingview",
-    "fix-protocol"
+    "triple-lock", "god-mode", "dual-grid-lock", "stealth-trade", "copy-trade",
+    "xah-hooks", "dark-pool", "ftd-oracle", "sec-reg-sho", "dream-pool",
+    "signal-intelligence", "patent-pending", "beastmode-scanner",
+    "bridge", "cross-chain", "xrpl", "rlusd", "base", "usdc", "eip-3009",
+    "xahau", "xah", "x402", "cdp-bazaar", "coinbase", "micropayment",
+    "defi", "agent-economy", "institutional", "options-intelligence",
+    "tradingview", "fix-protocol", "neural-os", "android"
   ],
   "payment": {
     "protocol": "x402",
-    "assets": ["RLUSD/XRPL", "USDC/Base", "XAH/Xahau"],
-    "free_tools": ["ghost_agent_loyalty", "x402_attestation_pubkey"]
+    "rails": {
+      "base_usdc": {
+        "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "pay_to": "0x4e14B249D9A4c9c9352D780eCEB508A8eB7a7700",
+        "facilitator": "https://x402.org/facilitator",
+        "discovery": "https://squeezeos-api.onrender.com/.well-known/x402"
+      },
+      "xrpl_rlusd": {
+        "currency": "RLUSD",
+        "issuer": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De",
+        "invoice": "https://four02proof.onrender.com/v1/invoice"
+      }
+    },
+    "free_tools": ["ghost_agent_loyalty", "x402_attestation_pubkey", "triple_lock_demo", "ftd_info", "x402_discovery"]
   },
   "related_services": {
-    "squeezeos":           "https://squeezeos-api.onrender.com",
-    "four02proof":         "https://four02proof.onrender.com",
-    "signal_loom_pne":     "https://pne-gateway.onrender.com",
-    "shadow_desk":         "https://shadow-desk.onrender.com",
-    "xah_portal":          "https://xah-portal.onrender.com",
-    "nexus402":            "https://nexus402.onrender.com",
-    "sml_flow_interceptor":"https://sml-flow.onrender.com",
-    "stellar_forge":       "https://stellar-forge.onrender.com",
-    "echolock":            "https://echolock.onrender.com",
-    "tipmaster":           "https://tipmaster.onrender.com",
-    "tradingview_script":  "https://www.scriptmasterlabs.com/sovereign"
+    "squeezeos":            "https://squeezeos-api.onrender.com",
+    "four02proof":          "https://four02proof.onrender.com",
+    "signal_loom_pne":      "https://pne-gateway.onrender.com",
+    "shadow_desk":          "https://shadow-desk.onrender.com",
+    "xah_portal":           "https://xah-portal.onrender.com",
+    "nexus402":             "https://nexus402.onrender.com",
+    "sml_flow_interceptor": "https://sml-flow.onrender.com",
+    "stellar_forge":        "https://stellar-forge.onrender.com",
+    "echolock":             "https://echolock.onrender.com",
+    "tipmaster":            "https://tipmaster.onrender.com",
+    "tradingview_script":   "https://www.scriptmasterlabs.com/sovereign"
   },
   "_meta": {
     "io.modelcontextprotocol.registry/publisher-provided": {
       "operator": "Script Master Labs",
       "contact": "https://www.scriptmasterlabs.com",
       "payment_protocol": "x402",
+      "cdp_bazaar": "https://x402.org/facilitator",
       "llms_txt": "https://ghost-layer.onrender.com/llms.txt",
       "patent_pending": ["APEX ANCHOR MATRIX", "SML Sovereign Harmonic Matrix v8.0"]
     }
