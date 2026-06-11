@@ -70,7 +70,7 @@ _pdt_trades     = []        # epoch timestamps of day trades
 _daily_loss_usd = 0.0
 _lock           = threading.Lock()
 
-COOLDOWN_S     = 300        # 5-min per-symbol cooldown
+COOLDOWN_S     = 3600       # 1-hour per-symbol cooldown — poll is 5min so must be much longer
 PDT_WINDOW_S   = 5 * 86400 # 5-day rolling window
 
 
