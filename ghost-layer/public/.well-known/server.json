@@ -1,9 +1,9 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "com.scriptmasterlabs/ghost-layer",
-  "title": "Ghost Layer — Dual-Chain Transparent Toll Gateway",
-  "description": "Neutral bridge between XRPL native RLUSD payments and Base/EVM gasless USDC authorization (EIP-3009). Enables autonomous AI agents to transact across both chains with a single unified settlement flow. XAH/Xahau support. Every bridge event immutably logged. Zero custody.",
-  "version": "2.2.0",
+  "title": "Ghost Layer — $XAH Institutional Stack v4.0",
+  "description": "The sovereign trading OS. GOD MODE + DUAL GRID LOCK patent-pending signal intelligence. Dark pool stealth trade. Institutional copy trade mirroring. Xahau Hook-armed on-chain automation. Dual-chain bridge (XRPL RLUSD + Base USDC). X402 payment rail. AI Decision Notary. Agent credit marketplace. 100% live dynamic market universe. Operated by Script Master Labs — Disabled US Army Veteran.",
+  "version": "4.0.0",
   "websiteUrl": "https://ghost-layer.onrender.com",
   "repository": {
     "type": "git",
@@ -22,6 +22,15 @@
     "sampling": false
   },
   "tags": [
+    "god-mode",
+    "dual-grid-lock",
+    "stealth-trade",
+    "copy-trade",
+    "xah-hooks",
+    "dark-pool",
+    "signal-intelligence",
+    "patent-pending",
+    "beastmode-scanner",
     "bridge",
     "cross-chain",
     "xrpl",
@@ -32,20 +41,39 @@
     "xahau",
     "xah",
     "micropayment",
+    "x402",
     "defi",
-    "agent-economy"
+    "agent-economy",
+    "institutional",
+    "options-intelligence",
+    "tradingview",
+    "fix-protocol"
   ],
   "payment": {
     "protocol": "x402",
     "assets": ["RLUSD/XRPL", "USDC/Base", "XAH/Xahau"],
-    "free_tools": ["ghost_agent_loyalty"]
+    "free_tools": ["ghost_agent_loyalty", "x402_attestation_pubkey"]
+  },
+  "related_services": {
+    "squeezeos":           "https://squeezeos-api.onrender.com",
+    "four02proof":         "https://four02proof.onrender.com",
+    "signal_loom_pne":     "https://pne-gateway.onrender.com",
+    "shadow_desk":         "https://shadow-desk.onrender.com",
+    "xah_portal":          "https://xah-portal.onrender.com",
+    "nexus402":            "https://nexus402.onrender.com",
+    "sml_flow_interceptor":"https://sml-flow.onrender.com",
+    "stellar_forge":       "https://stellar-forge.onrender.com",
+    "echolock":            "https://echolock.onrender.com",
+    "tipmaster":           "https://tipmaster.onrender.com",
+    "tradingview_script":  "https://www.scriptmasterlabs.com/sovereign"
   },
   "_meta": {
     "io.modelcontextprotocol.registry/publisher-provided": {
       "operator": "Script Master Labs",
       "contact": "https://www.scriptmasterlabs.com",
       "payment_protocol": "x402",
-      "llms_txt": "https://ghost-layer.onrender.com/llms.txt"
+      "llms_txt": "https://ghost-layer.onrender.com/llms.txt",
+      "patent_pending": ["APEX ANCHOR MATRIX", "SML Sovereign Harmonic Matrix v8.0"]
     }
   }
 }

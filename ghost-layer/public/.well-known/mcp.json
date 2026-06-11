@@ -1,16 +1,16 @@
 {
   "schema_version": "1.0",
-  "name": "ghost-layer-mcp",
-  "display_name": "Ghost Layer — Dual-Chain Bridge + Execution Matrix MCP",
-  "description": "MCP server for Ghost Layer cross-chain bridge and on-chain Execution Matrix. Settle RLUSD (XRPL), XAH (Xahau), and USDC (Base/EVM) micropayments synchronously with full compliance receipts. Mint 54-block programmable routing state.",
-  "version": "3.0.0",
+  "name": "xah-institutional-stack-mcp",
+  "display_name": "$XAH Institutional Stack v4.0 — Script Master Labs",
+  "description": "MCP server for the full $XAH Institutional Stack. GOD MODE + DUAL GRID LOCK patent-pending signal intelligence. Dark pool stealth trade. Copy trade mirroring. Xahau Hook-armed automation. Dual-chain bridge (XRPL RLUSD + Base USDC). X402 micropayment gating. AI Decision Notary on Xahau. Agent credit marketplace. 100% live dynamic universe — zero hardcoded tickers.",
+  "version": "4.0.0",
   "server_url": "https://ghost-layer.onrender.com",
   "mcp_endpoint": "https://ghost-layer.onrender.com/mcp",
   "payment_required": true,
   "payment_protocol": "x402",
   "payment_assets": ["RLUSD/XRPL", "XAH/Xahau", "USDC/Base"],
-  "stack": "$XAH Institutional Stack — Ghost Layer + 402Proof + SqueezeOS + Signal Loom",
-  "related_mcp": ["https://four02proof.onrender.com/mcp"],
+  "stack": "$XAH Institutional Stack — Ghost Layer + SqueezeOS + 402Proof + Signal Loom/PNE + Shadow Desk + XAH Portal + Nexus402 + SML Flow Interceptor + Stellar Forge + EchoLock + Tipmaster",
+  "related_mcp": ["https://four02proof.onrender.com/mcp", "https://squeezeos-api.onrender.com/mcp"],
   "networks": {
     "xrpl": {"rpc": "https://xrplcluster.com", "currency": "RLUSD", "issuer": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De"},
     "xahau": {"rpc": "https://xahau.network", "currency": "XAH", "native": true, "hooks_enabled": true},
@@ -187,6 +187,78 @@
       "description": "Retrieve Ghost Layer's Ed25519 public key to independently verify CERTIFIED/SOVEREIGN decision certificates.",
       "endpoint": "GET https://ghost-layer.onrender.com/v1/x402/attestation/pubkey",
       "input_schema": {"type": "object", "properties": {}}
+    },
+    {
+      "name": "beastmode_scan",
+      "description": "Scan the full dynamic US market universe for GOD_MODE and DUAL_GRID_LOCK signals on a given timeframe. Returns only highest-tier hits. 100% live — Polygon grouped daily + Alpaca movers + Tradier. Zero hardcoded tickers. Mandatory: AMC, GME, IWM always included.",
+      "endpoint": "GET https://squeezeos-api.onrender.com/api/beastmode",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "tf": {"type": "string", "description": "Timeframe: 1D (default), 4H, 1H", "default": "1D"}
+        }
+      }
+    },
+    {
+      "name": "convergence_signal",
+      "description": "Per-symbol SML Sovereign Harmonic Matrix v8.0 convergence analysis. Returns signal tier (GOD_MODE / DUAL_GRID_LOCK / etc), god_stacked count, harmonic_score, SQI score, MTF alignment, AI Counsel string, options sniper recommendation.",
+      "endpoint": "GET https://squeezeos-api.onrender.com/api/convergence/{symbol}",
+      "input_schema": {
+        "type": "object",
+        "required": ["symbol"],
+        "properties": {
+          "symbol": {"type": "string", "description": "Ticker symbol (e.g. AMC, GME, SPY)"},
+          "tf":     {"type": "string", "description": "Timeframe: 1D (default), 4H, 1H", "default": "1D"}
+        }
+      }
+    },
+    {
+      "name": "stealth_trade",
+      "description": "Execute a dark pool stealth order with zero visible market impact. Privacy level 0–10 maps to Ghost Layer PRIVACY face. On-chain execution receipt committed as URIToken on Xahau mainnet. FIX protocol connectivity available.",
+      "endpoint": "POST https://ghost-layer.onrender.com/v1/stealth/order",
+      "payment_required": true,
+      "payment_protocol": "x402",
+      "price_rlusd": 0.20,
+      "input_schema": {
+        "type": "object",
+        "required": ["symbol", "side", "qty", "agent_wallet"],
+        "properties": {
+          "symbol":        {"type": "string",  "description": "Ticker symbol"},
+          "side":          {"type": "string",  "enum": ["buy", "sell"]},
+          "qty":           {"type": "integer", "description": "Number of shares"},
+          "agent_wallet":  {"type": "string",  "description": "Your XRPL wallet address"},
+          "privacy_level": {"type": "integer", "minimum": 0, "maximum": 10, "default": 5}
+        }
+      }
+    },
+    {
+      "name": "copy_trade_subscribe",
+      "description": "Subscribe to copy trade — mirror institutional wallet moves in real time. Signal-gated to GOD_MODE or DUAL_GRID_LOCK on 4H or Daily only. Routes to Tradier or Robinhood. All safety gates inherited: PDT shield, cooldown, kill switch, daily loss limit.",
+      "endpoint": "POST https://ghost-layer.onrender.com/v1/copytrade/subscribe",
+      "payment_required": true,
+      "payment_protocol": "x402",
+      "price_rlusd": 0.15,
+      "input_schema": {
+        "type": "object",
+        "required": ["source_wallet", "mirror_wallet", "broker"],
+        "properties": {
+          "source_wallet":      {"type": "string",  "description": "Institutional wallet to mirror"},
+          "mirror_wallet":      {"type": "string",  "description": "Your XRPL wallet address"},
+          "max_position_usd":   {"type": "number",  "description": "Max position size in USD (default 300)"},
+          "signal_gate":        {"type": "string",  "enum": ["GOD_MODE", "DUAL_GRID_LOCK", "BOTH"], "default": "BOTH"},
+          "tf_gate":            {"type": "array",   "items": {"type": "string"}, "default": ["1D", "4H"]},
+          "broker":             {"type": "string",  "enum": ["tradier", "robinhood"]}
+        }
+      }
+    },
+    {
+      "name": "xah_hooks_payload",
+      "description": "Get the Hook-ready parameter payload for all 6 Ghost Layer Execution Matrix faces. Encoded as canonical XRPL binary HookParameters (Name/Value hex pairs). Commits via URITokenMint to Xahau mainnet (NetworkID=21337). Independently verifiable on-chain.",
+      "endpoint": "GET https://ghost-layer.onrender.com/api/cube/payload",
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      }
     },
     {
       "name": "cube_state_mint",

@@ -1,12 +1,13 @@
 {
   "schema_version": "1.0",
-  "stack_version": "3.0.0",
-  "name": "Ghost Layer — $XAH Institutional Stack",
-  "tagline": "Dual-chain toll gateway · X402 vending · On-chain Execution Matrix · AI Decision Notary · Agent Credit Marketplace",
-  "description": "Ghost Layer is the sovereign settlement backbone of the $XAH Institutional Stack. Bridge RLUSD (XRPL) and USDC (Base/EVM) synchronously with transparent basis-point fees. Mint any AI decision as an immutable URIToken on Xahau. Buy and sell AI services peer-to-peer via XRPL-native escrow. Gate premium data products behind HTTP 402 RLUSD payment. Every parameter change in the 54-block Execution Matrix auto-commits on-chain after Phase 5. Every settled bridge, notarization, and marketplace release builds your Agent Loyalty Tier permanently.",
+  "stack_version": "4.0.0",
+  "name": "$XAH Institutional Stack — Script Master Labs",
+  "tagline": "GOD MODE signals · Stealth trade · Copy trade · XAH Hooks · Dual-chain bridge · X402 payment rail · On-chain notary · Agent marketplace",
+  "description": "The sovereign trading OS for autonomous AI agents and institutions. Patent-pending APEX ANCHOR MATRIX signal intelligence (GOD MODE + DUAL GRID LOCK). Dark pool stealth execution. Institutional copy trade mirroring. Xahau Hook-armed on-chain automation. Dual-chain bridge (XRPL RLUSD + Base USDC). X402 micropayment gating. AI Decision Notary on Xahau. FICO-style agent credit bureau. Peer-to-peer credit marketplace. Full dynamic market universe — 100% live, zero hardcoded tickers. Operated by a Disabled US Army Veteran.",
   "url": "https://ghost-layer.onrender.com",
   "homepage": "https://www.scriptmasterlabs.com",
   "operator": "Script Master Labs / $XAH Institutional Stack",
+  "patent_pending": ["APEX ANCHOR MATRIX", "SML Sovereign Harmonic Matrix v8.0"],
   "payment_required": true,
   "payment_protocol": "x402",
   "payment_assets": ["RLUSD/XRPL", "USDC/Base", "XAH/Xahau"],
@@ -17,17 +18,32 @@
     "llms_txt":   "https://ghost-layer.onrender.com/llms.txt"
   },
   "mcp_endpoint": "https://ghost-layer.onrender.com/mcp",
-  "related_services": {
-    "402proof":    "https://four02proof.onrender.com",
-    "squeezeos":   "https://squeezeos-vault.onrender.com",
-    "signal_loom": "https://pne-gateway.onrender.com",
-    "shadow_desk": "https://shadow-desk.onrender.com",
-    "xah_portal":  "https://xah-portal.onrender.com"
+  "stack": {
+    "ghost_layer":        "https://ghost-layer.onrender.com",
+    "squeezeos":          "https://squeezeos-api.onrender.com",
+    "four02proof":        "https://four02proof.onrender.com",
+    "signal_loom_pne":    "https://pne-gateway.onrender.com",
+    "shadow_desk":        "https://shadow-desk.onrender.com",
+    "xah_portal":         "https://xah-portal.onrender.com",
+    "nexus402":           "https://nexus402.onrender.com",
+    "sml_flow_interceptor":"https://sml-flow.onrender.com",
+    "stellar_forge":      "https://stellar-forge.onrender.com",
+    "echolock":           "https://echolock.onrender.com",
+    "tipmaster":          "https://tipmaster.onrender.com",
+    "tradingview_script": "https://www.scriptmasterlabs.com/sovereign"
   },
   "networks": {
     "xrpl":  {"rpc": "https://xrplcluster.com", "currency": "RLUSD", "issuer": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De"},
     "base":  {"currency": "USDC", "contract": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"},
-    "xahau": {"rpc": "https://xahau.network", "currency": "XAH", "native": true, "hooks_enabled": true}
+    "xahau": {"rpc": "https://xahau.network", "network_id": 21337, "currency": "XAH", "native": true, "hooks_enabled": true}
+  },
+  "signal_intelligence": {
+    "product": "SML Sovereign Harmonic Matrix v8.0",
+    "patent_pending": true,
+    "tiers": ["GOD_MODE", "DUAL_GRID_LOCK", "HIGH_CONVERGENCE", "CONVERGENCE", "FRACTAL_LOCK", "PARTIAL_ALIGNMENT", "NEUTRAL"],
+    "discord_gate": "GOD_MODE and DUAL_GRID_LOCK on 4HR or Daily only",
+    "mandatory_tickers": ["AMC", "GME", "IWM"],
+    "universe": "100% dynamic — Polygon grouped daily + Alpaca movers + Tradier"
   },
   "loyalty_tiers": {
     "BRONZE":   {"min_spend_usd": 0,   "discount_pct": 0,  "free_per_paid": null},
@@ -37,6 +53,11 @@
     "DIAMOND":  {"min_spend_usd": 100, "discount_pct": 30, "free_per_paid": 2}
   },
   "sse_events": [
+    "GOD_MODE_CONFIRMED",
+    "DUAL_GRID_LOCK_FIRED",
+    "STEALTH_TRADE_FILLED",
+    "COPY_TRADE_MIRRORED",
+    "XAHAU_HOOK_ARMED",
     "BRIDGE_SETTLED",
     "X402_DISPENSED",
     "XAHAU_MINT_CONFIRMED",
@@ -48,54 +69,59 @@
   ],
   "tools": [
     {
-      "name": "ghost_layer_bridge",
-      "cost": "variable BPS",
-      "description": "Execute cross-chain bridge. XRPL: sign with secp256k1. Base: EIP-3009 gasless permit. Returns receipt + tier-discounted fee."
+      "name": "beastmode_scan",
+      "cost": "0.10 RLUSD",
+      "description": "Full dynamic market universe scan. Returns GOD_MODE and DUAL_GRID_LOCK signals only on 4H or Daily. 100% live — Polygon + Alpaca + Tradier. Zero hardcoded tickers.",
+      "endpoint": "GET https://squeezeos-api.onrender.com/api/beastmode?tf=1D"
     },
     {
-      "name": "ghost_x402_dispense",
-      "cost": "0.01–0.05 RLUSD",
-      "description": "Buy a premium product from the X402 vending machine. GET /v1/x402/catalog first to see current products."
+      "name": "convergence_signal",
+      "cost": "0.05 RLUSD",
+      "description": "Per-symbol SML matrix convergence. Returns signal tier, god_stacked, harmonic_score, SQI, MTF alignment, AI Counsel, options sniper recommendation.",
+      "endpoint": "GET https://squeezeos-api.onrender.com/api/convergence/{SYMBOL}?tf=1D"
+    },
+    {
+      "name": "stealth_trade",
+      "cost": "0.20 RLUSD",
+      "description": "Dark pool stealth order execution. Zero visible market impact. Privacy level 0–10. On-chain receipt committed as URIToken on Xahau. FIX protocol connectivity.",
+      "endpoint": "POST https://ghost-layer.onrender.com/v1/stealth/order"
+    },
+    {
+      "name": "copy_trade_subscribe",
+      "cost": "0.15 RLUSD",
+      "description": "Mirror institutional wallet trades. Signal-gated: only replicates GOD_MODE or DUAL_GRID_LOCK. Broker routing: Tradier or Robinhood. All safety gates inherited.",
+      "endpoint": "POST https://ghost-layer.onrender.com/v1/copytrade/subscribe"
+    },
+    {
+      "name": "xah_hooks_payload",
+      "cost": "0.05 RLUSD",
+      "description": "Get Hook-ready parameter payload for all 6 Execution Matrix faces. Encoded as canonical XRPL binary HookParameters. Commits via URITokenMint to Xahau mainnet (NetworkID=21337).",
+      "endpoint": "GET https://ghost-layer.onrender.com/api/cube/payload"
+    },
+    {
+      "name": "ghost_layer_bridge",
+      "cost": "variable BPS",
+      "description": "Execute cross-chain bridge. XRPL: secp256k1 signature. Base: EIP-3009 gasless permit. Returns receipt + tier-discounted fee."
     },
     {
       "name": "decision_notarize",
       "cost": "0.001–0.050 RLUSD",
-      "description": "Mint any AI decision as immutable URIToken on Xahau. STANDARD/CERTIFIED/SOVEREIGN grades. Ed25519 certificates for CERTIFIED+."
+      "description": "Mint any AI decision as immutable URIToken on Xahau. STANDARD/CERTIFIED/SOVEREIGN grades."
     },
     {
       "name": "cube_state_mint",
       "cost": "0.05 RLUSD",
-      "description": "Commit the 54-block Execution Matrix state on-chain. Phase 5: fires after every face rotation automatically if token cached."
+      "description": "Commit 54-block Execution Matrix state on-chain. Phase 5: fires after every face rotation automatically."
     },
     {
       "name": "credit_post_listing",
       "cost": "free",
-      "description": "Post a service offer to the Agent Credit Marketplace with credit-tier gating."
-    },
-    {
-      "name": "credit_get_listings",
-      "cost": "free",
-      "description": "Browse tier-filtered marketplace listings."
-    },
-    {
-      "name": "credit_quote",
-      "cost": "free",
-      "description": "Get XRPL escrow params. Enforces min_buyer_tier — ERR_TIER_INSUFFICIENT if below gate."
-    },
-    {
-      "name": "credit_register_escrow",
-      "cost": "free",
-      "description": "Register EscrowCreate sequence number after submitting to XRPL."
+      "description": "Post service offer to Agent Credit Marketplace with loyalty-tier gating."
     },
     {
       "name": "credit_release",
-      "cost": "XRPL network fee only",
+      "cost": "XRPL fee only",
       "description": "Confirm delivery → Ghost Layer fires EscrowFinish. Funds flow escrow → seller on XRPL."
-    },
-    {
-      "name": "credit_profile",
-      "cost": "free",
-      "description": "Get loyalty tier, lifetime volume, effective BPS, and marketplace access rights."
     },
     {
       "name": "ghost_agent_loyalty",
@@ -108,19 +134,22 @@
       "description": "Get Ed25519 pubkey to independently verify CERTIFIED/SOVEREIGN decision certificates."
     },
     {
-      "name": "squeezeos_council",
-      "cost": "0.10 RLUSD via 402Proof",
-      "description": "AI Council verdict for a ticker symbol. Requires X-Payment-Token from four02proof.onrender.com. GET /api/council/decision?symbol=GME on squeezeos-vault.onrender.com."
+      "name": "shadow_desk_flow",
+      "cost": "0.05 RLUSD",
+      "description": "Institutional dark pool flow — hidden liquidity, block prints, internalized flow, off-exchange accumulation.",
+      "endpoint": "GET https://shadow-desk.onrender.com/v1/flow/{symbol}"
     },
     {
-      "name": "squeezeos_scan",
-      "cost": "0.05 RLUSD via 402Proof",
-      "description": "Squeeze scanner — scored universe of tradeable stocks. GET /api/market/scan on squeezeos-vault.onrender.com."
+      "name": "squeezeos_council",
+      "cost": "0.10 RLUSD via 402Proof",
+      "description": "AI Council multi-agent verdict for a ticker. Bull/Bear researchers + debaters + portfolio manager + trader.",
+      "endpoint": "GET https://squeezeos-api.onrender.com/api/council/decision?symbol=GME"
     },
     {
       "name": "squeezeos_flow",
       "cost": "0.05 RLUSD via 402Proof",
-      "description": "Options flow feed — unusual activity, sweeps, blocks, OI spikes. GET /api/market/flow on squeezeos-vault.onrender.com."
+      "description": "Options flow feed — unusual activity, sweeps, blocks, OI spikes.",
+      "endpoint": "GET https://squeezeos-api.onrender.com/api/market/flow"
     }
   ]
 }
