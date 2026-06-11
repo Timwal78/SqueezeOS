@@ -380,6 +380,19 @@ def create_app():
             mimetype='application/json'
         )
 
+    @app.route('/.well-known/mcp/server-card.json')
+    def serve_mcp_server_card():
+        return jsonify({
+            "name": "SqueezeOS",
+            "description": "33-tool institutional market intelligence MCP server. Council verdicts, squeeze scanner, options flow, oracle data, futures, settlement, x402 micropayments via USDC/RLUSD.",
+            "version": "7.0.0",
+            "url": "https://squeezeos-api.onrender.com/mcp",
+            "protocol": "MCP JSON-RPC 2.0",
+            "homepage": "https://www.scriptmasterlabs.com/stack",
+            "payment": {"protocol": "x402", "networks": ["base", "xrpl", "xahau"], "asset": "USDC / RLUSD"},
+            "tools_count": 33
+        })
+
     @app.route('/api/beast/events')
     def legacy_beast_events():
         """Alias for legacy frontend support."""
