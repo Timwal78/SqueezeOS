@@ -37,7 +37,8 @@ from urllib.error import URLError
 
 from dotenv import load_dotenv
 load_dotenv(dotenv_path=os.environ.get("DOTENV_PATH",
-            os.path.join(os.path.dirname(__file__), "executor.env")))
+            os.path.join(os.path.dirname(__file__), "executor.env")),
+            override=True)
 
 # ── Logging ────────────────────────────────────────────────────────────────────
 LOG_DIR  = os.environ.get("LOG_DIR", r"C:\SqueezeOS")
