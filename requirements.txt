@@ -9,6 +9,7 @@ python-dotenv>=1.2.2
 openai>=2.41.0
 neo4j>=5.0
 xrpl-py>=4.5.0
+psycopg[binary]>=3.3.4
 anthropic>=0.25
 cryptography>=48.0.0
 stripe>=10.1.0
