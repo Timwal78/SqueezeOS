@@ -155,6 +155,8 @@ print(verdict["verdict"]["directive"])    # "BUY (IGNITION)"
 
 ## Architecture
 
+> **Full ecosystem map (19 products, status, agent endpoints):** [`docs/architecture/INDEX.md`](./docs/architecture/INDEX.md)
+
 ```
 Agent Request
     │
