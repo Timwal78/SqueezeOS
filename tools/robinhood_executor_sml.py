@@ -203,6 +203,21 @@ def _execute(symbol: str, side: str, sml: dict):
         logger.info(f"[EXEC] {symbol} god_stacked={god_count} < {MIN_GOD_STACKED} — skip")
         return
 
+    # IWM trades 0DTE options only — never buy shares. Alert and stop here.
+    if symbol == "IWM":
+        if now - last >= COOLDOWN_S:
+            _last_execution[symbol] = now
+            _save_last_execution(_last_execution)
+            logger.info(f"[EXEC] IWM GOD MODE {god_count}/6 — 0DTE OPTIONS ALERT ONLY (no share order)")
+            try:
+                price = 0.0
+                import robin_stocks.robinhood as rh
+                price = float(rh.stocks.get_latest_price(symbol)[0] or 0)
+            except Exception:
+                pass
+            _discord(symbol, f"{side}-0DTE-ALERT", 0, price, sml, {"alert_only": True})
+        return
+
     if not _pdt_allowed():
         return
 
@@ -312,4 +327,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
