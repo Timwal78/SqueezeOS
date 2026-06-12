@@ -25,7 +25,7 @@ convergence_bp = Blueprint("convergence", __name__)
 # HTTP request caused 30s+ hangs and Render health-check crash loops.
 # Instead, a background thread refreshes this cache on an interval and the
 # /beastmode route returns it instantly.
-_beast_cache = {"hits": [], "ts": 0, "tf": "1D"}
+_beast_cache = {"hits": [], "ts": 0, "tf": "1D", "progress": {"done": 0, "total": 0}}
 _beast_lock = threading.Lock()
 _BEAST_REFRESH_S = int(os.environ.get("BEASTMODE_REFRESH_S", "45"))
 _beast_thread_started = False
@@ -38,7 +38,14 @@ def _beastmode_refresh_loop():
             dm = get_service("dm")
             if dm:
                 tf = _beast_cache.get("tf", "1D")
-                hits = scan_beastmode_universe({"dm": dm}, tf=tf)
+
+                def _on_progress(hits_so_far, done, total, _tf=tf):
+                    with _beast_lock:
+                        _beast_cache["hits"] = hits_so_far
+                        _beast_cache["ts"] = time.time()
+                        _beast_cache["progress"] = {"done": done, "total": total}
+
+                hits = scan_beastmode_universe({"dm": dm}, tf=tf, on_progress=_on_progress)
 
                 for hit in hits:
                     sniper_data = hit.get("options_sniper") or {}
@@ -314,12 +321,14 @@ def beastmode_scan():
         _beast_cache["tf"] = tf
         hits = list(_beast_cache["hits"])
         ts = _beast_cache["ts"]
+        progress = dict(_beast_cache.get("progress", {}))
 
     return jsonify(clean_data({
         "status": "success",
         "hits": len(hits),
         "signals": hits,
         "universe": "dynamic",
+        "scan_progress": progress,
         "cache_age_s": round(time.time() - ts, 1) if ts else None,
         "timestamp": time.time(),
     }))
