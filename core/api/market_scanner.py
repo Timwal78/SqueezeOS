@@ -57,6 +57,9 @@ _analyzer = None  # singleton — load once, reuse every cycle
 # Absolutely no hardcoded watchlists. Discovery is 100% dynamic from the live tape.
 MANDATORY_TICKERS = ["IWM", "GME", "AMC"] # Core focus, everything else dynamically fetched
 
+_universe_cache = {"symbols": list(MANDATORY_TICKERS), "ts": 0}
+_UNIVERSE_TTL_S = 300  # full market discovery is heavy — refresh every 5 minutes only
+
 def _discover_universe(dm):
     """
     100% FETCH — calls dm.discover_universe() which runs:
@@ -64,15 +67,27 @@ def _discover_universe(dm):
       2. Alpaca most-actives + movers — live gainers/losers
       3. Tradier quotes — execution-grade data
     Returns the full live symbol list. Mandatory tickers always included.
+    Result is cached for _UNIVERSE_TTL_S seconds — this call is heavy
+    (full-market scan) and must NOT run on every 3s quote-refresh cycle,
+    or it starves the health-check thread and crash-loops the service.
     """
+    now = time.time()
+    if now - _universe_cache["ts"] < _UNIVERSE_TTL_S and _universe_cache["symbols"]:
+        return _universe_cache["symbols"]
+
     try:
         discovered = dm.discover_universe()
         symbols = set(discovered.keys())
         symbols.update(MANDATORY_TICKERS)
-        logger.info(f"[DISCOVERY] Live universe: {len(symbols)} tickers")
-        return list(symbols)
+        result = list(symbols)
+        logger.info(f"[DISCOVERY] Live universe: {len(result)} tickers (refreshed)")
+        _universe_cache["symbols"] = result
+        _universe_cache["ts"] = now
+        return result
     except Exception as e:
         logger.error(f"[DISCOVERY] dm.discover_universe() failed: {e}")
+        if _universe_cache["symbols"]:
+            return _universe_cache["symbols"]
         return list(MANDATORY_TICKERS)
 
 def _run_scan():
