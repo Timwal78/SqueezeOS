@@ -66,7 +66,23 @@ MAX_DAILY_LOSS_USD = float(os.environ.get("MAX_DAILY_LOSS_USD", "500.0"))
 
 # ── State ──────────────────────────────────────────────────────────────────────
 _rh_logged_in   = False
-_last_execution = {}        # symbol → epoch
+_COOLDOWN_FILE = os.path.join(LOG_DIR, "last_execution.json")
+
+def _load_last_execution() -> dict:
+    try:
+        with open(_COOLDOWN_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def _save_last_execution(d: dict) -> None:
+    try:
+        with open(_COOLDOWN_FILE, "w") as f:
+            json.dump(d, f)
+    except Exception as e:
+        logger.warning(f"[COOLDOWN] save failed: {e}")
+
+_last_execution = _load_last_execution()  # symbol → epoch, persisted across restarts
 _pdt_trades     = []        # epoch timestamps of day trades
 _daily_loss_usd = 0.0
 _lock           = threading.Lock()
@@ -191,6 +207,7 @@ def _execute(symbol: str, side: str, sml: dict):
         return
 
     _last_execution[symbol] = now
+    _save_last_execution(_last_execution)
 
     # Get live price from Robinhood
     try:
@@ -295,3 +312,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
