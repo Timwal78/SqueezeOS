@@ -26,6 +26,7 @@
 | 16 | [16_futures_market.md](./16_futures_market.md) | Futures Market — bureau-discounted settlement fees | 🔵 Planned |
 | 17 | [17_oracle_data_feed.md](./17_oracle_data_feed.md) | Oracle Data Feed — SEC 8-K + market structure SSE | ✅ Live |
 | 18 | [18_agent_credit_marketplace.md](./18_agent_credit_marketplace.md) | Agent Credit Marketplace — XRPL P2P escrow | 🟡 Beta |
+| 21 | [21_agent_top.md](./21_agent_top.md) | agent-top — live terminal dashboard for AI agents (htop for agents) | ✅ Live |
 | 20 | [20_aegis_node.md](./20_aegis_node.md) | Aegis-Node — autonomous agent kill switch (token/API/loop guard) | ✅ Live |
 | 19 | [19_system_circuit_breaker.md](./19_system_circuit_breaker.md) | System Circuit Breaker — kill switches + financial caps spec | 🟡 Spec |
 
