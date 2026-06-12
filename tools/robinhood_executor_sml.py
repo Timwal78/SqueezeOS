@@ -119,7 +119,7 @@ def _get_rh_portfolio_value() -> float:
         return float(equity)
     except Exception as e:
         logger.warning(f"[RH] Could not fetch portfolio value: {e}")
-        return 9999.0  # assume above PDT limit if we can't check
+        return 0.0  # fail-safe: assume below PDT limit, enforce restrictions
 
 
 # ── PDT shield ─────────────────────────────────────────────────────────────────
@@ -251,9 +251,9 @@ def _execute(symbol: str, side: str, sml: dict):
             try:
                 import robin_stocks.robinhood as rh
                 if side == "buy":
-                    r = rh.orders.order_buy_market(symbol, qty)
+                    r = rh.orders.order_buy_market(symbol, qty, extendedHours=True)
                 else:
-                    r = rh.orders.order_sell_market(symbol, qty)
+                    r = rh.orders.order_sell_market(symbol, qty, extendedHours=True)
                 result = {"placed": True, "raw": r}
                 logger.info(f"[RH] Order placed ✅ {symbol} {side} x{qty}")
             except Exception as e:
