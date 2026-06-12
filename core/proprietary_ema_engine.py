@@ -143,7 +143,7 @@ class _Engine1:
         return {
             "engine":        1,
             "name":          "Tesla Elastic Stretch",
-            "sequence":      "1-24-578-963",
+            "sequence":      "PROPRIETARY",
             "dimension":     "PRICE",
             "ema24":         round(ema24,  4),
             "ema578":        round(ema578, 4),
@@ -233,7 +233,7 @@ class _Engine3:
         return {
             "engine":    3,
             "name":      "Lucas Phi² Volume Accumulation",
-            "sequence":  "11-47-123-321",
+            "sequence":  "PROPRIETARY",
             "dimension": "VOLUME",
             "digital_roots":       self.DIGITAL_ROOTS,
             "phi_squared":         round(self.PHI_SQ, 4),
@@ -341,7 +341,7 @@ class _Engine4:
         return {
             "engine":          4,
             "name":            "Harmonic Ladder",
-            "sequence":        "3-36-69-102-135",
+            "sequence":        "PROPRIETARY",
             "step":            self.STEP,
             "dimension":       "PRICE",
             "ema_3":           round(e3,   4),
