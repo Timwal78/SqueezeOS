@@ -7,6 +7,7 @@
 
 import logging
 import os
+import threading
 import time
 from flask import Blueprint, jsonify, request
 from core.legacy import get_service, clean_data
@@ -17,6 +18,59 @@ from core.discord_payload import fire_discord
 
 logger = logging.getLogger("SML.Convergence.API")
 convergence_bp = Blueprint("convergence", __name__)
+
+# ── Beastmode background cache ────────────────────────────────────────────
+# scan_beastmode_universe() is a full-universe convergence scan — expensive
+# (~thousands of tickers post Law-2 discovery). Running it synchronously per
+# HTTP request caused 30s+ hangs and Render health-check crash loops.
+# Instead, a background thread refreshes this cache on an interval and the
+# /beastmode route returns it instantly.
+_beast_cache = {"hits": [], "ts": 0, "tf": "1D"}
+_beast_lock = threading.Lock()
+_BEAST_REFRESH_S = int(os.environ.get("BEASTMODE_REFRESH_S", "45"))
+_beast_thread_started = False
+
+def _beastmode_refresh_loop():
+    logger.info("[BEASTMODE] Background refresh thread active (every %ss)", _BEAST_REFRESH_S)
+    time.sleep(8)  # let services init
+    while True:
+        try:
+            dm = get_service("dm")
+            if dm:
+                tf = _beast_cache.get("tf", "1D")
+                hits = scan_beastmode_universe({"dm": dm}, tf=tf)
+
+                for hit in hits:
+                    sniper_data = hit.get("options_sniper") or {}
+                    try:
+                        fire_discord(hit, trade_type=sniper_data.get("type", "CALL").lower())
+                    except Exception as _de:
+                        logger.warning(f"[BEASTMODE] discord fire failed: {_de}")
+
+                    sml = hit.get("sml_matrix") or {}
+                    if sml.get("execute_gate") and sml.get("tier") == "GOD_MODE":
+                        sym = hit.get("symbol", "")
+                        if sym:
+                            try:
+                                _fire_execution(sym, hit, dm)
+                            except Exception as _ee:
+                                logger.warning(f"[BEASTMODE] exec failed for {sym}: {_ee}")
+
+                with _beast_lock:
+                    _beast_cache["hits"] = hits
+                    _beast_cache["ts"] = time.time()
+                logger.info(f"[BEASTMODE] cache refreshed — {len(hits)} hits")
+        except Exception as e:
+            logger.error(f"[BEASTMODE] refresh error: {e}")
+        time.sleep(_BEAST_REFRESH_S)
+
+def start_beastmode_scanner():
+    global _beast_thread_started
+    if _beast_thread_started:
+        return
+    _beast_thread_started = True
+    threading.Thread(target=_beastmode_refresh_loop, daemon=True, name="SML-Beastmode-Scanner").start()
+
 
 # ── Execution config ─────────────────────────────────────────────────────────
 _last_execution: dict = {}        # symbol → epoch of last executed trade
@@ -253,28 +307,22 @@ def convergence_signal(symbol):
 
 @convergence_bp.route("/beastmode", methods=["GET"])
 def beastmode_scan():
-    """Scan the full universe. Only returns HIGH_CONVERGENCE+ signals."""
+    """Return cached full-universe convergence hits (refreshed by background thread)."""
     tf = request.args.get("tf", "1D").upper()
-    
-    dm = get_service("dm")
-    if not dm:
-        return jsonify({"status": "error", "message": "DataManager unavailable"}), 503
 
-    hits = scan_beastmode_universe({"dm": dm}, tf=tf)
+    with _beast_lock:
+        _beast_cache["tf"] = tf
+        hits = list(_beast_cache["hits"])
+        ts = _beast_cache["ts"]
 
-    # Fire Discord + execution for every convergence hit
-    for hit in hits:
-        sniper_data = hit.get("options_sniper") or {}
-        fire_discord(hit, trade_type=sniper_data.get("type", "CALL").lower())
-
-        # ── Market-wide execution gate ────────────────────────────────────
-        # Executes on GOD_MODE tier with god_stacked >= MIN_GOD_STACKED (default 5)
-        # Skips god_stacked ≤ 4 per operator config
-        sml = hit.get("sml_matrix") or {}
-        if sml.get("execute_gate") and sml.get("tier") == "GOD_MODE":
-            sym = hit.get("symbol", "")
-            if sym:
-                _fire_execution(sym, hit)
+    return jsonify(clean_data({
+        "status": "success",
+        "hits": len(hits),
+        "signals": hits,
+        "universe": "dynamic",
+        "cache_age_s": round(time.time() - ts, 1) if ts else None,
+        "timestamp": time.time(),
+    }))
 
     return jsonify(clean_data({
         "status":        "success",
