@@ -113,7 +113,7 @@ class Engine5_GannMacro:
         return {
             "engine":            5,
             "name":              "Tesla/Gann Macro Frequency",
-            "sequence":          "1-42-369-578",
+            "sequence":          "PROPRIETARY",
             "dimension":         "PRICE",
             "ema42":             round(ema42,  4),
             "ema369":            round(ema369, 4),
