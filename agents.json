@@ -18,6 +18,7 @@
   "ecosystem": "ScriptMasterLabs",
   "ecosystem_url": "https://www.scriptmasterlabs.com",
   "llms_txt": "https://squeeze-os.vercel.app/llms.txt",
+  "architecture_map": "https://github.com/Timwal78/SqueezeOS/blob/main/docs/architecture/INDEX.md",
   "sitemap": "https://squeeze-os.vercel.app/sitemap.xml",
   "robots": "https://squeeze-os.vercel.app/robots.txt"
 }
