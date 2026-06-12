@@ -286,8 +286,13 @@ def _post(path: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
 
 def _account_id() -> Optional[str]:
-    acct = os.environ.get("TRADIER_ACCOUNT_ID")
-    return acct.strip() if acct and acct.strip() else None
+    # Render env vars are TRADIER_ACCOUNT (live) / TRADIER_PRODUCTION_ACCOUNT,
+    # not TRADIER_ACCOUNT_ID. Check all in priority order for compatibility.
+    for var in ("TRADIER_ACCOUNT_ID", "TRADIER_ACCOUNT", "TRADIER_PRODUCTION_ACCOUNT"):
+        acct = os.environ.get(var)
+        if acct and acct.strip():
+            return acct.strip()
+    return None
 
 
 def get_account_balance() -> Optional[float]:
