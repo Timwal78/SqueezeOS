@@ -298,9 +298,11 @@ def get_account_balance() -> Optional[float]:
     """
     acct = _account_id()
     if not acct:
+        logger.error("[TRADIER] TRADIER_ACCOUNT_ID not set — cannot fetch balance (PDT shield will fail-safe to restricted)")
         return None
     data = _get(f"/accounts/{acct}/balances", {})
     if not data:
+        logger.warning(f"[TRADIER] /accounts/{acct}/balances returned no data")
         return None
     balances = data.get("balances") or {}
     # Tradier returns total_equity for margin accounts, total_cash for cash accounts
