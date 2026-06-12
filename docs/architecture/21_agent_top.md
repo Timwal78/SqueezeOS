@@ -8,7 +8,7 @@ agent-top is "`htop` for AI agents" — a live terminal dashboard for any agent 
 ## Architecture
 - **Core** (`src/index.js`): spawns the agent process, scans stdout for a tiny JSON-line telemetry protocol (`{"agent_top": {...}}`), strips those lines from passthrough output, maintains rolling 60s windows for tokens/min and API calls/min.
 - **CLI/TUI** (`bin/cli.js`): renders a live ANSI dashboard (~4 Hz), bars for token rate and API rate (green→yellow→red), running cost total, top repeated action with ⚠ loop warning. Keypress `k` = instant kill, `q` = detach.
-- **Optional peer**: detects `aegis-node` (doc 20) at runtime and shows enforcement status in the footer — agent-top is the dashboard, aegis-node is the guarantee.
+- **Optional peer**: detects `@timothywalton/aegis-node` (doc 20) at runtime and shows enforcement status in the footer — agent-top is the dashboard, aegis-node is the guarantee.
 
 ## Agent & Human Access
 - npm package, MIT licensed, zero required dependencies (aegis-node is an optional peer).

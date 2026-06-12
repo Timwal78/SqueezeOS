@@ -9,7 +9,7 @@ Aegis-Node is the standalone, open-source "blast shield" for autonomous AI agent
 - **Controller** (`src/index.js`): spawns the agent as a child process (detached, full process-group control).
 - **Watcher** (`src/monitor.js`): runs on a separate `worker_thread`, tracking rolling 60s windows for token burn rate, API call rate, and repeated-action signatures. Isolated so a hung agent main thread can't block a trip.
 - **On trip**: instant `SIGKILL` of the full process tree, plus best-effort `iptables` outbound DROP for the agent's PID (Linux). Optional `--network-namespace` mode runs the agent in its own net namespace from the start (defense-in-depth).
-- **CLI**: `npx aegis-node --max-tokens-per-min N --max-api-calls-per-min N -- <command>` — zero code changes for baseline rate limits.
+- **CLI**: `npx -p @timothywalton/aegis-node aegis --max-tokens-per-min N --max-api-calls-per-min N -- <command>` — zero code changes for baseline rate limits.
 
 ## Agent & Human Access
 - npm package, MIT licensed — install directly, no payment/x402 gating (infrastructure play, not a revenue product).
