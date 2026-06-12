@@ -336,10 +336,14 @@ class ConvergenceEngine:
 
 # ── Multi-symbol Beastmode scan ───────────────────────────────────────────────
 
-def scan_beastmode_universe(services: dict, tf: str = "1D") -> list:
+def scan_beastmode_universe(services: dict, tf: str = "1D", on_progress=None) -> list:
     """
     Scan all symbols in BEASTMODE_UNIVERSE.
     Returns only symbols with HIGH_CONVERGENCE or BEASTMODE signals.
+
+    on_progress(sorted_hits_so_far, done_count, total_count) is called after
+    every symbol so callers (e.g. the background cache refresher) can release
+    results incrementally instead of waiting for the full scan to finish.
     """
     dm = services.get("dm")
     if not dm:
@@ -358,7 +362,8 @@ def scan_beastmode_universe(services: dict, tf: str = "1D") -> list:
     # Take the top 500 most active tickers, plus our mandatory focus
     universe = list(set(MANDATORY_TICKERS + active_syms[:500]))
     
-    for symbol in universe:
+    total = len(universe)
+    for idx, symbol in enumerate(universe, 1):
         try:
             if hasattr(dm, "get_bars"):
                 bars = dm.get_bars(symbol, timeframe=tf, limit=400) or []
@@ -374,13 +379,20 @@ def scan_beastmode_universe(services: dict, tf: str = "1D") -> list:
 
             result = engine.analyze(symbol, closes, volumes, bars_with_dates=bars, run_sniper=True)
             highest_stacks = result.get("sml_matrix", {}).get("highest_stacked_set", 0)
-            
+
             if highest_stacks >= 4 or symbol in MANDATORY_TICKERS:
                 # Store the stack count on the top level for easy frontend access
                 result["highest_stacked_set"] = highest_stacks
                 hits.append(result)
         except Exception as e:
             logger.warning(f"[Convergence] {symbol} scan error: {e}")
+
+        if on_progress:
+            try:
+                sorted_so_far = sorted(hits, key=lambda x: (x.get("highest_stacked_set", 0), x.get("composite_score", 0)), reverse=True)
+                on_progress(sorted_so_far, idx, total)
+            except Exception as _pe:
+                logger.warning(f"[Convergence] on_progress callback error: {_pe}")
 
     # Sort strictly by highest stacked sets (9 down to 4), then by composite score
     return sorted(hits, key=lambda x: (x.get("highest_stacked_set", 0), x.get("composite_score", 0)), reverse=True)
