@@ -25,7 +25,7 @@ from core.api.marketplace_bp import marketplace_bp
 from core.api.hiring_bp import hiring_bp
 from core.api.mcp_bp import mcp_bp
 from core.api.proprietary_ema_bp import proprietary_ema_bp
-from core.api.convergence_bp import convergence_bp
+from core.api.convergence_bp import convergence_bp, start_beastmode_scanner
 from core.api.honeypot import honeypot_bp, honeypot_before_request
 from core.api.settlement_bp import settlement_bp
 from core.api.futures_bp import futures_bp
@@ -155,6 +155,9 @@ def create_app():
     if not _IS_SERVERLESS:
         # Start background market scanner
         start_market_scanner()
+
+        # Start background beastmode convergence scanner (cached, non-blocking)
+        start_beastmode_scanner()
 
         # Start webhook delivery engine (SSE tap + delivery workers)
         start_webhook_engine()
