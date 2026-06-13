@@ -1,17 +1,19 @@
 """
-SqueezeOS Peer Signal Marketplace
-════════════════════════════════════
+Alpha Mesh — Agent-to-Agent Intelligence Bazaar (SqueezeOS Peer Signal Marketplace)
+═══════════════════════════════════════════════════════════════════════════════════
 Agents publish their own market signals; other agents pay to read them.
-Zero custody — SqueezeOS earns read fees, sellers earn Credit Bureau score.
+Zero custody — sellers keep 90% of each read fee, SqueezeOS takes 10%.
 
   GET  /api/marketplace                — browse listings (free)
   GET  /api/marketplace/preview/<id>   — symbol + bias + confidence (free)
-  POST /api/marketplace/read           — full signal (0.02 RLUSD via x402)
+  POST /api/marketplace/read           — full signal (0.02 RLUSD via x402; 90% to seller)
   POST /api/marketplace/list           — publish a signal (free to list)
+  GET  /api/marketplace/balance/<wallet> — accrued seller earnings (Alpha Mesh)
   GET  /api/marketplace/leaderboard    — top sellers by sale count (free)
   DELETE /api/marketplace/<id>         — delete own listing (wallet auth)
 
 Seller rewards (zero custody):
+  Each sale → 90% of 0.02 RLUSD accrues to seller balance (Alpha Mesh)
   Each sale → seller Credit Bureau score boost (+2 pts, up to +50 lifetime)
   Top sellers featured on leaderboard
   Score 600+ → qualify for Relay Node (40% bulk discount on own buys)
@@ -48,8 +50,17 @@ _VALID_TYPES  = frozenset({"SQUEEZE", "OPTIONS", "BREAKOUT", "REVERSAL", "TREND"
 
 def _stat(wallet: str) -> dict:
     if wallet not in _seller_stats:
-        _seller_stats[wallet] = {"sale_count": 0, "listing_count": 0, "revenue_rlusd": 0.0}
+        _seller_stats[wallet] = {
+            "sale_count": 0, "listing_count": 0, "revenue_rlusd": 0.0,
+            "balance_rlusd": 0.0, "paid_out_rlusd": 0.0,
+        }
     return _seller_stats[wallet]
+
+
+# Alpha Mesh revenue split — seller keeps 90%, platform takes 10%
+SELLER_SHARE = 0.90
+READ_PRICE_RLUSD = 0.02
+SELLER_CUT_RLUSD = round(READ_PRICE_RLUSD * SELLER_SHARE, 4)
 
 
 # ── Browse ────────────────────────────────────────────────────────────────────
@@ -156,11 +167,12 @@ def read():
         l['active'] = False
         return jsonify({"error": "ERR_LISTING_EXPIRED", "message": "Listing has expired"}), 410
 
-    # Record sale + credit seller
+    # Record sale + credit seller (Alpha Mesh: 90% of read fee accrues to seller)
     l['sale_count'] += 1
     st = _stat(l['wallet'])
     st['sale_count']      += 1
-    st['revenue_rlusd']    = round(st['revenue_rlusd'] + 0.02, 4)
+    st['revenue_rlusd']    = round(st['revenue_rlusd'] + READ_PRICE_RLUSD, 4)
+    st['balance_rlusd']    = round(st['balance_rlusd'] + SELLER_CUT_RLUSD, 4)
 
     # Bureau score bonus: +2 per sale, up to +50 lifetime
     score_bonus = min(st['sale_count'] * 2, 50)
@@ -181,6 +193,9 @@ def read():
         "seller_wallet":   l["wallet"],
         "seller_sales":    st["sale_count"],
         "seller_score_bonus": score_bonus,
+        "seller_cut_rlusd": SELLER_CUT_RLUSD,
+        "seller_balance_rlusd": st["balance_rlusd"],
+        "platform_fee_rlusd": round(READ_PRICE_RLUSD - SELLER_CUT_RLUSD, 4),
         "listed_at":       l["listed_at"],
         "expires_at":      l["expires_at"],
         "verified_by":     "SqueezeOS Marketplace — payment verified, seller wallet on record",
@@ -280,6 +295,34 @@ def list_signal():
             "relay_path": "Score 600+ → relay node (40% bulk discount on your own signal buys)",
         },
     }), 201
+
+
+@marketplace_bp.route('/balance/<wallet>', methods=['GET'])
+def balance(wallet):
+    """Alpha Mesh — accrued seller earnings (90% of each /read sale)."""
+    st = _seller_stats.get(wallet)
+    if not st:
+        return jsonify({
+            "wallet": wallet,
+            "balance_rlusd": 0.0,
+            "sale_count": 0,
+            "message": "No sales recorded for this wallet yet.",
+            "ts": time.time(),
+        })
+    return jsonify({
+        "wallet":          wallet,
+        "balance_rlusd":   st["balance_rlusd"],
+        "paid_out_rlusd":  st["paid_out_rlusd"],
+        "revenue_rlusd":   st["revenue_rlusd"],
+        "sale_count":      st["sale_count"],
+        "seller_share":    f"{int(SELLER_SHARE*100)}%",
+        "payout_note": (
+            "Balance accrues from Alpha Mesh signal sales (90% of each "
+            "0.02 RLUSD read). Payout rail: contact ScriptMasterLabs@gmail.com "
+            "for manual XRPL settlement until automated payout batches go live."
+        ),
+        "ts": time.time(),
+    })
 
 
 # ── Leaderboard ───────────────────────────────────────────────────────────────
