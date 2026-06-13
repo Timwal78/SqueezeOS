@@ -81,7 +81,9 @@ def scan_options(symbol: str, trade_type: str = "call", current_price: float = 0
         if exp_resp.status_code != 200:
             return {"error": f"Tradier expirations returned HTTP {exp_resp.status_code}"}
 
-        raw_exps = exp_resp.json().get("expirations", {}).get("date", []) or []
+        _exp_json = exp_resp.json() or {}
+        _expirations = _exp_json.get("expirations") or {}
+        raw_exps = _expirations.get("date", []) or []
         if isinstance(raw_exps, str):
             raw_exps = [raw_exps]
 
@@ -111,7 +113,9 @@ def scan_options(symbol: str, trade_type: str = "call", current_price: float = 0
                 if chain_resp.status_code != 200:
                     continue
 
-                options = chain_resp.json().get("options", {}).get("option", []) or []
+                _chain_json = chain_resp.json() or {}
+                _opts_wrap = _chain_json.get("options") or {}
+                options = _opts_wrap.get("option", []) or []
                 if isinstance(options, dict):
                     options = [options]
 
@@ -359,18 +363,18 @@ def scan_beastmode_universe(services: dict, tf: str = "1D", on_progress=None) ->
     # Sort dynamic quotes by volume ratio
     active_syms = sorted(quotes.keys(), key=lambda s: quotes[s].get("volRatio", 0), reverse=True)
     
-    # Take the top 500 most active tickers, plus our mandatory focus
-    universe = list(set(MANDATORY_TICKERS + active_syms[:500]))
+    # Take the top 150 most active tickers, plus our mandatory focus (memory-bounded)
+    universe = list(set(MANDATORY_TICKERS + active_syms[:150]))  # trimmed from 500 to fit 512MB instance
     
     total = len(universe)
     for idx, symbol in enumerate(universe, 1):
         try:
             if hasattr(dm, "get_bars"):
-                bars = dm.get_bars(symbol, timeframe=tf, limit=400) or []
+                bars = dm.get_bars(symbol, timeframe=tf, limit=250) or []
                 if not bars and tf == "1D":
-                    bars = dm.get_bars(symbol, timeframe="1Min", limit=400) or []
+                    bars = dm.get_bars(symbol, timeframe="1Min", limit=250) or []
             else:
-                bars = dm.get_historical_bars(symbol, timeframe=tf, limit=400) or []
+                bars = dm.get_historical_bars(symbol, timeframe=tf, limit=250) or []
             closes  = [float(b.get("c") or b.get("close", 0)) for b in bars if b.get("c") or b.get("close")]
             volumes = [float(b.get("v") or b.get("volume", 0)) for b in bars if b.get("v") or b.get("volume")]
 
