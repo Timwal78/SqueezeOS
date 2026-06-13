@@ -144,7 +144,7 @@ def info():
             "GET /api/ftd/series/{symbol}": {"price_rlusd": "0.02", "endpoint_id": FTD_READ_ENDPOINT_ID},
             "GET /api/ftd/ratio/{symbol}": {"price_rlusd": "0.03", "endpoint_id": FTD_RATIO_ENDPOINT_ID},
             "GET /api/ftd/etf-basket/{etf}": {"price_rlusd": "0.05", "endpoint_id": FTD_DEEP_ENDPOINT_ID},
-            "GET /api/ftd/cycle/{symbol}": {"price_rlusd": "0.05", "endpoint_id": FTD_DEEP_ENDPOINT_ID},
+            "GET /api/ftd/cycle/{symbol}": {"price_rlusd": "0.05", "price_usdc": "0.05", "endpoint_id": FTD_DEEP_ENDPOINT_ID, "rails": ["RLUSD/XRPL (X-Payment-Token)", "USDC/Base (x402 X-PAYMENT)"]},
         },
         "etf_baskets_supported": sorted(ETF_BASKETS.keys()),
         "window_days": WINDOW_DAYS,
@@ -315,8 +315,11 @@ def cycle(symbol: str):
     descriptive. The response includes explicit notes that the markers are
     not predictions of forced buying.
     """
-    wallet, err = _gate(FTD_DEEP_ENDPOINT_ID, "0.05")
-    if err:
+    wallet, err = _gate_dual(
+        FTD_DEEP_ENDPOINT_ID, "0.05", "0.05",
+        description="ShortSqueeze Swarm — settlement-cycle bundle (T+21/T+35 markers, FTD spike stats, Reg SHO 204 close-out marker)",
+    )
+    if err and not callable(err):
         return err
 
     payload = cycle_summary_for(symbol)
@@ -324,9 +327,14 @@ def cycle(symbol: str):
         "SEC Reg SHO Fails-To-Deliver + Threshold Securities List "
         "(processed and indexed by SqueezeOS)"
     )
-    payload["agent_wallet"] = wallet or ""
+    payload["agent_wallet"] = wallet if isinstance(wallet, str) and wallet != "USDC_PAID" else ""
+    payload["paid_via"] = "USDC/Base" if wallet == "USDC_PAID" else ("RLUSD/XRPL" if wallet else "")
     payload["ts"] = time.time()
-    return jsonify(payload)
+
+    resp = jsonify(payload)
+    if callable(err):
+        resp = err(resp)
+    return resp
 
 
 # ── Operator dashboard (mobile-first, save-to-homescreen) ────────────────────
@@ -603,6 +611,48 @@ def dashboard():
 """)
 
     return Response("".join(parts), mimetype="text/html; charset=utf-8")
+
+
+def _gate_dual(endpoint_id: str, price_rlusd: str, price_usdc: str, description: str):
+    """
+    Dual-rail gate: accept EITHER USDC/Base (x402 X-PAYMENT) OR RLUSD/XRPL
+    (X-Payment-Token via 402Proof). Returns (wallet_or_marker, err_or_settle_fn).
+    err_or_settle_fn is a flask error response on failure, or a settle-callback
+    function on USDC success (call with the built response to attach settlement).
+
+    RLUSD/XRPL agent volume is still small, so this lets Base/USDC x402 agents
+    (the larger active population) pay directly via facilitator verify+settle,
+    while XRPL/RLUSD agents keep using the existing 402Proof flow.
+    """
+    import base64 as _b64
+    import json as _json
+    from x402_flask import _payment_requirements, _facilitator, _402 as _x402_402
+
+    token = request.headers.get("X-Payment-Token", "")
+    if token:
+        return _gate(endpoint_id, price_rlusd)
+
+    xpay = request.headers.get("X-PAYMENT")
+    if xpay:
+        reqs = _payment_requirements(price_usdc, description, request.base_url)
+        try:
+            payload = _json.loads(_b64.b64decode(xpay))
+        except Exception:
+            return None, _x402_402(reqs, "malformed X-PAYMENT header")
+        verify = _facilitator("/verify", payload, reqs)
+        if not verify.get("isValid", False):
+            return None, _x402_402(reqs, f"invalid payment: {verify.get('invalidReason','unknown')}")
+
+        def _settle_after(resp):
+            settle = _facilitator("/settle", payload, reqs)
+            if settle.get("success", False):
+                resp.headers["X-PAYMENT-RESPONSE"] = _b64.b64encode(_json.dumps(settle).encode()).decode()
+            return resp
+
+        return "USDC_PAID", _settle_after
+
+    reqs = _payment_requirements(price_usdc, description, request.base_url)
+    return None, _x402_402(reqs, "payment required")
 
 
 _DASHBOARD_HTML_HEAD = """<!DOCTYPE html>
