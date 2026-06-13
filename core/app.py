@@ -174,6 +174,15 @@ def create_app():
         # Start FTD Data Oracle pollers (SEC Reg SHO FTD + Threshold list)
         start_ftd_pollers()
 
+        # Start ShortSqueeze Swarm — FTD/Reg SHO anomaly detection + Discord alerts
+        from ftd_anomaly_engine import start_ftd_anomaly_engine
+        try:
+            from discord_alerts import DiscordAlerts
+            _discord_for_ftd = DiscordAlerts()
+        except Exception:
+            _discord_for_ftd = None
+        start_ftd_anomaly_engine(_discord_for_ftd)
+
         # Self-pinger — keeps Render free-tier warm; pings own /api/status every 10 min
         _start_self_pinger()
         

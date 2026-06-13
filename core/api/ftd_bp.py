@@ -139,6 +139,7 @@ def info():
             },
         ],
         "endpoints": {
+            "GET /api/ftd/alerts": {"price_rlusd": "0.00", "endpoint_id": None, "note": "ShortSqueeze Swarm public alert feed (free teaser)"},
             "GET /api/ftd/threshold-list": {"price_rlusd": "0.02", "endpoint_id": FTD_READ_ENDPOINT_ID},
             "GET /api/ftd/series/{symbol}": {"price_rlusd": "0.02", "endpoint_id": FTD_READ_ENDPOINT_ID},
             "GET /api/ftd/ratio/{symbol}": {"price_rlusd": "0.03", "endpoint_id": FTD_RATIO_ENDPOINT_ID},
@@ -158,6 +159,38 @@ def info():
             "of price action. T+21 and T+35 markers are calendar arithmetic on "
             "published FTD settlement dates — not deterministic predictions of "
             "forced buying."
+        ),
+        "free": True,
+        "ts": time.time(),
+    })
+
+
+@ftd_bp.route("/alerts", methods=["GET"])
+def alerts():
+    """
+    FREE — ShortSqueeze Swarm public alert feed.
+
+    Recent FTD anomalies (new Reg SHO threshold-list entries, FTD spikes
+    >= 2x rolling avg at >= 95th percentile). Each alert is a teaser:
+    symbol + anomaly type + spike ratio, no thesis or T+21/T+35 markers.
+
+    Full descriptive detail: GET /api/ftd/cycle/<symbol> (0.05 RLUSD).
+    """
+    from ftd_anomaly_engine import get_feed, SCAN_INTERVAL_S, SPIKE_THRESHOLD
+
+    limit = max(1, min(int(request.args.get("limit", 25)), 100))
+    items = get_feed(limit)
+    return jsonify({
+        "tier": "SHORTSQUEEZE_SWARM",
+        "count": len(items),
+        "alerts": items,
+        "scan_interval_seconds": SCAN_INTERVAL_S,
+        "spike_threshold": SPIKE_THRESHOLD,
+        "unlock_detail": "/api/ftd/cycle/{symbol} — 0.05 RLUSD",
+        "source": "SEC Reg SHO Fails-To-Deliver + Threshold Securities List",
+        "compliance_note": (
+            "Descriptive anomaly feed only. Not a trade signal, not a "
+            "prediction of forced buying."
         ),
         "free": True,
         "ts": time.time(),

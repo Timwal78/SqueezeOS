@@ -40,13 +40,14 @@
         { "endpoint": "/api/options", "method": "GET",  "cost": "0.05", "currency": "RLUSD", "description": "Institutional options flow scanner — sweeps, whale activity, unusual volume" },
         { "endpoint": "/api/iwm",     "method": "GET",  "cost": "0.03", "currency": "RLUSD", "description": "IWM 0DTE contract scorer — delta, gamma, parity watch" },
         { "endpoint": "/api/marketplace/read", "method": "POST", "cost": "0.02", "currency": "RLUSD", "description": "Full signal thesis from peer Signal Marketplace" },
-        { "endpoint": "/api/oracle/latest/{feed}", "method": "GET", "cost": "0.02", "currency": "RLUSD", "description": "Real-time regulatory event feed (SEC 8-K, FDA, USPTO)" }
+        { "endpoint": "/api/oracle/latest/{feed}", "method": "GET", "cost": "0.02", "currency": "RLUSD", "description": "Real-time regulatory event feed (SEC 8-K, FDA, USPTO)" },
+        { "endpoint": "/api/ftd/cycle/{symbol}", "method": "GET", "cost": "0.05", "currency": "RLUSD", "description": "ShortSqueeze Swarm full detail — settlement-cycle bundle (T+21/T+35 markers, FTD spike stats, Reg SHO 204 close-out marker)" }
       ],
       "free_endpoints": [
         "/api/demo/council", "/api/preview/{symbol}", "/api/history/{symbol}",
         "/api/status", "/api/events", "/api/marketplace", "/api/hiring",
         "/api/futures", "/api/settlement", "/api/stigmergy/sniff",
-        "/api/oracle/feeds", "/api/ftd/info"
+        "/api/oracle/feeds", "/api/ftd/info", "/api/ftd/alerts"
       ],
       "mcp_config": {
         "mcpServers": {
