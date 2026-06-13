@@ -315,11 +315,11 @@ def cycle(symbol: str):
     descriptive. The response includes explicit notes that the markers are
     not predictions of forced buying.
     """
-    wallet, err = _gate_dual(
+    wallet, err, settle_fn = _gate_dual(
         FTD_DEEP_ENDPOINT_ID, "0.05", "0.05",
         description="ShortSqueeze Swarm — settlement-cycle bundle (T+21/T+35 markers, FTD spike stats, Reg SHO 204 close-out marker)",
     )
-    if err and not callable(err):
+    if err is not None:
         return err
 
     payload = cycle_summary_for(symbol)
@@ -332,8 +332,8 @@ def cycle(symbol: str):
     payload["ts"] = time.time()
 
     resp = jsonify(payload)
-    if callable(err):
-        resp = err(resp)
+    if settle_fn is not None:
+        resp = settle_fn(resp)
     return resp
 
 
@@ -615,10 +615,10 @@ def dashboard():
 
 def _gate_dual(endpoint_id: str, price_rlusd: str, price_usdc: str, description: str):
     """
-    Dual-rail gate: accept EITHER USDC/Base (x402 X-PAYMENT) OR RLUSD/XRPL
-    (X-Payment-Token via 402Proof). Returns (wallet_or_marker, err_or_settle_fn).
-    err_or_settle_fn is a flask error response on failure, or a settle-callback
-    function on USDC success (call with the built response to attach settlement).
+    Dual-rail gate. Returns a 3-tuple: (wallet, err_response, settle_fn).
+      - success RLUSD:  (wallet_str, None, None)
+      - success USDC:   ("USDC_PAID", None, settle_fn)   # call settle_fn(resp) after building response
+      - failure/402:    (None, flask_response, None)
 
     RLUSD/XRPL agent volume is still small, so this lets Base/USDC x402 agents
     (the larger active population) pay directly via facilitator verify+settle,
@@ -630,7 +630,8 @@ def _gate_dual(endpoint_id: str, price_rlusd: str, price_usdc: str, description:
 
     token = request.headers.get("X-Payment-Token", "")
     if token:
-        return _gate(endpoint_id, price_rlusd)
+        wallet, err = _gate(endpoint_id, price_rlusd)
+        return wallet, err, None
 
     xpay = request.headers.get("X-PAYMENT")
     if xpay:
@@ -638,10 +639,10 @@ def _gate_dual(endpoint_id: str, price_rlusd: str, price_usdc: str, description:
         try:
             payload = _json.loads(_b64.b64decode(xpay))
         except Exception:
-            return None, _x402_402(reqs, "malformed X-PAYMENT header")
+            return None, _x402_402(reqs, "malformed X-PAYMENT header"), None
         verify = _facilitator("/verify", payload, reqs)
         if not verify.get("isValid", False):
-            return None, _x402_402(reqs, f"invalid payment: {verify.get('invalidReason','unknown')}")
+            return None, _x402_402(reqs, f"invalid payment: {verify.get('invalidReason','unknown')}"), None
 
         def _settle_after(resp):
             settle = _facilitator("/settle", payload, reqs)
@@ -649,10 +650,10 @@ def _gate_dual(endpoint_id: str, price_rlusd: str, price_usdc: str, description:
                 resp.headers["X-PAYMENT-RESPONSE"] = _b64.b64encode(_json.dumps(settle).encode()).decode()
             return resp
 
-        return "USDC_PAID", _settle_after
+        return "USDC_PAID", None, _settle_after
 
     reqs = _payment_requirements(price_usdc, description, request.base_url)
-    return None, _x402_402(reqs, "payment required")
+    return None, _x402_402(reqs, "payment required"), None
 
 
 _DASHBOARD_HTML_HEAD = """<!DOCTYPE html>
