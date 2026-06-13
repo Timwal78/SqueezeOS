@@ -27,6 +27,7 @@ import sys
 import time
 import uuid
 import logging
+from functools import wraps
 from flask import Blueprint, jsonify, request
 import core.signal_history as signal_history
 
@@ -61,6 +62,43 @@ def _stat(wallet: str) -> dict:
 SELLER_SHARE = 0.90
 READ_PRICE_RLUSD = 0.02
 SELLER_CUT_RLUSD = round(READ_PRICE_RLUSD * SELLER_SHARE, 4)
+
+
+def _dual_payment(price_usdc: str):
+    """
+    Accept EITHER USDC/Base (x402 X-PAYMENT) OR RLUSD/XRPL (X-Payment-Token
+    via 402Proof, handled by require_payment). Falls through to require_payment
+    when no X-PAYMENT header is present (preserves the existing RLUSD flow and
+    a 402 response that advertises both rails).
+    """
+    def decorator(fn):
+        rlusd_gated = require_payment(fn)
+
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            xpay = request.headers.get("X-PAYMENT")
+            if not xpay:
+                return rlusd_gated(*args, **kwargs)
+
+            import base64 as _b64, json as _json
+            from x402_flask import _payment_requirements, _facilitator, _402 as _x402_402
+
+            reqs = _payment_requirements(price_usdc, "Alpha Mesh signal read", request.base_url)
+            try:
+                payload = _json.loads(_b64.b64decode(xpay))
+            except Exception:
+                return _x402_402(reqs, "malformed X-PAYMENT header")
+            verify = _facilitator("/verify", payload, reqs)
+            if not verify.get("isValid", False):
+                return _x402_402(reqs, f"invalid payment: {verify.get('invalidReason','unknown')}")
+
+            resp = fn(*args, **kwargs)
+            settle = _facilitator("/settle", payload, reqs)
+            if settle.get("success", False):
+                resp.headers["X-PAYMENT-RESPONSE"] = _b64.b64encode(_json.dumps(settle).encode()).decode()
+            return resp
+        return wrapper
+    return decorator
 
 
 # ── Browse ────────────────────────────────────────────────────────────────────
@@ -150,7 +188,7 @@ def preview(listing_id):
 # ── Full read — gated by x402 (0.02 RLUSD) ───────────────────────────────────
 
 @marketplace_bp.route('/read', methods=['POST'])
-@require_payment
+@_dual_payment("0.02")
 def read():
     body       = request.get_json(silent=True) or {}
     listing_id = (body.get('listing_id') or '').strip()
@@ -196,6 +234,7 @@ def read():
         "seller_cut_rlusd": SELLER_CUT_RLUSD,
         "seller_balance_rlusd": st["balance_rlusd"],
         "platform_fee_rlusd": round(READ_PRICE_RLUSD - SELLER_CUT_RLUSD, 4),
+        "paid_via": "USDC/Base" if request.headers.get("X-PAYMENT") else "RLUSD/XRPL",
         "listed_at":       l["listed_at"],
         "expires_at":      l["expires_at"],
         "verified_by":     "SqueezeOS Marketplace — payment verified, seller wallet on record",
