@@ -100,7 +100,9 @@ def _fire_discord(discord, alert: dict) -> None:
             }]
         }
 
-        url = discord.webhook_all or discord.webhook_squeeze or discord.webhook_flow
+        import os as _os
+        url = (_os.environ.get("DISCORD_WEBHOOK_FTD", "")
+               or discord.webhook_all or discord.webhook_squeeze or discord.webhook_flow)
         if url:
             discord._post(url, embed)
     except Exception as e:
