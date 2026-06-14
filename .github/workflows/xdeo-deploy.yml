@@ -1,0 +1,123 @@
+name: xdeo-deploy
+
+# Deploys xDEO to Cloudflare Workers on every merge to main.
+# Also runs on manual trigger so you can redeploy any time without a code change.
+#
+# Required GitHub Secrets (Settings → Secrets → Actions → New repository secret):
+#
+#   CLOUDFLARE_API_TOKEN    — CF dashboard → My Profile → API Tokens → Create Token
+#                             Use the "Edit Cloudflare Workers" template (includes D1 + KV).
+#   CLOUDFLARE_ACCOUNT_ID   — CF dashboard → any Workers page → right sidebar "Account ID"
+#   CF_D1_DATABASE_ID       — CF dashboard → Workers & Pages → D1 → Create database
+#                             Name it "xdeo" → copy the Database ID shown after creation.
+#   CF_KV_NAMESPACE_ID      — CF dashboard → Workers & Pages → KV → Create namespace
+#                             Name it "xdeo-kv" → copy the Namespace ID shown after creation.
+#   X402_PAY_TO             — Your Base wallet address (0x...). USDC fees land here.
+#
+# Optional secrets (leave unset to skip):
+#   X402_DEV_BYPASS_TOKEN   — Local/dev bypass token. Safe to skip for production.
+
+on:
+  push:
+    branches: [main]
+    paths: ["xdeo/**"]
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Reason for manual deploy"
+        required: false
+        default: "manual redeploy"
+
+jobs:
+  deploy:
+    name: Deploy xDEO Worker
+    runs-on: ubuntu-latest
+    environment: production
+    defaults:
+      run:
+        working-directory: xdeo
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: xdeo/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Run tests
+        run: npm test
+
+      - name: Inject D1 + KV resource IDs into wrangler.toml
+        env:
+          CF_D1_DATABASE_ID: ${{ secrets.CF_D1_DATABASE_ID }}
+          CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
+        run: |
+          if [ -z "$CF_D1_DATABASE_ID" ]; then
+            echo "❌ CF_D1_DATABASE_ID secret is not set. See workflow comments for setup." >&2
+            exit 1
+          fi
+          if [ -z "$CF_KV_NAMESPACE_ID" ]; then
+            echo "❌ CF_KV_NAMESPACE_ID secret is not set. See workflow comments for setup." >&2
+            exit 1
+          fi
+          sed -i "s/REPLACE_WITH_D1_DATABASE_ID/$CF_D1_DATABASE_ID/" wrangler.toml
+          sed -i "s/REPLACE_WITH_KV_NAMESPACE_ID/$CF_KV_NAMESPACE_ID/" wrangler.toml
+          echo "✅ wrangler.toml patched with resource IDs"
+
+      - name: Apply D1 migrations
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx wrangler d1 migrations apply xdeo --remote
+          echo "✅ D1 migrations applied"
+
+      - name: Deploy Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx wrangler deploy
+          echo "✅ xDEO Worker deployed"
+
+      - name: Set Worker secrets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          X402_PAY_TO: ${{ secrets.X402_PAY_TO }}
+          X402_DEV_BYPASS_TOKEN: ${{ secrets.X402_DEV_BYPASS_TOKEN }}
+        run: |
+          if [ -z "$X402_PAY_TO" ]; then
+            echo "⚠️  X402_PAY_TO not set — fees have nowhere to land. Add your Base wallet address as a secret." >&2
+            exit 1
+          fi
+          echo "$X402_PAY_TO" | npx wrangler secret put X402_PAY_TO
+          if [ -n "$X402_DEV_BYPASS_TOKEN" ]; then
+            echo "$X402_DEV_BYPASS_TOKEN" | npx wrangler secret put X402_DEV_BYPASS_TOKEN
+          fi
+          echo "✅ Worker secrets set"
+
+      - name: Print live URL
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  xDEO is live 🚀"
+          echo "  Worker:   https://xdeo.$(npx wrangler whoami 2>/dev/null | grep -o '[a-z0-9-]*\.workers\.dev' | head -1 || echo 'workers.dev')"
+          echo "  Health:   /api/status"
+          echo "  Manifest: /.well-known/agent-manifest.json"
+          echo "  Share:    /share.html"
+          echo "  MCP:      /mcp"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
