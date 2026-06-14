@@ -5,6 +5,7 @@ export interface Env {
   KV: KVNamespace;
   ASSETS: Fetcher;
   STREAM_HUB: DurableObjectNamespace;
+  AI: Ai;
 
   // vars (wrangler.toml [vars])
   EDGAR_USER_AGENT: string;

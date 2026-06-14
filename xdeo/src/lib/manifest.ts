@@ -77,6 +77,15 @@ export function agentManifest(base: string, env: Env) {
         path: "/api/v1/verdict/{filingId}",
         price_usdc: 0,
         description: "Post-earnings scoreboard: who was right vs the SEC filing."
+      },
+      {
+        name: "ai_thesis",
+        method: "GET",
+        path: "/api/v1/estimates/{id}/ai-thesis",
+        price_usdc: 0.75,
+        description:
+          "AI-synthesized investment thesis. Combines the analyst's raw thesis, track record, " +
+          "and actual SEC result into structured bull/bear analysis. Not investment advice."
       }
     ],
     streams: {
@@ -124,6 +133,14 @@ export function openApiSpec(base: string, env: Env) {
       "/api/v1/estimates/{id}": {
         get: {
           summary: "Read estimate thesis (x402, analyst-priced)",
+          parameters: [p("id")],
+          responses: { ...ok(), "402": { description: "Payment required" } },
+          ...paymentExt
+        }
+      },
+      "/api/v1/estimates/{id}/ai-thesis": {
+        get: {
+          summary: "AI-synthesized investment thesis (x402 $0.75)",
           parameters: [p("id")],
           responses: { ...ok(), "402": { description: "Payment required" } },
           ...paymentExt

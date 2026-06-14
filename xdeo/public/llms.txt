@@ -34,6 +34,10 @@ xDEO never holds funds.
 
 - GET /api/v1/tickers/{ticker}/estimates — all estimates ($0.01 USDC)
 - GET /api/v1/estimates/{id} — full thesis (analyst-priced, $0.01–$5.00)
+- GET /api/v1/estimates/{id}/ai-thesis — AI-synthesized thesis ($0.75 USDC)
+  Returns: summary, bull_case, bear_case, key_assumptions[], risks[], confidence_rationale.
+  Powered by Cloudflare Workers AI (Llama 3.1 8B). Cached 24h.
+  Not investment advice.
 
 ## Legal
 
