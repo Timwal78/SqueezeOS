@@ -1,0 +1,42 @@
+name = "xdeo"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# Static assets (llms.txt, openapi, etc.) served from ./public
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+# Relational store — analysts, estimates, tickers, filings, verdicts, agents
+[[d1_databases]]
+binding = "DB"
+database_name = "xdeo"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+# Cache + ephemeral state (rate limits, EDGAR ETags, dedupe)
+[[kv_namespaces]]
+binding = "KV"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+# Pull new SEC filings every 5 minutes (spec: EDGAR ingestion pipeline)
+[triggers]
+crons = ["*/5 * * * *"]
+
+[vars]
+# --- Identity (SEC requires a descriptive User-Agent on every request) ---
+EDGAR_USER_AGENT = "xDEO Earnings Oracle contact@example.com"
+# --- x402 / payments (USDC on Base mainnet) ---
+X402_NETWORK = "base"
+# USDC on Base mainnet
+X402_ASSET = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+X402_FACILITATOR_URL = "https://x402.org/facilitator"
+PROTOCOL_FEE_BPS = "500"            # 5% protocol fee (analysts keep 95%)
+AGENT_AFFILIATE_BPS = "1500"        # 15% to referring AI agents
+TREASURY_BPS = "500"                # 5% to community treasury
+# X402_PAY_TO and X402_DEV_BYPASS_TOKEN are secrets — set via `wrangler secret put`
+
+# Production secrets (set out-of-band, never commit):
+#   wrangler secret put X402_PAY_TO              # protocol receiving wallet (Base)
+#   wrangler secret put X402_DEV_BYPASS_TOKEN    # optional: local/dev test bypass
