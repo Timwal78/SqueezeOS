@@ -1,0 +1,49 @@
+name: xdeo-seed
+
+# One-click "Seed Now": manually run the autonomous House Analyst on the live
+# worker so estimates populate immediately (e.g. right before advertising),
+# instead of waiting for the daily cron.
+#
+# Requires ONE GitHub secret:
+#   XDEO_ADMIN_TOKEN  — any random string you choose. The deploy workflow pushes
+#                       it to the worker as ADMIN_TOKEN; this workflow sends it as
+#                       the X-Admin-Token header to authenticate the seed call.
+#
+# Usage: Actions tab → xdeo-seed → Run workflow.
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Worker base URL"
+        required: false
+        default: "https://xdeo.timothy-walton45.workers.dev"
+
+jobs:
+  seed:
+    name: Seed House Analyst estimates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger seeding
+        env:
+          XDEO_ADMIN_TOKEN: ${{ secrets.XDEO_ADMIN_TOKEN }}
+          BASE_URL: ${{ github.event.inputs.base_url }}
+        run: |
+          if [ -z "$XDEO_ADMIN_TOKEN" ]; then
+            echo "❌ XDEO_ADMIN_TOKEN secret is not set. Add it in Settings → Secrets → Actions," >&2
+            echo "   then re-run the xdeo-deploy workflow once so the worker picks it up." >&2
+            exit 1
+          fi
+          echo "Seeding House Analyst estimates via $BASE_URL ..."
+          code=$(curl -sS -o /tmp/seed.json -w "%{http_code}" -X POST \
+            -H "X-Admin-Token: $XDEO_ADMIN_TOKEN" \
+            "$BASE_URL/api/v1/admin/seed")
+          echo "--- response ---"
+          cat /tmp/seed.json || true
+          echo ""
+          echo "--- HTTP $code ---"
+          if [ "$code" != "200" ]; then
+            echo "❌ Seeding failed (HTTP $code)." >&2
+            exit 1
+          fi
+          echo "✅ Seeding complete. Check /api/v1/analysts and /api/v1/tickers/<T>/estimates"

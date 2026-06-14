@@ -25,6 +25,7 @@ export interface Env {
   // secrets (wrangler secret put)
   X402_PAY_TO?: string;
   X402_DEV_BYPASS_TOKEN?: string;
+  ADMIN_TOKEN?: string; // guards POST /api/v1/admin/* (manual House Analyst seeding)
 }
 
 export type Tier = "OBSERVER" | "ANALYST" | "SAGE" | "ORACLE" | "LEGEND";

@@ -175,7 +175,9 @@ export async function runAutonomousAnalyst(
   const edgar = new EdgarClient(env.EDGAR_USER_AGENT);
   const house = lower(env.HOUSE_ANALYST_ADDRESS || HOUSE_ANALYST_FALLBACK);
   const price = clampPrice(Number(env.HOUSE_ESTIMATE_PRICE ?? "0.05"));
-  const maxPerRun = Math.max(1, Number(env.HOUSE_MAX_PER_RUN ?? "10"));
+  // Default 5 keeps a first-run (which pulls full filing history) under the
+  // Cloudflare free-plan 50-subrequest-per-invocation limit. Raise on paid plan.
+  const maxPerRun = Math.max(1, Number(env.HOUSE_MAX_PER_RUN ?? "5"));
 
   await ensureHouseAnalyst(env, house);
 
