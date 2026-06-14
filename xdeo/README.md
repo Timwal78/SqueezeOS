@@ -29,15 +29,19 @@ SqueezeOS x402/MCP ecosystem.
 | Agent manifest + OpenAPI + llms.txt | ✅ | `src/lib/manifest.ts`, `public/llms.txt` |
 | Shareable OG estimate cards (SVG) | ✅ | `src/og/card.ts` |
 | D1 schema | ✅ | `migrations/0001_init.sql` |
-| Unit tests (35, pure logic) | ✅ | `test/` |
-| Smart contracts (Base) | 🚧 interfaces only | `contracts/` |
+| Tests — 42 (pure logic + DB integration over node:sqlite) | ✅ | `test/` |
+| Smart contracts (Base) | 🚧 interface + canonical scoring spec | `contracts/` |
 | Next.js frontend | 🚧 roadmap | — |
 | Twitter/X bot, embeds, prediction-market integration | 🚧 roadmap | — |
 
-> ⚠️ The EDGAR endpoints are blocked from the build sandbox's egress allowlist,
-> so live ingestion was validated by code + unit tests against the documented
-> EDGAR response shapes, not a live call from CI. It runs on Cloudflare Workers,
-> which can reach `data.sec.gov`.
+> ⚠️ Two things are blocked by the build sandbox's egress allowlist and so could
+> not be exercised live here (both work in their real runtimes):
+> - **SEC EDGAR** (`data.sec.gov`) — live ingestion was validated by tests
+>   against the documented EDGAR response shapes; it runs on Cloudflare Workers,
+>   which can reach SEC.
+> - **The Solidity compiler** (`binaries.soliditylang.org`) — so the `contracts/`
+>   are kept at honest interface + canonical-spec level, not shipped as
+>   unverified implementations. See `contracts/README.md`.
 
 ---
 
@@ -66,10 +70,17 @@ Each scored estimate yields `score ∈ [0,100]` from three terms:
 - **Timeliness** — full credit at ≥30 days lead, 0.25 floor for last-minute calls.
 - **Confidence as stake** — confident hits rewarded, confident misses punished harder.
 
+Timeliness genuinely bites: a low-lead call is blended toward a neutral 0.5
+(`effective = base·timeliness + 0.5·(1−timeliness)`), dampening both its reward
+and its penalty — anyone can be "right" minutes before results.
+
 Reputation folds in each score via a bounded EMA (alpha floor 0.08) so it
 **compounds**: a long record is hard-won and one miss can't erase it, nor one hit
 fake it. Streaks (7d→1.5×, 30d→2.5×, 100d→5×) amplify gains only. See
-`src/reputation/engine.ts` and the 21 unit tests in `test/reputation.test.ts`.
+`src/reputation/engine.ts` (23 unit tests) and the end-to-end scoring pipeline
+test in `test/integration.scoring.test.ts`, which runs the real migration SQL +
+applier against an in-memory SQLite. The exact same formula is specified for the
+on-chain port in `contracts/README.md`.
 
 ## API
 
