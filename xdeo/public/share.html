@@ -1,0 +1,1780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>xDEO — The Decentralized Earnings Oracle | $0.01 Per Call</title>
+  <meta name="description" content="Bloomberg Terminal costs $24,000/year. xDEO charges $0.01 per API call. Real analyst estimates scored against SEC EDGAR filings. No subscription. No custody. Anyone with a wallet." />
+  <link rel="canonical" href="https://xdeo.finance/share" />
+
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://xdeo.finance/share" />
+  <meta property="og:title" content="xDEO — The Bloomberg Terminal Was Never Built For You" />
+  <meta property="og:description" content="$0.01 per call. Real estimates scored against SEC EDGAR. AI-powered. Zero custody. Main Street finally gets institutional-grade earnings intelligence." />
+  <meta property="og:image" content="https://xdeo.finance/og-image.png" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:site" content="@xdeo_finance" />
+  <meta name="twitter:title" content="xDEO — $0.01 per earnings call. Bloomberg charges $24k/year." />
+  <meta name="twitter:description" content="Analyst estimates scored against real SEC EDGAR filings. Reputation you can't fake. AI thesis for $0.75. Main Street vs Wall Street — retail finally wins." />
+  <meta name="twitter:image" content="https://xdeo.finance/og-image.png" />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "xDEO",
+    "url": "https://xdeo.finance",
+    "description": "Decentralized earnings oracle. Analyst estimates scored against SEC EDGAR filings. Pay-per-call via x402 protocol (USDC on Base).",
+    "applicationCategory": "FinanceApplication",
+    "offers": {
+      "@type": "Offer",
+      "price": "0.01",
+      "priceCurrency": "USD",
+      "description": "Per API call — no subscription required"
+    },
+    "featureList": [
+      "SEC EDGAR auto-scoring",
+      "Reputation engine with streak multipliers",
+      "AI-powered investment thesis",
+      "x402 native payment protocol",
+      "MCP compatible for AI agents",
+      "Zero custody, zero KYC"
+    ]
+  }
+  </script>
+
+  <style>
+    /* ===== CSS CUSTOM PROPERTIES ===== */
+    :root {
+      --gold: #f5a623;
+      --gold-bright: #ffcc00;
+      --blue: #00d4ff;
+      --green: #00ff88;
+      --red: #ff4d6d;
+      --text: #e8e8f0;
+      --muted: #6b6b9f;
+      --surface: #0f0f1e;
+      --surface-2: #13132a;
+      --border: rgba(255, 255, 255, 0.06);
+      --border-gold: rgba(245, 166, 35, 0.3);
+      --border-blue: rgba(0, 212, 255, 0.2);
+      --bg: #06060f;
+      --font-head: 'Space Grotesk', sans-serif;
+      --font-body: 'Inter', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --radius: 12px;
+      --radius-lg: 20px;
+      --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* ===== RESET & BASE ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      font-size: 16px;
+      line-height: 1.6;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ===== BACKGROUND GLOW ===== */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 70% 50% at 15% 10%, rgba(245, 166, 35, 0.07) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 85% 90%, rgba(0, 212, 255, 0.07) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ===== UTILITY ===== */
+    .container {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    .gradient-text {
+      background: linear-gradient(135deg, var(--gold), var(--gold-bright));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .gradient-text-blue {
+      background: linear-gradient(135deg, var(--blue), #7b8fff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .card {
+      background: rgba(15, 15, 30, 0.8);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    .tag {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 4px 12px;
+      border-radius: 100px;
+    }
+
+    .tag-gold {
+      background: rgba(245, 166, 35, 0.12);
+      color: var(--gold);
+      border: 1px solid rgba(245, 166, 35, 0.25);
+    }
+
+    .tag-blue {
+      background: rgba(0, 212, 255, 0.1);
+      color: var(--blue);
+      border: 1px solid rgba(0, 212, 255, 0.2);
+    }
+
+    .tag-green {
+      background: rgba(0, 255, 136, 0.1);
+      color: var(--green);
+      border: 1px solid rgba(0, 255, 136, 0.2);
+    }
+
+    /* ===== FADE-IN ANIMATION ===== */
+    .fade-in {
+      opacity: 0;
+      transform: translateY(28px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+    .fade-in.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .fade-in.delay-1 { transition-delay: 0.1s; }
+    .fade-in.delay-2 { transition-delay: 0.2s; }
+    .fade-in.delay-3 { transition-delay: 0.3s; }
+    .fade-in.delay-4 { transition-delay: 0.4s; }
+
+    /* ===== NAV ===== */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding: 16px 0;
+      background: rgba(6, 6, 15, 0.8);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    nav .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .nav-wordmark {
+      font-family: var(--font-head);
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--gold);
+      text-decoration: none;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 28px;
+      align-items: center;
+    }
+
+    .nav-links a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: color var(--transition);
+    }
+    .nav-links a:hover { color: var(--text); }
+
+    .nav-links .btn-nav {
+      background: rgba(245, 166, 35, 0.1);
+      color: var(--gold);
+      border: 1px solid var(--border-gold);
+      padding: 8px 18px;
+      border-radius: 8px;
+      transition: background var(--transition), color var(--transition);
+    }
+    .nav-links .btn-nav:hover {
+      background: rgba(245, 166, 35, 0.2);
+      color: var(--gold-bright);
+    }
+
+    /* ===== HERO ===== */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 120px 24px 80px;
+      position: relative;
+    }
+
+    .hero-eyebrow {
+      margin-bottom: 20px;
+    }
+
+    .hero-headline {
+      font-family: var(--font-head);
+      font-size: clamp(36px, 6vw, 72px);
+      font-weight: 800;
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+      max-width: 860px;
+      margin-bottom: 24px;
+    }
+
+    .hero-sub {
+      font-size: clamp(16px, 2.2vw, 20px);
+      color: var(--muted);
+      max-width: 520px;
+      margin-bottom: 40px;
+      line-height: 1.6;
+    }
+
+    .hero-sub strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-bottom: 64px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--gold), #e09018);
+      color: #06060f;
+      font-family: var(--font-body);
+      font-weight: 700;
+      font-size: 15px;
+      padding: 14px 28px;
+      border-radius: 10px;
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+      transition: transform var(--transition), box-shadow var(--transition);
+      box-shadow: 0 0 30px rgba(245, 166, 35, 0.25);
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 40px rgba(245, 166, 35, 0.4);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--text);
+      font-family: var(--font-body);
+      font-weight: 600;
+      font-size: 15px;
+      padding: 13px 28px;
+      border-radius: 10px;
+      text-decoration: none;
+      border: 1px solid var(--border);
+      transition: border-color var(--transition), background var(--transition);
+    }
+    .btn-secondary:hover {
+      border-color: rgba(255, 255, 255, 0.15);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    /* ===== TERMINAL ===== */
+    .terminal-wrap {
+      width: 100%;
+      max-width: 760px;
+      text-align: left;
+    }
+
+    .terminal {
+      background: #09091a;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255,255,255,0.04);
+    }
+
+    .terminal-bar {
+      background: #111126;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+    .dot-r { background: #ff5f57; }
+    .dot-y { background: #ffbd2e; }
+    .dot-g { background: #28c840; }
+
+    .terminal-title {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--muted);
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .terminal-body {
+      padding: 24px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.8;
+    }
+
+    .t-prompt { color: var(--green); }
+    .t-cmd { color: var(--text); }
+    .t-key { color: var(--blue); }
+    .t-str { color: #a8d8b9; }
+    .t-num { color: #f0a040; }
+    .t-bool { color: #c792ea; }
+    .t-comment { color: var(--muted); }
+    .t-curl { color: var(--gold); }
+    .t-flag { color: #89ddff; }
+    .t-url { color: var(--text); text-decoration: underline; text-decoration-color: var(--muted); }
+    .t-bracket { color: var(--muted); }
+    .t-brace { color: var(--text); }
+
+    /* ===== TRUST BAR ===== */
+    .trust-bar {
+      padding: 32px 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      background: rgba(15, 15, 30, 0.4);
+    }
+
+    .trust-inner {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 40px;
+      flex-wrap: wrap;
+    }
+
+    .trust-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      transition: color var(--transition);
+    }
+    .trust-item:hover { color: var(--text); }
+
+    .trust-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .trust-icon-edgar { background: rgba(255, 77, 109, 0.15); color: #ff4d6d; font-family: var(--font-mono); font-size: 10px; }
+    .trust-icon-base { background: rgba(0, 82, 255, 0.2); color: #4d78ff; }
+    .trust-icon-402 { background: rgba(245, 166, 35, 0.15); color: var(--gold); font-family: var(--font-mono); font-size: 10px; }
+    .trust-icon-cf { background: rgba(249, 115, 22, 0.15); color: #f97316; }
+    .trust-icon-mcp { background: rgba(0, 255, 136, 0.1); color: var(--green); font-family: var(--font-mono); font-size: 10px; }
+
+    /* ===== SECTIONS ===== */
+    section {
+      padding: 100px 0;
+      position: relative;
+    }
+
+    .section-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 16px;
+    }
+
+    .section-headline {
+      font-family: var(--font-head);
+      font-size: clamp(28px, 4vw, 48px);
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      line-height: 1.1;
+      margin-bottom: 16px;
+    }
+
+    .section-sub {
+      color: var(--muted);
+      font-size: 16px;
+      max-width: 560px;
+      line-height: 1.7;
+    }
+
+    /* ===== COMPARISON ===== */
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-top: 48px;
+    }
+
+    .comp-card {
+      border-radius: var(--radius-lg);
+      padding: 36px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .comp-before {
+      background: rgba(255, 77, 109, 0.06);
+      border: 1px solid rgba(255, 77, 109, 0.2);
+    }
+    .comp-before::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(255, 77, 109, 0.06) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .comp-after {
+      background: rgba(0, 255, 136, 0.04);
+      border: 1px solid rgba(0, 255, 136, 0.15);
+    }
+    .comp-after::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(0, 255, 136, 0.05) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .comp-badge {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 4px;
+    }
+    .comp-before .comp-badge { background: rgba(255,77,109,0.12); color: #ff4d6d; }
+    .comp-after .comp-badge { background: rgba(0,255,136,0.1); color: var(--green); }
+
+    .comp-name {
+      font-family: var(--font-head);
+      font-size: 22px;
+      font-weight: 800;
+      margin-bottom: 24px;
+      letter-spacing: -0.02em;
+    }
+    .comp-before .comp-name { color: #ff8fa3; }
+    .comp-after .comp-name { color: var(--green); }
+
+    .comp-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .comp-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .comp-icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .comp-before .comp-icon { background: rgba(255,77,109,0.15); color: #ff4d6d; }
+    .comp-after .comp-icon { background: rgba(0,255,136,0.12); color: var(--green); }
+
+    .comp-before .comp-list li { color: #c07080; }
+    .comp-after .comp-list li { color: #a0e8c8; }
+
+    .comp-price {
+      font-family: var(--font-mono);
+      font-size: 32px;
+      font-weight: 600;
+      margin: 24px 0 4px;
+      line-height: 1;
+    }
+    .comp-before .comp-price { color: #ff4d6d; }
+    .comp-after .comp-price { color: var(--green); }
+
+    .comp-price-label {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    /* ===== HOW IT WORKS ===== */
+    .steps-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      margin-top: 48px;
+    }
+
+    .step-card {
+      padding: 32px;
+      border-radius: var(--radius-lg);
+      background: rgba(15, 15, 30, 0.7);
+      border: 1px solid var(--border);
+      position: relative;
+      transition: border-color var(--transition), transform var(--transition);
+    }
+    .step-card:hover {
+      border-color: rgba(245, 166, 35, 0.2);
+      transform: translateY(-4px);
+    }
+
+    .step-number {
+      font-family: var(--font-mono);
+      font-size: 48px;
+      font-weight: 600;
+      color: rgba(245, 166, 35, 0.12);
+      line-height: 1;
+      margin-bottom: 20px;
+      letter-spacing: -0.04em;
+    }
+
+    .step-icon {
+      font-size: 28px;
+      margin-bottom: 16px;
+    }
+
+    .step-title {
+      font-family: var(--font-head);
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      letter-spacing: -0.01em;
+    }
+
+    .step-desc {
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    /* ===== REPUTATION ENGINE ===== */
+    .rep-layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      align-items: start;
+      margin-top: 48px;
+    }
+
+    .formula-display {
+      background: rgba(15, 15, 30, 0.8);
+      border: 1px solid var(--border-gold);
+      border-radius: var(--radius-lg);
+      padding: 36px;
+    }
+
+    .formula-title {
+      font-size: 12px;
+      font-family: var(--font-mono);
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+
+    .formula-eq {
+      font-family: var(--font-mono);
+      font-size: clamp(14px, 2vw, 18px);
+      margin-bottom: 28px;
+      line-height: 1.6;
+    }
+    .f-score { color: var(--gold); font-weight: 600; }
+    .f-var { color: var(--blue); }
+    .f-op { color: var(--muted); }
+
+    .streak-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .streak-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .streak-days {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--muted);
+      width: 60px;
+    }
+
+    .streak-bar-wrap {
+      flex: 1;
+      height: 6px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .streak-bar {
+      height: 100%;
+      border-radius: 3px;
+      background: linear-gradient(90deg, var(--gold), var(--gold-bright));
+    }
+
+    .streak-mult {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--gold);
+      width: 42px;
+      text-align: right;
+    }
+
+    /* Leaderboard */
+    .leaderboard {
+      background: rgba(15, 15, 30, 0.8);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+
+    .lb-header {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .lb-title {
+      font-family: var(--font-head);
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .lb-note {
+      font-size: 10px;
+      color: var(--muted);
+      font-family: var(--font-mono);
+    }
+
+    .lb-row {
+      padding: 18px 24px;
+      display: grid;
+      grid-template-columns: 24px 1fr auto auto;
+      gap: 12px;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      transition: background var(--transition);
+    }
+    .lb-row:last-child { border-bottom: none; }
+    .lb-row:hover { background: rgba(255,255,255,0.02); }
+
+    .lb-rank {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .lb-analyst-name {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .lb-tier {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      padding: 3px 8px;
+      border-radius: 4px;
+    }
+    .tier-legend { background: rgba(245,166,35,0.15); color: var(--gold); }
+    .tier-oracle { background: rgba(0,212,255,0.12); color: var(--blue); }
+    .tier-sage   { background: rgba(0,255,136,0.1);  color: var(--green); }
+
+    .lb-score {
+      text-align: right;
+    }
+    .lb-score-num {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--gold);
+    }
+    .lb-score-acc {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    /* ===== AI THESIS ===== */
+    .ai-card {
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-gold);
+      background: rgba(10, 10, 22, 0.9);
+      overflow: hidden;
+      position: relative;
+    }
+    .ai-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 70% 50% at 50% -10%, rgba(245,166,35,0.06) 0%, transparent 60%);
+      pointer-events: none;
+    }
+
+    .ai-header {
+      padding: 36px 40px 28px;
+    }
+
+    .ai-price-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+
+    .ai-price {
+      font-family: var(--font-mono);
+      font-size: 40px;
+      font-weight: 600;
+      color: var(--gold);
+      line-height: 1;
+    }
+
+    .ai-headline {
+      font-family: var(--font-head);
+      font-size: clamp(22px, 3vw, 32px);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 12px;
+    }
+
+    .ai-sub {
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.6;
+      max-width: 560px;
+      margin-bottom: 28px;
+    }
+
+    .ai-badges {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .ai-body {
+      border-top: 1px solid var(--border);
+    }
+
+    /* Code block */
+    .code-block {
+      background: #07071a;
+      padding: 28px 32px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.9;
+      overflow-x: auto;
+    }
+
+    .c-key { color: var(--blue); }
+    .c-str { color: #a8d8b9; }
+    .c-num { color: #f0a040; }
+    .c-bool { color: #c792ea; }
+    .c-arr { color: var(--muted); }
+    .c-comment { color: #3a3a5a; font-style: italic; }
+    .c-label { color: var(--gold); font-weight: 600; }
+    .c-positive { color: var(--green); }
+    .c-negative { color: #ff8fa3; }
+
+    /* ===== AGENTS SECTION ===== */
+    .agents-layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      align-items: start;
+      margin-top: 48px;
+    }
+
+    .agents-copy {
+      padding-top: 8px;
+    }
+
+    .agent-feature {
+      display: flex;
+      gap: 16px;
+      padding: 20px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .agent-feature:last-child { border-bottom: none; }
+
+    .agent-feature-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: rgba(0, 212, 255, 0.1);
+      border: 1px solid var(--border-blue);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .agent-feature-title {
+      font-family: var(--font-head);
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .agent-feature-desc {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .mcp-snippet {
+      background: #07071a;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .mcp-snippet-header {
+      padding: 12px 20px;
+      background: rgba(255,255,255,0.02);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .mcp-snippet-title {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .mcp-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .mcp-snippet-body {
+      padding: 24px;
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      line-height: 1.8;
+    }
+
+    .agents-tagline {
+      font-family: var(--font-head);
+      font-size: 24px;
+      font-weight: 800;
+      margin-top: 24px;
+      letter-spacing: -0.02em;
+      line-height: 1.3;
+    }
+
+    /* ===== TIERS SECTION ===== */
+    .tiers-grid {
+      display: flex;
+      gap: 10px;
+      margin-top: 40px;
+      overflow-x: auto;
+      padding-bottom: 8px;
+    }
+
+    .tier-pill {
+      flex-shrink: 0;
+      padding: 20px 24px;
+      border-radius: var(--radius);
+      background: rgba(15,15,30,0.7);
+      border: 1px solid var(--border);
+      min-width: 160px;
+      transition: border-color var(--transition), transform var(--transition);
+    }
+    .tier-pill:hover { transform: translateY(-3px); }
+
+    .tier-pill-name {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      margin-bottom: 8px;
+    }
+    .tier-pill:nth-child(1) .tier-pill-name { color: var(--muted); }
+    .tier-pill:nth-child(2) .tier-pill-name { color: #89ddff; }
+    .tier-pill:nth-child(3) .tier-pill-name { color: var(--green); }
+    .tier-pill:nth-child(4) .tier-pill-name { color: var(--blue); }
+    .tier-pill:nth-child(5) .tier-pill-name { color: var(--gold); }
+
+    .tier-pill:nth-child(5) {
+      border-color: var(--border-gold);
+      background: rgba(245,166,35,0.04);
+    }
+
+    .tier-pill-req {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    /* ===== STATS ROW ===== */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 2px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      margin-top: 60px;
+    }
+
+    .stat-cell {
+      background: var(--surface);
+      padding: 28px 24px;
+      text-align: center;
+    }
+
+    .stat-num {
+      font-family: var(--font-head);
+      font-size: 36px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin-bottom: 6px;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: var(--muted);
+      font-family: var(--font-mono);
+      letter-spacing: 0.05em;
+    }
+
+    /* ===== FOOTER ===== */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 40px 0;
+      background: rgba(6,6,15,0.5);
+    }
+
+    .footer-inner {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+
+    .footer-brand {
+      font-family: var(--font-head);
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--gold);
+      margin-bottom: 10px;
+    }
+
+    .footer-legal {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.8;
+      max-width: 540px;
+    }
+
+    .footer-links {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .footer-links a {
+      font-size: 13px;
+      color: var(--muted);
+      text-decoration: none;
+      transition: color var(--transition);
+    }
+    .footer-links a:hover { color: var(--text); }
+
+    /* ===== SECTION DIVIDER ===== */
+    .divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border), transparent);
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 768px) {
+      .comparison-grid,
+      .steps-grid,
+      .rep-layout,
+      .agents-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .stats-row {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .nav-links a:not(.btn-nav) { display: none; }
+
+      .comp-card { padding: 24px; }
+      .ai-header { padding: 24px; }
+      .ai-price { font-size: 32px; }
+
+      section { padding: 72px 0; }
+
+      .trust-inner { gap: 20px; }
+      .trust-item span:last-child { display: none; }
+    }
+
+    @media (max-width: 480px) {
+      .stats-row { grid-template-columns: 1fr 1fr; }
+      .btn-group { flex-direction: column; align-items: center; }
+      .btn-primary, .btn-secondary { width: 100%; max-width: 280px; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ===== NAV ===== -->
+<nav>
+  <div class="container">
+    <a href="/" class="nav-wordmark">xDEO</a>
+    <nav class="nav-links">
+      <a href="/docs">Docs</a>
+      <a href="https://github.com/xdeo-finance/xdeo" target="_blank" rel="noopener">GitHub</a>
+      <a href="/api/v1/leaderboard" class="btn-nav">Leaderboard →</a>
+    </nav>
+  </div>
+</nav>
+
+<!-- ===== HERO ===== -->
+<section class="hero">
+  <div class="hero-eyebrow fade-in">
+    <span class="tag tag-gold">Main Street vs Wall Street</span>
+  </div>
+
+  <h1 class="hero-headline fade-in delay-1">
+    The Bloomberg Terminal<br />
+    <span class="gradient-text">was never built for you.</span>
+  </h1>
+
+  <p class="hero-sub fade-in delay-2">
+    Real analyst estimates, scored automatically against
+    <strong>SEC EDGAR filings</strong>.
+    AI-powered investment thesis.
+    <strong>$0.01 a call.</strong>
+    No subscription. No custody. No gatekeepers.
+  </p>
+
+  <div class="btn-group fade-in delay-3">
+    <a href="/api/v1/tickers" class="btn-primary">Explore Free →</a>
+    <a href="/docs/api" class="btn-secondary">View API Docs</a>
+  </div>
+
+  <div class="terminal-wrap fade-in delay-4">
+    <div class="terminal">
+      <div class="terminal-bar">
+        <div class="dot dot-r"></div>
+        <div class="dot dot-y"></div>
+        <div class="dot dot-g"></div>
+        <span class="terminal-title">xdeo — bash</span>
+      </div>
+      <div class="terminal-body">
+        <div><span class="t-prompt">$</span> <span class="t-curl">curl</span> <span class="t-flag">-H</span> <span class="t-str">"X-Payment-Token: &lt;usdc-token&gt;"</span> \</div>
+        <div>&nbsp;&nbsp;&nbsp;&nbsp; <span class="t-url">https://xdeo.finance/api/v1/tickers/AAPL</span></div>
+        <br />
+        <div><span class="t-comment">// HTTP 200 OK — $0.01 deducted via x402</span></div>
+        <br />
+        <div><span class="t-brace">{</span></div>
+        <div>&nbsp;&nbsp;<span class="t-key">"ticker"</span><span class="t-bracket">:</span> <span class="t-str">"AAPL"</span><span class="t-bracket">,</span></div>
+        <div>&nbsp;&nbsp;<span class="t-key">"consensus_eps"</span><span class="t-bracket">:</span> <span class="t-num">2.41</span><span class="t-bracket">,</span></div>
+        <div>&nbsp;&nbsp;<span class="t-key">"consensus_revenue"</span><span class="t-bracket">:</span> <span class="t-num">124800000000</span><span class="t-bracket">,</span></div>
+        <div>&nbsp;&nbsp;<span class="t-key">"estimate_count"</span><span class="t-bracket">:</span> <span class="t-num">34</span><span class="t-bracket">,</span></div>
+        <div>&nbsp;&nbsp;<span class="t-key">"top_analyst_tier"</span><span class="t-bracket">:</span> <span class="t-str">"LEGEND"</span><span class="t-bracket">,</span></div>
+        <div>&nbsp;&nbsp;<span class="t-key">"xdeo_verdict"</span><span class="t-bracket">:</span> <span class="t-str">"BEAT_LIKELY"</span><span class="t-bracket">,</span></div>
+        <div>&nbsp;&nbsp;<span class="t-key">"verdict_confidence"</span><span class="t-bracket">:</span> <span class="t-num">0.78</span><span class="t-bracket">,</span></div>
+        <div>&nbsp;&nbsp;<span class="t-key">"edgar_next_filing"</span><span class="t-bracket">:</span> <span class="t-str">"2025-08-01"</span><span class="t-bracket">,</span></div>
+        <div>&nbsp;&nbsp;<span class="t-key">"scoring_live"</span><span class="t-bracket">:</span> <span class="t-bool">true</span></div>
+        <div><span class="t-brace">}</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== TRUST BAR ===== -->
+<div class="trust-bar">
+  <div class="container">
+    <div class="trust-inner">
+      <div class="trust-item">
+        <div class="trust-icon trust-icon-edgar">SEC</div>
+        <span>EDGAR Verified</span>
+      </div>
+      <div class="trust-item">
+        <div class="trust-icon trust-icon-base">B</div>
+        <span>Base (USDC)</span>
+      </div>
+      <div class="trust-item">
+        <div class="trust-icon trust-icon-402">402</div>
+        <span>x402 Protocol</span>
+      </div>
+      <div class="trust-item">
+        <div class="trust-icon trust-icon-cf">&#9729;</div>
+        <span>Cloudflare Workers</span>
+      </div>
+      <div class="trust-item">
+        <div class="trust-icon trust-icon-mcp">MCP</div>
+        <span>MCP Compatible</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== COMPARISON ===== -->
+<section id="comparison">
+  <div class="container">
+    <p class="section-label fade-in">The problem</p>
+    <h2 class="section-headline fade-in delay-1">
+      Wall Street had a<br />
+      <span class="gradient-text">24-year head start.</span>
+    </h2>
+    <p class="section-sub fade-in delay-2">
+      Bloomberg built a walled garden. Goldman has the quants. You have Reddit.
+      That ends today.
+    </p>
+
+    <div class="comparison-grid">
+      <div class="comp-card comp-before fade-in delay-1">
+        <div class="comp-badge">Before</div>
+        <div class="comp-name">Bloomberg Terminal</div>
+        <div class="comp-price">$24,000</div>
+        <div class="comp-price-label">per seat, per year — non-negotiable</div>
+        <ul class="comp-list" style="margin-top: 24px;">
+          <li>
+            <div class="comp-icon">✕</div>
+            <span>Analyst research reports: $50,000+/year on top</span>
+          </li>
+          <li>
+            <div class="comp-icon">✕</div>
+            <span>Institutional trading desks only — no individual access</span>
+          </li>
+          <li>
+            <div class="comp-icon">✕</div>
+            <span>Zero accountability when analyst calls are wrong — no public track record</span>
+          </li>
+          <li>
+            <div class="comp-icon">✕</div>
+            <span>Lock-in contracts, annual renewals, buried in fine print</span>
+          </li>
+          <li>
+            <div class="comp-icon">✕</div>
+            <span>KYC, accreditation gates, geography restrictions</span>
+          </li>
+        </ul>
+      </div>
+
+      <div class="comp-card comp-after fade-in delay-2">
+        <div class="comp-badge">xDEO</div>
+        <div class="comp-name">Decentralized Oracle</div>
+        <div class="comp-price">$0.01</div>
+        <div class="comp-price-label">per API call — pay as you go, forever</div>
+        <ul class="comp-list" style="margin-top: 24px;">
+          <li>
+            <div class="comp-icon">✓</div>
+            <span>Open to anyone with a wallet — no gatekeepers, no minimums</span>
+          </li>
+          <li>
+            <div class="comp-icon">✓</div>
+            <span>Every estimate scored against real SEC EDGAR filings automatically</span>
+          </li>
+          <li>
+            <div class="comp-icon">✓</div>
+            <span>On-chain reputation — good calls compound forever, bad ones don't disappear</span>
+          </li>
+          <li>
+            <div class="comp-icon">✓</div>
+            <span>AI agents pay natively via x402 — no human required in the loop</span>
+          </li>
+          <li>
+            <div class="comp-icon">✓</div>
+            <span>Zero custody. Zero KYC. Zero subscription. Pure information.</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ===== HOW IT WORKS ===== -->
+<section id="how">
+  <div class="container">
+    <p class="section-label fade-in">How it works</p>
+    <h2 class="section-headline fade-in delay-1">
+      Three steps to a<br />
+      <span class="gradient-text">permanent reputation.</span>
+    </h2>
+    <p class="section-sub fade-in delay-2">
+      You don't stake money. You stake your name. EDGAR doesn't lie.
+    </p>
+
+    <div class="steps-grid">
+      <div class="step-card fade-in delay-1">
+        <div class="step-number">01</div>
+        <div class="step-icon">&#128221;</div>
+        <h3 class="step-title">Submit Your Estimate</h3>
+        <p class="step-desc">
+          Post your EPS or revenue forecast for any covered ticker. Free to submit.
+          No money at stake — only your reputation. Every submission is timestamped
+          and immutable. You can't edit it after the filing.
+        </p>
+      </div>
+
+      <div class="step-card fade-in delay-2">
+        <div class="step-number">02</div>
+        <div class="step-icon">&#9878;</div>
+        <h3 class="step-title">EDGAR Auto-Scores</h3>
+        <p class="step-desc">
+          The moment the SEC filing lands, the oracle reads the actual numbers.
+          Your estimate is scored on accuracy, timeliness (how early you called it),
+          and confidence (how bold your call was). Automatically. Permanently.
+        </p>
+      </div>
+
+      <div class="step-card fade-in delay-3">
+        <div class="step-number">03</div>
+        <div class="step-icon">&#128293;</div>
+        <h3 class="step-title">Reputation Compounds</h3>
+        <p class="step-desc">
+          Good calls stack. A 100-day accuracy streak earns a 5× score multiplier.
+          Your tier climbs from OBSERVER to LEGEND. The market pays more for
+          estimates from LEGEND-tier analysts. Merit-based. Unfakeable.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ===== REPUTATION ENGINE ===== -->
+<section id="reputation">
+  <div class="container">
+    <p class="section-label fade-in">Reputation Engine</p>
+    <h2 class="section-headline fade-in delay-1">
+      A score you<br />
+      <span class="gradient-text">can't fake or buy.</span>
+    </h2>
+    <p class="section-sub fade-in delay-2">
+      Every analyst's reputation is derived from the same public formula,
+      applied to the same public data. No editorial discretion. No pay-to-play.
+    </p>
+
+    <div class="rep-layout">
+      <div class="fade-in delay-1">
+        <div class="formula-display">
+          <div class="formula-title">Reputation Formula</div>
+          <div class="formula-eq">
+            <span class="f-score">reputation</span> <span class="f-op">=</span><br />
+            &nbsp;&nbsp;<span class="f-var">accuracy</span> <span class="f-op">×</span><br />
+            &nbsp;&nbsp;<span class="f-var">timeliness</span> <span class="f-op">×</span><br />
+            &nbsp;&nbsp;<span class="f-var">confidence</span> <span class="f-op">×</span><br />
+            &nbsp;&nbsp;<span class="f-score">streak_multiplier</span>
+          </div>
+
+          <div class="formula-title" style="margin-bottom: 16px;">Streak Multipliers</div>
+          <div class="streak-grid">
+            <div class="streak-item">
+              <span class="streak-days">7 days</span>
+              <div class="streak-bar-wrap">
+                <div class="streak-bar" style="width: 30%;"></div>
+              </div>
+              <span class="streak-mult">1.5×</span>
+            </div>
+            <div class="streak-item">
+              <span class="streak-days">30 days</span>
+              <div class="streak-bar-wrap">
+                <div class="streak-bar" style="width: 50%;"></div>
+              </div>
+              <span class="streak-mult">2.5×</span>
+            </div>
+            <div class="streak-item">
+              <span class="streak-days">60 days</span>
+              <div class="streak-bar-wrap">
+                <div class="streak-bar" style="width: 70%;"></div>
+              </div>
+              <span class="streak-mult">3.5×</span>
+            </div>
+            <div class="streak-item">
+              <span class="streak-days">100 days</span>
+              <div class="streak-bar-wrap">
+                <div class="streak-bar" style="width: 100%;"></div>
+              </div>
+              <span class="streak-mult">5.0×</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tiers -->
+        <div style="margin-top: 24px;">
+          <div class="formula-title" style="color: var(--muted); font-size: 11px; margin-bottom: 14px; font-family: var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase;">Analyst Tiers</div>
+          <div class="tiers-grid">
+            <div class="tier-pill">
+              <div class="tier-pill-name">OBSERVER</div>
+              <div class="tier-pill-req">Just started. 0 scored estimates.</div>
+            </div>
+            <div class="tier-pill">
+              <div class="tier-pill-name">ANALYST</div>
+              <div class="tier-pill-req">5+ estimates. Rep &gt; 100</div>
+            </div>
+            <div class="tier-pill">
+              <div class="tier-pill-name">SAGE</div>
+              <div class="tier-pill-req">15+ estimates. Rep &gt; 500</div>
+            </div>
+            <div class="tier-pill">
+              <div class="tier-pill-name">ORACLE</div>
+              <div class="tier-pill-req">30+ estimates. Rep &gt; 1,500</div>
+            </div>
+            <div class="tier-pill">
+              <div class="tier-pill-name">LEGEND</div>
+              <div class="tier-pill-req">100+ estimates. Rep &gt; 5,000</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Leaderboard -->
+      <div class="fade-in delay-2">
+        <div class="leaderboard">
+          <div class="lb-header">
+            <span class="lb-title">Top Analysts</span>
+            <span class="lb-note">Illustrative — live data via /api/v1/leaderboard</span>
+          </div>
+
+          <div class="lb-row">
+            <span class="lb-rank">#1</span>
+            <div>
+              <div class="lb-analyst-name">cryptovega.eth</div>
+              <div style="font-size: 11px; color: var(--muted); font-family: var(--font-mono); margin-top: 2px;">142 estimates · 97-day streak</div>
+            </div>
+            <span class="lb-tier tier-legend">LEGEND</span>
+            <div class="lb-score">
+              <div class="lb-score-num">8,412</div>
+              <div class="lb-score-acc">91.4% acc</div>
+            </div>
+          </div>
+
+          <div class="lb-row">
+            <span class="lb-rank">#2</span>
+            <div>
+              <div class="lb-analyst-name">mainst_oracle</div>
+              <div style="font-size: 11px; color: var(--muted); font-family: var(--font-mono); margin-top: 2px;">88 estimates · 44-day streak</div>
+            </div>
+            <span class="lb-tier tier-oracle">ORACLE</span>
+            <div class="lb-score">
+              <div class="lb-score-num">3,891</div>
+              <div class="lb-score-acc">87.2% acc</div>
+            </div>
+          </div>
+
+          <div class="lb-row">
+            <span class="lb-rank">#3</span>
+            <div>
+              <div class="lb-analyst-name">edgar_watcher</div>
+              <div style="font-size: 11px; color: var(--muted); font-family: var(--font-mono); margin-top: 2px;">47 estimates · 23-day streak</div>
+            </div>
+            <span class="lb-tier tier-sage">SAGE</span>
+            <div class="lb-score">
+              <div class="lb-score-num">1,247</div>
+              <div class="lb-score-acc">83.0% acc</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pricing mini-table -->
+        <div class="card" style="margin-top: 24px; padding: 24px;">
+          <div style="font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 16px;">API Pricing</div>
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
+              <span style="color: var(--muted);">Leaderboard / Consensus / Verdict</span>
+              <span class="tag tag-green" style="font-size: 10px;">Free</span>
+            </div>
+            <div style="height: 1px; background: var(--border);"></div>
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
+              <span style="color: var(--muted);">Estimate list</span>
+              <span style="font-family: var(--font-mono); color: var(--gold);">$0.01</span>
+            </div>
+            <div style="height: 1px; background: var(--border);"></div>
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
+              <span style="color: var(--muted);">Full analyst thesis</span>
+              <span style="font-family: var(--font-mono); color: var(--gold);">$0.01 – $5.00</span>
+            </div>
+            <div style="height: 1px; background: var(--border);"></div>
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
+              <span style="color: var(--muted);">AI thesis (Llama 3.1 8B)</span>
+              <span style="font-family: var(--font-mono); color: var(--gold);">$0.75</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ===== AI THESIS ===== -->
+<section id="ai-thesis">
+  <div class="container">
+    <p class="section-label fade-in">AI Thesis</p>
+    <h2 class="section-headline fade-in delay-1">
+      Institutional-grade analysis.<br />
+      <span class="gradient-text">Seventy-five cents.</span>
+    </h2>
+
+    <div class="ai-card fade-in delay-2" style="margin-top: 48px;">
+      <div class="ai-header">
+        <div class="ai-price-row">
+          <span class="ai-price">$0.75</span>
+          <span class="tag tag-gold">Cloudflare Workers AI</span>
+          <span class="tag tag-blue">Llama 3.1 8B</span>
+        </div>
+        <h3 class="ai-headline">The $0.75 investment thesis.</h3>
+        <p class="ai-sub">
+          Structured bull case, bear case, key risks — generated on the fly from
+          live consensus data and SEC filings. No hallucinated numbers.
+          Grounded in real EDGAR data, delivered in milliseconds from the edge.
+          Every response includes a <code style="font-family: var(--font-mono); color: var(--blue); font-size: 13px;">confidence_rationale</code> so you know exactly why.
+        </p>
+        <div class="ai-badges">
+          <span class="tag tag-gold">Structured JSON Output</span>
+          <span class="tag tag-blue">EDGAR-grounded</span>
+          <span class="tag tag-green">Edge-native · &lt;800ms</span>
+        </div>
+      </div>
+
+      <div class="ai-body">
+        <div class="code-block">
+          <div><span class="c-comment">// POST /api/v1/tickers/NVDA/ai-thesis</span></div>
+          <div><span class="c-comment">// X-Payment-Token: &lt;usdc-token&gt; — $0.75 deducted</span></div>
+          <br />
+          <div><span class="c-arr">{</span></div>
+          <div>&nbsp;&nbsp;<span class="c-key">"ticker"</span>: <span class="c-str">"NVDA"</span>,</div>
+          <div>&nbsp;&nbsp;<span class="c-key">"generated_at"</span>: <span class="c-str">"2025-07-28T14:32:00Z"</span>,</div>
+          <div>&nbsp;&nbsp;<span class="c-key">"model"</span>: <span class="c-str">"@cf/meta/llama-3.1-8b-instruct"</span>,</div>
+          <div>&nbsp;&nbsp;<span class="c-key">"data_sources"</span>: [<span class="c-str">"SEC EDGAR 10-Q"</span>, <span class="c-str">"xDEO consensus"</span>],</div>
+          <br />
+          <div>&nbsp;&nbsp;<span class="c-label">"summary"</span>: <span class="c-str">"NVDA trades at 28× forward revenue with data center demand</span></div>
+          <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c-str">outpacing supply. AI infrastructure capex cycle shows no</span></div>
+          <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c-str">signs of deceleration through FY2026."</span>,</div>
+          <br />
+          <div>&nbsp;&nbsp;<span class="c-key">"bull_case"</span>: <span class="c-str">"Blackwell ramp accelerates H2. Sovereign AI spend</span></div>
+          <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c-str">is incremental, not substitution. Gross margin floor at 72%."</span>,</div>
+          <br />
+          <div>&nbsp;&nbsp;<span class="c-key">"bear_case"</span>: <span class="c-str">"Export controls tighten. AMD CDNA 4 closes the gap.</span></div>
+          <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c-str">Hyperscaler in-house silicon cuts third-party spend by 15%."</span>,</div>
+          <br />
+          <div>&nbsp;&nbsp;<span class="c-label">"key_assumptions"</span>: [</div>
+          <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="c-str">"Data center revenue growth &gt;85% YoY"</span>,</div>
+          <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="c-str">"No new chip export restrictions before Q4"</span>,</div>
+          <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="c-str">"CUDA moat holds through 2027"</span></div>
+          <div>&nbsp;&nbsp;],</div>
+          <br />
+          <div>&nbsp;&nbsp;<span class="c-label">"risks"</span>: [</div>
+          <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="c-str">"Geopolitical: US-China chip restrictions"</span>,</div>
+          <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="c-str">"Concentration: top 4 customers = 40% of revenue"</span>,</div>
+          <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="c-str">"Valuation: 28× revenue leaves no margin for miss"</span></div>
+          <div>&nbsp;&nbsp;],</div>
+          <br />
+          <div>&nbsp;&nbsp;<span class="c-label">"confidence_rationale"</span>: <span class="c-str">"Based on 34 scored estimates (avg acc 87%),</span></div>
+          <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c-str">3 LEGEND-tier analysts contributing. EDGAR 10-Q filed</span></div>
+          <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c-str">2025-05-28 confirms data center segment guidance."</span>,</div>
+          <br />
+          <div>&nbsp;&nbsp;<span class="c-key">"overall_confidence"</span>: <span class="c-num">0.82</span>,</div>
+          <div>&nbsp;&nbsp;<span class="c-key">"not_investment_advice"</span>: <span class="c-bool">true</span></div>
+          <div><span class="c-arr">}</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ===== FOR AI AGENTS ===== -->
+<section id="agents">
+  <div class="container">
+    <p class="section-label fade-in">For AI Agents</p>
+    <h2 class="section-headline fade-in delay-1">
+      Your agent finds the alpha.<br />
+      <span class="gradient-text-blue">You pay $0.01.</span>
+    </h2>
+    <p class="section-sub fade-in delay-2">
+      xDEO speaks the language of autonomous agents natively.
+      The x402 protocol means your agent can discover, pay for, and consume
+      earnings data without any human intervention.
+    </p>
+
+    <div class="agents-layout">
+      <div class="agents-copy fade-in delay-1">
+        <div class="agent-feature">
+          <div class="agent-feature-icon">&#127760;</div>
+          <div>
+            <div class="agent-feature-title">MCP Endpoint at /mcp</div>
+            <p class="agent-feature-desc">
+              Full Model Context Protocol server. Claude, GPT-4, and any MCP-compatible
+              agent discovers tools, calls estimates, and gets structured data back —
+              without ever leaving the agent runtime.
+            </p>
+          </div>
+        </div>
+
+        <div class="agent-feature">
+          <div class="agent-feature-icon">&#128196;</div>
+          <div>
+            <div class="agent-feature-title">x402 Native Payment</div>
+            <p class="agent-feature-desc">
+              HTTP 402 → agent pays USDC on Base → retries with token.
+              Peer-to-peer. No API key management. No billing dashboard.
+              The protocol IS the payment system.
+            </p>
+          </div>
+        </div>
+
+        <div class="agent-feature">
+          <div class="agent-feature-icon">&#129395;</div>
+          <div>
+            <div class="agent-feature-title">Affiliate Program — 15% of Fees</div>
+            <p class="agent-feature-desc">
+              Include your <code style="font-family: var(--font-mono); color: var(--blue); font-size: 12px;">X-AGENT-ID</code> header and earn 15% of every fee
+              you drive. Build an agent that surfaces xDEO data and the oracle
+              pays you back. Agents become revenue-generating businesses.
+            </p>
+          </div>
+        </div>
+
+        <div class="agents-tagline fade-in delay-2">
+          "The model discovers the edge.<br />
+          <span class="gradient-text-blue">EDGAR confirms it."</span>
+        </div>
+      </div>
+
+      <div class="fade-in delay-2">
+        <div class="mcp-snippet">
+          <div class="mcp-snippet-header">
+            <div class="mcp-dot"></div>
+            <span class="mcp-snippet-title">claude_desktop_config.json · MCP Configuration</span>
+          </div>
+          <div class="mcp-snippet-body">
+            <div><span style="color: var(--muted);">{</span></div>
+            <div>&nbsp;&nbsp;<span class="c-key">"mcpServers"</span>: <span style="color: var(--muted);">{</span></div>
+            <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="c-key">"xdeo"</span>: <span style="color: var(--muted);">{</span></div>
+            <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c-key">"url"</span>: <span class="c-str">"https://xdeo.finance/mcp"</span>,</div>
+            <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c-key">"transport"</span>: <span class="c-str">"streamable-http"</span>,</div>
+            <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c-key">"headers"</span>: <span style="color: var(--muted);">{</span></div>
+            <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c-key">"X-Agent-ID"</span>: <span class="c-str">"your-agent-id"</span>,</div>
+            <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c-key">"X-Payment-Token"</span>: <span class="c-str">"&lt;usdc-token&gt;"</span></div>
+            <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: var(--muted);">}</span></div>
+            <div>&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: var(--muted);">}</span></div>
+            <div>&nbsp;&nbsp;<span style="color: var(--muted);">}</span></div>
+            <div><span style="color: var(--muted);">}</span></div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 20px; padding: 24px;">
+          <div style="font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 16px;">Available MCP Tools</div>
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <div style="display: flex; justify-content: space-between; font-size: 13px;">
+              <code style="font-family: var(--font-mono); color: var(--blue);">get_consensus</code>
+              <span style="color: var(--muted);">Free</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 13px;">
+              <code style="font-family: var(--font-mono); color: var(--blue);">get_estimates</code>
+              <span style="color: var(--muted);">$0.01</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 13px;">
+              <code style="font-family: var(--font-mono); color: var(--blue);">get_verdict</code>
+              <span style="color: var(--muted);">Free</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 13px;">
+              <code style="font-family: var(--font-mono); color: var(--blue);">get_ai_thesis</code>
+              <span style="color: var(--muted);">$0.75</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 13px;">
+              <code style="font-family: var(--font-mono); color: var(--blue);">get_leaderboard</code>
+              <span style="color: var(--muted);">Free</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 13px;">
+              <code style="font-family: var(--font-mono); color: var(--blue);">submit_estimate</code>
+              <span style="color: var(--muted);">Free</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 20px; padding: 20px; border-color: rgba(0,255,136,0.15);">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+            <span style="font-size: 18px;">&#129395;</span>
+            <span style="font-family: var(--font-head); font-size: 14px; font-weight: 700;">Agent Affiliate Earnings</span>
+          </div>
+          <p style="font-size: 13px; color: var(--muted); line-height: 1.6;">
+            Include <code style="font-family: var(--font-mono); color: var(--blue); font-size: 12px;">X-AGENT-ID: &lt;your-id&gt;</code> on every request.
+            Earn <strong style="color: var(--green);">15%</strong> of every API fee you drive.
+            Tracked on-chain. No signup required.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== STATS ROW ===== -->
+<div class="container" style="padding-bottom: 80px;">
+  <div class="stats-row fade-in">
+    <div class="stat-cell">
+      <div class="stat-num gradient-text" id="stat-cost">$0.01</div>
+      <div class="stat-label">per API call</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-num" style="color: var(--blue);" id="stat-bloomberg">$24k</div>
+      <div class="stat-label">Bloomberg / year</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-num" style="color: var(--green);" id="stat-streak">5×</div>
+      <div class="stat-label">max streak multiplier</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-num" style="color: var(--gold);" id="stat-affiliate">15%</div>
+      <div class="stat-label">agent affiliate cut</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== FOOTER ===== -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <div>
+        <div class="footer-brand">xDEO</div>
+        <p class="footer-legal">
+          Information service only. Not investment advice. Not a broker-dealer.<br />
+          Zero custody. No KYC. All scoring data derives from SEC EDGAR public filings.<br />
+          Analyst estimates are user-submitted. xDEO does not endorse any estimate.<br />
+          Past accuracy does not guarantee future performance. Use at your own risk.
+        </p>
+        <p class="footer-legal" style="margin-top: 12px; color: #3a3a5a;">
+          All illustrative data (analyst names, scores, leaderboard entries) shown on this page
+          are fictional examples for demonstration purposes. Live data available via API.
+        </p>
+      </div>
+      <div class="footer-links">
+        <a href="/api/v1">API v1</a>
+        <a href="/mcp">MCP Endpoint</a>
+        <a href="/docs">Documentation</a>
+        <a href="https://github.com/xdeo-finance/xdeo" target="_blank" rel="noopener">GitHub</a>
+        <a href="/api/v1/leaderboard">Leaderboard</a>
+        <a href="/api/v1/tickers">Tickers</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- ===== MINIMAL JS ===== -->
+<script>
+  // IntersectionObserver for fade-in animations
+  (function() {
+    var els = document.querySelectorAll('.fade-in');
+    if (!('IntersectionObserver' in window)) {
+      els.forEach(function(el) { el.classList.add('visible'); });
+      return;
+    }
+    var io = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          io.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+    els.forEach(function(el) { io.observe(el); });
+  })();
+</script>
+
+</body>
+</html>
