@@ -103,6 +103,18 @@ const TOOLS = [
   }
 ];
 
+// GET /mcp — human/browser-friendly description (the protocol itself is POST).
+mcp.get("/", (c) =>
+  c.json({
+    server: SERVER_INFO,
+    protocol: "Model Context Protocol (JSON-RPC 2.0)",
+    transport: "streamable-http",
+    usage: "POST JSON-RPC to this URL. Methods: initialize, tools/list, tools/call, ping.",
+    tools: TOOLS.map((t) => ({ name: t.name, description: t.description })),
+    docs: new URL("/api/v1/openapi.json", c.req.url).toString()
+  })
+);
+
 mcp.post("/", async (c) => {
   let req: any;
   try {
