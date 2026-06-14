@@ -28,7 +28,7 @@ class_name = "StreamHub"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["StreamHub"]
+new_sqlite_classes = ["StreamHub"]
 
 # Workers AI — inference binding; no external key. Billed to CF account.
 # Powers the AI thesis endpoint (GET /api/v1/estimates/:id/ai-thesis, $0.75 USDC).
