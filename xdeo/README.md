@@ -31,8 +31,8 @@ SqueezeOS x402/MCP ecosystem.
 | D1 schema | ✅ | `migrations/0001_init.sql` |
 | Tests — 42 (pure logic + DB integration over node:sqlite) | ✅ | `test/` |
 | Smart contracts (Base): Core, Reputation, Treasury, AgentRewards + scoring lib + Hardhat tests | ✅ written, 🚧 pending compile/audit (solc egress) | `contracts/` |
-| Next.js frontend | 🚧 roadmap | — |
-| Twitter/X bot, embeds, prediction-market integration | 🚧 roadmap | — |
+| Next.js 14 frontend (tickers, consensus, leaderboard, verdict board, embeddable widget) | ✅ builds clean | `web/` |
+| Twitter/X bot, prediction-market read-through | 🚧 roadmap | — |
 
 > ⚠️ Two things are blocked by the build sandbox's egress allowlist and so could
 > not be exercised live here (both work in their real runtimes):
