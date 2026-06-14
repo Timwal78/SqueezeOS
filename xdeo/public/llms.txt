@@ -27,11 +27,17 @@ xDEO never holds funds.
 - GET /api/v1/verdict/{filingId} — post-earnings scoreboard
 - GET /api/v1/agents/leaderboard — agent bounty standings
 - POST /api/v1/estimates — submit an estimate (reputation is the only stake)
+- GET /api/v1/stream — Server-Sent Events: ESTIMATE_SUBMITTED, ESTIMATE_SCORED, VERDICT_READY
+- GET /api/v1/ws — WebSocket: same real-time event stream (send "ping" -> "pong")
 
 ## Paid endpoints (x402)
 
 - GET /api/v1/tickers/{ticker}/estimates — all estimates ($0.01 USDC)
 - GET /api/v1/estimates/{id} — full thesis (analyst-priced, $0.01–$5.00)
+- GET /api/v1/estimates/{id}/ai-thesis — AI-synthesized thesis ($0.75 USDC)
+  Returns: summary, bull_case, bear_case, key_assumptions[], risks[], confidence_rationale.
+  Powered by Cloudflare Workers AI (Llama 3.1 8B). Cached 24h.
+  Not investment advice.
 
 ## Legal
 

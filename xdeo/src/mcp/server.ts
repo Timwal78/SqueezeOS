@@ -84,6 +84,22 @@ const TOOLS = [
       properties: { filingId: { type: "string" } },
       required: ["filingId"]
     }
+  },
+  {
+    name: "ai_thesis",
+    description:
+      "AI-synthesized investment thesis for one estimate. Combines the analyst's raw thesis, " +
+      "their historical accuracy, and (if scored) the actual SEC filing result into a " +
+      "structured analysis: summary, bull/bear case, key assumptions, risks, and confidence " +
+      "assessment. Costs 0.75 USDC via x402. Not investment advice.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "estimate ID" },
+        payment_token: { type: "string", description: "base64 x402 payload" }
+      },
+      required: ["id"]
+    }
   }
 ];
 
@@ -167,6 +183,9 @@ async function dispatch(
       break;
     case "verdict":
       url = `${origin}/api/v1/verdict/${encodeURIComponent(args.filingId)}`;
+      break;
+    case "ai_thesis":
+      url = `${origin}/api/v1/estimates/${encodeURIComponent(args.id)}/ai-thesis`;
       break;
     default:
       return { ok: false, body: { error: `unknown tool: ${name}` } };

@@ -1,4 +1,5 @@
-// /api/v1/estimates — submit estimates, read single estimate (paywalled thesis).
+// /api/v1/estimates — submit estimates, read single estimate (paywalled thesis),
+// and generate AI-powered thesis analysis (x402 $0.75, 24h KV cache).
 
 import { Hono } from "hono";
 import { requirePayment, readPayment } from "../x402/middleware.js";
@@ -6,6 +7,9 @@ import { EdgarClient } from "../edgar/client.js";
 import { normalizePeriod } from "../edgar/xbrl.js";
 import { advanceStreak } from "../reputation/engine.js";
 import { uuid, now, utcDay, lower, isAddress } from "../lib/json.js";
+import { publishEvent } from "../stream/publish.js";
+import { generateThesis } from "../ai/thesis.js";
+import type { ThesisResult } from "../ai/thesis.js";
 import type { Env, Estimate } from "../types.js";
 
 export const estimates = new Hono<{ Bindings: Env }>();
@@ -81,6 +85,19 @@ estimates.post("/", async (c) => {
   // Streak + estimate count + tier promotion to ANALYST at 5 estimates.
   await bumpAnalystOnSubmit(c.env, analyst);
 
+  // Real-time fan-out (best-effort, off the response path).
+  c.executionCtx.waitUntil(
+    publishEvent(c.env, "ESTIMATE_SUBMITTED", {
+      id,
+      ticker,
+      analyst,
+      metric,
+      fiscal_year: body.fiscal_year,
+      fiscal_period: fp,
+      predicted: body.predicted
+    })
+  );
+
   return c.json({ id, status: "OPEN", ticker, metric, fiscal_year: body.fiscal_year, fiscal_period: fp });
 });
 
@@ -119,6 +136,93 @@ estimates.get(
     }
 
     return c.json(est);
+  }
+);
+
+// GET /api/v1/estimates/:id/ai-thesis — AI-synthesized thesis. x402 $0.75 USDC.
+// Runs once via Workers AI (Llama 3.1 8B), caches result in KV for 24h.
+// Every read is charged; the generation cost is amortized across all reads of the same thesis.
+estimates.get(
+  "/:id/ai-thesis",
+  requirePayment((_c) => ({
+    priceUsdc: 0.75,
+    resource: new URL(_c.req.url).toString(),
+    description: `xDEO AI thesis for estimate ${_c.req.param("id")}`
+  })),
+  async (c) => {
+    const id = c.req.param("id");
+    const cacheKey = `ai-thesis:${id}`;
+
+    // Serve cached thesis immediately (still charges for read).
+    const cached = await c.env.KV.get<ThesisResult>(cacheKey, "json");
+    if (cached) {
+      const payment = readPayment(c);
+      if (payment.amountUsdc > 0) {
+        await recordRead(c.env, id, payment, c.req.header("X-AGENT-ID") ?? null);
+      }
+      return c.json({ ...cached, cached: true });
+    }
+
+    // Load estimate + analyst joined row.
+    const est = await c.env.DB.prepare(
+      `SELECT e.*, a.handle, a.reputation, a.accuracy, a.tier, a.scored_count
+         FROM estimates e JOIN analysts a ON a.address = e.analyst
+        WHERE e.id = ?`
+    )
+      .bind(id)
+      .first<
+        Estimate & {
+          handle: string | null;
+          reputation: number;
+          accuracy: number;
+          tier: string;
+          scored_count: number;
+        }
+      >();
+    if (!est) return c.json({ error: "estimate not found" }, 404);
+
+    // Load actual filing result if this estimate has been scored.
+    const filing = est.filing_id
+      ? await c.env.DB.prepare(
+          `SELECT eps_actual, revenue_actual, period_end FROM filings WHERE id = ?`
+        )
+          .bind(est.filing_id)
+          .first<{ eps_actual: number | null; revenue_actual: number | null; period_end: string | null }>()
+      : null;
+
+    const thesis = await generateThesis(c.env.AI, {
+      estimate: {
+        ticker: est.ticker,
+        analyst: est.analyst,
+        metric: est.metric,
+        fiscal_year: est.fiscal_year,
+        fiscal_period: est.fiscal_period,
+        predicted: est.predicted,
+        confidence: est.confidence,
+        thesis: est.thesis,
+        status: est.status,
+        score: est.score,
+        error_pct: est.error_pct
+      },
+      analyst: {
+        handle: est.handle,
+        reputation: est.reputation,
+        accuracy: est.accuracy,
+        tier: est.tier,
+        scored_count: est.scored_count
+      },
+      filing: filing ?? null
+    });
+
+    // Cache for 24 hours — thesis doesn't change after generation.
+    await c.env.KV.put(cacheKey, JSON.stringify(thesis), { expirationTtl: 86400 });
+
+    const payment = readPayment(c);
+    if (payment.amountUsdc > 0) {
+      await recordRead(c.env, id, payment, c.req.header("X-AGENT-ID") ?? null);
+    }
+
+    return c.json(thesis);
   }
 );
 
