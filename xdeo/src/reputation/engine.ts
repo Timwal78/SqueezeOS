@@ -60,10 +60,18 @@ export function scoreEstimate(input: ScoreInput): ScoreResult {
   const conf = clamp01(input.confidence);
   // Confidence is a stake: high-confidence hits are rewarded and high-confidence
   // misses punished harder. We map acc from [0,1] to a signed term first.
+  // Equivalent unsigned form (used by the on-chain port, see contracts/README):
+  //   base = acc*w + (1-w)/2,  where w = 0.5 + 0.5*conf
   const signed = 2 * acc - 1; // [-1, 1]
   const confidenceWeighted = signed * (0.5 + 0.5 * conf);
   const base = (confidenceWeighted + 1) / 2; // back to [0,1]
-  const score = 100 * clamp01(base * timeliness + (1 - timeliness) * base);
+  // Timeliness discounts low-lead calls toward a neutral 0.5: a last-minute
+  // call (timeliness=0.25) is pulled 75% of the way to neutral, dampening both
+  // its reward (if right) and its penalty (if wrong) — anyone can be "right"
+  // minutes before results. Full-lead calls (timeliness=1) keep their base.
+  //   effective = base*timeliness + 0.5*(1 - timeliness)
+  const effective = base * timeliness + 0.5 * (1 - timeliness);
+  const score = 100 * clamp01(effective);
   return { score, errorPct, timeliness };
 }
 

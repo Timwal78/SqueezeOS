@@ -53,6 +53,23 @@ describe("scoreEstimate", () => {
     const timidMiss = scoreEstimate({ predicted: 2, actual: 1, confidence: 0, leadSeconds: 0 });
     expect(confidentMiss.score).toBeLessThan(timidMiss.score);
   });
+
+  it("discounts an accurate last-minute call vs the same call made early", () => {
+    const early = scoreEstimate({ predicted: 1, actual: 1, confidence: 1, leadSeconds: 30 * 86400 });
+    const lastMinute = scoreEstimate({ predicted: 1, actual: 1, confidence: 1, leadSeconds: 0 });
+    // Timeliness must actually bite: a late perfect call is pulled toward neutral.
+    expect(lastMinute.score).toBeLessThan(early.score);
+    expect(early.score).toBeGreaterThan(95);
+    expect(lastMinute.score).toBeGreaterThan(50); // right, but discounted
+    expect(lastMinute.score).toBeLessThan(90);
+  });
+
+  it("dampens a last-minute miss toward neutral too (not extra punished)", () => {
+    const earlyMiss = scoreEstimate({ predicted: 2, actual: 1, confidence: 1, leadSeconds: 30 * 86400 });
+    const lateMiss = scoreEstimate({ predicted: 2, actual: 1, confidence: 1, leadSeconds: 0 });
+    // A late wrong call is less informative -> pulled UP toward 50, not below.
+    expect(lateMiss.score).toBeGreaterThan(earlyMiss.score);
+  });
 });
 
 describe("updateReputation", () => {
