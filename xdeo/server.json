@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.timwal78/xdeo",
+  "name": "io.github.Timwal78/xdeo",
   "title": "xDEO — Earnings Oracle",
   "description": "Reputation-ranked analyst earnings estimates. Pay per call via x402 on Base.",
   "version": "1.0.0",
