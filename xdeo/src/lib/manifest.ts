@@ -109,7 +109,7 @@ export function openApiSpec(base: string, env: Env) {
     openapi: "3.1.0",
     info: {
       title: "xDEO — Decentralized Earnings Oracle",
-      version: "0.1.0",
+      version: "1.0.0",
       description:
         "Machine-native earnings-estimate marketplace. x402-gated (USDC on Base). " +
         "Zero custody, public SEC EDGAR data only, no investment advice."

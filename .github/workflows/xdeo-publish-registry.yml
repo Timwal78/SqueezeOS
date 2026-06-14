@@ -1,0 +1,46 @@
+name: xdeo-publish-registry
+
+# Publishes xDEO to the official MCP Registry (registry.modelcontextprotocol.io).
+# xDEO is a REMOTE MCP server, so this needs ONLY GitHub namespace ownership via
+# OIDC — no npm package, no secrets. Aggregators (mcp.so, Glama, PulseMCP, etc.)
+# sync from this registry, so one publish propagates to many directories.
+#
+# Run it: Actions tab → xdeo-publish-registry → Run workflow.
+# (Also auto-runs when you push a tag like v1.0.0.)
+
+on:
+  workflow_dispatch: {}
+  push:
+    tags: ["xdeo-v*"]
+
+jobs:
+  publish:
+    name: Publish to MCP Registry
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # required for GitHub OIDC auth to the registry
+      contents: read
+    defaults:
+      run:
+        working-directory: xdeo
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install mcp-publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+          ./mcp-publisher --help | head -1
+
+      - name: Authenticate (GitHub OIDC)
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish server.json
+        run: ./mcp-publisher publish
+
+      - name: Verify
+        run: |
+          echo "Published. Verifying in registry..."
+          sleep 5
+          curl -s "https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.timwal78/xdeo" | head -c 800 || true
+          echo ""
