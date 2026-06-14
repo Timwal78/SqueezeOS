@@ -8,6 +8,7 @@ export interface Env {
   AI: Ai;
 
   // vars (wrangler.toml [vars])
+  ENVIRONMENT?: string; // "dev" enables the x402 dev bypass; unset/"production" disables it
   EDGAR_USER_AGENT: string;
   X402_NETWORK: string;
   X402_ASSET: string;
