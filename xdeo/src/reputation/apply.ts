@@ -8,6 +8,7 @@ import {
   computeTier
 } from "./engine.js";
 import { now } from "../lib/json.js";
+import { publishEvent } from "../stream/publish.js";
 import type { Env, Analyst, Estimate, Tier } from "../types.js";
 
 export interface ScoringFiling {
@@ -79,6 +80,27 @@ export async function scoreOpenEstimatesForFiling(
       ).bind(upd.reputation, upd.accuracy, upd.scored_count, tier, est.analyst)
     ]);
     count++;
+
+    // Real-time fan-out: a fresh score landed.
+    await publishEvent(env, "ESTIMATE_SCORED", {
+      estimate_id: est.id,
+      ticker: filing.ticker,
+      analyst: est.analyst,
+      score: result.score,
+      error_pct: result.errorPct,
+      reputation: upd.reputation,
+      tier
+    });
+  }
+
+  if (count > 0) {
+    await publishEvent(env, "VERDICT_READY", {
+      filing_id: filing.id,
+      ticker: filing.ticker,
+      fiscal_year: filing.fiscal_year,
+      fiscal_period: filing.fiscal_period,
+      scored: count
+    });
   }
 
   if (count >= 0) {

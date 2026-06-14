@@ -4,6 +4,7 @@ export interface Env {
   DB: D1Database;
   KV: KVNamespace;
   ASSETS: Fetcher;
+  STREAM_HUB: DurableObjectNamespace;
 
   // vars (wrangler.toml [vars])
   EDGAR_USER_AGENT: string;

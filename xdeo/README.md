@@ -26,6 +26,7 @@ SqueezeOS x402/MCP ecosystem.
 | x402 payment gate (HTTP 402 → facilitator verify/settle) | ✅ | `src/x402/middleware.ts` |
 | Tiers (Observer→Legend), streaks, referrals, agent affiliates | ✅ | schema + routes |
 | MCP server (JSON-RPC 2.0) | ✅ | `src/mcp/server.ts` |
+| Real-time streaming (SSE + WebSocket via Durable Object) | ✅ | `src/stream/` |
 | Agent manifest + OpenAPI + llms.txt | ✅ | `src/lib/manifest.ts`, `public/llms.txt` |
 | Shareable OG estimate cards (SVG) | ✅ | `src/og/card.ts` |
 | D1 schema | ✅ | `migrations/0001_init.sql` |

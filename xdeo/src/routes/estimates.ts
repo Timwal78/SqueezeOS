@@ -6,6 +6,7 @@ import { EdgarClient } from "../edgar/client.js";
 import { normalizePeriod } from "../edgar/xbrl.js";
 import { advanceStreak } from "../reputation/engine.js";
 import { uuid, now, utcDay, lower, isAddress } from "../lib/json.js";
+import { publishEvent } from "../stream/publish.js";
 import type { Env, Estimate } from "../types.js";
 
 export const estimates = new Hono<{ Bindings: Env }>();
@@ -80,6 +81,19 @@ estimates.post("/", async (c) => {
 
   // Streak + estimate count + tier promotion to ANALYST at 5 estimates.
   await bumpAnalystOnSubmit(c.env, analyst);
+
+  // Real-time fan-out (best-effort, off the response path).
+  c.executionCtx.waitUntil(
+    publishEvent(c.env, "ESTIMATE_SUBMITTED", {
+      id,
+      ticker,
+      analyst,
+      metric,
+      fiscal_year: body.fiscal_year,
+      fiscal_period: fp,
+      predicted: body.predicted
+    })
+  );
 
   return c.json({ id, status: "OPEN", ticker, metric, fiscal_year: body.fiscal_year, fiscal_period: fp });
 });

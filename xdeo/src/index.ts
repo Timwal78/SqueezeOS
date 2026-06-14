@@ -14,8 +14,11 @@ import { mcp } from "./mcp/server.js";
 import { agentManifest, openApiSpec } from "./lib/manifest.js";
 import { estimateCardSvg } from "./og/card.js";
 import { runIngest } from "./edgar/ingest.js";
+import { StreamHub } from "./stream/hub.js";
 import { CORS_HEADERS } from "./lib/json.js";
 import type { Env, Estimate } from "./types.js";
+
+export { StreamHub };
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -58,6 +61,16 @@ app.route("/api/v1/agents", agents);
 
 // MCP JSON-RPC
 app.route("/mcp", mcp);
+
+// Real-time streams (fan-out via the global StreamHub Durable Object).
+//   GET /api/v1/stream  — Server-Sent Events (text/event-stream)
+//   GET /api/v1/ws      — WebSocket upgrade
+function streamHub(c: { env: Env }) {
+  const id = c.env.STREAM_HUB.idFromName("global");
+  return c.env.STREAM_HUB.get(id);
+}
+app.get("/api/v1/stream", (c) => streamHub(c).fetch("https://hub/sse"));
+app.get("/api/v1/ws", (c) => streamHub(c).fetch(c.req.raw));
 
 // Discovery surfaces
 app.get("/api/v1/openapi.json", (c) =>

@@ -27,6 +27,8 @@ xDEO never holds funds.
 - GET /api/v1/verdict/{filingId} — post-earnings scoreboard
 - GET /api/v1/agents/leaderboard — agent bounty standings
 - POST /api/v1/estimates — submit an estimate (reputation is the only stake)
+- GET /api/v1/stream — Server-Sent Events: ESTIMATE_SUBMITTED, ESTIMATE_SCORED, VERDICT_READY
+- GET /api/v1/ws — WebSocket: same real-time event stream (send "ping" -> "pong")
 
 ## Paid endpoints (x402)
 

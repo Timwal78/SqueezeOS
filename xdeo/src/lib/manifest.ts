@@ -79,6 +79,11 @@ export function agentManifest(base: string, env: Env) {
         description: "Post-earnings scoreboard: who was right vs the SEC filing."
       }
     ],
+    streams: {
+      sse: `${base}/api/v1/stream`,
+      websocket: `${base.replace(/^http/, "ws")}/api/v1/ws`,
+      events: ["ESTIMATE_SUBMITTED", "ESTIMATE_SCORED", "VERDICT_READY"]
+    },
     api: { openapi: `${base}/api/v1/openapi.json` }
   };
 }
@@ -134,6 +139,8 @@ export function openApiSpec(base: string, env: Env) {
       "/api/v1/verdict/{filingId}": {
         get: { summary: "Post-earnings verdict", parameters: [p("filingId")], responses: ok() }
       },
+      "/api/v1/stream": { get: { summary: "Real-time event stream (SSE)", responses: ok() } },
+      "/api/v1/ws": { get: { summary: "Real-time event stream (WebSocket upgrade)", responses: { "101": { description: "Switching Protocols" } } } },
       "/api/v1/agents/manifest.json": { get: { summary: "Agent manifest", responses: ok() } },
       "/api/v1/agents/leaderboard": { get: { summary: "Agent bounty leaderboard", responses: ok() } }
     }
