@@ -50,6 +50,14 @@ estimates.post("/", async (c) => {
     return c.json({ error: "fiscal_year and fiscal_period (Q1..Q4|FY) required" }, 400);
   if (!body.thesis || body.thesis.length < 10)
     return c.json({ error: "thesis required (>=10 chars)" }, 400);
+  if (body.thesis.length > 4000)
+    return c.json({ error: "thesis too long (max 4000 chars)" }, 400);
+
+  // Anti-spam: cap submissions per analyst (and per source IP) per UTC day so a
+  // bot can't flood the public leaderboard/consensus or run up EDGAR/AI calls.
+  const allowed = await withinSubmitLimit(c.env, analyst, c.req.header("CF-Connecting-IP"));
+  if (!allowed)
+    return c.json({ error: "rate limit exceeded — too many submissions today" }, 429);
 
   const price = clampPrice(body.price_usdc ?? 0);
   const confidence = clamp01(body.confidence ?? 0.5);
@@ -300,6 +308,36 @@ async function bumpAnalystOnSubmit(env: Env, address: string): Promise<void> {
   )
     .bind(count, streak, today, tier, address)
     .run();
+}
+
+// KV-backed daily submit limiter. Eventually-consistent (good enough for spam
+// control). Caps per analyst address and per source IP.
+const SUBMIT_CAP_PER_ADDRESS = 50;
+const SUBMIT_CAP_PER_IP = 200;
+
+async function withinSubmitLimit(
+  env: Env,
+  address: string,
+  ip: string | undefined
+): Promise<boolean> {
+  const day = utcDay();
+  const checks: Array<{ key: string; cap: number }> = [
+    { key: `rl:sub:addr:${day}:${address}`, cap: SUBMIT_CAP_PER_ADDRESS }
+  ];
+  if (ip) checks.push({ key: `rl:sub:ip:${day}:${ip}`, cap: SUBMIT_CAP_PER_IP });
+
+  for (const { key, cap } of checks) {
+    const current = Number((await env.KV.get(key)) ?? "0");
+    if (current >= cap) return false;
+  }
+  // Increment counters (TTL 2 days so they self-expire).
+  await Promise.all(
+    checks.map(async ({ key }) => {
+      const current = Number((await env.KV.get(key)) ?? "0");
+      await env.KV.put(key, String(current + 1), { expirationTtl: 172800 });
+    })
+  );
+  return true;
 }
 
 function clampPrice(p: number): number {

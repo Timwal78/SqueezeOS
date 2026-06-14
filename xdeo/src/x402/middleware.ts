@@ -36,6 +36,14 @@ export interface SettledPayment {
 /** What the handler reads off the context once payment succeeds. */
 export const PAYMENT_CTX_KEY = "x402Payment";
 
+/** Constant-time string compare (avoids timing side-channels on bearer tokens). */
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
 function toAtomic(usdc: number): string {
   return BigInt(Math.round(usdc * 10 ** USDC_DECIMALS)).toString();
 }
@@ -90,10 +98,15 @@ export function requirePayment(
     const header = c.req.header("X-PAYMENT");
     const requirements = buildRequirements(env, resolved, payTo);
 
-    // Dev/local bypass: only honored when the secret is configured.
+    // Dev/local bypass: ONLY honored when ENVIRONMENT === "dev" AND the secret
+    // is configured. In production this branch is dead even if the secret leaks,
+    // so a paywall can never be opened by a static bearer on the live worker.
+    // Constant-time compare to avoid leaking the token via response timing.
     if (
+      env.ENVIRONMENT === "dev" &&
       env.X402_DEV_BYPASS_TOKEN &&
-      header === env.X402_DEV_BYPASS_TOKEN
+      header &&
+      timingSafeEqual(header, env.X402_DEV_BYPASS_TOKEN)
     ) {
       c.set(PAYMENT_CTX_KEY as never, {
         payer: "0xdev",

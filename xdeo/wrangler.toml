@@ -43,7 +43,7 @@ crons = ["*/5 * * * *", "0 13 * * 1-5"]
 
 [vars]
 # --- Identity (SEC requires a descriptive User-Agent on every request) ---
-EDGAR_USER_AGENT = "xDEO Earnings Oracle contact@example.com"
+EDGAR_USER_AGENT = "xDEO Earnings Oracle contact@scriptmasterlabs.com"
 # --- x402 / payments (USDC on Base mainnet) ---
 X402_NETWORK = "base"
 # USDC on Base mainnet
