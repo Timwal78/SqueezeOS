@@ -10,7 +10,7 @@ import type { Env } from "../types.js";
 
 export const mcp = new Hono<{ Bindings: Env }>();
 
-const SERVER_INFO = { name: "xdeo", version: "0.1.0" };
+const SERVER_INFO = { name: "xdeo", version: "1.0.0" };
 const PROTOCOL_VERSION = "2024-11-05";
 
 const TOOLS = [

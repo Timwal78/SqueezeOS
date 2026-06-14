@@ -1,0 +1,18 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.timwal78/xdeo",
+  "title": "xDEO — Earnings Oracle",
+  "description": "Reputation-ranked analyst earnings estimates, auto-scored against real SEC EDGAR filings. Pay per call with x402 (USDC on Base). Zero custody, public data only, not investment advice.",
+  "version": "1.0.0",
+  "websiteUrl": "https://xdeo.timothy-walton45.workers.dev/share.html",
+  "repository": {
+    "url": "https://github.com/Timwal78/SqueezeOS",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://xdeo.timothy-walton45.workers.dev/mcp"
+    }
+  ]
+}
