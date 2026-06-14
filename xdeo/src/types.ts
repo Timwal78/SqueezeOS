@@ -16,6 +16,12 @@ export interface Env {
   AGENT_AFFILIATE_BPS: string;
   TREASURY_BPS: string;
 
+  // Autonomous House Analyst (daily cron). All optional — sensible defaults.
+  XDEO_UNIVERSE?: string;          // comma-separated watchlist; defaults to large caps
+  HOUSE_ANALYST_ADDRESS?: string;  // identity for house estimates
+  HOUSE_ESTIMATE_PRICE?: string;   // USDC price to read a house thesis (default 0.05)
+  HOUSE_MAX_PER_RUN?: string;      // max new house estimates per daily run (default 10)
+
   // secrets (wrangler secret put)
   X402_PAY_TO?: string;
   X402_DEV_BYPASS_TOKEN?: string;

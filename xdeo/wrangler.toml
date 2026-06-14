@@ -35,9 +35,11 @@ new_sqlite_classes = ["StreamHub"]
 [ai]
 binding = "AI"
 
-# Pull new SEC filings every 5 minutes (spec: EDGAR ingestion pipeline)
+# Crons:
+#   */5 * * * *      — pull new SEC filings + score open estimates (ingestion pipeline)
+#   0 13 * * 1-5     — weekday 13:00 UTC: autonomous House Analyst seeds EPS forecasts
 [triggers]
-crons = ["*/5 * * * *"]
+crons = ["*/5 * * * *", "0 13 * * 1-5"]
 
 [vars]
 # --- Identity (SEC requires a descriptive User-Agent on every request) ---
@@ -50,6 +52,12 @@ X402_FACILITATOR_URL = "https://x402.org/facilitator"
 PROTOCOL_FEE_BPS = "500"            # 5% protocol fee (analysts keep 95%)
 AGENT_AFFILIATE_BPS = "1500"        # 15% to referring AI agents
 TREASURY_BPS = "500"                # 5% to community treasury
+# --- Autonomous House Analyst (daily cron) ---
+# Watchlist of companies the House AI forecasts. Real symbols; data is from EDGAR.
+XDEO_UNIVERSE = "AAPL,MSFT,NVDA,AMZN,GOOGL,META,TSLA,AMD,NFLX,AVGO,JPM,V,WMT,COST,PLTR"
+HOUSE_ESTIMATE_PRICE = "0.05"       # USDC to read a house thesis
+HOUSE_MAX_PER_RUN = "10"            # cap new house estimates per daily run
+# HOUSE_ANALYST_ADDRESS is optional; defaults to a labelled house identity.
 # X402_PAY_TO and X402_DEV_BYPASS_TOKEN are secrets — set via `wrangler secret put`
 
 # Production secrets (set out-of-band, never commit):

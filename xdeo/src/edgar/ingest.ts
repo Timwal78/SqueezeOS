@@ -34,72 +34,91 @@ export async function runIngest(env: Env): Promise<{ filings: number; scored: nu
       WHERE e.status = 'OPEN'`
   ).all<{ ticker: string; cik: string }>();
 
+  let filings = 0;
+  let scored = 0;
+  for (const row of results ?? []) {
+    const r = await ingestTicker(env, edgar, row.ticker, row.cik);
+    filings += r.filings;
+    scored += r.scored;
+  }
+  return { filings, scored };
+}
+
+/**
+ * Ingest any new 10-K/10-Q filings for ONE ticker and score the OPEN estimates
+ * they resolve. Shared by the 5-minute cron (open-estimate tickers) and the
+ * autonomous analyst (which seeds filing history for the whole watchlist).
+ */
+export async function ingestTicker(
+  env: Env,
+  edgar: EdgarClient,
+  ticker: string,
+  cik: string
+): Promise<{ filings: number; scored: number }> {
+  const sub = await edgar.submissions(cik);
+  if (!sub) return { filings: 0, scored: 0 };
+  const recent = sub.filings.recent;
+
+  // Cache concept facts per ticker so we fetch each tag at most once.
+  let epsFacts: Record<string, XbrlFact[]> | null = null;
+  let revFacts: Record<string, XbrlFact[]> | null = null;
+
   let newFilings = 0;
   let scored = 0;
 
-  for (const row of results ?? []) {
-    const sub = await edgar.submissions(row.cik);
-    if (!sub) continue;
-    const recent = sub.filings.recent;
+  for (let i = 0; i < recent.accessionNumber.length; i++) {
+    const form = recent.form[i]!;
+    if (form !== "10-K" && form !== "10-Q") continue;
 
-    // Cache concept facts per ticker so we fetch each tag at most once.
-    let epsFacts: Record<string, XbrlFact[]> | null = null;
-    let revFacts: Record<string, XbrlFact[]> | null = null;
+    const accn = recent.accessionNumber[i]!;
+    const id = accn.replace(/-/g, "");
 
-    for (let i = 0; i < recent.accessionNumber.length; i++) {
-      const form = recent.form[i]!;
-      if (form !== "10-K" && form !== "10-Q") continue;
+    // Skip filings already ingested.
+    const seen = await env.DB.prepare(`SELECT 1 FROM filings WHERE id = ?`)
+      .bind(id)
+      .first();
+    if (seen) continue;
 
-      const accn = recent.accessionNumber[i]!;
-      const id = accn.replace(/-/g, "");
+    // Lazily load concept facts (only when we actually have a new filing).
+    if (!epsFacts) epsFacts = await loadTags(edgar, cik, EPS_TAGS);
+    if (!revFacts) revFacts = await loadTags(edgar, cik, REVENUE_TAGS);
 
-      // Skip filings already ingested.
-      const seen = await env.DB.prepare(`SELECT 1 FROM filings WHERE id = ?`)
-        .bind(id)
-        .first();
-      if (seen) continue;
+    const period = periodFromFacts(epsFacts, accn) ?? periodFromFacts(revFacts, accn);
+    if (!period) continue; // can't anchor a fiscal period -> skip (no guessing)
 
-      // Lazily load concept facts (only when we actually have a new filing).
-      if (!epsFacts) epsFacts = await loadTags(edgar, row.cik, EPS_TAGS);
-      if (!revFacts) revFacts = await loadTags(edgar, row.cik, REVENUE_TAGS);
+    const eps = selectByTags(epsFacts, EPS_TAGS, period);
+    const rev = selectByTags(revFacts, REVENUE_TAGS, period);
 
-      const period = periodFromFacts(epsFacts, accn) ?? periodFromFacts(revFacts, accn);
-      if (!period) continue; // can't anchor a fiscal period -> skip (no guessing)
-
-      const eps = selectByTags(epsFacts, EPS_TAGS, period);
-      const rev = selectByTags(revFacts, REVENUE_TAGS, period);
-
-      await env.DB.prepare(
-        `INSERT OR IGNORE INTO filings
-           (id, cik, ticker, form, fiscal_year, fiscal_period, period_end,
-            eps_actual, revenue_actual, filed_at, scored, ingested_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,0,?)`
-      )
-        .bind(
-          id,
-          row.cik,
-          row.ticker,
-          form,
-          period.fiscal_year,
-          period.fiscal_period,
-          eps?.fact.end ?? recent.reportDate[i] ?? null,
-          eps?.fact.val ?? null,
-          rev?.fact.val ?? null,
-          recent.filingDate[i] ?? null,
-          now()
-        )
-        .run();
-      newFilings++;
-
-      scored += await scoreOpenEstimatesForFiling(env, {
+    await env.DB.prepare(
+      `INSERT OR IGNORE INTO filings
+         (id, cik, ticker, form, fiscal_year, fiscal_period, period_end,
+          eps_actual, revenue_actual, filed_at, scored, ingested_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,0,?)`
+    )
+      .bind(
         id,
-        ticker: row.ticker,
-        fiscal_year: period.fiscal_year,
-        fiscal_period: period.fiscal_period,
-        eps_actual: eps?.fact.val ?? null,
-        revenue_actual: rev?.fact.val ?? null
-      });
-    }
+        cik,
+        ticker,
+        form,
+        period.fiscal_year,
+        period.fiscal_period,
+        eps?.fact.end ?? recent.reportDate[i] ?? null,
+        eps?.fact.val ?? null,
+        rev?.fact.val ?? null,
+        recent.filingDate[i] ?? null,
+        now()
+      )
+      .run();
+    newFilings++;
+
+    scored += await scoreOpenEstimatesForFiling(env, {
+      id,
+      ticker,
+      fiscal_year: period.fiscal_year,
+      fiscal_period: period.fiscal_period,
+      eps_actual: eps?.fact.val ?? null,
+      revenue_actual: rev?.fact.val ?? null
+    });
   }
 
   return { filings: newFilings, scored };
