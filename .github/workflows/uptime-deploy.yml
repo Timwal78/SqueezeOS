@@ -1,0 +1,44 @@
+name: uptime-deploy
+
+# Deploys the SML Uptime Sentinel (Cloudflare cron worker) on merge to main.
+# Reuses the SAME secret as xDEO — no new setup required:
+#   CLOUDFLARE_API_TOKEN  (already configured)
+
+on:
+  push:
+    branches: [main]
+    paths: ["uptime/**"]
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Reason for manual deploy"
+        required: false
+        default: "manual redeploy"
+
+jobs:
+  deploy:
+    name: Deploy SML Uptime Sentinel
+    runs-on: ubuntu-latest
+    environment: production
+    defaults:
+      run:
+        working-directory: uptime
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Deploy Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "❌ CLOUDFLARE_API_TOKEN secret is not set." >&2
+            exit 1
+          fi
+          npx --yes wrangler@3 deploy
+          echo "✅ SML Uptime Sentinel deployed — fleet kept warm 24/7"
