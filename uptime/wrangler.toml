@@ -1,0 +1,13 @@
+name = "sml-uptime"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+account_id = "de174553560f13ed28ab35f8fc160215"
+
+# Ping the fleet every 5 minutes so Render free-tier dynos never spin down.
+[triggers]
+crons = ["*/5 * * * *"]
+
+[vars]
+# URLs to keep warm. Canonical service URLs (see SqueezeOS/CLAUDE.md source-of-truth).
+# Remove any you don't want kept alive, or add new ones — redeploys automatically on push.
+UPTIME_TARGETS = "https://squeezeos-api.onrender.com/api/status,https://ghost-layer.onrender.com/,https://four02proof.onrender.com/,https://sml-rails.onrender.com/,https://sml-copytrader.onrender.com/,https://sml-launchpad.onrender.com/,https://forge-gateway-a822.onrender.com/,https://shadow-desk.onrender.com/,https://tipmaster.onrender.com/"
