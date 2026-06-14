@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://xdeo.timothy-walton45.workers.dev/sitemap.xml
