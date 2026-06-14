@@ -4,6 +4,9 @@
   "private": true,
   "description": "x402 Decentralized Earnings Oracle — a machine-native marketplace for earnings estimates. Zero custody, public data only, agent-first.",
   "type": "module",
+  "engines": {
+    "node": ">=22.5"
+  },
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",

@@ -17,7 +17,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          # Node >= 22.5 is required for the built-in node:sqlite module used by
+          # the DB integration tests (test/helpers/d1.ts).
+          node-version: "22"
           cache: npm
           cache-dependency-path: xdeo/package-lock.json
       - run: npm ci
