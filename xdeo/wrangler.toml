@@ -2,6 +2,7 @@ name = "xdeo"
 main = "src/index.ts"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
+account_id = "de174553560f13ed28ab35f8fc160215"
 
 # Static assets (llms.txt, openapi, etc.) served from ./public
 [assets]
@@ -12,13 +13,13 @@ binding = "ASSETS"
 [[d1_databases]]
 binding = "DB"
 database_name = "xdeo"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "87531ee2-9c6b-48bf-aa6a-01737f534915"
 migrations_dir = "migrations"
 
 # Cache + ephemeral state (rate limits, EDGAR ETags, dedupe)
 [[kv_namespaces]]
 binding = "KV"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+id = "e8879156f30a4b8bb398b50a56abbc55"
 
 # Real-time stream fan-out (WebSocket + SSE) — single global instance.
 [[durable_objects.bindings]]
