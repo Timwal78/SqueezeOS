@@ -14,6 +14,7 @@ import { mcp } from "./mcp/server.js";
 import { agentManifest, openApiSpec } from "./lib/manifest.js";
 import { estimateCardSvg } from "./og/card.js";
 import { runIngest } from "./edgar/ingest.js";
+import { runAutonomousAnalyst } from "./analyst/autonomous.js";
 import { StreamHub } from "./stream/hub.js";
 import { CORS_HEADERS } from "./lib/json.js";
 import type { Env, Estimate } from "./types.js";
@@ -114,8 +115,20 @@ app.notFound((c) => c.json({ error: "not found" }, 404));
 export default {
   fetch: app.fetch,
 
-  // 5-minute cron: pull new EDGAR filings, score open estimates.
-  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
+  // Scheduled crons (see wrangler.toml [triggers]):
+  //   "0 13 * * 1-5" — daily House Analyst: seed watchlist + AI EPS forecasts.
+  //   everything else ("*/5 * * * *") — EDGAR ingest + score open estimates.
+  async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext) {
+    if (event.cron === "0 13 * * 1-5") {
+      ctx.waitUntil(
+        runAutonomousAnalyst(env)
+          .then((r) =>
+            console.log(`xDEO house analyst: ${r.seeded_tickers} tickers, ${r.estimates} estimates`)
+          )
+          .catch((e) => console.error("xDEO house analyst error:", e))
+      );
+      return;
+    }
     ctx.waitUntil(
       runIngest(env)
         .then((r) => console.log(`xDEO ingest: ${r.filings} filings, ${r.scored} scored`))

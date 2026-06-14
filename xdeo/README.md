@@ -22,6 +22,8 @@ SqueezeOS x402/MCP ecosystem.
 | Cloudflare Workers + Hono API | ✅ | `src/index.ts`, `src/routes/` |
 | Real SEC EDGAR ingestion (submissions + XBRL companyconcept) | ✅ | `src/edgar/` |
 | Auto-scoring of open estimates on filing (5-min cron) | ✅ | `src/edgar/ingest.ts`, `src/reputation/apply.ts` |
+| Autonomous House Analyst (daily AI EPS forecasts, self-scored) | ✅ | `src/analyst/autonomous.ts` |
+| AI thesis endpoint (Workers AI, x402 $0.75) | ✅ | `src/ai/thesis.ts` |
 | Reputation engine (accuracy × timeliness × streak, compounding) | ✅ | `src/reputation/engine.ts` |
 | x402 payment gate (HTTP 402 → facilitator verify/settle) | ✅ | `src/x402/middleware.ts` |
 | Tiers (Observer→Legend), streaks, referrals, agent affiliates | ✅ | schema + routes |
@@ -30,7 +32,7 @@ SqueezeOS x402/MCP ecosystem.
 | Agent manifest + OpenAPI + llms.txt | ✅ | `src/lib/manifest.ts`, `public/llms.txt` |
 | Shareable OG estimate cards (SVG) | ✅ | `src/og/card.ts` |
 | D1 schema | ✅ | `migrations/0001_init.sql` |
-| Tests — 42 (pure logic + DB integration over node:sqlite) | ✅ | `test/` |
+| Tests — 90 (pure logic + DB integration over node:sqlite) | ✅ | `test/` |
 | Smart contracts (Base): Core, Reputation, Treasury, AgentRewards + scoring lib + Hardhat tests | ✅ written, 🚧 pending compile/audit (solc egress) | `contracts/` |
 | Next.js 14 frontend (tickers, consensus, leaderboard, verdict board, embeddable widget) | ✅ builds clean | `web/` |
 | Twitter/X bot, prediction-market read-through | 🚧 roadmap | — |
@@ -82,6 +84,28 @@ fake it. Streaks (7d→1.5×, 30d→2.5×, 100d→5×) amplify gains only. See
 test in `test/integration.scoring.test.ts`, which runs the real migration SQL +
 applier against an in-memory SQLite. The exact same formula is specified for the
 on-chain port in `contracts/README.md`.
+
+## Autonomous House Analyst — the supply flywheel
+
+A marketplace needs inventory. `src/analyst/autonomous.ts` runs on a daily cron
+(`0 13 * * 1-5`) and bootstraps it **without any external API key** (Cloudflare
+Workers AI + free EDGAR):
+
+1. **Seed** the watchlist (`XDEO_UNIVERSE`, default large caps) into `tickers`.
+2. **Ingest** each company's real filing history via the shared `ingestTicker`.
+3. **Forecast** the next fiscal period's diluted EPS with Workers AI, grounded in
+   the actual reported EPS trend, and submit it as an OPEN estimate.
+4. The 5-minute EDGAR cron **scores** those forecasts against the real filing when
+   it lands — so the House AI earns a genuine, public track record like anyone else.
+
+**Integrity:** every House AI estimate is a real forward prediction made *before*
+the filing, scored honestly against SEC data, and clearly labelled **`xDEO House
+AI`** on the leaderboard. No fabricated actuals — they come from the same scoring
+pipeline as human estimates. They are opinions, not investment advice. If the AI
+is wrong, its reputation falls; it has to earn trust like every other analyst.
+
+Tunable via env: `XDEO_UNIVERSE`, `HOUSE_ESTIMATE_PRICE` (default 0.05),
+`HOUSE_MAX_PER_RUN` (default 10), `HOUSE_ANALYST_ADDRESS`.
 
 ## API
 
