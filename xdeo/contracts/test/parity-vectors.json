@@ -1,0 +1,69 @@
+{
+  "note": "Generated from src/reputation/engine.ts (tested). Tolerance: 1e-6 relative.",
+  "vectors": [
+    {
+      "predicted_1e8": "147000000",
+      "actual_1e8": "147000000",
+      "confidence_wad": "950000000000000000",
+      "leadSeconds": 2592000,
+      "expected_score_wad": "98750000000000000000",
+      "expected_score": 98.75
+    },
+    {
+      "predicted_1e8": "605000000",
+      "actual_1e8": "600000000",
+      "confidence_wad": "900000000000000000",
+      "leadSeconds": 2592000,
+      "expected_score_wad": "92168059557965119488",
+      "expected_score": 92.16805955796512
+    },
+    {
+      "predicted_1e8": "900000000",
+      "actual_1e8": "600000000",
+      "confidence_wad": "900000000000000000",
+      "leadSeconds": 2592000,
+      "expected_score_wad": "5468749708391190528",
+      "expected_score": 5.468749708391191
+    },
+    {
+      "predicted_1e8": "100000000",
+      "actual_1e8": "100000000",
+      "confidence_wad": "1000000000000000000",
+      "leadSeconds": 0,
+      "expected_score_wad": "62500000000000000000",
+      "expected_score": 62.5
+    },
+    {
+      "predicted_1e8": "200000000",
+      "actual_1e8": "100000000",
+      "confidence_wad": "1000000000000000000",
+      "leadSeconds": 0,
+      "expected_score_wad": "37524414057703800832",
+      "expected_score": 37.5244140577038
+    },
+    {
+      "predicted_1e8": "200000000",
+      "actual_1e8": "100000000",
+      "confidence_wad": "1000000000000000000",
+      "leadSeconds": 2592000,
+      "expected_score_wad": "97656230815212912",
+      "expected_score": 0.09765623081521291
+    },
+    {
+      "predicted_1e8": "-50000000",
+      "actual_1e8": "-40000000",
+      "confidence_wad": "500000000000000000",
+      "leadSeconds": 1296000,
+      "expected_score_wad": "34848907185058983936",
+      "expected_score": 34.848907185058984
+    },
+    {
+      "predicted_1e8": "412000000",
+      "actual_1e8": "400000000",
+      "confidence_wad": "700000000000000000",
+      "leadSeconds": 604800,
+      "expected_score_wad": "61280117645436280832",
+      "expected_score": 61.280117645436285
+    }
+  ]
+}

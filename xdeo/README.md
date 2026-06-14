@@ -30,7 +30,7 @@ SqueezeOS x402/MCP ecosystem.
 | Shareable OG estimate cards (SVG) | ✅ | `src/og/card.ts` |
 | D1 schema | ✅ | `migrations/0001_init.sql` |
 | Tests — 42 (pure logic + DB integration over node:sqlite) | ✅ | `test/` |
-| Smart contracts (Base) | 🚧 interface + canonical scoring spec | `contracts/` |
+| Smart contracts (Base): Core, Reputation, Treasury, AgentRewards + scoring lib + Hardhat tests | ✅ written, 🚧 pending compile/audit (solc egress) | `contracts/` |
 | Next.js frontend | 🚧 roadmap | — |
 | Twitter/X bot, embeds, prediction-market integration | 🚧 roadmap | — |
 

@@ -1,17 +1,18 @@
 # xDEO Smart Contracts (Base L2)
 
-> **Status: interface + canonical spec.** This directory defines the on-chain
-> surface (`src/IxDEOCore.sol`) and the exact scoring math the contracts must
-> implement, so the on-chain port agrees bit-for-bit with the off-chain engine
-> in `../src/reputation/engine.ts`.
+> **Status: implemented, pending compile/audit.** Full Solidity implementations
+> of all four contracts plus the shared scoring library are here, with a Hardhat
+> test suite. The scoring port agrees with the off-chain engine in
+> `../src/reputation/engine.ts` by construction (see canonical spec below) and is
+> checked against parity vectors generated from that tested engine.
 >
-> ⚠️ **Not yet compiled/tested in CI.** A Hardhat scaffold is included
-> (`hardhat.config.js`, `package.json`), but the Solidity compiler is fetched
-> from `binaries.soliditylang.org`, which is **blocked by this build
-> environment's network egress allowlist** (the same restriction that blocks
-> `data.sec.gov`). Implementations + Foundry/Hardhat tests + an audit are Phase 3
-> and must be done in an environment with compiler access. Until then the
-> off-chain backend (fully tested) is the source of truth.
+> ⚠️ **Not yet compiled/tested in CI.** The Solidity compiler is fetched from
+> `binaries.soliditylang.org`, which is **blocked by this build environment's
+> network egress allowlist** (the same restriction that blocks `data.sec.gov`).
+> So these contracts have **not been compiled or run here** — they are written to
+> compile and pass `npx hardhat test` the moment they are in an environment with
+> compiler access. A professional audit remains required before mainnet. Until
+> then the off-chain backend (fully tested) is the source of truth.
 
 ## Zero-custody invariant
 
@@ -25,10 +26,20 @@ custodial hold of third-party funds.
 
 | Contract | Responsibility |
 |----------|----------------|
-| `xDEOCore.sol` | Analyst registry, estimate commitments, oracle-driven scoring, fee accounting. |
-| `xDEOReputation.sol` | Soulbound (non-transferable) reputation + tier badge NFTs. |
-| `xDEOTreasury.sol` | 5% community treasury; ORACLE-tier governance over allocations. |
-| `xDEOAgentRewards.sol` | AI-agent affiliate registry + 15% reward accounting. |
+| `src/lib/ReputationMath.sol` | UD60x18 scoring + EMA + streak math — the on-chain port of `engine.ts`. |
+| `src/xDEOCore.sol` | Analyst registry, estimate commitments, oracle scoring, pull-based fee accounting. |
+| `src/xDEOReputation.sol` | Soulbound (non-transferable) reputation + tier badge NFTs (ERC721). |
+| `src/xDEOTreasury.sol` | 5% community treasury; ORACLE/LEGEND-tier governance over allocations. |
+| `src/xDEOAgentRewards.sol` | AI-agent affiliate registry + 15% reward accounting. |
+| `src/test/*` | Test-only harness + MockERC20 (compiled only for tests). |
+
+## Tests
+
+- `test/ReputationMath.parity.test.js` — asserts the on-chain scoring matches the
+  off-chain engine within tolerance, using `test/parity-vectors.json` (generated
+  from the tested `engine.ts`; regenerate via the script in the repo history).
+- `test/xDEOCore.lifecycle.test.js` — register → submit → oracle score →
+  reputation update → settle paid read → pull 95%/referral; soulbound enforcement.
 
 ## Canonical scoring spec (must match `engine.ts`)
 
