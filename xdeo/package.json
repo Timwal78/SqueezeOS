@@ -1,0 +1,26 @@
+{
+  "name": "xdeo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "x402 Decentralized Earnings Oracle — a machine-native marketplace for earnings estimates. Zero custody, public data only, agent-first.",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "db:migrate:local": "wrangler d1 migrations apply xdeo --local",
+    "db:migrate:remote": "wrangler d1 migrations apply xdeo --remote"
+  },
+  "dependencies": {
+    "hono": "^4.6.3"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240925.0",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.1",
+    "wrangler": "^3.78.0"
+  },
+  "license": "MIT"
+}
