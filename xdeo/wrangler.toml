@@ -56,8 +56,9 @@ TREASURY_BPS = "500"                # 5% to community treasury
 # Watchlist of companies the House AI forecasts. Real symbols; data is from EDGAR.
 XDEO_UNIVERSE = "AAPL,MSFT,NVDA,AMZN,GOOGL,META,TSLA,AMD,NFLX,AVGO,JPM,V,WMT,COST,PLTR"
 HOUSE_ESTIMATE_PRICE = "0.05"       # USDC to read a house thesis
-HOUSE_MAX_PER_RUN = "10"            # cap new house estimates per daily run
+HOUSE_MAX_PER_RUN = "5"             # per-run cap (free-plan subrequest safe; raise on paid)
 # HOUSE_ANALYST_ADDRESS is optional; defaults to a labelled house identity.
+# ADMIN_TOKEN is a secret (set via deploy from the XDEO_ADMIN_TOKEN GitHub secret).
 # X402_PAY_TO and X402_DEV_BYPASS_TOKEN are secrets — set via `wrangler secret put`
 
 # Production secrets (set out-of-band, never commit):

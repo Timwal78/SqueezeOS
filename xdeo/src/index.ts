@@ -10,6 +10,7 @@ import { estimates } from "./routes/estimates.js";
 import { analysts } from "./routes/analysts.js";
 import { verdict } from "./routes/verdict.js";
 import { agents } from "./routes/agents.js";
+import { admin } from "./routes/admin.js";
 import { mcp } from "./mcp/server.js";
 import { agentManifest, openApiSpec } from "./lib/manifest.js";
 import { estimateCardSvg } from "./og/card.js";
@@ -59,6 +60,7 @@ app.route("/api/v1/estimates", estimates);
 app.route("/api/v1/analysts", analysts);
 app.route("/api/v1/verdict", verdict);
 app.route("/api/v1/agents", agents);
+app.route("/api/v1/admin", admin);
 
 // MCP JSON-RPC
 app.route("/mcp", mcp);
