@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.timwal78/xdeo",
   "title": "xDEO — Earnings Oracle",
-  "description": "Reputation-ranked analyst earnings estimates, auto-scored against real SEC EDGAR filings. Pay per call with x402 (USDC on Base). Zero custody, public data only, not investment advice.",
+  "description": "Reputation-ranked analyst earnings estimates. Pay per call via x402 on Base.",
   "version": "1.0.0",
   "websiteUrl": "https://xdeo.timothy-walton45.workers.dev/share.html",
   "repository": {
