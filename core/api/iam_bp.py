@@ -168,17 +168,25 @@ def iam_resolve(symbol):
     except Exception:
         pass
 
-    # Fire Discord alert for actionable resolutions (BUY/SELL with urgent time window)
+    # Fire Discord alert + auto-execution for actionable resolutions
     try:
-        action = result["resolution"]["action"]
-        window = result["truth_layer"]["time_window"]
+        action     = result["resolution"]["action"]
+        window     = result["truth_layer"]["time_window"]
+        confidence = result["resolution"]["resolution_confidence"]
+        price      = float(result.get("price") or 0.0)
+
         if action in ("BUY", "SELL") and window in _URGENT_WINDOWS:
+            # Discord beast-channel alert
             threading.Thread(
                 target=_fire_iam_discord,
                 args=(sym, result),
                 daemon=True,
                 name=f"iam-discord-{sym}",
             ).start()
+
+            # Broker execution (Tradier + Robinhood alert) — gated by IAM_AUTO_TRADING
+            from iam_executor import execute_async
+            execute_async(sym, result["resolution"], window, confidence, price)
     except Exception:
         pass
 
@@ -247,6 +255,86 @@ def iam_truth(symbol):
     })
     _IAM_CACHE[f"truth_{sym}"] = {"ts": now, "data": response}
     return jsonify(response)
+
+
+@iam_bp.route("/autopilot/status", methods=["GET"])
+def iam_autopilot_status():
+    """
+    IAM Autopilot status — FREE endpoint.
+
+    Returns the current state of the IAM auto-execution layer:
+    arm switch, execution mode, daily counters, safety gate state.
+    """
+    try:
+        from iam_executor import status as exec_status
+        s = exec_status()
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+    return jsonify(clean_data({
+        "status":    "success",
+        "autopilot": s,
+        "brokers": {
+            "tradier":    "POST /accounts/{id}/orders — equity + options",
+            "robinhood":  "tools/robinhood_executor_sml.py — Windows polling service",
+        },
+        "env_vars": {
+            "IAM_AUTO_TRADING":         "false (master arm switch)",
+            "IAM_EXECUTION_MODE":       "alert | tradier | both",
+            "IAM_INSTRUMENT":           "equity | options | auto",
+            "IAM_PAPER_MODE":           "true (default safe)",
+            "IAM_MIN_CONFIDENCE":       "70 (minimum % to execute)",
+            "IAM_MAX_ORDERS_PER_DAY":   "5",
+            "IAM_MAX_ORDER_USD":        "500",
+            "IAM_DAILY_LOSS_LIMIT":     "300",
+        },
+    }))
+
+
+@iam_bp.route("/autopilot/dry-run/<symbol>", methods=["GET"])
+def iam_autopilot_dry_run(symbol):
+    """
+    IAM Autopilot dry-run — FREE endpoint.
+
+    Resolves the current obligation state and shows what the autopilot
+    WOULD do without placing any orders or requiring payment.
+    """
+    sym = symbol.upper().strip()
+    try:
+        from iam_executor import status as exec_status, _gate_check, REQUIRED_WINDOWS
+        engine = _get_iam_engine()
+        truth  = engine.truth_only(sym)
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+    nra      = truth.get("next_required_action", {})
+    window   = nra.get("time_window", "DORMANT")
+    stress   = nra.get("total_system_stress", 0.0)
+
+    # Simulate what resolution would look like (no payment, use truth layer only)
+    would_execute = window in REQUIRED_WINDOWS and stress >= 55
+    gate_reason   = None
+    if would_execute:
+        gate_reason = _gate_check(sym, {}, window, 75.0)  # test gates with hypothetical 75% confidence
+
+    return jsonify(clean_data({
+        "status":          "success",
+        "symbol":          sym,
+        "truth_layer":     truth,
+        "autopilot_preview": {
+            "would_trigger":   would_execute,
+            "blocked_by":      gate_reason,
+            "time_window":     window,
+            "total_stress":    stress,
+            "note": (
+                "This uses Truth Layer only. Full autopilot uses paid resolution "
+                "(resolution_confidence must be ≥ IAM_MIN_CONFIDENCE)."
+                if would_execute else
+                f"Window={window} not in {list(REQUIRED_WINDOWS)} or stress too low — autopilot would not trigger."
+            ),
+        },
+        "exec_status": exec_status(),
+    }))
 
 
 @iam_bp.route("/stress-test", methods=["POST"])
