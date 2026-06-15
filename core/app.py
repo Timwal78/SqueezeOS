@@ -161,6 +161,10 @@ def create_app():
         # Start background beastmode convergence scanner (cached, non-blocking)
         start_beastmode_scanner()
 
+        # Start IAM background obligation scanner — dynamic top-N from market scanner
+        from iam_scanner import start_iam_scanner
+        start_iam_scanner()
+
         # Start webhook delivery engine (SSE tap + delivery workers)
         start_webhook_engine()
 
