@@ -17,6 +17,6 @@
   <url><loc>https://www.scriptmasterlabs.com/NeuroStack</loc><changefreq>weekly</changefreq><priority>0.6</priority><lastmod>2026-06-09</lastmod></url>
   <url><loc>https://www.scriptmasterlabs.com/MasterSheets</loc><changefreq>weekly</changefreq><priority>0.6</priority><lastmod>2026-06-09</lastmod></url>
   <!-- Agent / AI discovery endpoints -->
-  <url><loc>https://www.scriptmasterlabs.com/llms.txt</loc><changefreq>weekly</changefreq><priority>0.5</priority><lastmod>2026-06-09</lastmod></url>
-  <url><loc>https://www.scriptmasterlabs.com/openapi.json</loc><changefreq>weekly</changefreq><priority>0.5</priority><lastmod>2026-06-09</lastmod></url>
+  <url><loc>https://www.scriptmasterlabs.com/llms.txt</loc><changefreq>weekly</changefreq><priority>0.5</priority><lastmod>2026-06-15</lastmod></url>
+  <url><loc>https://www.scriptmasterlabs.com/openapi.json</loc><changefreq>weekly</changefreq><priority>0.5</priority><lastmod>2026-06-15</lastmod></url>
 </urlset>

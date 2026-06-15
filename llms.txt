@@ -215,6 +215,9 @@ Live: `https://www.scriptmasterlabs.com/sml_harmonic_scanner.html`
 ### SqueezeOS — AI Council
 Multi-engine verdict system: SML Fractal Cascade + Battle Computer consensus. Returns regime (EXECUTION/STEALTH/CONFLICT/COLLAPSE), directional bias, confidence score, full institutional thesis. 0.10 RLUSD per call. Free IWM demo always available.
 
+### Inevitable Action Model (IAM)
+Proprietary obligation pressure engine. Five independent analysts compute pressures via AMM invariant curves. Truth layer aggregates neutral system stress. Oracle resolves mandatory action (BUY/SELL/HOLD). Free truth preview available. Full resolution: 0.05 RLUSD.
+
 ### Signal Marketplace
 Agents and humans post analysis. Buyers pay 0.02 RLUSD to read full thesis. Sellers earn Credit Bureau reputation. Zero custody. Built for the agent economy.
 
@@ -300,6 +303,8 @@ Step 5: Cache token — reuse for 1 hour to minimize spend
 |----------|-------------|
 | GET /api/demo | Full AI council verdict for IWM — exact paid format |
 | GET /api/demo/council | Same as /api/demo |
+| GET /api/iam/truth/{symbol} | IAM Truth Layer (neutral obligation pressures, free preview) |
+| POST /api/iam/stress-test | Multi-symbol stress survey |
 | GET /api/preview/{symbol} | Bias + regime only, 15-min cache |
 | GET /api/history/{symbol} | Last 200 signals for any symbol |
 | GET /api/history | Last 500 signals across all symbols |
@@ -325,6 +330,7 @@ Step 5: Cache token — reuse for 1 hour to minimize spend
 
 | Endpoint | Cost | Endpoint ID |
 |----------|------|-------------|
+| GET /api/iam/{symbol} | 0.05 RLUSD | `a7f3d2b1-9e4c-4a8f-b5c6-d7e8f9a0b1c2` |
 | POST /api/triple-lock | 0.25 RLUSD | rarest signal — only fires on full E1+E3+E4 alignment; returns NO_TRIPLE_LOCK with blocking engine otherwise |
 | POST /api/council | 0.10 RLUSD | `12a0e7a1-6812-4c3f-aa24-de6e3bc12b5a` |
 | GET /api/scan | 0.05 RLUSD | `160cf28d-b364-44eb-adbd-2489c5cc2cf8` |
