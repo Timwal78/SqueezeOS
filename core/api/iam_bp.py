@@ -5,16 +5,27 @@ Markets move not by belief, but by necessity.
 IAM trades the necessity.
 
 Endpoints:
-  GET  /api/iam/<symbol>         — Full IAM resolution: obligation committee + Truth Layer + mandatory action
-  GET  /api/iam/truth/<symbol>   — Truth Layer only: neutral obligation state, no action (free)
-  POST /api/iam/stress-test      — Multi-symbol system stress survey (free, up to 5 symbols)
+  GET  /api/iam/<symbol>         — Full IAM resolution (PAID 0.05 RLUSD): obligation committee
+                                   + Truth Layer + mandatory action. Internal AMM parameters redacted.
+  GET  /api/iam/truth/<symbol>   — Truth Layer only: neutral obligation state, no action (FREE)
+  POST /api/iam/stress-test      — Multi-symbol system stress survey (FREE, up to 5 symbols)
+
+Proprietary boundary:
+  _redact_obligation() strips raw_stress and detail from every analyst block
+  before serialization. The AMM invariant curve and internal thresholds are
+  never exposed to callers — only the output signals (pressure, direction, label).
 """
 
+import sys
+import os
 import time
 import logging
 from flask import Blueprint, jsonify, request
 from core.legacy import get_service, clean_data
 import core.signal_history as signal_history
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+from x402_flask import x402_guard
 
 logger = logging.getLogger("IAM-BP")
 iam_bp = Blueprint("iam", __name__)
@@ -32,15 +43,30 @@ def _get_iam_engine():
     return IAMEngine(services)
 
 
+def _redact_obligation(block: dict) -> dict:
+    """Strip AMM curve inputs and calculation detail from analyst output at API boundary."""
+    return {k: v for k, v in block.items() if k not in ("raw_stress", "detail")}
+
+
 @iam_bp.route("/<symbol>", methods=["GET"])
+@x402_guard(
+    price_usdc="0.05",
+    description=(
+        "IAM Full Resolution — mandatory action the market is forced to take. "
+        "Obligation committee (5 independent analysts) + Truth Layer + Action Resolution Oracle. "
+        "Returns: action BUY/SELL/HOLD, rationale, vehicle, invalidation, review trigger, "
+        "per-analyst obligation pressure (0-100%), and total system stress. "
+        "Internal AMM parameters redacted."
+    ),
+)
 def iam_resolve(symbol):
     """
-    Full IAM resolution for a symbol.
+    Full IAM resolution — PAID endpoint (0.05 RLUSD).
 
     Returns:
       - truth_layer: neutral obligation pressure vector (no direction)
-      - obligation_committee: per-analyst breakdown (5 independent specialists)
-      - resolution: mandatory action, rationale, vehicle, invalidation, review trigger
+      - obligation_committee: per-analyst pressure, direction, label (internals redacted)
+      - resolution: mandatory action + rationale + vehicle + invalidation + review trigger
     """
     sym = symbol.upper().strip()
     now = time.time()
@@ -59,7 +85,12 @@ def iam_resolve(symbol):
     if "error" in result:
         return jsonify({"status": "error", **result}), 503
 
-    # Record to signal history
+    # Redact proprietary internals at API boundary — only signals pass through
+    redacted_committee = {
+        name: _redact_obligation(block)
+        for name, block in result.get("obligation_committee", {}).items()
+    }
+
     try:
         signal_history.record(sym, "IAM_RESOLUTION", {
             "action":     result["resolution"]["action"],
@@ -73,7 +104,10 @@ def iam_resolve(symbol):
     response = clean_data({
         "status":  "success",
         "cached":  False,
-        "iam":     result,
+        "iam": {
+            **{k: v for k, v in result.items() if k != "obligation_committee"},
+            "obligation_committee": redacted_committee,
+        },
     })
 
     _IAM_CACHE[f"resolve_{sym}"] = {"ts": now, "data": response}
@@ -83,17 +117,19 @@ def iam_resolve(symbol):
 @iam_bp.route("/truth/<symbol>", methods=["GET"])
 def iam_truth(symbol):
     """
-    Truth Layer only — neutral obligation state, no action resolution.
+    Truth Layer only — FREE endpoint.
 
-    Useful for dashboards that want to display raw obligation pressures
-    without committing to a directional interpretation.
+    Neutral obligation state: no action resolution, no internal parameters.
 
-    Returns the canonical Truth Layer output from the IAM pitch deck:
+    Returns the canonical Truth Layer output from the IAM specification:
       NEXT REQUIRED ACTION:
-      • Volatility Release: 87%
-      • Liquidity Refill: 74%
-      • Directional Bias: NONE   ← always NONE at this stage
-      • Time Window: IMMEDIATE
+      • Volatility Release: 0-100%
+      • Liquidity Refill:   0-100%
+      • Dealer Hedge:       0-100%
+      • Mean Reversion Pull: 0-100%
+      • Structural Pressure: 0-100%
+      • Directional Bias:   NONE  ← always NONE at this stage
+      • Time Window:        DORMANT / DEVELOPING / NEAR_TERM / IMMEDIATE
     """
     sym = symbol.upper().strip()
     now = time.time()
@@ -109,7 +145,25 @@ def iam_truth(symbol):
         logger.error(f"[IAM-BP] Truth error for {sym}: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-    response = clean_data({"status": "success", "cached": False, "iam_truth": result})
+    response = clean_data({
+        "status":    "success",
+        "cached":    False,
+        "iam_truth": result,
+        "upgrade": {
+            "full_resolution": f"/api/iam/{sym}",
+            "price_rlusd":     "0.05",
+            "includes":        [
+                "mandatory action (BUY/SELL/HOLD)",
+                "obligation committee breakdown",
+                "rationale",
+                "vehicle",
+                "invalidation condition",
+                "review trigger",
+                "resolution confidence",
+            ],
+            "gateway": "https://four02proof.onrender.com",
+        },
+    })
     _IAM_CACHE[f"truth_{sym}"] = {"ts": now, "data": response}
     return jsonify(response)
 
@@ -117,7 +171,7 @@ def iam_truth(symbol):
 @iam_bp.route("/stress-test", methods=["POST"])
 def iam_stress_test():
     """
-    Multi-symbol system stress survey.
+    Multi-symbol system stress survey — FREE endpoint.
 
     POST body: {"symbols": ["IWM", "SPY", "GME"]}  (max 5)
     Returns obligation stress ranked by total system stress descending.
@@ -128,7 +182,7 @@ def iam_stress_test():
     if not symbols or not isinstance(symbols, list):
         return jsonify({"status": "error", "message": "symbols array required"}), 400
 
-    symbols = [s.upper().strip() for s in symbols[:5]]  # hard cap at 5
+    symbols = [s.upper().strip() for s in symbols[:5]]
 
     engine  = _get_iam_engine()
     results = []
@@ -157,4 +211,9 @@ def iam_stress_test():
         "symbols":   results,
         "ranked_by": "total_system_stress",
         "timestamp": time.time(),
+        "upgrade": {
+            "full_resolution": "/api/iam/<symbol>",
+            "price_rlusd":     "0.05",
+            "gateway":         "https://four02proof.onrender.com",
+        },
     }))

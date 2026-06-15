@@ -571,7 +571,7 @@ _TOOLS = [
     {
         "name": "iam_resolve",
         "description": (
-            "IAM — Inevitable Action Model. "
+            "IAM — Inevitable Action Model. Proprietary. Cost: 0.05 RLUSD. "
             "Resolves what action the market is FORCED to take, not what it is predicted to do. "
             "IAM is a resolver, not a predictor. "
             "Five independent Obligation Committee analysts (no cross-communication) compute: "
@@ -580,13 +580,13 @@ _TOOLS = [
             "(3) Dealer Inventory Hedge — what must dealers buy/sell to stay neutral? "
             "(4) Mean Reversion Pull — how far has price deviated from statistical equilibrium? "
             "(5) Structural Bounds — is price at a boundary that requires resolution? "
-            "Each analyst outputs a 0-100 obligation pressure via the AMM invariant curve "
-            "(pressure = s² / (s² + (1−s)² + ε) × 100) — non-linear, like Uniswap slippage. "
-            "Truth Layer aggregates into neutral system stress (no direction). "
-            "Action Resolution Oracle then selects the action A* = argmin(projected_stress_after_A). "
-            "Output: mandatory action BUY/SELL/HOLD with rationale, vehicle, invalidation condition, "
-            "and review trigger. The user does not decide — they execute. "
-            "Free endpoint."
+            "Truth Layer aggregates into neutral system stress (directional_bias: NONE). "
+            "Action Resolution Oracle selects A* = argmin(projected_stress_after_action). "
+            "Output: mandatory action BUY/SELL/HOLD, rationale, vehicle, invalidation condition, "
+            "review trigger, per-analyst obligation pressure (0-100%). "
+            "Internal AMM invariant parameters are proprietary and redacted from all responses. "
+            "Use iam_truth (free) to preview the Truth Layer before paying. "
+            "Pass payment_token from verify_payment plus agent_wallet."
         ),
         "inputSchema": {
             "type": "object",
@@ -596,6 +596,8 @@ _TOOLS = [
                     "type": "string",
                     "description": "US equity ticker (e.g. IWM, SPY, QQQ, GME, AMC, NVDA)",
                 },
+                "payment_token": {"type": "string", "description": "JWT from verify_payment (0.05 RLUSD)"},
+                "agent_wallet":  {"type": "string", "description": "Your XRPL wallet address"},
             },
         },
     },
@@ -634,11 +636,13 @@ _ENDPOINT_IDS = {
     "options_intelligence": "c951a374-2424-4064-ab80-35afe8053d29",
     "iwm_odte":             "60f48ce0-6002-4385-9b60-03a0d2bbebab",
     "marketplace_read_signal": "d1a2b3c4-e001-4c3f-aa24-de6e3bc12b5a",
+    "iam_resolve":          "a7f3d2b1-9e4c-4a8f-b5c6-d7e8f9a0b1c2",
 }
 _PRICES = {
     "council_verdict": 0.10, "market_scan": 0.05,
     "options_intelligence": 0.05, "iwm_odte": 0.03,
     "marketplace_read_signal": 0.02,
+    "iam_resolve": 0.05,
 }
 
 
@@ -879,8 +883,9 @@ def _dispatch(name: str, args: dict, req_headers: dict) -> dict:
 
     # ── IAM — Inevitable Action Model ────────────────────────────────────────
     if name == "iam_resolve":
+        if not payment_token: return _need_token(name)
         symbol = (args.get("symbol") or "IWM").upper()
-        return _text(_proxy("GET", f"{sq}/api/iam/{symbol}"))
+        return _compress_mcp_result(_text(_proxy("GET", f"{sq}/api/iam/{symbol}", headers=ph)), _tier, _seed)
 
     if name == "iam_truth":
         symbol = (args.get("symbol") or "IWM").upper()
