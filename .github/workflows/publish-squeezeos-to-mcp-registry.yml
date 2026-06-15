@@ -1,0 +1,43 @@
+name: publish-squeezeos-to-mcp-registry
+
+# Publishes SqueezeOS to the official MCP Registry (registry.modelcontextprotocol.io).
+# SqueezeOS is a REMOTE MCP server — no npm package, no secrets needed.
+# GitHub OIDC proves ownership of the io.github.Timwal78 namespace.
+# Aggregators (mcp.so, Glama, PulseMCP) sync from the registry automatically.
+#
+# How to run: Actions tab → publish-squeezeos-to-mcp-registry → Run workflow
+# (Also auto-runs when you push a tag like squeezeos-v5.0.0)
+
+on:
+  workflow_dispatch: {}
+  push:
+    tags: ["squeezeos-v*"]
+
+jobs:
+  publish:
+    name: Publish to MCP Registry
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write  # required for GitHub OIDC auth to the registry
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install mcp-publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+          ./mcp-publisher --help | head -1
+
+      - name: Authenticate (GitHub OIDC — no token needed)
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish server.json
+        run: ./mcp-publisher publish
+
+      - name: Verify listing
+        run: |
+          echo "Published. Verifying in registry..."
+          sleep 5
+          curl -s "https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.timwal78/squeezeos" | head -c 800 || true
+          echo ""

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.Timwal78/squeezeos",
+  "title": "SqueezeOS — Institutional Market Intelligence",
+  "description": "33-tool MCP server for institutional-grade squeeze detection, options flow, dark-pool analysis, and AI trade verdicts. Free public endpoints available. Premium endpoints pay-per-call via x402/RLUSD on the XRP Ledger — no API key, no subscription.",
+  "version": "5.0.0",
+  "websiteUrl": "https://squeezeos-api.onrender.com",
+  "repository": {
+    "url": "https://github.com/Timwal78/SqueezeOS",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://squeezeos-api.onrender.com/mcp"
+    }
+  ]
+}
