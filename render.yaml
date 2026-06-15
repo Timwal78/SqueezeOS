@@ -21,6 +21,24 @@ services:
         sync: false
       - key: DISCORD_WEBHOOK_ALL
         sync: false
+      - key: DISCORD_WEBHOOK_BEAST
+        sync: false
+      - key: IAM_AUTO_TRADING
+        value: "true"
+      - key: IAM_PAPER_MODE
+        value: "false"
+      - key: IAM_EXECUTION_MODE
+        value: "both"
+      - key: IAM_INSTRUMENT
+        value: "equity"
+      - key: IAM_MIN_CONFIDENCE
+        value: "70"
+      - key: IAM_MAX_ORDERS_PER_DAY
+        value: "5"
+      - key: IAM_MAX_ORDER_USD
+        value: "500"
+      - key: IAM_DAILY_LOSS_LIMIT
+        value: "300"
       - key: POLYGON_API_KEY
         sync: false
       - key: PROOF402_TOKEN_SECRET
