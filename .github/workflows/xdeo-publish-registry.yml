@@ -25,7 +25,7 @@ jobs:
         working-directory: xdeo
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install mcp-publisher
         run: |
