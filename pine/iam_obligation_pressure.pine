@@ -1,0 +1,313 @@
+//@version=6
+// ════════════════════════════════════════════════════════════════════
+//   IAM — Inevitable Action Model  |  Obligation Pressure Companion
+//   ScriptMaster Labs  ·  squeezeos-api.onrender.com
+//
+//   DISCLAIMER — LOCAL APPROXIMATION ONLY
+//   ─────────────────────────────────────
+//   This indicator provides a LOCAL APPROXIMATION of IAM obligation
+//   metrics using standard TradingView built-ins. It does NOT replicate
+//   the proprietary Obligation Committee, Truth Layer, AMM curve, or
+//   internal analyst weights that power the production IAM engine.
+//
+//   For the mandatory action (BUY / SELL / HOLD) and full obligation
+//   resolution, use the IAM API at squeezeos-api.onrender.com
+//   (0.05 RLUSD per call via 402Proof / XRPL).
+//
+//   The production IAM engine runs an Obligation Committee of 5 analysts,
+//   a Truth Layer, and an Action Resolution Oracle — none of which are
+//   replicated here. Use this script as a visual companion, not a
+//   replacement.
+// ════════════════════════════════════════════════════════════════════
+indicator("IAM — Obligation Pressure (Companion)", shorttitle="IAM-OBL",
+          overlay=false, max_bars_back=500)
+
+// ═══════════════════════════════════════════════════════════════════
+// INPUTS
+// ═══════════════════════════════════════════════════════════════════
+grpCalc = "Calculation Periods"
+length_vol    = input.int(14,   "ATR period (Volatility Release)",  minval=2,  group=grpCalc)
+length_liq    = input.int(20,   "Volume MA period (Liquidity Refill)", minval=5, group=grpCalc)
+length_mr     = input.int(50,   "EMA period (Mean Reversion Pull)", minval=10, group=grpCalc)
+length_struct = input.int(100,  "RSI/Structural period",            minval=10, group=grpCalc)
+
+grpDisp = "Display"
+show_obligation_table = input.bool(true,  "Show obligation pressure table", group=grpDisp)
+show_signals          = input.bool(true,  "Show BUY / SELL labels",         group=grpDisp)
+signal_threshold      = input.float(65.0, "Signal threshold (composite %)", minval=1.0, maxval=100.0, step=0.5, group=grpDisp)
+
+// ═══════════════════════════════════════════════════════════════════
+// CORE CALCULATIONS — Local approximation of the 5 obligation axes
+// ═══════════════════════════════════════════════════════════════════
+
+// ── 1. VOLATILITY RELEASE PRESSURE ─────────────────────────────────
+//    Normalized ATR vs its 50-bar SMA.
+//    High ATR well above average → market is releasing trapped volatility.
+atr_raw      = ta.atr(length_vol)
+atr_avg      = ta.sma(atr_raw, 50)
+// ratio > 1 means current vol above average; clamp to a sensible range (0–3×)
+vol_ratio    = atr_avg > 0 ? atr_raw / atr_avg : 1.0
+// map [0, 3] → [0, 100], clamp
+p_volatility = math.min(100.0, math.max(0.0, (vol_ratio - 0.5) / 2.5 * 100.0))
+
+// ── 2. LIQUIDITY REFILL PRESSURE ───────────────────────────────────
+//    Volume below its MA = liquidity drain = market obligated to refill.
+//    Low volume (ratio < 1) → high refill pressure.
+vol_ma       = ta.sma(volume, length_liq)
+liq_ratio    = vol_ma > 0 ? volume / vol_ma : 1.0
+// Invert: ratio=0 → 100%, ratio=2 → 0%
+p_liquidity  = math.min(100.0, math.max(0.0, (1.0 - liq_ratio) * 100.0 + 50.0))
+
+// ── 3. DEALER HEDGE PRESSURE ───────────────────────────────────────
+//    Bollinger Band squeeze: tight bands relative to their 50-bar range
+//    = dealers underhedged = pressure to hedge accumulates.
+bb_mult      = 2.0
+bb_basis     = ta.sma(close, 20)
+bb_dev       = ta.stdev(close, 20)
+bb_width     = bb_dev > 0 ? (2.0 * bb_mult * bb_dev) / bb_basis * 100.0 : 0.0
+
+var float[] bb_hist = array.new_float()
+array.push(bb_hist, bb_width)
+if array.size(bb_hist) > 50
+    array.shift(bb_hist)
+
+bb_w_max     = array.size(bb_hist) >= 5 ? array.max(bb_hist) : bb_width
+bb_w_min     = array.size(bb_hist) >= 5 ? array.min(bb_hist) : 0.0
+bb_range     = bb_w_max - bb_w_min
+// Narrow band (low width) → high squeeze pressure; invert normalized position
+bb_norm      = bb_range > 0 ? (bb_width - bb_w_min) / bb_range : 0.5
+p_dealer     = math.min(100.0, math.max(0.0, (1.0 - bb_norm) * 100.0))
+
+// ── 4. MEAN REVERSION PULL ─────────────────────────────────────────
+//    Distance of price from its length_mr EMA, normalized by ATR.
+//    Far from EMA → strong gravitational pull back → high obligation.
+ema_mr       = ta.ema(close, length_mr)
+dist_atr     = atr_raw > 0 ? math.abs(close - ema_mr) / atr_raw : 0.0
+// Typical extreme = 4× ATR from mean; map [0, 4] → [0, 100]
+p_mean_rev   = math.min(100.0, math.max(0.0, dist_atr / 4.0 * 100.0))
+
+// ── 5. STRUCTURAL PRESSURE ─────────────────────────────────────────
+//    RSI extremes signal structural imbalance — market is structurally
+//    obligated to rebalance when RSI is at extremes (>70 or <30).
+rsi_raw      = ta.rsi(close, 14)
+// Distance from 50 (neutral), scaled so 50→0%, 70→100%, 30→100%
+rsi_dist     = math.abs(rsi_raw - 50.0)
+p_structural = math.min(100.0, math.max(0.0, rsi_dist / 20.0 * 100.0))
+
+// ═══════════════════════════════════════════════════════════════════
+// COMPOSITE STRESS — weighted average (weights not disclosed)
+//   Weights are intentionally withheld; the composite reflects
+//   an approximation of the IAM obligation weighting model.
+// ═══════════════════════════════════════════════════════════════════
+// Internal weights (not labelled in the display — intentional)
+W1 = 0.22   // volatility
+W2 = 0.18   // liquidity
+W3 = 0.20   // dealer hedge
+W4 = 0.25   // mean reversion
+W5 = 0.15   // structural
+
+composite = W1 * p_volatility +
+            W2 * p_liquidity  +
+            W3 * p_dealer     +
+            W4 * p_mean_rev   +
+            W5 * p_structural
+
+// ═══════════════════════════════════════════════════════════════════
+// SIGNAL LOGIC
+// ═══════════════════════════════════════════════════════════════════
+obligation_critical = composite >= signal_threshold
+
+sig_buy  = obligation_critical and close < ema_mr   // below EMA → upward reversion
+sig_sell = obligation_critical and close > ema_mr   // above EMA → downward reversion
+// HOLD when below threshold
+
+// Implied local action (for table display)
+local_action = sig_buy ? "BUY" : sig_sell ? "SELL" : "HOLD"
+
+// Time window approximation from composite level
+time_window = composite >= 80.0 ? "IMMEDIATE"    :
+              composite >= signal_threshold ? "NEAR_TERM" :
+              composite >= 40.0 ? "DEVELOPING"  : "DORMANT"
+
+// ═══════════════════════════════════════════════════════════════════
+// BACKGROUND SHADING — obligation state zones
+// ═══════════════════════════════════════════════════════════════════
+bg_critical    = composite >= signal_threshold
+bg_developing  = composite >= 40.0 and composite < signal_threshold
+
+bgcolor(bg_critical   ? color.new(color.red,   88) : na, title="Critical zone bg")
+bgcolor(bg_developing ? color.new(color.blue,  92) : na, title="Developing zone bg")
+
+// ═══════════════════════════════════════════════════════════════════
+// PLOTS — Obligation pressure pane
+// ═══════════════════════════════════════════════════════════════════
+plot(composite,   "Composite Stress",       color=color.new(color.white,   0),  linewidth=3)
+plot(p_volatility,"Volatility Release",     color=color.new(color.red,     20), linewidth=1)
+plot(p_liquidity, "Liquidity Refill",       color=color.new(color.blue,    20), linewidth=1)
+plot(p_dealer,    "Dealer Hedge",           color=color.new(color.orange,  20), linewidth=1)
+plot(p_mean_rev,  "Mean Reversion Pull",    color=color.new(color.purple,  20), linewidth=1)
+plot(p_structural,"Structural Pressure",    color=color.new(color.green,   20), linewidth=1)
+
+// Signal threshold reference line
+hline(signal_threshold, "Signal Threshold", color=color.new(color.yellow, 30),
+      linestyle=hline.style_dashed, linewidth=1)
+hline(40.0, "Developing Threshold", color=color.new(color.gray, 50),
+      linestyle=hline.style_dotted, linewidth=1)
+hline(0.0,  "Zero",  color=color.new(color.gray, 80), linewidth=1)
+hline(100.0,"Max",   color=color.new(color.gray, 80), linewidth=1)
+
+// ═══════════════════════════════════════════════════════════════════
+// SIGNAL SHAPES — plotted in the pane at composite value for clarity
+// ═══════════════════════════════════════════════════════════════════
+plotshape(show_signals and sig_buy  and barstate.isconfirmed,
+          title="BUY Obligation",
+          location=location.bottom,
+          style=shape.triangleup,
+          size=size.small,
+          color=color.new(color.lime, 0),
+          text="BUY",
+          textcolor=color.lime)
+
+plotshape(show_signals and sig_sell and barstate.isconfirmed,
+          title="SELL Obligation",
+          location=location.top,
+          style=shape.triangledown,
+          size=size.small,
+          color=color.new(color.red, 0),
+          text="SELL",
+          textcolor=color.red)
+
+// ═══════════════════════════════════════════════════════════════════
+// OBLIGATION TABLE — bottom-right corner
+// ═══════════════════════════════════════════════════════════════════
+// Helper: colour a pressure reading
+pressureColor(val) =>
+    val >= 75.0 ? color.new(color.red,    20) :
+    val >= 50.0 ? color.new(color.orange, 20) :
+    val >= 25.0 ? color.new(color.yellow, 30) :
+                  color.new(color.teal,   30)
+
+actionBgColor(act) =>
+    act == "BUY"  ? color.new(color.lime,   20) :
+    act == "SELL" ? color.new(color.red,    20) :
+                    color.new(color.gray,   40)
+
+var table obl_table = table.new(position.bottom_right, 3, 11,
+                                border_width=1,
+                                border_color=color.new(color.gray, 60),
+                                frame_width=1,
+                                frame_color=color.new(color.gray, 40))
+
+if barstate.islast and show_obligation_table
+    // ── Header ──
+    HDR_BG   = color.new(color.navy, 10)
+    HDR_TXT  = color.white
+    CELL_TXT = color.new(color.silver, 0)
+    DIM_TXT  = color.new(color.gray, 20)
+
+    table.cell(obl_table, 0, 0, "IAM OBLIGATION",
+               bgcolor=HDR_BG, text_color=HDR_TXT, text_size=size.small)
+    table.cell(obl_table, 1, 0, "LOCAL APPROX",
+               bgcolor=HDR_BG, text_color=color.new(color.yellow, 10), text_size=size.tiny)
+    table.cell(obl_table, 2, 0, syminfo.ticker,
+               bgcolor=HDR_BG, text_color=HDR_TXT, text_size=size.small)
+
+    // ── Column headers ──
+    SUB_BG = color.new(color.black, 30)
+    table.cell(obl_table, 0, 1, "Obligation Axis",     bgcolor=SUB_BG, text_color=DIM_TXT, text_size=size.tiny)
+    table.cell(obl_table, 1, 1, "Pressure",            bgcolor=SUB_BG, text_color=DIM_TXT, text_size=size.tiny)
+    table.cell(obl_table, 2, 1, "Level",               bgcolor=SUB_BG, text_color=DIM_TXT, text_size=size.tiny)
+
+    // ── Row helper (inline to avoid function-type conflicts) ──
+    // Row 2 — Volatility Release
+    volLevelStr = p_volatility >= 75 ? "HIGH" : p_volatility >= 50 ? "MED" : p_volatility >= 25 ? "LOW" : "IDLE"
+    table.cell(obl_table, 0, 2, "Volatility Release",
+               bgcolor=color.new(color.black, 20), text_color=color.new(color.red, 10), text_size=size.tiny)
+    table.cell(obl_table, 1, 2, str.tostring(p_volatility, "#.#") + "%",
+               bgcolor=pressureColor(p_volatility), text_color=color.white, text_size=size.tiny)
+    table.cell(obl_table, 2, 2, volLevelStr,
+               bgcolor=pressureColor(p_volatility), text_color=color.white, text_size=size.tiny)
+
+    // Row 3 — Liquidity Refill
+    liqLevelStr = p_liquidity >= 75 ? "HIGH" : p_liquidity >= 50 ? "MED" : p_liquidity >= 25 ? "LOW" : "IDLE"
+    table.cell(obl_table, 0, 3, "Liquidity Refill",
+               bgcolor=color.new(color.black, 20), text_color=color.new(color.blue, 10), text_size=size.tiny)
+    table.cell(obl_table, 1, 3, str.tostring(p_liquidity, "#.#") + "%",
+               bgcolor=pressureColor(p_liquidity), text_color=color.white, text_size=size.tiny)
+    table.cell(obl_table, 2, 3, liqLevelStr,
+               bgcolor=pressureColor(p_liquidity), text_color=color.white, text_size=size.tiny)
+
+    // Row 4 — Dealer Hedge
+    dlrLevelStr = p_dealer >= 75 ? "HIGH" : p_dealer >= 50 ? "MED" : p_dealer >= 25 ? "LOW" : "IDLE"
+    table.cell(obl_table, 0, 4, "Dealer Hedge",
+               bgcolor=color.new(color.black, 20), text_color=color.new(color.orange, 10), text_size=size.tiny)
+    table.cell(obl_table, 1, 4, str.tostring(p_dealer, "#.#") + "%",
+               bgcolor=pressureColor(p_dealer), text_color=color.white, text_size=size.tiny)
+    table.cell(obl_table, 2, 4, dlrLevelStr,
+               bgcolor=pressureColor(p_dealer), text_color=color.white, text_size=size.tiny)
+
+    // Row 5 — Mean Reversion Pull
+    mrLevelStr = p_mean_rev >= 75 ? "HIGH" : p_mean_rev >= 50 ? "MED" : p_mean_rev >= 25 ? "LOW" : "IDLE"
+    table.cell(obl_table, 0, 5, "Mean Reversion",
+               bgcolor=color.new(color.black, 20), text_color=color.new(color.purple, 10), text_size=size.tiny)
+    table.cell(obl_table, 1, 5, str.tostring(p_mean_rev, "#.#") + "%",
+               bgcolor=pressureColor(p_mean_rev), text_color=color.white, text_size=size.tiny)
+    table.cell(obl_table, 2, 5, mrLevelStr,
+               bgcolor=pressureColor(p_mean_rev), text_color=color.white, text_size=size.tiny)
+
+    // Row 6 — Structural Pressure
+    strLevelStr = p_structural >= 75 ? "HIGH" : p_structural >= 50 ? "MED" : p_structural >= 25 ? "LOW" : "IDLE"
+    table.cell(obl_table, 0, 6, "Structural",
+               bgcolor=color.new(color.black, 20), text_color=color.new(color.green, 10), text_size=size.tiny)
+    table.cell(obl_table, 1, 6, str.tostring(p_structural, "#.#") + "%",
+               bgcolor=pressureColor(p_structural), text_color=color.white, text_size=size.tiny)
+    table.cell(obl_table, 2, 6, strLevelStr,
+               bgcolor=pressureColor(p_structural), text_color=color.white, text_size=size.tiny)
+
+    // ── Divider row ──
+    DIV_BG = color.new(color.gray, 70)
+    table.cell(obl_table, 0, 7, "",  bgcolor=DIV_BG)
+    table.cell(obl_table, 1, 7, "",  bgcolor=DIV_BG)
+    table.cell(obl_table, 2, 7, "",  bgcolor=DIV_BG)
+
+    // Row 8 — Composite Stress
+    compLevelStr = composite >= 75 ? "CRITICAL" : composite >= signal_threshold ? "HIGH" : composite >= 40 ? "DEVELOPING" : "DORMANT"
+    COMP_BG = pressureColor(composite)
+    table.cell(obl_table, 0, 8, "COMPOSITE",
+               bgcolor=COMP_BG, text_color=color.white, text_size=size.small)
+    table.cell(obl_table, 1, 8, str.tostring(composite, "#.#") + "%",
+               bgcolor=COMP_BG, text_color=color.white, text_size=size.small)
+    table.cell(obl_table, 2, 8, compLevelStr,
+               bgcolor=COMP_BG, text_color=color.white, text_size=size.small)
+
+    // Row 9 — Time Window
+    table.cell(obl_table, 0, 9,  "Time Window",
+               bgcolor=color.new(color.black, 20), text_color=DIM_TXT, text_size=size.tiny)
+    table.cell(obl_table, 1, 9,  time_window,
+               bgcolor=color.new(color.black, 20), text_color=color.new(color.aqua, 0), text_size=size.tiny)
+    table.cell(obl_table, 2, 9,  "",
+               bgcolor=color.new(color.black, 20))
+
+    // Row 10 — Implied Action (LOCAL)
+    ACT_BG = actionBgColor(local_action)
+    table.cell(obl_table, 0, 10, "LOCAL ACTION",
+               bgcolor=ACT_BG, text_color=color.white, text_size=size.small)
+    table.cell(obl_table, 1, 10, local_action,
+               bgcolor=ACT_BG, text_color=color.white, text_size=size.normal)
+    table.cell(obl_table, 2, 10, "approx only",
+               bgcolor=ACT_BG, text_color=color.new(color.yellow, 10), text_size=size.tiny)
+
+// ═══════════════════════════════════════════════════════════════════
+// ALERT CONDITIONS
+// ═══════════════════════════════════════════════════════════════════
+alertcondition(sig_buy  and barstate.isconfirmed,
+               title  = "IAM — BUY Obligation Signal",
+               message= '{"engine":"IAM-OBL-COMPANION","action":"BUY","symbol":"{{ticker}}","composite":"{{plot_0}}","price":{{close}},"tf":"{{interval}}","note":"LOCAL APPROXIMATION — verify at squeezeos-api.onrender.com"}')
+
+alertcondition(sig_sell and barstate.isconfirmed,
+               title  = "IAM — SELL Obligation Signal",
+               message= '{"engine":"IAM-OBL-COMPANION","action":"SELL","symbol":"{{ticker}}","composite":"{{plot_0}}","price":{{close}},"tf":"{{interval}}","note":"LOCAL APPROXIMATION — verify at squeezeos-api.onrender.com"}')
+
+alertcondition((sig_buy or sig_sell) and barstate.isconfirmed,
+               title  = "IAM — Obligation Critical (BUY or SELL)",
+               message= '{"engine":"IAM-OBL-COMPANION","action":"{{plot_0}}","symbol":"{{ticker}}","price":{{close}},"tf":"{{interval}}","note":"LOCAL APPROXIMATION — verify at squeezeos-api.onrender.com"}')

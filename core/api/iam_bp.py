@@ -20,18 +20,85 @@ import sys
 import os
 import time
 import logging
+import threading
 from flask import Blueprint, jsonify, request
 from core.legacy import get_service, clean_data
 import core.signal_history as signal_history
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 from x402_flask import x402_guard
+from discord_alerts import DiscordAlerts
 
 logger = logging.getLogger("IAM-BP")
 iam_bp = Blueprint("iam", __name__)
 
 _IAM_CACHE: dict = {}
 _IAM_TTL = 45
+
+_discord = DiscordAlerts()
+_IAM_DISCORD_COOLDOWN: dict = {}
+_IAM_DISCORD_COOLDOWN_SEC = 300  # 5-minute per-symbol cooldown
+
+_ACTION_COLORS = {
+    "BUY":  0x00FF88,
+    "SELL": 0xFF4444,
+    "HOLD": 0xFFAA00,
+}
+_URGENT_WINDOWS = {"IMMEDIATE", "NEAR_TERM"}
+
+
+def _fire_iam_discord(sym: str, result: dict):
+    """Post IAM resolution to Discord beast channel — fire-and-forget from daemon thread."""
+    try:
+        now = time.time()
+        last = _IAM_DISCORD_COOLDOWN.get(sym, 0)
+        if (now - last) < _IAM_DISCORD_COOLDOWN_SEC:
+            return
+        _IAM_DISCORD_COOLDOWN[sym] = now
+
+        resolution = result.get("resolution", {})
+        truth      = result.get("truth_layer", {})
+        action     = resolution.get("action", "HOLD")
+        window     = truth.get("time_window", "DORMANT")
+        stress     = truth.get("total_system_stress", 0.0)
+        confidence = resolution.get("resolution_confidence", 0.0)
+        rationale  = resolution.get("rationale", "")
+        vehicle    = resolution.get("vehicle", "")
+        dominant   = truth.get("dominant_obligation", "")
+
+        color = _ACTION_COLORS.get(action, 0xAAAAAA)
+
+        payload = {
+            "embeds": [{
+                "title": f"⚡ IAM OBLIGATION RESOLVED — {sym}",
+                "description": (
+                    f"**The market is FORCED to act.**\n"
+                    f"> {rationale}"
+                ),
+                "color": color,
+                "fields": [
+                    {"name": "Action",             "value": f"**{action}**",               "inline": True},
+                    {"name": "Time Window",         "value": window,                        "inline": True},
+                    {"name": "System Stress",       "value": f"{stress:.1f}%",              "inline": True},
+                    {"name": "Dominant Obligation", "value": dominant or "—",               "inline": True},
+                    {"name": "Vehicle",             "value": vehicle or "—",                "inline": True},
+                    {"name": "Resolution Confidence", "value": f"{confidence:.0f}%",        "inline": True},
+                ],
+                "footer": {
+                    "text": (
+                        f"IAM v1 | Obligation Committee + Truth Layer + ARO | "
+                        f"SqueezeOS — squeezeos-api.onrender.com"
+                    )
+                },
+                "timestamp": __import__("datetime").datetime.utcnow().isoformat(),
+            }]
+        }
+
+        url = _discord.webhook_beast or _discord.webhook_all
+        if url:
+            _discord._post(url, payload)
+    except Exception as e:
+        logger.warning(f"[IAM-DISCORD] Alert failed for {sym}: {e}")
 
 
 def _get_iam_engine():
@@ -101,6 +168,28 @@ def iam_resolve(symbol):
     except Exception:
         pass
 
+    # Fire Discord alert + auto-execution for actionable resolutions
+    try:
+        action     = result["resolution"]["action"]
+        window     = result["truth_layer"]["time_window"]
+        confidence = result["resolution"]["resolution_confidence"]
+        price      = float(result.get("price") or 0.0)
+
+        if action in ("BUY", "SELL") and window in _URGENT_WINDOWS:
+            # Discord beast-channel alert
+            threading.Thread(
+                target=_fire_iam_discord,
+                args=(sym, result),
+                daemon=True,
+                name=f"iam-discord-{sym}",
+            ).start()
+
+            # Broker execution (Tradier + Robinhood alert) — gated by IAM_AUTO_TRADING
+            from iam_executor import execute_async
+            execute_async(sym, result["resolution"], window, confidence, price)
+    except Exception:
+        pass
+
     response = clean_data({
         "status":  "success",
         "cached":  False,
@@ -166,6 +255,86 @@ def iam_truth(symbol):
     })
     _IAM_CACHE[f"truth_{sym}"] = {"ts": now, "data": response}
     return jsonify(response)
+
+
+@iam_bp.route("/autopilot/status", methods=["GET"])
+def iam_autopilot_status():
+    """
+    IAM Autopilot status — FREE endpoint.
+
+    Returns the current state of the IAM auto-execution layer:
+    arm switch, execution mode, daily counters, safety gate state.
+    """
+    try:
+        from iam_executor import status as exec_status
+        s = exec_status()
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+    return jsonify(clean_data({
+        "status":    "success",
+        "autopilot": s,
+        "brokers": {
+            "tradier":    "POST /accounts/{id}/orders — equity + options",
+            "robinhood":  "tools/robinhood_executor_sml.py — Windows polling service",
+        },
+        "env_vars": {
+            "IAM_AUTO_TRADING":         "false (master arm switch)",
+            "IAM_EXECUTION_MODE":       "alert | tradier | both",
+            "IAM_INSTRUMENT":           "equity | options | auto",
+            "IAM_PAPER_MODE":           "true (default safe)",
+            "IAM_MIN_CONFIDENCE":       "70 (minimum % to execute)",
+            "IAM_MAX_ORDERS_PER_DAY":   "5",
+            "IAM_MAX_ORDER_USD":        "500",
+            "IAM_DAILY_LOSS_LIMIT":     "300",
+        },
+    }))
+
+
+@iam_bp.route("/autopilot/dry-run/<symbol>", methods=["GET"])
+def iam_autopilot_dry_run(symbol):
+    """
+    IAM Autopilot dry-run — FREE endpoint.
+
+    Resolves the current obligation state and shows what the autopilot
+    WOULD do without placing any orders or requiring payment.
+    """
+    sym = symbol.upper().strip()
+    try:
+        from iam_executor import status as exec_status, _gate_check, REQUIRED_WINDOWS
+        engine = _get_iam_engine()
+        truth  = engine.truth_only(sym)
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+    nra      = truth.get("next_required_action", {})
+    window   = nra.get("time_window", "DORMANT")
+    stress   = nra.get("total_system_stress", 0.0)
+
+    # Simulate what resolution would look like (no payment, use truth layer only)
+    would_execute = window in REQUIRED_WINDOWS and stress >= 55
+    gate_reason   = None
+    if would_execute:
+        gate_reason = _gate_check(sym, {}, window, 75.0)  # test gates with hypothetical 75% confidence
+
+    return jsonify(clean_data({
+        "status":          "success",
+        "symbol":          sym,
+        "truth_layer":     truth,
+        "autopilot_preview": {
+            "would_trigger":   would_execute,
+            "blocked_by":      gate_reason,
+            "time_window":     window,
+            "total_stress":    stress,
+            "note": (
+                "This uses Truth Layer only. Full autopilot uses paid resolution "
+                "(resolution_confidence must be ≥ IAM_MIN_CONFIDENCE)."
+                if would_execute else
+                f"Window={window} not in {list(REQUIRED_WINDOWS)} or stress too low — autopilot would not trigger."
+            ),
+        },
+        "exec_status": exec_status(),
+    }))
 
 
 @iam_bp.route("/stress-test", methods=["POST"])
