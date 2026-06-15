@@ -15,7 +15,7 @@ jobs:
         working-directory: xdeo
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           # Node >= 22.5 is required for the built-in node:sqlite module used by
           # the DB integration tests (test/helpers/d1.ts).
