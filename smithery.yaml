@@ -1,54 +1,48 @@
-# SqueezeOS MCP Server — Smithery Registry
-# https://smithery.ai/servers/timothy-walton45/squeezeos
+# SqueezeOS MCP Server — Smithery Configuration
+# https://smithery.ai
 
 startCommand:
   type: http
-  url: "https://squeezeos-api.onrender.com/mcp"
+  url: https://squeezeos-api.onrender.com/mcp
+  transport: streamable-http
+
   configSchema:
     type: object
     properties:
-      ownerKey:
+      paymentToken:
         type: string
-        title: "Owner API Key"
-        description: "Optional. Set your OWNER_API_KEY for zero-cost access to all 33 premium tools. Without it, agents pay 0.03-0.10 RLUSD per call via x402 on XRPL. Get a key at https://squeezeos-api.onrender.com/pricing"
+        description: "1-hour JWT from verify_payment tool (402Proof). Required for paid tools only. Free tools work without it."
+        default: ""
+      agentWallet:
+        type: string
+        description: "Your XRPL wallet address (for payment tracking and loyalty tier)"
+        default: ""
     required: []
 
-name: squeezeos
-display_name: "SqueezeOS — Institutional AI Trading Intelligence"
-description: >
-  Real-time institutional market intelligence for AI agents and quants.
-  33 MCP tools: AI council verdicts, squeeze scanner, options flow,
-  IWM 0DTE, signal history, convergence analysis, CEO Trader council-arm,
-  signal marketplace, agent hiring, webhook push delivery, and more.
-  Free demo: GET /api/demo/council — live IWM verdict, no payment.
-  Human checkout: https://squeezeos-api.onrender.com/pricing ($9 dev / $29 starter / $79 pro).
-  Agent payment: x402 RLUSD micropayment on XRPL (0.03-0.10 per call).
-  Always-on Render deployment. SSE live event stream. Zero custody.
-version: "5.0.0"
-homepage: "https://www.scriptmasterlabs.com"
-repository: "https://github.com/Timwal78/SqueezeOS"
-documentation: "https://squeezeos-api.onrender.com/llms.txt"
-license: "Proprietary"
-category: "finance"
+  exampleConfig:
+    paymentToken: ""
+    agentWallet: ""
+
+# Smithery display metadata
+name: SqueezeOS Market Intelligence
+description: |
+  33 MCP tools for institutional-grade equity intelligence by Script Master Labs.
+  Includes: AI council verdicts, squeeze scanner, options flow, IWM 0DTE, FTD data,
+  convergence signals, institutional flows, signal futures, conditional settlements,
+  and more. Free tools available — premium tools cost $0.01-$0.25 via x402 micropayment
+  (RLUSD on XRPL or USDC on Base). No API keys required.
+category: finance
 tags:
   - finance
   - trading
-  - options
   - market-intelligence
-  - squeeze-scanner
+  - options
+  - equities
+  - squeeze
   - institutional
-  - xrpl
-  - rlusd
   - x402
-  - agent-payments
-  - micropayments
-  - zero-dte
-  - ai-council
-  - credit-bureau
-  - agent-economy
-  - marketplace
-  - hiring-protocol
-  - webhooks
-  - signal-history
-  - tradier
-  - autonomous-trading
+  - xrpl
+icon: https://www.scriptmasterlabs.com/og-image.png
+homepage: https://www.scriptmasterlabs.com
+payment: x402
+license: commercial

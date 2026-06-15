@@ -1,0 +1,21 @@
+{
+  "name": "squeezeos",
+  "displayName": "SqueezeOS Market Intelligence",
+  "description": "Institutional-grade equity intelligence MCP server. 33 tools including AI council verdicts, squeeze scanner, options flow, IWM 0DTE, FTD data, convergence signals, and more. Free tools available. Premium tools ~$0.01-$0.25 via x402 (RLUSD/USDC). No API keys.",
+  "version": "5.0.0",
+  "homepage": "https://www.scriptmasterlabs.com",
+  "repository": "https://github.com/Timwal78/squeezeos",
+  "transport": {
+    "type": "streamable-http",
+    "url": "https://squeezeos-api.onrender.com/mcp"
+  },
+  "tools": 33,
+  "freeTier": true,
+  "payment": {
+    "standard": "x402",
+    "currencies": ["RLUSD", "USDC"],
+    "networks": ["XRPL", "Base"]
+  },
+  "categories": ["finance", "market-data", "trading", "AI"],
+  "tags": ["stocks", "options", "squeeze", "institutional", "equities", "FTD", "x402"]
+}
