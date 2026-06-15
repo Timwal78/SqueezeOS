@@ -566,6 +566,65 @@ _TOOLS = [
             },
         },
     },
+
+    # ── IAM — Inevitable Action Model ────────────────────────────────────────────
+    {
+        "name": "iam_resolve",
+        "description": (
+            "IAM — Inevitable Action Model. "
+            "Resolves what action the market is FORCED to take, not what it is predicted to do. "
+            "IAM is a resolver, not a predictor. "
+            "Five independent Obligation Committee analysts (no cross-communication) compute: "
+            "(1) Volatility Release — how overdue is a vol event? "
+            "(2) Liquidity Refill — which side of the book is depleted? "
+            "(3) Dealer Inventory Hedge — what must dealers buy/sell to stay neutral? "
+            "(4) Mean Reversion Pull — how far has price deviated from statistical equilibrium? "
+            "(5) Structural Bounds — is price at a boundary that requires resolution? "
+            "Each analyst outputs a 0-100 obligation pressure via the AMM invariant curve "
+            "(pressure = s² / (s² + (1−s)² + ε) × 100) — non-linear, like Uniswap slippage. "
+            "Truth Layer aggregates into neutral system stress (no direction). "
+            "Action Resolution Oracle then selects the action A* = argmin(projected_stress_after_A). "
+            "Output: mandatory action BUY/SELL/HOLD with rationale, vehicle, invalidation condition, "
+            "and review trigger. The user does not decide — they execute. "
+            "Free endpoint."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["symbol"],
+            "properties": {
+                "symbol": {
+                    "type": "string",
+                    "description": "US equity ticker (e.g. IWM, SPY, QQQ, GME, AMC, NVDA)",
+                },
+            },
+        },
+    },
+    {
+        "name": "iam_truth",
+        "description": (
+            "IAM Truth Layer — neutral obligation state for a symbol. No action resolution. "
+            "Returns the raw obligation pressure vector before direction is forced: "
+            "• Volatility Release: 0-100% "
+            "• Liquidity Refill: 0-100% "
+            "• Dealer Hedge: 0-100% "
+            "• Mean Reversion Pull: 0-100% "
+            "• Structural Pressure: 0-100% "
+            "• Directional Bias: NONE (always — Truth Layer is strictly neutral) "
+            "• Time Window: DORMANT / DEVELOPING / NEAR_TERM / IMMEDIATE "
+            "Use this to display the obligation state without committing to a trade direction. "
+            "Free endpoint."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["symbol"],
+            "properties": {
+                "symbol": {
+                    "type": "string",
+                    "description": "US equity ticker",
+                },
+            },
+        },
+    },
 ]
 
 # Endpoint IDs for helpful 402 error messages
@@ -817,6 +876,15 @@ def _dispatch(name: str, args: dict, req_headers: dict) -> dict:
     if name == "proprietary_ema_signal":
         symbol = (args.get("symbol") or "IWM").upper()
         return _text(_proxy("GET", f"{sq}/api/ema/{symbol}"))
+
+    # ── IAM — Inevitable Action Model ────────────────────────────────────────
+    if name == "iam_resolve":
+        symbol = (args.get("symbol") or "IWM").upper()
+        return _text(_proxy("GET", f"{sq}/api/iam/{symbol}"))
+
+    if name == "iam_truth":
+        symbol = (args.get("symbol") or "IWM").upper()
+        return _text(_proxy("GET", f"{sq}/api/iam/truth/{symbol}"))
 
     return {
         "content": [{"type": "text", "text": json.dumps({"error": "ERR_UNKNOWN_TOOL", "tool": name})}],
