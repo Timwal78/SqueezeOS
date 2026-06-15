@@ -39,6 +39,14 @@ services:
         value: "500"
       - key: IAM_DAILY_LOSS_LIMIT
         value: "300"
+      - key: IAM_SCAN_ENABLED
+        value: "true"
+      - key: IAM_SCAN_TOP_N
+        value: "50"
+      - key: IAM_SCAN_INTERVAL
+        value: "300"
+      - key: IAM_SCAN_INTER_DELAY
+        value: "2.0"
       - key: POLYGON_API_KEY
         sync: false
       - key: PROOF402_TOKEN_SECRET
