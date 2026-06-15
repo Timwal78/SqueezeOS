@@ -2,7 +2,8 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.timwal78/squeezeos",
   "title": "SqueezeOS Market Intelligence",
-  "description": "Institutional-grade market intelligence MCP server. Squeeze detection, options flow, dark-pool analysis, and AI trade verdicts. 33 tools. Free endpoints plus pay-per-call premium via x402 on XRPL.",
+  "description": "Squeeze detection, options flow, AI trade verdicts. 33 MCP tools. Free + pay-per-call via x402.",
+  "version": "5.0.0",
   "websiteUrl": "https://squeezeos-api.onrender.com",
   "repository": {
     "url": "https://github.com/Timwal78/SqueezeOS",
