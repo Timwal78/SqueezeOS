@@ -311,9 +311,29 @@ def require_payment(f):
             _logging.warning(f'[402Proof] invoice fetch failed: {e} — passing through')
             return f(*args, **kwargs)
 
+        _base = os.getenv('SQUEEZEOS_BASE_URL', 'https://squeezeos-api.onrender.com')
         free_preview = _free_preview_for(path)
         body = {
-            'error':   'ERR_PAYMENT_REQUIRED',
+            # ── x402 standard fields (Coinbase CDP / AP2 compatible) ─────────
+            'x402Version': 1,
+            'error': 'X402',
+            'accepts': [{
+                'scheme':            'exact',
+                'network':           'xrpl',
+                'maxAmountRequired': str(inv.get('amount', '0')),
+                'asset':             inv.get('asset', 'RLUSD'),
+                'resource':          f"{_base}{path}",
+                'description':       f"SqueezeOS — {path.strip('/').replace('/', ' ').title()}",
+                'mimeType':          'application/json',
+                'payTo':             inv.get('pay_to', ''),
+                'maxTimeoutSeconds': 300,
+                'extra': {
+                    'memo_hex':   inv.get('memo_hex', ''),
+                    'invoice_id': inv.get('invoice_id', ''),
+                    'verify_at':  f"{PROOF402_SERVER}/v1/verify",
+                },
+            }],
+            # ── SML-native fields (backward compatible) ───────────────────────
             'message': f'This endpoint costs {inv.get("amount", "?")} {inv.get("asset", "RLUSD")}. Pay on XRPL to continue.',
             'invoice': inv,
             'remedy': {
@@ -321,6 +341,20 @@ def require_payment(f):
                 'step2': f"Include MemoData: {inv['memo_hex']} in your XRPL payment transaction",
                 'step3': f"POST {PROOF402_SERVER}/v1/verify with invoice_id, tx_hash, agent_wallet",
                 'step4': 'Retry this request with header: X-Payment-Token: <token>',
+            },
+            # ── Agent discovery (new agents that hit a premium endpoint first) ─
+            'discovery': {
+                'agents_json': f"{_base}/.well-known/agents.json",
+                'mcp_json':    f"{_base}/.well-known/mcp.json",
+                'mcp_endpoint': f"{_base}/mcp",
+                'llms_txt':    f"{_base}/llms.txt",
+                'free_endpoints': [
+                    f"{_base}/api/preview/IWM",
+                    f"{_base}/api/history/IWM",
+                    f"{_base}/api/status",
+                    f"{_base}/api/demo",
+                ],
+                'note': 'Try the free endpoints above before purchasing. They require no payment or auth.',
             },
         }
         if free_preview:

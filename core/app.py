@@ -33,6 +33,7 @@ from core.api.oracle_data_bp import oracle_data_bp, start_oracle_pollers
 from core.api.ftd_bp import ftd_bp
 from core.ftd_data import start_ftd_pollers
 from core.api.agent_analytics import analytics_bp, before_analytics, after_analytics
+from core.api.agent_interceptor import add_discovery_headers
 from core.api.autopilot_bp import autopilot_bp
 from core.api.stigmergy_bp import stigmergy_bp
 from core.api.notary_bp import notary_bp
@@ -198,6 +199,10 @@ def create_app():
     @app.after_request
     def run_analytics(response):
         return after_analytics(response)
+
+    @app.after_request
+    def run_agent_interceptor(response):
+        return add_discovery_headers(response)
 
     @app.after_request
     def add_security_headers(response):

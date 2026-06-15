@@ -66,6 +66,33 @@ services:
     autoDeploy: true
 
   # ---------------------------------------------------------------------------
+  # outbound-hunter — 24/7 Registry Broadcaster + Agent-to-Agent Hustler
+  # Continuously seeds AI registries and delivers signed samples to new bots.
+  # ---------------------------------------------------------------------------
+  - type: worker
+    name: sml-outbound-hunter
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    startCommand: python outbound/main.py
+    autoDeploy: true
+    envVars:
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: SQUEEZEOS_BASE_URL
+        value: https://squeezeos-api.onrender.com
+      - key: PROOF402_BASE_URL
+        value: https://four02proof.onrender.com
+      - key: PROOF402_TOKEN_SECRET
+        sync: false
+      - key: BROADCAST_INTERVAL_SECONDS
+        value: "3600"
+      - key: HUSTLE_INTERVAL_SECONDS
+        value: "7200"
+      - key: HUSTLE_INITIAL_DELAY_SECONDS
+        value: "1800"
+
+  # ---------------------------------------------------------------------------
   # pne-redis — Redis for the PNE sovereign intent auction gateway
   # ---------------------------------------------------------------------------
   - type: redis
