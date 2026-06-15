@@ -20,18 +20,85 @@ import sys
 import os
 import time
 import logging
+import threading
 from flask import Blueprint, jsonify, request
 from core.legacy import get_service, clean_data
 import core.signal_history as signal_history
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 from x402_flask import x402_guard
+from discord_alerts import DiscordAlerts
 
 logger = logging.getLogger("IAM-BP")
 iam_bp = Blueprint("iam", __name__)
 
 _IAM_CACHE: dict = {}
 _IAM_TTL = 45
+
+_discord = DiscordAlerts()
+_IAM_DISCORD_COOLDOWN: dict = {}
+_IAM_DISCORD_COOLDOWN_SEC = 300  # 5-minute per-symbol cooldown
+
+_ACTION_COLORS = {
+    "BUY":  0x00FF88,
+    "SELL": 0xFF4444,
+    "HOLD": 0xFFAA00,
+}
+_URGENT_WINDOWS = {"IMMEDIATE", "NEAR_TERM"}
+
+
+def _fire_iam_discord(sym: str, result: dict):
+    """Post IAM resolution to Discord beast channel — fire-and-forget from daemon thread."""
+    try:
+        now = time.time()
+        last = _IAM_DISCORD_COOLDOWN.get(sym, 0)
+        if (now - last) < _IAM_DISCORD_COOLDOWN_SEC:
+            return
+        _IAM_DISCORD_COOLDOWN[sym] = now
+
+        resolution = result.get("resolution", {})
+        truth      = result.get("truth_layer", {})
+        action     = resolution.get("action", "HOLD")
+        window     = truth.get("time_window", "DORMANT")
+        stress     = truth.get("total_system_stress", 0.0)
+        confidence = resolution.get("resolution_confidence", 0.0)
+        rationale  = resolution.get("rationale", "")
+        vehicle    = resolution.get("vehicle", "")
+        dominant   = truth.get("dominant_obligation", "")
+
+        color = _ACTION_COLORS.get(action, 0xAAAAAA)
+
+        payload = {
+            "embeds": [{
+                "title": f"⚡ IAM OBLIGATION RESOLVED — {sym}",
+                "description": (
+                    f"**The market is FORCED to act.**\n"
+                    f"> {rationale}"
+                ),
+                "color": color,
+                "fields": [
+                    {"name": "Action",             "value": f"**{action}**",               "inline": True},
+                    {"name": "Time Window",         "value": window,                        "inline": True},
+                    {"name": "System Stress",       "value": f"{stress:.1f}%",              "inline": True},
+                    {"name": "Dominant Obligation", "value": dominant or "—",               "inline": True},
+                    {"name": "Vehicle",             "value": vehicle or "—",                "inline": True},
+                    {"name": "Resolution Confidence", "value": f"{confidence:.0f}%",        "inline": True},
+                ],
+                "footer": {
+                    "text": (
+                        f"IAM v1 | Obligation Committee + Truth Layer + ARO | "
+                        f"SqueezeOS — squeezeos-api.onrender.com"
+                    )
+                },
+                "timestamp": __import__("datetime").datetime.utcnow().isoformat(),
+            }]
+        }
+
+        url = _discord.webhook_beast or _discord.webhook_all
+        if url:
+            _discord._post(url, payload)
+    except Exception as e:
+        logger.warning(f"[IAM-DISCORD] Alert failed for {sym}: {e}")
 
 
 def _get_iam_engine():
@@ -98,6 +165,20 @@ def iam_resolve(symbol):
             "window":     result["truth_layer"]["time_window"],
             "confidence": result["resolution"]["resolution_confidence"],
         })
+    except Exception:
+        pass
+
+    # Fire Discord alert for actionable resolutions (BUY/SELL with urgent time window)
+    try:
+        action = result["resolution"]["action"]
+        window = result["truth_layer"]["time_window"]
+        if action in ("BUY", "SELL") and window in _URGENT_WINDOWS:
+            threading.Thread(
+                target=_fire_iam_discord,
+                args=(sym, result),
+                daemon=True,
+                name=f"iam-discord-{sym}",
+            ).start()
     except Exception:
         pass
 
