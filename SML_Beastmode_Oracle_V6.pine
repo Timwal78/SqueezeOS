@@ -82,6 +82,11 @@ var string G_ATR = "▶  VOLATILITY REGIME"
 int atr_len = input.int(14,  "ATR Length",   group=G_ATR, minval=1,  maxval=50)
 int atr_lb  = input.int(100, "ATR Lookback", group=G_ATR, minval=20, maxval=500)
 
+// ── SqueezeOS Webhook ────────────────────────────────────────────────────────
+var string G_WH = "▶  SQUEEZEOS WEBHOOK"
+string wh_passphrase = input.string("SQUEEZE_AUTH_992", "Webhook Passphrase", group=G_WH)
+string wh_system     = input.string("SML_Leviathan",    "System Name",        group=G_WH)
+
 // =========================================================================
 // APEX ANCHOR MATRIX ENGINE — Proprietary Harmonic Grid
 // Formula: base + (gap × n) for n = 0..4
@@ -539,32 +544,30 @@ alertcondition(evt_apex and regime_compressed and vol_confirm,     "SML: Prime S
 alertcondition(is_prime_setup  and full_mtf_stack and vol_confirm, "SML: Prime Institutional", "PRIME INSTITUTIONAL — {{ticker}} {{interval}} [SML v8.0]")
 alertcondition(mtf_stack_fired and state_convergence,              "SML: MTF Stack",           "MTF STACK — {{ticker}} {{interval}} [SML v8.0]")
 
-// ── alert() — Discord JSON webhooks (use ONE alert set to "alert() function calls") ──
+// ── alert() — SqueezeOS webhook (POST to /api/webhooks/tradingview) ──────────
+// Set ONE alert using "alert() function calls" trigger, URL = squeezeos-api.onrender.com/api/webhooks/tradingview
+// DGL + FULL SPECTRUM fire EXECUTE_LONG/SHORT based on bias. Apex/Critical/Convergence skipped server-side.
 string _px  = str.tostring(close, "#.00")
-string _set = str.tostring(total_coiled)
-string _ci  = str.tostring(math.round(harmonic_score))
-string _sq  = str.tostring(math.round(sqi_total))
-string _tf  = timeframe.period
 string _tk  = syminfo.ticker
-string _ftx = ",\"footer\":{\"text\":\"SML v8.0  |  ScriptMaster Labs  |  PROPRIETARY\"}}"
+string _exec = bias_count >= 2 ? "EXECUTE_LONG" : "EXECUTE_SHORT"
 
 if dgl_fire
-    alert("{\"username\":\"SML SOVEREIGN MATRIX\",\"embeds\":[{\"title\":\"\\ud83d\\udc8e  DUAL GRID LOCK  \\u2014  " + _tk + "\",\"description\":\"**GOD TIER ALL 3 COMPRESSED**\\nPrice: **$" + _px + "** | TF: **" + _tf + "** | CI: **" + _ci + "**\",\"color\":16766720" + _ftx + "]}", alert.freq_once_per_bar_close)
+    alert("{\"passphrase\":\"" + wh_passphrase + "\",\"system\":\"" + wh_system + "\",\"ticker\":\"" + _tk + "\",\"action\":\"" + _exec + "\",\"price\":" + _px + "}", alert.freq_once_per_bar_close)
 
 else if evt_full
-    alert("{\"username\":\"SML SOVEREIGN MATRIX\",\"embeds\":[{\"title\":\"\\ud83d\\udfe1  FULL SPECTRUM  \\u2014  " + _tk + "\",\"description\":\"**ALL 9 SETS COMPRESSED**\\nPrice: **$" + _px + "** | TF: **" + _tf + "** | CI: **" + _ci + "** | SQI: **" + _sq + "**\",\"color\":16766720" + _ftx + "]}", alert.freq_once_per_bar_close)
-
-else if evt_apex and vol_confirm
-    alert("{\"username\":\"SML SOVEREIGN MATRIX\",\"embeds\":[{\"title\":\"\\u26aa  APEX SINGULARITY  \\u2014  " + _tk + "\",\"description\":\"Sets: **" + _set + "/9** compressed\\nPrice: **$" + _px + "** | TF: **" + _tf + "** | CI: **" + _ci + "** | SQI: **" + _sq + "**\",\"color\":16777215" + _ftx + "]}", alert.freq_once_per_bar_close)
-
-else if evt_critical and vol_confirm
-    alert("{\"username\":\"SML SOVEREIGN MATRIX\",\"embeds\":[{\"title\":\"\\ud83d\\udfe3  CRITICAL MASS  \\u2014  " + _tk + "\",\"description\":\"Sets: **" + _set + "/9** compressed\\nPrice: **$" + _px + "** | TF: **" + _tf + "** | CI: **" + _ci + "**\",\"color\":16717203" + _ftx + "]}", alert.freq_once_per_bar_close)
-
-else if evt_convergence and vol_confirm
-    alert("{\"username\":\"SML SOVEREIGN MATRIX\",\"embeds\":[{\"title\":\"\\ud83d\\udfe2  CONVERGENCE  \\u2014  " + _tk + "\",\"description\":\"Sets: **" + _set + "/9** compressed\\nPrice: **$" + _px + "** | TF: **" + _tf + "** | CI: **" + _ci + "**\",\"color\":65407" + _ftx + "]}", alert.freq_once_per_bar_close)
+    alert("{\"passphrase\":\"" + wh_passphrase + "\",\"system\":\"" + wh_system + "\",\"ticker\":\"" + _tk + "\",\"action\":\"" + _exec + "\",\"price\":" + _px + "}", alert.freq_once_per_bar_close)
 
 else if is_prime_setup and full_mtf_stack and vol_confirm
-    alert("{\"username\":\"SML SOVEREIGN MATRIX\",\"embeds\":[{\"title\":\"\\ud83d\\udd35  PRIME INSTITUTIONAL  \\u2014  " + _tk + "\",\"description\":\"**FULL MTF STACK + PRIME SETUP**\\nPrice: **$" + _px + "** | TF: **" + _tf + "** | SQI: **" + _sq + "**\",\"color\":52479" + _ftx + "]}", alert.freq_once_per_bar_close)
+    alert("{\"passphrase\":\"" + wh_passphrase + "\",\"system\":\"" + wh_system + "\",\"ticker\":\"" + _tk + "\",\"action\":\"" + _exec + "\",\"price\":" + _px + "}", alert.freq_once_per_bar_close)
+
+else if evt_apex and vol_confirm
+    alert("{\"passphrase\":\"" + wh_passphrase + "\",\"system\":\"" + wh_system + "\",\"ticker\":\"" + _tk + "\",\"action\":\"APEX\",\"price\":" + _px + "}", alert.freq_once_per_bar_close)
+
+else if evt_critical and vol_confirm
+    alert("{\"passphrase\":\"" + wh_passphrase + "\",\"system\":\"" + wh_system + "\",\"ticker\":\"" + _tk + "\",\"action\":\"CRITICAL_MASS\",\"price\":" + _px + "}", alert.freq_once_per_bar_close)
+
+else if evt_convergence and vol_confirm
+    alert("{\"passphrase\":\"" + wh_passphrase + "\",\"system\":\"" + wh_system + "\",\"ticker\":\"" + _tk + "\",\"action\":\"CONVERGENCE\",\"price\":" + _px + "}", alert.freq_once_per_bar_close)
 
 else if exit_convergence
-    alert("{\"username\":\"SML SOVEREIGN MATRIX\",\"embeds\":[{\"title\":\"\\u26aa  RELEASED  \\u2014  " + _tk + "\",\"description\":\"Compression released\\nPrice: **$" + _px + "** | TF: **" + _tf + "**\",\"color\":6710886" + _ftx + "]}", alert.freq_once_per_bar_close)
+    alert("{\"passphrase\":\"" + wh_passphrase + "\",\"system\":\"" + wh_system + "\",\"ticker\":\"" + _tk + "\",\"action\":\"RELEASED\",\"price\":" + _px + "}", alert.freq_once_per_bar_close)
