@@ -1,0 +1,41 @@
+SML Sovereign Harmonic Matrix — Stripe Pricing Reference
+=========================================================
+
+PRODUCTS TO CREATE IN STRIPE:
+
+1. Monthly Plan
+   Name: SML Matrix — Monthly
+   Price: $97.00 / month
+   Billing: recurring
+
+2. Quarterly Plan
+   Name: SML Matrix — Quarterly
+   Price: $247.00 / 3 months
+   Billing: recurring
+
+3. Annual Plan
+   Name: SML Matrix — Annual
+   Price: $797.00 / year
+   Billing: recurring
+
+4. Founding Member (LIMITED — first 20 only)
+   Name: SML Matrix — Founding Member
+   Price: $47.00 / month
+   Billing: recurring, locked for life
+   Coupon: FOUNDER20 (limit: 20 redemptions)
+
+WORKFLOW:
+- Customer pays via Stripe
+- You receive payment notification
+- Add their TradingView username to the invite list
+- They get access to the script
+
+CONTACT FOR ACCESS:
+hello@scriptmasterlabs.com
+scriptmasterlabs@gmail.com
+
+TO DO:
+- Create Stripe account at stripe.com
+- Create products above
+- Generate payment links for each tier
+- Add payment links to TradingView description and scriptmasterlabs.com

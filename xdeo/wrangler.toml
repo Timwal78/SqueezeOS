@@ -19,7 +19,7 @@ migrations_dir = "migrations"
 # Cache + ephemeral state (rate limits, EDGAR ETags, dedupe)
 [[kv_namespaces]]
 binding = "KV"
-id = "e8879156f30a4b8bb398b50a56abbc55"
+id = "9bcfbfacd1b4489a9e8dbc273f5e5c57"
 
 # Real-time stream fan-out (WebSocket + SSE) — single global instance.
 [[durable_objects.bindings]]

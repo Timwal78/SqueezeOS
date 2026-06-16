@@ -17,6 +17,7 @@
     "db:migrate:remote": "wrangler d1 migrations apply xdeo --remote"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "hono": "^4.6.3"
   },
   "devDependencies": {
