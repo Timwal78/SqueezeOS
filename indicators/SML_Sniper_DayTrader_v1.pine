@@ -1,0 +1,228 @@
+//@version=6
+// ═══════════════════════════════════════════════════════════════════════════
+// SML Sniper Day Trader v1.0 — Institutional Intraday Execution Bridge
+// Based on KhanSaab Sniper Entry/Exit V.02 — reconfigured for SML arsenal
+// ─────────────────────────────────────────────────────────────────────────
+// Signals: EMA 9/21 crossover gated by 7-factor dual score (bull/bear %)
+// Execution: fires to SqueezeOS /api/webhooks/tradingview when score ≥ gate
+// Day-trade profile: quick EMA entries, ATR-based 5-target ladder, VWAP filter
+// ═══════════════════════════════════════════════════════════════════════════
+indicator("SML Sniper Day Trader v1.0", overlay=true, max_labels_count=500, max_boxes_count=500, max_bars_back=1000)
+
+// ── Colors ────────────────────────────────────────────────────────────────────
+color SML_CYAN    = #00FFFF
+color SML_GOLD    = #FFD700
+color SML_GREEN   = #00FF7F
+color SML_ORANGE  = #FF6B00
+color SML_PINK    = #FF1493
+color c_turquoise = #40E0D0
+
+// ── Inputs — Visuals ──────────────────────────────────────────────────────────
+var string G_VIS = "▶  VISUALS & UI"
+string dashTextSize  = input.string("small", "Dashboard Font Size",  options=["tiny","small","normal","large","huge"], group=G_VIS)
+string tradeTextSize = input.string("small", "Trade Label Size",     options=["tiny","small","normal","large","huge"], group=G_VIS)
+int    ribbonOpacity = input.int(75, "EMA Ribbon Opacity", minval=0, maxval=100, group=G_VIS)
+int    labelOffset   = input.int(12, "Label Right Offset (Bars)",    minval=1,   group=G_VIS)
+
+// ── Inputs — Risk ─────────────────────────────────────────────────────────────
+var string G_RISK = "▶  RISK MANAGEMENT"
+float atrMultiplier = input.float(1.5, "SL ATR Multiplier", minval=0.1, step=0.1, group=G_RISK)
+
+// ── Inputs — Execution Gate ───────────────────────────────────────────────────
+var string G_EXEC = "▶  EXECUTION GATE"
+float minScoreGate = input.float(60.0, "Min Score % to fire webhook (0=all)", minval=0.0, maxval=100.0, step=5.0, group=G_EXEC)
+bool  requireVwap  = input.bool(true,  "Require price above VWAP for BUY / below for SELL", group=G_EXEC)
+bool  requireAdx   = input.bool(true,  "Require ADX > 25 (trending market only)",            group=G_EXEC)
+
+// ── Inputs — SqueezeOS Webhook ────────────────────────────────────────────────
+var string G_WH = "▶  SQUEEZEOS WEBHOOK"
+string wh_passphrase = input.string("SQUEEZE_AUTH_992", "Webhook Passphrase", group=G_WH)
+string wh_system     = input.string("SML_Sniper",       "System Name",        group=G_WH)
+
+// ── Indicators ────────────────────────────────────────────────────────────────
+float ema9   = ta.ema(close, 9)
+float ema21  = ta.ema(close, 21)
+float vwapV  = ta.vwap(hlc3)
+float atr    = ta.atr(14)
+float rsiVal = ta.rsi(close, 14)
+float rsi5m  = request.security(syminfo.tickerid, "5", ta.rsi(close, 14), lookahead=barmerge.lookahead_off)
+[macdMain, macdSig, _] = ta.macd(close, 12, 26, 9)
+[_, _, adxVal] = ta.dmi(14, 14)
+float volAvg = ta.sma(volume, 20)
+
+// ── Dual Score (7-factor, 0–100%) ────────────────────────────────────────────
+float bScore = 0.0
+bScore += (close > vwapV          ? 1.0 : 0.0)
+bScore += (rsiVal > 50            ? 1.0 : 0.0)
+bScore += (macdMain > macdSig     ? 1.0 : 0.0)
+bScore += (ema9 > ema21           ? 1.0 : 0.0)
+bScore += (adxVal > 25 and close > ema9 ? 1.0 : 0.0)
+bScore += (volume > volAvg and close > open ? 1.0 : 0.0)
+bScore += (rsi5m > 50             ? 1.0 : 0.0)
+float bullPct = (bScore / 7.0) * 100.0
+
+float rScore = 0.0
+rScore += (close < vwapV          ? 1.0 : 0.0)
+rScore += (rsiVal < 50            ? 1.0 : 0.0)
+rScore += (macdMain < macdSig     ? 1.0 : 0.0)
+rScore += (ema9 < ema21           ? 1.0 : 0.0)
+rScore += (adxVal > 25 and close < ema9 ? 1.0 : 0.0)
+rScore += (volume > volAvg and close < open ? 1.0 : 0.0)
+rScore += (rsi5m < 50             ? 1.0 : 0.0)
+float bearPct = (rScore / 7.0) * 100.0
+
+// ── Bias ──────────────────────────────────────────────────────────────────────
+string biasText = (bullPct - bearPct) >= 40 ? "STRONG BULL" :
+                  (bearPct - bullPct) >= 40 ? "STRONG BEAR" :
+                  bullPct > bearPct ? "MILD BULL" : "MILD BEAR"
+color biasCol = biasText == "STRONG BULL" ? color.green :
+                biasText == "STRONG BEAR" ? color.red : color.gray
+
+// ── Signal Logic ──────────────────────────────────────────────────────────────
+var int   lastSignalState = 0
+var float entryP = 0.0
+var float slP    = 0.0
+var float t1 = 0.0, var float t2 = 0.0, var float t3 = 0.0
+var float t4 = 0.0, var float t5 = 0.0
+var bool t1Hit = false, var bool t2Hit = false, var bool t3Hit = false
+var bool t4Hit = false, var bool t5Hit = false
+
+bool buyCond  = ta.crossover(ema9, ema21)
+bool sellCond = ta.crossunder(ema9, ema21)
+
+// Execution gate: score threshold + optional VWAP + optional ADX filter
+bool buyGated  = bullPct >= minScoreGate and
+                 (not requireVwap or close > vwapV) and
+                 (not requireAdx  or adxVal > 25)
+bool sellGated = bearPct >= minScoreGate and
+                 (not requireVwap or close < vwapV) and
+                 (not requireAdx  or adxVal > 25)
+
+bool triggerBuy  = buyCond  and lastSignalState <= 0 and buyGated
+bool triggerSell = sellCond and lastSignalState >= 0 and sellGated
+
+if triggerBuy or triggerSell
+    lastSignalState := triggerBuy ? 1 : -1
+    entryP := close
+    float risk = atr * atrMultiplier
+    slP := triggerBuy ? entryP - risk : entryP + risk
+    t1  := triggerBuy ? entryP + risk         : entryP - risk
+    t2  := triggerBuy ? entryP + (risk * 2.0) : entryP - (risk * 2.0)
+    t3  := triggerBuy ? entryP + (risk * 3.0) : entryP - (risk * 3.0)
+    t4  := triggerBuy ? entryP + (risk * 4.0) : entryP - (risk * 4.0)
+    t5  := triggerBuy ? entryP + (risk * 5.0) : entryP - (risk * 5.0)
+    t1Hit := false
+    t2Hit := false
+    t3Hit := false
+    t4Hit := false
+    t5Hit := false
+
+// ── Target hit detection ──────────────────────────────────────────────────────
+if lastSignalState == 1
+    if high >= t1 then t1Hit := true
+    if high >= t2 then t2Hit := true
+    if high >= t3 then t3Hit := true
+    if high >= t4 then t4Hit := true
+    if high >= t5 then t5Hit := true
+if lastSignalState == -1
+    if low <= t1 then t1Hit := true
+    if low <= t2 then t2Hit := true
+    if low <= t3 then t3Hit := true
+    if low <= t4 then t4Hit := true
+    if low <= t5 then t5Hit := true
+
+// ── EMA Ribbon ────────────────────────────────────────────────────────────────
+p9  = plot(ema9,  color=color.new(color.green, 20), title="EMA 9",  linewidth=2)
+p21 = plot(ema21, color=color.new(color.red,   20), title="EMA 21", linewidth=2)
+fill(p9, p21, color=ema9 > ema21 ? color.new(color.green, 100 - ribbonOpacity) : color.new(color.red, 100 - ribbonOpacity))
+plot(vwapV, color=close > vwapV ? color.green : color.red, linewidth=2, title="VWAP")
+
+// ── Candle colors + entry markers ─────────────────────────────────────────────
+bool isRetest = (lastSignalState == 1  and low  <= ema9 and low  > ema21) or
+                (lastSignalState == -1 and high >= ema9 and high < ema21)
+barcolor((triggerBuy or triggerSell) ? color.black : isRetest ? color.orange : na)
+plotshape(triggerBuy,  text="BUY",  style=shape.labelup,   location=location.belowbar, color=color.green, textcolor=color.white, size=size.small)
+plotshape(triggerSell, text="SELL", style=shape.labeldown, location=location.abovebar, color=color.red,   textcolor=color.white, size=size.small)
+
+// ── TP Lines & Labels ─────────────────────────────────────────────────────────
+var line lE  = na, var line lSL = na
+var line lT1 = na, var line lT2 = na, var line lT3 = na, var line lT4 = na, var line lT5 = na
+
+var label lbE  = label.new(na, na, "", color=color.blue,            textcolor=color.white, style=label.style_label_left, size=tradeTextSize)
+var label lbT1 = label.new(na, na, "", color=color.green,           textcolor=color.white, style=label.style_label_left, size=tradeTextSize)
+var label lbT2 = label.new(na, na, "", color=color.green,           textcolor=color.white, style=label.style_label_left, size=tradeTextSize)
+var label lbT3 = label.new(na, na, "", color=color.green,           textcolor=color.white, style=label.style_label_left, size=tradeTextSize)
+var label lbT4 = label.new(na, na, "", color=color.rgb(0,100,0),   textcolor=color.white, style=label.style_label_left, size=tradeTextSize)
+var label lbT5 = label.new(na, na, "", color=color.rgb(0, 70, 0),  textcolor=color.white, style=label.style_label_left, size=tradeTextSize)
+
+if triggerBuy or triggerSell
+    line.delete(lE),  line.delete(lSL)
+    line.delete(lT1), line.delete(lT2), line.delete(lT3), line.delete(lT4), line.delete(lT5)
+    lE  := line.new(bar_index, entryP, bar_index + 20, entryP, color=color.blue,           width=2, extend=extend.right)
+    lSL := line.new(bar_index, slP,    bar_index + 20, slP,    color=color.red,            width=2, extend=extend.right)
+    lT1 := line.new(bar_index, t1,     bar_index + 20, t1,     color=color.green,          style=line.style_dashed, extend=extend.right)
+    lT2 := line.new(bar_index, t2,     bar_index + 20, t2,     color=color.green,          style=line.style_dashed, extend=extend.right)
+    lT3 := line.new(bar_index, t3,     bar_index + 20, t3,     color=color.green,          style=line.style_dashed, extend=extend.right)
+    lT4 := line.new(bar_index, t4,     bar_index + 20, t4,     color=color.rgb(0,100,0),   width=2, extend=extend.right)
+    lT5 := line.new(bar_index, t5,     bar_index + 20, t5,     color=color.rgb(0, 70, 0),  width=3, extend=extend.right)
+
+if lastSignalState != 0
+    int tX = bar_index + labelOffset
+    line.set_color(lT1, t1Hit ? c_turquoise : color.green)
+    line.set_color(lT2, t2Hit ? c_turquoise : color.green)
+    line.set_color(lT3, t3Hit ? c_turquoise : color.green)
+    line.set_color(lT4, t4Hit ? c_turquoise : color.rgb(0,100,0))
+    line.set_color(lT5, t5Hit ? c_turquoise : color.rgb(0, 70, 0))
+    label.set_xy(lbE,  tX, entryP), label.set_text(lbE,  "ENTRY: " + str.tostring(entryP, "#.##"))
+    label.set_xy(lbT1, tX, t1),     label.set_text(lbT1, "TP1: "   + str.tostring(t1,     "#.##") + (t1Hit ? " ✓" : ""))
+    label.set_xy(lbT2, tX, t2),     label.set_text(lbT2, "TP2: "   + str.tostring(t2,     "#.##") + (t2Hit ? " ✓" : ""))
+    label.set_xy(lbT3, tX, t3),     label.set_text(lbT3, "TP3: "   + str.tostring(t3,     "#.##") + (t3Hit ? " ✓" : ""))
+    label.set_xy(lbT4, tX, t4),     label.set_text(lbT4, "TP4: "   + str.tostring(t4,     "#.##") + (t4Hit ? " ✓" : ""))
+    label.set_xy(lbT5, tX, t5),     label.set_text(lbT5, "TP5: "   + str.tostring(t5,     "#.##") + (t5Hit ? " ✓" : ""))
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+f_addDashRow(_table, _row, _title, _val, _col, _size) =>
+    table.cell(_table, 0, _row, _title, text_color=color.black, text_halign=text.align_left,  text_size=_size)
+    table.cell(_table, 1, _row, _val,   text_color=_col,        text_halign=text.align_right, text_size=_size)
+
+var table d = table.new(position.middle_left, 2, 18,
+    bgcolor=color.new(#050505, 5), border_width=1, border_color=color.new(color.gray, 60))
+
+if barstate.islast
+    table.cell(d, 0, 0, "BULL SCORE", text_color=color.white, bgcolor=color.green, text_size=dashTextSize)
+    table.cell(d, 1, 0, str.tostring(bullPct, "#") + "%",     text_color=color.white, bgcolor=color.green, text_size=dashTextSize)
+    table.cell(d, 0, 1, "BEAR SCORE", text_color=color.white, bgcolor=color.red,   text_size=dashTextSize)
+    table.cell(d, 1, 1, str.tostring(bearPct, "#") + "%",     text_color=color.white, bgcolor=color.red,   text_size=dashTextSize)
+    table.cell(d, 0, 2, "MARKET BIAS",text_color=color.white, bgcolor=color.black, text_size=dashTextSize)
+    table.cell(d, 1, 2, biasText,     text_color=color.white, bgcolor=biasCol,     text_size=dashTextSize)
+    f_addDashRow(d, 3,  "Score Gate",  str.tostring(minScoreGate, "#") + "%",         color.black, dashTextSize)
+    f_addDashRow(d, 4,  "Price/VWAP",  close > vwapV ? "ABOVE" : "BELOW",            close > vwapV ? color.green : color.red, dashTextSize)
+    f_addDashRow(d, 5,  "RSI (14)",    str.tostring(rsiVal, "#.#"),                   rsiVal > 50 ? color.green : color.red, dashTextSize)
+    f_addDashRow(d, 6,  "MACD Trend",  macdMain > macdSig ? "BULL" : "BEAR",         macdMain > macdSig ? color.green : color.red, dashTextSize)
+    f_addDashRow(d, 7,  "ADX Power",   str.tostring(adxVal, "#.#"),                   adxVal > 25 ? color.green : color.gray, dashTextSize)
+    f_addDashRow(d, 8,  "EMA Cross",   ema9 > ema21 ? "BULL" : "BEAR",               ema9 > ema21 ? color.green : color.red, dashTextSize)
+    f_addDashRow(d, 9,  "ATR (14)",    str.tostring(atr, "#.##"),                     color.black, dashTextSize)
+    f_addDashRow(d, 10, "Vol Status",  volume > volAvg ? "HIGH" : "LOW",              volume > volAvg ? color.green : color.gray, dashTextSize)
+    f_addDashRow(d, 11, "5m RSI",      str.tostring(rsi5m, "#.#"),                    rsi5m > 50 ? color.green : color.red, dashTextSize)
+    f_addDashRow(d, 12, "SL Price",    str.tostring(slP, "#.##"),                     color.red, dashTextSize)
+    f_addDashRow(d, 13, "Trend Str",   adxVal > 25 ? "STRONG" : "WEAK",              adxVal > 25 ? color.green : color.red, dashTextSize)
+    f_addDashRow(d, 14, "Gate Status", buyGated ? "BUY OPEN" : sellGated ? "SELL OPEN" : "GATED",
+                 buyGated ? color.green : sellGated ? color.red : color.gray, dashTextSize)
+    f_addDashRow(d, 15, "Signal",      triggerBuy ? "NEW BUY" : triggerSell ? "NEW SELL" : "WAIT",
+                 triggerBuy ? color.green : triggerSell ? color.red : color.black, dashTextSize)
+    f_addDashRow(d, 16, "System",      wh_system + "  v1.0",                          color.blue, dashTextSize)
+
+// ── alertcondition (legacy / template) ───────────────────────────────────────
+alertcondition(triggerBuy  and buyGated,  "SML Sniper: BUY",  "SNIPER BUY — {{ticker}} @ {{close}} [SML]")
+alertcondition(triggerSell and sellGated, "SML Sniper: SELL", "SNIPER SELL — {{ticker}} @ {{close}} [SML]")
+
+// ── alert() — SqueezeOS webhook ───────────────────────────────────────────────
+// ONE alert → "alert() function calls" → URL: squeezeos-api.onrender.com/api/webhooks/tradingview
+string _px = str.tostring(close, "#.00")
+string _tk = syminfo.ticker
+
+if triggerBuy and buyGated
+    alert("{\"passphrase\":\"" + wh_passphrase + "\",\"system\":\"" + wh_system + "\",\"ticker\":\"" + _tk + "\",\"action\":\"BUY\",\"price\":" + _px + "}", alert.freq_once_per_bar_close)
+
+else if triggerSell and sellGated
+    alert("{\"passphrase\":\"" + wh_passphrase + "\",\"system\":\"" + wh_system + "\",\"ticker\":\"" + _tk + "\",\"action\":\"SELL\",\"price\":" + _px + "}", alert.freq_once_per_bar_close)
