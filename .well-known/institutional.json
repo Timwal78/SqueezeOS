@@ -29,6 +29,61 @@
       "data_policy": "Zero simulated data. If a feed is unavailable, endpoints return AWAITING_DATA."
     },
     {
+      "name": "SML Execution Intelligence Stack",
+      "description": "Real-time trading execution signals from the live ScriptMaster Labs institutional stack. Three converging signal engines running simultaneously — GOD MODE SET9 convergence scanner, SML Sniper v1.1 (13/34 EMA crossover, 15 min bars), and MMLE Beast (65 min market maker liquidity). These are the exact signals driving live equity orders on Robinhood and Tradier in real time. AI agents can purchase access via any x402-compatible payment rail across the SML product inventory.",
+      "status": "live",
+      "execution_engines": [
+        {
+          "name": "GOD MODE Scanner (SET9 Convergence)",
+          "description": "9-indicator SET9 matrix — all 6 must be stacked (god_stacked=6/6) for execution. Scans top-25 dynamic universe every 10 minutes. Max 3 orders per scan cycle. Daily cap: 25 orders / $1,500 notional / $100 loss limit.",
+          "signal_endpoint": "GET /api/beastmode",
+          "cost": "free",
+          "timeframe": "multi-timeframe convergence",
+          "execution": "live — Robinhood + Tradier"
+        },
+        {
+          "name": "SML Sniper v1.1",
+          "description": "13/34 EMA crossover with 7-factor institutional score (VWAP, RSI, MACD, EMA cross, ADX, volume+body, 5m RSI). Fires when score ≥ 60% + Pillar 13→65 fully aligned. 5-target ATR ladder from entry. TradingView Pine v6.",
+          "signal_endpoint": "GET /api/webhooks/tv_pending (system=SML_Sniper)",
+          "cost": "free",
+          "timeframe": "15 min",
+          "execution": "live — Robinhood + Tradier via webhook bridge"
+        },
+        {
+          "name": "MMLE Beast",
+          "description": "Market Maker Liquidity Engine — HJB/Kalman institutional liquidity signals. Fires FIRE_LONG / FIRE_SHORT on market maker positioning shifts. Longer timeframe confirmation layer.",
+          "signal_endpoint": "GET /api/webhooks/tv_pending (system=MMLE-BEAST)",
+          "cost": "free",
+          "timeframe": "65 min",
+          "execution": "live — Robinhood + Tradier via webhook bridge"
+        }
+      ],
+      "combined_intelligence": {
+        "endpoint": "GET /api/execution/intelligence",
+        "cost": "0.05 RLUSD",
+        "description": "All three engines in one call — GOD MODE top signals + active Sniper position + MMLE bias. Institutional execution context with confidence, direction, entry price, and regime."
+      },
+      "payment_rails": [
+        { "rail": "402Proof", "asset": "RLUSD", "network": "XRPL", "url": "https://four02proof.onrender.com" },
+        { "rail": "Ghost Layer (XRPL)", "asset": "RLUSD", "network": "XRPL", "url": "https://ghost-layer.onrender.com" },
+        { "rail": "Ghost Layer (Base)", "asset": "USDC", "network": "Base L2", "url": "https://ghost-layer.onrender.com" },
+        { "rail": "Forge x402 Gateway", "asset": "RLUSD", "network": "XRPL", "url": "https://forge-gateway-a822.onrender.com" },
+        { "rail": "Shadow Desk MCP", "asset": "RLUSD", "network": "XRPL", "url": "https://shadow-desk.onrender.com" }
+      ],
+      "risk_controls": {
+        "max_order_usd": 150,
+        "max_per_scan": 3,
+        "max_orders_per_day": 25,
+        "max_daily_notional_usd": 1500,
+        "max_daily_loss_usd": 100,
+        "daily_reset": "midnight",
+        "blocklist": "known delisted / OTC junk tickers"
+      },
+      "brokers": ["Robinhood (robin_stocks)", "Tradier (brokerage API)"],
+      "data_sources": ["Tradier live price feed", "Robinhood live price feed", "TradingView Pine Script v6 alerts"]
+    },
+
+    {
       "name": "Stigmergy Protocol",
       "description": "Biologically-inspired swarm coordination layer for autonomous agents. Agents leave RLUSD micropayment pheromones at semantic coordinates. Other agents sniff capital concentration and follow high-value trails. Trailblazers earn toll income. Emergent self-organization — no central directory.",
       "url": "https://squeezeos-api.onrender.com/api/stigmergy/sniff",
