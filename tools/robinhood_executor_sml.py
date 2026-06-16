@@ -55,7 +55,7 @@ SQUEEZEOS_API_URL  = os.environ.get("SQUEEZEOS_API_URL", "https://squeezeos-api.
 ROBINHOOD_USER     = os.environ.get("ROBINHOOD_USERNAME", "")
 ROBINHOOD_PASS     = os.environ.get("ROBINHOOD_PASSWORD", "")
 POLL_INTERVAL_S    = int(os.environ.get("POLL_INTERVAL_S", "300"))     # poll every 5 minutes
-MIN_GOD_STACKED    = int(os.environ.get("MIN_GOD_STACKED", "5"))       # min SET9 stacked to execute
+MIN_GOD_STACKED    = int(os.environ.get("MIN_GOD_STACKED", "4"))       # min SET9 stacked to execute (4/6 = institutional grade, max signal flow)
 PDT_BALANCE_LIMIT  = float(os.environ.get("PDT_BALANCE_LIMIT", "2100.0"))
 PDT_MAX_TRADES     = int(os.environ.get("PDT_MAX_TRADES", "3"))
 PAPER_MODE           = os.environ.get("ROBINHOOD_PAPER_MODE", "false").lower() == "true"
@@ -335,7 +335,8 @@ def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
 
 
 # ── Beastmode poll (server-side SET9 convergence scanner) ─────────────────────
-def _poll_beastmode():
+def _poll_beastmode() -> int:
+    """Returns number of orders placed this poll. 0 = no signals or all filtered."""
     url = f"{SQUEEZEOS_API_URL}/api/beastmode"
     try:
         req = URLRequest(url, headers={"User-Agent": "SqueezeOS-RH-Executor/2.0"})
@@ -343,37 +344,69 @@ def _poll_beastmode():
             data = json.loads(resp.read())
     except Exception as e:
         logger.warning(f"[POLL] beastmode fetch failed: {e}")
-        return
+        return 0
 
-    signals = data.get("signals") or data.get("hits") or []
+    signals    = data.get("signals") or []
+    cache_age  = data.get("cache_age_s")
+    age_str    = f", cache age {cache_age:.0f}s" if cache_age is not None else ""
+    now        = time.time()
+
     if not signals:
-        return
+        logger.info(f"[POLL] beastmode: 0 signals from server{age_str} — scan universe warming up or no convergence")
+        return 0
 
-    logger.info(f"[POLL] {len(signals)} beastmode signals — checking GOD MODE gate...")
-    scan_counter = [0]
+    # Classify signals for diagnostics
+    god_hits   = []
+    skipped    = {"no_tier": 0, "low_stack": 0, "cooldown": 0, "blocklist": 0}
+
     for hit in signals:
         symbol = (hit.get("symbol") or "").upper().strip()
         sml    = hit.get("sml_matrix") or {}
         tier   = sml.get("tier", "")
         gate   = sml.get("execute_gate", False)
-
-        if not symbol or tier != "GOD_MODE" or not gate:
+        stacked = sml.get("god_stacked", 0)
+        if tier != "GOD_MODE" or not gate:
+            skipped["no_tier"] += 1
             continue
+        if stacked < MIN_GOD_STACKED:
+            skipped["low_stack"] += 1
+            logger.debug(f"[POLL] {symbol} god_stacked={stacked} < threshold {MIN_GOD_STACKED} — skip")
+            continue
+        if symbol in _BLOCKLIST:
+            skipped["blocklist"] += 1
+            continue
+        cooldown_remaining = COOLDOWN_S - (now - _last_execution.get(symbol, 0))
+        if cooldown_remaining > 0:
+            skipped["cooldown"] += 1
+            logger.info(f"[POLL] {symbol} GOD MODE {stacked}/6 — cooldown {int(cooldown_remaining)}s left")
+            continue
+        god_hits.append((symbol, sml))
 
-        signal = hit.get("signal", "")
+    logger.info(
+        f"[POLL] beastmode: {len(signals)} total | {len(god_hits)} ready to execute | "
+        f"filtered: {skipped['no_tier']} non-GOD, {skipped['low_stack']} low-stack (<{MIN_GOD_STACKED}), "
+        f"{skipped['cooldown']} cooldown, {skipped['blocklist']} blocklist{age_str}"
+    )
+
+    scan_counter = [0]
+    for symbol, sml in god_hits:
+        signal = sml.get("signal", "")
         side   = "buy" if "BULL" in signal or signal in ("BEASTMODE", "GOD_MODE", "DUAL_GRID_LOCK") else "sell"
-        logger.info(f"[POLL] GOD MODE: {symbol} {side.upper()} god_stacked={sml.get('god_stacked',0)}/6")
+        logger.info(f"[POLL] EXECUTING GOD MODE: {symbol} {side.upper()} god_stacked={sml.get('god_stacked',0)}/6")
         _execute(symbol, side, sml, scan_counter)
         if scan_counter[0] >= MAX_PER_SCAN:
             logger.info(f"[POLL] Per-scan limit {MAX_PER_SCAN} reached — stopping beastmode batch")
             break
 
+    return scan_counter[0]
+
 
 # ── Pine script TV webhook poll (Leviathan / MMLE Beast / Sniper) ──────────────
-def _poll_tv_pending():
+def _poll_tv_pending() -> int:
     """
     Poll signals queued by TradingView Pine script alerts via the webhook.
-    These come from SML_Leviathan, MMLE_Beast, and SML_Sniper.
+    These come from SML_Sniper v1.1 (15m EMA) and MMLE Beast (65m).
+    Returns number of orders placed.
     """
     url = f"{SQUEEZEOS_API_URL}/api/webhooks/tv_pending"
     try:
@@ -382,13 +415,13 @@ def _poll_tv_pending():
             data = json.loads(resp.read())
     except Exception as e:
         logger.warning(f"[TV-POLL] tv_pending fetch failed: {e}")
-        return
+        return 0
 
     signals = data.get("signals") or []
     if not signals:
-        return
+        return 0
 
-    logger.info(f"[TV-POLL] {len(signals)} Pine script signal(s) from webhook queue")
+    logger.info(f"[TV-POLL] {len(signals)} Pine script signal(s) from webhook queue (Sniper/MMLE)")
     scan_counter = [0]
     for sig in signals:
         symbol    = (sig.get("symbol") or "").upper().strip()
@@ -410,6 +443,8 @@ def _poll_tv_pending():
             "confidence":    sig.get("confidence", 80.0),
         }
         _execute(symbol, side, sml_proxy, scan_counter)
+
+    return scan_counter[0]
 
 
 # ── Main loop ──────────────────────────────────────────────────────────────────
@@ -438,9 +473,15 @@ def main():
     while True:
         try:
             _reset_daily_if_new_day()
-            logger.info(f"[POLL] Scanning — beastmode + Pine webhook queue...")
-            _poll_beastmode()
-            _poll_tv_pending()
+            rh_status = "PAPER" if PAPER_MODE else ("OK" if _rh_logged_in else "pending-login")
+            logger.info(f"[POLL] Scanning... (RH: {rh_status} | orders today: {_orders_today}/{MAX_ORDERS_PER_DAY} | notional: ${_daily_notional_usd:.0f}/${MAX_DAILY_NOTIONAL:.0f})")
+            beast_placed = _poll_beastmode()
+            tv_placed    = _poll_tv_pending()
+            total_placed = beast_placed + tv_placed
+            if total_placed == 0:
+                logger.info("[POLL] No signals this cycle — waiting for next scan")
+            else:
+                logger.info(f"[POLL] Cycle complete — {total_placed} order(s) placed ({beast_placed} GOD MODE, {tv_placed} Pine)")
         except Exception as e:
             logger.error(f"[LOOP] Unexpected error: {e}")
         logger.info(f"[POLL] Next scan in {POLL_INTERVAL_S}s")
