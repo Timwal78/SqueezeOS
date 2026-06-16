@@ -222,6 +222,7 @@ def _discord(symbol: str, side: str, qty: int, price: float, sml: dict, result: 
 # ── Order execution ────────────────────────────────────────────────────────────
 def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
     """scan_counter is a single-element list [n] so callers can track per-scan count."""
+    global _orders_today, _daily_notional_usd
     if _circuit_open():
         return
 
