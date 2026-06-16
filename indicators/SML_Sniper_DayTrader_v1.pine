@@ -4,17 +4,13 @@
 // ─────────────────────────────────────────────────────────────────────────
 // Trigger : EMA 13/34 crossover (Fibonacci pair — avoids crowded 9/21)
 // Gate    : 7-factor dual score + VWAP side + ADX + macro alignment
-// Confluence: Pillar 13→65 and Tracker 9→61 directional stack (from
-//             Sovereign Harmonic Matrix) — replicated inline
+// Confluence: Pillar 13→65 and Tracker 9→61 directional stack
 // Execution : BUY/SELL → SqueezeOS /api/webhooks/tradingview → Tradier + RH
 // ═══════════════════════════════════════════════════════════════════════════
 indicator("SML Sniper Day Trader v1.1", overlay=true, max_labels_count=500, max_boxes_count=500, max_bars_back=1000)
 
 // ── Colors ────────────────────────────────────────────────────────────────────
-color SML_CYAN  = #00FFFF
-color SML_GOLD  = #FFD700
-color SML_GREEN = #00FF7F
-color c_teal    = #40E0D0
+color c_teal = #40E0D0
 
 // ── Inputs — Visuals ──────────────────────────────────────────────────────────
 var string G_VIS = "▶  VISUALS & UI"
@@ -29,9 +25,9 @@ float atrMult = input.float(1.5, "SL ATR Multiplier", minval=0.1, step=0.1, grou
 
 // ── Inputs — Execution Gate ───────────────────────────────────────────────────
 var string G_EXEC = "▶  EXECUTION GATE"
-float minScore      = input.float(60.0, "Min Score % to fire (0 = all)",         minval=0.0, maxval=100.0, step=5.0, group=G_EXEC)
+float minScore      = input.float(60.0, "Min Score % to fire (0 = all)",               minval=0.0, maxval=100.0, step=5.0, group=G_EXEC)
 bool  requireVwap   = input.bool(true,  "Require price above VWAP for BUY / below for SELL", group=G_EXEC)
-bool  requireAdx    = input.bool(true,  "Require ADX > 25 (trending market only)",            group=G_EXEC)
+bool  requireAdx    = input.bool(true,  "Require ADX > 25 (trending market only)",           group=G_EXEC)
 bool  requirePillar = input.bool(true,  "Require Pillar 13→65 alignment (institutional macro)", group=G_EXEC)
 bool  requireTrack  = input.bool(false, "Also require Tracker 9→61 alignment (tighter gate)",  group=G_EXEC)
 
@@ -41,7 +37,6 @@ string wh_pass   = input.string("SQUEEZE_AUTH_992", "Webhook Passphrase", group=
 string wh_system = input.string("SML_Sniper",       "System Name",        group=G_WH)
 
 // ── Core Indicators ───────────────────────────────────────────────────────────
-// 13/34 — Fibonacci pair, far less retail traffic than 9/21
 float ema13  = ta.ema(close, 13)
 float ema34  = ta.ema(close, 34)
 float vwapV  = ta.vwap(hlc3)
@@ -52,9 +47,7 @@ float rsi5m  = request.security(syminfo.tickerid, "5", ta.rsi(close, 14), lookah
 [_, _, adxVal] = ta.dmi(14, 14)
 float volAvg = ta.sma(volume, 20)
 
-// ── Institutional Macro Confluence ───────────────────────────────────────────
-// Pillar 13→65 (gap 13): all 5 EMAs in order = institutional macro aligned
-// ema13 is shared with the crossover fast line — no redundant computation
+// ── Institutional Macro Confluence ────────────────────────────────────────────
 float eP13b = ta.ema(close, 26)
 float eP13c = ta.ema(close, 39)
 float eP13d = ta.ema(close, 52)
@@ -62,7 +55,6 @@ float eP13e = ta.ema(close, 65)
 bool P13_bull = ema13 > eP13b and eP13b > eP13c and eP13c > eP13d and eP13d > eP13e
 bool P13_bear = ema13 < eP13b and eP13b < eP13c and eP13c < eP13d and eP13d < eP13e
 
-// Tracker 9→61 (gap 13): faster trend confirmation layer
 float eT9a = ta.ema(close, 9)
 float eT9b = ta.ema(close, 22)
 float eT9c = ta.ema(close, 35)
@@ -74,7 +66,7 @@ bool T9_bear = eT9a < eT9b and eT9b < eT9c and eT9c < eT9d and eT9d < eT9e
 bool macroAlignBull = (not requirePillar or P13_bull) and (not requireTrack or T9_bull)
 bool macroAlignBear = (not requirePillar or P13_bear) and (not requireTrack or T9_bear)
 
-// ── Dual Score (7-factor, 0–100%) ────────────────────────────────────────────
+// ── Dual Score (7-factor, 0–100%) ─────────────────────────────────────────────
 float bScore = 0.0
 bScore += (close > vwapV                    ? 1.0 : 0.0)
 bScore += (rsiVal > 50                      ? 1.0 : 0.0)
@@ -114,11 +106,18 @@ bool sellGated = bearPct >= minScore and
                  macroAlignBear
 
 var int   lastSig = 0
-var float entryP  = 0.0, var float slP = 0.0
-var float t1 = 0.0, var float t2 = 0.0, var float t3 = 0.0
-var float t4 = 0.0, var float t5 = 0.0
-var bool t1Hit = false, var bool t2Hit = false, var bool t3Hit = false
-var bool t4Hit = false, var bool t5Hit = false
+var float entryP  = 0.0
+var float slP     = 0.0
+var float t1      = 0.0
+var float t2      = 0.0
+var float t3      = 0.0
+var float t4      = 0.0
+var float t5      = 0.0
+var bool  t1Hit   = false
+var bool  t2Hit   = false
+var bool  t3Hit   = false
+var bool  t4Hit   = false
+var bool  t5Hit   = false
 
 bool xBuy  = ta.crossover(ema13,  ema34)
 bool xSell = ta.crossunder(ema13, ema34)
@@ -136,66 +135,77 @@ if triggerBuy or triggerSell
     t3  := triggerBuy ? entryP + r * 3.0 : entryP - r * 3.0
     t4  := triggerBuy ? entryP + r * 4.0 : entryP - r * 4.0
     t5  := triggerBuy ? entryP + r * 5.0 : entryP - r * 5.0
-    t1Hit := false; t2Hit := false; t3Hit := false; t4Hit := false; t5Hit := false
+    t1Hit := false
+    t2Hit := false
+    t3Hit := false
+    t4Hit := false
+    t5Hit := false
 
 if lastSig == 1
-    if high >= t1 then t1Hit := true
-    if high >= t2 then t2Hit := true
-    if high >= t3 then t3Hit := true
-    if high >= t4 then t4Hit := true
-    if high >= t5 then t5Hit := true
+    t1Hit := t1Hit or high >= t1
+    t2Hit := t2Hit or high >= t2
+    t3Hit := t3Hit or high >= t3
+    t4Hit := t4Hit or high >= t4
+    t5Hit := t5Hit or high >= t5
+
 if lastSig == -1
-    if low <= t1 then t1Hit := true
-    if low <= t2 then t2Hit := true
-    if low <= t3 then t3Hit := true
-    if low <= t4 then t4Hit := true
-    if low <= t5 then t5Hit := true
+    t1Hit := t1Hit or low <= t1
+    t2Hit := t2Hit or low <= t2
+    t3Hit := t3Hit or low <= t3
+    t4Hit := t4Hit or low <= t4
+    t5Hit := t5Hit or low <= t5
 
 // ── Plots ─────────────────────────────────────────────────────────────────────
-// Pillar slow chain (faint — visual reference only)
 plot(eP13b, "Pillar 26", color=color.new(#FF8C00, 80), linewidth=1)
 plot(eP13c, "Pillar 39", color=color.new(#FF8C00, 80), linewidth=1)
 plot(eP13d, "Pillar 52", color=color.new(#FF8C00, 80), linewidth=1)
 plot(eP13e, "Pillar 65", color=color.new(#FF8C00, 55), linewidth=2)
 
-// 13/34 crossover ribbon
 int rAlpha = P13_bull ? 0 : P13_bear ? 0 : 30
-p13  = plot(ema13, "EMA 13", color=color.new(color.green, rAlpha), linewidth=2)
-p34  = plot(ema34, "EMA 34", color=color.new(color.red,   rAlpha), linewidth=2)
+p13 = plot(ema13, "EMA 13", color=color.new(color.green, rAlpha), linewidth=2)
+p34 = plot(ema34, "EMA 34", color=color.new(color.red,   rAlpha), linewidth=2)
 fill(p13, p34, color=ema13 > ema34 ? color.new(color.green, 100 - ribOpac) : color.new(color.red, 100 - ribOpac))
 plot(vwapV, "VWAP", color=close > vwapV ? color.green : color.red, linewidth=2)
 
-// Entry markers
 bool isRetest = (lastSig == 1  and low  <= ema13 and low  > ema34) or
                 (lastSig == -1 and high >= ema13 and high < ema34)
 barcolor((triggerBuy or triggerSell) ? color.black : isRetest ? color.orange : na)
 plotshape(triggerBuy,  text="BUY",  style=shape.labelup,   location=location.belowbar, color=color.green, textcolor=color.white, size=size.normal)
 plotshape(triggerSell, text="SELL", style=shape.labeldown, location=location.abovebar, color=color.red,   textcolor=color.white, size=size.normal)
 
-// Macro alignment markers (separate layer — not execution signals)
 plotshape(P13_bull and not P13_bull[1], "Pillar Bull", shape.triangleup,   location.bottom, color=color.new(#FF8C00, 0), size=size.tiny)
 plotshape(P13_bear and not P13_bear[1], "Pillar Bear", shape.triangledown, location.top,    color=color.new(#FF8C00, 0), size=size.tiny)
 
 // ── TP Lines & Labels ─────────────────────────────────────────────────────────
-var line lE  = na, var line lSL = na
-var line lT1 = na, var line lT2 = na, var line lT3 = na, var line lT4 = na, var line lT5 = na
-var label lbE  = label.new(na, na, "", color=color.blue,          textcolor=color.white, style=label.style_label_left, size=tradeSize)
-var label lbT1 = label.new(na, na, "", color=color.green,         textcolor=color.white, style=label.style_label_left, size=tradeSize)
-var label lbT2 = label.new(na, na, "", color=color.green,         textcolor=color.white, style=label.style_label_left, size=tradeSize)
-var label lbT3 = label.new(na, na, "", color=color.green,         textcolor=color.white, style=label.style_label_left, size=tradeSize)
-var label lbT4 = label.new(na, na, "", color=color.rgb(0,100,0),  textcolor=color.white, style=label.style_label_left, size=tradeSize)
-var label lbT5 = label.new(na, na, "", color=color.rgb(0, 70, 0), textcolor=color.white, style=label.style_label_left, size=tradeSize)
+var line lE   = na
+var line lSL  = na
+var line lT1  = na
+var line lT2  = na
+var line lT3  = na
+var line lT4  = na
+var line lT5  = na
+var label lbE  = label.new(na, na, "", color=color.blue,         textcolor=color.white, style=label.style_label_left, size=tradeSize)
+var label lbT1 = label.new(na, na, "", color=color.green,        textcolor=color.white, style=label.style_label_left, size=tradeSize)
+var label lbT2 = label.new(na, na, "", color=color.green,        textcolor=color.white, style=label.style_label_left, size=tradeSize)
+var label lbT3 = label.new(na, na, "", color=color.green,        textcolor=color.white, style=label.style_label_left, size=tradeSize)
+var label lbT4 = label.new(na, na, "", color=color.rgb(0,100,0), textcolor=color.white, style=label.style_label_left, size=tradeSize)
+var label lbT5 = label.new(na, na, "", color=color.rgb(0,70,0),  textcolor=color.white, style=label.style_label_left, size=tradeSize)
 
 if triggerBuy or triggerSell
-    line.delete(lE);  line.delete(lSL)
-    line.delete(lT1); line.delete(lT2); line.delete(lT3); line.delete(lT4); line.delete(lT5)
-    lE  := line.new(bar_index, entryP, bar_index+20, entryP, color=color.blue,          width=2, extend=extend.right)
-    lSL := line.new(bar_index, slP,    bar_index+20, slP,    color=color.red,           width=2, extend=extend.right)
-    lT1 := line.new(bar_index, t1,     bar_index+20, t1,     color=color.green,         style=line.style_dashed, extend=extend.right)
-    lT2 := line.new(bar_index, t2,     bar_index+20, t2,     color=color.green,         style=line.style_dashed, extend=extend.right)
-    lT3 := line.new(bar_index, t3,     bar_index+20, t3,     color=color.green,         style=line.style_dashed, extend=extend.right)
-    lT4 := line.new(bar_index, t4,     bar_index+20, t4,     color=color.rgb(0,100,0),  width=2, extend=extend.right)
-    lT5 := line.new(bar_index, t5,     bar_index+20, t5,     color=color.rgb(0, 70, 0), width=3, extend=extend.right)
+    line.delete(lE)
+    line.delete(lSL)
+    line.delete(lT1)
+    line.delete(lT2)
+    line.delete(lT3)
+    line.delete(lT4)
+    line.delete(lT5)
+    lE  := line.new(bar_index, entryP, bar_index + 20, entryP, color=color.blue,         width=2, extend=extend.right)
+    lSL := line.new(bar_index, slP,    bar_index + 20, slP,    color=color.red,          width=2, extend=extend.right)
+    lT1 := line.new(bar_index, t1,     bar_index + 20, t1,     color=color.green,        style=line.style_dashed, extend=extend.right)
+    lT2 := line.new(bar_index, t2,     bar_index + 20, t2,     color=color.green,        style=line.style_dashed, extend=extend.right)
+    lT3 := line.new(bar_index, t3,     bar_index + 20, t3,     color=color.green,        style=line.style_dashed, extend=extend.right)
+    lT4 := line.new(bar_index, t4,     bar_index + 20, t4,     color=color.rgb(0,100,0), width=2, extend=extend.right)
+    lT5 := line.new(bar_index, t5,     bar_index + 20, t5,     color=color.rgb(0,70,0),  width=3, extend=extend.right)
 
 if lastSig != 0
     int tX = bar_index + lblOff
@@ -203,13 +213,19 @@ if lastSig != 0
     line.set_color(lT2, t2Hit ? c_teal : color.green)
     line.set_color(lT3, t3Hit ? c_teal : color.green)
     line.set_color(lT4, t4Hit ? c_teal : color.rgb(0,100,0))
-    line.set_color(lT5, t5Hit ? c_teal : color.rgb(0, 70, 0))
-    label.set_xy(lbE,  tX, entryP); label.set_text(lbE,  "ENTRY: " + str.tostring(entryP, "#.##"))
-    label.set_xy(lbT1, tX, t1);     label.set_text(lbT1, "TP1: "   + str.tostring(t1,     "#.##") + (t1Hit ? " ✓" : ""))
-    label.set_xy(lbT2, tX, t2);     label.set_text(lbT2, "TP2: "   + str.tostring(t2,     "#.##") + (t2Hit ? " ✓" : ""))
-    label.set_xy(lbT3, tX, t3);     label.set_text(lbT3, "TP3: "   + str.tostring(t3,     "#.##") + (t3Hit ? " ✓" : ""))
-    label.set_xy(lbT4, tX, t4);     label.set_text(lbT4, "TP4: "   + str.tostring(t4,     "#.##") + (t4Hit ? " ✓" : ""))
-    label.set_xy(lbT5, tX, t5);     label.set_text(lbT5, "TP5: "   + str.tostring(t5,     "#.##") + (t5Hit ? " ✓" : ""))
+    line.set_color(lT5, t5Hit ? c_teal : color.rgb(0,70,0))
+    label.set_xy(lbE,  tX, entryP)
+    label.set_text(lbE,  "ENTRY: " + str.tostring(entryP, "#.##"))
+    label.set_xy(lbT1, tX, t1)
+    label.set_text(lbT1, "TP1: " + str.tostring(t1, "#.##") + (t1Hit ? " ✓" : ""))
+    label.set_xy(lbT2, tX, t2)
+    label.set_text(lbT2, "TP2: " + str.tostring(t2, "#.##") + (t2Hit ? " ✓" : ""))
+    label.set_xy(lbT3, tX, t3)
+    label.set_text(lbT3, "TP3: " + str.tostring(t3, "#.##") + (t3Hit ? " ✓" : ""))
+    label.set_xy(lbT4, tX, t4)
+    label.set_text(lbT4, "TP4: " + str.tostring(t4, "#.##") + (t4Hit ? " ✓" : ""))
+    label.set_xy(lbT5, tX, t5)
+    label.set_text(lbT5, "TP5: " + str.tostring(t5, "#.##") + (t5Hit ? " ✓" : ""))
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 f_row(_t, _r, _lbl, _val, _col, _sz) =>
@@ -220,48 +236,46 @@ var table d = table.new(position.middle_left, 2, 22,
     bgcolor=color.new(#050505, 5), border_width=1, border_color=color.new(color.gray, 60))
 
 if barstate.islast
-    table.cell(d,0,0, "BULL SCORE", text_color=color.white, bgcolor=color.green, text_size=dashSize)
-    table.cell(d,1,0, str.tostring(bullPct,"#")+"%",        text_color=color.white, bgcolor=color.green, text_size=dashSize)
-    table.cell(d,0,1, "BEAR SCORE", text_color=color.white, bgcolor=color.red,   text_size=dashSize)
-    table.cell(d,1,1, str.tostring(bearPct,"#")+"%",        text_color=color.white, bgcolor=color.red,   text_size=dashSize)
-    table.cell(d,0,2, "MARKET BIAS",text_color=color.white, bgcolor=color.black, text_size=dashSize)
-    table.cell(d,1,2, biasText,     text_color=color.white, bgcolor=biasCol,     text_size=dashSize)
-    f_row(d,  3, "Score Gate",    str.tostring(minScore,"#")+"%",                          color.black,  dashSize)
-    f_row(d,  4, "Price/VWAP",   close > vwapV ? "ABOVE" : "BELOW",                       close > vwapV ? color.green : color.red, dashSize)
-    f_row(d,  5, "RSI (14)",     str.tostring(rsiVal,"#.#"),                               rsiVal > 50 ? color.green : color.red, dashSize)
-    f_row(d,  6, "MACD Trend",   macdMain > macdSig ? "BULL" : "BEAR",                    macdMain > macdSig ? color.green : color.red, dashSize)
-    f_row(d,  7, "ADX Power",    str.tostring(adxVal,"#.#"),                               adxVal > 25 ? color.green : color.gray, dashSize)
-    f_row(d,  8, "EMA 13/34",    ema13 > ema34 ? "BULL CROSS" : "BEAR CROSS",             ema13 > ema34 ? color.green : color.red, dashSize)
-    f_row(d,  9, "ATR (14)",     str.tostring(atr,"#.##"),                                 color.black,  dashSize)
-    f_row(d, 10, "Vol Status",   volume > volAvg ? "HIGH" : "LOW",                         volume > volAvg ? color.green : color.gray, dashSize)
-    f_row(d, 11, "5m RSI",       str.tostring(rsi5m,"#.#"),                                rsi5m > 50 ? color.green : color.red, dashSize)
-    // Macro confluence rows
+    table.cell(d, 0, 0, "BULL SCORE", text_color=color.white, bgcolor=color.green, text_size=dashSize)
+    table.cell(d, 1, 0, str.tostring(bullPct, "#") + "%", text_color=color.white, bgcolor=color.green, text_size=dashSize)
+    table.cell(d, 0, 1, "BEAR SCORE", text_color=color.white, bgcolor=color.red, text_size=dashSize)
+    table.cell(d, 1, 1, str.tostring(bearPct, "#") + "%", text_color=color.white, bgcolor=color.red, text_size=dashSize)
+    table.cell(d, 0, 2, "MARKET BIAS", text_color=color.white, bgcolor=color.black, text_size=dashSize)
+    table.cell(d, 1, 2, biasText, text_color=color.white, bgcolor=biasCol, text_size=dashSize)
+    f_row(d,  3, "Score Gate",   str.tostring(minScore, "#") + "%",                         color.black, dashSize)
+    f_row(d,  4, "Price/VWAP",  close > vwapV ? "ABOVE" : "BELOW",                         close > vwapV ? color.green : color.red, dashSize)
+    f_row(d,  5, "RSI (14)",    str.tostring(rsiVal, "#.#"),                                rsiVal > 50 ? color.green : color.red, dashSize)
+    f_row(d,  6, "MACD Trend",  macdMain > macdSig ? "BULL" : "BEAR",                      macdMain > macdSig ? color.green : color.red, dashSize)
+    f_row(d,  7, "ADX Power",   str.tostring(adxVal, "#.#"),                                adxVal > 25 ? color.green : color.gray, dashSize)
+    f_row(d,  8, "EMA 13/34",   ema13 > ema34 ? "BULL CROSS" : "BEAR CROSS",               ema13 > ema34 ? color.green : color.red, dashSize)
+    f_row(d,  9, "ATR (14)",    str.tostring(atr, "#.##"),                                  color.black, dashSize)
+    f_row(d, 10, "Vol Status",  volume > volAvg ? "HIGH" : "LOW",                           volume > volAvg ? color.green : color.gray, dashSize)
+    f_row(d, 11, "5m RSI",      str.tostring(rsi5m, "#.#"),                                 rsi5m > 50 ? color.green : color.red, dashSize)
     string p13_txt = P13_bull ? "▲ ALIGNED BULL" : P13_bear ? "▼ ALIGNED BEAR" : "neutral"
     string t9_txt  = T9_bull  ? "▲ ALIGNED BULL" : T9_bear  ? "▼ ALIGNED BEAR" : "neutral"
-    f_row(d, 12, "Pillar 13→65", p13_txt, P13_bull ? color.new(#FF8C00,0) : P13_bear ? color.new(#FF8C00,0) : color.gray, dashSize)
-    f_row(d, 13, "Tracker 9→61", t9_txt,  T9_bull  ? color.new(#00BFFF,0) : T9_bear  ? color.new(#00BFFF,0) : color.gray, dashSize)
+    f_row(d, 12, "Pillar 13→65", p13_txt, P13_bull ? color.new(#FF8C00, 0) : P13_bear ? color.new(#FF8C00, 0) : color.gray, dashSize)
+    f_row(d, 13, "Tracker 9→61", t9_txt,  T9_bull  ? color.new(#00BFFF, 0) : T9_bear  ? color.new(#00BFFF, 0) : color.gray, dashSize)
     string mac_txt = macroAlignBull ? "MACRO BULL OPEN" : macroAlignBear ? "MACRO BEAR OPEN" : "MACRO GATED"
-    f_row(d, 14, "Macro Conf",   mac_txt, macroAlignBull ? color.green : macroAlignBear ? color.red : color.gray, dashSize)
-    f_row(d, 15, "SL Price",     str.tostring(slP,"#.##"),                                 color.red,    dashSize)
-    f_row(d, 16, "Trend Str",    adxVal > 25 ? "STRONG" : "WEAK",                          adxVal > 25 ? color.green : color.red, dashSize)
+    f_row(d, 14, "Macro Conf",  mac_txt, macroAlignBull ? color.green : macroAlignBear ? color.red : color.gray, dashSize)
+    f_row(d, 15, "SL Price",    str.tostring(slP, "#.##"),                                  color.red, dashSize)
+    f_row(d, 16, "Trend Str",   adxVal > 25 ? "STRONG" : "WEAK",                            adxVal > 25 ? color.green : color.red, dashSize)
     string gate_txt = buyGated ? "BUY OPEN" : sellGated ? "SELL OPEN" : "ALL GATED"
-    f_row(d, 17, "Gate Status",  gate_txt, buyGated ? color.green : sellGated ? color.red : color.gray, dashSize)
-    string sig_txt  = triggerBuy ? "NEW BUY" : triggerSell ? "NEW SELL" : "WAIT"
-    f_row(d, 18, "Signal",       sig_txt,  triggerBuy ? color.green : triggerSell ? color.red : color.black, dashSize)
-    f_row(d, 19, "System",       wh_system + "  v1.1",                                     color.blue,   dashSize)
+    f_row(d, 17, "Gate Status", gate_txt, buyGated ? color.green : sellGated ? color.red : color.gray, dashSize)
+    string sig_txt = triggerBuy ? "NEW BUY" : triggerSell ? "NEW SELL" : "WAIT"
+    f_row(d, 18, "Signal",      sig_txt, triggerBuy ? color.green : triggerSell ? color.red : color.black, dashSize)
+    f_row(d, 19, "System",      wh_system + "  v1.1", color.blue, dashSize)
 
-// ── alertcondition (legacy) ───────────────────────────────────────────────────
+// ── alertcondition (legacy — use for manual alerts) ───────────────────────────
 alertcondition(triggerBuy  and buyGated,  "SML Sniper: BUY",  "SNIPER BUY 13/34 — {{ticker}} @ {{close}} [SML]")
 alertcondition(triggerSell and sellGated, "SML Sniper: SELL", "SNIPER SELL 13/34 — {{ticker}} @ {{close}} [SML]")
 
 // ── alert() — SqueezeOS webhook ───────────────────────────────────────────────
-// ONE alert per chart → "alert() function calls" trigger
+// ONE alert per chart → set trigger to "alert() function calls"
 // Webhook URL: https://squeezeos-api.onrender.com/api/webhooks/tradingview
 string _px = str.tostring(close, "#.00")
 string _tk = syminfo.ticker
 
 if triggerBuy and buyGated
     alert("{\"passphrase\":\"" + wh_pass + "\",\"system\":\"" + wh_system + "\",\"ticker\":\"" + _tk + "\",\"action\":\"BUY\",\"price\":" + _px + "}", alert.freq_once_per_bar_close)
-
 else if triggerSell and sellGated
     alert("{\"passphrase\":\"" + wh_pass + "\",\"system\":\"" + wh_system + "\",\"ticker\":\"" + _tk + "\",\"action\":\"SELL\",\"price\":" + _px + "}", alert.freq_once_per_bar_close)
