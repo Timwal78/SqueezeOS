@@ -46,11 +46,11 @@ services:
       - key: IAM_SCAN_ENABLED
         value: "true"
       - key: IAM_SCAN_TOP_N
-        value: "50"
+        value: "25"
       - key: IAM_SCAN_INTERVAL
-        value: "300"
+        value: "600"
       - key: IAM_SCAN_INTER_DELAY
-        value: "2.0"
+        value: "3.0"
       - key: POLYGON_API_KEY
         sync: false
       - key: PROOF402_TOKEN_SECRET
