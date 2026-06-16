@@ -135,3 +135,11 @@ services:
         value: "100"
       - key: CORS_ORIGINS
         value: "https://signal-loom.vercel.app,https://n-exchequer.io"
+
+  - type: web
+    name: kimi-agent
+    env: node
+    buildCommand: "npm install && npm run build"
+    startCommand: "npm run start"
+    rootDir: kimi_agent
+    plan: starter

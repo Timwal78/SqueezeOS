@@ -1,0 +1,107 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Syncopate:wght@400;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 2%;
+    --foreground: 0 0% 100%;
+    --card: 0 0% 6.7%;
+    --card-foreground: 0 0% 100%;
+    --popover: 0 0% 6.7%;
+    --popover-foreground: 0 0% 100%;
+    --primary: 187 100% 50%;
+    --primary-foreground: 0 0% 0%;
+    --secondary: 0 0% 11%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 11%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 285 53% 37%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 14%;
+    --input: 0 0% 14%;
+    --ring: 187 100% 50%;
+    --radius: 0px;
+    --chart-1: 187 100% 50%;
+    --chart-2: 120 100% 50%;
+    --chart-3: 285 53% 37%;
+    --chart-4: 0 0% 60%;
+    --chart-5: 45 100% 50%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-[#050505] text-white antialiased;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    overflow-x: hidden;
+  }
+}
+
+@layer components {
+  .font-display {
+    font-family: 'Syncopate', sans-serif;
+  }
+
+  .glass-panel {
+    @apply bg-white/[0.03] border border-white/10 backdrop-blur-sm;
+  }
+
+  .glass-panel-hover {
+    @apply glass-panel transition-all duration-300 hover:border-white/30 hover:bg-white/[0.05];
+  }
+
+  .neon-glow {
+    box-shadow: 0 0 30px rgba(0, 229, 255, 0.1);
+  }
+
+  .neon-glow-green {
+    box-shadow: 0 0 20px rgba(57, 255, 20, 0.15);
+  }
+
+  .text-gradient-cyan {
+    @apply bg-gradient-to-r from-[#00E5FF] to-[#7B2D8E] bg-clip-text text-transparent;
+  }
+
+  .grid-pattern {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    background-size: 50px 50px;
+  }
+
+  .status-badge {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-medium rounded-none border;
+  }
+
+  .status-active {
+    @apply border-[#39FF14]/30 text-[#39FF14] bg-[#39FF14]/10;
+  }
+
+  .status-pending {
+    @apply border-yellow-500/30 text-yellow-400 bg-yellow-500/10;
+  }
+
+  .status-failed {
+    @apply border-red-500/30 text-red-400 bg-red-500/10;
+  }
+
+  .status-converted {
+    @apply border-[#00E5FF]/30 text-[#00E5FF] bg-[#00E5FF]/10;
+  }
+
+  .terminal-text {
+    font-family: 'Inter', monospace;
+    @apply text-sm tracking-wide;
+  }
+}
