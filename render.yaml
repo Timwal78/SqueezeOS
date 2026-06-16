@@ -32,13 +32,17 @@ services:
       - key: IAM_INSTRUMENT
         value: "equity"
       - key: IAM_MIN_CONFIDENCE
-        value: "70"
+        value: "75"
       - key: IAM_MAX_ORDERS_PER_DAY
-        value: "5"
+        value: "10"
+      - key: IAM_MAX_SHARES
+        value: "10"
       - key: IAM_MAX_ORDER_USD
+        value: "150"
+      - key: IAM_MAX_NOTIONAL_PER_DAY
         value: "500"
       - key: IAM_DAILY_LOSS_LIMIT
-        value: "300"
+        value: "100"
       - key: IAM_SCAN_ENABLED
         value: "true"
       - key: IAM_SCAN_TOP_N

@@ -26,7 +26,8 @@ from flask import Blueprint, request, jsonify
 logger = logging.getLogger("TV-Webhook")
 tradingview_webhook_bp = Blueprint("tradingview_webhook", __name__)
 
-AUTH_PASSPHRASE = os.environ.get("TV_WEBHOOK_PASSPHRASE", "SQUEEZE_AUTH_992")
+def _passphrase() -> str:
+    return os.environ.get("TV_WEBHOOK_PASSPHRASE", "SQUEEZE_AUTH_992")
 
 _LONG_ACTIONS  = {"EXECUTE_LONG",  "FIRE_LONG",  "BUY",  "LONG"}
 _SHORT_ACTIONS = {"EXECUTE_SHORT", "FIRE_SHORT", "SELL", "SHORT"}
@@ -68,7 +69,7 @@ def catch_tv_webhook():
     try:
         payload = request.get_json(force=True) or {}
 
-        if payload.get("passphrase") != AUTH_PASSPHRASE:
+        if payload.get("passphrase") != _passphrase():
             logger.warning(f"[TV-Webhook] Unauthorized attempt from {request.remote_addr}")
             return jsonify({"status": "error", "message": "Unauthorized"}), 401
 
