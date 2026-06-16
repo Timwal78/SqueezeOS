@@ -434,6 +434,29 @@ class CEOTrader:
         if price <= 0:
             return False
 
+        # ── Filter 5: Proprietary 5-EMA Stack Guardrail ───────────────────────
+        from core.legacy import get_service
+        from core.proprietary_ema_engine import _Engine5
+        dm = get_service("dm")
+        if dm:
+            try:
+                # Need at least 61 bars for the new Engine5 periods
+                bars = dm.get_historical_bars(symbol, timeframe="1Day", limit=100)
+                if not bars:
+                    bars = dm.get_historical_bars(symbol, timeframe="1Min", limit=100)
+                if bars:
+                    closes = [float(b.get("c") or b.get("close", 0)) for b in bars if b.get("c") or b.get("close")]
+                    e5_state = _Engine5().analyze(closes)
+                    
+                    if directive == "BUY" and e5_state.get("signal") == "BEAR_STACK_5EMA":
+                        logger.warning(f"[CEO] {symbol} blocked — Proprietary 5-EMA stack is BEARISH")
+                        return False
+                    if directive == "SELL" and e5_state.get("signal") == "BULL_STACK_5EMA":
+                        logger.warning(f"[CEO] {symbol} blocked — Proprietary 5-EMA stack is BULLISH")
+                        return False
+            except Exception as e:
+                logger.warning(f"[CEO] Proprietary 5-EMA check failed for {symbol}: {e}")
+
         # ── Compute Kelly sizing ──────────────────────────────────────────────
         tp1     = verdict.get("tp1")
         stop    = verdict.get("stop")

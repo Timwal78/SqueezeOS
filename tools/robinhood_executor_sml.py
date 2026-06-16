@@ -203,6 +203,25 @@ def _execute(symbol: str, side: str, sml: dict):
         logger.info(f"[EXEC] {symbol} god_stacked={god_count} < {MIN_GOD_STACKED} — skip")
         return
 
+    # ── Proprietary 5-EMA Stack Guardrail ───────────────────────────────────
+    try:
+        url = f"{SQUEEZEOS_API_URL}/api/ema/{symbol}"
+        req = URLRequest(url, headers={"User-Agent": "SqueezeOS-RH-Executor/2.0"})
+        with urlopen(req, timeout=10) as resp:
+            ema_data = json.loads(resp.read())
+            
+        if ema_data.get("status") == "success":
+            e5 = ema_data.get("ema_suite", {}).get("engine_5", {})
+            e5_signal = e5.get("signal", "")
+            if side == "buy" and e5_signal == "BEAR_STACK_5EMA":
+                logger.warning(f"[EXEC] {symbol} blocked — Proprietary 5-EMA stack is BEARISH")
+                return
+            if side == "sell" and e5_signal == "BULL_STACK_5EMA":
+                logger.warning(f"[EXEC] {symbol} blocked — Proprietary 5-EMA stack is BULLISH")
+                return
+    except Exception as e:
+        logger.warning(f"[EXEC] Proprietary 5-EMA check failed for {symbol}: {e}")
+
     # IWM trades 0DTE options only — never buy shares. Alert and stop here.
     if symbol == "IWM":
         if now - last >= COOLDOWN_S:

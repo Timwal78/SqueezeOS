@@ -79,7 +79,7 @@ def redact_suite_output(suite):
     if not isinstance(suite, dict):
         return suite
     out = dict(suite)
-    for key in ("engine_1", "engine_3", "engine_4"):
+    for key in ("engine_1", "engine_3", "engine_4", "engine_5"):
         if key in out:
             out[key] = redact_engine_block(out[key])
     return out
@@ -362,6 +362,61 @@ class _Engine4:
         }
 
 
+# ── Engine 5 — Proprietary 5-EMA Stack (PRICE) ────────────────────────────────
+
+class _Engine5:
+    """
+    Engine 5 — Proprietary 5-EMA Harmonic Stack.
+    Price closes only. Custom band-pass array using 9, 21, 33, 45, 57 periods
+    requested for Robinhood/Tradier execution gating.
+
+    Internal parameters are proprietary; see `_PUBLIC_FIELDS`.
+    """
+
+    PERIODS = (9, 22, 35, 48, 61)
+    STEP    = 13
+
+    def analyze(self, closes: List[float]) -> dict:
+        n = len(closes)
+        if n < 11:
+            return {"engine": 5, "signal": "INSUFFICIENT_DATA", "dimension": "PRICE"}
+
+        price = closes[-1]
+
+        e9  = _tail(_ema(closes, min(9,  n)))
+        e22 = _tail(_ema(closes, min(22, n)))
+        e35 = _tail(_ema(closes, min(35, n)))
+        e48 = _tail(_ema(closes, min(48, n)))
+        e61 = _tail(_ema(closes, min(61, n)))
+
+        bull_stack = e9 > e22 > e35 > e48 > e61
+        bear_stack = e9 < e22 < e35 < e48 < e61
+
+        if bull_stack:
+            signal = "BULL_STACK_5EMA"
+        elif bear_stack:
+            signal = "BEAR_STACK_5EMA"
+        else:
+            signal = "NEUTRAL"
+
+        return {
+            "engine":          5,
+            "name":            "Proprietary 5-EMA Stack",
+            "sequence":        "PROPRIETARY",
+            "step":            self.STEP,
+            "dimension":       "PRICE",
+            "ema_9":           round(e9,  4),
+            "ema_22":          round(e22, 4),
+            "ema_35":          round(e35, 4),
+            "ema_48":          round(e48, 4),
+            "ema_61":          round(e61, 4),
+            "bull_stack":      bull_stack,
+            "bear_stack":      bear_stack,
+            "signal":          signal,
+            "score_contrib":   15 if bull_stack else -15 if bear_stack else 0,
+        }
+
+
 # ── Combined runner ───────────────────────────────────────────────────────────
 
 def run_proprietary_suite(closes: List[float],
@@ -378,6 +433,7 @@ def run_proprietary_suite(closes: List[float],
     """
     e1 = _Engine1().analyze(closes)
     e4 = _Engine4().analyze(closes)
+    e5 = _Engine5().analyze(closes)
 
     if volumes and len(volumes) >= 11:
         e3 = _Engine3().analyze(volumes)
@@ -406,7 +462,8 @@ def run_proprietary_suite(closes: List[float],
     # ── Combined score ────────────────────────────────────────────────
     raw = (e1.get("score_contrib", 0) +
            e3.get("score_contrib", 0) +
-           e4.get("score_contrib", 0))
+           e4.get("score_contrib", 0) +
+           e5.get("score_contrib", 0))
     combined_score = max(0, min(100, 50 + raw))
 
     # ── Consensus ─────────────────────────────────────────────────────
@@ -441,4 +498,5 @@ def run_proprietary_suite(closes: List[float],
         "engine_1":            e1,
         "engine_3":            e3,
         "engine_4":            e4,
+        "engine_5":            e5,
     }
