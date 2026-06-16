@@ -4,11 +4,12 @@ TradingView Webhook — SML Execution Bridge
 Receives alert POSTs from TradingView Pine scripts and routes them to:
   1. Tradier equity/options orders via iam_executor.execute_async()
   2. Discord beast-channel embed (Robinhood Windows service pickup)
+  3. /api/webhooks/tv_pending queue — Robinhood executor polls this
 
 Expected payload (Pine alert message):
   {
     "passphrase": "SQUEEZE_AUTH_992",
-    "system":     "SML_Leviathan" | "SML_FTD_Hunter" | "MMLE-BEAST" | ...,
+    "system":     "SML_Leviathan" | "SML_FTD_Hunter" | "MMLE-BEAST" | "SML_Sniper" | ...,
     "ticker":     "{{ticker}}",
     "action":     "EXECUTE_LONG" | "EXECUTE_SHORT" | "FIRE_LONG" | "FIRE_SHORT",
     "price":      {{close}}
@@ -16,11 +17,16 @@ Expected payload (Pine alert message):
 
 Webhook URL for TradingView alert dialog:
   https://squeezeos-api.onrender.com/api/webhooks/tradingview
+
+Robinhood executor polls:
+  GET https://squeezeos-api.onrender.com/api/webhooks/tv_pending
+  Returns and clears all signals queued in the last 10 minutes.
 """
 import os
 import time
 import logging
 import threading
+from collections import deque
 from flask import Blueprint, request, jsonify
 
 logger = logging.getLogger("TV-Webhook")
@@ -33,6 +39,33 @@ _LONG_ACTIONS  = {"EXECUTE_LONG",  "FIRE_LONG",  "BUY",  "LONG"}
 _SHORT_ACTIONS = {"EXECUTE_SHORT", "FIRE_SHORT", "SELL", "SHORT"}
 
 _ACTION_COLORS = {"BUY": 0x00FF88, "SELL": 0xFF4444}
+
+# Pending signal queue for Robinhood executor polling.
+# Signals expire after 10 minutes if not picked up.
+_TV_QUEUE: deque = deque(maxlen=50)
+_TV_QUEUE_LOCK   = threading.Lock()
+_TV_SIGNAL_TTL   = 600  # 10 minutes
+
+
+def _queue_push(sym: str, direction: str, system: str, price: float):
+    with _TV_QUEUE_LOCK:
+        _TV_QUEUE.append({
+            "symbol":    sym,
+            "action":    direction,
+            "system":    system,
+            "price":     price,
+            "ts":        time.time(),
+            "confidence": 80.0,
+        })
+
+
+def _queue_pop_all() -> list:
+    """Return all non-expired signals and clear the queue."""
+    now = time.time()
+    with _TV_QUEUE_LOCK:
+        fresh = [s for s in _TV_QUEUE if now - s["ts"] < _TV_SIGNAL_TTL]
+        _TV_QUEUE.clear()
+    return fresh
 
 
 def _fire_discord(sym: str, direction: str, system: str, price: float, result: dict):
@@ -109,6 +142,9 @@ def catch_tv_webhook():
             logger.error(f"[TV-Webhook] iam_executor error for {ticker}: {e}")
             exec_result = {"error": str(e)}
 
+        # Push to Robinhood executor polling queue
+        _queue_push(ticker, direction, system, price)
+
         threading.Thread(
             target=_fire_discord,
             args=(ticker, direction, system, price, exec_result),
@@ -128,3 +164,19 @@ def catch_tv_webhook():
     except Exception as e:
         logger.error(f"[TV-Webhook] Processing error: {e}")
         return jsonify({"status": "error", "message": "Internal error"}), 500
+
+
+@tradingview_webhook_bp.route("/tv_pending", methods=["GET"])
+def tv_pending():
+    """
+    Robinhood executor polls this to pick up Pine script signals.
+    Returns all pending signals queued since last poll, then clears them.
+    Signals expire after 10 minutes if not fetched.
+    """
+    signals = _queue_pop_all()
+    return jsonify({
+        "status":  "success",
+        "signals": signals,
+        "count":   len(signals),
+        "ts":      time.time(),
+    })

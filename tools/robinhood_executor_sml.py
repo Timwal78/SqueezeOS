@@ -263,7 +263,7 @@ def _execute(symbol: str, side: str, sml: dict):
     _discord(symbol, side, qty, price, sml, result)
 
 
-# ── Beastmode poll ─────────────────────────────────────────────────────────────
+# ── Beastmode poll (server-side SET9 convergence scanner) ─────────────────────
 def _poll_beastmode():
     url = f"{SQUEEZEOS_API_URL}/api/beastmode"
     try:
@@ -276,10 +276,9 @@ def _poll_beastmode():
 
     signals = data.get("signals") or data.get("hits") or []
     if not signals:
-        logger.info("[POLL] No signals this cycle")
         return
 
-    logger.info(f"[POLL] {len(signals)} signals — checking GOD MODE gate...")
+    logger.info(f"[POLL] {len(signals)} beastmode signals — checking GOD MODE gate...")
     for hit in signals:
         symbol = (hit.get("symbol") or "").upper().strip()
         sml    = hit.get("sml_matrix") or {}
@@ -295,12 +294,56 @@ def _poll_beastmode():
         _execute(symbol, side, sml)
 
 
+# ── Pine script TV webhook poll (Leviathan / MMLE Beast / Sniper) ──────────────
+def _poll_tv_pending():
+    """
+    Poll signals queued by TradingView Pine script alerts via the webhook.
+    These come from SML_Leviathan, MMLE_Beast, and SML_Sniper.
+    """
+    url = f"{SQUEEZEOS_API_URL}/api/webhooks/tv_pending"
+    try:
+        req = URLRequest(url, headers={"User-Agent": "SqueezeOS-RH-Executor/2.0"})
+        with urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read())
+    except Exception as e:
+        logger.warning(f"[TV-POLL] tv_pending fetch failed: {e}")
+        return
+
+    signals = data.get("signals") or []
+    if not signals:
+        return
+
+    logger.info(f"[TV-POLL] {len(signals)} Pine script signal(s) from webhook queue")
+    for sig in signals:
+        symbol    = (sig.get("symbol") or "").upper().strip()
+        direction = (sig.get("action") or "").upper().strip()
+        system    = sig.get("system", "TradingView")
+        price     = float(sig.get("price") or 0.0)
+
+        if not symbol or direction not in ("BUY", "SELL"):
+            continue
+
+        side = "buy" if direction == "BUY" else "sell"
+        logger.info(f"[TV-POLL] {system} → {direction} {symbol} @ ${price:.2f}")
+
+        # Reuse _execute with a synthetic sml dict that passes the god_stacked gate
+        sml_proxy = {
+            "god_stacked":   MIN_GOD_STACKED,   # meets threshold — Pine already gated this
+            "tier":          "GOD_MODE",
+            "execute_gate":  True,
+            "signal":        f"{system}_{direction}",
+            "confidence":    sig.get("confidence", 80.0),
+        }
+        _execute(symbol, side, sml_proxy)
+
+
 # ── Main loop ──────────────────────────────────────────────────────────────────
 def main():
     logger.info("=" * 60)
-    logger.info("SqueezeOS Robinhood Executor v2.0 — Polling Mode")
+    logger.info("SqueezeOS Robinhood Executor v2.1 — Dual Poll Mode")
     logger.info(f"  API         : {SQUEEZEOS_API_URL}")
     logger.info(f"  Poll every  : {POLL_INTERVAL_S}s")
+    logger.info(f"  Sources     : /api/beastmode (SET9) + /api/webhooks/tv_pending (Pine)")
     logger.info(f"  MIN_GOD     : {MIN_GOD_STACKED}/6 SET9 stacked")
     logger.info(f"  PDT limit   : ${PDT_BALANCE_LIMIT}")
     logger.info(f"  Max order   : ${MAX_ORDER_USD} / {MAX_EQUITY_SHARES} shares")
@@ -317,8 +360,9 @@ def main():
 
     while True:
         try:
-            logger.info(f"[POLL] Scanning market universe...")
+            logger.info(f"[POLL] Scanning — beastmode + Pine webhook queue...")
             _poll_beastmode()
+            _poll_tv_pending()
         except Exception as e:
             logger.error(f"[LOOP] Unexpected error: {e}")
         logger.info(f"[POLL] Next scan in {POLL_INTERVAL_S}s")
