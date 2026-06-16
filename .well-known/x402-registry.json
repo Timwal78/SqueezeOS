@@ -94,6 +94,76 @@
     },
 
     {
+      "service": "SqueezeOS — Execution Intelligence Stack (Live Trading Signals)",
+      "base_url": "https://squeezeos-api.onrender.com",
+      "description": "Real-time execution signals from the live SML institutional trading stack. Three converging engines: GOD MODE SET9 convergence scanner, SML Sniper v1.1 (13/34 EMA crossover, 15 min), and MMLE Beast (65 min market maker liquidity). Same signals driving live Robinhood + Tradier execution. Pay once, get the full active signal set.",
+      "payment_rails": [
+        {
+          "rail": "402Proof",
+          "asset": "RLUSD",
+          "network": "XRPL mainnet",
+          "invoice": "https://four02proof.onrender.com/v1/invoice",
+          "verify": "https://four02proof.onrender.com/v1/verify"
+        },
+        {
+          "rail": "Ghost Layer",
+          "asset": "RLUSD",
+          "network": "XRPL mainnet",
+          "gateway": "https://ghost-layer.onrender.com/v1/bridge/execute",
+          "note": "Priority auction via X-Grace-Tip header. Rank-1 = fastest signal delivery."
+        },
+        {
+          "rail": "Ghost Layer",
+          "asset": "USDC",
+          "network": "Base (Ethereum L2)",
+          "gateway": "https://ghost-layer.onrender.com/v1/bridge/execute",
+          "standard": "EIP-3009 gasless transfer"
+        },
+        {
+          "rail": "Forge x402 Gateway",
+          "asset": "RLUSD",
+          "network": "XRPL mainnet",
+          "gateway": "https://forge-gateway-a822.onrender.com",
+          "note": "BYOK LLM proxy with embedded x402 billing. AI agents can pay inline."
+        },
+        {
+          "rail": "Shadow Desk MCP",
+          "asset": "RLUSD",
+          "network": "XRPL mainnet",
+          "gateway": "https://shadow-desk.onrender.com",
+          "note": "MCP server with inline billing. Call as a tool — payment handled in protocol."
+        }
+      ],
+      "endpoints": [
+        {
+          "endpoint_id": "ex1a2b3c-0001-4d2e-bb35-sml9execution1",
+          "path": "/api/execution/intelligence",
+          "method": "GET",
+          "cost": "0.05",
+          "currency": "RLUSD",
+          "description": "Combined execution intelligence: GOD MODE top signals (SET9 6/6 convergence), active Sniper v1.1 positions (13/34 EMA, 15 min), active MMLE Beast bias (65 min). Returns live signal set with confidence, direction, and entry context. Same data driving live institutional execution on Robinhood and Tradier.",
+          "response_fields": ["godmode_signals", "sniper_signal", "mmle_signal", "active_count", "market_regime", "timestamp"]
+        },
+        {
+          "endpoint_id": "ex1a2b3c-0002-4d2e-bb35-sml9execution2",
+          "path": "/api/beastmode",
+          "method": "GET",
+          "cost": "free",
+          "description": "Full GOD MODE scan — all SET9 convergence hits with god_stacked count, tier, signal direction, and SML matrix. Free. Same feed polled by live executor every 5 minutes.",
+          "free_note": "No payment required. Returns full signal universe. Premium /api/execution/intelligence adds Sniper + MMLE layers."
+        },
+        {
+          "endpoint_id": "ex1a2b3c-0003-4d2e-bb35-sml9execution3",
+          "path": "/api/webhooks/tv_pending",
+          "method": "GET",
+          "cost": "free",
+          "description": "Pine script signal queue — signals queued by TradingView alerts (SML Sniper v1.1, MMLE Beast). Consumed and cleared on each poll. 10-minute TTL. Free. Used by Robinhood executor to pick up Pine signals.",
+          "free_note": "No payment required. Signals expire after 10 minutes if not consumed."
+        }
+      ]
+    },
+
+    {
       "service": "SqueezeOS — Signal Relay Mesh (Bulk Discount, 40% off)",
       "base_url": "https://squeezeos-api.onrender.com",
       "note": "Relay endpoints require Agent Credit Bureau score ≥ 600 at https://four02proof.onrender.com/v1/bureau/score/{wallet}",
@@ -138,6 +208,8 @@
     { "service": "SqueezeOS", "path": "/api/marketplace",         "description": "Browse peer signal listings" },
     { "service": "SqueezeOS", "path": "/api/hiring",              "description": "Browse agent job board" },
     { "service": "SqueezeOS", "path": "/api/futures",             "description": "Signal futures prediction market" },
+    { "service": "SqueezeOS", "path": "/api/beastmode",           "description": "GOD MODE SET9 convergence scan — live execution signals (god_stacked 1-6)" },
+    { "service": "SqueezeOS", "path": "/api/webhooks/tv_pending", "description": "Pine script signal queue — Sniper v1.1 + MMLE Beast active signals (10-min TTL)" },
     { "service": "SqueezeOS", "path": "/api/stigmergy/sniff",     "description": "Pheromone cluster scan (agent antennae)" },
     { "service": "SqueezeOS", "path": "/api/oracle/feeds",        "description": "Regulatory feed catalog and buffer counts" },
     { "service": "402Proof",  "path": "/v1/invoice",              "description": "Generate payment invoice" },
