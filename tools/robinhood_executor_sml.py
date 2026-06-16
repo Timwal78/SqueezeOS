@@ -58,11 +58,13 @@ POLL_INTERVAL_S    = int(os.environ.get("POLL_INTERVAL_S", "300"))     # poll ev
 MIN_GOD_STACKED    = int(os.environ.get("MIN_GOD_STACKED", "5"))       # min SET9 stacked to execute
 PDT_BALANCE_LIMIT  = float(os.environ.get("PDT_BALANCE_LIMIT", "2100.0"))
 PDT_MAX_TRADES     = int(os.environ.get("PDT_MAX_TRADES", "3"))
-PAPER_MODE         = os.environ.get("ROBINHOOD_PAPER_MODE", "false").lower() == "true"
-KILL_SWITCH        = os.environ.get("KILL_SWITCH", "false").lower() == "true"
-MAX_EQUITY_SHARES  = int(os.environ.get("MAX_EQUITY_SHARES", "3"))
-MAX_ORDER_USD      = float(os.environ.get("MAX_ORDER_USD", "300.0"))
-MAX_DAILY_LOSS_USD = float(os.environ.get("MAX_DAILY_LOSS_USD", "500.0"))
+PAPER_MODE           = os.environ.get("ROBINHOOD_PAPER_MODE", "false").lower() == "true"
+KILL_SWITCH          = os.environ.get("KILL_SWITCH", "false").lower() == "true"
+MAX_EQUITY_SHARES    = int(os.environ.get("MAX_EQUITY_SHARES", "3"))
+MAX_ORDER_USD        = float(os.environ.get("MAX_ORDER_USD", "150.0"))
+MAX_DAILY_LOSS_USD   = float(os.environ.get("MAX_DAILY_LOSS_USD", "100.0"))
+MAX_ORDERS_PER_DAY   = int(os.environ.get("MAX_ORDERS_PER_DAY", "10"))
+MAX_DAILY_NOTIONAL   = float(os.environ.get("MAX_DAILY_NOTIONAL_USD", "500.0"))
 
 # ── State ──────────────────────────────────────────────────────────────────────
 _rh_logged_in   = False
@@ -82,10 +84,25 @@ def _save_last_execution(d: dict) -> None:
     except Exception as e:
         logger.warning(f"[COOLDOWN] save failed: {e}")
 
-_last_execution = _load_last_execution()  # symbol → epoch, persisted across restarts
-_pdt_trades     = []        # epoch timestamps of day trades
-_daily_loss_usd = 0.0
-_lock           = threading.Lock()
+_last_execution     = _load_last_execution()  # symbol → epoch, persisted across restarts
+_pdt_trades         = []        # epoch timestamps of day trades
+_daily_loss_usd     = 0.0
+_orders_today       = 0
+_daily_notional_usd = 0.0
+_trading_day        = ""        # "YYYY-MM-DD" — reset counters at midnight
+_lock               = threading.Lock()
+
+
+def _reset_daily_if_new_day():
+    global _orders_today, _daily_notional_usd, _daily_loss_usd, _trading_day
+    today = datetime.now().strftime("%Y-%m-%d")
+    with _lock:
+        if today != _trading_day:
+            _trading_day = today
+            _orders_today = 0
+            _daily_notional_usd = 0.0
+            _daily_loss_usd = 0.0
+            logger.info(f"[DAILY] New trading day {today} — all daily counters reset")
 
 COOLDOWN_S     = 3600       # 1-hour per-symbol cooldown — poll is 5min so must be much longer
 PDT_WINDOW_S   = 5 * 86400 # 5-day rolling window
@@ -151,6 +168,12 @@ def _circuit_open() -> bool:
     with _lock:
         if _daily_loss_usd >= MAX_DAILY_LOSS_USD:
             logger.warning(f"[CIRCUIT] Daily loss ${_daily_loss_usd:.2f} >= limit ${MAX_DAILY_LOSS_USD}")
+            return True
+        if _orders_today >= MAX_ORDERS_PER_DAY:
+            logger.warning(f"[CIRCUIT] Daily order cap reached: {_orders_today}/{MAX_ORDERS_PER_DAY} — no more orders today")
+            return True
+        if _daily_notional_usd >= MAX_DAILY_NOTIONAL:
+            logger.warning(f"[CIRCUIT] Daily notional ${_daily_notional_usd:.2f} >= cap ${MAX_DAILY_NOTIONAL} — halted")
             return True
     return False
 
@@ -244,6 +267,10 @@ def _execute(symbol: str, side: str, sml: dict):
     if PAPER_MODE:
         logger.info(f"[PAPER] Would {side.upper()} {qty}x {symbol} @ ${price:.2f}")
         result = {"paper": True}
+        with _lock:
+            _orders_today += 1
+            _daily_notional_usd += qty * price
+            logger.info(f"[DAILY] Orders: {_orders_today}/{MAX_ORDERS_PER_DAY} | Notional: ${_daily_notional_usd:.2f}/${MAX_DAILY_NOTIONAL:.0f}")
     else:
         if not _ensure_login():
             result = {"error": "login_failed"}
@@ -256,6 +283,10 @@ def _execute(symbol: str, side: str, sml: dict):
                     r = rh.orders.order_sell_market(symbol, qty, extendedHours=True)
                 result = {"placed": True, "raw": r}
                 logger.info(f"[RH] Order placed ✅ {symbol} {side} x{qty}")
+                with _lock:
+                    _orders_today += 1
+                    _daily_notional_usd += qty * price
+                    logger.info(f"[DAILY] Orders: {_orders_today}/{MAX_ORDERS_PER_DAY} | Notional: ${_daily_notional_usd:.2f}/${MAX_DAILY_NOTIONAL:.0f}")
             except Exception as e:
                 logger.error(f"[RH] Order error: {e}")
                 result = {"error": str(e)}
@@ -347,6 +378,7 @@ def main():
     logger.info(f"  MIN_GOD     : {MIN_GOD_STACKED}/6 SET9 stacked")
     logger.info(f"  PDT limit   : ${PDT_BALANCE_LIMIT}")
     logger.info(f"  Max order   : ${MAX_ORDER_USD} / {MAX_EQUITY_SHARES} shares")
+    logger.info(f"  Daily cap   : {MAX_ORDERS_PER_DAY} orders / ${MAX_DAILY_NOTIONAL:.0f} notional / ${MAX_DAILY_LOSS_USD:.0f} loss limit")
     logger.info(f"  Paper mode  : {PAPER_MODE}")
     logger.info(f"  Kill switch : {KILL_SWITCH}")
     logger.info("=" * 60)
@@ -360,6 +392,7 @@ def main():
 
     while True:
         try:
+            _reset_daily_if_new_day()
             logger.info(f"[POLL] Scanning — beastmode + Pine webhook queue...")
             _poll_beastmode()
             _poll_tv_pending()
