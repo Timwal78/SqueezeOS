@@ -82,6 +82,20 @@ var string G_ATR = "▶  VOLATILITY REGIME"
 int atr_len = input.int(14,  "ATR Length",   group=G_ATR, minval=1,  maxval=50)
 int atr_lb  = input.int(100, "ATR Lookback", group=G_ATR, minval=20, maxval=500)
 
+// ── SqueezeOS Webhook ────────────────────────────────────────────────────────
+var string G_WH = "▶  SQUEEZEOS WEBHOOK"
+string wh_passphrase = input.string("SQUEEZE_AUTH_992", "Webhook Passphrase", group=G_WH)
+string wh_system     = input.string("SML_Leviathan",    "System Name",        group=G_WH)
+
+// ── Institutional Macro Matrix ────────────────────────────────────────────────
+// Set-9 Tracker  (9,22,35,48,61) — faster entry, trend confirmation
+// Set-13 Pillar  (13,26,39,52,65) — slower, max macro capture, ~13 signals/500 days
+var string G_MAC = "▶  INSTITUTIONAL MACRO MATRIX (13-step gap)"
+bool show_sT9  = input.bool(true, "Tracker  [ 9, 22, 35, 48, 61 · gap 13 ]",  group=G_MAC)
+bool show_sP13 = input.bool(true, "Pillar  [ 13, 26, 39, 52, 65 · gap 13 ]",  group=G_MAC)
+color col_T9   = input.color(color.new(#00BFFF, 0), "Tracker color",  group=G_MAC, inline="T9")
+color col_P13  = input.color(color.new(#FF8C00, 0), "Pillar color",   group=G_MAC, inline="P13")
+
 // =========================================================================
 // APEX ANCHOR MATRIX ENGINE — Proprietary Harmonic Grid
 // Formula: base + (gap × n) for n = 0..4
@@ -106,6 +120,9 @@ f_grid_ema(int b, int g) =>
 [e7a, e7b, e7c, e7d, e7e] = f_grid_ema(9, 3)
 [e8a, e8b, e8c, e8d, e8e] = f_grid_ema(9, 6)
 [e9a, e9b, e9c, e9d, e9e] = f_grid_ema(9, 9)
+// Institutional Macro — 13-step gap (trend catchers, not compression detectors)
+[eT9a,  eT9b,  eT9c,  eT9d,  eT9e]  = f_grid_ema(9,  13)  // Tracker  9,22,35,48,61
+[eP13a, eP13b, eP13c, eP13d, eP13e] = f_grid_ema(13, 13)  // Pillar  13,26,39,52,65
 // =========================================================================
 
 // ── Volume / ATR ──────────────────────────────────────────────────────────────
@@ -134,7 +151,9 @@ float sp5 = get_spread(e5a, e5b, e5c, e5d, e5e)
 float sp6 = get_spread(e6a, e6b, e6c, e6d, e6e)
 float sp7 = get_spread(e7a, e7b, e7c, e7d, e7e)
 float sp8 = get_spread(e8a, e8b, e8c, e8d, e8e)
-float sp9 = get_spread(e9a, e9b, e9c, e9d, e9e)
+float sp9   = get_spread(e9a,  e9b,  e9c,  e9d,  e9e)
+float spT9  = get_spread(eT9a, eT9b, eT9c, eT9d, eT9e)
+float spP13 = get_spread(eP13a,eP13b,eP13c,eP13d,eP13e)
 
 int   ci_lb          = 252
 float sp_avg_raw     = (sp1 + sp2 + sp3 + sp4 + sp5 + sp6 + sp7 + sp8 + sp9) / 9.0
@@ -155,7 +174,9 @@ float sc5 = get_set_score(sp5)
 float sc6 = get_set_score(sp6)
 float sc7 = get_set_score(sp7)
 float sc8 = get_set_score(sp8)
-float sc9 = get_set_score(sp9)
+float sc9   = get_set_score(sp9)
+float scT9  = get_set_score(spT9)
+float scP13 = get_set_score(spP13)
 
 bool coil_s1 = sp1 < effective_threshold
 bool coil_s2 = sp2 < effective_threshold
@@ -166,6 +187,18 @@ bool coil_s6 = sp6 < effective_threshold
 bool coil_s7 = sp7 < effective_threshold
 bool coil_s8 = sp8 < effective_threshold
 bool coil_s9 = sp9 < effective_threshold
+
+// ── Institutional Macro — directional alignment (fast above/below slow = bull/bear) ──
+bool T9_bull  = eT9a  > eT9b  and eT9b  > eT9c  and eT9c  > eT9d  and eT9d  > eT9e
+bool T9_bear  = eT9a  < eT9b  and eT9b  < eT9c  and eT9c  < eT9d  and eT9d  < eT9e
+bool P13_bull = eP13a > eP13b and eP13b > eP13c and eP13c > eP13d and eP13d > eP13e
+bool P13_bear = eP13a < eP13b and eP13b < eP13c and eP13c < eP13d and eP13d < eP13e
+bool macro_bull      = T9_bull  and P13_bull
+bool macro_bear      = T9_bear  and P13_bear
+bool macro_bull_fire = macro_bull and not macro_bull[1]
+bool macro_bear_fire = macro_bear and not macro_bear[1]
+bool macro_exit      = not macro_bull and not macro_bear and (macro_bull[1] or macro_bear[1])
+int  macro_stacked   = (macro_bull or macro_bear) ? 2 : ((T9_bull or T9_bear) ? 1 : 0) + ((P13_bull or P13_bear) ? 1 : 0)
 
 int god_stacked   = (coil_s7 ? 1 : 0) + (coil_s8 ? 1 : 0) + (coil_s9 ? 1 : 0)
 int prime_stacked = (coil_s4 ? 1 : 0) + (coil_s5 ? 1 : 0) + (coil_s6 ? 1 : 0)
@@ -305,6 +338,18 @@ plot(show_set and show_s8 ? e8e : na, "G-B Macro", pc8a, linewidth=2)
 plot(show_set and show_s9 ? e9a : na, "G-C Fast",  pc9f, linewidth=1)
 plot(show_set and show_s9 ? e9e : na, "G-C Macro", pc9a, linewidth=2)
 
+// Institutional Macro Matrix — brightens when aligned, fades when neutral
+int   aT9f  = show_sT9  and (T9_bull  or T9_bear)  ? 0 : 70
+int   aP13f = show_sP13 and (P13_bull or P13_bear) ? 0 : 70
+color pcT9f  = color.new(col_T9,  aT9f)
+color pcT9a  = color.new(col_T9,  45)
+color pcP13f = color.new(col_P13, aP13f)
+color pcP13a = color.new(col_P13, 45)
+plot(show_set and show_sT9  ? eT9a  : na, "Tracker Fast  (9)",   pcT9f,  linewidth=2)
+plot(show_set and show_sT9  ? eT9e  : na, "Tracker Anchor (61)", pcT9a,  linewidth=3)
+plot(show_set and show_sP13 ? eP13a : na, "Pillar Fast  (13)",   pcP13f, linewidth=2)
+plot(show_set and show_sP13 ? eP13e : na, "Pillar Anchor (65)",  pcP13a, linewidth=3)
+
 p_kp_top = plot(show_kinetic ? kp_upper : na, "Anchor Ceil",  kp_col, linewidth=pitch_mode?3:2, style=plot.style_stepline)
 p_kp_bot = plot(show_kinetic ? kp_lower : na, "Anchor Floor", kp_col, linewidth=pitch_mode?3:2, style=plot.style_stepline)
 fill(p_kp_top, p_kp_bot, show_fill ? fill_col : na, title="Confluence Fill")
@@ -320,6 +365,8 @@ plotshape(show_markers and evt_full         and confirmed, "FS",  shape.circle, 
 plotshape(show_markers and exit_convergence and confirmed, "EX",  shape.xcross,     location.belowbar, color.new(SML_ACCENT,20), size=size.tiny,   offset=0)
 plotshape(show_markers and dgl_fire         and confirmed, "DGL", shape.labelup,    location.belowbar, color.new(SML_GOLD,  0),  size=size.large,  offset=0, text="💎", textcolor=color.black)
 plotshape(show_markers and is_prime_setup and full_mtf_stack and confirmed, "PR", shape.triangleup, location.abovebar, color.new(SML_CYAN,0), size=size.small, offset=0)
+plotshape(show_markers and macro_bull_fire and confirmed, "MB", shape.labelup,   location.belowbar, color.new(#00BFFF,0), size=size.large, offset=0, text="🏛", textcolor=color.white)
+plotshape(show_markers and macro_bear_fire and confirmed, "MS", shape.labeldown, location.abovebar, color.new(#FF8C00,0), size=size.large, offset=0, text="🏛", textcolor=color.white)
 
 // ── Labels — compact text, throttled, staggered ───────────────────────────────
 color TRANSP  = color.new(color.black, 100)
@@ -352,7 +399,7 @@ if show_labels and confirmed and dgl_fire
               color=color.new(SML_GOLD,0), textcolor=color.black, style=label.style_label_down, size=size.small)
 
 // ── HUD — 3-column: label | value | detail/tier ───────────────────────────────
-var table hud = table.new(position.top_right, 3, 35,
+var table hud = table.new(position.top_right, 3, 42,
     bgcolor=color.new(#050505,5), border_color=SML_ACCENT, border_width=1,
     frame_color=SML_ACCENT, frame_width=2)
 
@@ -523,10 +570,39 @@ if show_hud and barstate.islast
         table.cell(hud,1,31, "CR>=" + str.tostring(min_sets_crit) + "  AX>=" + str.tostring(min_sets_apex), text_color=SML_ACCENT, text_size=size.tiny)
         table.cell(hud,2,31, "FSC=" + str.tostring(min_sets_full), text_color=SML_ACCENT, text_size=size.tiny)
 
-    table.cell(hud,0,32, "© ScriptMaster Labs  |  PROPRIETARY  |  DO NOT DISTRIBUTE", text_color=color.new(SML_ACCENT,20), text_size=size.tiny)
-    table.cell(hud,1,32, "")
-    table.cell(hud,2,32, "")
-    table.merge_cells(hud,0,32,2,32)
+    // ── Institutional Macro Matrix ────────────────────────────────────────────
+    table.cell(hud,0,33, "─────────────────────────────────────────────────────────────────", text_color=SML_ACCENT, text_size=size.tiny)
+    table.cell(hud,1,33, "")
+    table.cell(hud,2,33, "")
+    table.merge_cells(hud,0,33,2,33)
+
+    table.cell(hud,0,34, "INSTITUTIONAL MACRO MATRIX  [ 13-step gap ]", text_color=color.new(#00BFFF,0), text_size=size.small)
+    table.cell(hud,1,34, "")
+    table.cell(hud,2,34, "")
+    table.merge_cells(hud,0,34,2,34)
+
+    string T9_state  = T9_bull  ? "▲ BULL STACK" : T9_bear  ? "▼ BEAR STACK" : "  neutral"
+    string P13_state = P13_bull ? "▲ BULL STACK" : P13_bear ? "▼ BEAR STACK" : "  neutral"
+    string macro_txt = macro_bull ? "🏛 MACRO BULL  BOTH STACKED" : macro_bear ? "🏛 MACRO BEAR  BOTH STACKED" : macro_stacked == 1 ? "PARTIAL  1/2 ALIGNED" : "SCANNING"
+    color  macro_col = macro_bull ? color.new(#00BFFF,0) : macro_bear ? color.new(#FF8C00,0) : macro_stacked==1 ? SML_ACCENT : color.new(color.gray,20)
+
+    table.cell(hud,0,35, "Tracker  9→61",  text_color=SML_ACCENT,                                  text_size=size.small)
+    table.cell(hud,1,35, T9_state,         text_color=T9_bull?color.new(#00BFFF,0):T9_bear?color.new(#FF8C00,0):SML_ACCENT, text_size=size.small)
+    table.cell(hud,2,35, "CI:" + str.tostring(math.round(scT9)),  text_color=color.white, text_size=size.tiny)
+
+    table.cell(hud,0,36, "Pillar  13→65",  text_color=SML_ACCENT,                                   text_size=size.small)
+    table.cell(hud,1,36, P13_state,        text_color=P13_bull?color.new(#00BFFF,0):P13_bear?color.new(#FF8C00,0):SML_ACCENT, text_size=size.small)
+    table.cell(hud,2,36, "CI:" + str.tostring(math.round(scP13)), text_color=color.white, text_size=size.tiny)
+
+    table.cell(hud,0,37, "MACRO STATE",    text_color=SML_ACCENT, text_size=size.small)
+    table.cell(hud,1,37, macro_txt,        text_color=macro_col,  text_size=size.small)
+    table.cell(hud,2,37, "",               text_size=size.tiny)
+    table.merge_cells(hud,1,37,2,37)
+
+    table.cell(hud,0,38, "© ScriptMaster Labs  |  PROPRIETARY  |  DO NOT DISTRIBUTE", text_color=color.new(SML_ACCENT,20), text_size=size.tiny)
+    table.cell(hud,1,38, "")
+    table.cell(hud,2,38, "")
+    table.merge_cells(hud,0,38,2,38)
 
 // ── alertcondition (legacy / individual setup) ────────────────────────────────
 alertcondition(evt_convergence and vol_confirm,                    "SML: Convergence",         "CONVERGENCE — {{ticker}} {{interval}} [SML v8.0]")
@@ -538,33 +614,41 @@ alertcondition(dgl_fire,                                           "SML: Dual Gr
 alertcondition(evt_apex and regime_compressed and vol_confirm,     "SML: Prime Signal",        "PRIME SIGNAL — {{ticker}} {{interval}} [SML v8.0]")
 alertcondition(is_prime_setup  and full_mtf_stack and vol_confirm, "SML: Prime Institutional", "PRIME INSTITUTIONAL — {{ticker}} {{interval}} [SML v8.0]")
 alertcondition(mtf_stack_fired and state_convergence,              "SML: MTF Stack",           "MTF STACK — {{ticker}} {{interval}} [SML v8.0]")
+alertcondition(macro_bull_fire,                                    "SML: Macro Bull Stack",    "MACRO BULL STACK — 9+13 ALIGNED — {{ticker}} {{interval}} [SML v8.0]")
+alertcondition(macro_bear_fire,                                    "SML: Macro Bear Stack",    "MACRO BEAR STACK — 9+13 ALIGNED — {{ticker}} {{interval}} [SML v8.0]")
+alertcondition(macro_exit,                                         "SML: Macro Exit",          "MACRO STACK EXIT — {{ticker}} {{interval}} [SML v8.0]")
 
-// ── alert() — Discord JSON webhooks (use ONE alert set to "alert() function calls") ──
+// ── alert() — SqueezeOS webhook (POST to /api/webhooks/tradingview) ──────────
+// Set ONE alert using "alert() function calls" trigger, URL = squeezeos-api.onrender.com/api/webhooks/tradingview
+// DGL + FULL SPECTRUM fire EXECUTE_LONG/SHORT based on bias. Apex/Critical/Convergence skipped server-side.
 string _px  = str.tostring(close, "#.00")
-string _set = str.tostring(total_coiled)
-string _ci  = str.tostring(math.round(harmonic_score))
-string _sq  = str.tostring(math.round(sqi_total))
-string _tf  = timeframe.period
 string _tk  = syminfo.ticker
-string _ftx = ",\"footer\":{\"text\":\"SML v8.0  |  ScriptMaster Labs  |  PROPRIETARY\"}}"
+// Macro alignment is highest-confidence direction; falls back to bias_count
+string _exec = macro_bull ? "EXECUTE_LONG" : macro_bear ? "EXECUTE_SHORT" : bias_count >= 2 ? "EXECUTE_LONG" : "EXECUTE_SHORT"
 
 if dgl_fire
-    alert("{\"username\":\"SML SOVEREIGN MATRIX\",\"embeds\":[{\"title\":\"\\ud83d\\udc8e  DUAL GRID LOCK  \\u2014  " + _tk + "\",\"description\":\"**GOD TIER ALL 3 COMPRESSED**\\nPrice: **$" + _px + "** | TF: **" + _tf + "** | CI: **" + _ci + "**\",\"color\":16766720" + _ftx + "]}", alert.freq_once_per_bar_close)
+    alert("{\"passphrase\":\"" + wh_passphrase + "\",\"system\":\"" + wh_system + "\",\"ticker\":\"" + _tk + "\",\"action\":\"" + _exec + "\",\"price\":" + _px + "}", alert.freq_once_per_bar_close)
 
 else if evt_full
-    alert("{\"username\":\"SML SOVEREIGN MATRIX\",\"embeds\":[{\"title\":\"\\ud83d\\udfe1  FULL SPECTRUM  \\u2014  " + _tk + "\",\"description\":\"**ALL 9 SETS COMPRESSED**\\nPrice: **$" + _px + "** | TF: **" + _tf + "** | CI: **" + _ci + "** | SQI: **" + _sq + "**\",\"color\":16766720" + _ftx + "]}", alert.freq_once_per_bar_close)
-
-else if evt_apex and vol_confirm
-    alert("{\"username\":\"SML SOVEREIGN MATRIX\",\"embeds\":[{\"title\":\"\\u26aa  APEX SINGULARITY  \\u2014  " + _tk + "\",\"description\":\"Sets: **" + _set + "/9** compressed\\nPrice: **$" + _px + "** | TF: **" + _tf + "** | CI: **" + _ci + "** | SQI: **" + _sq + "**\",\"color\":16777215" + _ftx + "]}", alert.freq_once_per_bar_close)
-
-else if evt_critical and vol_confirm
-    alert("{\"username\":\"SML SOVEREIGN MATRIX\",\"embeds\":[{\"title\":\"\\ud83d\\udfe3  CRITICAL MASS  \\u2014  " + _tk + "\",\"description\":\"Sets: **" + _set + "/9** compressed\\nPrice: **$" + _px + "** | TF: **" + _tf + "** | CI: **" + _ci + "**\",\"color\":16717203" + _ftx + "]}", alert.freq_once_per_bar_close)
-
-else if evt_convergence and vol_confirm
-    alert("{\"username\":\"SML SOVEREIGN MATRIX\",\"embeds\":[{\"title\":\"\\ud83d\\udfe2  CONVERGENCE  \\u2014  " + _tk + "\",\"description\":\"Sets: **" + _set + "/9** compressed\\nPrice: **$" + _px + "** | TF: **" + _tf + "** | CI: **" + _ci + "**\",\"color\":65407" + _ftx + "]}", alert.freq_once_per_bar_close)
+    alert("{\"passphrase\":\"" + wh_passphrase + "\",\"system\":\"" + wh_system + "\",\"ticker\":\"" + _tk + "\",\"action\":\"" + _exec + "\",\"price\":" + _px + "}", alert.freq_once_per_bar_close)
 
 else if is_prime_setup and full_mtf_stack and vol_confirm
-    alert("{\"username\":\"SML SOVEREIGN MATRIX\",\"embeds\":[{\"title\":\"\\ud83d\\udd35  PRIME INSTITUTIONAL  \\u2014  " + _tk + "\",\"description\":\"**FULL MTF STACK + PRIME SETUP**\\nPrice: **$" + _px + "** | TF: **" + _tf + "** | SQI: **" + _sq + "**\",\"color\":52479" + _ftx + "]}", alert.freq_once_per_bar_close)
+    alert("{\"passphrase\":\"" + wh_passphrase + "\",\"system\":\"" + wh_system + "\",\"ticker\":\"" + _tk + "\",\"action\":\"" + _exec + "\",\"price\":" + _px + "}", alert.freq_once_per_bar_close)
+
+else if macro_bull_fire
+    alert("{\"passphrase\":\"" + wh_passphrase + "\",\"system\":\"" + wh_system + "\",\"ticker\":\"" + _tk + "\",\"action\":\"EXECUTE_LONG\",\"price\":" + _px + "}", alert.freq_once_per_bar_close)
+
+else if macro_bear_fire
+    alert("{\"passphrase\":\"" + wh_passphrase + "\",\"system\":\"" + wh_system + "\",\"ticker\":\"" + _tk + "\",\"action\":\"EXECUTE_SHORT\",\"price\":" + _px + "}", alert.freq_once_per_bar_close)
+
+else if evt_apex and vol_confirm
+    alert("{\"passphrase\":\"" + wh_passphrase + "\",\"system\":\"" + wh_system + "\",\"ticker\":\"" + _tk + "\",\"action\":\"APEX\",\"price\":" + _px + "}", alert.freq_once_per_bar_close)
+
+else if evt_critical and vol_confirm
+    alert("{\"passphrase\":\"" + wh_passphrase + "\",\"system\":\"" + wh_system + "\",\"ticker\":\"" + _tk + "\",\"action\":\"CRITICAL_MASS\",\"price\":" + _px + "}", alert.freq_once_per_bar_close)
+
+else if evt_convergence and vol_confirm
+    alert("{\"passphrase\":\"" + wh_passphrase + "\",\"system\":\"" + wh_system + "\",\"ticker\":\"" + _tk + "\",\"action\":\"CONVERGENCE\",\"price\":" + _px + "}", alert.freq_once_per_bar_close)
 
 else if exit_convergence
-    alert("{\"username\":\"SML SOVEREIGN MATRIX\",\"embeds\":[{\"title\":\"\\u26aa  RELEASED  \\u2014  " + _tk + "\",\"description\":\"Compression released\\nPrice: **$" + _px + "** | TF: **" + _tf + "**\",\"color\":6710886" + _ftx + "]}", alert.freq_once_per_bar_close)
+    alert("{\"passphrase\":\"" + wh_passphrase + "\",\"system\":\"" + wh_system + "\",\"ticker\":\"" + _tk + "\",\"action\":\"RELEASED\",\"price\":" + _px + "}", alert.freq_once_per_bar_close)

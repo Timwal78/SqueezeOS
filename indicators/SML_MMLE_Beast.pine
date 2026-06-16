@@ -42,9 +42,9 @@ fire_on_state     = input.string("BOTH", "Fire on state", options=["TNT_LONG","T
 fire_vpin_z_min   = input.float(1.0, "Min VPIN z to fire", step=0.1, group=grpExec)
 
 grpAlert = "Alert routing"
-alert_mode  = input.string("DISCORD_EMBED", "Webhook payload format", options=["DISCORD_EMBED","DISCORD_TEXT","BEAST_WEBHOOK","GENERIC_JSON"], group=grpAlert)
+alert_mode  = input.string("BEAST_WEBHOOK", "Webhook payload format", options=["DISCORD_EMBED","DISCORD_TEXT","BEAST_WEBHOOK","GENERIC_JSON"], group=grpAlert)
 discord_username = input.string("MMLE-BEAST", "Discord username", group=grpAlert)
-beast_secret_tag = input.string("",     "Beast tag", group=grpAlert)
+beast_secret_tag = input.string("SQUEEZE_AUTH_992", "Beast tag / SqueezeOS Passphrase", group=grpAlert)
 
 prevClose = close[1]
 barSide   = close > prevClose ? 1 : close < prevClose ? -1 : 0
@@ -237,7 +237,7 @@ mkDiscordText(_action, _emoji) =>
     str.format('{{"username":"{0}","content":"{1} **MMLE-BEAST {2}** {3} @ ${4,number,#.##} → magnet ${5,number,#.##} · VPIN z {6,number,#.##}"}}', discord_username, _emoji, _action, syminfo.ticker, close, magnet, nz(vpin_z, 0.0))
 
 mkBeastWebhook(_action) =>
-    str.format('{{"engine":"MMLE-BEAST","tag":"{0}","action":"{1}","symbol":"{2}","price":{3,number,#.####},"magnet":{4,number,#.####},"vpin_z":{5,number,#.####},"state":"{6}","call_wall":{7,number,#.####},"put_wall":{8,number,#.####}}}', beast_secret_tag, _action, syminfo.ticker, close, magnet, nz(vpin_z, 0.0), resolvedState, nz(callWall, 0.0), nz(putWall, 0.0))
+    str.format('{{"passphrase":"{0}","system":"MMLE-BEAST","ticker":"{1}","action":"{2}","price":{3,number,#.##}}}', beast_secret_tag, syminfo.ticker, _action, close)
 
 mkGenericJson(_action) =>
     str.format('{{"engine":"MMLE-BEAST","action":"{0}","symbol":"{1}","price":{2,number,#.####},"magnet":{3,number,#.####},"state":"{4}","timeframe":"{5}"}}', _action, syminfo.ticker, close, magnet, resolvedState, timeframe.period)
