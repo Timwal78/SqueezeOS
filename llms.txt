@@ -60,6 +60,9 @@ To connect via Claude Desktop or any MCP client:
 
 **Alt:** Pay USDC on Base via Ghost Layer bridge (no XRPL trust line needed)
 
+**Full Protocol Details:**
+See `https://github.com/Timwal78/SqueezeOS_Github/blob/main/AGENT_MONETIZATION.md` for complete documentation on x402 XRPL loops and Agent Credit Bureau scoring.
+
 ## Key Endpoints
 
 - Health: https://squeezeos-api.onrender.com/api/status

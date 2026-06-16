@@ -219,6 +219,7 @@ GET https://four02proof.onrender.com/v1/bureau/score/{wallet}
 
 | File | URL |
 |------|-----|
+| Agent Monetization Protocol | [`AGENT_MONETIZATION.md`](./AGENT_MONETIZATION.md) |
 | MCP manifest (33 tools) | `GET /.well-known/mcp.json` |
 | OpenAPI 3.0 spec | `GET /.well-known/openapi.json` |
 | agents.json | `GET /.well-known/agents.json` |
