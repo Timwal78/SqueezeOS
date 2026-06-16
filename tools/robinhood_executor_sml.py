@@ -63,8 +63,9 @@ KILL_SWITCH          = os.environ.get("KILL_SWITCH", "false").lower() == "true"
 MAX_EQUITY_SHARES    = int(os.environ.get("MAX_EQUITY_SHARES", "3"))
 MAX_ORDER_USD        = float(os.environ.get("MAX_ORDER_USD", "150.0"))
 MAX_DAILY_LOSS_USD   = float(os.environ.get("MAX_DAILY_LOSS_USD", "100.0"))
-MAX_ORDERS_PER_DAY   = int(os.environ.get("MAX_ORDERS_PER_DAY", "10"))
-MAX_DAILY_NOTIONAL   = float(os.environ.get("MAX_DAILY_NOTIONAL_USD", "500.0"))
+MAX_ORDERS_PER_DAY   = int(os.environ.get("MAX_ORDERS_PER_DAY", "25"))
+MAX_DAILY_NOTIONAL   = float(os.environ.get("MAX_DAILY_NOTIONAL_USD", "1500.0"))
+MAX_PER_SCAN         = int(os.environ.get("MAX_PER_SCAN", "3"))
 
 # ── State ──────────────────────────────────────────────────────────────────────
 _rh_logged_in   = False
@@ -106,6 +107,14 @@ def _reset_daily_if_new_day():
 
 COOLDOWN_S     = 3600       # 1-hour per-symbol cooldown — poll is 5min so must be much longer
 PDT_WINDOW_S   = 5 * 86400 # 5-day rolling window
+
+# Tickers that are bankrupt, delisted, or known OTC junk — never trade these
+_BLOCKLIST = {
+    "AMCX",   # AMC Networks delisted
+    "FXST",   # delisted
+    "CODA",   # delisted
+    "NKLA",   # Nikola — fraud, near-zero
+}
 
 
 # ── Robinhood login ────────────────────────────────────────────────────────────
@@ -211,8 +220,17 @@ def _discord(symbol: str, side: str, qty: int, price: float, sml: dict, result: 
 
 
 # ── Order execution ────────────────────────────────────────────────────────────
-def _execute(symbol: str, side: str, sml: dict):
+def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
+    """scan_counter is a single-element list [n] so callers can track per-scan count."""
     if _circuit_open():
+        return
+
+    if symbol in _BLOCKLIST:
+        logger.warning(f"[EXEC] {symbol} is on the blocklist (bankrupt/delisted) — skip")
+        return
+
+    if scan_counter[0] >= MAX_PER_SCAN:
+        logger.info(f"[EXEC] {symbol} — per-scan batch limit {MAX_PER_SCAN} reached, deferring to next cycle")
         return
 
     now  = time.time()
@@ -267,6 +285,7 @@ def _execute(symbol: str, side: str, sml: dict):
     if PAPER_MODE:
         logger.info(f"[PAPER] Would {side.upper()} {qty}x {symbol} @ ${price:.2f}")
         result = {"paper": True}
+        scan_counter[0] += 1
         with _lock:
             _orders_today += 1
             _daily_notional_usd += qty * price
@@ -283,6 +302,7 @@ def _execute(symbol: str, side: str, sml: dict):
                     r = rh.orders.order_sell_market(symbol, qty, extendedHours=True)
                 result = {"placed": True, "raw": r}
                 logger.info(f"[RH] Order placed ✅ {symbol} {side} x{qty}")
+                scan_counter[0] += 1
                 with _lock:
                     _orders_today += 1
                     _daily_notional_usd += qty * price
@@ -310,6 +330,7 @@ def _poll_beastmode():
         return
 
     logger.info(f"[POLL] {len(signals)} beastmode signals — checking GOD MODE gate...")
+    scan_counter = [0]
     for hit in signals:
         symbol = (hit.get("symbol") or "").upper().strip()
         sml    = hit.get("sml_matrix") or {}
@@ -322,7 +343,10 @@ def _poll_beastmode():
         signal = hit.get("signal", "")
         side   = "buy" if "BULL" in signal or signal in ("BEASTMODE", "GOD_MODE", "DUAL_GRID_LOCK") else "sell"
         logger.info(f"[POLL] GOD MODE: {symbol} {side.upper()} god_stacked={sml.get('god_stacked',0)}/6")
-        _execute(symbol, side, sml)
+        _execute(symbol, side, sml, scan_counter)
+        if scan_counter[0] >= MAX_PER_SCAN:
+            logger.info(f"[POLL] Per-scan limit {MAX_PER_SCAN} reached — stopping beastmode batch")
+            break
 
 
 # ── Pine script TV webhook poll (Leviathan / MMLE Beast / Sniper) ──────────────
@@ -345,6 +369,7 @@ def _poll_tv_pending():
         return
 
     logger.info(f"[TV-POLL] {len(signals)} Pine script signal(s) from webhook queue")
+    scan_counter = [0]
     for sig in signals:
         symbol    = (sig.get("symbol") or "").upper().strip()
         direction = (sig.get("action") or "").upper().strip()
@@ -357,15 +382,14 @@ def _poll_tv_pending():
         side = "buy" if direction == "BUY" else "sell"
         logger.info(f"[TV-POLL] {system} → {direction} {symbol} @ ${price:.2f}")
 
-        # Reuse _execute with a synthetic sml dict that passes the god_stacked gate
         sml_proxy = {
-            "god_stacked":   MIN_GOD_STACKED,   # meets threshold — Pine already gated this
+            "god_stacked":   MIN_GOD_STACKED,
             "tier":          "GOD_MODE",
             "execute_gate":  True,
             "signal":        f"{system}_{direction}",
             "confidence":    sig.get("confidence", 80.0),
         }
-        _execute(symbol, side, sml_proxy)
+        _execute(symbol, side, sml_proxy, scan_counter)
 
 
 # ── Main loop ──────────────────────────────────────────────────────────────────
@@ -379,6 +403,7 @@ def main():
     logger.info(f"  PDT limit   : ${PDT_BALANCE_LIMIT}")
     logger.info(f"  Max order   : ${MAX_ORDER_USD} / {MAX_EQUITY_SHARES} shares")
     logger.info(f"  Daily cap   : {MAX_ORDERS_PER_DAY} orders / ${MAX_DAILY_NOTIONAL:.0f} notional / ${MAX_DAILY_LOSS_USD:.0f} loss limit")
+    logger.info(f"  Per-scan    : max {MAX_PER_SCAN} orders per poll cycle")
     logger.info(f"  Paper mode  : {PAPER_MODE}")
     logger.info(f"  Kill switch : {KILL_SWITCH}")
     logger.info("=" * 60)
