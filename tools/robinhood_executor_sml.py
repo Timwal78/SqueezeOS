@@ -673,6 +673,7 @@ def _poll_oracle() -> int:
 
 # ── Main loop ──────────────────────────────────────────────────────────────────
 def main():
+    global _rh_logged_in  # explicitly declare global so Python never creates a local shadow
     logger.info("=" * 60)
     logger.info("SqueezeOS Robinhood Executor v3.1 — Dynamic Universe + Extended Hours")
     logger.info(f"  API         : {SQUEEZEOS_API_URL}")
