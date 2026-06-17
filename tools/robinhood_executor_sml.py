@@ -55,7 +55,7 @@ logger = logging.getLogger("RH.Executor")
 SQUEEZEOS_API_URL  = os.environ.get("SQUEEZEOS_API_URL", "https://squeezeos-api.onrender.com")
 ROBINHOOD_USER     = os.environ.get("ROBINHOOD_USERNAME", "")
 ROBINHOOD_PASS     = os.environ.get("ROBINHOOD_PASSWORD", "")
-POLL_INTERVAL_S    = int(os.environ.get("POLL_INTERVAL_S", "300"))     # poll every 5 minutes
+POLL_INTERVAL_S    = int(os.environ.get("POLL_INTERVAL_S", "180"))     # poll every 3 minutes
 MIN_GOD_STACKED    = int(os.environ.get("MIN_GOD_STACKED", "3"))       # min SET9 stacked to execute (3/6 = 50% convergence, max signal flow)
 PDT_BALANCE_LIMIT  = float(os.environ.get("PDT_BALANCE_LIMIT", "2100.0"))
 PDT_MAX_TRADES     = int(os.environ.get("PDT_MAX_TRADES", "3"))
@@ -522,13 +522,96 @@ def _poll_tv_pending() -> int:
     return scan_counter[0]
 
 
+# ── Oracle watchlist poll (direct BUY/SELL from multi-engine oracle) ───────────
+# Polls the free /api/oracle endpoint for any symbol it's actively tracking.
+# Fires on BUY or BUY (IGNITION) with confidence >= ORACLE_MIN_CONFIDENCE.
+# This is the fallback when beastmode has no GOD_MODE hits (e.g., server warmup,
+# quiet market, or no convergence in the full universe scan).
+ORACLE_MIN_CONFIDENCE = float(os.environ.get("ORACLE_MIN_CONFIDENCE", "65.0"))
+
+def _poll_oracle() -> int:
+    """
+    Poll /api/oracle for BUY signals. Executes any symbol the oracle rates BUY
+    or BUY (IGNITION) with sufficient confidence. No GOD_MODE required.
+    Returns number of orders placed.
+    """
+    url = f"{SQUEEZEOS_API_URL}/api/oracle"
+    try:
+        req = URLRequest(url, headers={"User-Agent": "SqueezeOS-RH-Executor/2.0"})
+        with urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read())
+    except Exception as e:
+        logger.warning(f"[ORACLE] fetch failed: {e}")
+        return 0
+
+    # /api/oracle returns {"status": "success", "directives": {"SYM": {...}, ...}}
+    directives = data.get("directives") or data.get("results") or {}
+    if not directives:
+        logger.debug("[ORACLE] no directives in response")
+        return 0
+
+    now = time.time()
+    scan_counter = [0]
+    buy_count = 0
+    sell_count = 0
+
+    for sym, directive in directives.items():
+        if not isinstance(directive, dict):
+            continue
+        sym = sym.upper().strip()
+        if sym in _BLOCKLIST:
+            continue
+
+        action     = (directive.get("action") or directive.get("directive") or "").upper()
+        confidence = float(directive.get("confidence") or directive.get("resolution_confidence") or 0)
+        price      = float(directive.get("price") or directive.get("last") or 0)
+
+        if action in ("BUY", "BUY (IGNITION)"):
+            buy_count += 1
+            if confidence < ORACLE_MIN_CONFIDENCE:
+                continue
+            cooldown_remaining = COOLDOWN_S - (now - _last_execution.get(sym, 0))
+            if cooldown_remaining > 0:
+                continue
+            sml_proxy = {
+                "god_stacked":  MIN_GOD_STACKED,
+                "tier":         "GOD_MODE",
+                "signal":       "ORACLE_BUY",
+                "confidence":   confidence,
+            }
+            logger.info(f"[ORACLE] BUY → {sym}  confidence={confidence:.0f}%  price=${price:.2f}")
+            _execute(sym, "buy", sml_proxy, scan_counter)
+            if scan_counter[0] >= MAX_PER_SCAN:
+                break
+
+        elif action in ("SELL", "SHIELD"):
+            sell_count += 1
+            # Only sell if we actually hold it (position check happens inside _execute)
+            cooldown_remaining = COOLDOWN_S - (now - _last_execution.get(sym, 0))
+            if cooldown_remaining > 0:
+                continue
+            sml_proxy = {
+                "god_stacked":  MIN_GOD_STACKED,
+                "tier":         "GOD_MODE",
+                "signal":       "ORACLE_SELL",
+                "confidence":   confidence,
+            }
+            logger.info(f"[ORACLE] SELL → {sym}  confidence={confidence:.0f}%  price=${price:.2f}")
+            _execute(sym, "sell", sml_proxy, scan_counter)
+
+    if buy_count or sell_count:
+        logger.info(f"[ORACLE] {len(directives)} symbols scanned | {buy_count} BUY | {sell_count} SELL signals | {scan_counter[0]} orders placed")
+
+    return scan_counter[0]
+
+
 # ── Main loop ──────────────────────────────────────────────────────────────────
 def main():
     logger.info("=" * 60)
     logger.info("SqueezeOS Robinhood Executor v2.1 — Dual Poll Mode")
     logger.info(f"  API         : {SQUEEZEOS_API_URL}")
     logger.info(f"  Poll every  : {POLL_INTERVAL_S}s")
-    logger.info(f"  Sources     : /api/beastmode (SET9) + /api/webhooks/tv_pending (Pine)")
+    logger.info(f"  Sources     : /api/beastmode (SET9) + /api/webhooks/tv_pending (Pine) + /api/oracle (BUY directives)")
     logger.info(f"  MIN_GOD     : {MIN_GOD_STACKED}/6 SET9 stacked")
     logger.info(f"  PDT limit   : ${PDT_BALANCE_LIMIT}")
     logger.info(f"  Max order   : ${MAX_ORDER_USD} / {MAX_EQUITY_SHARES} shares")
@@ -556,13 +639,14 @@ def main():
                 time.sleep(POLL_INTERVAL_S)
                 continue
             logger.info(f"[POLL] Scanning... (RH: {rh_status} | orders today: {_orders_today}/{MAX_ORDERS_PER_DAY} | notional: ${_daily_notional_usd:.0f}/${MAX_DAILY_NOTIONAL:.0f})")
-            beast_placed = _poll_beastmode()
-            tv_placed    = _poll_tv_pending()
-            total_placed = beast_placed + tv_placed
+            beast_placed  = _poll_beastmode()
+            tv_placed     = _poll_tv_pending()
+            oracle_placed = _poll_oracle()
+            total_placed  = beast_placed + tv_placed + oracle_placed
             if total_placed == 0:
                 logger.info("[POLL] No signals this cycle — waiting for next scan")
             else:
-                logger.info(f"[POLL] Cycle complete — {total_placed} order(s) placed ({beast_placed} GOD MODE, {tv_placed} Pine)")
+                logger.info(f"[POLL] Cycle complete — {total_placed} order(s) placed ({beast_placed} GOD MODE, {tv_placed} Pine, {oracle_placed} Oracle)")
         except Exception as e:
             logger.error(f"[LOOP] Unexpected error: {e}")
         logger.info(f"[POLL] Next scan in {POLL_INTERVAL_S}s")
