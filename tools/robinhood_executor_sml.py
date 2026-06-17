@@ -460,8 +460,10 @@ def _poll_beastmode() -> int:
         logger.info(f"[POLL] beastmode: 0 signals from server{age_str} — scan universe warming up or no convergence yet")
         return 0
 
-    # Accept GOD_MODE and DUAL_GRID_LOCK tiers — both are high-conviction
-    _VALID_TIERS = {"GOD_MODE", "DUAL_GRID_LOCK"}
+    # Accept GOD_MODE, DUAL_GRID_LOCK, and GRID_LOCK tiers
+    # GRID_LOCK is one tier below GOD_MODE — valid signal, requires stacked >= 2
+    _VALID_TIERS     = {"GOD_MODE", "DUAL_GRID_LOCK", "GRID_LOCK"}
+    _TIER_MIN_STACK  = {"GOD_MODE": MIN_GOD_STACKED, "DUAL_GRID_LOCK": MIN_GOD_STACKED, "GRID_LOCK": max(2, MIN_GOD_STACKED - 1)}
 
     god_hits = []
     skipped  = {"no_tier": 0, "low_stack": 0, "cooldown": 0, "blocklist": 0}
@@ -472,14 +474,20 @@ def _poll_beastmode() -> int:
         tier    = sml.get("tier", "")
         stacked = sml.get("god_stacked", 0)
         signal  = sml.get("signal", "")
-        # Also treat DUAL_GRID_LOCK in the signal name as a valid tier
-        effective_tier = tier if tier in _VALID_TIERS else ("DUAL_GRID_LOCK" if "DUAL" in signal.upper() else tier)
+        # Infer tier from signal name when tier field is absent/unknown
+        if tier not in _VALID_TIERS:
+            if "DUAL" in signal.upper():
+                tier = "DUAL_GRID_LOCK"
+            elif "GRID" in signal.upper():
+                tier = "GRID_LOCK"
+        effective_tier = tier if tier in _VALID_TIERS else tier
         if effective_tier not in _VALID_TIERS:
             skipped["no_tier"] += 1
             continue
-        if stacked < MIN_GOD_STACKED:
+        min_stack = _TIER_MIN_STACK.get(effective_tier, MIN_GOD_STACKED)
+        if stacked < min_stack:
             skipped["low_stack"] += 1
-            logger.debug(f"[POLL] {symbol} {tier} stacked={stacked} < {MIN_GOD_STACKED} — skip")
+            logger.debug(f"[POLL] {symbol} {tier} stacked={stacked} < {min_stack} — skip")
             continue
         if symbol in _BLOCKLIST:
             skipped["blocklist"] += 1
@@ -569,7 +577,7 @@ def _poll_tv_pending() -> int:
 # Fires on BUY or BUY (IGNITION) with confidence >= ORACLE_MIN_CONFIDENCE.
 # This is the fallback when beastmode has no GOD_MODE hits (e.g., server warmup,
 # quiet market, or no convergence in the full universe scan).
-ORACLE_MIN_CONFIDENCE = float(os.environ.get("ORACLE_MIN_CONFIDENCE", "65.0"))
+ORACLE_MIN_CONFIDENCE = float(os.environ.get("ORACLE_MIN_CONFIDENCE", "60.0"))  # match oracle's own BUY floor
 
 def _poll_oracle() -> int:
     """
@@ -606,7 +614,7 @@ def _poll_oracle() -> int:
         with urlopen(req, timeout=20) as resp:
             hist = json.loads(resp.read())
         # History returns list of {symbol, event_type, data:{directive/action, confidence, price}, ts}
-        cutoff = now - 600   # only care about signals from the last 10 minutes
+        cutoff = now - 1800   # look back 30 min — catches signals between 3-min poll cycles
         for event in (hist.get("events") or hist.get("history") or []):
             ts  = float(event.get("ts") or event.get("timestamp") or 0)
             if ts < cutoff:
@@ -675,14 +683,14 @@ def _poll_oracle() -> int:
 def main():
     global _rh_logged_in  # explicitly declare global so Python never creates a local shadow
     logger.info("=" * 60)
-    logger.info("SqueezeOS Robinhood Executor v3.1 — Dynamic Universe + Extended Hours")
+    logger.info("SqueezeOS Robinhood Executor v3.2 — Wider Signal Net (GRID_LOCK + 60% oracle)")
     logger.info(f"  API         : {SQUEEZEOS_API_URL}")
     logger.info(f"  Poll every  : {POLL_INTERVAL_S}s")
     logger.info(f"  Hours       : 4:00 AM–8:00 PM ET (pre-market + regular + after-hours)")
     logger.info(f"  Ext hours   : LIMIT orders (buy +0.2% / sell -0.2% from last price)")
     logger.info(f"  Sources     : beastmode (GOD_MODE+DUAL_LOCK) | TV webhook (Pine) | oracle+history (live universe)")
     logger.info(f"  Oracle      : 100% FETCH — uses live scan universe, no hardcoded watchlist")
-    logger.info(f"  MIN_GOD     : {MIN_GOD_STACKED}/6 stacked  |  ORACLE_MIN_CONF: {ORACLE_MIN_CONFIDENCE}%")
+    logger.info(f"  MIN_GOD     : {MIN_GOD_STACKED}/6 stacked (GRID_LOCK: {max(2,MIN_GOD_STACKED-1)})  |  ORACLE_MIN_CONF: {ORACLE_MIN_CONFIDENCE}%")
     logger.info(f"  PDT limit   : ${PDT_BALANCE_LIMIT}")
     logger.info(f"  Max order   : ${MAX_ORDER_USD} / {MAX_EQUITY_SHARES} shares")
     logger.info(f"  Daily cap   : {MAX_ORDERS_PER_DAY} orders / ${MAX_DAILY_NOTIONAL:.0f} notional / ${MAX_DAILY_LOSS_USD:.0f} loss limit")
