@@ -114,6 +114,10 @@ _BLOCKLIST = {
     "FXST",   # delisted
     "CODA",   # delisted
     "NKLA",   # Nikola — fraud, near-zero
+    "ZXZZT",  # Nasdaq test ticker — not a real security
+    "ZVZZT",  # Nasdaq test ticker
+    "ZAZZT",  # Nasdaq test ticker
+    "ZBZZT",  # Nasdaq test ticker
 }
 
 
