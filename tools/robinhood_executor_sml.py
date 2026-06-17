@@ -706,7 +706,7 @@ def main():
 
             # Periodic session health-check — re-login if token may have expired
             if not PAPER_MODE and time.time() - _last_login_check > _LOGIN_RECHECK_S:
-                _rh_logged_in = False   # force re-verify (will re-use stored token if valid)
+                _invalidate_login()   # sets global _rh_logged_in = False
                 _ensure_login()
                 _last_login_check = time.time()
 
