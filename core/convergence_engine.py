@@ -360,21 +360,24 @@ def scan_beastmode_universe(services: dict, tf: str = "1D", on_progress=None) ->
     with state.lock:
         quotes = state.quotes
     
-    # Sort dynamic quotes by volume ratio
+    # Sort ALL discovered symbols by volume ratio — widest possible universe
+    # Mandatory tickers (IWM, GME, AMC) always included regardless of rank
     active_syms = sorted(quotes.keys(), key=lambda s: quotes[s].get("volRatio", 0), reverse=True)
-    
-    # Take the top 150 most active tickers, plus our mandatory focus (memory-bounded)
-    universe = list(set(MANDATORY_TICKERS + active_syms[:150]))  # trimmed from 500 to fit 512MB instance
-    
+
+    # No artificial cap — scan the full discovered universe sorted by momentum.
+    # Memory stays bounded because we fetch 60 bars per symbol (sufficient for all
+    # SET9 indicators: EMA-34, RSI-14, MACD-26, ADX-14, BB-20) instead of 250.
+    universe = list(set(MANDATORY_TICKERS + active_syms))
+
     total = len(universe)
     for idx, symbol in enumerate(universe, 1):
         try:
             if hasattr(dm, "get_bars"):
-                bars = dm.get_bars(symbol, timeframe=tf, limit=250) or []
+                bars = dm.get_bars(symbol, timeframe=tf, limit=60) or []
                 if not bars and tf == "1D":
-                    bars = dm.get_bars(symbol, timeframe="1Min", limit=250) or []
+                    bars = dm.get_bars(symbol, timeframe="1Min", limit=60) or []
             else:
-                bars = dm.get_historical_bars(symbol, timeframe=tf, limit=250) or []
+                bars = dm.get_historical_bars(symbol, timeframe=tf, limit=60) or []
             closes  = [float(b.get("c") or b.get("close", 0)) for b in bars if b.get("c") or b.get("close")]
             volumes = [float(b.get("v") or b.get("volume", 0)) for b in bars if b.get("v") or b.get("volume")]
 
