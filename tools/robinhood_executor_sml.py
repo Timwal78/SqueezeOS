@@ -311,10 +311,34 @@ def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
         logger.warning(f"[EXEC] {symbol} no live price — abort")
         return
 
-    qty = max(1, int(MAX_ORDER_USD // price))
-    qty = min(qty, MAX_EQUITY_SHARES)
+    if side == "sell":
+        # Sell only what we actually own — never short, never guess quantity.
+        try:
+            import robin_stocks.robinhood as rh
+            positions = rh.account.get_open_stock_positions()
+            owned_qty = 0
+            for pos in (positions or []):
+                try:
+                    instr = rh.stocks.get_instrument_by_url(pos["instrument"])
+                    if (instr or {}).get("symbol", "").upper() == symbol:
+                        owned_qty = int(float(pos.get("quantity") or 0))
+                        break
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.warning(f"[EXEC] {symbol} SELL — could not fetch position: {e}")
+            owned_qty = 0
 
-    logger.info(f"[EXEC] 🚀 RH GOD MODE — {side.upper()} {qty}x {symbol} @ ${price:.2f} | SET9:{god_count}/6")
+        if owned_qty <= 0:
+            logger.info(f"[EXEC] {symbol} SELL signal — no position to close, skipping (no shorts)")
+            return
+        qty = owned_qty
+        logger.info(f"[EXEC] {symbol} SELL — closing full position: {qty} shares @ ${price:.2f}")
+    else:
+        qty = max(1, int(MAX_ORDER_USD // price))
+        qty = min(qty, MAX_EQUITY_SHARES)
+
+    logger.info(f"[EXEC] RH GOD MODE — {side.upper()} {qty}x {symbol} @ ${price:.2f} | SET9:{god_count}/6")
 
     result = {}
     if PAPER_MODE:
@@ -336,7 +360,7 @@ def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
                 else:
                     r = rh.orders.order_sell_market(symbol, qty, extendedHours=True)
                 result = {"placed": True, "raw": r}
-                logger.info(f"[RH] Order placed ✅ {symbol} {side} x{qty}")
+                logger.info(f"[RH] Order placed {symbol} {side} x{qty}")
                 scan_counter[0] += 1
                 with _lock:
                     _orders_today += 1
