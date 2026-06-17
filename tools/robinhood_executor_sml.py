@@ -97,14 +97,14 @@ _lock               = threading.Lock()
 
 def _reset_daily_if_new_day():
     global _orders_today, _daily_notional_usd, _daily_loss_usd, _trading_day
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = datetime.now(_ET).strftime("%Y-%m-%d")   # always ET, not system clock
     with _lock:
         if today != _trading_day:
             _trading_day = today
             _orders_today = 0
             _daily_notional_usd = 0.0
             _daily_loss_usd = 0.0
-            logger.info(f"[DAILY] New trading day {today} — all daily counters reset")
+            logger.info(f"[DAILY] New trading day {today} ET — all daily counters reset")
 
 COOLDOWN_S     = int(os.environ.get("COOLDOWN_S", "900"))   # 15-min buy cooldown per symbol (one 15-min bar)
 PDT_WINDOW_S   = 5 * 86400 # 5-day rolling window
@@ -310,12 +310,13 @@ def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
                 price = float(rh.stocks.get_latest_price(symbol)[0] or 0)
             except Exception:
                 pass
-            _discord(symbol, f"{side}-0DTE-ALERT", 0, price, sml, {"alert_only": True})
+            _discord(symbol, "ALERT", 0, price, sml, {"alert_only": True, "note": "IWM 0DTE — manual options entry only"})
         return
 
     if not _pdt_allowed():
         return
 
+    # Cooldown write happens AFTER PDT check so a blocked trade doesn't lock the symbol
     _last_execution[symbol] = now
     _save_last_execution(_last_execution)
 
@@ -356,6 +357,14 @@ def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
     else:
         qty = max(1, int(MAX_ORDER_USD // price))
         qty = min(qty, MAX_EQUITY_SHARES)
+        # Never exceed what's left of today's notional budget
+        with _lock:
+            remaining_notional = MAX_DAILY_NOTIONAL - _daily_notional_usd
+        budget_qty = max(1, int(remaining_notional // price))
+        qty = min(qty, budget_qty)
+        if qty <= 0:
+            logger.warning(f"[EXEC] {symbol} BUY — daily notional budget exhausted, skipping")
+            return
 
     logger.info(f"[EXEC] RH GOD MODE — {side.upper()} {qty}x {symbol} @ ${price:.2f} | SET9:{god_count}/6")
 
@@ -418,30 +427,40 @@ def _poll_beastmode() -> int:
         logger.warning(f"[POLL] beastmode fetch failed: {e}")
         return 0
 
-    signals    = data.get("signals") or []
-    cache_age  = data.get("cache_age_s")
-    age_str    = f", cache age {cache_age:.0f}s" if cache_age is not None else ""
-    now        = time.time()
-
-    if not signals:
-        logger.info(f"[POLL] beastmode: 0 signals from server{age_str} — scan universe warming up or no convergence")
+    if data.get("status") != "success":
+        logger.warning(f"[POLL] beastmode status={data.get('status')} — server may be down or scan failed")
         return 0
 
-    # Classify signals for diagnostics
-    god_hits   = []
-    skipped    = {"no_tier": 0, "low_stack": 0, "cooldown": 0, "blocklist": 0}
+    signals   = data.get("signals") or []
+    cache_age = data.get("cache_age_s")
+    stale     = data.get("stale", False)
+    age_str   = f", cache {cache_age:.0f}s old{'  (STALE)' if stale else ''}" if cache_age is not None else ""
+    now       = time.time()
+
+    if not signals:
+        logger.info(f"[POLL] beastmode: 0 signals from server{age_str} — scan universe warming up or no convergence yet")
+        return 0
+
+    # Accept GOD_MODE and DUAL_GRID_LOCK tiers — both are high-conviction
+    _VALID_TIERS = {"GOD_MODE", "DUAL_GRID_LOCK"}
+
+    god_hits = []
+    skipped  = {"no_tier": 0, "low_stack": 0, "cooldown": 0, "blocklist": 0}
 
     for hit in signals:
         symbol  = (hit.get("symbol") or "").upper().strip()
         sml     = hit.get("sml_matrix") or {}
         tier    = sml.get("tier", "")
         stacked = sml.get("god_stacked", 0)
-        if tier != "GOD_MODE":
+        signal  = sml.get("signal", "")
+        # Also treat DUAL_GRID_LOCK in the signal name as a valid tier
+        effective_tier = tier if tier in _VALID_TIERS else ("DUAL_GRID_LOCK" if "DUAL" in signal.upper() else tier)
+        if effective_tier not in _VALID_TIERS:
             skipped["no_tier"] += 1
             continue
         if stacked < MIN_GOD_STACKED:
             skipped["low_stack"] += 1
-            logger.debug(f"[POLL] {symbol} god_stacked={stacked} < threshold {MIN_GOD_STACKED} — skip")
+            logger.debug(f"[POLL] {symbol} {tier} stacked={stacked} < {MIN_GOD_STACKED} — skip")
             continue
         if symbol in _BLOCKLIST:
             skipped["blocklist"] += 1
@@ -449,29 +468,33 @@ def _poll_beastmode() -> int:
         cooldown_remaining = COOLDOWN_S - (now - _last_execution.get(symbol, 0))
         if cooldown_remaining > 0:
             skipped["cooldown"] += 1
-            logger.info(f"[POLL] {symbol} GOD MODE {stacked}/6 — cooldown {int(cooldown_remaining)}s left")
+            logger.info(f"[POLL] {symbol} {effective_tier} {stacked}/6 — cooldown {int(cooldown_remaining)}s left")
             continue
-        god_hits.append((symbol, sml))
+        god_hits.append((symbol, sml, effective_tier))
 
     logger.info(
-        f"[POLL] beastmode: {len(signals)} total | {len(god_hits)} ready to execute | "
-        f"filtered: {skipped['no_tier']} non-GOD, {skipped['low_stack']} low-stack (<{MIN_GOD_STACKED}), "
+        f"[POLL] beastmode: {len(signals)} raw | {len(god_hits)} ready | "
+        f"skipped: {skipped['no_tier']} wrong-tier, {skipped['low_stack']} low-stack, "
         f"{skipped['cooldown']} cooldown, {skipped['blocklist']} blocklist{age_str}"
     )
 
     if _circuit_open():
-        logger.info(f"[POLL] {len(god_hits)} GOD MODE signal(s) ready but circuit breaker open — skipping execution")
+        logger.info(f"[POLL] {len(god_hits)} signal(s) ready but circuit breaker open — skip")
         return 0
 
     scan_counter = [0]
-    for symbol, sml in god_hits:
+    deferred     = 0
+    for symbol, sml, tier_label in god_hits:
         signal = sml.get("signal", "")
         side   = "buy" if "BULL" in signal or signal in ("BEASTMODE", "GOD_MODE", "DUAL_GRID_LOCK") else "sell"
-        logger.info(f"[POLL] GOD MODE candidate: {symbol} {side.upper()} god_stacked={sml.get('god_stacked',0)}/6 — sending to executor")
-        _execute(symbol, side, sml, scan_counter)
         if scan_counter[0] >= MAX_PER_SCAN:
-            logger.info(f"[POLL] Per-scan limit {MAX_PER_SCAN} reached — stopping beastmode batch")
-            break
+            deferred += 1
+            continue
+        logger.info(f"[POLL] {tier_label}: {symbol} {side.upper()} stacked={sml.get('god_stacked',0)}/6")
+        _execute(symbol, side, sml, scan_counter)
+
+    if deferred:
+        logger.info(f"[POLL] {deferred} signal(s) deferred — per-scan limit {MAX_PER_SCAN} reached (next cycle)")
 
     return scan_counter[0]
 
@@ -531,76 +554,100 @@ ORACLE_MIN_CONFIDENCE = float(os.environ.get("ORACLE_MIN_CONFIDENCE", "65.0"))
 
 def _poll_oracle() -> int:
     """
-    Poll /api/oracle for BUY signals. Executes any symbol the oracle rates BUY
-    or BUY (IGNITION) with sufficient confidence. No GOD_MODE required.
+    Poll /api/oracle for BUY/SELL directives.
+
+    /api/oracle (batch) returns:
+      {"status": "success", "symbols": {"GME": {"directive": "BUY", "confidence": 75, ...}, ...}}
+
+    The oracle batch only covers the server's ORACLE_SYMBOLS list (GME/AMC/IWM + extras).
+    We also poll /api/history to catch BUY council verdicts for ANY symbol the engines touched.
     Returns number of orders placed.
     """
-    url = f"{SQUEEZEOS_API_URL}/api/oracle"
-    try:
-        req = URLRequest(url, headers={"User-Agent": "SqueezeOS-RH-Executor/2.0"})
-        with urlopen(req, timeout=30) as resp:
-            data = json.loads(resp.read())
-    except Exception as e:
-        logger.warning(f"[ORACLE] fetch failed: {e}")
-        return 0
-
-    # /api/oracle returns {"status": "success", "directives": {"SYM": {...}, ...}}
-    directives = data.get("directives") or data.get("results") or {}
-    if not directives:
-        logger.debug("[ORACLE] no directives in response")
-        return 0
-
     now = time.time()
     scan_counter = [0]
-    buy_count = 0
+    symbols_seen: dict = {}   # sym → {directive, confidence, price}
+
+    # ── 1. Oracle batch (server's watchlist) ─────────────────────────────────
+    try:
+        req = URLRequest(f"{SQUEEZEOS_API_URL}/api/oracle",
+                         headers={"User-Agent": "SqueezeOS-RH-Executor/2.0"})
+        with urlopen(req, timeout=20) as resp:
+            data = json.loads(resp.read())
+        # API returns {"symbols": {"SYM": {"directive": "BUY", "confidence": N, "price": N}}}
+        for sym, info in (data.get("symbols") or {}).items():
+            if isinstance(info, dict):
+                symbols_seen[sym.upper()] = info
+    except Exception as e:
+        logger.warning(f"[ORACLE] batch fetch failed: {e}")
+
+    # ── 2. Signal history — catch BUY council verdicts from ALL scanned symbols ──
+    try:
+        req = URLRequest(f"{SQUEEZEOS_API_URL}/api/history",
+                         headers={"User-Agent": "SqueezeOS-RH-Executor/2.0"})
+        with urlopen(req, timeout=20) as resp:
+            hist = json.loads(resp.read())
+        # History returns list of {symbol, event_type, data:{directive/action, confidence, price}, ts}
+        cutoff = now - 600   # only care about signals from the last 10 minutes
+        for event in (hist.get("events") or hist.get("history") or []):
+            ts  = float(event.get("ts") or event.get("timestamp") or 0)
+            if ts < cutoff:
+                continue
+            sym = (event.get("symbol") or "").upper().strip()
+            if not sym or sym in _BLOCKLIST:
+                continue
+            d = event.get("data") or {}
+            directive  = (d.get("directive") or d.get("action") or "").upper()
+            confidence = float(d.get("confidence") or 0)
+            price      = float(d.get("price") or 0)
+            if directive in ("BUY", "BUY (IGNITION)", "SELL") and confidence > 0:
+                # History entries are more recent — overwrite batch entry for same symbol
+                symbols_seen[sym] = {"directive": directive, "confidence": confidence, "price": price}
+    except Exception as e:
+        logger.debug(f"[ORACLE] history fetch failed: {e}")
+
+    if not symbols_seen:
+        return 0
+
+    buy_count  = 0
     sell_count = 0
 
-    for sym, directive in directives.items():
-        if not isinstance(directive, dict):
-            continue
-        sym = sym.upper().strip()
+    for sym, info in symbols_seen.items():
         if sym in _BLOCKLIST:
             continue
+        directive  = (info.get("directive") or info.get("action") or "").upper()
+        confidence = float(info.get("confidence") or 0)
+        price      = float(info.get("price") or 0)
 
-        action     = (directive.get("action") or directive.get("directive") or "").upper()
-        confidence = float(directive.get("confidence") or directive.get("resolution_confidence") or 0)
-        price      = float(directive.get("price") or directive.get("last") or 0)
+        sml_proxy = {
+            "god_stacked": MIN_GOD_STACKED,
+            "tier":        "GOD_MODE",
+            "signal":      f"ORACLE_{directive}",
+            "confidence":  confidence,
+        }
 
-        if action in ("BUY", "BUY (IGNITION)"):
+        if directive in ("BUY", "BUY (IGNITION)"):
             buy_count += 1
             if confidence < ORACLE_MIN_CONFIDENCE:
                 continue
-            cooldown_remaining = COOLDOWN_S - (now - _last_execution.get(sym, 0))
-            if cooldown_remaining > 0:
+            # BUY respects cooldown — don't spam the same symbol every 3 min
+            if now - _last_execution.get(sym, 0) < COOLDOWN_S:
                 continue
-            sml_proxy = {
-                "god_stacked":  MIN_GOD_STACKED,
-                "tier":         "GOD_MODE",
-                "signal":       "ORACLE_BUY",
-                "confidence":   confidence,
-            }
-            logger.info(f"[ORACLE] BUY → {sym}  confidence={confidence:.0f}%  price=${price:.2f}")
+            logger.info(f"[ORACLE] BUY → {sym}  conf={confidence:.0f}%  price=${price:.2f}")
             _execute(sym, "buy", sml_proxy, scan_counter)
             if scan_counter[0] >= MAX_PER_SCAN:
                 break
 
-        elif action in ("SELL", "SHIELD"):
+        elif directive in ("SELL", "SHIELD"):
             sell_count += 1
-            # Only sell if we actually hold it (position check happens inside _execute)
-            cooldown_remaining = COOLDOWN_S - (now - _last_execution.get(sym, 0))
-            if cooldown_remaining > 0:
-                continue
-            sml_proxy = {
-                "god_stacked":  MIN_GOD_STACKED,
-                "tier":         "GOD_MODE",
-                "signal":       "ORACLE_SELL",
-                "confidence":   confidence,
-            }
-            logger.info(f"[ORACLE] SELL → {sym}  confidence={confidence:.0f}%  price=${price:.2f}")
+            # SELL never blocked by cooldown — exits are always urgent
+            logger.info(f"[ORACLE] SELL → {sym}  conf={confidence:.0f}%  price=${price:.2f}")
             _execute(sym, "sell", sml_proxy, scan_counter)
 
-    if buy_count or sell_count:
-        logger.info(f"[ORACLE] {len(directives)} symbols scanned | {buy_count} BUY | {sell_count} SELL signals | {scan_counter[0]} orders placed")
+    if buy_count or sell_count or scan_counter[0]:
+        logger.info(
+            f"[ORACLE] {len(symbols_seen)} symbols | {buy_count} BUY | {sell_count} SELL | "
+            f"{scan_counter[0]} orders placed"
+        )
 
     return scan_counter[0]
 
@@ -608,11 +655,11 @@ def _poll_oracle() -> int:
 # ── Main loop ──────────────────────────────────────────────────────────────────
 def main():
     logger.info("=" * 60)
-    logger.info("SqueezeOS Robinhood Executor v2.1 — Dual Poll Mode")
+    logger.info("SqueezeOS Robinhood Executor v3.0 — Institutional Audit Edition")
     logger.info(f"  API         : {SQUEEZEOS_API_URL}")
     logger.info(f"  Poll every  : {POLL_INTERVAL_S}s")
-    logger.info(f"  Sources     : /api/beastmode (SET9) + /api/webhooks/tv_pending (Pine) + /api/oracle (BUY directives)")
-    logger.info(f"  MIN_GOD     : {MIN_GOD_STACKED}/6 SET9 stacked")
+    logger.info(f"  Sources     : beastmode (GOD_MODE+DUAL_LOCK) | TV webhook (Pine) | oracle+history (all signals)")
+    logger.info(f"  MIN_GOD     : {MIN_GOD_STACKED}/6 stacked  |  ORACLE_MIN_CONF: {ORACLE_MIN_CONFIDENCE}%")
     logger.info(f"  PDT limit   : ${PDT_BALANCE_LIMIT}")
     logger.info(f"  Max order   : ${MAX_ORDER_USD} / {MAX_EQUITY_SHARES} shares")
     logger.info(f"  Daily cap   : {MAX_ORDERS_PER_DAY} orders / ${MAX_DAILY_NOTIONAL:.0f} notional / ${MAX_DAILY_LOSS_USD:.0f} loss limit")
@@ -628,9 +675,19 @@ def main():
     if not PAPER_MODE:
         _ensure_login()
 
+    _last_login_check = time.time()
+    _LOGIN_RECHECK_S  = 1800  # re-verify session every 30 min to catch token expiry
+
     while True:
         try:
             _reset_daily_if_new_day()
+
+            # Periodic session health-check — re-login if token may have expired
+            if not PAPER_MODE and time.time() - _last_login_check > _LOGIN_RECHECK_S:
+                _rh_logged_in = False   # force re-verify (will re-use stored token if valid)
+                _ensure_login()
+                _last_login_check = time.time()
+
             rh_status = "PAPER" if PAPER_MODE else ("OK" if _rh_logged_in else "pending-login")
             if not _market_open():
                 from datetime import datetime as _dt

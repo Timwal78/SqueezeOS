@@ -333,22 +333,14 @@ def beastmode_scan():
             stale = True
 
     return jsonify(clean_data({
-        "status": "success",
-        "hits": len(hits),
-        "signals": hits,
-        "universe": "dynamic",
+        "status":       "success",
+        "hits":         len(hits),
+        "signals":      hits,
+        "universe":     "dynamic",
         "scan_progress": progress,
-        "cache_age_s": round(time.time() - ts, 1) if ts else None,
-        "stale": stale,
-        "timestamp": time.time(),
-    }))
-
-    return jsonify(clean_data({
-        "status":        "success",
-        "universe":      "DYNAMIC",
-        "hits":          len(hits),
-        "signals":       hits,
-        "timestamp":     time.time(),
+        "cache_age_s":  round(time.time() - ts, 1) if ts else None,
+        "stale":        stale,
+        "timestamp":    time.time(),
     }))
 
 
