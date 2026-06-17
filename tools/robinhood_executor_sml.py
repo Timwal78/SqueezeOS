@@ -60,7 +60,7 @@ PDT_BALANCE_LIMIT  = float(os.environ.get("PDT_BALANCE_LIMIT", "2100.0"))
 PDT_MAX_TRADES     = int(os.environ.get("PDT_MAX_TRADES", "3"))
 PAPER_MODE           = os.environ.get("ROBINHOOD_PAPER_MODE", "false").lower() == "true"
 KILL_SWITCH          = os.environ.get("KILL_SWITCH", "false").lower() == "true"
-MAX_EQUITY_SHARES    = int(os.environ.get("MAX_EQUITY_SHARES", "3"))
+MAX_EQUITY_SHARES    = int(os.environ.get("MAX_EQUITY_SHARES", "500"))  # hard ceiling; real limit is MAX_ORDER_USD
 MAX_ORDER_USD        = float(os.environ.get("MAX_ORDER_USD", "150.0"))
 MAX_DAILY_LOSS_USD   = float(os.environ.get("MAX_DAILY_LOSS_USD", "100.0"))
 MAX_ORDERS_PER_DAY   = int(os.environ.get("MAX_ORDERS_PER_DAY", "25"))
@@ -105,7 +105,7 @@ def _reset_daily_if_new_day():
             _daily_loss_usd = 0.0
             logger.info(f"[DAILY] New trading day {today} — all daily counters reset")
 
-COOLDOWN_S     = 3600       # 1-hour per-symbol cooldown — poll is 5min so must be much longer
+COOLDOWN_S     = int(os.environ.get("COOLDOWN_S", "900"))   # 15-min buy cooldown per symbol (one 15-min bar)
 PDT_WINDOW_S   = 5 * 86400 # 5-day rolling window
 
 # Tickers that are bankrupt, delisted, or known OTC junk — never trade these
@@ -251,8 +251,9 @@ def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
 
     now  = time.time()
     last = _last_execution.get(symbol, 0)
-    if now - last < COOLDOWN_S:
-        logger.info(f"[EXEC] {symbol} cooldown — {int(COOLDOWN_S-(now-last))}s left")
+    # Cooldown only applies to BUY — never block an exit (position check is the SELL gate).
+    if side == "buy" and now - last < COOLDOWN_S:
+        logger.info(f"[EXEC] {symbol} BUY cooldown — {int(COOLDOWN_S-(now-last))}s left")
         return
 
     god_count = sml.get("god_stacked", 0)
