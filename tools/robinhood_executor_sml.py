@@ -211,13 +211,22 @@ def _circuit_open() -> bool:
 _ET = zoneinfo.ZoneInfo("America/New_York")
 
 def _market_open() -> bool:
-    """Returns True only during regular NYSE hours 9:30–16:00 ET Mon–Fri."""
+    """Returns True during regular hours AND extended hours (4:00–20:00 ET) Mon–Fri."""
     now_et = datetime.now(_ET)
     if now_et.weekday() >= 5:  # Saturday=5, Sunday=6
         return False
     t = now_et.time()
     from datetime import time as dtime
-    return dtime(9, 30) <= t < dtime(16, 0)
+    return dtime(4, 0) <= t < dtime(20, 0)
+
+def _is_extended_hours() -> bool:
+    """True if currently in pre-market (4:00–9:30) or after-hours (16:00–20:00) ET."""
+    now_et = datetime.now(_ET)
+    if now_et.weekday() >= 5:
+        return False
+    t = now_et.time()
+    from datetime import time as dtime
+    return dtime(4, 0) <= t < dtime(9, 30) or dtime(16, 0) <= t < dtime(20, 0)
 
 
 # ── Discord alert ──────────────────────────────────────────────────────────────
@@ -383,7 +392,17 @@ def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
         else:
             try:
                 import robin_stocks.robinhood as rh
-                if side == "buy":
+                # Extended hours requires LIMIT orders — market orders are rejected by Robinhood
+                if _is_extended_hours():
+                    if side == "buy":
+                        limit_px = round(price * 1.002, 2)  # 0.2% above last price to ensure fill
+                        r = rh.orders.order_buy_limit(symbol, qty, limit_px, extendedHours=True)
+                        logger.info(f"[RH] Extended hours BUY LIMIT {qty}x {symbol} @ ${limit_px:.2f}")
+                    else:
+                        limit_px = round(price * 0.998, 2)  # 0.2% below last price to ensure fill
+                        r = rh.orders.order_sell_limit(symbol, qty, limit_px, extendedHours=True)
+                        logger.info(f"[RH] Extended hours SELL LIMIT {qty}x {symbol} @ ${limit_px:.2f}")
+                elif side == "buy":
                     r = rh.orders.order_buy_market(symbol, qty)
                 else:
                     r = rh.orders.order_sell_market(symbol, qty)
@@ -655,10 +674,13 @@ def _poll_oracle() -> int:
 # ── Main loop ──────────────────────────────────────────────────────────────────
 def main():
     logger.info("=" * 60)
-    logger.info("SqueezeOS Robinhood Executor v3.0 — Institutional Audit Edition")
+    logger.info("SqueezeOS Robinhood Executor v3.1 — Dynamic Universe + Extended Hours")
     logger.info(f"  API         : {SQUEEZEOS_API_URL}")
     logger.info(f"  Poll every  : {POLL_INTERVAL_S}s")
-    logger.info(f"  Sources     : beastmode (GOD_MODE+DUAL_LOCK) | TV webhook (Pine) | oracle+history (all signals)")
+    logger.info(f"  Hours       : 4:00 AM–8:00 PM ET (pre-market + regular + after-hours)")
+    logger.info(f"  Ext hours   : LIMIT orders (buy +0.2% / sell -0.2% from last price)")
+    logger.info(f"  Sources     : beastmode (GOD_MODE+DUAL_LOCK) | TV webhook (Pine) | oracle+history (live universe)")
+    logger.info(f"  Oracle      : 100% FETCH — uses live scan universe, no hardcoded watchlist")
     logger.info(f"  MIN_GOD     : {MIN_GOD_STACKED}/6 stacked  |  ORACLE_MIN_CONF: {ORACLE_MIN_CONFIDENCE}%")
     logger.info(f"  PDT limit   : ${PDT_BALANCE_LIMIT}")
     logger.info(f"  Max order   : ${MAX_ORDER_USD} / {MAX_EQUITY_SHARES} shares")

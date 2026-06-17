@@ -512,16 +512,20 @@ def create_app():
             result = engine.analyze(sym)
             return jsonify({"status": "success", "oracle": result})
         else:
-            results = run_oracle_batch(ORACLE_SYMBOLS, services)
+            # 100% FETCH — use the live scan universe; ORACLE_SYMBOLS is emergency fallback only
+            live_universe = list(state.quotes.keys()) if state.quotes else None
+            batch_symbols = live_universe if live_universe else ORACLE_SYMBOLS
+            results = run_oracle_batch(batch_symbols, services)
             ranked = sorted(
                 [v for v in results.values() if v.get("directive") != "SHIELD"],
                 key=lambda x: x.get("confidence", 0), reverse=True
             )
-            master = ranked[0] if ranked else list(results.values())[0]
+            master = ranked[0] if ranked else (list(results.values())[0] if results else {})
             return jsonify({
                 "status": "success",
                 "master": master,
                 "symbols": results,
+                "universe_size": len(batch_symbols),
                 "timestamp": datetime.now().isoformat(),
             })
 
@@ -562,6 +566,7 @@ def create_app():
             }
             engine = OracleEngine(services)
             snapshots = {}
+            # 100% FETCH — live scan universe; ORACLE_SYMBOLS is emergency fallback only
             active_universe = list(state.quotes.keys()) if state.quotes else ORACLE_SYMBOLS
             for sym in active_universe:
                 try:
