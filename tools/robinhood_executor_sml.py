@@ -55,7 +55,7 @@ SQUEEZEOS_API_URL  = os.environ.get("SQUEEZEOS_API_URL", "https://squeezeos-api.
 ROBINHOOD_USER     = os.environ.get("ROBINHOOD_USERNAME", "")
 ROBINHOOD_PASS     = os.environ.get("ROBINHOOD_PASSWORD", "")
 POLL_INTERVAL_S    = int(os.environ.get("POLL_INTERVAL_S", "300"))     # poll every 5 minutes
-MIN_GOD_STACKED    = int(os.environ.get("MIN_GOD_STACKED", "4"))       # min SET9 stacked to execute (4/6 = institutional grade, max signal flow)
+MIN_GOD_STACKED    = int(os.environ.get("MIN_GOD_STACKED", "3"))       # min SET9 stacked to execute (3/6 = 50% convergence, max signal flow)
 PDT_BALANCE_LIMIT  = float(os.environ.get("PDT_BALANCE_LIMIT", "2100.0"))
 PDT_MAX_TRADES     = int(os.environ.get("PDT_MAX_TRADES", "3"))
 PAPER_MODE           = os.environ.get("ROBINHOOD_PAPER_MODE", "false").lower() == "true"
@@ -403,12 +403,11 @@ def _poll_beastmode() -> int:
     skipped    = {"no_tier": 0, "low_stack": 0, "cooldown": 0, "blocklist": 0}
 
     for hit in signals:
-        symbol = (hit.get("symbol") or "").upper().strip()
-        sml    = hit.get("sml_matrix") or {}
-        tier   = sml.get("tier", "")
-        gate   = sml.get("execute_gate", False)
+        symbol  = (hit.get("symbol") or "").upper().strip()
+        sml     = hit.get("sml_matrix") or {}
+        tier    = sml.get("tier", "")
         stacked = sml.get("god_stacked", 0)
-        if tier != "GOD_MODE" or not gate:
+        if tier != "GOD_MODE":
             skipped["no_tier"] += 1
             continue
         if stacked < MIN_GOD_STACKED:
