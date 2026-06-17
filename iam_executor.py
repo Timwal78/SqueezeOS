@@ -33,7 +33,8 @@ import os
 import time
 import logging
 import threading
-from datetime import datetime, timezone, timedelta
+import zoneinfo
+from datetime import datetime, timezone, timedelta, time as _dtime
 from typing import Optional
 
 logger = logging.getLogger("IAM-EXEC")
@@ -59,8 +60,8 @@ MAX_SHARES         = lambda: _env_int("IAM_MAX_SHARES", 5)
 MAX_ORDER_USD      = lambda: _env_float("IAM_MAX_ORDER_USD", 500.0)
 MAX_ORDERS_PER_DAY = lambda: _env_int("IAM_MAX_ORDERS_PER_DAY", 5)
 MAX_NOTIONAL_PER_DAY = lambda: _env_float("IAM_MAX_NOTIONAL_PER_DAY", 2000.0)
-DAILY_LOSS_LIMIT   = lambda: _env_float("IAM_DAILY_LOSS_LIMIT", 300.0)
-COOLDOWN_SECONDS   = lambda: _env_int("IAM_COOLDOWN_SECONDS", 3600)
+DAILY_LOSS_LIMIT   = lambda: _env_float("IAM_DAILY_LOSS_LIMIT", 150.0)  # 7% of ~$2k account
+COOLDOWN_SECONDS   = lambda: _env_int("IAM_COOLDOWN_SECONDS", 600)   # 10 min default — AMC moves in waves
 OPTION_EXPIRY_DAYS = lambda: _env_int("IAM_OPTION_EXPIRY_DAYS", 1)
 OPTION_QTY         = lambda: _env_int("IAM_OPTION_CONTRACT_QTY", 1)
 
@@ -126,13 +127,28 @@ def status() -> dict:
 
 
 # ── Market hours guard ─────────────────────────────────────────────────────────
+_TZ_ET = zoneinfo.ZoneInfo("America/New_York")
+
 def _is_market_hours() -> bool:
-    now = datetime.now(timezone.utc)
-    if now.weekday() >= 5:
+    """True during regular + extended hours (4:00 AM – 8:00 PM ET) Mon–Fri."""
+    now_et = datetime.now(_TZ_ET)
+    if now_et.weekday() >= 5:
         return False
-    et  = now - timedelta(hours=4)   # approximate ET (covers DST Mar–Nov)
-    mins = et.hour * 60 + et.minute
-    return (9 * 60 + 30) <= mins <= (16 * 60)
+    t = now_et.time()
+    return _dtime(4, 0) <= t < _dtime(20, 0)
+
+def _is_extended_hours() -> bool:
+    """True during pre-market (4:00–9:30 ET) or after-hours (16:00–20:00 ET)."""
+    now_et = datetime.now(_TZ_ET)
+    if now_et.weekday() >= 5:
+        return False
+    t = now_et.time()
+    return _dtime(4, 0) <= t < _dtime(9, 30) or _dtime(16, 0) <= t < _dtime(20, 0)
+
+def _ext_hours_duration() -> str:
+    """Tradier duration string: 'pre' for pre-market, 'post' for after-hours."""
+    t = datetime.now(_TZ_ET).time()
+    return "pre" if t < _dtime(9, 30) else "post"
 
 
 # ── Safety gate stack ──────────────────────────────────────────────────────────
@@ -178,7 +194,10 @@ def _gate_check(sym: str, resolution: dict, time_window: str,
 # ── Tradier execution ──────────────────────────────────────────────────────────
 def _execute_tradier(sym: str, action: str, resolution: dict, price: float) -> dict:
     instrument = INSTRUMENT()
-
+    # Tradier does not support options orders in extended hours — fall back to equity
+    if _is_extended_hours():
+        logger.info(f"[IAM-EXEC] Extended hours: routing {sym} to equity (options unavailable)")
+        return _execute_tradier_equity(sym, action, price)
     if instrument == "options" or (instrument == "auto" and sym in ("IWM", "SPY", "QQQ")):
         return _execute_tradier_options(sym, action, resolution, price)
     else:
@@ -192,10 +211,17 @@ def _execute_tradier_equity(sym: str, action: str, price: float) -> dict:
         qty  = max(1, min(MAX_SHARES(), int(MAX_ORDER_USD() / price))) if price > 0 else 1
 
         if PAPER_MODE():
-            logger.info(f"[IAM-EXEC][PAPER] Would {side.upper()} {qty}x {sym} @ ${price:.2f}")
+            mode_label = f"EXT-HOURS limit" if _is_extended_hours() else "market"
+            logger.info(f"[IAM-EXEC][PAPER] Would {side.upper()} {qty}x {sym} @ ${price:.2f} ({mode_label})")
             return {"mode": "paper", "side": side, "qty": qty, "price": price, "placed": False}
 
-        result = place_equity_order(sym, qty, side, order_type="market", duration="day")
+        if _is_extended_hours():
+            limit_px = round(price * 1.002, 2) if side == "buy" else round(price * 0.998, 2)
+            duration = _ext_hours_duration()
+            result = place_equity_order(sym, qty, side, order_type="limit",
+                                        duration=duration, limit_price=limit_px)
+        else:
+            result = place_equity_order(sym, qty, side, order_type="market", duration="day")
         result["qty"]   = qty
         result["price"] = price
         result["side"]  = side

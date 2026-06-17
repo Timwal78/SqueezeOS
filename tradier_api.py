@@ -319,10 +319,12 @@ def get_account_balance() -> Optional[float]:
 
 
 def place_equity_order(symbol: str, quantity: int, side: str,
-                       order_type: str = "market", duration: str = "day") -> Dict[str, Any]:
+                       order_type: str = "market", duration: str = "day",
+                       limit_price: Optional[float] = None) -> Dict[str, Any]:
     """
     Place a live equity order via Tradier.
     side: 'buy' | 'sell'
+    limit_price: required when order_type='limit' (extended-hours orders)
     Returns {'status': 'success', 'order_id': ...} or {'status': 'error', 'message': ...}
     """
     acct = _account_id()
@@ -339,6 +341,8 @@ def place_equity_order(symbol: str, quantity: int, side: str,
         "type":     order_type,
         "duration": duration,
     }
+    if limit_price and order_type == "limit":
+        payload["price"] = f"{limit_price:.2f}"
     logger.info(f"[TRADIER] Placing equity order: {side.upper()} {quantity}x {symbol} ({order_type})")
     resp = _post(f"/accounts/{acct}/orders", payload)
     if resp and resp.get("order", {}).get("id"):
