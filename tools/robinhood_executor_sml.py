@@ -369,11 +369,15 @@ def _poll_beastmode() -> int:
         f"{skipped['cooldown']} cooldown, {skipped['blocklist']} blocklist{age_str}"
     )
 
+    if _circuit_open():
+        logger.info(f"[POLL] {len(god_hits)} GOD MODE signal(s) ready but circuit breaker open — skipping execution")
+        return 0
+
     scan_counter = [0]
     for symbol, sml in god_hits:
         signal = sml.get("signal", "")
         side   = "buy" if "BULL" in signal or signal in ("BEASTMODE", "GOD_MODE", "DUAL_GRID_LOCK") else "sell"
-        logger.info(f"[POLL] EXECUTING GOD MODE: {symbol} {side.upper()} god_stacked={sml.get('god_stacked',0)}/6")
+        logger.info(f"[POLL] GOD MODE candidate: {symbol} {side.upper()} god_stacked={sml.get('god_stacked',0)}/6 — sending to executor")
         _execute(symbol, side, sml, scan_counter)
         if scan_counter[0] >= MAX_PER_SCAN:
             logger.info(f"[POLL] Per-scan limit {MAX_PER_SCAN} reached — stopping beastmode batch")
