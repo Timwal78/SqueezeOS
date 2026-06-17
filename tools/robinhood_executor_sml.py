@@ -364,13 +364,21 @@ def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
                     r = rh.orders.order_buy_market(symbol, qty, extendedHours=True)
                 else:
                     r = rh.orders.order_sell_market(symbol, qty, extendedHours=True)
-                result = {"placed": True, "raw": r}
-                logger.info(f"[RH] Order placed {symbol} {side} x{qty}")
-                scan_counter[0] += 1
-                with _lock:
-                    _orders_today += 1
-                    _daily_notional_usd += qty * price
-                    logger.info(f"[DAILY] Orders: {_orders_today}/{MAX_ORDERS_PER_DAY} | Notional: ${_daily_notional_usd:.2f}/${MAX_DAILY_NOTIONAL:.0f}")
+                # Robinhood can return 200 with an error body — check for it
+                rh_detail = (r or {}).get("detail", "") if isinstance(r, dict) else ""
+                rh_state   = (r or {}).get("state", "") if isinstance(r, dict) else ""
+                order_id   = (r or {}).get("id", "no-id") if isinstance(r, dict) else "no-id"
+                if rh_detail and rh_state not in ("confirmed", "queued", "unconfirmed", "partially_filled", "filled", ""):
+                    logger.error(f"[RH] Order REJECTED {symbol} {side}: {rh_detail} (state={rh_state})")
+                    result = {"error": rh_detail, "raw": r}
+                else:
+                    logger.info(f"[RH] Order accepted {symbol} {side} x{qty} | id={order_id} state={rh_state or 'queued'}")
+                    result = {"placed": True, "raw": r}
+                    scan_counter[0] += 1
+                    with _lock:
+                        _orders_today += 1
+                        _daily_notional_usd += qty * price
+                        logger.info(f"[DAILY] Orders: {_orders_today}/{MAX_ORDERS_PER_DAY} | Notional: ${_daily_notional_usd:.2f}/${MAX_DAILY_NOTIONAL:.0f}")
             except Exception as e:
                 err = str(e)
                 logger.error(f"[RH] Order error: {err}")
