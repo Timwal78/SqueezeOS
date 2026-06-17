@@ -26,6 +26,7 @@ convergence_bp = Blueprint("convergence", __name__)
 # Instead, a background thread refreshes this cache on an interval and the
 # /beastmode route returns it instantly.
 _beast_cache = {"hits": [], "ts": 0, "tf": "1D", "progress": {"done": 0, "total": 0}}
+_beast_last_good = {"hits": [], "ts": 0}   # last scan that produced ≥1 hit — never wiped
 _beast_lock = threading.Lock()
 _BEAST_REFRESH_S = int(os.environ.get("BEASTMODE_REFRESH_S", "45"))
 _beast_thread_started = False
@@ -66,6 +67,9 @@ def _beastmode_refresh_loop():
                 with _beast_lock:
                     _beast_cache["hits"] = hits
                     _beast_cache["ts"] = time.time()
+                    if hits:
+                        _beast_last_good["hits"] = hits
+                        _beast_last_good["ts"] = time.time()
                 logger.info(f"[BEASTMODE] cache refreshed — {len(hits)} hits")
         except Exception as e:
             logger.error(f"[BEASTMODE] refresh error: {e}")
@@ -322,23 +326,21 @@ def beastmode_scan():
         hits = list(_beast_cache["hits"])
         ts = _beast_cache["ts"]
         progress = dict(_beast_cache.get("progress", {}))
+        stale = False
+        if not hits and _beast_last_good["hits"]:
+            hits = list(_beast_last_good["hits"])
+            ts = _beast_last_good["ts"]
+            stale = True
 
     return jsonify(clean_data({
-        "status": "success",
-        "hits": len(hits),
-        "signals": hits,
-        "universe": "dynamic",
+        "status":       "success",
+        "hits":         len(hits),
+        "signals":      hits,
+        "universe":     "dynamic",
         "scan_progress": progress,
-        "cache_age_s": round(time.time() - ts, 1) if ts else None,
-        "timestamp": time.time(),
-    }))
-
-    return jsonify(clean_data({
-        "status":        "success",
-        "universe":      "DYNAMIC",
-        "hits":          len(hits),
-        "signals":       hits,
-        "timestamp":     time.time(),
+        "cache_age_s":  round(time.time() - ts, 1) if ts else None,
+        "stale":        stale,
+        "timestamp":    time.time(),
     }))
 
 

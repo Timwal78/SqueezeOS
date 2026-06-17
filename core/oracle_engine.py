@@ -456,4 +456,13 @@ def run_oracle_batch(symbols: list, services: dict) -> dict:
     return results
 
 
-ORACLE_SYMBOLS = ["GME", "AMC", "IWM"]
+ORACLE_SYMBOLS = [
+    # Meme / squeeze stocks
+    "GME", "AMC", "MSTR", "PLTR", "HOOD", "SOUN", "RGTI",
+    # High-beta momentum
+    "NVDA", "TSLA", "SMCI", "ARM", "RIVN",
+    # Macro ETFs
+    "SPY", "QQQ", "IWM",
+    # Large-cap liquid
+    "AAPL", "META", "AMZN",
+]
