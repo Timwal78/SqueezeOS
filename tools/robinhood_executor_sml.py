@@ -31,6 +31,7 @@ import hmac
 import hashlib
 import threading
 from datetime import datetime
+import zoneinfo
 from logging.handlers import RotatingFileHandler
 from urllib.request import urlopen, Request as URLRequest
 from urllib.error import URLError
@@ -206,6 +207,19 @@ def _circuit_open() -> bool:
     return False
 
 
+# ── Market hours guard ─────────────────────────────────────────────────────────
+_ET = zoneinfo.ZoneInfo("America/New_York")
+
+def _market_open() -> bool:
+    """Returns True only during regular NYSE hours 9:30–16:00 ET Mon–Fri."""
+    now_et = datetime.now(_ET)
+    if now_et.weekday() >= 5:  # Saturday=5, Sunday=6
+        return False
+    t = now_et.time()
+    from datetime import time as dtime
+    return dtime(9, 30) <= t < dtime(16, 0)
+
+
 # ── Discord alert ──────────────────────────────────────────────────────────────
 _DISCORD_URL = os.environ.get("DISCORD_WEBHOOK_BEAST", "") or os.environ.get("DISCORD_WEBHOOK_ALL", "")
 
@@ -361,9 +375,9 @@ def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
             try:
                 import robin_stocks.robinhood as rh
                 if side == "buy":
-                    r = rh.orders.order_buy_market(symbol, qty, extendedHours=True)
+                    r = rh.orders.order_buy_market(symbol, qty)
                 else:
-                    r = rh.orders.order_sell_market(symbol, qty, extendedHours=True)
+                    r = rh.orders.order_sell_market(symbol, qty)
                 # Robinhood can return 200 with an error body — check for it
                 rh_detail = (r or {}).get("detail", "") if isinstance(r, dict) else ""
                 rh_state   = (r or {}).get("state", "") if isinstance(r, dict) else ""
@@ -532,6 +546,12 @@ def main():
         try:
             _reset_daily_if_new_day()
             rh_status = "PAPER" if PAPER_MODE else ("OK" if _rh_logged_in else "pending-login")
+            if not _market_open():
+                from datetime import datetime as _dt
+                now_et = _dt.now(_ET)
+                logger.info(f"[POLL] Market closed ({now_et.strftime('%a %H:%M ET')}) — standing by, next check in {POLL_INTERVAL_S}s")
+                time.sleep(POLL_INTERVAL_S)
+                continue
             logger.info(f"[POLL] Scanning... (RH: {rh_status} | orders today: {_orders_today}/{MAX_ORDERS_PER_DAY} | notional: ${_daily_notional_usd:.0f}/${MAX_DAILY_NOTIONAL:.0f})")
             beast_placed = _poll_beastmode()
             tv_placed    = _poll_tv_pending()
