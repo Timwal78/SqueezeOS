@@ -127,13 +127,28 @@ def _ensure_login() -> bool:
         return False
     try:
         import robin_stocks.robinhood as rh
-        rh.login(ROBINHOOD_USER, ROBINHOOD_PASS)
+        # store_session=True caches the auth token to disk — subsequent logins
+        # use the stored token without requiring MFA again.
+        rh.login(ROBINHOOD_USER, ROBINHOOD_PASS, store_session=True, pickle_name="rh_session")
+        # Verify the session actually works — don't trust "no exception = success"
+        profile = rh.profiles.load_account_profile()
+        if not profile:
+            raise ValueError("load_account_profile returned empty — session not authenticated")
         _rh_logged_in = True
-        logger.info("[RH] Logged in OK")
+        logger.info(f"[RH] Logged in OK — account verified")
         return True
     except Exception as e:
+        _rh_logged_in = False
         logger.error(f"[RH] Login failed: {e}")
+        logger.error("[RH] If Robinhood requires MFA: run the executor once manually in a terminal to complete MFA, then restart as a service.")
         return False
+
+
+def _invalidate_login():
+    """Call when an API error indicates the session has expired."""
+    global _rh_logged_in
+    _rh_logged_in = False
+    logger.warning("[RH] Session invalidated — will re-login on next cycle")
 
 
 # ── Portfolio value (for PDT check) ───────────────────────────────────────────
@@ -328,8 +343,11 @@ def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
                     _daily_notional_usd += qty * price
                     logger.info(f"[DAILY] Orders: {_orders_today}/{MAX_ORDERS_PER_DAY} | Notional: ${_daily_notional_usd:.2f}/${MAX_DAILY_NOTIONAL:.0f}")
             except Exception as e:
-                logger.error(f"[RH] Order error: {e}")
-                result = {"error": str(e)}
+                err = str(e)
+                logger.error(f"[RH] Order error: {err}")
+                if "logged in" in err.lower():
+                    _invalidate_login()
+                result = {"error": err}
 
     _discord(symbol, side, qty, price, sml, result)
 
@@ -388,11 +406,15 @@ def _poll_beastmode() -> int:
         f"{skipped['cooldown']} cooldown, {skipped['blocklist']} blocklist{age_str}"
     )
 
+    if _circuit_open():
+        logger.info(f"[POLL] {len(god_hits)} GOD MODE signal(s) ready but circuit breaker open — skipping execution")
+        return 0
+
     scan_counter = [0]
     for symbol, sml in god_hits:
         signal = sml.get("signal", "")
         side   = "buy" if "BULL" in signal or signal in ("BEASTMODE", "GOD_MODE", "DUAL_GRID_LOCK") else "sell"
-        logger.info(f"[POLL] EXECUTING GOD MODE: {symbol} {side.upper()} god_stacked={sml.get('god_stacked',0)}/6")
+        logger.info(f"[POLL] GOD MODE candidate: {symbol} {side.upper()} god_stacked={sml.get('god_stacked',0)}/6 — sending to executor")
         _execute(symbol, side, sml, scan_counter)
         if scan_counter[0] >= MAX_PER_SCAN:
             logger.info(f"[POLL] Per-scan limit {MAX_PER_SCAN} reached — stopping beastmode batch")
