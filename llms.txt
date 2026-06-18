@@ -1,88 +1,19 @@
-# SqueezeOS — Institutional AI Market Intelligence
-# By Script Master Labs (https://www.scriptmasterlabs.com)
+# SqueezeOS MCP Server
+> Institutional market intelligence MCP server. 33 tools. x402 payment gating.
 
-## MCP Server
+## Connect
+- MCP Endpoint: https://squeezeos-api.onrender.com/mcp
+- Transport: streamable-http
+- Auth: x402 (XRPL/RLUSD or Base/USDC)
 
-This is a live MCP (Model Context Protocol) server you can connect to right now.
+## Free Tools
+- demo_council - market regime overview
+- signal_preview - signal teaser
+- convergence_check - multi-timeframe check
 
-**MCP Endpoint:** https://squeezeos-api.onrender.com/mcp
-**Transport:** streamable-http
-**Protocol:** JSON-RPC 2.0 (MCP 2024-11-05)
-**Tools:** 33 total (28 free, 5 premium)
+## Paid Tools (x402)
+- squeeze_scan - short squeeze detection $0.01
+- ftd_cycle - FTD cycle analysis $0.05
+- full_regime - institutional regime $0.25
 
-To connect via Claude Desktop or any MCP client:
-```json
-{
-  "mcpServers": {
-    "squeezeos": {
-      "url": "https://squeezeos-api.onrender.com/mcp",
-      "transport": "streamable-http"
-    }
-  }
-}
-```
-
-## Free Tools (no payment required)
-
-- **demo_council** — IWM AI council verdict (same as paid, fixed to IWM, 5-min cache)
-- **signal_preview** — bias + regime preview for any US equity symbol (15-min cache)
-- **signal_history** — last 200 signals for any symbol
-- **convergence_check** — 5-engine SML convergence scan (GME, AMC, MSTR, PLTR, etc.)
-- **beastmode_scan** — full universe convergence scan
-- **proprietary_ema_signal** — 3-engine EMA suite
-- **marketplace_browse** — peer signal marketplace
-- **futures_browse** — signal prediction market
-- **system_status** — health check
-- **get_invoice** — request payment invoice
-- **verify_payment** — verify XRPL tx, get 1-hour JWT
-- **bureau_public_score** — Agent Credit Bureau score for any XRPL wallet
-- Plus: hiring, settlement, futures, notary discovery, FTD info, oracle feeds
-
-## Premium Tools (x402 micropayments)
-
-| Tool | Cost | What you get |
-|------|------|--------------|
-| council_verdict | 0.10 RLUSD | Full AI verdict for any symbol, 8 engines |
-| market_scan | 0.05 RLUSD | $1-$50 universe squeeze scanner |
-| options_intelligence | 0.05 RLUSD | Institutional options flow |
-| iwm_odte | 0.03 RLUSD | IWM zero-day-to-expiry scorer |
-| triple_lock_verdict | 0.25 RLUSD | Highest-conviction signal (all 3 engines agree) |
-| oracle_query | 0.02 RLUSD | Real-world data oracle (SEC 8-K, FDA, USPTO) |
-| FTD data suite | 0.02-0.05 RLUSD | SEC Reg SHO FTD data |
-
-## Payment Flow
-
-1. Call `get_invoice` with endpoint_id
-2. Pay RLUSD on XRPL to destination address from invoice
-3. Call `verify_payment` with invoice_id + tx_hash
-4. Receive 1-hour JWT access_token
-5. Include `X-Payment-Token: <token>` header on premium calls
-
-**Alt:** Pay USDC on Base via Ghost Layer bridge (no XRPL trust line needed)
-
-**Full Protocol Details:**
-See `https://github.com/Timwal78/SqueezeOS_Github/blob/main/AGENT_MONETIZATION.md` for complete documentation on x402 XRPL loops and Agent Credit Bureau scoring.
-
-## Key Endpoints
-
-- Health: https://squeezeos-api.onrender.com/api/status
-- MCP: https://squeezeos-api.onrender.com/mcp
-- Free preview: https://squeezeos-api.onrender.com/api/preview/{symbol}
-- Demo council: https://squeezeos-api.onrender.com/api/demo
-- Discovery: https://squeezeos-api.onrender.com/.well-known/mcp.json
-- SSE stream: https://squeezeos-api.onrender.com/api/events
-
-## Data Sources
-
-All data is real-time from licensed/public sources:
-- Tradier (options chains, equities)
-- Polygon.io / Alpaca (real-time quotes)
-- SEC EDGAR (8-K, FTD, Reg SHO)
-- FDA.gov (drug approvals)
-- USPTO (patent grants)
-- XRPL (payments)
-
-## Legal
-- Zero custody: SqueezeOS never holds user funds
-- Not investment advice
-- Market data from licensed providers (Tradier, Polygon, Alpaca)
+## Built by ScriptMasterLabs (SDVOSB) - ScriptMasterLabs@gmail.com
