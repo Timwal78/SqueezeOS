@@ -1,48 +1,7 @@
-# SqueezeOS MCP Server — Smithery Configuration
-# https://smithery.ai
-
 startCommand:
   type: http
-  url: https://squeezeos-api.onrender.com/mcp
-  transport: streamable-http
-
   configSchema:
     type: object
-    properties:
-      paymentToken:
-        type: string
-        description: "1-hour JWT from verify_payment tool (402Proof). Required for paid tools only. Free tools work without it."
-        default: ""
-      agentWallet:
-        type: string
-        description: "Your XRPL wallet address (for payment tracking and loyalty tier)"
-        default: ""
-    required: []
-
-  exampleConfig:
-    paymentToken: ""
-    agentWallet: ""
-
-# Smithery display metadata
-name: SqueezeOS Market Intelligence
-description: |
-  33 MCP tools for institutional-grade equity intelligence by Script Master Labs.
-  Includes: AI council verdicts, squeeze scanner, options flow, IWM 0DTE, FTD data,
-  convergence signals, institutional flows, signal futures, conditional settlements,
-  and more. Free tools available — premium tools cost $0.01-$0.25 via x402 micropayment
-  (RLUSD on XRPL or USDC on Base). No API keys required.
-category: finance
-tags:
-  - finance
-  - trading
-  - market-intelligence
-  - options
-  - equities
-  - squeeze
-  - institutional
-  - x402
-  - xrpl
-icon: https://www.scriptmasterlabs.com/og-image.png
-homepage: https://www.scriptmasterlabs.com
-payment: x402
-license: commercial
+    properties: {}
+  exampleConfig: {}
+  url: "https://squeezeos-api.onrender.com/mcp"
