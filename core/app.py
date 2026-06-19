@@ -45,6 +45,8 @@ from core.api.sml_alert_bp import sml_alert_bp
 from core.api.smithery_bp import smithery_bp
 from core.api.oracle_engine_bp import oracle_engine_bp
 from core.api.iam_bp import iam_bp
+from core.api.vapl_bp import vapl_bp
+from core.vapl.middleware import install_vapl_middleware
 import core.signal_history as signal_history
 from core.legacy import start_whale_stalker, init_services, get_service, clean_data
 from core.market_graph import get_graph
@@ -139,6 +141,7 @@ def create_app():
     app.register_blueprint(v2_bp, url_prefix='/api/v1', name='v2_bridge_v1')
     app.register_blueprint(oracle_engine_bp, url_prefix='/api/engine')
     app.register_blueprint(iam_bp,           url_prefix='/api/iam')
+    app.register_blueprint(vapl_bp)
 
     # Stellar Forge growth engine — feature-flagged, dormant unless enabled.
     # Registers the affiliate/loyalty/payout surface only when explicitly turned
@@ -785,6 +788,8 @@ def create_app():
 
     from x402_flask import register_x402_discovery
     register_x402_discovery(app)
+
+    install_vapl_middleware(app)
 
     return app
 
