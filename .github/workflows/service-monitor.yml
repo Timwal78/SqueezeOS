@@ -45,7 +45,7 @@ jobs:
             fi
           }
 
-          # ── All SML services ───────────────────────────────────────────────
+          # ── All SML services ────────────────────────────────────────────
           check_service "Ghost Layer Sovereign (scriptmasterlabs.com)" \
             "https://scriptmasterlabs.com" "200 301 302"
 
@@ -70,7 +70,7 @@ jobs:
           check_service "TipMaster" \
             "https://tipmaster.onrender.com/health" "200 404"
 
-          # ── Build Discord alert payload ────────────────────────────────────
+          # ── Build Discord alert payload ────────────────────────────────
           if [ "${#FAILURES[@]}" -gt 0 ] || [ "${#WARNINGS[@]}" -gt 0 ]; then
             if [ -z "$DISCORD_WEBHOOK" ]; then
               echo "No DISCORD_WEBHOOK_ALL secret set — skipping alert"
@@ -80,29 +80,29 @@ jobs:
               for entry in "${FAILURES[@]}"; do
                 IFS='|' read -r svc_name svc_status svc_url <<< "$entry"
                 FIELDS=$(echo "$FIELDS" | python3 -c "
-          import json, sys
-          fields = json.load(sys.stdin)
-          fields.append({
-            'name': '🔴 ' + '''$svc_name''',
-            'value': '**Status:** ' + '''$svc_status''' + '\n**URL:** ' + '''$svc_url''',
-            'inline': False
-          })
-          print(json.dumps(fields))
-          ")
+import json, sys
+fields = json.load(sys.stdin)
+fields.append({
+  'name': '🔴 ' + '''$svc_name''',
+  'value': '**Status:** ' + '''$svc_status''' + '\n**URL:** ' + '''$svc_url''',
+  'inline': False
+})
+print(json.dumps(fields))
+")
               done
 
               for entry in "${WARNINGS[@]}"; do
                 IFS='|' read -r svc_name svc_status svc_url <<< "$entry"
                 FIELDS=$(echo "$FIELDS" | python3 -c "
-          import json, sys
-          fields = json.load(sys.stdin)
-          fields.append({
-            'name': '🟡 ' + '''$svc_name''',
-            'value': '**Status:** ' + '''$svc_status''' + '\n**URL:** ' + '''$svc_url''',
-            'inline': False
-          })
-          print(json.dumps(fields))
-          ")
+import json, sys
+fields = json.load(sys.stdin)
+fields.append({
+  'name': '🟡 ' + '''$svc_name''',
+  'value': '**Status:** ' + '''$svc_status''' + '\n**URL:** ' + '''$svc_url''',
+  'inline': False
+})
+print(json.dumps(fields))
+")
               done
 
               COLOR=15158332   # red for hard failures
@@ -113,33 +113,33 @@ jobs:
               fi
 
               python3 - <<PYEOF
-          import json, urllib.request, os
+import json, urllib.request, os
 
-          payload = {
-            "username": "SML Sentinel",
-            "embeds": [{
-              "title": "$TITLE",
-              "color": $COLOR,
-              "description": "Proactive monitoring detected an issue. Investigate immediately.",
-              "fields": $FIELDS,
-              "footer": {"text": "service-monitor.yml — every 10 min"},
-              "timestamp": "$NOW"
-            }]
-          }
+payload = {
+  "username": "SML Sentinel",
+  "embeds": [{
+    "title": "$TITLE",
+    "color": $COLOR,
+    "description": "Proactive monitoring detected an issue. Investigate immediately.",
+    "fields": $FIELDS,
+    "footer": {"text": "service-monitor.yml — every 10 min"},
+    "timestamp": "$NOW"
+  }]
+}
 
-          data = json.dumps(payload).encode()
-          req = urllib.request.Request(
-            os.environ["DISCORD_WEBHOOK"],
-            data=data,
-            headers={"Content-Type": "application/json"},
-            method="POST"
-          )
-          try:
-            with urllib.request.urlopen(req, timeout=10) as r:
-              print(f"Discord alert sent: {r.status}")
-          except Exception as e:
-            print(f"Discord alert failed: {e}")
-          PYEOF
+data = json.dumps(payload).encode()
+req = urllib.request.Request(
+  os.environ["DISCORD_WEBHOOK"],
+  data=data,
+  headers={"Content-Type": "application/json"},
+  method="POST"
+)
+try:
+  with urllib.request.urlopen(req, timeout=10) as r:
+    print(f"Discord alert sent: {r.status}")
+except Exception as e:
+  print(f"Discord alert failed: {e}")
+PYEOF
             fi
 
             # Fail job only for hard errors (not warnings like 403 Vercel gate)
