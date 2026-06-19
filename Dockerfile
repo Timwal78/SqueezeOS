@@ -2,6 +2,10 @@
 FROM python:3.11-slim
 WORKDIR /app
 
+# Prevent glibc memory fragmentation (OOM Fix)
+ENV MALLOC_ARENA_MAX=2
+ENV PYTHONUNBUFFERED=1
+
 # Install build deps needed by some packages
 RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /var/lib/apt/lists/*
 
@@ -12,4 +16,4 @@ RUN pip install --prefer-binary --no-cache-dir -r requirements.txt
 
 COPY . .
 EXPOSE 8182
-CMD ["gunicorn", "--bind", "0.0.0.0:8182", "--workers", "1", "--threads", "8", "--timeout", "120", "--max-requests", "500", "--max-requests-jitter", "50", "--preload", "core.app:create_app()"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8182", "--workers", "1", "--threads", "2", "--timeout", "120", "--max-requests", "500", "--max-requests-jitter", "50, core.app:create_app()"]
