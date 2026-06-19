@@ -308,8 +308,12 @@ def require_payment(f):
         try:
             inv = _issue_invoice(endpoint_id)
         except Exception as e:
-            _logging.warning(f'[402Proof] invoice fetch failed: {e} — passing through')
-            return f(*args, **kwargs)
+            _logging.error(f'[402Proof] invoice fetch failed: {e} — payment gate CLOSED (503)')
+            return jsonify({
+                'error': 'ERR_PAYMENT_GATE_UNAVAILABLE',
+                'message': 'Payment gateway temporarily unavailable. Cannot issue invoice. Retry later.',
+                'retry_after': 30,
+            }), 503
 
         _base = os.getenv('SQUEEZEOS_BASE_URL', 'https://squeezeos-api.onrender.com')
         free_preview = _free_preview_for(path)
