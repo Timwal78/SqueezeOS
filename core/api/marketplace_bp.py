@@ -22,8 +22,12 @@ Why free to list:
   Supply-side participation maximized. Revenue comes from readers, not sellers.
 """
 
+import base64
+import hashlib
 import os
+import sqlite3
 import sys
+import threading
 import time
 import uuid
 import logging
@@ -38,9 +42,95 @@ from proof402_integration import require_payment
 logger = logging.getLogger("SqueezeOS-Marketplace")
 marketplace_bp = Blueprint('marketplace', __name__)
 
+# ── SQLite persistence (uses VAPL disk so balances survive redeploys) ─────────
+_VAPL_DIR  = os.path.dirname(os.environ.get("VAPL_SOUL_FILE", "/var/data/vapl/soul.json"))
+try:
+    os.makedirs(_VAPL_DIR, exist_ok=True)
+    _DB_FILE = os.path.join(_VAPL_DIR, "marketplace.db")
+except Exception:
+    _DB_FILE = "/tmp/marketplace.db"
+
+_db_lock = threading.Lock()
+
+# XRPL payout wallet (operator funds this to honour seller withdrawals)
+MARKETPLACE_XRPL_SEED    = os.environ.get("MARKETPLACE_XRPL_SEED", "")
+MARKETPLACE_XRPL_ADDRESS = os.environ.get("MARKETPLACE_XRPL_ADDRESS", "")
+RLUSD_ISSUER             = "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De"
+RLUSD_CURRENCY           = "524C555344000000000000000000000000000000"
+MIN_WITHDRAW_RLUSD       = 0.05
+WITHDRAW_WINDOW_SECS     = 300   # 5-minute replay-attack window
+
 # ── Storage ───────────────────────────────────────────────────────────────────
 _listings:     dict = {}   # listing_id -> listing dict
 _seller_stats: dict = {}   # wallet -> {sale_count, listing_count, revenue_rlusd}
+
+
+def _init_db() -> None:
+    with sqlite3.connect(_DB_FILE) as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS seller_balances (
+                wallet         TEXT PRIMARY KEY,
+                balance_rlusd  REAL DEFAULT 0,
+                paid_out_rlusd REAL DEFAULT 0,
+                revenue_rlusd  REAL DEFAULT 0,
+                sale_count     INTEGER DEFAULT 0,
+                listing_count  INTEGER DEFAULT 0
+            )
+        """)
+        conn.commit()
+
+
+def _load_balances() -> None:
+    """Restore persisted seller balances into _seller_stats on startup."""
+    try:
+        _init_db()
+        with sqlite3.connect(_DB_FILE) as conn:
+            rows = conn.execute("SELECT * FROM seller_balances").fetchall()
+        for wallet, balance, paid_out, revenue, sales, listings in rows:
+            _seller_stats[wallet] = {
+                "balance_rlusd":  balance,
+                "paid_out_rlusd": paid_out,
+                "revenue_rlusd":  revenue,
+                "sale_count":     sales,
+                "listing_count":  listings,
+            }
+        logger.info("[MARKET] Loaded %d seller balances from SQLite", len(rows))
+    except Exception as exc:
+        logger.warning("[MARKET] Balance load failed (non-fatal): %s", exc)
+
+
+def _persist_balance(wallet: str) -> None:
+    """Write one seller's balance to SQLite."""
+    st = _seller_stats.get(wallet)
+    if not st:
+        return
+    try:
+        with _db_lock, sqlite3.connect(_DB_FILE) as conn:
+            conn.execute("""
+                INSERT INTO seller_balances
+                    (wallet, balance_rlusd, paid_out_rlusd, revenue_rlusd, sale_count, listing_count)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(wallet) DO UPDATE SET
+                    balance_rlusd  = excluded.balance_rlusd,
+                    paid_out_rlusd = excluded.paid_out_rlusd,
+                    revenue_rlusd  = excluded.revenue_rlusd,
+                    sale_count     = excluded.sale_count,
+                    listing_count  = excluded.listing_count
+            """, (
+                wallet,
+                st["balance_rlusd"],
+                st["paid_out_rlusd"],
+                st["revenue_rlusd"],
+                st["sale_count"],
+                st["listing_count"],
+            ))
+            conn.commit()
+    except Exception as exc:
+        logger.warning("[MARKET] Balance persist failed for %s…: %s", wallet[:12], exc)
+
+
+# Load persisted balances at import time
+_load_balances()
 
 _MAX_LISTINGS   = 500   # global cap — evict oldest on overflow
 _MAX_PER_SELLER = 10    # active listings per wallet
@@ -211,6 +301,7 @@ def read():
     st['sale_count']      += 1
     st['revenue_rlusd']    = round(st['revenue_rlusd'] + READ_PRICE_RLUSD, 4)
     st['balance_rlusd']    = round(st['balance_rlusd'] + SELLER_CUT_RLUSD, 4)
+    _persist_balance(l['wallet'])   # survive redeploys
 
     # Bureau score bonus: +2 per sale, up to +50 lifetime
     score_bonus = min(st['sale_count'] * 2, 50)
@@ -361,6 +452,157 @@ def balance(wallet):
             "for manual XRPL settlement until automated payout batches go live."
         ),
         "ts": time.time(),
+    })
+
+
+# ── Withdraw — DID-signed, XRPL payout ───────────────────────────────────────
+
+def _verify_did_signature(agent_did: str, message: bytes, sig_b64: str) -> bool:
+    """Verify an Ed25519 signature from a did:key identity."""
+    try:
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+        # did:key:z{base58btc([0xed,0x01]+pub_raw)}
+        key_part = agent_did[len("did:key:z"):]
+        B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+        n = 0
+        for ch in key_part:
+            n = n * 58 + B58.index(ch)
+        # multicodec is exactly 34 bytes: [0xed, 0x01] + 32-byte pubkey
+        multicodec = n.to_bytes(34, "big")
+        if multicodec[0] != 0xed or multicodec[1] != 0x01:
+            return False
+        pub_raw = multicodec[2:]
+
+        pub_key = Ed25519PublicKey.from_public_bytes(pub_raw)
+        pad     = 4 - len(sig_b64) % 4
+        sig     = base64.urlsafe_b64decode(sig_b64 + ("=" * pad if pad != 4 else ""))
+        pub_key.verify(sig, message)
+        return True
+    except Exception:
+        return False
+
+
+def _send_rlusd_payout(amount_rlusd: float, destination: str):
+    """Send RLUSD from marketplace treasury wallet to seller."""
+    try:
+        import xrpl.clients, xrpl.models.transactions, xrpl.models.amounts
+        import xrpl.wallet, xrpl.transaction
+
+        wallet  = xrpl.wallet.Wallet.from_seed(MARKETPLACE_XRPL_SEED)
+        client  = xrpl.clients.JsonRpcClient("https://s1.ripple.com:51234/")
+        tx      = xrpl.models.transactions.Payment(
+            account=wallet.classic_address,
+            amount=xrpl.models.amounts.IssuedCurrencyAmount(
+                currency=RLUSD_CURRENCY,
+                issuer=RLUSD_ISSUER,
+                value=str(round(amount_rlusd, 6)),
+            ),
+            destination=destination,
+        )
+        response = xrpl.transaction.submit_and_wait(tx, client, wallet)
+        return response.result.get("hash")
+    except Exception as exc:
+        logger.warning("[MARKET] XRPL payout failed: %s", exc)
+        return None
+
+
+@marketplace_bp.route('/withdraw', methods=['POST'])
+def withdraw():
+    """Withdraw accrued Alpha Mesh earnings to seller's XRPL wallet.
+
+    Requires a DID-signed proof of wallet ownership (prevents spoofing).
+
+    Body:
+      {
+        "wallet":    "r...",
+        "agent_did": "did:key:z...",
+        "timestamp": 1234567890,          # unix seconds — must be within 5 min
+        "nonce":     "...",
+        "signature": "base64url(Ed25519(sha256(canonical_json({agent_did,nonce,timestamp,wallet}))))"
+      }
+    """
+    import json as _json
+
+    body      = request.get_json(silent=True) or {}
+    wallet    = (body.get("wallet")    or "").strip()
+    agent_did = (body.get("agent_did") or "").strip()
+    timestamp = body.get("timestamp", 0)
+    n         = (body.get("nonce")     or "").strip()
+    signature = (body.get("signature") or "").strip()
+
+    if not wallet or not wallet.startswith("r") or len(wallet) < 25:
+        return jsonify({"error": "ERR_INVALID_WALLET"}), 400
+    if not agent_did or not agent_did.startswith("did:key:z"):
+        return jsonify({"error": "ERR_INVALID_DID"}), 400
+    if not n or not signature:
+        return jsonify({"error": "ERR_MISSING_AUTH"}), 400
+
+    # Replay protection: timestamp must be within ±5 minutes
+    now = time.time()
+    if abs(now - float(timestamp)) > WITHDRAW_WINDOW_SECS:
+        return jsonify({
+            "error":   "ERR_TIMESTAMP_EXPIRED",
+            "message": "timestamp must be within 5 minutes of server time",
+        }), 400
+
+    # Verify DID signature over canonical JSON
+    msg_obj   = {"agent_did": agent_did, "nonce": n, "timestamp": timestamp, "wallet": wallet}
+    canonical = "{" + ",".join(
+        f"{_json.dumps(k)}:{_json.dumps(msg_obj[k])}" for k in sorted(msg_obj)
+    ) + "}"
+    digest = hashlib.sha256(canonical.encode()).digest()
+
+    if not _verify_did_signature(agent_did, digest, signature):
+        return jsonify({
+            "error":   "ERR_INVALID_SIGNATURE",
+            "message": "DID signature verification failed",
+        }), 403
+
+    # Check seller balance
+    st = _seller_stats.get(wallet)
+    balance = st["balance_rlusd"] if st else 0.0
+    if balance < MIN_WITHDRAW_RLUSD:
+        return jsonify({
+            "error":         "ERR_INSUFFICIENT_BALANCE",
+            "balance_rlusd": balance,
+            "minimum_rlusd": MIN_WITHDRAW_RLUSD,
+        }), 400
+
+    amount = round(balance, 4)
+
+    # Require payout wallet to be configured
+    if not MARKETPLACE_XRPL_SEED:
+        return jsonify({
+            "error":   "ERR_PAYOUT_UNAVAILABLE",
+            "message": "Marketplace treasury wallet not configured on server",
+        }), 503
+
+    # Execute XRPL payout
+    tx_hash = _send_rlusd_payout(amount, wallet)
+    if not tx_hash:
+        return jsonify({
+            "error":   "ERR_PAYMENT_FAILED",
+            "message": "XRPL payment failed — balance NOT debited",
+        }), 500
+
+    # Debit balance and persist
+    st["paid_out_rlusd"] = round(st.get("paid_out_rlusd", 0) + amount, 4)
+    st["balance_rlusd"]  = 0.0
+    _persist_balance(wallet)
+
+    logger.info(
+        "[MARKET] Withdrew %.4f RLUSD → %s… tx=%s",
+        amount, wallet[:12], tx_hash,
+    )
+
+    return jsonify({
+        "status":              "WITHDRAWN",
+        "wallet":              wallet,
+        "amount_rlusd":        amount,
+        "tx_hash":             tx_hash,
+        "paid_out_total_rlusd": st["paid_out_rlusd"],
+        "ts":                  now,
     })
 
 
