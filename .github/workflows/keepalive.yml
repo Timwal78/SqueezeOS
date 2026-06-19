@@ -36,7 +36,7 @@ jobs:
           ping_service "SqueezeOS"             "https://squeezeos-api.onrender.com/api/status" "200" &
           ping_service "SML Rails"             "https://sml-rails.onrender.com/health"         "200 404" &
           ping_service "TipMaster"             "https://tipmaster.onrender.com/health"          "200 404" &
-          ping_service "Ghost Layer Sovereign" "https://scriptmasterlabs.com"                  "200 301 302" &
+          ping_service "Ghost Layer Sovereign" "https://scriptmasterlabs.com"                  "200 301 302 403" &
 
           wait
           echo "All pings complete"
