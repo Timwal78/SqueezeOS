@@ -2,13 +2,6 @@ name: SML Autonomous Agent (XRPL)
 
 on:
   schedule:
-    # Schedule uses UTC time. Eastern Time is UTC-4 (or UTC-5 depending on daylight saving).
-    # Assuming EDT (UTC-4):
-    # 08:45 ET = 12:45 UTC
-    # 09:35 ET = 13:35 UTC
-    # 12:00 ET = 16:00 UTC
-    # 15:00 ET = 19:00 UTC
-    # 16:15 ET = 20:15 UTC
     - cron: '45 12 * * 1-5'
     - cron: '35 13 * * 1-5'
     - cron: '0 16 * * 1-5'
@@ -16,17 +9,16 @@ on:
     - cron: '15 20 * * 1-5'
 
   workflow_dispatch:
-    # Allows manual triggering
 
 jobs:
   execute-autonomous-agent:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.11'
           

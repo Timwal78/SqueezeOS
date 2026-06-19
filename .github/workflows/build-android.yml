@@ -14,21 +14,21 @@ jobs:
         working-directory: mobile
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@cdca7d6dd16c72fb5d9c5b2d47aaddfca8fd94e2 # v4
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: mobile/package-lock.json
 
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@7a40b8b20c7b26c7e8a6c6fc36f62f01b9a74c45 # v4
         with:
           distribution: temurin
           java-version: 17
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v4
+        uses: android-actions/setup-android@d155f4e6b6ac79ae9f5b7873f72a649e5bb02db0 # v4
 
       - name: Install dependencies
         run: npm ci
@@ -85,14 +85,14 @@ jobs:
             -Pandroid.injected.signing.key.password="$KS_PASS"
 
       - name: Upload signed AAB
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: neural-os-${{ github.run_number }}-release.aab
           path: mobile/android/app/build/outputs/bundle/release/app-release.aab
           retention-days: 90
 
       - name: Upload signed APK
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: neural-os-${{ github.run_number }}-release.apk
           path: mobile/android/app/build/outputs/apk/release/app-release.apk
