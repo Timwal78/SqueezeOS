@@ -266,9 +266,11 @@ def require_payment(f):
                 request_wallet = request.headers.get('X-Agent-Wallet', '')
 
                 if token_wallet and request_wallet and token_wallet != request_wallet:
+                    # Mask wallet addresses in logs: show first-6...last-4 only
+                    _mask = lambda w: f"{w[:6]}...{w[-4:]}" if len(w) > 10 else "***"
                     _logging.warning(
                         '[402Proof] wallet mismatch — token_wlt=%s request_wlt=%s path=%s',
-                        token_wallet, request_wallet, path
+                        _mask(token_wallet), _mask(request_wallet), path
                     )
                     if _ENFORCE_WALLET_BINDING:
                         return jsonify({

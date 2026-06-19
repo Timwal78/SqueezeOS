@@ -93,7 +93,16 @@ def create_app():
     # Use parent directory as static folder to serve root files (index.html, .js, .css)
     root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     app = Flask(__name__, static_folder=root_dir, static_url_path='')
-    CORS(app) # Enable CORS for institutional dashboard
+    # CORS — restrict to known frontends in production.
+    # CORS_ORIGINS env var accepts a comma-separated list; defaults to the
+    # canonical dashboard origins.  Set to "*" locally if needed for dev.
+    _cors_origins_env = os.environ.get(
+        "CORS_ORIGINS",
+        "https://scriptmasterlabs.com,https://www.scriptmasterlabs.com,"
+        "https://signal-auction-loom.vercel.app,https://squeezeos-api.onrender.com",
+    )
+    _cors_origins = [o.strip() for o in _cors_origins_env.split(",") if o.strip()]
+    CORS(app, origins=_cors_origins, supports_credentials=False)
     
     # Start Legacy Workers & Services (skipped in Vercel serverless mode)
     if not _IS_SERVERLESS:
@@ -211,7 +220,10 @@ def create_app():
     def add_security_headers(response):
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
         response.headers['X-Content-Type-Options'] = 'nosniff'
-        response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+        response.headers['X-Frame-Options'] = 'DENY'
+        response.headers['X-XSS-Protection'] = '1; mode=block'
+        response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        response.headers['Content-Security-Policy'] = "default-src 'self'"
         response.headers['Link'] = '<https://squeezeos-api.onrender.com/.well-known/agents.json>; rel="payment"'
         if 'text/html' in response.content_type:
             response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'

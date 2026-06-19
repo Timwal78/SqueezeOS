@@ -338,8 +338,8 @@ def checkout():
         )
         return redirect(session.url, code=303)
     except Exception as e:
-        logger.error(f"Stripe error: {e}")
-        return str(e), 500
+        logger.error("Stripe checkout session error", exc_info=True)
+        return jsonify({"error": "internal error creating checkout session"}), 500
 
 
 @keys_bp.route('/api/keys/success', methods=['GET'])
@@ -355,7 +355,8 @@ def success():
             return "No API key found for this session.", 404
         return render_template_string(SUCCESS_HTML, api_key=api_key)
     except Exception as e:
-        return str(e), 500
+        logger.error("Stripe session retrieval error", exc_info=True)
+        return jsonify({"error": "internal error retrieving session"}), 500
 
 
 @keys_bp.route('/api/keys/webhook', methods=['POST'])
