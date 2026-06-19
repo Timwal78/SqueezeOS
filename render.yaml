@@ -68,15 +68,18 @@ services:
           type: redis
           name: pne-redis
           property: connectionString
+      - key: VAPL_SOUL_FILE
+        value: /var/data/vapl/soul.json
+      - key: MARKETPLACE_XRPL_SEED
+        sync: false
+      - key: MARKETPLACE_XRPL_ADDRESS
+        sync: false
     healthCheckPath: /api/status
     autoDeploy: true
     disk:
       name: vapl-soul
       mountPath: /var/data/vapl
       sizeGB: 1
-    envVars:
-      - key: VAPL_SOUL_FILE
-        value: /var/data/vapl/soul.json
 
   # ---------------------------------------------------------------------------
   # outbound-hunter — 24/7 Registry Broadcaster + Agent-to-Agent Hustler
