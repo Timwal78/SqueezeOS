@@ -16,7 +16,7 @@ services:
       - key: SQUEEZEOS_OPERATOR_WALLET
         value: "rsdSmbUASmWDs4NPtE8ZHoMKmk1owR1yUh"
       - key: DISCORD_WEBHOOK_PAYMENTS
-        value: "https://discord.com/api/webhooks/1501375153584738306/JxIBorw9Eiw4mY1xfrlsTOrBqCi_BS-CRL6OgsDdFSG-PCFZH0cf7g70Q_m0SYRdK_nK"
+        sync: false
       - key: DISCORD_WEBHOOK_URL
         sync: false
       - key: DISCORD_WEBHOOK_ALL
@@ -83,7 +83,6 @@ services:
 
   # ---------------------------------------------------------------------------
   # outbound-hunter — 24/7 Registry Broadcaster + Agent-to-Agent Hustler
-  # Continuously seeds AI registries and delivers signed samples to new bots.
   # ---------------------------------------------------------------------------
   - type: worker
     name: sml-outbound-hunter
@@ -119,7 +118,6 @@ services:
 
   # ---------------------------------------------------------------------------
   # pne-gateway — Signal Loom sovereign intent auction gateway (Rust/Axum)
-  # L402 priority bidding over SqueezeOS API — formerly on Railway, now Render
   # ---------------------------------------------------------------------------
   - type: web
     name: pne-gateway

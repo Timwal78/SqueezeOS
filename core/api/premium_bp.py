@@ -11,6 +11,7 @@ SqueezeOS Premium API — 402Proof Gated Endpoints
 
 import sys
 import os
+import re
 import time
 import logging
 import threading
@@ -18,6 +19,18 @@ from flask import Blueprint, jsonify, request
 from core.legacy import get_service, clean_data
 from core.state import state, sse_queues
 import core.signal_history as signal_history
+
+_SYMBOL_RE = re.compile(r'^[A-Z0-9.]{1,10}$')
+
+
+def _validate_symbol(raw: str) -> tuple:
+    """Return (cleaned_symbol, error_response_or_None).
+    Sanitizes and validates a ticker symbol input.
+    """
+    cleaned = raw.upper().strip()[:10]
+    if not _SYMBOL_RE.match(cleaned):
+        return None, jsonify({"error": "invalid symbol", "message": "Symbol must be 1-10 uppercase alphanumeric characters"}), 400
+    return cleaned, None
 
 
 def _broadcast_sse(event: dict):
@@ -41,6 +54,16 @@ from x402_flask import x402_guard
 logger = logging.getLogger("SqueezeOS-Premium")
 premium_bp = Blueprint('premium', __name__)
 
+# Rate limiting — 30 requests/min per IP on premium endpoints
+from core.rate_limiter import premium_limiter as _premium_rl
+from flask import request as _req
+
+@premium_bp.before_request
+def _rate_limit_premium():
+    ip = _req.remote_addr or "unknown"
+    if not _premium_rl.allow(ip, _req.path):
+        return jsonify({"error": "rate_limit_exceeded", "message": "Too many requests. Retry after 60s."}), 429
+
 
 # ── /api/council ─────────────────────────────────────────────────────────────
 
@@ -52,7 +75,10 @@ def council():
     Returns regime, bias, risk score, and actionable thesis for a symbol or IWM.
     """
     body = request.get_json(silent=True) or {}
-    symbol = (body.get('symbol') or request.args.get('symbol', 'IWM')).upper()
+    raw_symbol = body.get('symbol') or request.args.get('symbol', 'IWM')
+    symbol, err = _validate_symbol(raw_symbol)
+    if err:
+        return err
 
     dm = get_service('dm')
     if not dm:
@@ -210,7 +236,10 @@ def options_flow():
     Default symbol: IWM
     """
     body = request.get_json(silent=True) or {}
-    symbol = (body.get('symbol') or request.args.get('symbol', 'IWM')).upper()
+    raw_symbol = body.get('symbol') or request.args.get('symbol', 'IWM')
+    symbol, err = _validate_symbol(raw_symbol)
+    if err:
+        return err
 
     dm = get_service('dm')
     if not dm:

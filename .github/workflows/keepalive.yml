@@ -12,7 +12,7 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      # ── Ping all Render/Vercel services in parallel ───────────────
+      # ── Ping all Render/Vercel services in parallel ───────────────────────
       # Sequential steps let one slow cold-start block the others, so
       # downstream services miss their ping and fall asleep. Run all
       # pings concurrently with a 55 s timeout (just under the 5-min
@@ -36,12 +36,12 @@ jobs:
           ping_service "SqueezeOS"             "https://squeezeos-api.onrender.com/api/status" "200" &
           ping_service "SML Rails"             "https://sml-rails.onrender.com/health"         "200 404" &
           ping_service "TipMaster"             "https://tipmaster.onrender.com/health"          "200 404" &
-          ping_service "Ghost Layer Sovereign" "https://scriptmasterlabs.com"                  "200 301 302" &
+          ping_service "Ghost Layer Sovereign" "https://scriptmasterlabs.com"                  "200 301 302 403" &
 
           wait
           echo "All pings complete"
 
-      # ── Alert Discord only on genuine hard failures ───────────────
+      # ── Alert Discord only on genuine hard failures ─────────────────
       - name: Alert Discord on failure
         if: failure() && env.DISCORD_WEBHOOK_ALL != ''
         env:

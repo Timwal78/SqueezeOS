@@ -266,9 +266,11 @@ def require_payment(f):
                 request_wallet = request.headers.get('X-Agent-Wallet', '')
 
                 if token_wallet and request_wallet and token_wallet != request_wallet:
+                    # Mask wallet addresses in logs: show first-6...last-4 only
+                    _mask = lambda w: f"{w[:6]}...{w[-4:]}" if len(w) > 10 else "***"
                     _logging.warning(
                         '[402Proof] wallet mismatch — token_wlt=%s request_wlt=%s path=%s',
-                        token_wallet, request_wallet, path
+                        _mask(token_wallet), _mask(request_wallet), path
                     )
                     if _ENFORCE_WALLET_BINDING:
                         return jsonify({
@@ -308,8 +310,12 @@ def require_payment(f):
         try:
             inv = _issue_invoice(endpoint_id)
         except Exception as e:
-            _logging.warning(f'[402Proof] invoice fetch failed: {e} — passing through')
-            return f(*args, **kwargs)
+            _logging.error(f'[402Proof] invoice fetch failed: {e} — payment gate CLOSED (503)')
+            return jsonify({
+                'error': 'ERR_PAYMENT_GATE_UNAVAILABLE',
+                'message': 'Payment gateway temporarily unavailable. Cannot issue invoice. Retry later.',
+                'retry_after': 30,
+            }), 503
 
         _base = os.getenv('SQUEEZEOS_BASE_URL', 'https://squeezeos-api.onrender.com')
         free_preview = _free_preview_for(path)

@@ -1,0 +1,153 @@
+name: Service Health Monitor
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'   # every 10 min — proactive alerting before user notices
+  workflow_dispatch:
+
+jobs:
+  monitor:
+    name: Check all SML services
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check services and alert on failure
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_ALL }}
+        run: |
+          FAILURES=()
+          WARNINGS=()
+          NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          check_service() {
+            local name="$1"
+            local url="$2"
+            local expected="${3:-200}"
+
+            status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 --retry 1 "$url" 2>/dev/null)
+
+            if [ -z "$status" ] || [ "$status" = "000" ]; then
+              FAILURES+=("$name|TIMEOUT|$url")
+              echo "FAIL  $name → TIMEOUT (url: $url)"
+            elif echo "$expected" | grep -qw "$status"; then
+              echo "  OK  $name → $status"
+            elif [ "$status" = "403" ]; then
+              # 403 on Vercel = Deployment Protection gate is enabled — needs dashboard fix
+              WARNINGS+=("$name|403 Forbidden (Vercel auth gate — disable Deployment Protection in Vercel dashboard)|$url")
+              echo "WARN  $name → 403 (Vercel Deployment Protection active)"
+            elif [ "$status" -ge 500 ] 2>/dev/null; then
+              FAILURES+=("$name|$status Server Error|$url")
+              echo "FAIL  $name → $status (url: $url)"
+            else
+              FAILURES+=("$name|$status Unexpected|$url")
+              echo "FAIL  $name → $status (url: $url)"
+            fi
+          }
+
+          # ── All SML services ────────────────────────────────────────────
+          check_service "Ghost Layer Sovereign (scriptmasterlabs.com)" \
+            "https://scriptmasterlabs.com" "200 301 302"
+
+          check_service "SqueezeOS API" \
+            "https://squeezeos-api.onrender.com/api/status" "200"
+
+          check_service "Ghost Layer" \
+            "https://ghost-layer.onrender.com/health" "200"
+
+          check_service "402Proof" \
+            "https://four02proof.onrender.com/v1/stats" "200"
+
+          check_service "SML Rails (RLUSD)" \
+            "https://sml-rails.onrender.com/health" "200 404"
+
+          check_service "SML Copy-Trader" \
+            "https://sml-copytrader.onrender.com/health" "200 404"
+
+          check_service "SML Launchpad" \
+            "https://sml-launchpad.onrender.com/health" "200 404"
+
+          check_service "TipMaster" \
+            "https://tipmaster.onrender.com/health" "200 404"
+
+          # ── Build Discord alert payload ────────────────────────────────
+          if [ "${#FAILURES[@]}" -gt 0 ] || [ "${#WARNINGS[@]}" -gt 0 ]; then
+            if [ -z "$DISCORD_WEBHOOK" ]; then
+              echo "No DISCORD_WEBHOOK_ALL secret set — skipping alert"
+            else
+              FIELDS="[]"
+
+              for entry in "${FAILURES[@]}"; do
+                IFS='|' read -r svc_name svc_status svc_url <<< "$entry"
+                FIELDS=$(echo "$FIELDS" | python3 -c "
+import json, sys
+fields = json.load(sys.stdin)
+fields.append({
+  'name': '🔴 ' + '''$svc_name''',
+  'value': '**Status:** ' + '''$svc_status''' + '\n**URL:** ' + '''$svc_url''',
+  'inline': False
+})
+print(json.dumps(fields))
+")
+              done
+
+              for entry in "${WARNINGS[@]}"; do
+                IFS='|' read -r svc_name svc_status svc_url <<< "$entry"
+                FIELDS=$(echo "$FIELDS" | python3 -c "
+import json, sys
+fields = json.load(sys.stdin)
+fields.append({
+  'name': '🟡 ' + '''$svc_name''',
+  'value': '**Status:** ' + '''$svc_status''' + '\n**URL:** ' + '''$svc_url''',
+  'inline': False
+})
+print(json.dumps(fields))
+")
+              done
+
+              COLOR=15158332   # red for hard failures
+              TITLE="🚨 SML Service Failure Detected"
+              if [ "${#FAILURES[@]}" -eq 0 ]; then
+                COLOR=16776960  # yellow for warnings only
+                TITLE="⚠️ SML Service Warning"
+              fi
+
+              python3 - <<PYEOF
+import json, urllib.request, os
+
+payload = {
+  "username": "SML Sentinel",
+  "embeds": [{
+    "title": "$TITLE",
+    "color": $COLOR,
+    "description": "Proactive monitoring detected an issue. Investigate immediately.",
+    "fields": $FIELDS,
+    "footer": {"text": "service-monitor.yml — every 10 min"},
+    "timestamp": "$NOW"
+  }]
+}
+
+data = json.dumps(payload).encode()
+req = urllib.request.Request(
+  os.environ["DISCORD_WEBHOOK"],
+  data=data,
+  headers={"Content-Type": "application/json"},
+  method="POST"
+)
+try:
+  with urllib.request.urlopen(req, timeout=10) as r:
+    print(f"Discord alert sent: {r.status}")
+except Exception as e:
+  print(f"Discord alert failed: {e}")
+PYEOF
+            fi
+
+            # Fail job only for hard errors (not warnings like 403 Vercel gate)
+            if [ "${#FAILURES[@]}" -gt 0 ]; then
+              echo ""
+              echo "HARD FAILURES DETECTED — failing job"
+              exit 1
+            fi
+          else
+            echo "All services healthy."
+          fi

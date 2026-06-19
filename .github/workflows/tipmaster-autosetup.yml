@@ -12,11 +12,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      NK: '5E46E636-CC5C-4D02-AF62-042269DEC9B8'
-      RK: 'rnd_HwBcJWniVQM1oJI4R310AZeFqahJ'
+      NK: ${{ secrets.NEYNAR_API_KEY }}
+      RK: ${{ secrets.RENDER_API_KEY }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -39,7 +39,7 @@ jobs:
             echo "==> Phase 1: no signer yet, will create one"
           fi
 
-      # ── PHASE 1 ─────────────────────────────────────────────────────
+      # ── PHASE 1 ────────────────────────────────────────────────
 
       - name: "[P1] Create Neynar managed signer"
         if: steps.state.outputs.phase == '1'
@@ -98,7 +98,7 @@ jobs:
           echo ""
           echo "Signer created and registered. Approval URL committed to repo."
 
-      # ── PHASE 2 ─────────────────────────────────────────────────────
+      # ── PHASE 2 ────────────────────────────────────────────────
 
       - name: "[P2] Generate XRPL gateway wallet"
         if: steps.state.outputs.phase == '2'
@@ -119,7 +119,6 @@ jobs:
         run: |
           UUID="${{ steps.state.outputs.signer_uuid }}"
 
-          # Check current status first
           GET0=$(curl -s "https://api.neynar.com/v2/farcaster/signer?signer_uuid=$UUID" -H "x-api-key: $NK")
           STATUS0=$(echo "$GET0" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status',''))" 2>/dev/null)
           PUBKEY=$(echo "$GET0" | python3 -c "import sys,json; print(json.load(sys.stdin).get('public_key',''))" 2>/dev/null)
@@ -131,28 +130,23 @@ jobs:
             echo "fid=$FID" >> "$GITHUB_OUTPUT"
             echo "already_approved=true" >> "$GITHUB_OUTPUT"
           else
-            # Try GET signed_key_request — returns token used to build Warpcast approval URL
             echo "==> GET /signed_key_request for pubkey $PUBKEY"
             SKR=$(curl -s "https://api.neynar.com/v2/farcaster/signer/signed_key_request?key=${PUBKEY}" \
               -H "x-api-key: $NK")
             echo "SKR response: $SKR"
 
-            # Try to extract token (used in deep link)
             TOKEN=$(echo "$SKR" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('token') or d.get('result',{}).get('token',''))" 2>/dev/null || true)
             echo "Token: $TOKEN"
 
-            # Check if approval URL already in signer GET response after above call
             GET1=$(curl -s "https://api.neynar.com/v2/farcaster/signer?signer_uuid=$UUID" -H "x-api-key: $NK")
             APPROVAL_URL=$(echo "$GET1" | python3 -c "import sys,json; print(json.load(sys.stdin).get('signer_approval_url',''))" 2>/dev/null || true)
             echo "Approval URL from GET: $APPROVAL_URL"
 
-            # Build from token if direct URL not available
             if [ -z "$APPROVAL_URL" ] && [ -n "$TOKEN" ]; then
               APPROVAL_URL="https://client.warpcast.com/deeplinks/signed-key-request?token=${TOKEN}"
               echo "Built approval URL from token: $APPROVAL_URL"
             fi
 
-            # Also try POST sponsored (might work on some plan tiers)
             if [ -z "$APPROVAL_URL" ]; then
               echo "==> Trying POST /signed_key with sponsored:true ..."
               REG=$(curl -s -X POST "https://api.neynar.com/v2/farcaster/signer/signed_key" \
@@ -163,7 +157,6 @@ jobs:
               echo "Approval URL from POST: $APPROVAL_URL"
             fi
 
-            # Commit all debug info + approval URL
             mkdir -p tipmaster-setup
             echo "$GET0"  > tipmaster-setup/neynar_before.txt
             echo "$SKR"   > tipmaster-setup/neynar_skr.txt

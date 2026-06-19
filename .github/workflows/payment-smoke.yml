@@ -12,7 +12,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      # ── Step 1: Wake all Render services in parallel ─────────────
+      # ── Step 1: Wake all Render services in parallel ───────────────────
       # Render free tier sleeps after 15 min; cold start takes 30–50 s.
       # Fire warm-up pings first so the real assertions don't time out.
       - name: Warm up Render services
@@ -31,14 +31,14 @@ jobs:
             --max-time 60 https://four02proof.onrender.com/v1/stats)
           echo "body=$body"
           echo "$body" | python3 -c "
-          import sys, json
-          d = json.load(sys.stdin)
-          assert 'total_invoices' in d or 'invoices' in d or len(d) > 0, \
-            f'Unexpected stats payload: {d}'
-          print('  OK  402Proof stats reachable and parseable')
-          "
+import sys, json
+d = json.load(sys.stdin)
+assert 'total_invoices' in d or 'invoices' in d or len(d) > 0, \
+  f'Unexpected stats payload: {d}'
+print('  OK  402Proof stats reachable and parseable')
+"
 
-      # ── Step 3: Request an invoice for /api/council ───────────────
+      # ── Step 3: Request an invoice for /api/council ─────────────────
       - name: Request invoice
         id: invoice
         run: |
@@ -50,12 +50,12 @@ jobs:
                  "agent_wallet":"rSmokeTester000000000000000000001"}')
           echo "invoice_body=$body"
           echo "$body" | python3 -c "
-          import sys, json
-          d = json.load(sys.stdin)
-          assert 'invoice_id' in d or 'id' in d or 'pay_to' in d, \
-            f'Invoice missing expected fields: {d}'
-          print('  OK  Invoice generated — pay_to and amount present')
-          "
+import sys, json
+d = json.load(sys.stdin)
+assert 'invoice_id' in d or 'id' in d or 'pay_to' in d, \
+  f'Invoice missing expected fields: {d}'
+print('  OK  Invoice generated — pay_to and amount present')
+"
 
       # ── Step 4: Ghost Layer health deep-check ────────────────────
       - name: Ghost Layer health
@@ -65,13 +65,13 @@ jobs:
             --max-time 60 https://ghost-layer.onrender.com/health)
           echo "ghost_body=$body"
           echo "$body" | python3 -c "
-          import sys, json
-          d = json.load(sys.stdin)
-          status = d.get('status', d.get('ok', d.get('alive', '')))
-          assert status in ('ok', 'healthy', True, 'up', 'live', 'online') or len(d) > 0, \
-            f'Ghost Layer health unexpected: {d}'
-          print('  OK  Ghost Layer healthy')
-          " || echo "  WARN  Ghost Layer returned non-JSON — checking status code only"
+import sys, json
+d = json.load(sys.stdin)
+status = d.get('status', d.get('ok', d.get('alive', '')))
+assert status in ('ok', 'healthy', True, 'up', 'live', 'online') or len(d) > 0, \
+  f'Ghost Layer health unexpected: {d}'
+print('  OK  Ghost Layer healthy')
+" || echo "  WARN  Ghost Layer returned non-JSON — checking status code only"
 
       # ── Step 5: SqueezeOS free demo (no payment needed) ──────────
       - name: SqueezeOS demo council
@@ -81,14 +81,14 @@ jobs:
             --max-time 60 \
             https://squeezeos-api.onrender.com/api/demo/council)
           echo "$body" | python3 -c "
-          import sys, json
-          d = json.load(sys.stdin)
-          assert d.get('status') == 'online' or 'bias' in d or 'verdict' in d or 'regime' in d, \
-            f'Unexpected demo response: {d}'
-          print('  OK  SqueezeOS demo council live')
-          "
+import sys, json
+d = json.load(sys.stdin)
+assert d.get('status') == 'online' or 'bias' in d or 'verdict' in d or 'regime' in d, \
+  f'Unexpected demo response: {d}'
+print('  OK  SqueezeOS demo council live')
+"
 
-      # ── Alert if any step fails ───────────────────────────────────
+      # ── Alert if any step fails ───────────────────────────────
       - name: Alert Discord on smoke failure
         if: failure() && env.DISCORD_WEBHOOK_ALL != ''
         env:

@@ -1,4 +1,4 @@
-name: Smoke Test — Import Check
+name: CI — Smoke Test, Lint, Security
 
 on:
   push:
@@ -12,13 +12,16 @@ on:
       - '**.py'
       - 'requirements.txt'
 
+permissions:
+  contents: read
+
 jobs:
   imports:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.11'
           cache: pip
@@ -89,3 +92,15 @@ jobs:
           if failures:
               sys.exit(1)
           "
+
+      - name: Install security tools
+        run: pip install flake8 bandit safety
+
+      - name: Lint (warnings only)
+        run: flake8 core/ --max-line-length=120 --ignore=E501,W503 || true
+
+      - name: Security scan — bandit
+        run: bandit -r core/ -ll -q || true
+
+      - name: Dependency vulnerability check
+        run: safety check -r requirements.txt || true

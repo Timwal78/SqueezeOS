@@ -15,5 +15,11 @@ COPY requirements.txt .
 RUN pip install --prefer-binary --no-cache-dir -r requirements.txt
 
 COPY . .
+
+# Create a non-root user and own the working directory
+RUN adduser --system --no-create-home --group appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 8182
-CMD ["gunicorn", "--bind", "0.0.0.0:8182", "--workers", "1", "--threads", "2", "--timeout", "120", "--max-requests", "500", "--max-requests-jitter", "50, core.app:create_app()"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8182", "--workers", "1", "--threads", "2", "--timeout", "120", "--max-requests", "500", "--max-requests-jitter", "50", "core.app:create_app()"]
