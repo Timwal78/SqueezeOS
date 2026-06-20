@@ -33,6 +33,7 @@ _PAYMENT_PRICES = {
     '/api/options':           0.05,
     '/api/iwm':               0.03,
     '/api/marketplace/read':  0.02,
+    '/api/741macro':          0.04,
 }
 
 def _fire_payment_discord(wallet: str, path: str, tier: int) -> None:
@@ -61,6 +62,7 @@ ENDPOINTS = {
     '/api/options':          'c951a374-2424-4064-ab80-35afe8053d29',  # 0.05 RLUSD
     '/api/iwm':              '60f48ce0-6002-4385-9b60-03a0d2bbebab',  # 0.03 RLUSD
     '/api/marketplace/read': 'd1a2b3c4-e001-4c3f-aa24-de6e3bc12b5a',  # 0.02 RLUSD
+    '/api/741macro':         'f3a7c891-2d54-4b8e-9a1f-6c3d8e5f7b2a',  # 0.04 RLUSD
     # Oracle routes use path params so payment is verified inline in oracle_data_bp.py:
     # '/api/oracle/latest/<feed>'  → ORACLE_READ_ENDPOINT_ID   e7f8a9b0-...  0.02 RLUSD
     # '/api/oracle/query'          → ORACLE_READ_ENDPOINT_ID   e7f8a9b0-...  0.02 RLUSD
@@ -74,6 +76,7 @@ _FREE_PREVIEW_BY_PATH = {
     '/api/options':          '/api/preview/IWM',
     '/api/iwm':              '/api/demo/council',
     '/api/marketplace/read': '/api/marketplace',
+    '/api/741macro':         '/api/preview/IWM',
 }
 
 

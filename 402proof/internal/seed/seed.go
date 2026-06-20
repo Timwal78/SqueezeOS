@@ -36,6 +36,9 @@ const (
 	// Real-World Data Oracle — regulatory event feeds (SqueezeOS)
 	OracleReadID   = "e7f8a9b0-c001-4d2e-bb35-ef7f4cd23c6a"  // 0.02 RLUSD — latest + query
 	OracleStreamID = "f8a9b0c1-d002-4e3f-cc46-f0845de34d7b"  // 0.05 RLUSD — SSE stream
+
+	// 741 Pure Macro Matrix — 5-layer EMA structural alignment engine
+	Macro741ID = "f3a7c891-2d54-4b8e-9a1f-6c3d8e5f7b2a"  // 0.04 RLUSD — dynamic ticker universe
 )
 
 type EndpointSeed struct {
@@ -167,6 +170,13 @@ var SMLEndpoints = []EndpointSeed{
 		Asset:       "RLUSD",
 		Description: "IWM 0DTE institutional scanner — scored contracts and parity watch",
 	},
+	{
+		ID:          Macro741ID,
+		Path:        "/api/741macro",
+		Price:       "0.04",
+		Asset:       "RLUSD",
+		Description: "741 Pure Macro Matrix — 5-layer EMA structural alignment (30/60/90/120/741). PERFECT_BULLISH/BEARISH_REGIME detection. Squeeze coil alert. Dynamic ticker universe.",
+	},
 }
 
 // Run seeds the Script Master Labs merchant and all 4 endpoints on every boot.
@@ -209,7 +219,7 @@ func Run(db *store.Memory, gatewayAddr string) {
 		}
 	}
 
-	log.Printf("[SEED] Script Master Labs ready — 4 market + 3 bureau + 4 relay + 1 marketplace + 1 ghost-layer + 2 oracle endpoints active")
+	log.Printf("[SEED] Script Master Labs ready — 5 market + 3 bureau + 4 relay + 1 marketplace + 1 ghost-layer + 2 oracle endpoints active")
 }
 
 func env(key, fallback string) string {
