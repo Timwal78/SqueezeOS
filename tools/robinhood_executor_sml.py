@@ -53,6 +53,31 @@ logger = logging.getLogger("RH.Executor")
 
 # ── Configuration ──────────────────────────────────────────────────────────────
 SQUEEZEOS_API_URL  = os.environ.get("SQUEEZEOS_API_URL", "https://squeezeos-api.onrender.com")
+
+_macro_cache: dict = {}
+_MACRO_CACHE_TTL   = 3600   # matches server-side 1-hour TTL
+
+def _get_macro_regime(symbol: str) -> str:
+    """
+    Query 741 Pure Macro Matrix on SqueezeOS server.
+    Returns PERFECT_BULLISH_REGIME | PERFECT_BEARISH_REGIME | CONSOLIDATION_CHOP | UNKNOWN.
+    Fails open — UNKNOWN / INSUFFICIENT_DATA never block a trade.
+    """
+    now = time.time()
+    cached = _macro_cache.get(symbol)
+    if cached and now - cached["ts"] < _MACRO_CACHE_TTL:
+        return cached["regime"]
+    try:
+        req = URLRequest(f"{SQUEEZEOS_API_URL}/api/macro/{symbol}",
+                         headers={"User-Agent": "SqueezeOS-RH-Executor/2.0"})
+        with urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+        regime = data.get("regime", "UNKNOWN")
+    except Exception as e:
+        logger.warning(f"[MACRO] {symbol} regime fetch failed: {e} — failing open")
+        regime = "UNKNOWN"
+    _macro_cache[symbol] = {"regime": regime, "ts": now}
+    return regime
 ROBINHOOD_USER     = os.environ.get("ROBINHOOD_USERNAME", "")
 ROBINHOOD_PASS     = os.environ.get("ROBINHOOD_PASSWORD", "")
 POLL_INTERVAL_S    = int(os.environ.get("POLL_INTERVAL_S", "180"))     # poll every 3 minutes
@@ -287,6 +312,14 @@ def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
     if god_count < MIN_GOD_STACKED:
         logger.info(f"[EXEC] {symbol} god_stacked={god_count} < {MIN_GOD_STACKED} — skip")
         return
+
+    # ── 741 Pure Macro Matrix gate (BUY only) ────────────────────────────────
+    if side == "buy":
+        macro = _get_macro_regime(symbol)
+        if macro == "PERFECT_BEARISH_REGIME":
+            logger.warning(f"[EXEC] {symbol} BUY blocked — 741 macro regime is PERFECT_BEARISH_REGIME")
+            return
+        logger.info(f"[EXEC] {symbol} macro regime={macro} — BUY allowed")
 
     # ── Proprietary 5-EMA Stack Guardrail ───────────────────────────────────
     try:
@@ -683,7 +716,7 @@ def _poll_oracle() -> int:
 def main():
     global _rh_logged_in  # explicitly declare global so Python never creates a local shadow
     logger.info("=" * 60)
-    logger.info("SqueezeOS Robinhood Executor v3.2 — Wider Signal Net (GRID_LOCK + 60% oracle)")
+    logger.info("SqueezeOS Robinhood Executor v3.3 — 741 Macro Regime Gate (PERFECT_BEARISH blocks BUY)")
     logger.info(f"  API         : {SQUEEZEOS_API_URL}")
     logger.info(f"  Poll every  : {POLL_INTERVAL_S}s")
     logger.info(f"  Hours       : 4:00 AM–8:00 PM ET (pre-market + regular + after-hours)")

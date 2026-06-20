@@ -39,6 +39,35 @@ from typing import Optional
 
 logger = logging.getLogger("IAM-EXEC")
 
+_macro_cache_iam: dict = {}
+_MACRO_CACHE_TTL_IAM   = 3600
+
+def _get_macro_regime(symbol: str) -> str:
+    """
+    Query 741 Pure Macro Matrix for the daily regime.
+    Fails open — UNKNOWN / INSUFFICIENT_DATA never block a trade.
+    Only PERFECT_BEARISH_REGIME blocks BUY orders.
+    """
+    import time as _time
+    import urllib.request as _urlreq
+    import json as _json
+    now = _time.time()
+    cached = _macro_cache_iam.get(symbol)
+    if cached and now - cached["ts"] < _MACRO_CACHE_TTL_IAM:
+        return cached["regime"]
+    base = os.getenv("SQUEEZEOS_BASE_URL", "https://squeezeos-api.onrender.com").rstrip("/")
+    try:
+        req = _urlreq.Request(f"{base}/api/macro/{symbol}",
+                              headers={"User-Agent": "SqueezeOS-IAM-Executor/1.0"})
+        with _urlreq.urlopen(req, timeout=10) as resp:
+            data = _json.loads(resp.read())
+        regime = data.get("regime", "UNKNOWN")
+    except Exception as e:
+        logger.warning(f"[IAM-EXEC] macro regime fetch failed for {symbol}: {e} — failing open")
+        regime = "UNKNOWN"
+    _macro_cache_iam[symbol] = {"regime": regime, "ts": now}
+    return regime
+
 # ── Config ─────────────────────────────────────────────────────────────────────
 def _env_bool(key: str, default: bool) -> bool:
     return os.environ.get(key, str(default)).strip().lower() in ("true", "1", "yes")
@@ -378,6 +407,16 @@ def execute_from_resolution(sym: str, resolution: dict,
         if block_reason:
             logger.info(f"[IAM-EXEC] {sym} blocked: {block_reason}")
             return
+
+        # 741 Pure Macro Matrix gate — only blocks BUY; SELL/exits always proceed
+        if action == "BUY":
+            macro = _get_macro_regime(sym)
+            if macro == "PERFECT_BEARISH_REGIME":
+                logger.warning(
+                    f"[IAM-EXEC] {sym} BUY blocked — 741 macro regime is PERFECT_BEARISH_REGIME"
+                )
+                return
+            logger.info(f"[IAM-EXEC] {sym} macro regime={macro} — BUY allowed")
 
         mode = EXECUTION_MODE()
         logger.info(
