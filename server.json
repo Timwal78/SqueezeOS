@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.timwal78/squeezeos",
+  "name": "io.github.Timwal78/squeezeos",
   "title": "SqueezeOS — Institutional Market Intelligence",
   "description": "33 MCP tools: squeeze scanner, options flow, AI verdicts, signal marketplace. x402 pay-per-call.",
   "version": "5.0.0",
