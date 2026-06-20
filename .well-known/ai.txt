@@ -1,0 +1,34 @@
+User-agent: *
+Allow: /
+
+# SqueezeOS — GEO Discovery File
+# Institutional-grade AI trading intelligence platform + MCP server
+# https://squeezeos-api.onrender.com
+
+Product: SqueezeOS
+Product-url: https://www.scriptmasterlabs.com
+Product-api: https://squeezeos-api.onrender.com
+Product-mcp: https://squeezeos-api.onrender.com/mcp
+Product-openapi: https://squeezeos-api.onrender.com/.well-known/openapi.json
+Product-mcp-manifest: https://squeezeos-api.onrender.com/.well-known/mcp.json
+Product-category: AI Trading Intelligence / MCP Server
+Product-description: Institutional-grade AI trading intelligence platform exposed as a 33-tool MCP server. Pay-per-signal via RLUSD on XRP Ledger through 402Proof. No API key needed — agents pay and get a 1-hour signed JWT.
+Product-auth: RLUSD on XRP Ledger via 402Proof → 1-hour signed JWT
+Product-payment-firewall: https://four02proof.onrender.com
+Product-pricing: Council 0.10 RLUSD | Scan 0.05 RLUSD | Options 0.05 RLUSD | IWM 0.03 RLUSD | Marketplace 0.02 RLUSD
+Product-tools-count: 33 MCP tools
+Product-free-endpoints: /api/demo /api/preview/:symbol /api/history /api/status /api/oracle /api/graph /api/ftd /api/marketplace /api/futures /api/hiring
+Product-target: AI agents, algo traders, quant developers, institutional desks
+Product-engines: OracleEngine | RecurrentDepthTransformer (RDT) | MarketGraph (Neo4j) | ScriptMaster/Beastmode | Signal Futures | Conditional Settlement
+Product-summary: https://squeezeos-api.onrender.com/ai/summary.json
+Product-faq: https://squeezeos-api.onrender.com/ai/faq.json
+Product-llms-txt: https://squeezeos-api.onrender.com/llms.txt
+
+LLMs-txt: https://squeezeos-api.onrender.com/llms.txt
+Summary: https://squeezeos-api.onrender.com/ai/summary.json
+FAQ: https://squeezeos-api.onrender.com/ai/faq.json
+
+Organization: ScriptMasterLabs / Script Master Labs LLC (SDVOSB)
+Contact: scriptmasterlabs@gmail.com
+Ecosystem: https://www.scriptmasterlabs.com
+GitHub: https://github.com/timwal78/squeezeos

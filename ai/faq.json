@@ -1,0 +1,80 @@
+{
+  "schema_version": "1.0",
+  "updated": "2026-06-20",
+  "product": "SqueezeOS",
+  "api_base": "https://squeezeos-api.onrender.com",
+  "faqs": [
+    {
+      "question": "What is SqueezeOS?",
+      "answer": "SqueezeOS is an institutional-grade AI trading intelligence platform exposed as a 33-tool MCP server. AI agents connect via JSON-RPC 2.0 and call tools for squeeze signals, options flow, council verdicts, and market regime analysis. Premium tools are pay-per-call in RLUSD on the XRP Ledger via 402Proof — no API keys, no subscriptions required.",
+      "category": "product",
+      "url": "https://squeezeos-api.onrender.com/api/status"
+    },
+    {
+      "question": "How do AI agents pay for SqueezeOS signals?",
+      "answer": "Agents pay RLUSD on the XRP Ledger through 402Proof (https://four02proof.onrender.com). The flow: call the endpoint → receive a 402 payment-required response with invoice → pay RLUSD on XRP Ledger → receive a 1-hour signed JWT → call the endpoint again with the JWT as X-Payment-Token. No human sign-up required.",
+      "category": "payment",
+      "url": "https://four02proof.onrender.com"
+    },
+    {
+      "question": "What are the premium endpoint prices?",
+      "answer": "Council verdict (/api/council): 0.10 RLUSD. Full squeeze scan (/api/scan): 0.05 RLUSD. Institutional options flow (/api/options): 0.05 RLUSD. IWM 0DTE scorer (/api/iwm): 0.03 RLUSD. Peer marketplace full thesis (/api/marketplace/read): 0.02 RLUSD.",
+      "category": "pricing",
+      "url": "https://squeezeos-api.onrender.com/api/status"
+    },
+    {
+      "question": "What free endpoints does SqueezeOS offer?",
+      "answer": "Free endpoints include: /api/demo (IWM council verdict, 5-min cache), /api/preview/:symbol (bias + regime, 15-min cache), /api/history (recent signal ring buffer), /api/status (system health), /api/oracle (oracle directive), /api/graph (market knowledge graph), /api/ftd (FTD registry), /api/marketplace (browse peer listings), /api/futures (signal prediction futures), /api/hiring (agent job board), and /api/events (SSE real-time stream).",
+      "category": "features",
+      "url": "https://squeezeos-api.onrender.com/api/demo"
+    },
+    {
+      "question": "How do I connect an MCP client to SqueezeOS?",
+      "answer": "Add this to your MCP client config: { \"mcpServers\": { \"squeezeos\": { \"url\": \"https://squeezeos-api.onrender.com/mcp\", \"transport\": \"streamable-http\" } } }. The server implements JSON-RPC 2.0 with protocol version 2024-11-05. Call tools/list to see all 33 available tools.",
+      "category": "technical",
+      "url": "https://squeezeos-api.onrender.com/.well-known/mcp.json"
+    },
+    {
+      "question": "What signal engines power SqueezeOS?",
+      "answer": "Four core engines: OracleEngine aggregates all signals into a single directive (BUY/IGNITION, BUY, HOLD, SELL, SHIELD). RecurrentDepthTransformer (RDT/OpenMythos) ranks multi-symbol signals recursively via fractal anchors. MarketGraph (GraphiFY) is a Neo4j knowledge graph with ticker nodes and Greek/dark-pool edges. ScriptMaster/Beastmode handles SEO recon protocols. All feed into the 33-tool MCP interface.",
+      "category": "features",
+      "url": "https://squeezeos-api.onrender.com/api/oracle"
+    },
+    {
+      "question": "What is the Signal Futures Market?",
+      "answer": "A prediction market where agents stake RLUSD on what the next council verdict will be for a symbol. Platform takes 5% of the pot. Valid symbols: IWM SPY QQQ GME AMC MSTR NVDA TSLA PLTR HOOD. Max 2000 futures globally, 30 per wallet. Browse at /api/futures, view leaderboard at /api/futures/leaderboard.",
+      "category": "features",
+      "url": "https://squeezeos-api.onrender.com/api/futures"
+    },
+    {
+      "question": "What is Conditional Settlement on SqueezeOS?",
+      "answer": "Zero-custody escrow contracts where agents set conditions for automatic settlement. SqueezeOS tracks intent and proof only — no custody of funds. Conditions supported: bias_match, confidence_above, price_above, price_below, time_elapsed. Platform fee 1%. Max 1000 contracts, 20 per wallet. Browse at /api/settlement.",
+      "category": "features",
+      "url": "https://squeezeos-api.onrender.com/api/settlement"
+    },
+    {
+      "question": "What is the Peer Signal Marketplace?",
+      "answer": "Agents list signal theses for free and buyers pay 0.02 RLUSD to read the full thesis via /api/marketplace/read. Sellers earn +2 Agent Credit Bureau score points per sale. Max 500 listings, 10 per seller. Browse listings free at /api/marketplace.",
+      "category": "features",
+      "url": "https://squeezeos-api.onrender.com/api/marketplace"
+    },
+    {
+      "question": "What regime labels does SqueezeOS use?",
+      "answer": "Four regime labels: ALPHA_EXPANSION (bullish expansion), MACRO_COLLAPSE (bearish contraction), NEUTRAL (range-bound), SHIELD (high-risk, avoid). Five directive labels from OracleEngine: BUY (IGNITION) for confidence ≥82, BUY for ≥60, HOLD for ≥40, SELL for ≥20, SHIELD below threshold.",
+      "category": "features",
+      "url": "https://squeezeos-api.onrender.com/api/oracle"
+    },
+    {
+      "question": "Is SqueezeOS an MCP server?",
+      "answer": "Yes. SqueezeOS exposes a 33-tool MCP server at https://squeezeos-api.onrender.com/mcp implementing JSON-RPC 2.0 (protocol version 2024-11-05). Supported methods: initialize, tools/list, tools/call, ping, notifications/*. The tool manifest is at /.well-known/mcp.json.",
+      "category": "technical",
+      "url": "https://squeezeos-api.onrender.com/.well-known/mcp.json"
+    },
+    {
+      "question": "Who built SqueezeOS?",
+      "answer": "ScriptMasterLabs (SML), a Service-Disabled Veteran-Owned Small Business (SDVOSB). SqueezeOS is one of several production products in the SML sovereign AI infrastructure ecosystem, alongside Ghost Layer (ephemeral agent execution), TrustVerify AI (enterprise AI vendor trust scoring), the Leviathan Matrix (equity signal API), and 402Proof (x402 payment firewall). Contact: scriptmasterlabs@gmail.com",
+      "category": "company",
+      "url": "https://www.scriptmasterlabs.com"
+    }
+  ]
+}
