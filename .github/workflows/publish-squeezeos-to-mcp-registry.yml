@@ -41,5 +41,5 @@ jobs:
         run: |
           echo "Published. Verifying in registry..."
           sleep 5
-          curl -s "https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.timwal78/squeezeos" | head -c 800 || true
+          curl -s "https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.Timwal78/squeezeos" | head -c 800 || true
           echo ""
