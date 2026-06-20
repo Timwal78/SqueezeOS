@@ -64,6 +64,28 @@ func NewBase(ep *models.Endpoint, ghostLayerETH string) *models.Invoice {
 	}
 }
 
+// NewSolana creates a USDC-on-Solana invoice. Price is the same decimal amount
+// as the RLUSD endpoint price (1:1 USD peg). PayTo is the treasury Solana wallet address.
+func NewSolana(ep *models.Endpoint, treasurySOL string) *models.Invoice {
+	id := uuid.New().String()
+	now := time.Now()
+	memoHex := strings.ToUpper(hex.EncodeToString([]byte(id)))
+	return &models.Invoice{
+		ID:         id,
+		EndpointID: ep.ID,
+		MerchantID: ep.MerchantID,
+		Path:       ep.Path,
+		Price:      ep.Price,
+		Asset:      "USDC",
+		Network:    "Solana",
+		PayTo:      treasurySOL,
+		MemoHex:    memoHex,
+		ExpiresAt:  now.Add(InvoiceTTL),
+		CreatedAt:  now,
+		Status:     "pending",
+	}
+}
+
 func IsExpired(inv *models.Invoice) bool {
 	return time.Now().After(inv.ExpiresAt)
 }

@@ -27,6 +27,7 @@ import (
 	"proof402/internal/passport"
 	"proof402/internal/receipt"
 	"proof402/internal/seed"
+	"proof402/internal/solana"
 	"proof402/internal/store"
 	"proof402/internal/xrpl"
 )
@@ -47,16 +48,31 @@ func main() {
 	serverURL := env("SERVER_URL", "http://localhost:9090")
 
 	// ── Base / USDC ─────────────────────────────────────────────────────────────
-	baseRPC          := env("BASE_RPC_URL",           "https://mainnet.base.org")
-	ghostLayerETH    := env("GHOST_LAYER_ETH_ADDRESS", "") // 0x address on Base
-	usdcContract     := env("USDC_CONTRACT_ADDRESS",  "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913")
-	baseClient       := base.NewClient(baseRPC)
-	usdcEnabled      := ghostLayerETH != ""
+	baseRPC       := env("BASE_RPC_URL",           "https://mainnet.base.org")
+	ghostLayerETH := env("GHOST_LAYER_ETH_ADDRESS", "") // 0x address on Base
+	usdcContract  := env("USDC_CONTRACT_ADDRESS",  "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913")
+	baseClient    := base.NewClient(baseRPC)
+	usdcEnabled   := ghostLayerETH != ""
 	if usdcEnabled {
-		log.Printf("[USDC] Base payment rail enabled — Ghost Layer ETH: %s", ghostLayerETH)
+		log.Printf("[USDC/BASE] Base payment rail enabled — Ghost Layer ETH: %s", ghostLayerETH)
 	} else {
-		log.Println("[USDC] GHOST_LAYER_ETH_ADDRESS not set — USDC rail disabled")
+		log.Println("[USDC/BASE] GHOST_LAYER_ETH_ADDRESS not set — Base USDC rail disabled")
 	}
+
+	// ── Solana / USDC-SPL ───────────────────────────────────────────────────────
+	solanaRPC     := env("SOLANA_RPC_URL",           "https://api.mainnet-beta.solana.com")
+	gatewaySOL    := env("GATEWAY_SOLANA_ADDRESS",   "") // Solana base58 wallet address
+	usdcMintSOL   := env("USDC_MINT_SOLANA",         "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")
+	solanaClient  := solana.NewClient(solanaRPC)
+	solanaEnabled := gatewaySOL != ""
+	if solanaEnabled {
+		log.Printf("[USDC/SOL] Solana USDC payment rail enabled — Treasury: %s", gatewaySOL)
+	} else {
+		log.Println("[USDC/SOL] GATEWAY_SOLANA_ADDRESS not set — Solana USDC rail disabled")
+	}
+
+	// ── Xahau (RLUSD on Xahau network) ─────────────────────────────────────────
+	xahauClient := xrpl.NewClient(xahauRPC)
 
 	if gatewayAddr == "" {
 		log.Fatalf("[FATAL] GATEWAY_XRPL_ADDRESS not set")
@@ -105,10 +121,19 @@ func main() {
 				"note":     "USDC on Base routed via Ghost Layer",
 			}
 		}
+		if solanaEnabled {
+			networks["solana"] = map[string]string{
+				"gateway":  gatewaySOL,
+				"rpc":      solanaRPC,
+				"currency": "USDC",
+				"mint":     usdcMintSOL,
+			}
+		}
 		writeJSON(w, 200, map[string]interface{}{
-			"status":       "ok",
-			"usdc_enabled": usdcEnabled,
-			"networks":     networks,
+			"status":          "ok",
+			"usdc_enabled":    usdcEnabled,
+			"solana_enabled":  solanaEnabled,
+			"networks":        networks,
 		})
 	})
 
@@ -236,7 +261,8 @@ func main() {
 		req.Body = http.MaxBytesReader(w, req.Body, 64*1024)
 		var body struct {
 			EndpointID string `json:"endpoint_id"`
-			Currency   string `json:"currency"` // optional: "USDC" for Base rail
+			Currency   string `json:"currency"` // optional: "USDC" for Base or Solana rail
+			Chain      string `json:"chain"`    // optional: "solana" to pay with Solana USDC; "base" (default for USDC)
 		}
 		if err := json.NewDecoder(req.Body).Decode(&body); err != nil || body.EndpointID == "" {
 			http.Error(w, "endpoint_id required", http.StatusBadRequest)
@@ -248,35 +274,52 @@ func main() {
 			return
 		}
 
-		// Route to USDC/Base if requested and configured
 		wantUSDC := strings.ToUpper(body.Currency) == "USDC"
-		if wantUSDC && !usdcEnabled {
-			http.Error(w, "USDC payment rail not configured on this server", http.StatusServiceUnavailable)
-			return
-		}
+		wantSolana := strings.ToLower(body.Chain) == "solana"
 
 		var inv *models.Invoice
-		if wantUSDC {
+		switch {
+		case wantUSDC && wantSolana:
+			if !solanaEnabled {
+				http.Error(w, "Solana USDC payment rail not configured on this server", http.StatusServiceUnavailable)
+				return
+			}
+			inv = invoice.NewSolana(ep, gatewaySOL)
+		case wantUSDC:
+			if !usdcEnabled {
+				http.Error(w, "USDC payment rail (Base) not configured on this server", http.StatusServiceUnavailable)
+				return
+			}
 			inv = invoice.NewBase(ep, ghostLayerETH)
-		} else {
+		default:
 			inv = invoice.New(ep, gatewayAddr)
 		}
 		db.SaveInvoice(inv)
 
-		// Build payment options list
+		// Build full payment options list so agents can choose their preferred chain
 		paymentOptions := []map[string]string{
 			{"network": "XRPL", "pay_to": gatewayAddr, "currency": "RLUSD", "issuer": rlusdIssuer, "rpc": xrplRPC},
-			{"network": "Xahau", "pay_to": gatewayXahau, "currency": "RLUSD", "issuer": rlusdIssuer, "rpc": xahauRPC, "note": "XAH trust line required for RLUSD on Xahau"},
+			{"network": "Xahau", "pay_to": gatewayXahau, "currency": "RLUSD", "issuer": rlusdIssuer, "rpc": xahauRPC, "note": "RLUSD on Xahau — XAH trust line required"},
 		}
 		if usdcEnabled {
 			paymentOptions = append(paymentOptions, map[string]string{
-				"network":       "Base",
-				"pay_to":        ghostLayerETH,
-				"currency":      "USDC",
-				"contract":      usdcContract,
-				"chain_id":      "8453",
-				"rpc":           baseRPC,
-				"memo_note":     "Include memo_hex as calldata for faster matching. Amount must be >= invoice amount.",
+				"network":   "Base",
+				"pay_to":    ghostLayerETH,
+				"currency":  "USDC",
+				"contract":  usdcContract,
+				"chain_id":  "8453",
+				"rpc":       baseRPC,
+				"memo_note": "Include memo_hex as calldata for faster matching.",
+			})
+		}
+		if solanaEnabled {
+			paymentOptions = append(paymentOptions, map[string]string{
+				"network":   "Solana",
+				"pay_to":    gatewaySOL,
+				"currency":  "USDC",
+				"mint":      usdcMintSOL,
+				"chain":     "solana",
+				"memo_note": "Include invoice_id in transfer memo for faster matching.",
 			})
 		}
 
@@ -329,25 +372,38 @@ func main() {
 			return
 		}
 
-		// Route verification by chain — Base tx hashes start with "0x"
-		if strings.HasPrefix(body.TxHash, "0x") {
+		// Route verification by invoice network — each chain has distinct tx hash formats.
+		switch inv.Network {
+		case "Base":
 			if !usdcEnabled {
-				http.Error(w, "USDC payment rail not configured on this server", http.StatusServiceUnavailable)
-				return
-			}
-			if inv.Network != "Base" {
-				http.Error(w, "tx_hash is a Base tx but invoice was issued for "+inv.Network, http.StatusBadRequest)
+				http.Error(w, "USDC payment rail (Base) not configured on this server", http.StatusServiceUnavailable)
 				return
 			}
 			if err := baseClient.VerifyUSDCPayment(body.TxHash, ghostLayerETH, inv.Price, usdcContract); err != nil {
 				log.Printf("[VERIFY/BASE] failed invoice=%s tx=%s: %v", body.InvoiceID, body.TxHash, err)
-				http.Error(w, "USDC payment verification failed: "+err.Error(), http.StatusPaymentRequired)
+				http.Error(w, "Base USDC payment verification failed: "+err.Error(), http.StatusPaymentRequired)
 				return
 			}
-		} else {
+		case "Solana":
+			if !solanaEnabled {
+				http.Error(w, "Solana USDC payment rail not configured on this server", http.StatusServiceUnavailable)
+				return
+			}
+			if err := solanaClient.VerifyUSDCPayment(body.TxHash, gatewaySOL, inv.Price, usdcMintSOL); err != nil {
+				log.Printf("[VERIFY/SOL] failed invoice=%s tx=%s: %v", body.InvoiceID, body.TxHash, err)
+				http.Error(w, "Solana USDC payment verification failed: "+err.Error(), http.StatusPaymentRequired)
+				return
+			}
+		case "Xahau":
+			if _, err := xahauClient.VerifyPayment(body.TxHash, gatewayXahau, inv.Price, inv.Asset, inv.MemoHex, rlusdIssuer); err != nil {
+				log.Printf("[VERIFY/XAHAU] failed invoice=%s tx=%s: %v", body.InvoiceID, body.TxHash, err)
+				http.Error(w, "Xahau payment verification failed: "+err.Error(), http.StatusPaymentRequired)
+				return
+			}
+		default: // XRPL (and any legacy invoices without Network set)
 			if _, err := xrplClient.VerifyPayment(body.TxHash, gatewayAddr, inv.Price, inv.Asset, inv.MemoHex, rlusdIssuer); err != nil {
-				log.Printf("[VERIFY] failed invoice=%s tx=%s: %v", body.InvoiceID, body.TxHash, err)
-				http.Error(w, "payment verification failed", http.StatusPaymentRequired)
+				log.Printf("[VERIFY/XRPL] failed invoice=%s tx=%s: %v", body.InvoiceID, body.TxHash, err)
+				http.Error(w, "XRPL payment verification failed: "+err.Error(), http.StatusPaymentRequired)
 				return
 			}
 		}
@@ -1048,8 +1104,8 @@ func main() {
 		}
 		p4Tools := []mcpTool{
 			{Name: "platform_stats", Description: "Live 402Proof platform stats: total payments, volume, active agents. Free.", InputSchema: map[string]interface{}{"type": "object", "properties": map[string]interface{}{}}},
-			{Name: "get_invoice", Description: "Request a payment invoice for any SqueezeOS endpoint. Returns XRPL destination address, RLUSD amount, and memo_hex. Pay on XRPL then call verify_payment. Free.", InputSchema: map[string]interface{}{"type": "object", "required": []string{"endpoint_id"}, "properties": map[string]interface{}{"endpoint_id": map[string]string{"type": "string", "description": "UUID of endpoint to pay for"}}}},
-			{Name: "verify_payment", Description: "Submit XRPL tx_hash after paying an invoice. Returns a signed JWT access_token (1-hour TTL). Free.", InputSchema: map[string]interface{}{"type": "object", "required": []string{"invoice_id", "tx_hash", "agent_wallet"}, "properties": map[string]interface{}{"invoice_id": map[string]string{"type": "string"}, "tx_hash": map[string]string{"type": "string", "description": "64-char hex XRPL tx hash"}, "agent_wallet": map[string]string{"type": "string"}, "agent_domain": map[string]string{"type": "string"}}}},
+			{Name: "get_invoice", Description: "Request a payment invoice for any SqueezeOS endpoint. Returns destination address, amount, and payment_options for XRPL (RLUSD), Xahau (RLUSD), Base (USDC), or Solana (USDC-SPL). Pass currency='USDC' and chain='solana' for Solana. Free.", InputSchema: map[string]interface{}{"type": "object", "required": []string{"endpoint_id"}, "properties": map[string]interface{}{"endpoint_id": map[string]string{"type": "string", "description": "UUID of endpoint to pay for"}, "currency": map[string]string{"type": "string", "description": "USDC for Base/Solana rail; omit for RLUSD on XRPL"}, "chain": map[string]string{"type": "string", "description": "solana — use Solana USDC-SPL rail; base — use Base USDC rail"}}}},
+			{Name: "verify_payment", Description: "Submit tx_hash after paying an invoice. Supports XRPL, Xahau, Base (0x… hash), and Solana. Returns a signed JWT access_token (1-hour TTL). Free.", InputSchema: map[string]interface{}{"type": "object", "required": []string{"invoice_id", "tx_hash", "agent_wallet"}, "properties": map[string]interface{}{"invoice_id": map[string]string{"type": "string"}, "tx_hash": map[string]string{"type": "string", "description": "XRPL/Xahau: 64-char hex; Base: 0x-prefixed hex; Solana: base58 signature"}, "agent_wallet": map[string]string{"type": "string"}, "agent_domain": map[string]string{"type": "string"}}}},
 			{Name: "check_loyalty", Description: "Loyalty tier and free-call balance for any XRPL wallet. Automatic — no registration. Free.", InputSchema: map[string]interface{}{"type": "object", "required": []string{"wallet"}, "properties": map[string]interface{}{"wallet": map[string]string{"type": "string"}}}},
 			{Name: "get_compliance_receipt", Description: "Retrieve a tamper-evident compliance receipt by UUID. Contains XRPL tx hash, agent wallet, endpoint, amount, and timestamp. Free.", InputSchema: map[string]interface{}{"type": "object", "required": []string{"receipt_id"}, "properties": map[string]interface{}{"receipt_id": map[string]string{"type": "string"}}}},
 			{Name: "get_agent_passport", Description: "Full Agent Passport for any XRPL wallet: payment history, risk score 0-100, loyalty tier, passport hash. Free.", InputSchema: map[string]interface{}{"type": "object", "required": []string{"wallet"}, "properties": map[string]interface{}{"wallet": map[string]string{"type": "string"}}}},
