@@ -627,6 +627,39 @@ _TOOLS = [
             },
         },
     },
+
+    # ── 741 Pure Macro Matrix ─────────────────────────────────────────────────
+    {
+        "name": "macro_741_scan",
+        "description": (
+            "741 Pure Macro Matrix — 5-layer EMA structural alignment engine. Cost: 0.04 RLUSD. "
+            "Computes EMA 30 / 60 / 90 / 120 / 741 on daily closes for any set of US equity tickers. "
+            "Returns one of three macro states per ticker: "
+            "• PERFECT_BULLISH_REGIME — EMA_30 > EMA_60 > EMA_90 > EMA_120 > EMA_741 "
+            "  (full institutional highway: asset is locked into massive capital momentum, safe to ride). "
+            "• PERFECT_BEARISH_REGIME — full inversion, macro distribution confirmed. "
+            "• CONSOLIDATION_CHOP — mixed stack; watch matrix_spread_pct for squeeze_alert. "
+            "squeeze_alert=true means CONSOLIDATION_CHOP with |matrix_spread_pct| < 5% — "
+            "price is coiling directly against the 741 anchor, a macro breakout is building. "
+            "matrix_spread_pct = ((EMA_30 - EMA_741) / EMA_741) * 100. "
+            "Fires Discord alert automatically on every PERFECT BULLISH or BEARISH hit. "
+            "Tickers are fully dynamic — pass any comma-separated list. No hardcoded universe. "
+            "Max 50 symbols per call. Data from Tradier (primary) or Alpaca (fallback). "
+            "Pass payment_token from verify_payment plus agent_wallet."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["symbols"],
+            "properties": {
+                "symbols": {
+                    "type": "string",
+                    "description": "Comma-separated US equity tickers, e.g. 'SPY,QQQ,GME,NVDA,IWM'. Max 50.",
+                },
+                "payment_token": {"type": "string", "description": "JWT from verify_payment (0.04 RLUSD)"},
+                "agent_wallet":  {"type": "string", "description": "Your XRPL wallet address"},
+            },
+        },
+    },
 ]
 
 # Endpoint IDs for helpful 402 error messages
@@ -637,12 +670,14 @@ _ENDPOINT_IDS = {
     "iwm_odte":             "60f48ce0-6002-4385-9b60-03a0d2bbebab",
     "marketplace_read_signal": "d1a2b3c4-e001-4c3f-aa24-de6e3bc12b5a",
     "iam_resolve":          "a7f3d2b1-9e4c-4a8f-b5c6-d7e8f9a0b1c2",
+    "macro_741_scan":       "f3a7c891-2d54-4b8e-9a1f-6c3d8e5f7b2a",
 }
 _PRICES = {
     "council_verdict": 0.10, "market_scan": 0.05,
     "options_intelligence": 0.05, "iwm_odte": 0.03,
     "marketplace_read_signal": 0.02,
     "iam_resolve": 0.05,
+    "macro_741_scan": 0.04,
 }
 
 
@@ -890,6 +925,15 @@ def _dispatch(name: str, args: dict, req_headers: dict) -> dict:
     if name == "iam_truth":
         symbol = (args.get("symbol") or "IWM").upper()
         return _text(_proxy("GET", f"{sq}/api/iam/truth/{symbol}"))
+
+    # ── 741 Pure Macro Matrix ─────────────────────────────────────────────────
+    if name == "macro_741_scan":
+        if not payment_token: return _need_token(name)
+        symbols = args.get("symbols", "")
+        return _compress_mcp_result(
+            _text(_proxy("POST", f"{sq}/api/741macro", headers=ph, json_body={"symbols": symbols})),
+            _tier, _seed,
+        )
 
     return {
         "content": [{"type": "text", "text": json.dumps({"error": "ERR_UNKNOWN_TOOL", "tool": name})}],
