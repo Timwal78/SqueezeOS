@@ -12,6 +12,8 @@ on:
   workflow_dispatch: {}
   push:
     tags: ["squeezeos-v*"]
+    branches: ["main"]
+    paths: ["server.json"]
 
 jobs:
   publish:
