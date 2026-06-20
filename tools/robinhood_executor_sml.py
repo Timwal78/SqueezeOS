@@ -57,6 +57,9 @@ SQUEEZEOS_API_URL  = os.environ.get("SQUEEZEOS_API_URL", "https://squeezeos-api.
 _macro_cache: dict = {}
 _MACRO_CACHE_TTL   = 3600   # matches server-side 1-hour TTL
 
+# Always-watched anchors — injected into every oracle poll regardless of live universe
+_MANDATORY_ANCHORS = {"AMC", "GME", "IWM"}
+
 def _get_macro_regime(symbol: str) -> str:
     """
     Query 741 Pure Macro Matrix on SqueezeOS server.
@@ -665,6 +668,20 @@ def _poll_oracle() -> int:
     except Exception as e:
         logger.debug(f"[ORACLE] history fetch failed: {e}")
 
+    # ── 3. Mandatory anchors — always fetch AMC, GME, IWM even if absent from batch ──
+    for anchor in _MANDATORY_ANCHORS:
+        if anchor not in symbols_seen:
+            try:
+                req = URLRequest(f"{SQUEEZEOS_API_URL}/api/oracle/{anchor}",
+                                 headers={"User-Agent": "SqueezeOS-RH-Executor/2.0"})
+                with urlopen(req, timeout=10) as resp:
+                    oracle_resp = json.loads(resp.read())
+                info = oracle_resp.get("oracle") or {}
+                if info.get("directive"):
+                    symbols_seen[anchor] = info
+            except Exception as e:
+                logger.debug(f"[ORACLE] mandatory anchor {anchor} fetch failed: {e}")
+
     if not symbols_seen:
         return 0
 
@@ -716,7 +733,7 @@ def _poll_oracle() -> int:
 def main():
     global _rh_logged_in  # explicitly declare global so Python never creates a local shadow
     logger.info("=" * 60)
-    logger.info("SqueezeOS Robinhood Executor v3.3 — 741 Macro Regime Gate (PERFECT_BEARISH blocks BUY)")
+    logger.info("SqueezeOS Robinhood Executor v3.4 — Dynamic Universe + Mandatory Anchors (AMC/GME/IWM)")
     logger.info(f"  API         : {SQUEEZEOS_API_URL}")
     logger.info(f"  Poll every  : {POLL_INTERVAL_S}s")
     logger.info(f"  Hours       : 4:00 AM–8:00 PM ET (pre-market + regular + after-hours)")

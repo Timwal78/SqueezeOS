@@ -227,7 +227,9 @@ def _execute_tradier(sym: str, action: str, resolution: dict, price: float) -> d
     if _is_extended_hours():
         logger.info(f"[IAM-EXEC] Extended hours: routing {sym} to equity (options unavailable)")
         return _execute_tradier_equity(sym, action, price)
-    if instrument == "options" or (instrument == "auto" and sym in ("IWM", "SPY", "QQQ")):
+    # auto mode: try options on any symbol — chain availability is the natural gate.
+    # BUY signal → calls; SELL signal → puts. Falls back gracefully if no chain exists.
+    if instrument in ("options", "auto"):
         return _execute_tradier_options(sym, action, resolution, price)
     else:
         return _execute_tradier_equity(sym, action, price)
