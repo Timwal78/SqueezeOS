@@ -18,62 +18,32 @@
     "protocol": "JSON-RPC 2.0 (MCP 2024-11-05)",
     "status": "production",
     "tool_count": 33,
-    "description": "SqueezeOS is an institutional-grade AI trading intelligence platform exposed as a 33-tool MCP server. AI agents call tools directly via JSON-RPC 2.0. Premium endpoints are pay-per-call — agents pay RLUSD on the XRP Ledger via 402Proof and receive a 1-hour signed JWT. No API keys, no subscriptions. Specializes in short-squeeze detection, multi-engine signal consensus, options flow, and real-time market regime analysis.",
+    "description": "SqueezeOS is an institutional-grade AI trading intelligence platform exposed as a 33-tool MCP server. AI agents call tools directly via JSON-RPC 2.0. Premium endpoints are pay-per-call — agents pay RLUSD on the XRP Ledger via 402Proof and receive a 1-hour signed JWT. No API keys, no subscriptions.",
     "engines": [
-      {
-        "name": "OracleEngine",
-        "description": "Aggregates all signal engines into a single directive: BUY (IGNITION), BUY, HOLD, SELL, or SHIELD. 60-second per-symbol cache.",
-        "endpoint": "/api/oracle"
-      },
-      {
-        "name": "RecurrentDepthTransformer (RDT / OpenMythos)",
-        "description": "Recursive what-if multi-symbol ranking engine using fractal anchors (depth 0-3). Reads from MarketGraph.",
-        "endpoint": "/api/graph/rdt"
-      },
-      {
-        "name": "MarketGraph (GraphiFY)",
-        "description": "Neo4j AuraDB knowledge graph — ticker nodes, Greek/dark-pool/fractal edges.",
-        "endpoint": "/api/graph"
-      },
-      {
-        "name": "ScriptMaster / Beastmode",
-        "description": "SEO/recon node: P01 Authority Signaling, P02 Visual Saturation, P03 Sentiment Exploitation.",
-        "endpoint": "/api/scriptmaster"
-      }
+      {"name": "OracleEngine", "description": "Aggregates all signal engines into a single directive: BUY (IGNITION), BUY, HOLD, SELL, or SHIELD.", "endpoint": "/api/oracle"},
+      {"name": "RecurrentDepthTransformer (RDT / OpenMythos)", "description": "Recursive what-if multi-symbol ranking engine using fractal anchors (depth 0-3).", "endpoint": "/api/graph/rdt"},
+      {"name": "MarketGraph (GraphiFY)", "description": "Neo4j AuraDB knowledge graph — ticker nodes, Greek/dark-pool/fractal edges.", "endpoint": "/api/graph"},
+      {"name": "ScriptMaster / Beastmode", "description": "SEO/recon node: P01 Authority Signaling, P02 Visual Saturation, P03 Sentiment Exploitation.", "endpoint": "/api/scriptmaster"}
     ],
     "premium_endpoints": [
-      { "path": "/api/council", "cost": "0.10 RLUSD", "description": "Multi-engine AI verdict for any symbol" },
-      { "path": "/api/scan", "cost": "0.05 RLUSD", "description": "Full $1-$50 squeeze scanner" },
-      { "path": "/api/options", "cost": "0.05 RLUSD", "description": "Institutional options flow" },
-      { "path": "/api/iwm", "cost": "0.03 RLUSD", "description": "IWM 0DTE contract scorer" },
-      { "path": "/api/marketplace/read", "cost": "0.02 RLUSD", "description": "Full signal thesis from peer marketplace" }
+      {"path": "/api/council", "cost": "0.10 RLUSD", "description": "Multi-engine AI verdict for any symbol"},
+      {"path": "/api/scan", "cost": "0.05 RLUSD", "description": "Full $1-$50 squeeze scanner"},
+      {"path": "/api/options", "cost": "0.05 RLUSD", "description": "Institutional options flow"},
+      {"path": "/api/iwm", "cost": "0.03 RLUSD", "description": "IWM 0DTE contract scorer"},
+      {"path": "/api/marketplace/read", "cost": "0.02 RLUSD", "description": "Full signal thesis from peer marketplace"}
     ],
     "free_endpoints": [
-      { "path": "/api/demo", "description": "IWM council verdict (5-min cache)" },
-      { "path": "/api/preview/:symbol", "description": "Bias + regime preview (15-min cache)" },
-      { "path": "/api/history", "description": "All recent signals (ring buffer, 200/symbol)" },
-      { "path": "/api/status", "description": "System health + uptime" },
-      { "path": "/api/oracle", "description": "Oracle directive batch" },
-      { "path": "/api/graph", "description": "Neo4j market graph snapshot" },
-      { "path": "/api/ftd", "description": "FTD registry (GME/AMC)" },
-      { "path": "/api/marketplace", "description": "Browse peer signal listings" },
-      { "path": "/api/futures", "description": "Browse signal prediction futures" },
-      { "path": "/api/hiring", "description": "Agent job board" },
-      { "path": "/api/events", "description": "SSE real-time event stream" }
-    ],
-    "marketplace_features": [
-      {
-        "name": "Signal Futures Market",
-        "description": "Agents stake RLUSD on next council verdict. Platform fee 5%. Valid symbols: IWM SPY QQQ GME AMC MSTR NVDA TSLA PLTR HOOD."
-      },
-      {
-        "name": "Conditional Settlement",
-        "description": "Zero-custody escrow contracts. Conditions: bias_match, confidence_above, price_above, price_below, time_elapsed. 1% platform fee."
-      },
-      {
-        "name": "Peer Signal Marketplace",
-        "description": "List signal theses free; buyers pay 0.02 RLUSD for full thesis. Sellers earn +2 Credit Bureau score per sale."
-      }
+      {"path": "/api/demo", "description": "IWM council verdict (5-min cache)"},
+      {"path": "/api/preview/:symbol", "description": "Bias + regime preview (15-min cache)"},
+      {"path": "/api/history", "description": "All recent signals (ring buffer, 200/symbol)"},
+      {"path": "/api/status", "description": "System health + uptime"},
+      {"path": "/api/oracle", "description": "Oracle directive batch"},
+      {"path": "/api/graph", "description": "Neo4j market graph snapshot"},
+      {"path": "/api/ftd", "description": "FTD registry (GME/AMC)"},
+      {"path": "/api/marketplace", "description": "Browse peer signal listings"},
+      {"path": "/api/futures", "description": "Browse signal prediction futures"},
+      {"path": "/api/hiring", "description": "Agent job board"},
+      {"path": "/api/events", "description": "SSE real-time event stream"}
     ],
     "auth": {
       "type": "RLUSD micropayment via 402Proof → 1-hour signed JWT",
@@ -94,13 +64,7 @@
     "regime_labels": ["ALPHA_EXPANSION", "MACRO_COLLAPSE", "NEUTRAL", "SHIELD"],
     "directive_labels": ["BUY (IGNITION)", "BUY", "HOLD", "SELL", "SHIELD"],
     "supported_symbols": "US equities — IWM SPY QQQ GME AMC MSTR NVDA TSLA PLTR HOOD + scan universe $1-$50",
-    "target_users": [
-      "AI agents needing autonomous market signal access",
-      "Algorithmic traders",
-      "Quant developers",
-      "Institutional short-squeeze desks",
-      "MCP client developers"
-    ]
+    "target_users": ["AI agents needing autonomous market signal access", "Algorithmic traders", "Quant developers", "Institutional short-squeeze desks", "MCP client developers"]
   },
   "discovery": {
     "llms_txt": "https://squeezeos-api.onrender.com/llms.txt",
@@ -112,5 +76,21 @@
     "faq": "https://squeezeos-api.onrender.com/ai/faq.json",
     "ai_txt": "https://squeezeos-api.onrender.com/.well-known/ai.txt",
     "status": "https://squeezeos-api.onrender.com/api/status"
+  },
+  "ecosystem": {
+    "organization": "ScriptMasterLabs",
+    "organization_url": "https://scriptmasterlabs.com",
+    "description": "ScriptMasterLabs builds x402 micropayment infrastructure, AI agent trust systems, and institutional market intelligence tools. All products interoperate via the x402 protocol for agent-native payments.",
+    "related_products": [
+      {"name": "mcp-x402 Signal API", "role": "Unified pay-per-call MCP gateway", "description": "43+ MCP tools covering trading signals, web scraping, SEC data, XRPL whale copy-trading, memecoin launchpad, and agent infrastructure. Multi-chain x402: Base USDC, XRPL RLUSD, Solana USDC.", "github": "https://github.com/timwal78/sml-x402-signal-api", "tags": ["mcp-server", "x402", "multi-chain", "trading"]},
+      {"name": "Ghost Layer", "role": "Dual-chain XRPL+Base toll gateway", "description": "Private routing engine with XRPL+Base micropayment toll, Xahau hooks intelligence, and URIToken minting.", "github": "https://github.com/timwal78/ghost-layer", "url": "https://ghost-layer.onrender.com", "tags": ["gateway", "xrpl", "base", "privacy"]},
+      {"name": "Aetheris-MCP", "role": "x402 web scraping MCP server", "description": "SSE MCP server with JSDOM-sanitized web scraping behind an on-chain x402 USDC micropayment interceptor.", "github": "https://github.com/timwal78/aetheris-mcp-render", "tags": ["mcp-server", "scraping", "x402", "usdc"]},
+      {"name": "Aetheris Client SDK", "role": "TypeScript x402 payment SDK", "description": "Official npm SDK that auto-intercepts HTTP 402 challenges and settles USDC payments on Base.", "github": "https://github.com/timwal78/aetheris-client-sdk", "tags": ["sdk", "typescript", "x402", "usdc"]},
+      {"name": "CrawlToll", "role": "x402-gated web crawling service", "description": "Metered web crawling with x402 micropayment gating.", "github": "https://github.com/timwal78/crawltoll", "tags": ["crawling", "x402"]},
+      {"name": "ZeroQuery Protocol", "role": "Privacy-preserving intent ranking with ZK proofs", "description": "SDK + Anchor program for ranking user intents without leaking raw queries. Groth16 ZK proofs + SOL SaaS tiers.", "github": "https://github.com/timwal78/zeroquery-protocol", "tags": ["zk-proofs", "solana", "privacy", "sdk"]},
+      {"name": "AGO Orchestrator", "role": "Agent orchestration infrastructure", "description": "Orchestration layer for ScriptMasterLabs autonomous agent workflows.", "github": "https://github.com/timwal78/ago-orchestrator", "tags": ["orchestration", "agents"]},
+      {"name": "CodeAgentX", "role": "Autonomous multi-agent financial research platform", "description": "Dexter — 4-agent architecture for financial research. TTM Squeeze detection, MOASS scanner, institutional options flow.", "github": "https://github.com/timwal78/codeagentx", "tags": ["agents", "trading", "research"]},
+      {"name": "Printing Press Library", "role": "Published catalog of generated Go CLIs and MCP servers", "description": "Registry of type-safe Go CLIs and MCP servers. Install via npx @mvanhorn/printing-press.", "github": "https://github.com/timwal78/printing-press-library", "tags": ["cli", "mcp-server", "go", "catalog"]}
+    ]
   }
 }
