@@ -56,23 +56,28 @@ SQUEEZEOS_API_URL  = os.environ.get("SQUEEZEOS_API_URL", "https://squeezeos-api.
 
 _macro_cache: dict = {}
 _MACRO_CACHE_TTL   = 3600   # matches server-side 1-hour TTL
+_MACRO_GATE_SECRET = os.environ.get("MACRO_GATE_SECRET", "")
 
 # Always-watched anchors — injected into every oracle poll regardless of live universe
 _MANDATORY_ANCHORS = {"AMC", "GME", "IWM"}
 
 def _get_macro_regime(symbol: str) -> str:
     """
-    Query 741 Pure Macro Matrix on SqueezeOS server.
-    Returns PERFECT_BULLISH_REGIME | PERFECT_BEARISH_REGIME | CONSOLIDATION_CHOP | UNKNOWN.
-    Fails open — UNKNOWN / INSUFFICIENT_DATA never block a trade.
+    Query internal 741 macro gate on SqueezeOS server.
+    Requires MACRO_GATE_SECRET in executor.env — endpoint is not public.
+    Fails open: no secret configured or fetch error → UNKNOWN (never blocks trades).
+    Only PERFECT_BEARISH_REGIME blocks BUY orders.
     """
+    if not _MACRO_GATE_SECRET:
+        return "UNKNOWN"   # no secret → fail open, never block trades
     now = time.time()
     cached = _macro_cache.get(symbol)
     if cached and now - cached["ts"] < _MACRO_CACHE_TTL:
         return cached["regime"]
     try:
         req = URLRequest(f"{SQUEEZEOS_API_URL}/api/macro/{symbol}",
-                         headers={"User-Agent": "SqueezeOS-RH-Executor/2.0"})
+                         headers={"User-Agent": "SqueezeOS-RH-Executor/2.0",
+                                  "X-Macro-Secret": _MACRO_GATE_SECRET})
         with urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read())
         regime = data.get("regime", "UNKNOWN")

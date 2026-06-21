@@ -39,34 +39,19 @@ from typing import Optional
 
 logger = logging.getLogger("IAM-EXEC")
 
-_macro_cache_iam: dict = {}
-_MACRO_CACHE_TTL_IAM   = 3600
-
 def _get_macro_regime(symbol: str) -> str:
     """
-    Query 741 Pure Macro Matrix for the daily regime.
-    Fails open — UNKNOWN / INSUFFICIENT_DATA never block a trade.
+    Returns the 741 Pure Macro regime for a symbol.
+    Direct Python import — no HTTP call, no public exposure of the paid product.
+    Fails open: UNKNOWN / INSUFFICIENT_DATA never block a trade.
     Only PERFECT_BEARISH_REGIME blocks BUY orders.
     """
-    import time as _time
-    import urllib.request as _urlreq
-    import json as _json
-    now = _time.time()
-    cached = _macro_cache_iam.get(symbol)
-    if cached and now - cached["ts"] < _MACRO_CACHE_TTL_IAM:
-        return cached["regime"]
-    base = os.getenv("SQUEEZEOS_BASE_URL", "https://squeezeos-api.onrender.com").rstrip("/")
     try:
-        req = _urlreq.Request(f"{base}/api/macro/{symbol}",
-                              headers={"User-Agent": "SqueezeOS-IAM-Executor/1.0"})
-        with _urlreq.urlopen(req, timeout=10) as resp:
-            data = _json.loads(resp.read())
-        regime = data.get("regime", "UNKNOWN")
+        from core.api.macro_bp import _compute_regime
+        return _compute_regime(symbol).get("regime", "UNKNOWN")
     except Exception as e:
-        logger.warning(f"[IAM-EXEC] macro regime fetch failed for {symbol}: {e} — failing open")
-        regime = "UNKNOWN"
-    _macro_cache_iam[symbol] = {"regime": regime, "ts": now}
-    return regime
+        logger.warning(f"[IAM-EXEC] macro regime check failed for {symbol}: {e} — failing open")
+        return "UNKNOWN"
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 def _env_bool(key: str, default: bool) -> bool:

@@ -1,27 +1,25 @@
 """
-741 Pure Macro Matrix — Regime Scanner
-=======================================
-Computes EMAs [30, 60, 90, 120, 741] on daily bars to classify macro regime.
+741 Pure Macro Matrix — Internal Regime Engine
+===============================================
+_compute_regime() is the primary interface — call it directly from server-side code.
 
-  PERFECT_BULLISH_REGIME  — full stack stacked bullish; institutional highway
-  PERFECT_BEARISH_REGIME  — full stack stacked bearish; avoid longs
-  CONSOLIDATION_CHOP      — mixed/neutral; watch for coil + breakout
+The single HTTP route (/api/macro/<symbol>) is secret-gated via X-Macro-Secret header.
+It exists ONLY for the Windows Robinhood executor (which can't import Python modules).
+
+Public 741 regime data is a paid product — use GET /api/741macro (x402, 0.04 RLUSD).
 
 Data source: Tradier daily OHLCV — DEVELOPER_MANIFESTO §3 compliant.
 Cache: 1 hour per symbol (daily EMAs are intraday-stable).
-
-Endpoints:
-  GET /api/macro             → batch scan of live universe
-  GET /api/macro/<symbol>    → single-symbol regime check
 """
 from __future__ import annotations
 
+import os
 import logging
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict
 
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 
 logger = logging.getLogger("macro-matrix")
 
@@ -34,7 +32,11 @@ _cache: Dict[str, Dict[str, Any]] = {}
 
 
 def _compute_regime(symbol: str) -> Dict[str, Any]:
-    """Fetch daily bars from Tradier and compute 741 Pure Macro regime."""
+    """
+    Compute 741 Pure Macro regime for a symbol.
+    Importable directly by server-side code — no HTTP call needed.
+    Returns regime + all 5 EMA layers.
+    """
     cached = _cache.get(symbol)
     if cached and time.time() - cached["ts"] < _CACHE_TTL:
         return cached["data"]
@@ -83,28 +85,13 @@ def _compute_regime(symbol: str) -> Dict[str, Any]:
     return result
 
 
-@macro_bp.route("/macro", methods=["GET"])
-@macro_bp.route("/macro/", methods=["GET"])
-def macro_batch():
-    from core.state import state
-    from core.oracle_engine import ORACLE_SYMBOLS
-    symbols = list(state.quotes.keys()) if state.quotes else ORACLE_SYMBOLS
-    regimes = {sym: _compute_regime(sym) for sym in symbols}
-    summary = {
-        "PERFECT_BULLISH_REGIME":  [s for s, r in regimes.items() if r["regime"] == "PERFECT_BULLISH_REGIME"],
-        "PERFECT_BEARISH_REGIME":  [s for s, r in regimes.items() if r["regime"] == "PERFECT_BEARISH_REGIME"],
-        "CONSOLIDATION_CHOP":      [s for s, r in regimes.items() if r["regime"] == "CONSOLIDATION_CHOP"],
-    }
-    return jsonify({
-        "status":         "success",
-        "universe_size":  len(symbols),
-        "summary":        summary,
-        "regimes":        regimes,
-        "timestamp":      datetime.now(timezone.utc).isoformat(),
-    })
+_SECRET = os.environ.get("MACRO_GATE_SECRET", "")
 
 
 @macro_bp.route("/macro/<symbol>", methods=["GET"])
 def macro_single(symbol: str):
+    """Internal executor gate — requires X-Macro-Secret header. Not a public product."""
+    if not _SECRET or request.headers.get("X-Macro-Secret") != _SECRET:
+        return jsonify({"error": "unauthorized"}), 403
     result = _compute_regime(symbol.upper().strip())
     return jsonify({"status": "success", **result})
