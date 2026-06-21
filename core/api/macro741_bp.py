@@ -3,8 +3,9 @@
 ===================================================================
 x402-gated premium endpoint. Cost: 0.04 RLUSD per call.
 
-EMA periods are configured via the MACRO741_PERIODS environment variable
-(comma-separated integers, ascending order). Not stored in source.
+EMA periods configured via MACRO_STACK_CSV (server env only, not in source).
+Secondary gate: X-Macro-Gate header validated against MACRO_GATE_SECRET.
+Cache pre-warm: MACRO_STACK_WARMUP symbols computed on startup.
 
   PERFECT_BULLISH_REGIME  — full ascending EMA stack (fast → slow)
   PERFECT_BEARISH_REGIME  — full descending EMA stack (fast → slow)
@@ -17,11 +18,10 @@ Tickers: fully dynamic via ?symbols= query param. No hardcoded lists.
 Squeeze Alert: CONSOLIDATION_CHOP with low |matrix_spread_pct| (<5%) means
 price is coiling against the anchor — a macro breakout is building.
 
-Trend Lock: PERFECT_BULLISH/BEARISH_REGIME = institutional alignment confirmed.
-
 Discord webhook fires automatically on every PERFECT_BULLISH or PERFECT_BEARISH hit.
 """
 
+import hmac
 import os
 import time
 import logging
@@ -37,17 +37,23 @@ macro741_bp = Blueprint("macro741", __name__)
 
 
 def _load_periods() -> list[int] | None:
-    raw = os.environ.get("MACRO741_PERIODS", "")
+    raw = os.environ.get("MACRO_STACK_CSV", "")
     if not raw:
         return None
     try:
         return [int(x.strip()) for x in raw.split(",") if x.strip()]
     except ValueError:
-        logger.error("[741] MACRO741_PERIODS contains non-integer values — endpoint disabled")
+        logger.error("[741] MACRO_STACK_CSV contains non-integer values — endpoint disabled")
         return None
 
 
 MACRO_PERIODS: list[int] | None = _load_periods()
+_GATE_SECRET: str = os.environ.get("MACRO_GATE_SECRET", "")
+_WARMUP_SYMBOLS: list[str] = [
+    s.strip().upper()
+    for s in os.environ.get("MACRO_STACK_WARMUP", "").split(",")
+    if s.strip()
+]
 
 # 60-second per-ticker cache
 _cache: dict = {}
@@ -193,6 +199,24 @@ def _fire_discord(results: list[dict]) -> None:
     threading.Thread(target=_post, daemon=True).start()
 
 
+def _run_warmup() -> None:
+    """Pre-warm cache for MACRO_STACK_WARMUP symbols after a short startup delay."""
+    if not _WARMUP_SYMBOLS or not MACRO_PERIODS:
+        return
+    time.sleep(8)
+    for sym in _WARMUP_SYMBOLS:
+        try:
+            data = _calculate_matrix_stack(sym)
+            data["_cached_at"] = time.time()
+            _cache[sym] = data
+            logger.info("[741] Warmed %s → %s", sym, data.get("structural_alignment", "ERROR"))
+        except Exception as e:
+            logger.warning("[741] Warmup failed for %s: %s", sym, e)
+
+
+threading.Thread(target=_run_warmup, daemon=True).start()
+
+
 @macro741_bp.route("/741macro", methods=["GET", "POST"])
 @require_payment
 def macro_741_scan():
@@ -212,8 +236,14 @@ def macro_741_scan():
     if not MACRO_PERIODS:
         return jsonify({
             "error": "CONFIG_NOT_SET",
-            "message": "MACRO741_PERIODS is not configured on this server.",
+            "message": "MACRO_STACK_CSV is not configured on this server.",
         }), 503
+
+    # Secondary B2B gate — constant-time comparison against MACRO_GATE_SECRET
+    if _GATE_SECRET:
+        provided = request.headers.get("X-Macro-Gate", "")
+        if not hmac.compare_digest(provided, _GATE_SECRET):
+            return jsonify({"error": "GATE_DENIED", "message": "Invalid or missing X-Macro-Gate header."}), 403
 
     # Parse symbols — from JSON body or query param
     body = request.get_json(silent=True) or {}
