@@ -1,22 +1,23 @@
 """
-741 Pure Macro Matrix — 5-Layer EMA Structural Alignment Engine
-===============================================================
+741 Pure Macro Matrix — Multi-Layer EMA Structural Alignment Engine
+===================================================================
 x402-gated premium endpoint. Cost: 0.04 RLUSD per call.
 
-Five EMAs: 30 / 60 / 90 / 120 / 741
-  PERFECT_BULLISH_REGIME  — EMA_30 > EMA_60 > EMA_90 > EMA_120 > EMA_741
-  PERFECT_BEARISH_REGIME  — EMA_30 < EMA_60 < EMA_90 < EMA_120 < EMA_741
+EMA periods are configured via the MACRO741_PERIODS environment variable
+(comma-separated integers, ascending order). Not stored in source.
+
+  PERFECT_BULLISH_REGIME  — full ascending EMA stack (fast → slow)
+  PERFECT_BEARISH_REGIME  — full descending EMA stack (fast → slow)
   CONSOLIDATION_CHOP      — mixed stack
 
-matrix_spread_pct = ((EMA_30 - EMA_741) / EMA_741) * 100
+matrix_spread_pct = ((EMA_fast - EMA_anchor) / EMA_anchor) * 100
 
 Tickers: fully dynamic via ?symbols= query param. No hardcoded lists.
 
 Squeeze Alert: CONSOLIDATION_CHOP with low |matrix_spread_pct| (<5%) means
-price is coiling directly against the 741 anchor — a macro breakout is building.
+price is coiling against the anchor — a macro breakout is building.
 
-Trend Lock: PERFECT_BULLISH/BEARISH_REGIME means the asset is on an institutional
-highway backed by massive capital momentum — safe to alert B2B endpoints.
+Trend Lock: PERFECT_BULLISH/BEARISH_REGIME = institutional alignment confirmed.
 
 Discord webhook fires automatically on every PERFECT_BULLISH or PERFECT_BEARISH hit.
 """
@@ -25,7 +26,7 @@ import os
 import time
 import logging
 import threading
-from datetime import date, timedelta, datetime
+from datetime import datetime
 from flask import Blueprint, request, jsonify
 from proof402_integration import require_payment
 from core.legacy import clean_data
@@ -34,14 +35,26 @@ logger = logging.getLogger("SqueezeOS-741")
 
 macro741_bp = Blueprint("macro741", __name__)
 
-MACRO_PERIODS = [30, 60, 90, 120, 741]
+
+def _load_periods() -> list[int] | None:
+    raw = os.environ.get("MACRO741_PERIODS", "")
+    if not raw:
+        return None
+    try:
+        return [int(x.strip()) for x in raw.split(",") if x.strip()]
+    except ValueError:
+        logger.error("[741] MACRO741_PERIODS contains non-integer values — endpoint disabled")
+        return None
+
+
+MACRO_PERIODS: list[int] | None = _load_periods()
 
 # 60-second per-ticker cache
 _cache: dict = {}
 _CACHE_TTL = 60
 
-# Need ~1100 calendar days to get 741+ trading days
-_HISTORY_DAYS = 1150
+# Calendar days needed to cover the anchor period with margin
+_HISTORY_DAYS: int = int(max(MACRO_PERIODS) * 1.6) if MACRO_PERIODS else 0
 
 
 def _compute_ema(closes: list[float], span: int) -> float:
@@ -93,7 +106,7 @@ def _fetch_closes(symbol: str) -> tuple[list[float], str]:
 
 
 def _calculate_matrix_stack(symbol: str) -> dict:
-    """Compute the 741 macro matrix for one symbol."""
+    """Compute the macro matrix for one symbol."""
     closes, source = _fetch_closes(symbol)
     if not closes:
         return {
@@ -103,28 +116,28 @@ def _calculate_matrix_stack(symbol: str) -> dict:
             "data_source": source,
         }
 
-    if len(closes) < MACRO_PERIODS[-1]:
+    anchor_period = MACRO_PERIODS[-1]
+    if len(closes) < anchor_period:
         return {
             "ticker": symbol,
             "error": "INSUFFICIENT_HISTORY",
-            "message": f"Need ≥741 daily bars; got {len(closes)}.",
+            "message": f"Need ≥{anchor_period} daily bars; got {len(closes)}.",
             "bars_available": len(closes),
             "data_source": source,
         }
 
-    layers = {}
-    for period in MACRO_PERIODS:
-        val = _compute_ema(closes, period)
-        layers[f"EMA_{period}"] = val
+    layers = {f"EMA_{p}": _compute_ema(closes, p) for p in MACRO_PERIODS}
+    ema_vals = [layers[f"EMA_{p}"] for p in MACRO_PERIODS]
 
-    e30, e60, e90, e120, e741 = (layers[f"EMA_{p}"] for p in MACRO_PERIODS)
-    if None in (e30, e60, e90, e120, e741):
+    if None in ema_vals:
         return {"ticker": symbol, "error": "EMA_COMPUTE_FAILED", "data_source": source}
 
-    current_close = round(closes[-1], 2)
-    bullish_stack = (e30 > e60) and (e60 > e90) and (e90 > e120) and (e120 > e741)
-    bearish_stack = (e30 < e60) and (e60 < e90) and (e90 < e120) and (e120 < e741)
-    matrix_spread_pct = round(((e30 - e741) / e741) * 100, 3)
+    e_fast = ema_vals[0]
+    e_anchor = ema_vals[-1]
+
+    bullish_stack = all(ema_vals[i] > ema_vals[i + 1] for i in range(len(ema_vals) - 1))
+    bearish_stack = all(ema_vals[i] < ema_vals[i + 1] for i in range(len(ema_vals) - 1))
+    matrix_spread_pct = round(((e_fast - e_anchor) / e_anchor) * 100, 3)
 
     if bullish_stack:
         alignment = "PERFECT_BULLISH_REGIME"
@@ -137,11 +150,11 @@ def _calculate_matrix_stack(symbol: str) -> dict:
 
     return {
         "ticker": symbol,
-        "current_close": current_close,
+        "current_close": round(closes[-1], 2),
         "structural_alignment": alignment,
         "matrix_spread_pct": matrix_spread_pct,
         "squeeze_alert": squeeze_alert,
-        "layers": {f"EMA_{p}": layers[f"EMA_{p}"] for p in MACRO_PERIODS},
+        "layers": layers,
         "bars_used": len(closes),
         "data_source": source,
         "ts": datetime.utcnow().isoformat() + "Z",
@@ -192,10 +205,16 @@ def macro_741_scan():
 
     Returns per-ticker:
       structural_alignment: PERFECT_BULLISH_REGIME | PERFECT_BEARISH_REGIME | CONSOLIDATION_CHOP
-      matrix_spread_pct:    ((EMA_30 - EMA_741) / EMA_741) * 100
+      matrix_spread_pct:    ((EMA_fast - EMA_anchor) / EMA_anchor) * 100
       squeeze_alert:        true when CONSOLIDATION_CHOP and |spread| < 5% (macro coil)
-      layers:               {EMA_30, EMA_60, EMA_90, EMA_120, EMA_741}
+      layers:               configured EMA stack (periods set server-side)
     """
+    if not MACRO_PERIODS:
+        return jsonify({
+            "error": "CONFIG_NOT_SET",
+            "message": "MACRO741_PERIODS is not configured on this server.",
+        }), 503
+
     # Parse symbols — from JSON body or query param
     body = request.get_json(silent=True) or {}
     raw = body.get("symbols") or request.args.get("symbols", "")
@@ -233,11 +252,9 @@ def macro_741_scan():
         if entry.get("structural_alignment", "").startswith("PERFECT_"):
             fresh_perfect.append(entry)
 
-    # Discord alert for newly computed PERFECT alignments
     if fresh_perfect:
         _fire_discord(fresh_perfect)
 
-    # Summary counts
     alignments = [r.get("structural_alignment") for r in results if "structural_alignment" in r]
     summary = {
         "perfect_bullish": alignments.count("PERFECT_BULLISH_REGIME"),
@@ -251,12 +268,12 @@ def macro_741_scan():
         "status": "success",
         "product": "741 Pure Macro Matrix",
         "description": (
-            "5-layer EMA stack (30/60/90/120/741). "
+            "Multi-layer EMA structural alignment engine. "
             "PERFECT_BULLISH_REGIME: institutional uptrend highway. "
             "PERFECT_BEARISH_REGIME: macro distribution confirmed. "
             "CONSOLIDATION_CHOP + squeeze_alert: macro coil building — watch for breakout."
         ),
-        "ema_layers": MACRO_PERIODS,
+        "layer_count": len(MACRO_PERIODS),
         "symbols_scanned": len(symbols),
         "summary": summary,
         "results": results,
