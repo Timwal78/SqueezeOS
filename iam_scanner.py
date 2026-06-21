@@ -25,15 +25,18 @@ _SCAN_ENABLED   = os.environ.get("IAM_SCAN_ENABLED", "true").lower() == "true"
 _SCAN_TOP_N     = int(os.environ.get("IAM_SCAN_TOP_N", "50"))
 _SCAN_INTERVAL  = int(float(os.environ.get("IAM_SCAN_INTERVAL", "300")))
 _INTER_DELAY    = float(os.environ.get("IAM_SCAN_INTER_DELAY", "2.0"))
-_URGENT_WINDOWS = {"IMMEDIATE", "NEAR_TERM"}
-_INITIAL_DELAY  = 120   # wait for market scanner to warm up before first pass
+_URGENT_WINDOWS    = {"IMMEDIATE", "NEAR_TERM"}
+_INITIAL_DELAY     = 120   # wait for market scanner to warm up before first pass
+_MANDATORY_ANCHORS = {"AMC", "GME", "IWM"}   # always resolved every pass regardless of universe
 
 
 def _get_symbols() -> list:
     """
-    Dynamically pull symbol list from live state — no hardcoded tickers.
+    Dynamically pull symbol list from live state — 100% FETCH, no hardcoded watchlist.
     Primary: state.scan_results (market scanner top candidates, ranked by squeeze score).
     Fallback: state.quotes universe (all live-quoted symbols).
+    Mandatory anchors (AMC, GME, IWM) are always prepended so they're never dropped
+    by the TOP_N cap and never miss a pass regardless of scan-result ranking.
     """
     from core.state import state
 
@@ -41,12 +44,15 @@ def _get_symbols() -> list:
         candidates = list(state.scan_results)
 
     if candidates:
-        return [r.get("symbol") for r in candidates[:_SCAN_TOP_N] if r.get("symbol")]
+        syms = [r.get("symbol") for r in candidates[:_SCAN_TOP_N] if r.get("symbol")]
+    else:
+        with state.lock:
+            syms = list(state.quotes.keys())[:_SCAN_TOP_N]
 
-    with state.lock:
-        fallback = list(state.quotes.keys())
-
-    return fallback[:_SCAN_TOP_N]
+    # Prepend mandatory anchors (deduplicated) so they're always first in the pass
+    seen = set(syms)
+    anchors = [s for s in sorted(_MANDATORY_ANCHORS) if s not in seen]
+    return anchors + syms
 
 
 def _scan_pass():

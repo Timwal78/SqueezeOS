@@ -53,6 +53,39 @@ logger = logging.getLogger("RH.Executor")
 
 # ── Configuration ──────────────────────────────────────────────────────────────
 SQUEEZEOS_API_URL  = os.environ.get("SQUEEZEOS_API_URL", "https://squeezeos-api.onrender.com")
+
+_macro_cache: dict = {}
+_MACRO_CACHE_TTL   = 3600   # matches server-side 1-hour TTL
+_MACRO_GATE_SECRET = os.environ.get("MACRO_GATE_SECRET", "")
+
+# Always-watched anchors — injected into every oracle poll regardless of live universe
+_MANDATORY_ANCHORS = {"AMC", "GME", "IWM"}
+
+def _get_macro_regime(symbol: str) -> str:
+    """
+    Query internal 741 macro gate on SqueezeOS server.
+    Requires MACRO_GATE_SECRET in executor.env — endpoint is not public.
+    Fails open: no secret configured or fetch error → UNKNOWN (never blocks trades).
+    Only PERFECT_BEARISH_REGIME blocks BUY orders.
+    """
+    if not _MACRO_GATE_SECRET:
+        return "UNKNOWN"   # no secret → fail open, never block trades
+    now = time.time()
+    cached = _macro_cache.get(symbol)
+    if cached and now - cached["ts"] < _MACRO_CACHE_TTL:
+        return cached["regime"]
+    try:
+        req = URLRequest(f"{SQUEEZEOS_API_URL}/api/macro/{symbol}",
+                         headers={"User-Agent": "SqueezeOS-RH-Executor/2.0",
+                                  "X-Macro-Secret": _MACRO_GATE_SECRET})
+        with urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+        regime = data.get("regime", "UNKNOWN")
+    except Exception as e:
+        logger.warning(f"[MACRO] {symbol} regime fetch failed: {e} — failing open")
+        regime = "UNKNOWN"
+    _macro_cache[symbol] = {"regime": regime, "ts": now}
+    return regime
 ROBINHOOD_USER     = os.environ.get("ROBINHOOD_USERNAME", "")
 ROBINHOOD_PASS     = os.environ.get("ROBINHOOD_PASSWORD", "")
 POLL_INTERVAL_S    = int(os.environ.get("POLL_INTERVAL_S", "180"))     # poll every 3 minutes
@@ -287,6 +320,14 @@ def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
     if god_count < MIN_GOD_STACKED:
         logger.info(f"[EXEC] {symbol} god_stacked={god_count} < {MIN_GOD_STACKED} — skip")
         return
+
+    # ── 741 Pure Macro Matrix gate (BUY only) ────────────────────────────────
+    if side == "buy":
+        macro = _get_macro_regime(symbol)
+        if macro == "PERFECT_BEARISH_REGIME":
+            logger.warning(f"[EXEC] {symbol} BUY blocked — 741 macro regime is PERFECT_BEARISH_REGIME")
+            return
+        logger.info(f"[EXEC] {symbol} macro regime={macro} — BUY allowed")
 
     # ── Proprietary 5-EMA Stack Guardrail ───────────────────────────────────
     try:
@@ -632,6 +673,20 @@ def _poll_oracle() -> int:
     except Exception as e:
         logger.debug(f"[ORACLE] history fetch failed: {e}")
 
+    # ── 3. Mandatory anchors — always fetch AMC, GME, IWM even if absent from batch ──
+    for anchor in _MANDATORY_ANCHORS:
+        if anchor not in symbols_seen:
+            try:
+                req = URLRequest(f"{SQUEEZEOS_API_URL}/api/oracle/{anchor}",
+                                 headers={"User-Agent": "SqueezeOS-RH-Executor/2.0"})
+                with urlopen(req, timeout=10) as resp:
+                    oracle_resp = json.loads(resp.read())
+                info = oracle_resp.get("oracle") or {}
+                if info.get("directive"):
+                    symbols_seen[anchor] = info
+            except Exception as e:
+                logger.debug(f"[ORACLE] mandatory anchor {anchor} fetch failed: {e}")
+
     if not symbols_seen:
         return 0
 
@@ -683,7 +738,7 @@ def _poll_oracle() -> int:
 def main():
     global _rh_logged_in  # explicitly declare global so Python never creates a local shadow
     logger.info("=" * 60)
-    logger.info("SqueezeOS Robinhood Executor v3.2 — Wider Signal Net (GRID_LOCK + 60% oracle)")
+    logger.info("SqueezeOS Robinhood Executor v3.4 — Dynamic Universe + Mandatory Anchors (AMC/GME/IWM)")
     logger.info(f"  API         : {SQUEEZEOS_API_URL}")
     logger.info(f"  Poll every  : {POLL_INTERVAL_S}s")
     logger.info(f"  Hours       : 4:00 AM–8:00 PM ET (pre-market + regular + after-hours)")

@@ -39,6 +39,20 @@ from typing import Optional
 
 logger = logging.getLogger("IAM-EXEC")
 
+def _get_macro_regime(symbol: str) -> str:
+    """
+    Returns the 741 Pure Macro regime for a symbol.
+    Direct Python import — no HTTP call, no public exposure of the paid product.
+    Fails open: UNKNOWN / INSUFFICIENT_DATA never block a trade.
+    Only PERFECT_BEARISH_REGIME blocks BUY orders.
+    """
+    try:
+        from core.api.macro_bp import _compute_regime
+        return _compute_regime(symbol).get("regime", "UNKNOWN")
+    except Exception as e:
+        logger.warning(f"[IAM-EXEC] macro regime check failed for {symbol}: {e} — failing open")
+        return "UNKNOWN"
+
 # ── Config ─────────────────────────────────────────────────────────────────────
 def _env_bool(key: str, default: bool) -> bool:
     return os.environ.get(key, str(default)).strip().lower() in ("true", "1", "yes")
@@ -198,7 +212,9 @@ def _execute_tradier(sym: str, action: str, resolution: dict, price: float) -> d
     if _is_extended_hours():
         logger.info(f"[IAM-EXEC] Extended hours: routing {sym} to equity (options unavailable)")
         return _execute_tradier_equity(sym, action, price)
-    if instrument == "options" or (instrument == "auto" and sym in ("IWM", "SPY", "QQQ")):
+    # auto mode: try options on any symbol — chain availability is the natural gate.
+    # BUY signal → calls; SELL signal → puts. Falls back gracefully if no chain exists.
+    if instrument in ("options", "auto"):
         return _execute_tradier_options(sym, action, resolution, price)
     else:
         return _execute_tradier_equity(sym, action, price)
@@ -378,6 +394,16 @@ def execute_from_resolution(sym: str, resolution: dict,
         if block_reason:
             logger.info(f"[IAM-EXEC] {sym} blocked: {block_reason}")
             return
+
+        # 741 Pure Macro Matrix gate — only blocks BUY; SELL/exits always proceed
+        if action == "BUY":
+            macro = _get_macro_regime(sym)
+            if macro == "PERFECT_BEARISH_REGIME":
+                logger.warning(
+                    f"[IAM-EXEC] {sym} BUY blocked — 741 macro regime is PERFECT_BEARISH_REGIME"
+                )
+                return
+            logger.info(f"[IAM-EXEC] {sym} macro regime={macro} — BUY allowed")
 
         mode = EXECUTION_MODE()
         logger.info(
