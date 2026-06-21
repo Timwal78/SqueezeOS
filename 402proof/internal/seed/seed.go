@@ -39,6 +39,9 @@ const (
 
 	// 741 Pure Macro Matrix — 5-layer EMA structural alignment engine
 	Macro741ID = "f3a7c891-2d54-4b8e-9a1f-6c3d8e5f7b2a"  // 0.04 RLUSD — dynamic ticker universe
+
+	// TriageOS — Healthcare Prior Authorization Agent
+	TriageAuthID = "c4a1e7b3-0001-4f5a-b900-de6e3bc12b5a"  // 0.08 RLUSD — prior auth package + on-chain audit commit
 )
 
 type EndpointSeed struct {
@@ -179,7 +182,17 @@ var SMLEndpoints = []EndpointSeed{
 	},
 }
 
-// Run seeds the Script Master Labs merchant and all 4 endpoints on every boot.
+var TriageEndpoints = []EndpointSeed{
+	{
+		ID:          TriageAuthID,
+		Path:        "/api/auth",
+		Price:       "0.08",
+		Asset:       "RLUSD",
+		Description: "TriageOS Prior Auth Agent — complete prior authorization package (medical necessity, ICD-10/CPT, payer strategy, appeal preemption, on-chain audit hash). No PHI stored.",
+	},
+}
+
+// Run seeds the Script Master Labs merchant and all endpoints on every boot.
 // Idempotent — skips anything already present.
 func Run(db *store.Memory, gatewayAddr string) {
 	merchantName  := env("SEED_MERCHANT_NAME",  "Script Master Labs")
@@ -200,8 +213,8 @@ func Run(db *store.Memory, gatewayAddr string) {
 		log.Printf("[SEED] Merchant: %s id=%s", merchantName, MerchantID)
 	}
 
-	// Seed all endpoints: SML market + Bureau + Relay bulk + Marketplace + Ghost Layer + Oracle
-	all := append(append(append(append(append(SMLEndpoints, BureauEndpoints...), RelayEndpoints...), MarketplaceEndpoints...), GhostLayerEndpoints...), OracleEndpoints...)
+	// Seed all endpoints: SML market + Bureau + Relay bulk + Marketplace + Ghost Layer + Oracle + TriageOS
+	all := append(append(append(append(append(append(SMLEndpoints, BureauEndpoints...), RelayEndpoints...), MarketplaceEndpoints...), GhostLayerEndpoints...), OracleEndpoints...), TriageEndpoints...)
 	for _, e := range all {
 		if _, ok := db.GetEndpoint(e.ID); !ok {
 			ep := &models.Endpoint{
@@ -219,7 +232,7 @@ func Run(db *store.Memory, gatewayAddr string) {
 		}
 	}
 
-	log.Printf("[SEED] Script Master Labs ready — 5 market + 3 bureau + 4 relay + 1 marketplace + 1 ghost-layer + 2 oracle endpoints active")
+	log.Printf("[SEED] Script Master Labs ready — 5 market + 3 bureau + 4 relay + 1 marketplace + 1 ghost-layer + 2 oracle + 1 triageos endpoints active")
 }
 
 func env(key, fallback string) string {
