@@ -721,6 +721,12 @@ def _poll_oracle() -> int:
 
         elif directive in ("SELL", "SHIELD"):
             sell_count += 1
+            if price <= 0:
+                logger.debug(f"[ORACLE] SELL {sym} skipped — no live price data")
+                continue
+            if confidence < 20:
+                logger.debug(f"[ORACLE] SELL {sym} skipped — confidence {confidence:.0f}% below floor")
+                continue
             # SELL never blocked by cooldown — exits are always urgent
             logger.info(f"[ORACLE] SELL → {sym}  conf={confidence:.0f}%  price=${price:.2f}")
             _execute(sym, "sell", sml_proxy, scan_counter)
@@ -738,7 +744,7 @@ def _poll_oracle() -> int:
 def main():
     global _rh_logged_in  # explicitly declare global so Python never creates a local shadow
     logger.info("=" * 60)
-    logger.info("SqueezeOS Robinhood Executor v3.4 — Dynamic Universe + Mandatory Anchors (AMC/GME/IWM)")
+    logger.info("SqueezeOS Robinhood Executor v3.5 — SELL confidence + price floor (no 0% ghost exits)")
     logger.info(f"  API         : {SQUEEZEOS_API_URL}")
     logger.info(f"  Poll every  : {POLL_INTERVAL_S}s")
     logger.info(f"  Hours       : 4:00 AM–8:00 PM ET (pre-market + regular + after-hours)")
