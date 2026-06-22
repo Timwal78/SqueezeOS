@@ -41,12 +41,13 @@ import anthropic
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-# ── XRPL ──────────────────────────────────────────────────────────────────────
+# ── XRPL ──────────────────────────────────────────────────────────────────────────────
 from xrpl.wallet import Wallet
 from xrpl.clients import JsonRpcClient
 from xrpl.models.transactions import Payment, Memo
 from xrpl.models.amounts import IssuedCurrencyAmount
 from xrpl.transaction import submit_and_wait
+from xrpl.core.keypairs import CryptoAlgorithm
 
 logging.basicConfig(
     level=logging.INFO,
@@ -54,7 +55,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("SML-Agent")
 
-# ── Config ────────────────────────────────────────────────────────────────────
+# ── Config ────────────────────────────────────────────────────────────────────────────
 SQUEEZEOS   = os.environ.get("SQUEEZEOS_BASE_URL",  "https://squeezeos-api.onrender.com")
 PROOF402    = os.environ.get("PROOF402_BASE_URL",   "https://four02proof.onrender.com")
 XRPL_RPC    = os.environ.get("XRPL_RPC_URL",        "https://xrplcluster.com")
@@ -75,7 +76,7 @@ ENDPOINT_SCAN    = "160cf28d-b364-44eb-adbd-2489c5cc2cf8"
 ENDPOINT_IWM     = "60f48ce0-6002-4385-9b60-03a0d2bbebab"
 ENDPOINT_OPTIONS = "c951a374-2424-4064-ab80-35afe8053d29"
 
-# ── P&L Tracker ───────────────────────────────────────────────────────────────
+# ── P&L Tracker ───────────────────────────────────────────────────────────────────────────
 class PnL:
     def __init__(self):
         self.spent   = 0.0
@@ -105,14 +106,15 @@ class PnL:
 
 pnl = PnL()
 
-# ── XRPL Payment ──────────────────────────────────────────────────────────────
-
+# ── XRPL Payment ─────────────────────────────────────────────────────────────────────────────
 def pay_invoice(invoice: dict) -> str:
     """Send RLUSD on XRPL for an invoice. Returns tx hash."""
     if not AGENT_SEED:
         raise RuntimeError("AGENT_XRPL_SEED not set — cannot pay invoice")
 
-    wallet = Wallet.from_seed(AGENT_SEED)
+    # xrpl-py 5.0 breaking change: Wallet.from_seed() no longer defaults to ED25519
+    # for s... seeds — it now infers SECP256K1 from the prefix. Must be explicit.
+    wallet = Wallet.from_seed(AGENT_SEED, algorithm=CryptoAlgorithm.ED25519)
     client = JsonRpcClient(XRPL_RPC)
 
     amount_str = str(invoice["amount"])
@@ -137,8 +139,7 @@ def pay_invoice(invoice: dict) -> str:
     pnl.record_spend(float(amount_str))
     return tx_hash
 
-# ── x402 Full Flow ────────────────────────────────────────────────────────────
-
+# ── x402 Full Flow ───────────────────────────────────────────────────────────────────────────
 def pay_and_call(endpoint_id: str, method: str, url: str, body: Optional[dict] = None) -> dict:
     """Complete x402 flow: invoice → pay XRPL → verify → call endpoint."""
 
@@ -184,15 +185,13 @@ def pay_and_call(endpoint_id: str, method: str, url: str, body: Optional[dict] =
     resp.raise_for_status()
     return resp.json()
 
-# ── Free endpoints (no payment) ───────────────────────────────────────────────
-
+# ── Free endpoints (no payment) ──────────────────────────────────────────────────────────────
 def get_free(path: str) -> dict:
     resp = requests.get(f"{SQUEEZEOS}{path}", timeout=20)
     resp.raise_for_status()
     return resp.json()
 
-# ── Data collection ───────────────────────────────────────────────────────────
-
+# ── Data collection ───────────────────────────────────────────────────────────────────────────
 def collect_market_data() -> dict:
     logger.info("[AGENT] Collecting market data...")
     data = {}
@@ -259,8 +258,7 @@ def collect_market_data() -> dict:
 
     return data
 
-# ── Brief synthesis (Claude) ──────────────────────────────────────────────────
-
+# ── Brief synthesis (Claude) ──────────────────────────────────────────────────────────────────────────
 def synthesize_brief(data: dict) -> dict:
     if not ANTHROPIC_KEY:
         raise RuntimeError("ANTHROPIC_API_KEY not set")
@@ -309,8 +307,7 @@ Return ONLY the JSON. No markdown. No explanation."""
     logger.info(f"[AGENT] Brief: {brief.get('master_bias')} | {brief.get('regime')} | conf={brief.get('confidence')}")
     return brief
 
-# ── List brief on marketplace ─────────────────────────────────────────────────
-
+# ── List brief on marketplace ─────────────────────────────────────────────────────────────────────────
 def list_brief(brief: dict) -> Optional[str]:
     if not AGENT_ADDR:
         logger.warning("[AGENT] No AGENT_XRPL_ADDRESS — skipping marketplace listing")
@@ -341,8 +338,7 @@ def list_brief(brief: dict) -> Optional[str]:
     logger.info(f"[AGENT] Listed on marketplace: {listing_id} — {symbol} {brief.get('master_bias')}")
     return listing_id
 
-# ── Push to webhooks ──────────────────────────────────────────────────────────
-
+# ── Push to webhooks ──────────────────────────────────────────────────────────────────────────────
 def push_to_webhooks(brief: dict, listing_id: Optional[str]):
     event = {
         "type":       "COUNCIL_VERDICT",
@@ -367,8 +363,7 @@ def push_to_webhooks(brief: dict, listing_id: Optional[str]):
     except Exception as e:
         logger.warning(f"[AGENT] Webhook push failed: {e}")
 
-# ── Log P&L to 402Proof Agent Passport ───────────────────────────────────────
-
+# ── Log P&L to 402Proof Agent Passport ────────────────────────────────────────────────────────────────
 def log_passport():
     if not AGENT_ADDR:
         return
@@ -384,8 +379,7 @@ def log_passport():
     except Exception:
         pass
 
-# ── Main run cycle ────────────────────────────────────────────────────────────
-
+# ── Main run cycle ──────────────────────────────────────────────────────────────────────────────
 def run_cycle():
     pnl.runs += 1
     run_id = f"run-{pnl.runs}-{int(time.time())}"
@@ -411,8 +405,7 @@ def run_cycle():
         logger.error(f"[AGENT] Cycle {pnl.runs} FAILED: {e}", exc_info=True)
         return None
 
-# ── Entry point ───────────────────────────────────────────────────────────────
-
+# ── Entry point ───────────────────────────────────────────────────────────────────────────────
 def main():
     logger.info("═" * 60)
     logger.info("SML AUTONOMOUS MARKET INTELLIGENCE AGENT")
