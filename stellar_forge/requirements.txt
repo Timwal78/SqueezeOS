@@ -7,6 +7,6 @@
 #   pip install -r stellar_forge/requirements.txt
 #
 psycopg[binary]>=3.3.4   # economy/store.py Postgres backend (durable rebate ledger)
-xrpl-py>=4.5.0           # economy/payouts.py live RLUSD on-chain settlement
+xrpl-py>=5.0.0           # economy/payouts.py live RLUSD on-chain settlement
 #
 # ML / fusion layer deps are separate again — see requirements-ml.txt.
