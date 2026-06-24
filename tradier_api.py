@@ -265,6 +265,45 @@ def get_option_chain_schwab_format(
     }
 
 
+def get_timesales(symbol: str, interval: str = "15min", days_back: int = 35) -> List[Dict[str, Any]]:
+    """
+    Fetch intraday time & sales bars from Tradier.
+    interval: '1min' | '5min' | '15min' | '1hour'
+    Returns list of {time, open, high, low, close, volume} dicts, oldest first.
+    35 days × 6.5h × 4 bars/h ≈ 910 bars — enough for the 741-bar MAC EMA.
+    """
+    from datetime import datetime, timedelta
+    end_dt   = datetime.now()
+    start_dt = end_dt - timedelta(days=days_back)
+    data = _get("/markets/timesales", {
+        "symbol":         symbol,
+        "interval":       interval,
+        "start":          start_dt.strftime("%Y-%m-%d %H:%M"),
+        "end":            end_dt.strftime("%Y-%m-%d %H:%M"),
+        "session_filter": "open",
+    })
+    if not data:
+        return []
+    series = (data.get("series") or {}).get("data") or []
+    if isinstance(series, dict):
+        series = [series]
+    # Normalise field names to {open,high,low,close,volume}
+    result = []
+    for bar in series:
+        try:
+            result.append({
+                "time":   bar.get("time"),
+                "open":   float(bar.get("open",  bar.get("o", 0))),
+                "high":   float(bar.get("high",  bar.get("h", 0))),
+                "low":    float(bar.get("low",   bar.get("l", 0))),
+                "close":  float(bar.get("close", bar.get("c", 0))),
+                "volume": float(bar.get("volume",bar.get("v", 0))),
+            })
+        except (TypeError, ValueError):
+            continue
+    return result
+
+
 def _post(path: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     headers = _headers()
     if not headers:

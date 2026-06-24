@@ -54,7 +54,6 @@ from core.legacy import start_whale_stalker, init_services, get_service, clean_d
 from core.market_graph import get_graph
 from core.rdt_engine import RecurrentDepthTransformer
 from core.telemetry_rotator import start_telemetry_rotator
-from tools.sales_agent import start_sales_agent
 
 state.audit['uptime_start'] = time.time()
 
@@ -206,11 +205,12 @@ def create_app():
             _discord_for_ftd = None
         start_ftd_anomaly_engine(_discord_for_ftd)
 
+        # SML Triple Lock Scanner — market-wide 15-min bar scanner (GEO/ARI/MAC stacks)
+        from core.sml_tl_scanner import start_tl_scanner
+        start_tl_scanner()
+
         # Self-pinger — keeps Render free-tier warm; pings own /api/status every 10 min
         _start_self_pinger()
-        
-        # Autonomous AI Sales Agent — hunts for leads and sends pitches to Discord daily
-        start_sales_agent()
     
     @app.after_request
     def run_analytics(response):
@@ -264,7 +264,7 @@ def create_app():
     def serve_card():
         return send_from_directory(app.static_folder, 'card.html')
 
-    # ── 301 Redirects — dead routes indexed by Google ────────────────────────
+    # ── 301 Redirects — dead routes indexed by Google ───────────────────────────────────
     # All permanently redirect to / so link equity passes forward, no 404 penalty.
     @app.route('/trading-indicators')
     @app.route('/trading-indicators/')
