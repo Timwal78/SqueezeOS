@@ -55,8 +55,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger("SML-Agent")
 
-# ── Config ────────────────────────────────────────────────────────────────────────────
-SQUEEZEOS   = os.environ.get("SQUEEZEOS_BASE_URL",  "https://squeezeos-api.onrender.com")
+# ── Config ────────────────────────────────────────────────────────────────────
+SQUEEZEOS   = os.environ.get("SQUEEZEOS_BASE_URL",  "https://squeezeos-api-1.onrender.com")
+MATRIX_URL  = os.environ.get("MATRIX_BASE_URL",    "https://squeezeos-api-1.onrender.com")
 PROOF402    = os.environ.get("PROOF402_BASE_URL",   "https://four02proof.onrender.com")
 XRPL_RPC    = os.environ.get("XRPL_RPC_URL",        "https://xrplcluster.com")
 AGENT_SEED  = os.environ.get("AGENT_XRPL_SEED",     "")
@@ -191,10 +192,49 @@ def get_free(path: str) -> dict:
     resp.raise_for_status()
     return resp.json()
 
-# ── Data collection ───────────────────────────────────────────────────────────────────────────
+
+# ── SqueezeOS Matrix Engine (Render) ──────────────────────────────────────────
+
+CRYPTO_SCAN_SYMBOLS = "ETH/USDT,BTC/USDT,SOL/USDT,AVAX/USDT"
+
+def collect_matrix_intents() -> dict:
+    """
+    Pulls live 5-EMA Fibonacci Ribbon execution intents from the
+    SqueezeOS Matrix Engine on Render across top crypto pairs.
+    """
+    try:
+        resp = requests.get(
+            f"{MATRIX_URL}/api/matrix-scan",
+            params={"symbols": CRYPTO_SCAN_SYMBOLS, "timeframe": "15m"},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        scan = resp.json()
+        logger.info(
+            f"[MATRIX] Scan: {scan.get('scan_count', 0)} pairs — "
+            f"actionable: {sum(1 for r in scan.get('results', []) if r.get('intent') not in ('MAINTAIN_STATE', 'ERROR'))}"
+        )
+        return scan
+    except Exception as e:
+        logger.warning(f"[MATRIX] Matrix scan failed: {e}")
+        return {}
+
+# ── Data collection ───────────────────────────────────────────────────────────
+
+
 def collect_market_data() -> dict:
     logger.info("[AGENT] Collecting market data...")
     data = {}
+
+    # SqueezeOS Matrix Engine — crypto EMA ribbon intents
+    matrix = collect_matrix_intents()
+    if matrix:
+        data["matrix_scan"] = matrix
+        # Surface the top actionable intent as a first-class field for Claude
+        for r in matrix.get("results", []):
+            if r.get("intent") not in ("MAINTAIN_STATE", "ERROR"):
+                data["matrix_top_signal"] = r
+                break
 
     # Free: IWM preview
     try:
@@ -266,10 +306,20 @@ def synthesize_brief(data: dict) -> dict:
     client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
     now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
+    matrix_summary = ""
+    if "matrix_top_signal" in data:
+        sig = data["matrix_top_signal"]
+        matrix_summary = (
+            f"\nSQUEEZEOS MATRIX ENGINE SIGNAL:\n"
+            f"  Symbol: {sig.get('symbol')} | Timeframe: {sig.get('timeframe')}\n"
+            f"  Intent: {sig.get('intent')}\n"
+            f"  Close: {sig.get('close')} | EMA_55: {sig.get('ema_55')} | EMA_365: {sig.get('ema_365')}\n"
+        )
+
     prompt = f"""You are the SML Autonomous Market Intelligence Agent. Synthesize this live market data into a concise, actionable daily brief.
 
 TIMESTAMP: {now_str}
-
+{matrix_summary}
 MARKET DATA:
 {json.dumps(data, indent=2, default=str)}
 
