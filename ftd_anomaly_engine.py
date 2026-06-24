@@ -32,6 +32,12 @@ SCAN_INTERVAL_S = 900          # 15 min between scans
 SPIKE_THRESHOLD = 2.0           # fail_shares >= 2x rolling avg
 FEED_MAXLEN = 100                # public feed keeps last 100 alerts
 
+# Per-symbol Discord cooldown — prevents re-alerting the same spike every cycle.
+# Default 24h; override with FTD_ALERT_COOLDOWN_S env var.
+import os as _os
+_ALERT_COOLDOWN_S = int(_os.environ.get("FTD_ALERT_COOLDOWN_S", str(86400)))
+_alert_cooldown: Dict[str, float] = {}  # symbol_type → last-alert epoch
+
 _feed: Deque[dict] = deque(maxlen=FEED_MAXLEN)
 _feed_lock = threading.RLock()
 
@@ -52,6 +58,17 @@ def get_feed(limit: int = 25) -> List[dict]:
 def _push(alert: dict) -> None:
     with _feed_lock:
         _feed.append(alert)
+
+
+def _can_alert(symbol: str, atype: str) -> bool:
+    """Return True if the per-symbol cooldown has expired."""
+    key = f"{symbol}_{atype}"
+    last = _alert_cooldown.get(key, 0)
+    return (time.time() - last) >= _ALERT_COOLDOWN_S
+
+
+def _mark_alert(symbol: str, atype: str) -> None:
+    _alert_cooldown[f"{symbol}_{atype}"] = time.time()
 
 
 def _fire_discord(discord, alert: dict) -> None:
@@ -95,16 +112,17 @@ def _fire_discord(discord, alert: dict) -> None:
                 ),
                 "color": color,
                 "fields": fields,
-                "footer": {"text": f"ShortSqueeze Swarm | {datetime.now().strftime('%I:%M %p ET')}"},
+                "footer": {"text": f"ShortSqueeze Swarm | FTD channel | {datetime.now().strftime('%I:%M %p ET')}"},
                 "timestamp": datetime.utcnow().isoformat(),
             }]
         }
 
-        import os as _os
-        url = (_os.environ.get("DISCORD_WEBHOOK_FTD", "")
-               or discord.webhook_all or discord.webhook_squeeze or discord.webhook_flow)
-        if url:
-            discord._post(url, embed)
+        # Route to dedicated FTD channel first; never fall back to the main channel
+        url = _os.environ.get("DISCORD_WEBHOOK_FTD", "")
+        if not url:
+            logger.debug("[FTD-ANOMALY] DISCORD_WEBHOOK_FTD not set — alert suppressed")
+            return
+        discord._post(url, embed)
     except Exception as e:
         logger.warning("[FTD-ANOMALY] discord post failed: %s", e)
 
@@ -135,6 +153,8 @@ def _scan_once(discord=None) -> None:
             sym = entry["symbol"]
             if sym not in new_symbols:
                 continue
+            if not _can_alert(sym, "NEW_THRESHOLD_LIST_ENTRY"):
+                continue
             alert = {
                 "symbol": sym,
                 "anomaly_type": "NEW_THRESHOLD_LIST_ENTRY",
@@ -145,6 +165,7 @@ def _scan_once(discord=None) -> None:
             }
             _push(alert)
             _fire_discord(discord, alert)
+            _mark_alert(sym, "NEW_THRESHOLD_LIST_ENTRY")
             logger.info("[FTD-ANOMALY] NEW_THRESHOLD_LIST_ENTRY %s", sym)
         _known_threshold_symbols.clear()
         _known_threshold_symbols.update(current_symbols)
@@ -168,6 +189,9 @@ def _scan_once(discord=None) -> None:
         # only alert on the 95th+ percentile reading to avoid noise
         if pct < 0.95:
             continue
+        # skip if this symbol already alerted within the cooldown window
+        if not _can_alert(sym, "FTD_SPIKE"):
+            continue
 
         alert = {
             "symbol": sym,
@@ -180,6 +204,7 @@ def _scan_once(discord=None) -> None:
         }
         _push(alert)
         _fire_discord(discord, alert)
+        _mark_alert(sym, "FTD_SPIKE")
         logger.info("[FTD-ANOMALY] FTD_SPIKE %s ratio=%.2f", sym, spike)
 
 
