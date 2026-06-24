@@ -671,6 +671,19 @@ _TOOLS = [
         },
     },
 
+    # ── Avg-Down Pyramid Engine ───────────────────────────────────────────────
+    {
+        "name": "avg_down_status",
+        "description": (
+            "SML Avg-Down Engine — real-time status of the automated pyramid builder. Free. "
+            "Returns engine health, scan interval, active position count, recent signal count, "
+            "and the last scan timestamp. Use avg_down_positions for open virtual positions "
+            "and avg_down_signals for the full signal log (ENTER / ADD / EXIT / STOP). "
+            "All layer names in output are opaque (L1–L5) — EMA configuration is operator-only."
+        ),
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+
     # ── 741 Pure Macro Matrix ─────────────────────────────────────────────────
     {
         "name": "macro_741_scan",
@@ -970,6 +983,10 @@ def _dispatch(name: str, args: dict, req_headers: dict) -> dict:
     if name == "iam_truth":
         symbol = (args.get("symbol") or "IWM").upper()
         return _text(_proxy("GET", f"{sq}/api/iam/truth/{symbol}"))
+
+    # ── Avg-Down Pyramid Engine ───────────────────────────────────────────────
+    if name == "avg_down_status":
+        return _text(_proxy("GET", f"{sq}/api/avg-down/status"))
 
     # ── FTD Data Oracle ───────────────────────────────────────────────────────
     if name == "ftd_alerts":

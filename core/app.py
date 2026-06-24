@@ -49,6 +49,7 @@ from core.api.vapl_bp import vapl_bp
 from core.vapl.middleware import install_vapl_middleware
 from core.api.macro741_bp import macro741_bp
 from core.api.macro_bp import macro_bp
+from core.api.avg_down_bp import avg_down_bp
 import core.signal_history as signal_history
 from core.legacy import start_whale_stalker, init_services, get_service, clean_data
 from core.market_graph import get_graph
@@ -154,6 +155,7 @@ def create_app():
     app.register_blueprint(vapl_bp)
     app.register_blueprint(macro741_bp, url_prefix='/api')
     app.register_blueprint(macro_bp,    url_prefix='/api')
+    app.register_blueprint(avg_down_bp, url_prefix='/api/avg-down')
 
     # Stellar Forge growth engine — feature-flagged, dormant unless enabled.
     # Registers the affiliate/loyalty/payout surface only when explicitly turned
@@ -208,6 +210,10 @@ def create_app():
         # SML Triple Lock Scanner — market-wide 15-min bar scanner (GEO/ARI/MAC stacks)
         from core.sml_tl_scanner import start_tl_scanner
         start_tl_scanner()
+
+        # SML Avg-Down Engine — automated pyramid builder on 5-layer EMA ribbon
+        from avg_down_engine import start_avg_down_engine
+        start_avg_down_engine()
 
         # Self-pinger — keeps Render free-tier warm; pings own /api/status every 10 min
         _start_self_pinger()
