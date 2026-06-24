@@ -223,6 +223,83 @@ def _fetch_bars(symbol: str, tradier) -> List[dict]:
     return []
 
 
+# ─── IAM PRIORITY INTEGRATION ─────────────────────────────────────────────────
+
+_TL_IAM_SEMAPHORE = threading.Semaphore(3)  # max 3 concurrent IAM resolves from TL
+
+
+def _trigger_iam_resolution(symbol: str, tl_result: dict):
+    """
+    When Triple Lock fires LOCK_CALL/LOCK_PUT, immediately trigger IAM resolution
+    for that symbol — bypasses the 45s IAM cache and runs ahead of the next scheduled
+    IAM cycle. Runs in a daemon thread; never blocks the scan loop.
+
+    Direction guard: if TL and IAM disagree (e.g., TL=CALL but IAM=SELL), execution
+    is suppressed and the conflict is logged. IAM always wins on direction.
+    """
+    def _do():
+        if not _TL_IAM_SEMAPHORE.acquire(blocking=False):
+            logger.info(f"[TL-IAM] {symbol}: semaphore full — IAM resolve deferred")
+            return
+        try:
+            from iam_engine import IAMEngine
+            from core.legacy import get_service
+            from iam_executor import execute_from_resolution
+
+            engine = IAMEngine({
+                "dm":            get_service("dm"),
+                "whale_stalker": get_service("whale_stalker"),
+            })
+            result = engine.resolve(symbol)
+
+            if "error" in result:
+                logger.warning(f"[TL-IAM] {symbol} resolve error: {result.get('error')}")
+                return
+
+            action     = result["resolution"]["action"]
+            window     = result["truth_layer"]["time_window"]
+            confidence = result["resolution"]["resolution_confidence"]
+            price      = float(result.get("price") or 0.0)
+            tl_state   = tl_result.get("state", "")
+            score      = tl_result.get("net_score", 0)
+            max_score  = tl_result.get("max_score", 12)
+
+            # Direction guard — if TL and IAM disagree, log and skip execution
+            if tl_state == "LOCK_CALL" and action == "SELL":
+                logger.info(
+                    f"[TL-IAM] {symbol}: TL=LOCK_CALL vs IAM=SELL — "
+                    f"directional conflict, skipping exec (IAM wins)"
+                )
+                return
+            if tl_state == "LOCK_PUT" and action == "BUY":
+                logger.info(
+                    f"[TL-IAM] {symbol}: TL=LOCK_PUT vs IAM=BUY — "
+                    f"directional conflict, skipping exec (IAM wins)"
+                )
+                return
+
+            # Tag the rationale so Discord embed surfaces the Triple Lock trigger
+            direction_label = "CALL" if tl_state == "LOCK_CALL" else "PUT"
+            squeeze_tag     = " +SQZ" if tl_result.get("in_squeeze") else ""
+            orig_rationale  = result["resolution"].get("rationale", "")
+            result["resolution"]["rationale"] = (
+                f"[TL {direction_label} LOCK {score}/{max_score}{squeeze_tag}] {orig_rationale}"
+            )
+
+            logger.info(
+                f"[TL-IAM] ✅ CONFIRMED {symbol} | TL={tl_state} | IAM={action} | "
+                f"window={window} | conf={confidence:.0f}% | score={score}/{max_score}"
+            )
+            execute_from_resolution(symbol, result["resolution"], window, confidence, price)
+
+        except Exception as e:
+            logger.error(f"[TL-IAM] IAM resolution error for {symbol}: {e}")
+        finally:
+            _TL_IAM_SEMAPHORE.release()
+
+    threading.Thread(target=_do, daemon=True, name=f"tl-iam-{symbol}").start()
+
+
 # ─── BACKGROUND SCANNER ────────────────────────────────────────────────────────
 
 def _run_tl_scan():
@@ -281,6 +358,10 @@ def _run_tl_scan():
         f"{fired} new locks | "
         f"active locks: {sum(1 for r in _results.values() if r.get('state') in ('LOCK_CALL','LOCK_PUT'))}"
     )
+
+    # Priority injection: trigger immediate IAM resolution for each new lock
+    for lock_result in new_locks:
+        _trigger_iam_resolution(lock_result["symbol"], lock_result)
 
 
 def _broadcast_lock(symbol: str, result: dict, sse_queues_ref, sh):
