@@ -628,6 +628,49 @@ _TOOLS = [
         },
     },
 
+    # ── FTD Data Oracle ───────────────────────────────────────────────────────
+    {
+        "name": "ftd_alerts",
+        "description": (
+            "ShortSqueeze Swarm — live FTD anomaly alert feed. Free. "
+            "Returns the last 25 SEC Reg SHO anomaly events detected by the background engine: "
+            "NEW_THRESHOLD_LIST_ENTRY (symbol newly on SEC threshold list) and "
+            "FTD_SPIKE (latest fail_shares ≥ 2× rolling window average, 95th-percentile+ reading). "
+            "Each alert includes symbol, anomaly_type, spike_ratio, and settlement_date. "
+            "This is a teaser feed — descriptive public-regulatory data only, not trade signals. "
+            "For full 180-day FTD time series or ratio analysis, use ftd_analysis (0.03 RLUSD)."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "description": "Max alerts to return (default 25, max 100)"},
+            },
+        },
+    },
+    {
+        "name": "ftd_analysis",
+        "description": (
+            "FTD Data Oracle — full FTD ratio + percentile analysis for any US equity. Cost: 0.03 RLUSD. "
+            "Returns the latest Fails-To-Deliver record for a symbol with: "
+            "fail_shares (shares failed to deliver), fail_value (notional), settlement_date, "
+            "rank_percentile (where this reading sits vs 180-day window, 0.0–1.0), "
+            "window_avg_fails, and spike_ratio (latest / window_avg). "
+            "A spike_ratio ≥ 2.0 at rank_percentile ≥ 0.95 is an institutional-grade FTD anomaly. "
+            "Data sourced directly from SEC Reg SHO biweekly reports — same feed Bloomberg charges "
+            "$200/month for. Descriptive regulatory data only — not a trade signal. "
+            "Pass payment_token from verify_payment plus agent_wallet."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["symbol"],
+            "properties": {
+                "symbol":        {"type": "string", "description": "US equity ticker (e.g. GME, AMC, BBBY, XRT)"},
+                "payment_token": {"type": "string", "description": "JWT from verify_payment (0.03 RLUSD)"},
+                "agent_wallet":  {"type": "string", "description": "Your XRPL wallet address"},
+            },
+        },
+    },
+
     # ── 741 Pure Macro Matrix ─────────────────────────────────────────────────
     {
         "name": "macro_741_scan",
@@ -671,6 +714,7 @@ _ENDPOINT_IDS = {
     "marketplace_read_signal": "d1a2b3c4-e001-4c3f-aa24-de6e3bc12b5a",
     "iam_resolve":          "a7f3d2b1-9e4c-4a8f-b5c6-d7e8f9a0b1c2",
     "macro_741_scan":       "f3a7c891-2d54-4b8e-9a1f-6c3d8e5f7b2a",
+    "ftd_analysis":         "a4b5c6d7-e002-4f3e-aa24-d52e3bc12b5a",
 }
 _PRICES = {
     "council_verdict": 0.10, "market_scan": 0.05,
@@ -678,6 +722,7 @@ _PRICES = {
     "marketplace_read_signal": 0.02,
     "iam_resolve": 0.05,
     "macro_741_scan": 0.04,
+    "ftd_analysis": 0.03,
 }
 
 
@@ -925,6 +970,19 @@ def _dispatch(name: str, args: dict, req_headers: dict) -> dict:
     if name == "iam_truth":
         symbol = (args.get("symbol") or "IWM").upper()
         return _text(_proxy("GET", f"{sq}/api/iam/truth/{symbol}"))
+
+    # ── FTD Data Oracle ───────────────────────────────────────────────────────
+    if name == "ftd_alerts":
+        limit = args.get("limit", 25)
+        return _text(_proxy("GET", f"{sq}/api/ftd/alerts", params={"limit": limit}))
+
+    if name == "ftd_analysis":
+        if not payment_token: return _need_token(name)
+        symbol = (args.get("symbol") or "GME").upper()
+        return _compress_mcp_result(
+            _text(_proxy("GET", f"{sq}/api/ftd/ratio/{symbol}", headers=ph)),
+            _tier, _seed,
+        )
 
     # ── 741 Pure Macro Matrix ─────────────────────────────────────────────────
     if name == "macro_741_scan":

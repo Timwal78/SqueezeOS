@@ -285,8 +285,8 @@
       "transport": "streamable-http",
       "payment_asset": "RLUSD",
       "payment_network": "XRPL",
-      "free_tools": ["demo_council", "signal_preview", "signal_history", "system_status", "stigmergy_sniff", "triple_lock_demo", "notary_info", "notary_quote", "ftd_info"],
-      "tool_count": 44,
+      "free_tools": ["demo_council", "signal_preview", "signal_history", "system_status", "stigmergy_sniff", "triple_lock_demo", "notary_info", "notary_quote", "ftd_info", "ftd_alerts"],
+      "tool_count": 46,
       "categories": ["finance", "trading", "market-data", "agent-economy"]
     },
     "google_ap2": {
