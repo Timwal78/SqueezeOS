@@ -197,6 +197,85 @@ def get_free(path: str) -> dict:
 
 CRYPTO_SCAN_SYMBOLS = "ETH/USDT,BTC/USDT,SOL/USDT,AVAX/USDT"
 
+ROBINHOOD_BASE      = os.environ.get("ROBINHOOD_BASE_URL", "http://localhost:8001")
+ROBINHOOD_ENABLED   = os.environ.get("ROBINHOOD_EXECUTION", "false").lower() == "true"
+ROBINHOOD_PAPER     = os.environ.get("ROBINHOOD_PAPER_MODE", "true").lower() == "true"
+EXECUTION_SIZE_USD  = float(os.environ.get("EXECUTION_SIZE_USD", "100"))
+
+_executed_this_cycle: set = set()
+
+
+def _symbol_to_robinhood(ccxt_symbol: str) -> str:
+    """Convert CCXT symbol (ETH/USDT) to Robinhood crypto symbol (ETH)."""
+    return ccxt_symbol.split("/")[0]
+
+
+def execute_signal(signal: dict) -> Optional[dict]:
+    """
+    Route a matrix intent to Robinhood execution.
+    Guards: paper mode flag, per-cycle dedup, human-confirmation gate.
+    """
+    intent = signal.get("intent")
+    symbol = signal.get("symbol", "")
+    rh_sym = _symbol_to_robinhood(symbol)
+
+    if intent == "MAINTAIN_STATE" or intent == "ERROR":
+        return None
+
+    dedup_key = f"{rh_sym}:{intent}"
+    if dedup_key in _executed_this_cycle:
+        logger.info(f"[EXEC] Skipping duplicate signal {dedup_key} this cycle")
+        return None
+    _executed_this_cycle.add(dedup_key)
+
+    if not ROBINHOOD_ENABLED:
+        logger.info(f"[EXEC] Execution disabled — would have fired {intent} on {rh_sym}")
+        return None
+
+    side   = "buy"  if intent in ("EXECUTE_INITIAL_ENTRY", "EXECUTE_TRANCHE_AVG_DOWN") else "sell"
+    amount = EXECUTION_SIZE_USD if side == "buy" else None
+
+    payload = {
+        "symbol":     rh_sym,
+        "side":       side,
+        "type":       "market",
+        "paper_mode": ROBINHOOD_PAPER,
+        "intent":     intent,
+    }
+    if amount:
+        payload["notional"] = amount
+
+    try:
+        resp = requests.post(
+            f"{ROBINHOOD_BASE}/orders",
+            json=payload,
+            timeout=15,
+        )
+        resp.raise_for_status()
+        result = resp.json()
+        mode = "PAPER" if ROBINHOOD_PAPER else "LIVE"
+        logger.info(f"[EXEC] {mode} {side.upper()} {rh_sym} — intent={intent} order={result.get('id', 'N/A')}")
+        return result
+    except Exception as e:
+        logger.error(f"[EXEC] Robinhood order failed {rh_sym} {intent}: {e}")
+        return None
+
+
+def execute_matrix_signals(scan: dict):
+    """Fire execution for all actionable signals in a scan result."""
+    _executed_this_cycle.clear()
+    results = scan.get("results", [])
+    executions = []
+    for r in results:
+        if r.get("intent") not in ("MAINTAIN_STATE", "ERROR"):
+            result = execute_signal(r)
+            if result:
+                executions.append({"signal": r, "order": result})
+    if executions:
+        logger.info(f"[EXEC] Fired {len(executions)} order(s) this cycle")
+    return executions
+
+
 def collect_matrix_intents() -> dict:
     """
     Pulls live 5-EMA Fibonacci Ribbon execution intents from the
@@ -235,6 +314,8 @@ def collect_market_data() -> dict:
             if r.get("intent") not in ("MAINTAIN_STATE", "ERROR"):
                 data["matrix_top_signal"] = r
                 break
+        # Fire Robinhood execution for all actionable signals
+        data["executions"] = execute_matrix_signals(matrix)
 
     # Free: IWM preview
     try:
