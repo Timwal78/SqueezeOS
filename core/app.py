@@ -205,6 +205,10 @@ def create_app():
             _discord_for_ftd = None
         start_ftd_anomaly_engine(_discord_for_ftd)
 
+        # SML Triple Lock Scanner — market-wide 15-min bar scanner (GEO/ARI/MAC stacks)
+        from core.sml_tl_scanner import start_tl_scanner
+        start_tl_scanner()
+
         # Self-pinger — keeps Render free-tier warm; pings own /api/status every 10 min
         _start_self_pinger()
     

@@ -498,6 +498,35 @@ def get_options(symbol):
         "chain_count": len(chain_data['options'])
     }))
 
+@market_bp.route('/tl-locks', methods=['GET'])
+def get_tl_locks():
+    """
+    GET /api/market/tl-locks
+    Returns all symbols currently in LOCK_CALL or LOCK_PUT state from the
+    SML Triple Lock Scanner (15-min bars, full market universe).
+    Optional ?state=LOCK_CALL|LOCK_PUT|CALL_FORMING|PUT_FORMING|all
+    """
+    from core.sml_tl_scanner import get_active_locks, get_forming, get_all_results
+    from core.legacy import clean_data
+
+    filter_state = request.args.get("state", "locks").upper()
+
+    if filter_state in ("ALL", "FULL"):
+        results = list(get_all_results().values())
+    elif filter_state in ("FORMING", "CALL_FORMING", "PUT_FORMING"):
+        results = get_forming()
+    else:  # default: active locks only
+        results = get_active_locks()
+
+    return jsonify(clean_data({
+        "status":     "success",
+        "locks":      results,
+        "count":      len(results),
+        "timeframe":  "15min",
+        "ts":         time.time(),
+    }))
+
+
 @market_bp.route('/news', methods=['GET'])
 def get_news():
     """Fetch live market news from Alpaca."""
