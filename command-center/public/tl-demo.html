@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ScriptMaster Labs — Triple Lock Intelligence</title>
+  <style>
+    :root {
+      --bg:       #070709;
+      --panel:    #0d0d12;
+      --border:   #1a1a2a;
+      --green:    #39FF14;
+      --red:      #FF003C;
+      --cyan:     #00FFFF;
+      --gold:     #FFD700;
+      --purple:   #BF5FFF;
+      --muted:    #555570;
+      --text:     #d0d0e0;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Courier New', Courier, monospace;
+      min-height: 100vh;
+    }
+
+    /* ── HEADER ────────────────────────────────────────────────── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 28px;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+    }
+    .brand { display: flex; align-items: center; gap: 14px; }
+    .brand-logo {
+      width: 36px; height: 36px;
+      border: 2px solid var(--cyan);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; color: var(--cyan);
+      text-shadow: 0 0 8px var(--cyan);
+    }
+    .brand-name { font-size: 13px; color: var(--cyan); letter-spacing: 3px; text-transform: uppercase; }
+    .brand-sub  { font-size: 10px; color: var(--muted); letter-spacing: 2px; }
+    .header-right { text-align: right; }
+    .timestamp { font-size: 11px; color: var(--muted); }
+    #clock { color: var(--text); }
+    .status-dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green);
+      animation: pulse 2s infinite;
+      margin-right: 6px;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    /* ── STAT ROW ───────────────────────────────────────────────── */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1px;
+      border-bottom: 1px solid var(--border);
+      background: var(--border);
+    }
+    .stat-card {
+      background: var(--panel);
+      padding: 20px 24px;
+      text-align: center;
+    }
+    .stat-label { font-size: 10px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; }
+    .stat-value { font-size: 36px; font-weight: bold; line-height: 1; }
+    .stat-sub   { font-size: 10px; color: var(--muted); margin-top: 6px; }
+    .v-green  { color: var(--green); text-shadow: 0 0 12px var(--green); }
+    .v-red    { color: var(--red);   text-shadow: 0 0 12px var(--red); }
+    .v-gold   { color: var(--gold);  text-shadow: 0 0 8px var(--gold); }
+    .v-cyan   { color: var(--cyan);  text-shadow: 0 0 8px var(--cyan); }
+    .v-purple { color: var(--purple);text-shadow: 0 0 8px var(--purple); }
+
+    /* ── MAIN GRID ──────────────────────────────────────────────── */
+    .main { display: grid; grid-template-columns: 1fr 340px; gap: 1px; background: var(--border); min-height: calc(100vh - 130px); }
+    .panel { background: var(--panel); }
+
+    /* ── LOCK TABLE ─────────────────────────────────────────────── */
+    .panel-header {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .panel-title { font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: var(--cyan); }
+    .refresh-badge {
+      font-size: 10px; color: var(--muted);
+      background: #111118; border: 1px solid var(--border);
+      padding: 3px 8px; border-radius: 3px;
+    }
+
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      padding: 10px 16px;
+      font-size: 9px; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--muted); text-align: left;
+      border-bottom: 1px solid var(--border);
+      background: #0a0a10;
+    }
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background .15s;
+    }
+    tbody tr:hover { background: #111120; }
+    tbody tr.flash-in { animation: flash .6s ease; }
+    @keyframes flash { 0%{background:#1a2a0a} 100%{background:transparent} }
+    td { padding: 12px 16px; font-size: 13px; }
+
+    .sym-cell { font-size: 15px; font-weight: bold; color: #fff; }
+    .state-call { color: var(--green); font-weight: bold; letter-spacing: 1px; }
+    .state-put  { color: var(--red);   font-weight: bold; letter-spacing: 1px; }
+    .state-forming-c { color: #70aa50; }
+    .state-forming-p { color: #aa5050; }
+
+    .score-bar-wrap {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .score-bar {
+      height: 6px; border-radius: 3px;
+      background: var(--border); flex: 1; overflow: hidden;
+    }
+    .score-fill {
+      height: 100%; border-radius: 3px;
+      background: var(--green);
+      transition: width .4s;
+    }
+    .score-fill.bear { background: var(--red); }
+    .score-num { font-size: 11px; color: var(--muted); min-width: 36px; }
+
+    .stack-col { display: flex; gap: 4px; }
+    .stack-badge {
+      font-size: 9px; letter-spacing: 1px; padding: 2px 6px;
+      border-radius: 3px; font-weight: bold;
+    }
+    .bull  { background: rgba(57,255,20,.15);  color: var(--green); }
+    .bear  { background: rgba(255,0,60,.15);   color: var(--red); }
+    .mix   { background: rgba(85,85,112,.2);   color: var(--muted); }
+    .degr  { background: rgba(191,95,255,.1);  color: var(--purple); }
+
+    .sqz-yes { color: var(--gold); }
+    .sqz-no  { color: var(--muted); }
+
+    .price-cell { color: #bbb; font-size: 12px; }
+
+    /* ── RIGHT PANEL ────────────────────────────────────────────── */
+    .right-panel { display: flex; flex-direction: column; gap: 1px; background: var(--border); }
+    .right-section { background: var(--panel); padding: 16px 18px; }
+    .right-title { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; }
+
+    /* IWM anchor card */
+    .anchor-symbol { font-size: 28px; font-weight: bold; color: #fff; }
+    .anchor-row { display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: var(--muted); }
+    .anchor-val { color: var(--text); }
+    .above-anchor { color: var(--green); }
+    .below-anchor { color: var(--red); }
+
+    .regime-badge {
+      display: inline-block;
+      margin-top: 12px;
+      padding: 6px 14px;
+      border-radius: 4px;
+      font-size: 11px; font-weight: bold; letter-spacing: 2px;
+    }
+    .regime-bull { background: rgba(57,255,20,.12); color: var(--green); border: 1px solid rgba(57,255,20,.3); }
+    .regime-bear { background: rgba(255,0,60,.12);  color: var(--red);   border: 1px solid rgba(255,0,60,.3); }
+    .regime-neut { background: rgba(85,85,112,.2);  color: var(--muted); border: 1px solid var(--border); }
+
+    /* Recent events log */
+    #event-log { max-height: 240px; overflow-y: auto; }
+    .log-entry {
+      font-size: 11px; padding: 6px 0;
+      border-bottom: 1px solid var(--border);
+      display: flex; gap: 8px;
+    }
+    .log-time { color: var(--muted); white-space: nowrap; }
+    .log-msg  { color: var(--text); }
+    .log-call { color: var(--green); }
+    .log-put  { color: var(--red); }
+
+    /* Engine legend */
+    .legend { display: flex; flex-direction: column; gap: 8px; }
+    .legend-row { display: flex; align-items: flex-start; gap: 10px; font-size: 11px; }
+    .legend-key { color: var(--cyan); font-weight: bold; min-width: 36px; }
+    .legend-desc { color: var(--muted); line-height: 1.4; }
+
+    /* ── EMPTY STATE ────────────────────────────────────────────── */
+    .empty {
+      padding: 48px; text-align: center; color: var(--muted);
+    }
+    .empty-icon { font-size: 40px; margin-bottom: 12px; }
+    .empty-msg { font-size: 12px; letter-spacing: 2px; }
+
+    /* ── FOOTER ─────────────────────────────────────────────────── */
+    footer {
+      padding: 12px 28px;
+      border-top: 1px solid var(--border);
+      background: var(--panel);
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 10px; color: var(--muted);
+    }
+
+    /* ── RESPONSIVE ─────────────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .main  { grid-template-columns: 1fr; }
+      .right-panel { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="brand">
+    <div class="brand-logo">⬡</div>
+    <div>
+      <div class="brand-name">ScriptMaster Labs</div>
+      <div class="brand-sub">Triple Lock Intelligence Platform</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="timestamp"><span class="status-dot"></span>LIVE · <span id="clock">--:--:--</span></div>
+    <div class="timestamp" style="margin-top:4px">Auto-refresh every 4 min · 15-min bars</div>
+  </div>
+</header>
+
+<!-- STAT CARDS -->
+<div class="stats">
+  <div class="stat-card">
+    <div class="stat-label">Active Locks</div>
+    <div class="stat-value v-green" id="stat-total">—</div>
+    <div class="stat-sub">CALL + PUT</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Lock Call</div>
+    <div class="stat-value v-green" id="stat-calls">—</div>
+    <div class="stat-sub">Bullish alignment</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Lock Put</div>
+    <div class="stat-value v-red" id="stat-puts">—</div>
+    <div class="stat-sub">Bearish alignment</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">In Squeeze</div>
+    <div class="stat-value v-gold" id="stat-squeeze">—</div>
+    <div class="stat-sub">Max conviction</div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- LOCK TABLE -->
+  <div class="panel">
+    <div class="panel-header">
+      <span class="panel-title">Active Triple Lock Signals</span>
+      <span class="refresh-badge" id="next-refresh">next refresh in 4:00</span>
+    </div>
+    <div id="table-wrap">
+      <div class="empty">
+        <div class="empty-icon">◎</div>
+        <div class="empty-msg">Loading market data...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right-panel">
+
+    <!-- IWM ANCHOR -->
+    <div class="right-section">
+      <div class="right-title">Macro Anchor — IWM</div>
+      <div class="anchor-symbol">IWM</div>
+      <div id="iwm-state">
+        <div class="anchor-row"><span>Price</span><span class="anchor-val" id="iwm-price">—</span></div>
+        <div class="anchor-row"><span>Anchor</span><span class="anchor-val" id="iwm-anchor">—</span></div>
+        <div class="anchor-row"><span>Vs Anchor</span><span id="iwm-vs">—</span></div>
+        <div class="anchor-row"><span>GEO</span><span class="anchor-val" id="iwm-geo">—</span></div>
+        <div class="anchor-row"><span>ARI</span><span class="anchor-val" id="iwm-ari">—</span></div>
+        <div class="anchor-row"><span>MAC</span><span class="anchor-val" id="iwm-mac">—</span></div>
+        <div><span class="regime-badge regime-neut" id="iwm-regime">LOADING</span></div>
+      </div>
+    </div>
+
+    <!-- EVENT LOG -->
+    <div class="right-section" style="flex:1">
+      <div class="right-title">Signal Log</div>
+      <div id="event-log">
+        <div class="log-entry"><span class="log-time">--:--</span><span class="log-msg">Waiting for signals...</span></div>
+      </div>
+    </div>
+
+    <!-- ENGINE LEGEND -->
+    <div class="right-section">
+      <div class="right-title">Engine Architecture</div>
+      <div class="legend">
+        <div class="legend-row">
+          <span class="legend-key">GEO</span>
+          <span class="legend-desc">Short-term price structure — proprietary fast stack alignment</span>
+        </div>
+        <div class="legend-row">
+          <span class="legend-key">ARI</span>
+          <span class="legend-desc">Intermediate momentum — arithmetic progression confirmation</span>
+        </div>
+        <div class="legend-row">
+          <span class="legend-key">MAC</span>
+          <span class="legend-desc">Macro anchor — long-horizon regime gate. All three must align.</span>
+        </div>
+        <div class="legend-row">
+          <span class="legend-key">VOL</span>
+          <span class="legend-desc">Volume surge required. Structure without conviction is noise.</span>
+        </div>
+        <div class="legend-row">
+          <span class="legend-key">SQZ</span>
+          <span class="legend-desc">Bollinger inside Keltner. Squeeze + lock = maximum conviction.</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <span>ScriptMaster Labs · Triple Lock Engine · Proprietary</span>
+  <span id="universe-info">Scanning — symbols</span>
+</footer>
+
+<script>
+  const API = 'https://squeezeos-api.onrender.com';
+  let allResults = {};
+  let countdown = 240;
+
+  // ── Clock
+  function updateClock() {
+    const now = new Date();
+    document.getElementById('clock').textContent =
+      now.toLocaleTimeString('en-US', {hour12: false});
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  // ── Countdown
+  setInterval(() => {
+    countdown--;
+    if (countdown <= 0) { countdown = 240; fetchLocks(); }
+    const m = String(Math.floor(countdown / 60)).padStart(1,'0');
+    const s = String(countdown % 60).padStart(2,'0');
+    document.getElementById('next-refresh').textContent = `next refresh in ${m}:${s}`;
+  }, 1000);
+
+  // ── Stack badge
+  function stackBadge(val, label) {
+    const cls = val === 'BULL' ? 'bull' : val === 'BEAR' ? 'bear' : val === 'DEGRADED' ? 'degr' : 'mix';
+    const display = val === 'BULL' ? '▲' : val === 'BEAR' ? '▼' : val === 'DEGRADED' ? '~' : '—';
+    return `<span class="stack-badge ${cls}" title="${label}: ${val}">${display} ${label}</span>`;
+  }
+
+  // ── State class
+  function stateClass(state) {
+    if (state === 'LOCK_CALL')    return 'state-call';
+    if (state === 'LOCK_PUT')     return 'state-put';
+    if (state === 'CALL_FORMING') return 'state-forming-c';
+    if (state === 'PUT_FORMING')  return 'state-forming-p';
+    return '';
+  }
+
+  // ── Render table
+  function renderTable(locks) {
+    if (!locks || locks.length === 0) {
+      document.getElementById('table-wrap').innerHTML = `
+        <div class="empty">
+          <div class="empty-icon">◎</div>
+          <div class="empty-msg">No active locks — market scanning in progress</div>
+        </div>`;
+      return;
+    }
+
+    const rows = locks.map(r => {
+      const isBull = r.state === 'LOCK_CALL';
+      const isForming = r.state === 'CALL_FORMING' || r.state === 'PUT_FORMING';
+      const stateLabel = {
+        LOCK_CALL:    '⬆ LOCK CALL',
+        LOCK_PUT:     '⬇ LOCK PUT',
+        CALL_FORMING: '◎ FORMING ↑',
+        PUT_FORMING:  '◎ FORMING ↓',
+      }[r.state] || r.state;
+
+      const maxScore = r.max_score || 12;
+      const score    = r.net_score || 0;
+      const pct      = Math.max(0, Math.abs(score) / maxScore * 100);
+      const fillClass = score >= 0 ? '' : 'bear';
+
+      const priceStr = r.price ? `$${Number(r.price).toFixed(2)}` : '—';
+      const sqzStr   = r.in_squeeze
+        ? '<span class="sqz-yes">◉ SQZ</span>'
+        : '<span class="sqz-no">—</span>';
+
+      const macVal = r.mac === 'DEGRADED' ? r.mac : r.mac;
+
+      return `<tr class="${isForming ? '' : 'flash-in'}">
+        <td class="sym-cell">${r.symbol}</td>
+        <td class="${stateClass(r.state)}">${stateLabel}</td>
+        <td>
+          <div class="score-bar-wrap">
+            <div class="score-bar"><div class="score-fill ${fillClass}" style="width:${pct}%"></div></div>
+            <span class="score-num">${score > 0 ? '+' : ''}${score}/${maxScore}</span>
+          </div>
+        </td>
+        <td>
+          <div class="stack-col">
+            ${stackBadge(r.geo, 'GEO')}
+            ${stackBadge(r.ari, 'ARI')}
+            ${stackBadge(r.mac, 'MAC')}
+          </div>
+        </td>
+        <td>${sqzStr}</td>
+        <td class="price-cell">${priceStr}</td>
+      </tr>`;
+    }).join('');
+
+    document.getElementById('table-wrap').innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Symbol</th>
+            <th>Signal</th>
+            <th>Confluence</th>
+            <th>Stack Alignment</th>
+            <th>Squeeze</th>
+            <th>Price</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  // ── Update IWM panel
+  function updateIWM(allData) {
+    const iwm = Object.values(allData).find(r => r.symbol === 'IWM');
+    if (!iwm) return;
+
+    const price  = iwm.price  ? `$${Number(iwm.price).toFixed(2)}`  : '—';
+    const anchor = iwm.mac741 ? `$${Number(iwm.mac741).toFixed(2)}` : '—';
+
+    document.getElementById('iwm-price').textContent  = price;
+    document.getElementById('iwm-anchor').textContent = anchor;
+    document.getElementById('iwm-geo').textContent    = iwm.geo || '—';
+    document.getElementById('iwm-ari').textContent    = iwm.ari || '—';
+    document.getElementById('iwm-mac').textContent    = iwm.mac || '—';
+
+    if (iwm.price && iwm.mac741) {
+      const diff = ((iwm.price - iwm.mac741) / iwm.mac741 * 100).toFixed(2);
+      const vsEl = document.getElementById('iwm-vs');
+      vsEl.textContent = `${diff > 0 ? '+' : ''}${diff}%`;
+      vsEl.className = diff > 0 ? 'above-anchor' : 'below-anchor';
+    }
+
+    const regime = document.getElementById('iwm-regime');
+    if (iwm.state === 'LOCK_CALL') {
+      regime.textContent = 'TRIPLE LOCK BULL';
+      regime.className = 'regime-badge regime-bull';
+    } else if (iwm.state === 'LOCK_PUT') {
+      regime.textContent = 'TRIPLE LOCK BEAR';
+      regime.className = 'regime-badge regime-bear';
+    } else if (iwm.geo === 'BULL' && iwm.ari === 'BULL') {
+      regime.textContent = 'BULLISH STRUCTURE';
+      regime.className = 'regime-badge regime-bull';
+    } else if (iwm.geo === 'BEAR' && iwm.ari === 'BEAR') {
+      regime.textContent = 'BEARISH STRUCTURE';
+      regime.className = 'regime-badge regime-bear';
+    } else {
+      regime.textContent = 'MIXED / STANDBY';
+      regime.className = 'regime-badge regime-neut';
+    }
+  }
+
+  // ── Log event
+  function logEvent(symbol, state) {
+    const log  = document.getElementById('event-log');
+    const now  = new Date().toLocaleTimeString('en-US', {hour12: false, hour:'2-digit', minute:'2-digit'});
+    const cls  = state === 'LOCK_CALL' ? 'log-call' : state === 'LOCK_PUT' ? 'log-put' : '';
+    const icon = state === 'LOCK_CALL' ? '⬆' : state === 'LOCK_PUT' ? '⬇' : '◎';
+    const entry = document.createElement('div');
+    entry.className = 'log-entry';
+    entry.innerHTML = `<span class="log-time">${now}</span><span class="log-msg ${cls}">${icon} ${symbol} — ${state.replace('_',' ')}</span>`;
+    log.insertBefore(entry, log.firstChild);
+    // Keep last 30
+    while (log.children.length > 30) log.removeChild(log.lastChild);
+  }
+
+  // ── Main fetch
+  async function fetchLocks() {
+    try {
+      // Fetch active locks
+      const res = await fetch(`${API}/api/market/tl-locks`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const locks = data.locks || [];
+
+      // Track new lock fires vs prior state
+      const prevStates = {};
+      Object.values(allResults).forEach(r => { prevStates[r.symbol] = r.state; });
+
+      // Fetch all results for IWM panel
+      const resAll = await fetch(`${API}/api/market/tl-locks?state=all`);
+      if (resAll.ok) {
+        const allData = await resAll.json();
+        (allData.locks || []).forEach(r => { allResults[r.symbol] = r; });
+        updateIWM(allResults);
+      }
+
+      // Stats
+      const calls   = locks.filter(r => r.state === 'LOCK_CALL').length;
+      const puts    = locks.filter(r => r.state === 'LOCK_PUT').length;
+      const squeeze = locks.filter(r => r.in_squeeze).length;
+      document.getElementById('stat-total').textContent   = calls + puts;
+      document.getElementById('stat-calls').textContent   = calls;
+      document.getElementById('stat-puts').textContent    = puts;
+      document.getElementById('stat-squeeze').textContent = squeeze;
+
+      // Log new fires
+      locks.forEach(r => {
+        if (r.state !== prevStates[r.symbol] && (r.state === 'LOCK_CALL' || r.state === 'LOCK_PUT')) {
+          logEvent(r.symbol, r.state);
+        }
+      });
+
+      renderTable(locks);
+
+      // Footer
+      const total = Object.keys(allResults).length;
+      document.getElementById('universe-info').textContent =
+        `Scanning ${total} symbols · powered by ScriptMaster Labs`;
+
+    } catch (err) {
+      document.getElementById('table-wrap').innerHTML = `
+        <div class="empty">
+          <div class="empty-icon">⚠</div>
+          <div class="empty-msg">API unreachable — ${err.message}</div>
+        </div>`;
+    }
+  }
+
+  fetchLocks();
+</script>
+</body>
+</html>
