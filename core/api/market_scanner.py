@@ -502,28 +502,42 @@ def get_options(symbol):
 def get_tl_locks():
     """
     GET /api/market/tl-locks
-    Returns all symbols currently in LOCK_CALL or LOCK_PUT state from the
-    SML Triple Lock Scanner (15-min bars, full market universe).
-    Optional ?state=LOCK_CALL|LOCK_PUT|CALL_FORMING|PUT_FORMING|all
+    Returns Triple Lock scanner results for the requested timeframe.
+
+    Query params:
+      ?tf=15|30|65      (default 15) — which timeframe scanner to query
+      ?state=locks|forming|all       — filter (default: active locks)
+
+    tf=15 : 15-min bars, full GEO+ARI+MAC (score −12/+12)
+    tf=30 : 30-min bars, GEO+ARI only    (score −8/+8)
+    tf=65 : 65-min bars, GEO+ARI only    (score −8/+8)
     """
-    from core.sml_tl_scanner import get_active_locks, get_forming, get_all_results
+    from core.sml_tl_scanner import get_active_locks, get_forming, get_all_results, get_all_timeframe_locks
     from core.legacy import clean_data
+
+    tf_raw = request.args.get("tf", "15")
+    try:
+        tf = int(tf_raw)
+    except ValueError:
+        tf = 15
+    if tf not in (15, 30, 65):
+        return jsonify({"status": "error", "message": "tf must be 15, 30, or 65"}), 400
 
     filter_state = request.args.get("state", "locks").upper()
 
     if filter_state in ("ALL", "FULL"):
-        results = list(get_all_results().values())
+        results = list(get_all_results(tf).values())
     elif filter_state in ("FORMING", "CALL_FORMING", "PUT_FORMING"):
-        results = get_forming()
+        results = get_forming(tf)
     else:  # default: active locks only
-        results = get_active_locks()
+        results = get_active_locks(tf)
 
     return jsonify(clean_data({
-        "status":     "success",
-        "locks":      results,
-        "count":      len(results),
-        "timeframe":  "15min",
-        "ts":         time.time(),
+        "status":    "success",
+        "locks":     results,
+        "count":     len(results),
+        "timeframe": f"{tf}min",
+        "ts":        time.time(),
     }))
 
 
