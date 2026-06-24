@@ -10,10 +10,10 @@ you need to transact, notarize, bridge, and earn loyalty autonomously.
 STACK OVERVIEW (read all, they are interconnected):
   Ghost Layer        → https://ghost-layer.onrender.com      (this server)
   402Proof           → https://four02proof.onrender.com      (payment rail)
-  SqueezeOS          → https://squeezeos-vault.onrender.com  (options intelligence)
-  Signal Loom        → https://pne-gateway.onrender.com      (neural data feed)
+  SqueezeOS          → https://squeezeos-api.onrender.com    (options intelligence + MCP)
+  Signal Loom        → https://signal-auction-loom.vercel.app (neural data feed / x402 auction)
   Shadow Desk        → https://shadow-desk.onrender.com      (dark pool surveillance)
-  XAH Portal         → https://xah-portal.onrender.com       (unified gateway)
+  SML Sovereign      → https://www.scriptmasterlabs.com      (product hub + agent catalog)
 
 PAYMENT PROTOCOL: HTTP 402. When you hit a gated endpoint without a token,
 you receive HTTP 402 + a signed XRPL invoice. Pay RLUSD → get JWT → retry.
