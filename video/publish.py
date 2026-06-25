@@ -31,6 +31,46 @@ YT_REFRESH    = os.getenv("YOUTUBE_REFRESH_TOKEN", "")
 
 # ── YouTube ───────────────────────────────────────────────────────────────────
 
+_TAGS_BASE = [
+    "SqueezeOS", "ScriptMaster Labs", "SML signals", "AI trading signals",
+    "institutional signals", "options flow", "stock market", "US markets",
+    "Wall Street", "NYSE", "NASDAQ", "day trading", "options trading",
+    "0DTE", "zero DTE", "market intelligence", "pay per signal",
+]
+
+_TAGS_BY_SYMBOL = {
+    "IWM": [
+        "IWM", "Russell 2000", "small cap stocks", "small cap ETF",
+        "IWM options", "pre-market trading", "pre-market signals",
+        "morning market", "market open", "IWM 0DTE", "small cap trading",
+        "iShares Russell 2000",
+    ],
+    "SPY": [
+        "SPY", "S&P 500", "SP500", "large cap stocks", "S&P 500 ETF",
+        "SPY options", "midday trading", "midday market update",
+        "market midday", "SPY 0DTE", "index trading", "SPDR S&P 500",
+    ],
+    "QQQ": [
+        "QQQ", "Nasdaq 100", "NASDAQ", "tech stocks", "tech ETF",
+        "QQQ options", "market close", "closing bell", "end of day trading",
+        "QQQ 0DTE", "growth stocks", "Invesco QQQ", "tech market",
+    ],
+}
+
+
+def _build_tags(symbol: str) -> list:
+    symbol_tags = _TAGS_BY_SYMBOL.get(symbol.upper(), [symbol.upper()])
+    tags = symbol_tags + _TAGS_BASE
+    # YouTube: total tag chars ≤ 500, individual tag ≤ 100
+    result, total = [], 0
+    for tag in tags:
+        if total + len(tag) + 1 > 500:
+            break
+        result.append(tag)
+        total += len(tag) + 1
+    return result
+
+
 def _yt_access_token() -> str:
     body = urllib.parse.urlencode({
         "client_id":     YT_CLIENT_ID,
@@ -62,7 +102,7 @@ def upload_youtube(video_path: str, title: str, description: str) -> str:
         "snippet": {
             "title":       title,
             "description": description,
-            "tags":        ["trading", "IWM", "SqueezeOS", "signals", "options", "stocks"],
+            "tags":        _build_tags(SYMBOL),
             "categoryId":  "25",  # News & Politics
         },
         "status": {
