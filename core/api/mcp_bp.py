@@ -9,7 +9,7 @@ GET  /mcp  — server info (health check)
 
 Supported methods:
   initialize        — handshake + capabilities
-  tools/list        — all 26 tools
+  tools/list        — all tools
   tools/call        — execute a tool (proxies to REST API)
   ping              — keepalive
   notifications/*   — silently acknowledged
@@ -606,14 +606,9 @@ _TOOLS = [
         "description": (
             "IAM Truth Layer — neutral obligation state for a symbol. No action resolution. "
             "Returns the raw obligation pressure vector before direction is forced: "
-            "• Volatility Release: 0-100% "
-            "• Liquidity Refill: 0-100% "
-            "• Dealer Hedge: 0-100% "
-            "• Mean Reversion Pull: 0-100% "
-            "• Structural Pressure: 0-100% "
-            "• Directional Bias: NONE (always — Truth Layer is strictly neutral) "
-            "• Time Window: DORMANT / DEVELOPING / NEAR_TERM / IMMEDIATE "
-            "Use this to display the obligation state without committing to a trade direction. "
+            "Volatility Release, Liquidity Refill, Dealer Hedge, Mean Reversion Pull, "
+            "Structural Pressure (all 0-100%), and Directional Bias: NONE (always — Truth Layer "
+            "is strictly neutral), plus Time Window: DORMANT / DEVELOPING / NEAR_TERM / IMMEDIATE. "
             "Free endpoint."
         ),
         "inputSchema": {
@@ -628,62 +623,6 @@ _TOOLS = [
         },
     },
 
-    # ── FTD Data Oracle ───────────────────────────────────────────────────────
-    {
-        "name": "ftd_alerts",
-        "description": (
-            "ShortSqueeze Swarm — live FTD anomaly alert feed. Free. "
-            "Returns the last 25 SEC Reg SHO anomaly events detected by the background engine: "
-            "NEW_THRESHOLD_LIST_ENTRY (symbol newly on SEC threshold list) and "
-            "FTD_SPIKE (latest fail_shares ≥ 2× rolling window average, 95th-percentile+ reading). "
-            "Each alert includes symbol, anomaly_type, spike_ratio, and settlement_date. "
-            "This is a teaser feed — descriptive public-regulatory data only, not trade signals. "
-            "For full 180-day FTD time series or ratio analysis, use ftd_analysis (0.03 RLUSD)."
-        ),
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "limit": {"type": "integer", "description": "Max alerts to return (default 25, max 100)"},
-            },
-        },
-    },
-    {
-        "name": "ftd_analysis",
-        "description": (
-            "FTD Data Oracle — full FTD ratio + percentile analysis for any US equity. Cost: 0.03 RLUSD. "
-            "Returns the latest Fails-To-Deliver record for a symbol with: "
-            "fail_shares (shares failed to deliver), fail_value (notional), settlement_date, "
-            "rank_percentile (where this reading sits vs 180-day window, 0.0–1.0), "
-            "window_avg_fails, and spike_ratio (latest / window_avg). "
-            "A spike_ratio ≥ 2.0 at rank_percentile ≥ 0.95 is an institutional-grade FTD anomaly. "
-            "Data sourced directly from SEC Reg SHO biweekly reports — same feed Bloomberg charges "
-            "$200/month for. Descriptive regulatory data only — not a trade signal. "
-            "Pass payment_token from verify_payment plus agent_wallet."
-        ),
-        "inputSchema": {
-            "type": "object",
-            "required": ["symbol"],
-            "properties": {
-                "symbol":        {"type": "string", "description": "US equity ticker (e.g. GME, AMC, BBBY, XRT)"},
-                "payment_token": {"type": "string", "description": "JWT from verify_payment (0.03 RLUSD)"},
-                "agent_wallet":  {"type": "string", "description": "Your XRPL wallet address"},
-            },
-        },
-    },
-
-    # ── Avg-Down Pyramid Engine ───────────────────────────────────────────────
-    {
-        "name": "avg_down_status",
-        "description": (
-            "SML Avg-Down Engine — real-time status of the automated pyramid builder. Free. "
-            "Returns engine health, scan interval, active position count, recent signal count, "
-            "and the last scan timestamp. Use avg_down_positions for open virtual positions "
-            "and avg_down_signals for the full signal log (ENTER / ADD / EXIT / STOP). "
-            "All layer names in output are opaque (L1–L5) — EMA configuration is operator-only."
-        ),
-        "inputSchema": {"type": "object", "properties": {}},
-    },
-
     # ── 741 Pure Macro Matrix ─────────────────────────────────────────────────
     {
         "name": "macro_741_scan",
@@ -691,17 +630,15 @@ _TOOLS = [
             "741 Pure Macro Matrix — 5-layer EMA structural alignment engine. Cost: 0.04 RLUSD. "
             "Computes EMA 30 / 60 / 90 / 120 / 741 on daily closes for any set of US equity tickers. "
             "Returns one of three macro states per ticker: "
-            "• PERFECT_BULLISH_REGIME — EMA_30 > EMA_60 > EMA_90 > EMA_120 > EMA_741 "
-            "  (full institutional highway: asset is locked into massive capital momentum, safe to ride). "
-            "• PERFECT_BEARISH_REGIME — full inversion, macro distribution confirmed. "
-            "• CONSOLIDATION_CHOP — mixed stack; watch matrix_spread_pct for squeeze_alert. "
+            "PERFECT_BULLISH_REGIME — EMA_30 > EMA_60 > EMA_90 > EMA_120 > EMA_741 "
+            "(full institutional highway: asset is locked into massive capital momentum, safe to ride). "
+            "PERFECT_BEARISH_REGIME — full inversion, macro distribution confirmed. "
+            "CONSOLIDATION_CHOP — mixed stack; watch matrix_spread_pct for squeeze_alert. "
             "squeeze_alert=true means CONSOLIDATION_CHOP with |matrix_spread_pct| < 5% — "
             "price is coiling directly against the 741 anchor, a macro breakout is building. "
-            "matrix_spread_pct = ((EMA_30 - EMA_741) / EMA_741) * 100. "
             "Fires Discord alert automatically on every PERFECT BULLISH or BEARISH hit. "
-            "Tickers are fully dynamic — pass any comma-separated list. No hardcoded universe. "
-            "Max 50 symbols per call. Data from Tradier (primary) or Alpaca (fallback). "
-            "Pass payment_token from verify_payment plus agent_wallet."
+            "Tickers are fully dynamic — pass any comma-separated list. Max 50 symbols per call. "
+            "Cost: 0.04 RLUSD. Pass payment_token from verify_payment plus agent_wallet."
         ),
         "inputSchema": {
             "type": "object",
@@ -716,6 +653,38 @@ _TOOLS = [
             },
         },
     },
+
+    # ── Slack Notifications ────────────────────────────────────────────────────
+    {
+        "name": "post_to_slack",
+        "description": (
+            "Post a sanitized market signal brief to Slack via incoming webhook. "
+            "Proprietary data policy enforced server-side: price levels, EMA values, "
+            "and raw indicator readings are stripped — only direction labels, confidence %, "
+            "regime, risk level, and text thesis are delivered to Slack. "
+            "Pass webhook_url to target your own Slack channel, or omit to post to the "
+            "SML shared channel (requires SLACK_WEBHOOK_URL env var on this server). Free."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["symbol", "bias"],
+            "properties": {
+                "symbol":      {"type": "string", "description": "Equity ticker (e.g. IWM, SPY, GME)"},
+                "bias":        {"type": "string", "enum": ["BULLISH", "BEARISH", "NEUTRAL"]},
+                "confidence":  {"type": "integer", "minimum": 0, "maximum": 100,
+                                "description": "Signal confidence 0-100"},
+                "regime":      {"type": "string",
+                                "description": "Regime label (e.g. ALPHA_EXPANSION, MACRO_COLLAPSE, NEUTRAL)"},
+                "risk_level":  {"type": "string", "enum": ["LOW", "MEDIUM", "HIGH", "EXTREME"]},
+                "thesis":      {"type": "string", "description": "Signal thesis (max 500 chars)"},
+                "actionable":  {"type": "string", "description": "One-line actionable instruction (max 300 chars)"},
+                "session":     {"type": "string",
+                                "enum": ["PRE_MARKET", "OPEN", "MIDDAY", "POWER_HOUR", "CLOSE"]},
+                "webhook_url": {"type": "string",
+                                "description": "Slack incoming webhook URL (optional, falls back to server SLACK_WEBHOOK_URL)"},
+            },
+        },
+    },
 ]
 
 # Endpoint IDs for helpful 402 error messages
@@ -727,7 +696,6 @@ _ENDPOINT_IDS = {
     "marketplace_read_signal": "d1a2b3c4-e001-4c3f-aa24-de6e3bc12b5a",
     "iam_resolve":          "a7f3d2b1-9e4c-4a8f-b5c6-d7e8f9a0b1c2",
     "macro_741_scan":       "f3a7c891-2d54-4b8e-9a1f-6c3d8e5f7b2a",
-    "ftd_analysis":         "a4b5c6d7-e002-4f3e-aa24-d52e3bc12b5a",
 }
 _PRICES = {
     "council_verdict": 0.10, "market_scan": 0.05,
@@ -735,7 +703,6 @@ _PRICES = {
     "marketplace_read_signal": 0.02,
     "iam_resolve": 0.05,
     "macro_741_scan": 0.04,
-    "ftd_analysis": 0.03,
 }
 
 
@@ -984,23 +951,6 @@ def _dispatch(name: str, args: dict, req_headers: dict) -> dict:
         symbol = (args.get("symbol") or "IWM").upper()
         return _text(_proxy("GET", f"{sq}/api/iam/truth/{symbol}"))
 
-    # ── Avg-Down Pyramid Engine ───────────────────────────────────────────────
-    if name == "avg_down_status":
-        return _text(_proxy("GET", f"{sq}/api/avg-down/status"))
-
-    # ── FTD Data Oracle ───────────────────────────────────────────────────────
-    if name == "ftd_alerts":
-        limit = args.get("limit", 25)
-        return _text(_proxy("GET", f"{sq}/api/ftd/alerts", params={"limit": limit}))
-
-    if name == "ftd_analysis":
-        if not payment_token: return _need_token(name)
-        symbol = (args.get("symbol") or "GME").upper()
-        return _compress_mcp_result(
-            _text(_proxy("GET", f"{sq}/api/ftd/ratio/{symbol}", headers=ph)),
-            _tier, _seed,
-        )
-
     # ── 741 Pure Macro Matrix ─────────────────────────────────────────────────
     if name == "macro_741_scan":
         if not payment_token: return _need_token(name)
@@ -1009,6 +959,81 @@ def _dispatch(name: str, args: dict, req_headers: dict) -> dict:
             _text(_proxy("POST", f"{sq}/api/741macro", headers=ph, json_body={"symbols": symbols})),
             _tier, _seed,
         )
+
+    # ── Slack Notifications ────────────────────────────────────────────────────
+    if name == "post_to_slack":
+        webhook_url = args.get("webhook_url") or os.environ.get("SLACK_WEBHOOK_URL", "")
+        if not webhook_url:
+            return _text({
+                "error": "ERR_NO_WEBHOOK",
+                "message": (
+                    "No webhook_url provided and SLACK_WEBHOOK_URL is not configured on this server. "
+                    "Create a Slack incoming webhook at api.slack.com/apps and pass it as webhook_url."
+                ),
+            })
+        symbol     = (args.get("symbol") or "").upper()
+        bias       = args.get("bias", "NEUTRAL")
+        conf       = max(0, min(100, int(args.get("confidence") or 0)))
+        regime     = args.get("regime", "")
+        risk       = args.get("risk_level", "")
+        # Proprietary data policy: thesis/actionable are plain text only — no price levels accepted
+        thesis     = str(args.get("thesis") or "")[:500]
+        actionable = str(args.get("actionable") or "")[:300]
+        session    = args.get("session", "")
+
+        _b_emoji = {"BULLISH": "\U0001f7e2", "BEARISH": "\U0001f534", "NEUTRAL": "\U0001f7e1"}
+        _r_emoji = {"LOW": "\U0001f7e2", "MEDIUM": "\U0001f7e1", "HIGH": "\U0001f7e0", "EXTREME": "\U0001f534"}
+        _s_label = {
+            "PRE_MARKET": "Pre-Market", "OPEN": "Market Open",
+            "MIDDAY": "Midday", "POWER_HOUR": "Power Hour", "CLOSE": "Close",
+        }
+
+        filled = round((conf / 100) * 10)
+        bar    = "█" * filled + "░" * (10 - filled)
+
+        blocks = [
+            {
+                "type": "header",
+                "text": {"type": "plain_text",
+                         "text": f"{_b_emoji.get(bias, '?')} {symbol} — {bias}"},
+            },
+            {
+                "type": "section",
+                "fields": [
+                    {"type": "mrkdwn",
+                     "text": f"*Session*\n{_s_label.get(session, session) or '—'}"},
+                    {"type": "mrkdwn", "text": f"*Regime*\n{regime or '—'}"},
+                    {"type": "mrkdwn", "text": f"*Confidence*\n{bar} {conf}%"},
+                    {"type": "mrkdwn",
+                     "text": f"*Risk*\n{_r_emoji.get(risk, '?')} {risk or '—'}"},
+                ],
+            },
+        ]
+        if thesis:
+            blocks.append({
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": thesis},
+            })
+        if actionable:
+            blocks.append({
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"⚡ *Actionable:* {actionable}"},
+            })
+        blocks.append({
+            "type": "context",
+            "elements": [{"type": "mrkdwn",
+                          "text": "Powered by SqueezeOS · <https://scriptmasterlabs.com|ScriptMaster Labs>"}],
+        })
+
+        try:
+            resp = requests.post(webhook_url, json={"blocks": blocks}, timeout=10)
+            if resp.ok:
+                return _text({"ok": True, "symbol": symbol, "bias": bias,
+                              "message": f"Posted {symbol} {bias} brief to Slack."})
+            return _text({"error": "ERR_SLACK_POST", "http_status": resp.status_code,
+                          "body": resp.text[:200]})
+        except Exception as e:
+            return _text({"error": "ERR_SLACK_POST", "message": str(e)})
 
     return {
         "content": [{"type": "text", "text": json.dumps({"error": "ERR_UNKNOWN_TOOL", "tool": name})}],
@@ -1057,7 +1082,6 @@ def mcp_dispatch():
         return ok({})
 
     if method == "tools/list":
-        cursor = params.get("cursor")   # pagination — not needed, all fit in one page
         return ok({"tools": _TOOLS})
 
     if method == "resources/list":

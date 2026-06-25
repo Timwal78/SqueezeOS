@@ -1,28 +1,4 @@
-"""
-SML Autonomous Market Intelligence Agent
-=========================================
-Self-funding agent that pays for its own signals via x402, synthesizes
-a market brief with Claude, lists it on the Signal Marketplace, and pushes
-to all webhook subscribers. Tracks its own P&L.
-
-Schedule:
-  Pre-market  : 08:45 ET
-  Market open : 09:35 ET
-  Midday      : 12:00 ET
-  Power hour  : 15:00 ET
-  Close       : 16:15 ET
-
-Environment:
-  AGENT_XRPL_SEED          - agent hot wallet seed (s...)
-  AGENT_XRPL_ADDRESS       - agent XRPL address (r...)
-  AGENT_DOMAIN             - identity domain (agent.scriptmasterlabs.com)
-  ANTHROPIC_API_KEY        - Claude API key
-  SQUEEZEOS_BASE_URL       - SqueezeOS API (default: Railway URL)
-  PROOF402_BASE_URL        - 402Proof (default: Render URL)
-  BRIEF_PRICE_RLUSD        - price to list brief (default: 0.01)
-  BRIEF_TTL_HOURS          - listing TTL (default: 6)
-  RUN_ONCE                 - set to "true" to run once and exit (for cron)
-"""
+"""\nSML Autonomous Market Intelligence Agent\n=========================================\nSelf-funding agent that pays for its own signals via x402, synthesizes\na market brief with Claude, lists it on the Signal Marketplace, and pushes\nto all webhook subscribers. Tracks its own P&L.\n\nSchedule:\n  Pre-market  : 08:45 ET\n  Market open : 09:35 ET\n  Midday      : 12:00 ET\n  Power hour  : 15:00 ET\n  Close       : 16:15 ET\n\nEnvironment:\n  AGENT_XRPL_SEED          - agent hot wallet seed (s...)\n  AGENT_XRPL_ADDRESS       - agent XRPL address (r...)\n  AGENT_DOMAIN             - identity domain (agent.scriptmasterlabs.com)\n  ANTHROPIC_API_KEY        - Claude API key\n  SQUEEZEOS_BASE_URL       - SqueezeOS API (default: Railway URL)\n  PROOF402_BASE_URL        - 402Proof (default: Render URL)\n  BRIEF_PRICE_RLUSD        - price to list brief (default: 0.01)\n  BRIEF_TTL_HOURS          - listing TTL (default: 6)\n  RUN_ONCE                 - set to \"true\" to run once and exit (for cron)\n\"\"\"
 
 import os
 import sys
@@ -41,13 +17,11 @@ import anthropic
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-# ── XRPL ──────────────────────────────────────────────────────────────────────────────
-from xrpl.wallet import Wallet
+# ── XRPL ──────────────────────────────────────────────────────────────────────────────\nfrom xrpl.wallet import Wallet
 from xrpl.clients import JsonRpcClient
 from xrpl.models.transactions import Payment, Memo
 from xrpl.models.amounts import IssuedCurrencyAmount
 from xrpl.transaction import submit_and_wait
-from xrpl.core.keypairs import CryptoAlgorithm
 
 logging.basicConfig(
     level=logging.INFO,
@@ -56,17 +30,18 @@ logging.basicConfig(
 logger = logging.getLogger("SML-Agent")
 
 # ── Config ────────────────────────────────────────────────────────────────────
-SQUEEZEOS   = os.environ.get("SQUEEZEOS_BASE_URL",  "https://squeezeos-api-1.onrender.com")
-MATRIX_URL  = os.environ.get("MATRIX_BASE_URL",    "https://squeezeos-api-1.onrender.com")
-PROOF402    = os.environ.get("PROOF402_BASE_URL",   "https://four02proof.onrender.com")
-XRPL_RPC    = os.environ.get("XRPL_RPC_URL",        "https://xrplcluster.com")
-AGENT_SEED  = os.environ.get("AGENT_XRPL_SEED",     "")
-AGENT_ADDR  = os.environ.get("AGENT_XRPL_ADDRESS",  "")
-AGENT_DOM   = os.environ.get("AGENT_DOMAIN",        "agent.scriptmasterlabs.com")
-ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-BRIEF_PRICE = float(os.environ.get("BRIEF_PRICE_RLUSD", "0.01"))
-BRIEF_TTL   = int(os.environ.get("BRIEF_TTL_HOURS", "6"))
-RUN_ONCE    = os.environ.get("RUN_ONCE", "false").lower() == "true"
+SQUEEZEOS         = os.environ.get("SQUEEZEOS_BASE_URL",  "https://squeezeos-api.onrender.com")
+MATRIX_URL        = os.environ.get("MATRIX_BASE_URL",    "https://squeezeos-api.onrender.com")
+PROOF402          = os.environ.get("PROOF402_BASE_URL",   "https://four02proof.onrender.com")
+XRPL_RPC          = os.environ.get("XRPL_RPC_URL",        "https://xrplcluster.com")
+AGENT_SEED        = os.environ.get("AGENT_XRPL_SEED",     "")
+AGENT_ADDR        = os.environ.get("AGENT_XRPL_ADDRESS",  "")
+AGENT_DOM         = os.environ.get("AGENT_DOMAIN",        "agent.scriptmasterlabs.com")
+ANTHROPIC_KEY     = os.environ.get("ANTHROPIC_API_KEY",   "")
+BRIEF_PRICE       = float(os.environ.get("BRIEF_PRICE_RLUSD", "0.01"))
+BRIEF_TTL         = int(os.environ.get("BRIEF_TTL_HOURS", "6"))
+RUN_ONCE          = os.environ.get("RUN_ONCE", "false").lower() == "true"
+SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL", "")  # optional
 
 RLUSD_ISSUER   = "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De"
 RLUSD_CURRENCY = "524C555344000000000000000000000000000000"
@@ -77,8 +52,7 @@ ENDPOINT_SCAN    = "160cf28d-b364-44eb-adbd-2489c5cc2cf8"
 ENDPOINT_IWM     = "60f48ce0-6002-4385-9b60-03a0d2bbebab"
 ENDPOINT_OPTIONS = "c951a374-2424-4064-ab80-35afe8053d29"
 
-# ── P&L Tracker ───────────────────────────────────────────────────────────────────────────
-class PnL:
+# ── P&L Tracker ───────────────────────────────────────────────────────────────────────────\nclass PnL:
     def __init__(self):
         self.spent   = 0.0
         self.earned  = 0.0
@@ -107,15 +81,13 @@ class PnL:
 
 pnl = PnL()
 
-# ── XRPL Payment ─────────────────────────────────────────────────────────────────────────────
+# ── XRPL Payment ────────────────────────────────────────────────────────────────────────────\n
 def pay_invoice(invoice: dict) -> str:
     """Send RLUSD on XRPL for an invoice. Returns tx hash."""
     if not AGENT_SEED:
         raise RuntimeError("AGENT_XRPL_SEED not set — cannot pay invoice")
 
-    # xrpl-py 5.0 breaking change: Wallet.from_seed() no longer defaults to ED25519
-    # for s... seeds — it now infers SECP256K1 from the prefix. Must be explicit.
-    wallet = Wallet.from_seed(AGENT_SEED, algorithm=CryptoAlgorithm.ED25519)
+    wallet = Wallet.from_seed(AGENT_SEED)
     client = JsonRpcClient(XRPL_RPC)
 
     amount_str = str(invoice["amount"])
@@ -140,7 +112,7 @@ def pay_invoice(invoice: dict) -> str:
     pnl.record_spend(float(amount_str))
     return tx_hash
 
-# ── x402 Full Flow ───────────────────────────────────────────────────────────────────────────
+# ── x402 Full Flow ────────────────────────────────────────────────────────────────────────────\n
 def pay_and_call(endpoint_id: str, method: str, url: str, body: Optional[dict] = None) -> dict:
     """Complete x402 flow: invoice → pay XRPL → verify → call endpoint."""
 
@@ -186,7 +158,7 @@ def pay_and_call(endpoint_id: str, method: str, url: str, body: Optional[dict] =
     resp.raise_for_status()
     return resp.json()
 
-# ── Free endpoints (no payment) ──────────────────────────────────────────────────────────────
+# ── Free endpoints (no payment) ───────────────────────────────────────────────────────────────────────────\n
 def get_free(path: str) -> dict:
     resp = requests.get(f"{SQUEEZEOS}{path}", timeout=20)
     resp.raise_for_status()
@@ -300,7 +272,6 @@ def collect_matrix_intents() -> dict:
 
 # ── Data collection ───────────────────────────────────────────────────────────
 
-
 def collect_market_data() -> dict:
     logger.info("[AGENT] Collecting market data...")
     data = {}
@@ -379,7 +350,7 @@ def collect_market_data() -> dict:
 
     return data
 
-# ── Brief synthesis (Claude) ──────────────────────────────────────────────────────────────────────────
+# ── Brief synthesis (Claude) ──────────────────────────────────────────────────────────────────────────\n
 def synthesize_brief(data: dict) -> dict:
     if not ANTHROPIC_KEY:
         raise RuntimeError("ANTHROPIC_API_KEY not set")
@@ -406,20 +377,20 @@ MARKET DATA:
 
 Generate a JSON brief with this exact structure:
 {{
-  "title": "SML Market Brief — {now_str}",
-  "session": "PRE_MARKET|OPEN|MIDDAY|POWER_HOUR|CLOSE",
-  "master_bias": "BULLISH|BEARISH|NEUTRAL",
-  "regime": "EXECUTION|STEALTH|CONFLICT|COLLAPSE",
-  "confidence": 0-100,
-  "top_picks": ["SYM1", "SYM2"],
-  "iwm_thesis": "2-3 sentence IWM analysis",
-  "market_thesis": "3-4 sentence overall market thesis",
-  "key_levels": {{"IWM_support": 0.0, "IWM_resistance": 0.0}},
-  "squeeze_count": 0,
-  "options_flow": "BULLISH|BEARISH|NEUTRAL|MIXED",
-  "risk_level": "LOW|MEDIUM|HIGH|EXTREME",
-  "actionable": "One clear actionable sentence for the session",
-  "agent_wallet": "{AGENT_ADDR}"
+  \"title\": \"SML Market Brief — {now_str}\",
+  \"session\": \"PRE_MARKET|OPEN|MIDDAY|POWER_HOUR|CLOSE\",
+  \"master_bias\": \"BULLISH|BEARISH|NEUTRAL\",
+  \"regime\": \"EXECUTION|STEALTH|CONFLICT|COLLAPSE\",
+  \"confidence\": 0-100,
+  \"top_picks\": [\"SYM1\", \"SYM2\"],
+  \"iwm_thesis\": \"2-3 sentence IWM analysis\",
+  \"market_thesis\": \"3-4 sentence overall market thesis\",
+  \"key_levels\": {{\"IWM_support\": 0.0, \"IWM_resistance\": 0.0}},
+  \"squeeze_count\": 0,
+  \"options_flow\": \"BULLISH|BEARISH|NEUTRAL|MIXED\",
+  \"risk_level\": \"LOW|MEDIUM|HIGH|EXTREME\",
+  \"actionable\": \"One clear actionable sentence for the session\",
+  \"agent_wallet\": \"{AGENT_ADDR}\"
 }}
 
 Return ONLY the JSON. No markdown. No explanation."""
@@ -438,7 +409,7 @@ Return ONLY the JSON. No markdown. No explanation."""
     logger.info(f"[AGENT] Brief: {brief.get('master_bias')} | {brief.get('regime')} | conf={brief.get('confidence')}")
     return brief
 
-# ── List brief on marketplace ─────────────────────────────────────────────────────────────────────────
+# ── List brief on marketplace ──────────────────────────────────────────────────────────────────────────\n
 def list_brief(brief: dict) -> Optional[str]:
     if not AGENT_ADDR:
         logger.warning("[AGENT] No AGENT_XRPL_ADDRESS — skipping marketplace listing")
@@ -469,7 +440,77 @@ def list_brief(brief: dict) -> Optional[str]:
     logger.info(f"[AGENT] Listed on marketplace: {listing_id} — {symbol} {brief.get('master_bias')}")
     return listing_id
 
-# ── Push to webhooks ──────────────────────────────────────────────────────────────────────────────
+# ── Post to Slack ────────────────────────────────────────────────────────────────────────────\n
+# PROPRIETARY DATA POLICY: key_levels (price numbers) and raw indicator values
+# are never included in Slack output. Only direction labels, confidence %, and
+# text thesis are posted.
+_BIAS_EMOJI  = {"BULLISH": "\U0001f7e2", "BEARISH": "\U0001f534", "NEUTRAL": "\U0001f7e1"}
+_RISK_EMOJI  = {"LOW": "\U0001f7e2", "MEDIUM": "\U0001f7e1", "HIGH": "\U0001f7e0", "EXTREME": "\U0001f534"}
+_SESSION_LABEL = {
+    "PRE_MARKET": "Pre-Market",
+    "OPEN": "Market Open",
+    "MIDDAY": "Midday",
+    "POWER_HOUR": "Power Hour",
+    "CLOSE": "Close",
+}
+
+def post_to_slack(brief: dict):
+    if not SLACK_WEBHOOK_URL:
+        return
+
+    bias     = brief.get("master_bias", "NEUTRAL")
+    regime   = brief.get("regime", "UNKNOWN")
+    conf     = brief.get("confidence", 0)
+    session  = _SESSION_LABEL.get(brief.get("session", ""), brief.get("session", ""))
+    picks    = ", ".join(brief.get("top_picks", []) or ["IWM"])
+    action   = brief.get("actionable", "")
+    risk     = brief.get("risk_level", "UNKNOWN")
+    thesis   = brief.get("iwm_thesis", "")
+
+    bias_e = _BIAS_EMOJI.get(bias, "❓")
+    risk_e = _RISK_EMOJI.get(risk, "❓")
+
+    filled = round((conf / 100) * 10)
+    bar    = "█" * filled + "░" * (10 - filled)
+
+    payload = {
+        "blocks": [
+            {
+                "type": "header",
+                "text": {"type": "plain_text", "text": f"{bias_e} SML Agent — {session}"},
+            },
+            {
+                "type": "section",
+                "fields": [
+                    {"type": "mrkdwn", "text": f"*Bias*\n{bias}"},
+                    {"type": "mrkdwn", "text": f"*Regime*\n{regime}"},
+                    {"type": "mrkdwn", "text": f"*Confidence*\n{bar} {conf}%"},
+                    {"type": "mrkdwn", "text": f"*Risk*\n{risk_e} {risk}"},
+                ],
+            },
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"*Watching:* {picks}\n{thesis}"},
+            },
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"⚡ *Actionable:* {action}"},
+            },
+            {
+                "type": "context",
+                "elements": [{"type": "mrkdwn", "text": "Powered by SqueezeOS · <https://scriptmasterlabs.com|ScriptMaster Labs>"}],
+            },
+        ]
+    }
+
+    try:
+        resp = requests.post(SLACK_WEBHOOK_URL, json=payload, timeout=10)
+        logger.info(f"[SLACK] Posted to webhook: {resp.status_code}")
+    except Exception as e:
+        logger.warning(f"[SLACK] Webhook post failed: {e}")
+
+
+# ── Push to webhooks ────────────────────────────────────────────────────────────────────────────\n
 def push_to_webhooks(brief: dict, listing_id: Optional[str]):
     event = {
         "type":       "COUNCIL_VERDICT",
@@ -494,7 +535,7 @@ def push_to_webhooks(brief: dict, listing_id: Optional[str]):
     except Exception as e:
         logger.warning(f"[AGENT] Webhook push failed: {e}")
 
-# ── Log P&L to 402Proof Agent Passport ────────────────────────────────────────────────────────────────
+# ── Log P&L to 402Proof Agent Passport ───────────────────────────────────────────────────────────────────\n
 def log_passport():
     if not AGENT_ADDR:
         return
@@ -510,7 +551,7 @@ def log_passport():
     except Exception:
         pass
 
-# ── Main run cycle ──────────────────────────────────────────────────────────────────────────────
+# ── Main run cycle ────────────────────────────────────────────────────────────────────────────\n
 def run_cycle():
     pnl.runs += 1
     run_id = f"run-{pnl.runs}-{int(time.time())}"
@@ -521,6 +562,7 @@ def run_cycle():
         brief      = synthesize_brief(data)
         listing_id = list_brief(brief)
         push_to_webhooks(brief, listing_id)
+        post_to_slack(brief)
         log_passport()
 
         summary = pnl.summary()
@@ -536,7 +578,7 @@ def run_cycle():
         logger.error(f"[AGENT] Cycle {pnl.runs} FAILED: {e}", exc_info=True)
         return None
 
-# ── Entry point ───────────────────────────────────────────────────────────────────────────────
+# ── Entry point ────────────────────────────────────────────────────────────────────────────\n
 def main():
     logger.info("═" * 60)
     logger.info("SML AUTONOMOUS MARKET INTELLIGENCE AGENT")
