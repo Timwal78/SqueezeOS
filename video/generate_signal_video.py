@@ -112,36 +112,10 @@ Return ONLY the spoken script. No stage directions, no headers."""
 # ── TTS via OpenAI ────────────────────────────────────────────────────────────
 
 def generate_audio(script: str, out_path: str) -> None:
-    if not OPENAI_KEY:
-        raise RuntimeError("OPENAI_API_KEY not set")
-
-    body = json.dumps({
-        "model": "tts-1",
-        "input": script,
-        "voice": TTS_VOICE,
-    }).encode()
-    req = urllib.request.Request(
-        "https://api.openai.com/v1/audio/speech",
-        data=body,
-        headers={
-            "Authorization": f"Bearer {OPENAI_KEY}",
-            "Content-Type":  "application/json",
-        },
-        method="POST",
-    )
-    for attempt in range(4):
-        try:
-            with urllib.request.urlopen(req, timeout=60) as r:
-                Path(out_path).write_bytes(r.read())
-            print(f"[TTS] audio → {out_path}")
-            return
-        except urllib.error.HTTPError as e:
-            if e.code == 429 and attempt < 3:
-                wait = 10 * (2 ** attempt)
-                print(f"[TTS] 429 rate limit — retrying in {wait}s (attempt {attempt+1}/4)")
-                import time; time.sleep(wait)
-            else:
-                raise
+    from gtts import gTTS
+    tts = gTTS(text=script, lang="en", slow=False)
+    tts.save(out_path)
+    print(f"[TTS] audio → {out_path}")
 
 
 # ── Chart frame generation via matplotlib ─────────────────────────────────────
