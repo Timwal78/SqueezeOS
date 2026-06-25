@@ -1,0 +1,59 @@
+name: SML Signal Video — Auto Generate & Publish
+
+on:
+  schedule:
+    - cron: '0 14 * * 1-5'   # 09:00 ET weekdays (market open)
+  workflow_dispatch:
+    inputs:
+      symbol:
+        description: 'Ticker symbol'
+        required: false
+        default: 'IWM'
+
+jobs:
+  generate-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system deps (ffmpeg)
+        run: sudo apt-get install -y ffmpeg
+
+      - name: Install Python deps
+        run: pip install -r video/requirements.txt
+
+      - name: Generate signal video
+        env:
+          ANTHROPIC_API_KEY:   ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY:      ${{ secrets.OPENAI_API_KEY }}
+          SQUEEZEOS_BASE_URL:  https://squeezeos-api.onrender.com
+          VIDEO_SYMBOL:        ${{ github.event.inputs.symbol || 'IWM' }}
+          VIDEO_OUTPUT_PATH:   /tmp/sml_signal_video.mp4
+          TTS_VOICE:           onyx
+        run: python video/generate_signal_video.py
+
+      - name: Publish to YouTube + Discord + Farcaster
+        env:
+          VIDEO_OUTPUT_PATH:      /tmp/sml_signal_video.mp4
+          VIDEO_SYMBOL:           ${{ github.event.inputs.symbol || 'IWM' }}
+          YOUTUBE_CLIENT_ID:      ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET:  ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN:  ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+          DISCORD_WEBHOOK_VIDEO:  ${{ secrets.DISCORD_WEBHOOK_VIDEO }}
+          DISCORD_WEBHOOK_ALL:    ${{ secrets.DISCORD_WEBHOOK_ALL }}
+          NEYNAR_API_KEY:         ${{ secrets.NEYNAR_API_KEY }}
+          NEYNAR_BOT_SIGNER_UUID: ${{ secrets.NEYNAR_BOT_SIGNER_UUID }}
+        run: python video/publish.py
+
+      - name: Upload video as artifact (backup)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sml-signal-video-${{ github.run_id }}
+          path: /tmp/sml_signal_video.mp4
+          retention-days: 7
