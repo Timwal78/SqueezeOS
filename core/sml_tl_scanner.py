@@ -417,10 +417,10 @@ def _run_tl_scan(tf: int = 15):
 
 
 def _broadcast_lock(symbol: str, result: dict, sse_queues_ref, sh, tf: int = 15):
-    state  = result["state"]
-    tf_tag = f"_{tf}" if tf != 15 else ""
-    event  = {
-        "type":       f"TL_{state}{tf_tag}",   # e.g. TL_LOCK_CALL, TL_LOCK_CALL_30
+    tl_state = result["state"]
+    tf_tag   = f"_{tf}" if tf != 15 else ""
+    event    = {
+        "type":       f"TL_{tl_state}{tf_tag}",   # e.g. TL_LOCK_CALL, TL_LOCK_CALL_30
         "symbol":     symbol,
         "timeframe":  tf,
         "net_score":  result["net_score"],
@@ -428,18 +428,31 @@ def _broadcast_lock(symbol: str, result: dict, sse_queues_ref, sh, tf: int = 15)
         "price":      result.get("price"),
         "ts":         result["ts"],
     }
-    # SSE broadcast
-    dead = []
-    for q in list(sse_queues_ref):
-        try:
-            q.put_nowait(event)
-        except Exception:
-            dead.append(q)
-    for q in dead:
-        try:
-            sse_queues_ref.remove(q)
-        except ValueError:
-            pass
+
+    # Primary SSE + terminal_feed broadcast via GlobalState
+    try:
+        from core.state import state as _squeezeos_state
+        squeeze_tag = " +SQZ" if result.get("in_squeeze") else ""
+        _squeezeos_state.push_terminal(
+            event["type"],
+            f"{tl_state} {symbol}@{tf}m score={result['net_score']}/{result['max_score']}{squeeze_tag}",
+            symbol,
+            result.get("net_score", 0),
+        )
+    except Exception as _e:
+        logger.debug("[TL-LOCK] state.push_terminal failed: %s", _e)
+        # Fallback: direct SSE queue broadcast
+        dead = []
+        for q in list(sse_queues_ref):
+            try:
+                q.put_nowait(event)
+            except Exception:
+                dead.append(q)
+        for q in dead:
+            try:
+                sse_queues_ref.remove(q)
+            except ValueError:
+                pass
 
     # Signal history
     try:
@@ -448,7 +461,7 @@ def _broadcast_lock(symbol: str, result: dict, sse_queues_ref, sh, tf: int = 15)
         pass
 
     logger.info(
-        f"[TL-LOCK] {tf}m {state} {symbol} | score={result['net_score']}/{result['max_score']} | "
+        f"[TL-LOCK] {tf}m {tl_state} {symbol} | score={result['net_score']}/{result['max_score']} | "
         f"squeeze={result['in_squeeze']} | price={result.get('price')}"
     )
 

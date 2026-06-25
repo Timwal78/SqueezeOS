@@ -654,6 +654,89 @@ _TOOLS = [
         },
     },
 
+    # ── SML Sovereign Signal Suite ────────────────────────────────────────────
+    {
+        "name": "sovereign_741",
+        "description": (
+            "SML 741 Macro Highway Signal — 0.02 RLUSD. "
+            "Returns BULLISH HIGHWAY (full ascending EMA stack, institutional momentum confirmed), "
+            "BEARISH HIGHWAY (full descending stack, macro distribution), or "
+            "CONSOLIDATION (mixed stack; squeeze_alert=true means coiling against the anchor — "
+            "macro breakout likely imminent). "
+            "Labels only — no EMA values, spreads, or price data ever returned. Proprietary engine."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["symbol"],
+            "properties": {
+                "symbol":        {"type": "string", "description": "US equity ticker (e.g. SPY, IWM, GME)"},
+                "payment_token": {"type": "string", "description": "JWT from verify_payment (0.02 RLUSD)"},
+                "agent_wallet":  {"type": "string", "description": "Your XRPL wallet address"},
+            },
+        },
+    },
+    {
+        "name": "sovereign_365",
+        "description": (
+            "SML 365-Day EMA Anchor Signal — 0.03 RLUSD. "
+            "Returns ABOVE (price is above the 365-day EMA — macro bull structure intact) or "
+            "BELOW (price is below — macro bear structure or recovery attempt). "
+            "No raw EMA values or price levels returned. Proprietary calculation."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["symbol"],
+            "properties": {
+                "symbol":        {"type": "string", "description": "US equity ticker"},
+                "payment_token": {"type": "string", "description": "JWT from verify_payment (0.03 RLUSD)"},
+                "agent_wallet":  {"type": "string", "description": "Your XRPL wallet address"},
+            },
+        },
+    },
+    {
+        "name": "sovereign_triplelock",
+        "description": (
+            "SML Triple Lock Consensus Signal — 0.05 RLUSD. "
+            "Returns LOCKED BULL (all three engines aligned bullish — max-conviction long setup, rarest signal), "
+            "LOCKED BEAR (all three engines aligned bearish — max-conviction short), "
+            "FORMING (two of three engines aligned — building toward a lock), or "
+            "UNLOCKED (engines not in consensus — wait for alignment). "
+            "No engine names, theses, or raw values returned. Labels only."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["symbol"],
+            "properties": {
+                "symbol":        {"type": "string", "description": "US equity ticker"},
+                "payment_token": {"type": "string", "description": "JWT from verify_payment (0.05 RLUSD)"},
+                "agent_wallet":  {"type": "string", "description": "Your XRPL wallet address"},
+            },
+        },
+    },
+    {
+        "name": "sovereign_full",
+        "description": (
+            "SML Sovereign Full Stack Signal — 0.10 RLUSD. "
+            "Runs all three sovereign engines (741 Macro, 365 Anchor, Triple Lock) and combines "
+            "them into one verdict: "
+            "SOVEREIGN BULL (all three bullish — maximum confidence long), "
+            "SOVEREIGN BEAR (all three bearish — maximum confidence short), "
+            "TRANSITIONAL (two of three aligned — directional bias forming), or "
+            "STANDBY (no consensus — preserve capital). "
+            "Also returns squeeze_alert=true when the 741 matrix detects macro coiling. "
+            "No raw values, EMA levels, or indicator readings returned. Ever."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["symbol"],
+            "properties": {
+                "symbol":        {"type": "string", "description": "US equity ticker"},
+                "payment_token": {"type": "string", "description": "JWT from verify_payment (0.10 RLUSD)"},
+                "agent_wallet":  {"type": "string", "description": "Your XRPL wallet address"},
+            },
+        },
+    },
+
     # ── Slack Notifications ────────────────────────────────────────────────────
     {
         "name": "post_to_slack",
@@ -696,6 +779,11 @@ _ENDPOINT_IDS = {
     "marketplace_read_signal": "d1a2b3c4-e001-4c3f-aa24-de6e3bc12b5a",
     "iam_resolve":          "a7f3d2b1-9e4c-4a8f-b5c6-d7e8f9a0b1c2",
     "macro_741_scan":       "f3a7c891-2d54-4b8e-9a1f-6c3d8e5f7b2a",
+    # Sovereign Signal Suite
+    "sovereign_741":        "e5f6a7b8-c9d0-1234-5678-901234567890",
+    "sovereign_365":        "f6a7b8c9-d0e1-2345-6789-012345678901",
+    "sovereign_triplelock": "a7b8c9d0-e1f2-3456-789a-123456789012",
+    "sovereign_full":       "b8c9d0e1-f2a3-4567-89ab-234567890123",
 }
 _PRICES = {
     "council_verdict": 0.10, "market_scan": 0.05,
@@ -703,6 +791,8 @@ _PRICES = {
     "marketplace_read_signal": 0.02,
     "iam_resolve": 0.05,
     "macro_741_scan": 0.04,
+    "sovereign_741": 0.02, "sovereign_365": 0.03,
+    "sovereign_triplelock": 0.05, "sovereign_full": 0.10,
 }
 
 
@@ -957,6 +1047,39 @@ def _dispatch(name: str, args: dict, req_headers: dict) -> dict:
         symbols = args.get("symbols", "")
         return _compress_mcp_result(
             _text(_proxy("POST", f"{sq}/api/741macro", headers=ph, json_body={"symbols": symbols})),
+            _tier, _seed,
+        )
+
+    # ── SML Sovereign Signal Suite ────────────────────────────────────────────
+    if name == "sovereign_741":
+        if not payment_token: return _need_token(name)
+        symbol = (args.get("symbol") or "IWM").upper()
+        return _compress_mcp_result(
+            _text(_proxy("GET", f"{sq}/api/signals/741/{symbol}", headers=ph)),
+            _tier, _seed,
+        )
+
+    if name == "sovereign_365":
+        if not payment_token: return _need_token(name)
+        symbol = (args.get("symbol") or "IWM").upper()
+        return _compress_mcp_result(
+            _text(_proxy("GET", f"{sq}/api/signals/365/{symbol}", headers=ph)),
+            _tier, _seed,
+        )
+
+    if name == "sovereign_triplelock":
+        if not payment_token: return _need_token(name)
+        symbol = (args.get("symbol") or "IWM").upper()
+        return _compress_mcp_result(
+            _text(_proxy("GET", f"{sq}/api/signals/triplelock/{symbol}", headers=ph)),
+            _tier, _seed,
+        )
+
+    if name == "sovereign_full":
+        if not payment_token: return _need_token(name)
+        symbol = (args.get("symbol") or "IWM").upper()
+        return _compress_mcp_result(
+            _text(_proxy("GET", f"{sq}/api/signals/full/{symbol}", headers=ph)),
             _tier, _seed,
         )
 
