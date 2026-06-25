@@ -60,6 +60,14 @@ def get_full_context(symbol: str) -> dict:
     return {"preview": preview, "council": council, "symbol": symbol}
 
 
+def _extract_verdict(council: dict) -> str:
+    """Council API may nest the verdict as a dict; extract a plain string."""
+    raw = council.get("verdict", council.get("directive", "HOLD"))
+    if isinstance(raw, dict):
+        return str(raw.get("directive", raw.get("bias", "HOLD")))
+    return str(raw) if raw else "HOLD"
+
+
 # ── Script generation via Claude ──────────────────────────────────────────────
 
 def generate_script(context: dict) -> str:
@@ -72,7 +80,7 @@ def generate_script(context: dict) -> str:
 
     bias        = preview.get("bias", "NEUTRAL")
     regime      = preview.get("regime", "NEUTRAL")
-    verdict     = council.get("verdict", council.get("directive", "HOLD"))
+    verdict     = _extract_verdict(council)
     confidence  = council.get("confidence", "")
     conf_str    = f"{confidence}% confidence" if confidence else ""
 
@@ -109,7 +117,7 @@ Return ONLY the spoken script. No stage directions, no headers."""
     return resp["content"][0]["text"].strip()
 
 
-# ── TTS via OpenAI ────────────────────────────────────────────────────────────
+# ── TTS via gTTS ─────────────────────────────────────────────────────────────
 
 def generate_audio(script: str, out_path: str) -> None:
     from gtts import gTTS
@@ -133,7 +141,7 @@ def build_chart_frames(context: dict, frames_dir: str, n_frames: int) -> None:
 
     bias    = preview.get("bias", "NEUTRAL")
     regime  = preview.get("regime", "NEUTRAL")
-    verdict = council.get("verdict", council.get("directive", "HOLD"))
+    verdict = _extract_verdict(council)
 
     BULL_COLOR  = "#00ff88"
     BEAR_COLOR  = "#ff3355"
@@ -282,8 +290,8 @@ def main():
 
     # 1. Fetch signal
     context = get_full_context(SYMBOL)
-    print(f"[SIGNAL] bias={context.get('preview', {}).get('bias')} "
-          f"verdict={context.get('council', {}).get('verdict', context.get('council', {}).get('directive'))}")
+    verdict_str = _extract_verdict(context.get("council", {}))
+    print(f"[SIGNAL] bias={context.get('preview', {}).get('bias')} verdict={verdict_str}")
 
     # 2. Generate script
     print("[SCRIPT] generating via Claude...")
