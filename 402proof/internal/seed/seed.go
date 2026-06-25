@@ -42,6 +42,12 @@ const (
 
 	// TriageOS — Healthcare Prior Authorization Agent
 	TriageAuthID = "c4a1e7b3-0001-4f5a-b900-de6e3bc12b5a"  // 0.08 RLUSD — prior auth package + on-chain audit commit
+
+	// Sovereign Signal Suite — structural labels only, no raw indicator values
+	Signal741ID        = "e5f6a7b8-c9d0-1234-5678-901234567890"  // 0.02 RLUSD — 741 macro alignment label
+	Signal365ID        = "f6a7b8c9-d0e1-2345-6789-012345678901"  // 0.03 RLUSD — 365-day cycle bias label
+	SignalTripleLockID = "a7b8c9d0-e1f2-3456-789a-123456789012"  // 0.05 RLUSD — triple-lock convergence label
+	SignalFullID       = "b8c9d0e1-f2a3-4567-89ab-234567890123"  // 0.10 RLUSD — full sovereign suite label
 )
 
 type EndpointSeed struct {
@@ -192,6 +198,37 @@ var TriageEndpoints = []EndpointSeed{
 	},
 }
 
+var SovereignSignalEndpoints = []EndpointSeed{
+	{
+		ID:          Signal741ID,
+		Path:        "/api/signals/741",
+		Price:       "0.02",
+		Asset:       "RLUSD",
+		Description: "Sovereign Signal — 741 macro structural alignment label (BULLISH/BEARISH/NEUTRAL). No raw indicator values returned.",
+	},
+	{
+		ID:          Signal365ID,
+		Path:        "/api/signals/365",
+		Price:       "0.03",
+		Asset:       "RLUSD",
+		Description: "Sovereign Signal — 365-day cycle bias label (EXPANSION/CONTRACTION/ACCUMULATION). No raw indicator values returned.",
+	},
+	{
+		ID:          SignalTripleLockID,
+		Path:        "/api/signals/triplelock",
+		Price:       "0.05",
+		Asset:       "RLUSD",
+		Description: "Sovereign Signal — triple-lock convergence label (LOCKED_BULL/LOCKED_BEAR/NO_LOCK with lock count). No raw indicator values returned.",
+	},
+	{
+		ID:          SignalFullID,
+		Path:        "/api/signals/full",
+		Price:       "0.10",
+		Asset:       "RLUSD",
+		Description: "Sovereign Signal Suite — all 4 structural labels in one call (741 macro + 365 cycle + triple-lock + composite bias). No raw indicator values returned.",
+	},
+}
+
 // Run seeds the Script Master Labs merchant and all endpoints on every boot.
 // Idempotent — skips anything already present.
 func Run(db *store.Memory, gatewayAddr string) {
@@ -213,8 +250,8 @@ func Run(db *store.Memory, gatewayAddr string) {
 		log.Printf("[SEED] Merchant: %s id=%s", merchantName, MerchantID)
 	}
 
-	// Seed all endpoints: SML market + Bureau + Relay bulk + Marketplace + Ghost Layer + Oracle + TriageOS
-	all := append(append(append(append(append(append(SMLEndpoints, BureauEndpoints...), RelayEndpoints...), MarketplaceEndpoints...), GhostLayerEndpoints...), OracleEndpoints...), TriageEndpoints...)
+	// Seed all endpoints: SML market + Bureau + Relay bulk + Marketplace + Ghost Layer + Oracle + TriageOS + Sovereign Signals
+	all := append(append(append(append(append(append(append(SMLEndpoints, BureauEndpoints...), RelayEndpoints...), MarketplaceEndpoints...), GhostLayerEndpoints...), OracleEndpoints...), TriageEndpoints...), SovereignSignalEndpoints...)
 	for _, e := range all {
 		if _, ok := db.GetEndpoint(e.ID); !ok {
 			ep := &models.Endpoint{
@@ -232,7 +269,7 @@ func Run(db *store.Memory, gatewayAddr string) {
 		}
 	}
 
-	log.Printf("[SEED] Script Master Labs ready — 5 market + 3 bureau + 4 relay + 1 marketplace + 1 ghost-layer + 2 oracle + 1 triageos endpoints active")
+	log.Printf("[SEED] Script Master Labs ready — 5 market + 3 bureau + 4 relay + 1 marketplace + 1 ghost-layer + 2 oracle + 1 triageos + 4 sovereign-signals endpoints active")
 }
 
 func env(key, fallback string) string {
