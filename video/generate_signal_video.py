@@ -116,7 +116,7 @@ def generate_audio(script: str, out_path: str) -> None:
         raise RuntimeError("OPENAI_API_KEY not set")
 
     body = json.dumps({
-        "model": "tts-1-hd",
+        "model": "tts-1",
         "input": script,
         "voice": TTS_VOICE,
     }).encode()
@@ -129,9 +129,19 @@ def generate_audio(script: str, out_path: str) -> None:
         },
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=60) as r:
-        Path(out_path).write_bytes(r.read())
-    print(f"[TTS] audio → {out_path}")
+    for attempt in range(4):
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                Path(out_path).write_bytes(r.read())
+            print(f"[TTS] audio → {out_path}")
+            return
+        except urllib.error.HTTPError as e:
+            if e.code == 429 and attempt < 3:
+                wait = 10 * (2 ** attempt)
+                print(f"[TTS] 429 rate limit — retrying in {wait}s (attempt {attempt+1}/4)")
+                import time; time.sleep(wait)
+            else:
+                raise
 
 
 # ── Chart frame generation via matplotlib ─────────────────────────────────────
