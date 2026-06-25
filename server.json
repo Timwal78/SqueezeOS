@@ -1,9 +1,9 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.timwal78/squeezeos",
+  "name": "io.github.Timwal78/squeezeos",
   "title": "SqueezeOS — Institutional AI Market Intelligence",
   "description": "Institutional AI market intelligence: squeeze scanner, options flow, council verdicts. x402 RLUSD.",
-  "version": "5.1.0",
+  "version": "6.2.0",
   "websiteUrl": "https://www.scriptmasterlabs.com",
   "repository": {
     "url": "https://github.com/timwal78/squeezeos",
