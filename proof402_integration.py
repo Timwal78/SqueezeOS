@@ -34,6 +34,10 @@ _PAYMENT_PRICES = {
     '/api/iwm':               0.03,
     '/api/marketplace/read':  0.02,
     '/api/741macro':          0.04,
+    '/api/signals/741':        0.02,
+    '/api/signals/365':        0.03,
+    '/api/signals/triplelock': 0.05,
+    '/api/signals/full':       0.10,
 }
 
 def _fire_payment_discord(wallet: str, path: str, tier: int) -> None:
@@ -63,6 +67,11 @@ ENDPOINTS = {
     '/api/iwm':              '60f48ce0-6002-4385-9b60-03a0d2bbebab',  # 0.03 RLUSD
     '/api/marketplace/read': 'd1a2b3c4-e001-4c3f-aa24-de6e3bc12b5a',  # 0.02 RLUSD
     '/api/741macro':         'f3a7c891-2d54-4b8e-9a1f-6c3d8e5f7b2a',  # 0.04 RLUSD
+    # Sovereign Signal Suite — labels only, no raw values
+    '/api/signals/741':        'e5f6a7b8-c9d0-1234-5678-901234567890',  # 0.02 RLUSD
+    '/api/signals/365':        'f6a7b8c9-d0e1-2345-6789-012345678901',  # 0.03 RLUSD
+    '/api/signals/triplelock': 'a7b8c9d0-e1f2-3456-789a-123456789012',  # 0.05 RLUSD
+    '/api/signals/full':       'b8c9d0e1-f2a3-4567-89ab-234567890123',  # 0.10 RLUSD
     # Oracle routes use path params so payment is verified inline in oracle_data_bp.py:
     # '/api/oracle/latest/<feed>'  → ORACLE_READ_ENDPOINT_ID   e7f8a9b0-...  0.02 RLUSD
     # '/api/oracle/query'          → ORACLE_READ_ENDPOINT_ID   e7f8a9b0-...  0.02 RLUSD
@@ -77,6 +86,10 @@ _FREE_PREVIEW_BY_PATH = {
     '/api/iwm':              '/api/demo/council',
     '/api/marketplace/read': '/api/marketplace',
     '/api/741macro':         '/api/preview/IWM',
+    '/api/signals/741':        '/api/signals/info',
+    '/api/signals/365':        '/api/signals/info',
+    '/api/signals/triplelock': '/api/signals/info',
+    '/api/signals/full':       '/api/signals/info',
 }
 
 
