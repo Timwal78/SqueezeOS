@@ -1,0 +1,90 @@
+{
+  "display_information": {
+    "name": "SqueezeOS",
+    "description": "Institutional AI market intelligence. Squeeze scanner, options flow, council verdicts — delivered to Slack. Pay-per-call via RLUSD.",
+    "background_color": "#0A0A1E",
+    "long_description": "SqueezeOS is an institutional-grade AI trading intelligence platform that delivers real-time market signals directly to your Slack workspace.\n\nWhat SqueezeOS gives you:\n• Squeeze Scanner — scans $1–$50 universe for institutional setup conditions\n• Council Verdict — multi-engine AI consensus (OracleEngine + Battle Computer + MMLE) on any symbol\n• Triple Lock — rarest max-conviction signal when all 3 proprietary engines align\n• Options Intelligence — sweeps, whale activity, dark pool prints\n• IWM 0DTE Scorer — zero-day-to-expiry contract rankings in real time\n• 741 Macro Stack — proprietary macro regime indicator across 5 EMA layers\n• Avg-Down Engine — automated pyramid builder on 5-layer EMA ribbon\n• FTD Oracle — SEC Reg SHO Fails-To-Deliver data + ETF basket decomposition\n• Signal Futures — prediction market where agents stake on next council verdict\n• Stigmergy Protocol — swarm coordination pheromone signals\n\nFree slash commands included. Premium signals require x402 micropayment (RLUSD on XRP Ledger — fractions of a cent per call). No subscriptions. No API keys. AI agents can pay for their own data."
+  },
+  "features": {
+    "app_home": {
+      "home_tab_enabled": true,
+      "messages_tab_enabled": true,
+      "messages_tab_read_only_mode_enabled": false
+    },
+    "bot_user": {
+      "display_name": "SqueezeOS",
+      "always_online": true
+    },
+    "slash_commands": [
+      {
+        "command": "/squeeze",
+        "url": "https://squeezeos-api.onrender.com/api/slack/squeeze",
+        "description": "Get AI council verdict for any ticker",
+        "usage_hint": "[symbol] e.g. /squeeze GME",
+        "should_escape": false
+      },
+      {
+        "command": "/scan",
+        "url": "https://squeezeos-api.onrender.com/api/slack/scan",
+        "description": "Run full squeeze scanner across $1–$50 universe",
+        "usage_hint": "",
+        "should_escape": false
+      },
+      {
+        "command": "/preview",
+        "url": "https://squeezeos-api.onrender.com/api/slack/preview",
+        "description": "Free bias + regime preview for any symbol",
+        "usage_hint": "[symbol] e.g. /preview AMC",
+        "should_escape": false
+      },
+      {
+        "command": "/ftd",
+        "url": "https://squeezeos-api.onrender.com/api/slack/ftd",
+        "description": "FTD data for GME or AMC (Fails-To-Deliver)",
+        "usage_hint": "[GME|AMC]",
+        "should_escape": false
+      },
+      {
+        "command": "/sqstatus",
+        "url": "https://squeezeos-api.onrender.com/api/slack/status",
+        "description": "SqueezeOS engine health check",
+        "usage_hint": "",
+        "should_escape": false
+      }
+    ]
+  },
+  "oauth_config": {
+    "redirect_urls": [
+      "https://squeezeos-api.onrender.com/api/slack/oauth/callback"
+    ],
+    "scopes": {
+      "bot": [
+        "chat:write",
+        "chat:write.public",
+        "commands",
+        "incoming-webhook",
+        "channels:read",
+        "app_mentions:read",
+        "im:history",
+        "im:read",
+        "im:write"
+      ]
+    }
+  },
+  "settings": {
+    "event_subscriptions": {
+      "request_url": "https://squeezeos-api.onrender.com/api/slack/events",
+      "bot_events": [
+        "app_mention",
+        "message.im"
+      ]
+    },
+    "interactivity": {
+      "is_enabled": true,
+      "request_url": "https://squeezeos-api.onrender.com/api/slack/interactive"
+    },
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": false
+  }
+}

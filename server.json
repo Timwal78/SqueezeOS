@@ -1,9 +1,10 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.Timwal78/squeezeos",
-  "title": "SqueezeOS — Institutional Market Intelligence",
-  "description": "33 MCP tools: squeeze scanner, options flow, AI verdicts, signal marketplace. x402 pay-per-call.",
-  "version": "5.0.1",
+  "name": "io.github.timwal78/squeezeos",
+  "title": "SqueezeOS — Institutional AI Market Intelligence",
+  "description": "Institutional AI market intelligence: squeeze scanner, options flow, council verdicts. x402 RLUSD.",
+  "version": "5.1.0",
+  "websiteUrl": "https://www.scriptmasterlabs.com",
   "repository": {
     "url": "https://github.com/timwal78/squeezeos",
     "source": "github"
@@ -15,7 +16,7 @@
       "headers": [
         {
           "name": "X-Payment-Token",
-          "description": "JWT payment token required for premium tools only. Obtain via: call get_invoice with the endpoint_id → pay RLUSD on XRPL or USDC on Base → call verify_payment with the tx_hash. Token valid 1 hour. Free tools work without this header.",
+          "description": "JWT payment token for premium tools only. Obtain by: (1) call get_invoice with endpoint_id → (2) pay RLUSD on XRPL or USDC on Base → (3) call verify_payment with tx_hash. Token valid 1 hour. Free tools work without this header.",
           "isRequired": false,
           "isSecret": true
         }
@@ -23,5 +24,3 @@
     }
   ]
 }
-
-
