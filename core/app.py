@@ -51,6 +51,7 @@ from core.api.macro741_bp import macro741_bp
 from core.api.macro_bp import macro_bp
 from core.api.signal_products_bp import signal_products_bp
 from core.api.avg_down_bp import avg_down_bp
+from core.api.slack_bp import slack_bp
 import core.signal_history as signal_history
 from core.legacy import start_whale_stalker, init_services, get_service, clean_data
 from core.market_graph import get_graph
@@ -154,10 +155,11 @@ def create_app():
     app.register_blueprint(oracle_engine_bp, url_prefix='/api/engine')
     app.register_blueprint(iam_bp,           url_prefix='/api/iam')
     app.register_blueprint(vapl_bp)
-    app.register_blueprint(macro741_bp,       url_prefix='/api')
-    app.register_blueprint(macro_bp,          url_prefix='/api')
-    app.register_blueprint(avg_down_bp,       url_prefix='/api/avg-down')
+    app.register_blueprint(macro741_bp,        url_prefix='/api')
+    app.register_blueprint(macro_bp,           url_prefix='/api')
+    app.register_blueprint(avg_down_bp,        url_prefix='/api/avg-down')
     app.register_blueprint(signal_products_bp, url_prefix='/api/signals')
+    app.register_blueprint(slack_bp,           url_prefix='/api/slack')
 
     # Stellar Forge growth engine — feature-flagged, dormant unless enabled.
     # Registers the affiliate/loyalty/payout surface only when explicitly turned
