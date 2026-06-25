@@ -2,7 +2,9 @@ name: SML Signal Video — Auto Generate & Publish
 
 on:
   schedule:
-    - cron: '0 14 * * 1-5'   # 09:00 ET weekdays (market open)
+    - cron: '30 12 * * 1-5'  # 08:30 ET weekdays — pre-market (IWM)
+    - cron: '0  17 * * 1-5'  # 13:00 ET weekdays — midday      (SPY)
+    - cron: '0  20 * * 1-5'  # 16:00 ET weekdays — close       (QQQ)
   workflow_dispatch:
     inputs:
       symbol:
@@ -27,12 +29,25 @@ jobs:
       - name: Install Python deps
         run: pip install -r video/requirements.txt
 
+      - name: Resolve symbol from schedule
+        id: sym
+        run: |
+          if [ -n "${{ github.event.inputs.symbol }}" ]; then
+            echo "symbol=${{ github.event.inputs.symbol }}" >> $GITHUB_OUTPUT
+          else
+            HOUR=$(date -u +%H)
+            if   [ "$HOUR" -eq 12 ]; then echo "symbol=IWM" >> $GITHUB_OUTPUT   # 08:30 ET pre-market
+            elif [ "$HOUR" -eq 17 ]; then echo "symbol=SPY" >> $GITHUB_OUTPUT   # 13:00 ET midday
+            else                          echo "symbol=QQQ" >> $GITHUB_OUTPUT   # 16:00 ET close
+            fi
+          fi
+
       - name: Generate signal video
         env:
           ANTHROPIC_API_KEY:   ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY:      ${{ secrets.OPENAI_API_KEY }}
           SQUEEZEOS_BASE_URL:  https://squeezeos-api.onrender.com
-          VIDEO_SYMBOL:        ${{ github.event.inputs.symbol || 'IWM' }}
+          VIDEO_SYMBOL:        ${{ steps.sym.outputs.symbol }}
           VIDEO_OUTPUT_PATH:   /tmp/sml_signal_video.mp4
           TTS_VOICE:           onyx
         run: python video/generate_signal_video.py
@@ -40,7 +55,7 @@ jobs:
       - name: Publish to YouTube + Discord + Farcaster
         env:
           VIDEO_OUTPUT_PATH:      /tmp/sml_signal_video.mp4
-          VIDEO_SYMBOL:           ${{ github.event.inputs.symbol || 'IWM' }}
+          VIDEO_SYMBOL:           ${{ steps.sym.outputs.symbol }}
           YOUTUBE_CLIENT_ID:      ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET:  ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN:  ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
