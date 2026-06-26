@@ -1,4 +1,39 @@
 <!-- gitnexus:start -->
+
+# OPERATOR NOTES — READ FIRST
+
+**Owner:** Timothy (TimmyCrypto / Timwal78) — disabled veteran, memory issues. Do NOT rely on him to remember prior decisions, service names, env vars, or build state. You must carry full context yourself. Always recap what exists before starting new work.
+
+## Render Services — Current State (as of 2026-06-26)
+
+| Service | Render Name | URL | Status | Purpose |
+|---------|-------------|-----|--------|---------|
+| SqueezeOS API | `squeezeos-api` | `https://squeezeos-api.onrender.com` | ✅ Live | Main Flask monorepo — AI Council, CASCADE ACCUMULATOR, Slack bot, 47 MCP tools |
+| SML Vault Executor | `sml-vault-executor` | `https://sml-vault-executor.onrender.com` | 🅿️ Parked | Future vault execution layer (Base mainnet). Currently runs squeezeos-api repo as placeholder. Gets its own codebase when vault is funded. Custom domain: `dash.scriptmasterlabs.com` |
+
+**NEVER confuse these two services.** `squeezeos-api` is production. `sml-vault-executor` is parked/future.
+
+## CASCADE ACCUMULATOR — Live Product
+
+- Blueprint: `core/api/cascade_bp.py` — registered at `/api/cascade`
+- Slack command: `/cascade [SYMBOL]` → ENTER/ADD/EXIT/STOP directive
+- x402 payment: 0.25 RLUSD/call (AI agents)
+- Stripe subscription: $149/mo — `price_1TmbGJQL50L4TFzsUsure8N0` (product `prod_Um9XO3d5Yi7TFd`)
+- Stripe webhook: `POST /api/cascade/stripe/webhook` → issues Redis API keys on subscription
+- Required Render env vars: `CASCADE_STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_SECRET_KEY`, `REDIS_URL`
+
+## SML-Vault-Executor — What's Needed When Vault Build Starts
+
+Missing env vars (not yet configured — vault not funded):
+- `VAULT_ADDRESS` — deployed vault contract `0x036454...` on Base mainnet
+- `EXECUTION_RPC_URL` — Base mainnet RPC endpoint
+- `EXECUTION_PRIVATE_KEY` — wallet that signs vault calls
+
+Already configured on that service:
+- `SML_EMA_PERIODS`, `SML_DRAWDOWN_STEP`, `SML_PROFIT_TARGET`, `CCXT_EXCHANGE`, `DASHBOARD_USER/PASS`, `MASTER_WALLET_ADDRESS`, `STRIPE_SECRET_KEY`
+
+---
+
 # GitNexus — Code Intelligence
 
 This project is indexed by GitNexus as **SqueezeOS** (2652 symbols, 4519 relationships, 58 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
