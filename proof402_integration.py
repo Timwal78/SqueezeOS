@@ -38,6 +38,7 @@ _PAYMENT_PRICES = {
     '/api/signals/365':        0.03,
     '/api/signals/triplelock': 0.05,
     '/api/signals/full':       0.10,
+    '/api/cascade/signal':     0.25,
 }
 
 def _fire_payment_discord(wallet: str, path: str, tier: int) -> None:
@@ -72,6 +73,8 @@ ENDPOINTS = {
     '/api/signals/365':        'f6a7b8c9-d0e1-2345-6789-012345678901',  # 0.03 RLUSD
     '/api/signals/triplelock': 'a7b8c9d0-e1f2-3456-789a-123456789012',  # 0.05 RLUSD
     '/api/signals/full':       'b8c9d0e1-f2a3-4567-89ab-234567890123',  # 0.10 RLUSD
+    # CASCADE ACCUMULATOR — execution tier
+    '/api/cascade/signal':     'c4sc4de1-8f2a-4b3e-9c1d-5e6f7a8b9c0d',  # 0.25 RLUSD
     # Oracle routes use path params so payment is verified inline in oracle_data_bp.py:
     # '/api/oracle/latest/<feed>'  → ORACLE_READ_ENDPOINT_ID   e7f8a9b0-...  0.02 RLUSD
     # '/api/oracle/query'          → ORACLE_READ_ENDPOINT_ID   e7f8a9b0-...  0.02 RLUSD
@@ -90,6 +93,7 @@ _FREE_PREVIEW_BY_PATH = {
     '/api/signals/365':        '/api/signals/info',
     '/api/signals/triplelock': '/api/signals/info',
     '/api/signals/full':       '/api/signals/info',
+    '/api/cascade/signal':     '/api/cascade/info',
 }
 
 

@@ -1,4 +1,5 @@
-"""CASCADE ACCUMULATOR — Flask Blueprint
+"""
+CASCADE ACCUMULATOR — Flask Blueprint
 Institutional systematic position-building engine. ScriptMaster Labs.
 
 Routes (all at /api/cascade/...):
@@ -154,17 +155,17 @@ def cascade_signal():
 
     if not latest and not position:
         return jsonify(clean_data({
-            "product":      "CASCADE ACCUMULATOR",
-            "symbol":       symbol,
-            "directive":    "NEUTRAL",
+            "product":   "CASCADE ACCUMULATOR",
+            "symbol":    symbol,
+            "directive": "NEUTRAL",
             "cascade_mode": "NEUTRAL",
-            "direction":    _DIRECTION_TEXT["NEUTRAL"],
-            "message":      "No active cascade signal for this symbol. Engine is monitoring.",
+            "direction": _DIRECTION_TEXT["NEUTRAL"],
+            "message":   "No active cascade signal for this symbol. Engine is monitoring.",
         }))
 
-    sig_type = (latest or {}).get("type", "NEUTRAL")
-    sig_data = (latest or {}).get("data", {})
-    mode     = _cascade_mode(sig_type)
+    sig_type    = (latest or {}).get("type", "NEUTRAL")
+    sig_data    = (latest or {}).get("data", {})
+    mode        = _cascade_mode(sig_type)
 
     return jsonify(clean_data({
         "product":        "CASCADE ACCUMULATOR",
