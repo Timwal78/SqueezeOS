@@ -8,8 +8,9 @@ It exists ONLY for the Windows Robinhood executor (which can't import Python mod
 
 Public 741 regime data is a paid product — use GET /api/741macro (x402, 0.04 RLUSD).
 
-Data source: Tradier daily OHLCV — DEVELOPER_MANIFESTO §3 compliant.
-Cache: 1 hour per symbol (daily regime is intraday-stable).
+Data source: Tradier intraday OHLCV (default 15min) — DEVELOPER_MANIFESTO §3 compliant.
+Cache: 5 minutes (one 15-min bar interval).
+Timeframe: controlled by MACRO_STACK_TIMEFRAME env var (1min | 5min | 15min | 1hour).
 """
 from __future__ import annotations
 
@@ -31,13 +32,18 @@ _raw = os.environ.get("MACRO_STACK_CSV", "")
 _STACK: List[int] = [int(x) for x in _raw.split(",") if x.strip().isdigit()] if _raw else []
 _WARMUP = int(os.environ.get("MACRO_STACK_WARMUP", "50"))
 _REQUIRED_BARS = (max(_STACK) + _WARMUP) if _STACK else 0
-_CACHE_TTL = 3600
+_TIMEFRAME = os.environ.get("MACRO_STACK_TIMEFRAME", "15min")  # 1min | 5min | 15min | 1hour
+_CACHE_TTL = 300  # 5 minutes — refresh every bar on 15min timeframe
 _cache: Dict[str, Dict[str, Any]] = {}
+
+# Intraday bars per trading day (6.5 hr session)
+_BARS_PER_DAY: Dict[str, int] = {"1min": 390, "5min": 78, "15min": 26, "1hour": 7}
+_DAYS_BACK = max(35, int(_REQUIRED_BARS / _BARS_PER_DAY.get(_TIMEFRAME, 26)) + 5) if _REQUIRED_BARS else 35
 
 
 def _compute_regime(symbol: str) -> Dict[str, Any]:
     """
-    Compute 741 Pure Macro regime for a symbol.
+    Compute 741 Pure Macro regime for a symbol using intraday bars.
     Importable directly by server-side code — no HTTP call needed.
     Returns regime + opaque layer values (L1–L5, short to long).
     """
@@ -50,21 +56,25 @@ def _compute_regime(symbol: str) -> Dict[str, Any]:
         return cached["data"]
 
     try:
-        from tradier_api import get_history_df
-        df = get_history_df(symbol, days=_REQUIRED_BARS + 60)
+        import pandas as pd
+        from tradier_api import get_timesales
+        bars = get_timesales(symbol, interval=_TIMEFRAME, days_back=_DAYS_BACK)
+        if not bars:
+            return {"symbol": symbol, "regime": "UNKNOWN", "status": "DATA_ERROR"}
+        df = pd.DataFrame(bars)
     except Exception as e:
         logger.warning(f"[741-MACRO] {symbol} data fetch error: {e}")
         return {"symbol": symbol, "regime": "UNKNOWN", "status": "DATA_ERROR"}
 
-    if df is None or len(df) < _REQUIRED_BARS:
+    if len(df) < _REQUIRED_BARS:
         return {
             "symbol": symbol,
             "regime": "INSUFFICIENT_DATA",
             "status": "INSUFFICIENT_DATA",
-            "bars": int(len(df)) if df is not None else 0,
+            "bars": len(df),
         }
 
-    close = df["Close"].astype(float)
+    close = df["close"].astype(float)
     ema_values = [float(close.ewm(span=p, adjust=False).mean().iloc[-1]) for p in _STACK]
 
     price  = float(close.iloc[-1])
@@ -84,10 +94,12 @@ def _compute_regime(symbol: str) -> Dict[str, Any]:
         "price":             round(price, 2),
         "matrix_spread_pct": spread,
         "layers":            {f"L{i + 1}": round(v, 2) for i, v in enumerate(ema_values)},
+        "timeframe":         _TIMEFRAME,
+        "bars_used":         len(df),
         "timestamp":         datetime.now(timezone.utc).isoformat(),
     }
     _cache[symbol] = {"ts": time.time(), "data": result}
-    logger.info(f"[741-MACRO] {symbol} → {regime} (spread={spread:+.1f}%)")
+    logger.info(f"[741-MACRO] {symbol} → {regime} (spread={spread:+.1f}%, tf={_TIMEFRAME}, bars={len(df)})")
     return result
 
 
