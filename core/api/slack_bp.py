@@ -79,8 +79,10 @@ def _payment_cta():
                 "• `council_verdict` — all engines · *0.10 RLUSD*\n"
                 "• `options_intelligence` — sweeps + dark pool · *0.05 RLUSD*\n"
                 "• `market_scan` — full $1–$50 universe · *0.05 RLUSD*\n"
-                "• `iwm_odte` — IWM 0DTE contract scorer · *0.03 RLUSD*\n\n"
-                "_No API keys. No subscription. Pay per call on XRP Ledger._"
+                "• `iwm_odte` — IWM 0DTE contract scorer · *0.03 RLUSD*\n"
+                "• `cascade_accumulator` — CASCADE ACCUMULATOR directive · *0.25 RLUSD*\n\n"
+                "_No API keys. No subscription. Pay per call on XRP Ledger._\n"
+                "_CASCADE ACCUMULATOR also available at $149/mo via Stripe._"
             )
         },
         "accessory": {
@@ -572,7 +574,9 @@ def _handle_mention(channel: str, _ts: str):
                     "*/preview [TICKER]* — Free bias + regime preview for any symbol\n"
                     "*/ftd [GME|AMC]* — SEC Fails-To-Deliver data + Threshold List status\n"
                     "*/sqstatus* — Full engine health check (all subsystems)\n\n"
-                    "*Premium tools via x402 micropayment (RLUSD on XRP Ledger):*\n"
+                    "*Execution Tier:*\n"
+                    "*/cascade [SYMBOL]* — CASCADE ACCUMULATOR directive · 0.25 RLUSD or $149/mo Stripe\n\n"
+                    "*Premium signal tools via x402 micropayment (RLUSD on XRP Ledger):*\n"
                     "• Full Council Verdict (all 3 engines): 0.10 RLUSD\n"
                     "• Options Intelligence (sweeps + dark pool): 0.05 RLUSD\n"
                     "• Full Universe Scanner (250 symbols): 0.05 RLUSD\n"
@@ -613,6 +617,160 @@ def _handle_dm(channel: str, text: str):
             _post_to_channel(channel, [], text="⚠️ Engine unavailable")
     else:
         _handle_mention(channel, "")
+
+
+# ─── /cascade [SYMBOL] ──────────────────────────────────────────────────────
+
+_CASCADE_COLOR = {
+    "ENTER":   "#00CC44",
+    "ADD":     "#00AAFF",
+    "EXIT":    "#FFB300",
+    "STOP":    "#FF3B3B",
+    "NEUTRAL": "#888888",
+}
+_CASCADE_EMOJI = {
+    "ENTER":   "🟢",
+    "ADD":     "🔵",
+    "EXIT":    "🟡",
+    "STOP":    "🔴",
+    "NEUTRAL": "⚪",
+}
+_CASCADE_MODE_LABEL = {
+    "ACCUMULATE": "📉 ACCUMULATE — building cost basis on the way down",
+    "PYRAMID":    "📈 PYRAMID — scaling into the move on the way up",
+    "EXIT":       "🏁 EXIT — recovery target reached, realize gains",
+    "STOP":       "🛑 STOP — anchor layer broken, protect capital",
+    "NEUTRAL":    "➡️  NEUTRAL — monitoring, no active signal",
+}
+
+
+@slack_bp.route("/cascade", methods=["POST"])
+def slash_cascade():
+    if not _verify(request):
+        return jsonify(_err("Invalid request signature")), 403
+
+    symbol       = (request.form.get("text", "").strip().upper() or "BTC/USDT")
+    response_url = request.form.get("response_url", "")
+
+    threading.Thread(
+        target=_deliver_cascade,
+        args=(symbol, response_url),
+        daemon=True
+    ).start()
+
+    return jsonify(_ack(f"⚡ CASCADE ACCUMULATOR analyzing *{symbol}*..."))
+
+
+def _deliver_cascade(symbol: str, response_url: str):
+    try:
+        r    = requests.get(f"{_BASE}/api/cascade/signal?symbol={symbol}", timeout=20)
+        code = r.status_code
+        data = r.json()
+    except Exception as exc:
+        _delayed(response_url, _err(f"CASCADE ACCUMULATOR engine unavailable: {exc}"))
+        return
+
+    # x402 payment required — show CTA
+    if code == 402:
+        inv     = data.get("invoice", {})
+        amount  = inv.get("amount", "0.25")
+        asset   = inv.get("asset", "RLUSD")
+        pay_to  = inv.get("pay_to", "")
+        memo    = inv.get("memo_hex", "")
+        inv_id  = inv.get("invoice_id", "")
+        blocks = [
+            {
+                "type": "header",
+                "text": {"type": "plain_text", "text": "CASCADE ACCUMULATOR"}
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": (
+                        f"*{symbol}* cascade directive requires *{amount} {asset}* payment.\n\n"
+                        "*Pay via x402 on XRP Ledger:*\n"
+                        f"1. Send `{amount} {asset}` to `{pay_to}`\n"
+                        f"2. Include MemoData: `{memo}`\n"
+                        f"3. POST to `four02proof.onrender.com/v1/verify` with `invoice_id: {inv_id}`\n"
+                        f"4. Re-run `/cascade {symbol}` with your `X-Payment-Token`\n\n"
+                        f"_Or subscribe for unlimited access at $149/mo:_"
+                    )
+                }
+            },
+            {
+                "type": "actions",
+                "elements": [{
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "Subscribe — $149/mo"},
+                    "url": f"{_BASE}/api/cascade/stripe/checkout",
+                    "style": "primary"
+                }]
+            },
+            _footer()
+        ]
+        _delayed(response_url, {
+            "response_type": "ephemeral",
+            "text": f"CASCADE ACCUMULATOR — {symbol}: payment required",
+            "attachments": [{"color": "#7B68EE", "blocks": blocks}]
+        })
+        return
+
+    directive    = data.get("directive", "NEUTRAL")
+    mode         = data.get("cascade_mode", "NEUTRAL")
+    direction    = data.get("direction", "Neutral")
+    color        = _CASCADE_COLOR.get(directive, "#888888")
+    emoji        = _CASCADE_EMOJI.get(directive, "⚪")
+    mode_label   = _CASCADE_MODE_LABEL.get(mode, mode)
+    position     = data.get("position") or {}
+    sig_data     = data.get("signal_data") or {}
+
+    pos_lines = ""
+    if position:
+        avg_cost = position.get("avg_cost")
+        level    = position.get("level", 0)
+        max_lvl  = position.get("max_levels", 3)
+        if avg_cost:
+            pos_lines = f"\n*Avg Cost:* `{avg_cost:.4f}` · *Level:* {level}/{max_lvl}"
+
+    blocks = [
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": f"CASCADE ACCUMULATOR — {symbol}"}
+        },
+        {
+            "type": "section",
+            "fields": [
+                {"type": "mrkdwn", "text": f"*DIRECTIVE*\n{emoji} {directive}"},
+                {"type": "mrkdwn", "text": f"*MODE*\n{mode}"},
+            ]
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*{mode_label}*\n_{direction}_{pos_lines}"
+            }
+        },
+        {"type": "divider"},
+        {
+            "type": "context",
+            "elements": [{
+                "type": "mrkdwn",
+                "text": (
+                    "CASCADE ACCUMULATOR · Execution Tier · 0.25 RLUSD/call · "
+                    f"<{_BASE}/api/cascade/stripe/checkout|Subscribe $149/mo> · "
+                    f"<{_SITE}|Script Master Labs>"
+                )
+            }]
+        }
+    ]
+
+    _delayed(response_url, {
+        "response_type": "in_channel",
+        "text": f"CASCADE ACCUMULATOR — {symbol}: {directive} ({mode})",
+        "attachments": [{"color": color, "blocks": blocks}]
+    })
 
 
 # ─── Interactive Components ───────────────────────────────────────────────────

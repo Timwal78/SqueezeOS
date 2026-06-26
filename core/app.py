@@ -51,6 +51,7 @@ from core.api.macro741_bp import macro741_bp
 from core.api.macro_bp import macro_bp
 from core.api.signal_products_bp import signal_products_bp
 from core.api.avg_down_bp import avg_down_bp
+from core.api.cascade_bp import cascade_bp
 from core.api.slack_bp import slack_bp
 import core.signal_history as signal_history
 from core.legacy import start_whale_stalker, init_services, get_service, clean_data
@@ -158,6 +159,7 @@ def create_app():
     app.register_blueprint(macro741_bp,        url_prefix='/api')
     app.register_blueprint(macro_bp,           url_prefix='/api')
     app.register_blueprint(avg_down_bp,        url_prefix='/api/avg-down')
+    app.register_blueprint(cascade_bp,         url_prefix='/api/cascade')
     app.register_blueprint(signal_products_bp, url_prefix='/api/signals')
     app.register_blueprint(slack_bp,           url_prefix='/api/slack')
 
@@ -472,7 +474,7 @@ def create_app():
                     sse_queues.remove(q)
         return Response(stream(), mimetype='text/event-stream')
     
-    @app.route('/api/cascade/<symbol>')
+    @app.route('/api/fractal-cascade/<symbol>')
     def get_cascade(symbol):
         """Fractal Cascade multi-timeframe alignment (Legacy Bridge)."""
         symbol = symbol.upper().strip()

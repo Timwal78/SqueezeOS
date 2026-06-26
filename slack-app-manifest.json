@@ -49,6 +49,13 @@
         "description": "SqueezeOS engine health check",
         "usage_hint": "",
         "should_escape": false
+      },
+      {
+        "command": "/cascade",
+        "url": "https://squeezeos-api.onrender.com/api/slack/cascade",
+        "description": "CASCADE ACCUMULATOR — systematic position-building directive",
+        "usage_hint": "[symbol] e.g. /cascade BTC/USDT",
+        "should_escape": false
       }
     ]
   },
