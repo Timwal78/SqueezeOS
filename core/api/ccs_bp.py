@@ -29,6 +29,7 @@ Trust Score (0-100):
 import os
 import time
 import uuid
+import json
 import hashlib
 import threading
 import logging
@@ -39,10 +40,67 @@ logger = logging.getLogger("SqueezeOS-CCS")
 
 ccs_bp = Blueprint("ccs", __name__)
 
-# ── In-memory stores (reset on restart — MVP) ───────────────────────────────
-_validations: dict = {}          # validation_id → result
-_trust_ledger: dict = {}         # wallet → {score, validations, accurate, blocked}
-_reports: list = []              # community misinfo reports
+# ── Redis (optional — persists trust ledger across restarts) ─────────────────
+_redis = None
+_REDIS_LEDGER_KEY = "ccs:trust_ledger"
+_REDIS_STATS_KEY = "ccs:stats"
+
+def _get_redis():
+    global _redis
+    if _redis is not None:
+        return _redis
+    url = os.getenv("REDIS_URL")
+    if not url:
+        return None
+    try:
+        import redis as _redis_lib
+        _redis = _redis_lib.from_url(url, decode_responses=True, socket_timeout=2)
+        _redis.ping()
+        logger.info("[CCS] Redis connected — trust ledger will persist across restarts")
+    except Exception as e:
+        logger.warning("[CCS] Redis unavailable (%s) — falling back to in-memory", e)
+        _redis = None
+    return _redis
+
+
+def _ledger_get(wallet: str):
+    r = _get_redis()
+    if r:
+        try:
+            raw = r.hget(_REDIS_LEDGER_KEY, wallet)
+            if raw:
+                return json.loads(raw)
+        except Exception:
+            pass
+    return _trust_ledger.get(wallet)
+
+
+def _ledger_set(wallet: str, data: dict):
+    _trust_ledger[wallet] = data
+    r = _get_redis()
+    if r:
+        try:
+            r.hset(_REDIS_LEDGER_KEY, wallet, json.dumps(data))
+        except Exception:
+            pass
+
+
+def _ledger_all() -> dict:
+    r = _get_redis()
+    if r:
+        try:
+            raw = r.hgetall(_REDIS_LEDGER_KEY)
+            if raw:
+                return {k: json.loads(v) for k, v in raw.items()}
+        except Exception:
+            pass
+    return _trust_ledger
+
+
+# ── In-memory stores ─────────────────────────────────────────────────────────
+_validations: dict = {}          # validation_id → result (session only, by design)
+_trust_ledger: dict = {}         # wallet → record (mirrors Redis when available)
+_reports: list = []              # community misinfo reports (session only)
 _rate_limits: dict = defaultdict(list)  # ip → [timestamps]
 
 _MAX_VALIDATIONS = 10_000
@@ -158,10 +216,11 @@ def _analyze_text(text: str) -> dict:
 
 def _get_wallet_trust(wallet: str) -> dict:
     """Return trust ledger entry for a wallet, initializing if new."""
-    if wallet not in _trust_ledger:
-        _trust_ledger[wallet] = {
+    rec = _ledger_get(wallet)
+    if rec is None:
+        rec = {
             "wallet": wallet,
-            "ccs_score": 50,         # neutral start
+            "ccs_score": 50,
             "validations_submitted": 0,
             "content_blocked": 0,
             "content_passed": 0,
@@ -170,7 +229,8 @@ def _get_wallet_trust(wallet: str) -> dict:
             "first_seen": time.time(),
             "last_seen": time.time(),
         }
-    return _trust_ledger[wallet]
+        _ledger_set(wallet, rec)
+    return rec
 
 
 def _update_wallet_trust(wallet: str, verdict: str):
@@ -201,6 +261,7 @@ def _update_wallet_trust(wallet: str, verdict: str):
         rec["reputation_tier"] = "FLAGGED"
     else:
         rec["reputation_tier"] = "BLOCKED_SENDER"
+    _ledger_set(wallet, rec)
 
 
 def _check_rate_limit(ip: str) -> bool:
@@ -468,6 +529,7 @@ def ccs_leaderboard():
     Top 25 most trusted wallets by CCS score.
     Free — GEO discovery signal.
     """
+    all_wallets = _ledger_all()
     scored = [
         {
             "wallet": w,
@@ -478,14 +540,14 @@ def ccs_leaderboard():
                 r["content_passed"] / max(1, r["validations_submitted"]) * 100, 1
             ),
         }
-        for w, r in _trust_ledger.items()
-        if r["validations_submitted"] >= 3  # minimum activity threshold
+        for w, r in all_wallets.items()
+        if r["validations_submitted"] >= 3
     ]
     scored.sort(key=lambda x: (x["ccs_score"], x["validations"]), reverse=True)
 
     return jsonify({
         "leaderboard": scored[:25],
-        "total_participants": len(_trust_ledger),
+        "total_participants": len(all_wallets),
         "ts": time.time(),
         "free": True,
     })
