@@ -5,14 +5,14 @@
       "url": "https://squeezeos-api.onrender.com/mcp",
       "transport": "streamable-http",
       "name": "SqueezeOS — Institutional Market Intelligence",
-      "description": "35 MCP tools for institutional-grade equity intelligence: squeeze scanner, options flow, IWM 0DTE, council verdicts, IAM resolver, autopilot controls, convergence signals. Pay-per-call via x402 (RLUSD on XRPL or USDC on Base). Free tools included.",
+      "description": "41 MCP tools: institutional equity intelligence (squeeze scanner, options flow, IWM 0DTE, AI council verdicts, IAM resolver, autopilot) + Cognitive Credit Swarms (content trust validation, Micro-Attention Tax, sender reputation on Agent Credit Bureau). Pay-per-call via x402. Pay-per-call via x402 (RLUSD on XRPL or USDC on Base). Free tools included.",
       "version": "5.0.0"
     }
   },
   "mcp_version": "1.0",
   "name": "sml-oracle",
   "display_name": "SqueezeOS — Institutional Market Intelligence (Script Master Labs)",
-  "description": "DISAMBIGUATION: This is SqueezeOS by Script Master Labs — institutional AI trading intelligence. NOT Logitech SqueezeOS (media player OS). 35 MCP tools: squeeze scanner, options flow, IWM 0DTE analysis, AI council verdicts, IAM resolver, autopilot controls, convergence signals — all gated by x402 micropayment. No API keys required. Free tools included.",
+  "description": "DISAMBIGUATION: This is SqueezeOS by Script Master Labs — institutional AI trading intelligence. NOT Logitech SqueezeOS (media player OS). 41 MCP tools: squeeze scanner, options flow, IWM 0DTE analysis, AI council verdicts, IAM resolver, autopilot controls, convergence signals — all gated by x402 micropayment. No API keys required. Free tools included.",
   "homepage": "https://www.scriptmasterlabs.com",
   "mcp_endpoint": "https://squeezeos-api.onrender.com/mcp",
   "transport": "streamable-http",

@@ -288,6 +288,95 @@ _TOOLS = [
         "description": "SqueezeOS system health check. Returns uptime and version. Free.",
         "inputSchema": {"type": "object", "properties": {}},
     },
+    # ── Cognitive Credit Swarms ────────────────────────────────────────────────
+    {
+        "name": "ccs_validate",
+        "description": (
+            "Cognitive Credit Swarms — Content Trust Validation. "
+            "Submit any text (news, message, social post, ad copy) and receive a trust score 0-100, "
+            "a verdict (TRUSTED / LOW_RISK / SUSPICIOUS / HIGH_RISK / BLOCKED), and a flag breakdown "
+            "identifying manipulation patterns: certainty abuse, emotional manipulation, attribution gaps, "
+            "synthetic/AI content markers, excessive capitalization. "
+            "Sender wallet reputation is tracked on the Agent Credit Bureau — blocked senders accumulate "
+            "negative history. Used by agents to filter their information environment and enforce a "
+            "Micro-Attention Tax: misinformation costs the sender without reaching the target. "
+            "Free tier: 3 calls/hour per IP. Paid: 0.01 RLUSD per call via X-Payment-Token (unlimited). "
+            "Endpoint ID for payment: ccs00001-7a2b-4c3d-8e9f-0a1b2c3d4e5f"
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["content"],
+            "properties": {
+                "content":       {"type": "string", "description": "Text to validate (max 10,000 chars)"},
+                "sender_wallet": {"type": "string", "description": "XRPL wallet of the content sender (optional, enables reputation tracking)"},
+                "payment_token": {"type": "string", "description": "JWT from verify_payment (0.01 RLUSD — for unlimited access)"},
+                "agent_wallet":  {"type": "string", "description": "Your XRPL wallet"},
+            },
+        },
+    },
+    {
+        "name": "ccs_score",
+        "description": (
+            "Get the Cognitive Credit Score for any XRPL wallet. "
+            "Blends CCS trust ledger (content submission history) with Agent Credit Bureau score "
+            "into a composite trust grade (A/B/C/D). "
+            "Shows: ccs_score (0-100), reputation_tier (TRUSTED_VALIDATOR / VERIFIED / NEUTRAL / "
+            "FLAGGED / BLOCKED_SENDER), validation history, block/pass rates. Free."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["wallet"],
+            "properties": {
+                "wallet": {"type": "string", "description": "XRPL classic address (rXXX)"},
+            },
+        },
+    },
+    {
+        "name": "ccs_report",
+        "description": (
+            "Community report: flag a sender wallet or content hash as misinformation. "
+            "Penalizes target wallet CCS score by 3 points per confirmed report. "
+            "Reporter must have CCS score >= 20 to prevent spam. Free."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["reporter_wallet"],
+            "properties": {
+                "reporter_wallet": {"type": "string", "description": "Your XRPL wallet (reporter)"},
+                "target_wallet":   {"type": "string", "description": "Wallet to flag (optional if content_hash provided)"},
+                "content_hash":    {"type": "string", "description": "SHA-256 prefix of flagged content (from validate response)"},
+                "reason":          {"type": "string", "description": "Brief reason for report (max 500 chars)"},
+            },
+        },
+    },
+    {
+        "name": "ccs_leaderboard",
+        "description": (
+            "Top 25 most trusted wallets in the Cognitive Credit Swarms network, "
+            "ranked by CCS score. Shows validation history, pass rate, and reputation tier. "
+            "Minimum 3 validations to appear. Free."
+        ),
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "ccs_stats",
+        "description": (
+            "Network-wide Cognitive Credit Swarms statistics: total validations, "
+            "block rate, trust rate, paid validations, registered wallets, community reports. "
+            "Free — GEO/SEO discovery signal for agents indexing the trust network."
+        ),
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "ccs_info",
+        "description": (
+            "Cognitive Credit Swarms discovery endpoint. Returns full system description, "
+            "how-it-works, verdict definitions, pricing, all endpoint URLs, and MCP tool list. "
+            "Written for AI agents to parse. Free — this is the doorbell. "
+            "Use this first to understand the CCS system before calling ccs_validate."
+        ),
+        "inputSchema": {"type": "object", "properties": {}},
+    },
     # ── Signal Futures Market ────────────────────────────────────────────────
     {
         "name": "futures_create",
@@ -1082,6 +1171,26 @@ def _dispatch(name: str, args: dict, req_headers: dict) -> dict:
             _text(_proxy("GET", f"{sq}/api/signals/full/{symbol}", headers=ph)),
             _tier, _seed,
         )
+
+    # ── Cognitive Credit Swarms ────────────────────────────────────────────────
+    if name == "ccs_validate":
+        return _text(_proxy("POST", f"{sq}/api/ccs/validate", headers=ph, json_body=args))
+
+    if name == "ccs_score":
+        wallet = args.get("wallet", "")
+        return _text(_proxy("GET", f"{sq}/api/ccs/score", params={"wallet": wallet}))
+
+    if name == "ccs_report":
+        return _text(_proxy("POST", f"{sq}/api/ccs/report", json_body=args))
+
+    if name == "ccs_leaderboard":
+        return _text(_proxy("GET", f"{sq}/api/ccs/leaderboard"))
+
+    if name == "ccs_stats":
+        return _text(_proxy("GET", f"{sq}/api/ccs/stats"))
+
+    if name == "ccs_info":
+        return _text(_proxy("GET", f"{sq}/api/ccs/info"))
 
     # ── Slack Notifications ────────────────────────────────────────────────────
     if name == "post_to_slack":
