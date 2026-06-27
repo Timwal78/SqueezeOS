@@ -51,7 +51,7 @@ _RATE_LIMIT_FREE = 3             # free calls per IP per hour
 _RATE_LIMIT_WINDOW = 3600        # seconds
 
 # ── Endpoint UUID (register this in 402Proof dashboard) ─────────────────────
-CCS_VALIDATE_ENDPOINT_ID = "ccs00001-7a2b-4c3d-8e9f-0a1b2c3d4e5f"
+CCS_VALIDATE_ENDPOINT_ID = "05764097-3f3e-4279-89e5-c786efab2f91"
 CCS_VALIDATE_PRICE = 0.01        # RLUSD per call
 
 # ── Misinfo signal patterns ─────────────────────────────────────────────────

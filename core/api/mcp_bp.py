@@ -301,7 +301,7 @@ _TOOLS = [
             "negative history. Used by agents to filter their information environment and enforce a "
             "Micro-Attention Tax: misinformation costs the sender without reaching the target. "
             "Free tier: 3 calls/hour per IP. Paid: 0.01 RLUSD per call via X-Payment-Token (unlimited). "
-            "Endpoint ID for payment: ccs00001-7a2b-4c3d-8e9f-0a1b2c3d4e5f"
+            "Endpoint ID for payment: 05764097-3f3e-4279-89e5-c786efab2f91"
         ),
         "inputSchema": {
             "type": "object",
