@@ -18,6 +18,17 @@
   },
   "capabilities": [
     {
+      "id": "cognitive_credit_swarms",
+      "name": "Cognitive Credit Swarms — Content Trust Validation",
+      "endpoint": "/api/ccs/validate",
+      "method": "POST",
+      "cost": "0.01",
+      "currency": "RLUSD",
+      "endpoint_id": "ccs00001-7a2b-4c3d-8e9f-0a1b2c3d4e5f",
+      "free_tier": "3 calls/hour per IP",
+      "description": "Trust-as-a-Service. Submit content and receive a trust score 0-100 with verdict (TRUSTED/LOW_RISK/SUSPICIOUS/HIGH_RISK/BLOCKED). Detects certainty manipulation, emotional manipulation, attribution gaps, and synthetic/AI content. Sender wallet reputation tracked on Agent Credit Bureau. Discovery: /api/ccs/info"
+    },
+    {
       "id": "council_verdict",
       "name": "AI Council Verdict",
       "endpoint": "/api/council",

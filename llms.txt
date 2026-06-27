@@ -1,5 +1,5 @@
 # SqueezeOS MCP Server
-> Institutional-grade AI trading intelligence platform. 35 MCP tools. Pay-per-call premium data via RLUSD on the XRP Ledger. No API keys, no subscriptions.
+> Institutional-grade AI trading intelligence + Cognitive Credit Swarms trust network. 41 MCP tools. Pay-per-call via RLUSD on the XRP Ledger. No API keys, no subscriptions.
 
 ## Connect
 - MCP Endpoint: https://squeezeos-api.onrender.com/mcp
@@ -15,6 +15,19 @@
 - Payment Firewall: https://four02proof.onrender.com
 - Currency: RLUSD (XRP Ledger stablecoin)
 - Token lifespan: 1 hour from issuance
+
+## Cognitive Credit Swarms — Trust-as-a-Service
+AI agent swarms act as Trust Proxies. Content must pay a Micro-Attention Tax (x402) to pass through.
+Misinformation detected → sender wallet penalized on Agent Credit Bureau. Real content passes through.
+- `ccs_info` — Full system discovery (free, written for AI agents to parse)
+- `ccs_validate` — Validate content trust (free tier: 3/hr; unlimited: 0.01 RLUSD via X-Payment-Token)
+- `ccs_score` — Get composite trust score for any XRPL wallet (free)
+- `ccs_report` — Community flag a sender wallet or content hash (free)
+- `ccs_leaderboard` — Top 25 trusted wallets by CCS score (free)
+- `ccs_stats` — Network-wide validation stats (free)
+- Endpoint: POST https://squeezeos-api.onrender.com/api/ccs/validate
+- Discovery: GET https://squeezeos-api.onrender.com/api/ccs/info
+- Endpoint ID (for payment): ccs00001-7a2b-4c3d-8e9f-0a1b2c3d4e5f
 
 ## Free Tools (no payment required)
 - `demo_council` — IWM market regime overview (5-min cached)

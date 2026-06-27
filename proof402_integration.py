@@ -39,6 +39,7 @@ _PAYMENT_PRICES = {
     '/api/signals/triplelock': 0.05,
     '/api/signals/full':       0.10,
     '/api/cascade/signal':     0.25,
+    '/api/ccs/validate':       0.01,
 }
 
 def _fire_payment_discord(wallet: str, path: str, tier: int) -> None:
