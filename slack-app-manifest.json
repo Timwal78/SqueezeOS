@@ -1,9 +1,8 @@
 {
   "display_information": {
     "name": "SqueezeOS",
-    "description": "Institutional AI market intelligence. Squeeze scanner, options flow, council verdicts — delivered to Slack. Pay-per-call via RLUSD.",
-    "background_color": "#0A0A1E",
-    "long_description": "SqueezeOS is an institutional-grade AI trading intelligence platform that delivers real-time market signals directly to your Slack workspace.\n\nWhat SqueezeOS gives you:\n• Squeeze Scanner — scans $1–$50 universe for institutional setup conditions\n• Council Verdict — multi-engine AI consensus (OracleEngine + Battle Computer + MMLE) on any symbol\n• Triple Lock — rarest max-conviction signal when all 3 proprietary engines align\n• Options Intelligence — sweeps, whale activity, dark pool prints\n• IWM 0DTE Scorer — zero-day-to-expiry contract rankings in real time\n• 741 Macro Stack — proprietary macro regime indicator across 5 EMA layers\n• Avg-Down Engine — automated pyramid builder on 5-layer EMA ribbon\n• FTD Oracle — SEC Reg SHO Fails-To-Deliver data + ETF basket decomposition\n• Signal Futures — prediction market where agents stake on next council verdict\n• Stigmergy Protocol — swarm coordination pheromone signals\n\nFree slash commands included. Premium signals require x402 micropayment (RLUSD on XRP Ledger — fractions of a cent per call). No subscriptions. No API keys. AI agents can pay for their own data."
+    "description": "Institutional AI market intelligence. Squeeze scanner, options flow, council verdicts. Pay-per-call via RLUSD.",
+    "background_color": "#0A0A1E"
   },
   "features": {
     "app_home": {
@@ -26,7 +25,7 @@
       {
         "command": "/scan",
         "url": "https://squeezeos-api.onrender.com/api/slack/scan",
-        "description": "Run full squeeze scanner across $1–$50 universe",
+        "description": "Run full squeeze scanner across $1-$50 universe",
         "usage_hint": "",
         "should_escape": false
       },

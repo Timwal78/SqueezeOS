@@ -20,7 +20,7 @@
       "id": "squeezeos",
       "name": "SqueezeOS — Institutional AI Market Intelligence",
       "tagline": "Multi-engine AI trading signals for autonomous agents. Pay per call. No API keys.",
-      "description": "Squeeze scanner, institutional options flow, IWM 0DTE analysis, AI council verdicts, TRIPLE_LOCK_VERDICT premium tier (rarest signal — all three proprietary engines aligned), SML Sovereign Signal Suite (741 Macro Highway / 365 Anchor / Triple Lock / Full Stack — labels only, no raw values), Decision Notary bridge (Xahau URIToken minting for EU AI Act audit trails), signal futures prediction market, regulatory event oracle (SEC 8-K, FDA, USPTO), FTD Data Oracle (SEC Reg SHO Fails-To-Deliver + Threshold List + ETF basket decomposition + multi-layer settlement echo bridge: T+13 and T+35 cycle windows wired into IAM confidence), 15m intraday Tactical Matrix compression detector (micro-coil EMA convergence detection, configurable coil gate for avg-down ADD signals), bureau-discounted Stigmergy Dream Pools, and Agent Credit Bureau. MCP tools. All premium calls gated by x402 RLUSD. Free demo, preview, notary info/quote, FTD info, and SSE stream always available.",
+      "description": "Squeeze scanner, institutional options flow, IWM 0DTE analysis, AI council verdicts, TRIPLE_LOCK_VERDICT premium tier (rarest signal — all three proprietary engines aligned), SML Sovereign Signal Suite (741 Macro Highway / 365 Anchor / Triple Lock / Full Stack — labels only, no raw values), Decision Notary bridge (Xahau URIToken minting for EU AI Act audit trails), signal futures prediction market, regulatory event oracle (SEC 8-K, FDA, USPTO), FTD Data Oracle (SEC Reg SHO Fails-To-Deliver + Threshold List + ETF basket decomposition + multi-layer settlement echo bridge: T+13 and T+35 cycle windows wired into IAM confidence), 15m intraday Tactical Matrix compression detector (micro-coil EMA convergence detection, configurable coil gate for avg-down ADD signals), bureau-discounted Stigmergy Dream Pools, Cognitive Credit Swarms (content trust validation, Micro-Attention Tax via x402, sender wallet reputation), and Agent Credit Bureau. 57 MCP tools. All premium calls gated by x402 RLUSD. Free demo, preview, notary info/quote, FTD info, and SSE stream always available.",
       "category": ["finance", "trading", "market-intelligence", "agent-economy"],
       "status": "live",
       "url": "https://squeezeos-api.onrender.com",
@@ -286,7 +286,7 @@
       "payment_asset": "RLUSD",
       "payment_network": "XRPL",
       "free_tools": ["demo_council", "signal_preview", "signal_history", "system_status", "stigmergy_sniff", "triple_lock_demo", "notary_info", "notary_quote", "ftd_info", "ftd_alerts", "avg_down_status"],
-      "tool_count": 51,
+      "tool_count": 57,
       "categories": ["finance", "trading", "market-data", "agent-economy"]
     },
     "google_ap2": {

@@ -156,37 +156,124 @@ _BLOCKLIST = {
 
 
 # ── Robinhood login ────────────────────────────────────────────────────────────
+_AUTH_FAILURE_ALERTED = False   # only alert Discord once per process until recovered
+
+def _rh_verify_session() -> bool:
+    """Return True only if the active session can actually read account data."""
+    try:
+        import robin_stocks.robinhood as rh
+        profile = rh.profiles.load_account_profile()
+        return bool(profile and profile.get("account_number"))
+    except Exception:
+        return False
+
+
+def _rh_force_reauth() -> bool:
+    """
+    Hard re-authentication using the stored device_token to bypass MFA.
+    Works headlessly as long as the device_token pickle exists.
+    Deletes the stale pickle and re-logs in from scratch using device_token.
+    """
+    import pickle, os, requests
+    import robin_stocks.robinhood as rh
+
+    pickle_path = os.path.join(os.path.expanduser("~"), ".tokens", "robinhoodrh_session.pickle")
+
+    device_token = None
+    if os.path.exists(pickle_path):
+        try:
+            with open(pickle_path, "rb") as f:
+                stored = pickle.load(f)
+            device_token = stored.get("device_token")
+        except Exception:
+            pass
+
+    if not device_token:
+        logger.error("[RH-AUTH] No device_token in pickle — MFA required. Run executor manually once to complete MFA.")
+        return False
+
+    # Delete stale pickle so robin_stocks does a clean login
+    try:
+        os.remove(pickle_path)
+    except Exception:
+        pass
+
+    try:
+        # Pass device_token explicitly so Robinhood skips MFA challenge
+        rh.login(
+            ROBINHOOD_USER,
+            ROBINHOOD_PASS,
+            store_session=True,
+            pickle_name="rh_session",
+            device_token=device_token,
+        )
+        if _rh_verify_session():
+            logger.info("[RH-AUTH] Force re-auth succeeded via device_token")
+            return True
+        else:
+            logger.error("[RH-AUTH] Force re-auth: login returned no exception but session invalid")
+            return False
+    except Exception as e:
+        logger.error(f"[RH-AUTH] Force re-auth failed: {e}")
+        return False
+
+
 def _ensure_login() -> bool:
-    global _rh_logged_in
+    global _rh_logged_in, _AUTH_FAILURE_ALERTED
     if _rh_logged_in:
         return True
     if not ROBINHOOD_USER or not ROBINHOOD_PASS:
         logger.error("[RH] ROBINHOOD_USERNAME / ROBINHOOD_PASSWORD not set in executor.env")
         return False
+
+    import robin_stocks.robinhood as rh
+
+    # Step 1: try normal login (uses cached pickle / refresh_token)
     try:
-        import robin_stocks.robinhood as rh
-        # store_session=True caches the auth token to disk — subsequent logins
-        # use the stored token without requiring MFA again.
         rh.login(ROBINHOOD_USER, ROBINHOOD_PASS, store_session=True, pickle_name="rh_session")
-        # Verify the session actually works — don't trust "no exception = success"
-        profile = rh.profiles.load_account_profile()
-        if not profile:
-            raise ValueError("load_account_profile returned empty — session not authenticated")
-        _rh_logged_in = True
-        logger.info(f"[RH] Logged in OK — account verified")
-        return True
+        if _rh_verify_session():
+            _rh_logged_in = True
+            _AUTH_FAILURE_ALERTED = False
+            logger.info("[RH] Session verified — logged in OK")
+            return True
+        logger.warning("[RH] Normal login returned no error but session invalid — forcing re-auth")
     except Exception as e:
-        _rh_logged_in = False
-        logger.error(f"[RH] Login failed: {e}")
-        logger.error("[RH] If Robinhood requires MFA: run the executor once manually in a terminal to complete MFA, then restart as a service.")
-        return False
+        logger.warning(f"[RH] Normal login error: {e} — forcing re-auth")
+
+    # Step 2: hard re-auth via stored device_token (no MFA required)
+    if _rh_force_reauth():
+        _rh_logged_in = True
+        _AUTH_FAILURE_ALERTED = False
+        return True
+
+    # Step 3: complete failure — alert and back off
+    _rh_logged_in = False
+    if not _AUTH_FAILURE_ALERTED:
+        _AUTH_FAILURE_ALERTED = True
+        _discord_critical("[RH] ❌ Authentication failed — executor is OFFLINE. Manual MFA re-auth required.")
+    return False
 
 
 def _invalidate_login():
-    """Call when an API error indicates the session has expired."""
     global _rh_logged_in
     _rh_logged_in = False
-    logger.warning("[RH] Session invalidated — will re-login on next cycle")
+    logger.warning("[RH] Session invalidated — will re-auth on next cycle")
+
+
+def _discord_critical(message: str):
+    """Fire a plain-text Discord alert for system-level failures (auth down, circuit tripped, etc.)."""
+    try:
+        from urllib.request import urlopen, Request as URLRequest
+        import json as _json
+        url = os.environ.get("DISCORD_WEBHOOK_BEAST", "") or os.environ.get("DISCORD_WEBHOOK_ALL", "")
+        if not url:
+            return
+        payload = _json.dumps({"content": f"🚨 **SQUEEZEOS EXECUTOR** {message}"}).encode()
+        req = URLRequest(url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
+        with urlopen(req, timeout=8):
+            pass
+    except Exception:
+        pass
 
 
 # ── Portfolio value (for PDT check) ───────────────────────────────────────────
@@ -767,20 +854,41 @@ def main():
     if not PAPER_MODE:
         _ensure_login()
 
-    _last_login_check = time.time()
-    _LOGIN_RECHECK_S  = 1800  # re-verify session every 30 min to catch token expiry
+    _last_login_check  = time.time()
+    _LOGIN_RECHECK_S   = 1800   # verify session every 30 min
+    _auth_retry_count  = 0
+    _AUTH_BACKOFF      = [60, 120, 300, 600, 1800]  # escalating retry delays on repeated failure
 
     while True:
         try:
             _reset_daily_if_new_day()
 
-            # Periodic session health-check — re-login if token may have expired
+            # Proactive session health-check every 30 min
             if not PAPER_MODE and time.time() - _last_login_check > _LOGIN_RECHECK_S:
-                _invalidate_login()   # sets global _rh_logged_in = False
-                _ensure_login()
+                _invalidate_login()
+                ok = _ensure_login()
                 _last_login_check = time.time()
+                if ok:
+                    _auth_retry_count = 0
+                else:
+                    delay = _AUTH_BACKOFF[min(_auth_retry_count, len(_AUTH_BACKOFF) - 1)]
+                    _auth_retry_count += 1
+                    logger.error(f"[AUTH] Re-auth failed (attempt {_auth_retry_count}) — backing off {delay}s")
+                    time.sleep(delay)
+                    continue
 
-            rh_status = "PAPER" if PAPER_MODE else ("OK" if _rh_logged_in else "pending-login")
+            # If we lost auth mid-cycle, recover before scanning
+            if not PAPER_MODE and not _rh_logged_in:
+                ok = _ensure_login()
+                if not ok:
+                    delay = _AUTH_BACKOFF[min(_auth_retry_count, len(_AUTH_BACKOFF) - 1)]
+                    _auth_retry_count += 1
+                    logger.error(f"[AUTH] Cannot authenticate (attempt {_auth_retry_count}) — skipping cycle, retry in {delay}s")
+                    time.sleep(delay)
+                    continue
+                _auth_retry_count = 0
+
+            rh_status = "PAPER" if PAPER_MODE else "OK"
             if not _market_open():
                 from datetime import datetime as _dt
                 now_et = _dt.now(_ET)
