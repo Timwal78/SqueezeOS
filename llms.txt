@@ -1,5 +1,6 @@
 # SqueezeOS MCP Server
-> Institutional-grade AI trading intelligence platform. 35 MCP tools. Pay-per-call premium data via RLUSD on the XRP Ledger. No API keys, no subscriptions.
+> Institutional-grade AI trading intelligence platform. Pay-per-call premium data via RLUSD on the XRP Ledger. No API keys, no subscriptions.
+> **v3.1 — New:** FTD multi-layer settlement echo bridge (T+13 + T+35 cycle windows → IAM confidence boost), 15m intraday Tactical Matrix compression detector, avg-down engine IAM upgrade.
 
 ## Connect
 - MCP Endpoint: https://squeezeos-api.onrender.com/mcp
@@ -74,6 +75,11 @@ Each sale grants +2 Agent Credit Bureau score to the seller.
 ## Key Headers
 - X-Payment-Token: <jwt> — for paid tool calls
 - X-Agent-Wallet: 0x... or rXRP... — for wallet-gated features and loyalty tracking
+
+## Engine Upgrades — Intraday Intelligence & Settlement Echo (v3.1)
+- **FTD Multi-Layer Settlement Echo Bridge** — T+13 and T+35 calendar cycle windows computed from the latest SEC FTD settlement date. When price is above the structural anchor and either echo window is active, the IAM Inevitable Action Model receives a structural confidence boost on ADD signals. Echo context is surfaced in `iam_truth` and `council_verdict` responses (`in_settlement_echo`, `echo_source` fields).
+- **15m Intraday Compression Detector** — Tactical Matrix five-EMA state computed in Python against live 15m bars from Tradier. Detects micro-coil compression (EMA cluster convergence below configurable spread threshold), bull stack, bear stack, and partial alignment. Operates as an internal IAM gate — when the coil gate env var is enabled, ADD signals require 15m coil confirmation before routing to the execution layer.
+- **Avg-Down Engine IAM Upgrade** — The accumulation engine now pulls FTD settlement echo context on every ENTER/ADD evaluation above anchor. Settlement echo confirmation + price above anchor = highest-conviction tier for ADD signal routing. Zero hardcoded values — all cycle windows, confidence weights, and coil thresholds are env-var-driven.
 
 ## Built by ScriptMasterLabs (SDVOSB)
 Contact: ScriptMasterLabs@gmail.com

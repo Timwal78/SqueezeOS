@@ -20,7 +20,7 @@
       "id": "squeezeos",
       "name": "SqueezeOS — Institutional AI Market Intelligence",
       "tagline": "Multi-engine AI trading signals for autonomous agents. Pay per call. No API keys.",
-      "description": "Squeeze scanner, institutional options flow, IWM 0DTE analysis, AI council verdicts, TRIPLE_LOCK_VERDICT premium tier (rarest signal — all three proprietary engines aligned), SML Sovereign Signal Suite (741 Macro Highway / 365 Anchor / Triple Lock / Full Stack — labels only, no raw values), Decision Notary bridge (Xahau URIToken minting for EU AI Act audit trails), signal futures prediction market, regulatory event oracle (SEC 8-K, FDA, USPTO), FTD Data Oracle (SEC Reg SHO Fails-To-Deliver + Threshold List + ETF basket decomposition), bureau-discounted Stigmergy Dream Pools, and Agent Credit Bureau. 51 MCP tools. All premium calls gated by x402 RLUSD. Free demo, preview, notary info/quote, FTD info, and SSE stream always available.",
+      "description": "Squeeze scanner, institutional options flow, IWM 0DTE analysis, AI council verdicts, TRIPLE_LOCK_VERDICT premium tier (rarest signal — all three proprietary engines aligned), SML Sovereign Signal Suite (741 Macro Highway / 365 Anchor / Triple Lock / Full Stack — labels only, no raw values), Decision Notary bridge (Xahau URIToken minting for EU AI Act audit trails), signal futures prediction market, regulatory event oracle (SEC 8-K, FDA, USPTO), FTD Data Oracle (SEC Reg SHO Fails-To-Deliver + Threshold List + ETF basket decomposition + multi-layer settlement echo bridge: T+13 and T+35 cycle windows wired into IAM confidence), 15m intraday Tactical Matrix compression detector (micro-coil EMA convergence detection, configurable coil gate for avg-down ADD signals), bureau-discounted Stigmergy Dream Pools, and Agent Credit Bureau. MCP tools. All premium calls gated by x402 RLUSD. Free demo, preview, notary info/quote, FTD info, and SSE stream always available.",
       "category": ["finance", "trading", "market-intelligence", "agent-economy"],
       "status": "live",
       "url": "https://squeezeos-api.onrender.com",
@@ -41,7 +41,7 @@
         { "endpoint": "/api/iwm",     "method": "GET",  "cost": "0.03", "currency": "RLUSD", "description": "IWM 0DTE contract scorer — delta, gamma, parity watch" },
         { "endpoint": "/api/marketplace/read", "method": "POST", "cost": "0.02", "currency": "RLUSD", "description": "Full signal thesis from peer Signal Marketplace" },
         { "endpoint": "/api/oracle/latest/{feed}", "method": "GET", "cost": "0.02", "currency": "RLUSD", "description": "Real-time regulatory event feed (SEC 8-K, FDA, USPTO)" },
-        { "endpoint": "/api/ftd/cycle/{symbol}", "method": "GET", "cost": "0.05", "currency": "RLUSD", "description": "ShortSqueeze Swarm full detail — settlement-cycle bundle (T+21/T+35 markers, FTD spike stats, Reg SHO 204 close-out marker)" }
+        { "endpoint": "/api/ftd/cycle/{symbol}", "method": "GET", "cost": "0.05", "currency": "RLUSD", "description": "ShortSqueeze Swarm full detail — settlement-cycle bundle (T+13 early echo marker, T+21 marker, T+35 close-out deadline, days-to-each, in_settlement_echo flag, echo_source, FTD spike stats, Reg SHO 204 close-out marker). v3.1: T+13 and settlement echo context wired directly into IAM Inevitable Action Model confidence." }
       ],
       "free_endpoints": [
         "/api/demo/council", "/api/preview/{symbol}", "/api/history/{symbol}",
