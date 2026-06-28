@@ -36,8 +36,6 @@ import threading
 
 from flask import Blueprint, request, jsonify, redirect
 from core.legacy import clean_data
-from proof402_integration import require_payment
-
 import compliance_swarm_engine as swarm
 
 logger = logging.getLogger("ComplianceBP")

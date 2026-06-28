@@ -1,5 +1,5 @@
 # SqueezeOS MCP Server
-> Institutional-grade AI trading intelligence + Cognitive Credit Swarms trust network. 41 MCP tools. Pay-per-call via RLUSD on the XRP Ledger. No API keys, no subscriptions.
+> Institutional-grade AI trading intelligence + Cognitive Credit Swarms trust network. 47 MCP tools. Pay-per-call via RLUSD on the XRP Ledger. No API keys, no subscriptions.
 
 ## Connect
 - MCP Endpoint: https://squeezeos-api.onrender.com/mcp

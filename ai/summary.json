@@ -10,15 +10,15 @@
   },
   "product": {
     "name": "SqueezeOS",
-    "tagline": "Institutional-grade AI trading intelligence — 33 MCP tools, pay-per-signal in RLUSD",
+    "tagline": "Institutional-grade AI trading intelligence — 47 MCP tools, pay-per-signal in RLUSD",
     "category": "AI Trading Intelligence / MCP Server",
     "url": "https://www.scriptmasterlabs.com",
     "api_base": "https://squeezeos-api.onrender.com",
     "mcp_endpoint": "https://squeezeos-api.onrender.com/mcp",
     "protocol": "JSON-RPC 2.0 (MCP 2024-11-05)",
     "status": "production",
-    "tool_count": 33,
-    "description": "SqueezeOS is an institutional-grade AI trading intelligence platform exposed as a 33-tool MCP server. AI agents call tools directly via JSON-RPC 2.0. Premium endpoints are pay-per-call — agents pay RLUSD on the XRP Ledger via 402Proof and receive a 1-hour signed JWT. No API keys, no subscriptions.",
+    "tool_count": 47,
+    "description": "SqueezeOS is an institutional-grade AI trading intelligence platform exposed as a 47-tool MCP server. AI agents call tools directly via JSON-RPC 2.0. Premium endpoints are pay-per-call — agents pay RLUSD on the XRP Ledger via 402Proof and receive a 1-hour signed JWT. No API keys, no subscriptions.",
     "engines": [
       {"name": "OracleEngine", "description": "Aggregates all signal engines into a single directive: BUY (IGNITION), BUY, HOLD, SELL, or SHIELD.", "endpoint": "/api/oracle"},
       {"name": "RecurrentDepthTransformer (RDT / OpenMythos)", "description": "Recursive what-if multi-symbol ranking engine using fractal anchors (depth 0-3).", "endpoint": "/api/graph/rdt"},

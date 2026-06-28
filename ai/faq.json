@@ -6,7 +6,7 @@
   "faqs": [
     {
       "question": "What is SqueezeOS?",
-      "answer": "SqueezeOS is an institutional-grade AI trading intelligence platform exposed as a 33-tool MCP server. AI agents connect via JSON-RPC 2.0 and call tools for squeeze signals, options flow, council verdicts, and market regime analysis. Premium tools are pay-per-call in RLUSD on the XRP Ledger via 402Proof — no API keys, no subscriptions required.",
+      "answer": "SqueezeOS is an institutional-grade AI trading intelligence platform exposed as a 47-tool MCP server. AI agents connect via JSON-RPC 2.0 and call tools for squeeze signals, options flow, council verdicts, and market regime analysis. Premium tools are pay-per-call in RLUSD on the XRP Ledger via 402Proof — no API keys, no subscriptions required.",
       "category": "product",
       "url": "https://squeezeos-api.onrender.com/api/status"
     },
@@ -30,13 +30,13 @@
     },
     {
       "question": "How do I connect an MCP client to SqueezeOS?",
-      "answer": "Add this to your MCP client config: { \"mcpServers\": { \"squeezeos\": { \"url\": \"https://squeezeos-api.onrender.com/mcp\", \"transport\": \"streamable-http\" } } }. The server implements JSON-RPC 2.0 with protocol version 2024-11-05. Call tools/list to see all 33 available tools.",
+      "answer": "Add this to your MCP client config: { \"mcpServers\": { \"squeezeos\": { \"url\": \"https://squeezeos-api.onrender.com/mcp\", \"transport\": \"streamable-http\" } } }. The server implements JSON-RPC 2.0 with protocol version 2024-11-05. Call tools/list to see all 47 available tools.",
       "category": "technical",
       "url": "https://squeezeos-api.onrender.com/.well-known/mcp.json"
     },
     {
       "question": "What signal engines power SqueezeOS?",
-      "answer": "Four core engines: OracleEngine aggregates all signals into a single directive (BUY/IGNITION, BUY, HOLD, SELL, SHIELD). RecurrentDepthTransformer (RDT/OpenMythos) ranks multi-symbol signals recursively via fractal anchors. MarketGraph (GraphiFY) is a Neo4j knowledge graph with ticker nodes and Greek/dark-pool edges. ScriptMaster/Beastmode handles SEO recon protocols. All feed into the 33-tool MCP interface.",
+      "answer": "Four core engines: OracleEngine aggregates all signals into a single directive (BUY/IGNITION, BUY, HOLD, SELL, SHIELD). RecurrentDepthTransformer (RDT/OpenMythos) ranks multi-symbol signals recursively via fractal anchors. MarketGraph (GraphiFY) is a Neo4j knowledge graph with ticker nodes and Greek/dark-pool edges. ScriptMaster/Beastmode handles SEO recon protocols. All feed into the 47-tool MCP interface.",
       "category": "features",
       "url": "https://squeezeos-api.onrender.com/api/oracle"
     },
@@ -66,7 +66,7 @@
     },
     {
       "question": "Is SqueezeOS an MCP server?",
-      "answer": "Yes. SqueezeOS exposes a 33-tool MCP server at https://squeezeos-api.onrender.com/mcp implementing JSON-RPC 2.0 (protocol version 2024-11-05). Supported methods: initialize, tools/list, tools/call, ping, notifications/*. The tool manifest is at /.well-known/mcp.json.",
+      "answer": "Yes. SqueezeOS exposes a 47-tool MCP server at https://squeezeos-api.onrender.com/mcp implementing JSON-RPC 2.0 (protocol version 2024-11-05). Supported methods: initialize, tools/list, tools/call, ping, notifications/*. The tool manifest is at /.well-known/mcp.json.",
       "category": "technical",
       "url": "https://squeezeos-api.onrender.com/.well-known/mcp.json"
     },
