@@ -40,6 +40,9 @@ _PAYMENT_PRICES = {
     '/api/signals/full':       0.10,
     '/api/cascade/signal':     0.25,
     '/api/ccs/validate':       0.01,
+    '/api/compliance/anomaly': 5.00,
+    '/api/compliance/audit':   5.00,
+    '/api/compliance/regulator/query': 2.50,
 }
 
 def _fire_payment_discord(wallet: str, path: str, tier: int) -> None:
