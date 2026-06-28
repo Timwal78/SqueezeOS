@@ -46,15 +46,16 @@ def _env_int(key: str, default: int) -> int:
     except: return default
 
 def _load_layers() -> List[int]:
-    raw = os.environ.get("AVG_DOWN_EMA_CSV", "55,89,144,233,365")
-    try:
-        periods = [int(x.strip()) for x in raw.split(",") if x.strip()]
-        if len(periods) != 5:
-            raise ValueError("AVG_DOWN_EMA_CSV must have exactly 5 values")
-        return sorted(periods)
-    except Exception as e:
-        logger.error(f"[AVG-DOWN] Bad AVG_DOWN_EMA_CSV: {e}. Using defaults.")
-        return [55, 89, 144, 233, 365]
+    raw = os.environ.get("AVG_DOWN_EMA_CSV", "").strip()
+    if not raw:
+        raise EnvironmentError(
+            "[AVG-DOWN] AVG_DOWN_EMA_CSV env var is not set — "
+            "configure it with the 5 ribbon EMA periods before starting the engine."
+        )
+    periods = [int(x.strip()) for x in raw.split(",") if x.strip()]
+    if len(periods) != 5:
+        raise ValueError(f"[AVG-DOWN] AVG_DOWN_EMA_CSV must have exactly 5 values, got {len(periods)}: {raw}")
+    return sorted(periods)
 
 SCAN_INTERVAL_S   = _env_int("AVG_DOWN_SCAN_INTERVAL_S", 300)    # 5 min
 MAX_LEVELS        = _env_int("AVG_DOWN_MAX_LEVELS", 3)
@@ -84,9 +85,13 @@ def _ema(values: List[float], period: int) -> List[float]:
 def _compute_layers(closes: List[float]) -> Optional[Dict[str, float]]:
     """
     Returns {L1..L5: value} for the latest bar.
-    Returns None if fewer than L5-period bars available.
+    Returns None if env var not configured or insufficient bars.
     """
-    layers = _load_layers()
+    try:
+        layers = _load_layers()
+    except (EnvironmentError, ValueError) as e:
+        logger.error(str(e))
+        return None
     if len(closes) < layers[-1]:
         return None
     result = {}

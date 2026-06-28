@@ -36,15 +36,16 @@ logger = logging.getLogger("SML-IntradayCoil")
 # ── Config ─────────────────────────────────────────────────────────────────────
 
 def _load_tactical_periods() -> List[int]:
-    raw = os.environ.get("TACTICAL_EMA_CSV", "6,33,66,99,123")
-    try:
-        periods = [int(x.strip()) for x in raw.split(",") if x.strip()]
-        if len(periods) != 5:
-            raise ValueError("TACTICAL_EMA_CSV must have exactly 5 values")
-        return sorted(periods)
-    except Exception as e:
-        logger.error(f"[COIL] Bad TACTICAL_EMA_CSV: {e} — using defaults")
-        return [6, 33, 66, 99, 123]
+    raw = os.environ.get("TACTICAL_EMA_CSV", "").strip()
+    if not raw:
+        raise EnvironmentError(
+            "[COIL] TACTICAL_EMA_CSV env var is not set — "
+            "set it to the 5 Tactical Matrix periods (comma-separated) before using this module."
+        )
+    periods = [int(x.strip()) for x in raw.split(",") if x.strip()]
+    if len(periods) != 5:
+        raise ValueError(f"[COIL] TACTICAL_EMA_CSV must have exactly 5 values, got {len(periods)}: {raw}")
+    return sorted(periods)
 
 def _coil_threshold() -> float:
     try:
@@ -155,9 +156,17 @@ def detect_compression(symbol: str, days_back: int = 5) -> dict:
       error        — error message if fetch or compute failed (signal="UNAVAILABLE")
     """
     symbol = symbol.upper().strip()
+
+    try:
+        periods = _load_tactical_periods()
+    except (EnvironmentError, ValueError) as e:
+        return {
+            "symbol": symbol, "is_coil": False, "spread_pct": None,
+            "signal": "UNAVAILABLE", "error": str(e), "bars_used": 0,
+        }
+
     closes = _fetch_15m_closes(symbol, days_back=days_back)
 
-    periods = _load_tactical_periods()
     if not closes:
         return {
             "symbol": symbol, "is_coil": False, "spread_pct": None,
