@@ -53,8 +53,8 @@ def _load_layers() -> List[int]:
             raise ValueError("AVG_DOWN_EMA_CSV must have exactly 5 values")
         return sorted(periods)
     except Exception as e:
-        logger.error(f"[AVG-DOWN] Bad AVG_DOWN_EMA_CSV: {e}. Using defaults.")
-        return [55, 89, 144, 233, 365]
+        logger.error(f"[AVG-DOWN] Bad AVG_DOWN_EMA_CSV: {e} — engine cannot start")
+        raise
 
 SCAN_INTERVAL_S   = _env_int("AVG_DOWN_SCAN_INTERVAL_S", 300)    # 5 min
 MAX_LEVELS        = _env_int("AVG_DOWN_MAX_LEVELS", 3)

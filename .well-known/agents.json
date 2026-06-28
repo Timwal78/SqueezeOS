@@ -144,14 +144,25 @@
     },
     {
       "id": "ftd_data_oracle",
-      "name": "FTD Data Oracle — SEC Reg SHO Fails-To-Deliver Feed",
+      "name": "FTD Data Oracle — SEC Reg SHO Fails-To-Deliver Feed + Settlement Echo Bridge",
       "endpoint": "/api/ftd",
       "method": "GET",
       "cost": "0 — 0.05",
       "currency": "RLUSD",
       "free": false,
-      "description": "Machine-readable SEC Fails-To-Deliver and Reg SHO Threshold Securities List data per call. Pure descriptive feed — surfaces public regulatory data normalized into JSON, not trade signals. Endpoints: /api/ftd/info (free discovery), /threshold-list and /series/{symbol} (0.02 RLUSD), /ratio/{symbol} (0.03), /etf-basket/{etf} for XRT/IWM/IJR/KRE and /cycle/{symbol} with T+21/T+35 calendar markers (0.05). All responses include explicit notes about Reg SHO 204 close-out mechanics and bona-fide market-maker exemptions. Refresh: FTD 24h, threshold list 6h.",
-      "signals": ["AWAITING_DATA", "ON_THRESHOLD_LIST", "T21_MARKER", "T35_MARKER", "RANK_PERCENTILE"]
+      "description": "Machine-readable SEC Fails-To-Deliver and Reg SHO Threshold Securities List data per call. Pure descriptive feed — surfaces public regulatory data normalized into JSON, not trade signals. Endpoints: /api/ftd/info (free discovery), /threshold-list and /series/{symbol} (0.02 RLUSD), /ratio/{symbol} (0.03), /etf-basket/{etf} for XRT/IWM/IJR/KRE and /cycle/{symbol} with full settlement-cycle bundle (0.05). v3.1 upgrade: /cycle now returns T+13 calendar marker (early settlement pressure window), T+21 marker, T+35 close-out deadline, days-to-each from today, and in_settlement_echo flag (true when within the echo window of T+13 or T+35). The echo flag is wired directly into the IAM Inevitable Action Model — active echo context boosts ADD signal confidence when price is above anchor. All responses include explicit notes about Reg SHO 204 close-out mechanics and bona-fide market-maker exemptions. Refresh: FTD 24h, threshold list 6h.",
+      "signals": ["AWAITING_DATA", "ON_THRESHOLD_LIST", "T13_MARKER", "T21_MARKER", "T35_MARKER", "SETTLEMENT_ECHO", "RANK_PERCENTILE"]
+    },
+    {
+      "id": "intraday_compression",
+      "name": "15m Tactical Matrix Compression Detector",
+      "endpoint": "internal — IAM gate + iam_truth response field",
+      "method": "internal",
+      "cost": "0",
+      "currency": "RLUSD",
+      "free": true,
+      "description": "Python port of the Tactical Matrix 5-EMA micro-coil detection logic. Polls live 15m bars from Tradier, computes all five EMA levels, and detects compression when the spread between the fastest and slowest EMA falls below the configured coil threshold. Returns full stack alignment state: bull_stack, bear_stack, partial_bull, partial_bear, coil, or neutral. When the coil gate is enabled via env var, the avg-down engine will only route ADD signals when 15m coil compression is confirmed — preventing entries during trending phases with wide EMA spread. Gate fails open on any data error so it never blocks signals unexpectedly. State surfaced in iam_truth responses.",
+      "signals": ["COIL", "BULL_STACK", "BEAR_STACK", "PARTIAL_BULL", "PARTIAL_BEAR", "NEUTRAL", "UNAVAILABLE"]
     }
   ],
   "sovereign_autopilot": {

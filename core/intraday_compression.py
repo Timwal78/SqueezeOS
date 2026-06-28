@@ -43,8 +43,8 @@ def _load_tactical_periods() -> List[int]:
             raise ValueError("TACTICAL_EMA_CSV must have exactly 5 values")
         return sorted(periods)
     except Exception as e:
-        logger.error(f"[COIL] Bad TACTICAL_EMA_CSV: {e} — using defaults")
-        return [6, 33, 66, 99, 123]
+        logger.error(f"[COIL] Bad TACTICAL_EMA_CSV: {e}")
+        raise
 
 def _coil_threshold() -> float:
     try:
@@ -155,9 +155,10 @@ def detect_compression(symbol: str, days_back: int = 5) -> dict:
       error        — error message if fetch or compute failed (signal="UNAVAILABLE")
     """
     symbol = symbol.upper().strip()
-    closes = _fetch_15m_closes(symbol, days_back=days_back)
 
     periods = _load_tactical_periods()
+    closes = _fetch_15m_closes(symbol, days_back=days_back)
+
     if not closes:
         return {
             "symbol": symbol, "is_coil": False, "spread_pct": None,
