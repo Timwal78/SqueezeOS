@@ -54,6 +54,7 @@ from core.api.avg_down_bp import avg_down_bp
 from core.api.cascade_bp import cascade_bp
 from core.api.slack_bp import slack_bp
 from core.api.ccs_bp import ccs_bp
+from core.api.compliance_bp import compliance_bp
 import core.signal_history as signal_history
 from core.legacy import start_whale_stalker, init_services, get_service, clean_data
 from core.market_graph import get_graph
@@ -164,6 +165,7 @@ def create_app():
     app.register_blueprint(signal_products_bp, url_prefix='/api/signals')
     app.register_blueprint(slack_bp,           url_prefix='/api/slack')
     app.register_blueprint(ccs_bp,             url_prefix='/api/ccs')
+    app.register_blueprint(compliance_bp,      url_prefix='/api/compliance')
 
     # Stellar Forge growth engine — feature-flagged, dormant unless enabled.
     # Registers the affiliate/loyalty/payout surface only when explicitly turned
