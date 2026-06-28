@@ -606,22 +606,47 @@ def cycle_summary_for(symbol: str) -> dict:
         out["reg_sho_204_close_out_marker"] = None
         notes.append("[REG_SHO: symbol not currently on threshold securities list]")
 
-    # T+35 calendar markers — pure date arithmetic from latest FTD settlement
-    # date. Per Reg SHO 204, broker-dealers have extended close-out windows
-    # in certain circumstances. This is a descriptive marker only.
-    t35_target = latest.settlement_date + timedelta(days=35)
+    # Settlement cycle calendar markers — pure date arithmetic from latest FTD
+    # settlement date. These are descriptive markers only — not trade signals.
+    # T+13: standard close-out deadline for most broker-dealers under Reg SHO
+    # T+21: extended window for certain participant exemptions
+    # T+35: maximum extended close-out window (pre-borrow / bona-fide MM)
+    t13_target = latest.settlement_date + timedelta(days=13)
     t21_target = latest.settlement_date + timedelta(days=21)
+    t35_target = latest.settlement_date + timedelta(days=35)
     today = date.today()
+
+    days_to_t13 = (t13_target - today).days
+    days_to_t21 = (t21_target - today).days
+    days_to_t35 = (t35_target - today).days
+
+    out["t13_calendar_marker"] = t13_target.isoformat()
     out["t21_calendar_marker"] = t21_target.isoformat()
     out["t35_calendar_marker"] = t35_target.isoformat()
-    out["days_to_t21_from_today"] = (t21_target - today).days
-    out["days_to_t35_from_today"] = (t35_target - today).days
+    out["days_to_t13_from_today"] = days_to_t13
+    out["days_to_t21_from_today"] = days_to_t21
+    out["days_to_t35_from_today"] = days_to_t35
+
+    # Echo window flag — price is near a mandatory settlement deadline.
+    # True when today is within ±3 calendar days of T+13 or T+35 target.
+    # This is a structural proximity marker, not a directional prediction.
+    _ECHO_WINDOW = 3
+    in_t13_echo = abs(days_to_t13) <= _ECHO_WINDOW
+    in_t35_echo = abs(days_to_t35) <= _ECHO_WINDOW
+    out["in_settlement_echo"] = in_t13_echo or in_t35_echo
+    out["echo_source"] = (
+        "T+13" if in_t13_echo and not in_t35_echo else
+        "T+35" if in_t35_echo and not in_t13_echo else
+        "T+13+T+35" if (in_t13_echo and in_t35_echo) else
+        None
+    )
 
     notes.append(
-        "T+21 and T+35 are descriptive calendar markers anchored to the LATEST "
+        "T+13, T+21, and T+35 are descriptive calendar markers anchored to the LATEST "
         "FTD settlement date. They are not predictions of forced buying. Reg SHO "
         "204 provides bona-fide market-maker exemptions and rolling close-out "
-        "mechanics that can extend or short-circuit these windows."
+        "mechanics that can extend or short-circuit these windows. "
+        "in_settlement_echo is True when today is within ±3 days of T+13 or T+35."
     )
 
     out["notes"] = notes

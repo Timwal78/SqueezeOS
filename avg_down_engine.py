@@ -119,6 +119,24 @@ def _ribbon_state(lv: Dict[str, float], close: float) -> dict:
 
 # ─── SIGNAL GENERATION ─────────────────────────────────────────────────────────
 
+def _ftd_context(symbol: str) -> dict:
+    """
+    Pull FTD settlement echo context for this symbol.
+    Fails open — any exception returns empty dict (never blocks evaluation).
+    """
+    try:
+        from core.ftd_data import cycle_summary_for
+        cyc = cycle_summary_for(symbol)
+        return {
+            "ftd_echo":    cyc.get("in_settlement_echo", False),
+            "echo_source": cyc.get("echo_source"),
+            "days_to_t13": cyc.get("days_to_t13_from_today"),
+            "days_to_t35": cyc.get("days_to_t35_from_today"),
+        }
+    except Exception:
+        return {}
+
+
 def _evaluate(symbol: str, closes: List[float], now_iso: str) -> Optional[dict]:
     """
     Evaluate one symbol. Returns a signal dict if action ≠ HOLD, else None.
@@ -136,6 +154,9 @@ def _evaluate(symbol: str, closes: List[float], now_iso: str) -> Optional[dict]:
         avg_price = float(pos.get("avg_price", 0.0))
         level     = int(pos.get("level", 0))
 
+    # FTD echo context — only queried when above anchor (deploy zone)
+    ftd_ctx = _ftd_context(symbol) if ribbon["above_anchor"] else {}
+
     # ── Exit / stop (position open) ──────────────────────────────────────
     if in_pos:
         pnl = (close - avg_price) / avg_price if avg_price > 0 else 0.0
@@ -148,27 +169,27 @@ def _evaluate(symbol: str, closes: List[float], now_iso: str) -> Optional[dict]:
         # Exit: recovered above avg or full ribbon re-aligned above cost
         if pnl >= EXIT_GAIN or (pnl > 0.005 and ribbon["full_bull"] and ribbon["above_anchor"]):
             _close_position(symbol, close, "EXIT", pnl, now_iso)
-            return _make_signal(symbol, "EXIT", close, level, lv, ribbon, pnl, now_iso)
+            return _make_signal(symbol, "EXIT", close, level, lv, ribbon, pnl, now_iso, ftd_ctx)
 
         # Add-to-position trigger
         threshold = -ADD_PCT * (level + 1)
         if (pnl < threshold and level < MAX_LEVELS
                 and ribbon["loose_bull"] and ribbon["above_anchor"]):
             _add_to_position(symbol, close, level + 1)
-            return _make_signal(symbol, "ADD", close, level + 1, lv, ribbon, pnl, now_iso)
+            return _make_signal(symbol, "ADD", close, level + 1, lv, ribbon, pnl, now_iso, ftd_ctx)
 
         return None  # HOLD
 
     # ── Entry (no position) ──────────────────────────────────────────────
     if ribbon["full_bull"] and ribbon["above_anchor"] and close > lv["L1"]:
         _open_position(symbol, close, now_iso)
-        return _make_signal(symbol, "ENTER", close, 0, lv, ribbon, 0.0, now_iso)
+        return _make_signal(symbol, "ENTER", close, 0, lv, ribbon, 0.0, now_iso, ftd_ctx)
 
     return None
 
 
-def _make_signal(symbol, action, price, level, lv, ribbon, pnl, ts) -> dict:
-    return {
+def _make_signal(symbol, action, price, level, lv, ribbon, pnl, ts, ftd_ctx=None) -> dict:
+    sig = {
         "symbol":      symbol,
         "action":      action,
         "price":       round(price, 4),
@@ -183,6 +204,12 @@ def _make_signal(symbol, action, price, level, lv, ribbon, pnl, ts) -> dict:
         "L5":          round(lv["L5"], 4),
         "ts":          ts,
     }
+    if ftd_ctx:
+        sig["ftd_echo"]    = ftd_ctx.get("ftd_echo", False)
+        sig["echo_source"] = ftd_ctx.get("echo_source")
+        sig["days_to_t13"] = ftd_ctx.get("days_to_t13")
+        sig["days_to_t35"] = ftd_ctx.get("days_to_t35")
+    return sig
 
 
 # ─── POSITION MANAGEMENT ──────────────────────────────────────────────────────
@@ -305,6 +332,22 @@ def _get_symbols() -> List[str]:
         return []
 
 
+def _intraday_coil_check(symbol: str) -> bool:
+    """
+    Returns True if the 15m Tactical Matrix is in micro-coil compression.
+    Fails open — any error returns False (never blocks a signal).
+    Only checked when ADD_REQUIRE_15M_COIL env var is 'true'.
+    """
+    if os.environ.get("ADD_REQUIRE_15M_COIL", "false").lower() != "true":
+        return True   # gate disabled — always allow
+    try:
+        from core.intraday_compression import detect_compression
+        result = detect_compression(symbol)
+        return result.get("is_coil", False)
+    except Exception:
+        return True   # fail open
+
+
 def _scan_once():
     import tradier_api as ta
     if not ta.is_available():
@@ -326,6 +369,14 @@ def _scan_once():
             continue
 
         if sig:
+            # Optional 15m coil gate on ADD signals — set ADD_REQUIRE_15M_COIL=true to enable
+            if sig["action"] == "ADD" and not _intraday_coil_check(sym):
+                logger.info(
+                    f"[AVG-DOWN] {sym} ADD deferred — 15m Tactical Matrix not in coil "
+                    f"(ADD_REQUIRE_15M_COIL=true active)"
+                )
+                continue
+
             with _state_lock:
                 _signals.appendleft(sig)
             _fire_discord(sig)
@@ -345,10 +396,20 @@ def _route_iam(symbol: str, sig: dict):
     """Fire IAM resolution for ENTER/ADD so the full safety stack is checked."""
     try:
         from iam_executor import execute_from_resolution
+
+        ftd_echo   = sig.get("ftd_echo", False)
+        echo_src   = sig.get("echo_source", "")
+        ftd_suffix = f" | FTD ECHO {echo_src}" if ftd_echo else ""
+
+        # FTD settlement echo in the deploy zone raises conviction +10
+        base_conf  = 65.0 + sig["align_score"] * 5.0
+        confidence = min(95.0, base_conf + (10.0 if ftd_echo else 0.0))
+
         resolution = {
             "action":    "BUY",
             "rationale": (
-                f"[AVG-DOWN {sig['action']} L{sig['level']} align={sig['align_score']}/4] "
+                f"[AVG-DOWN {sig['action']} L{sig['level']} align={sig['align_score']}/4"
+                f"{ftd_suffix}] "
                 f"Pyramid layer {sig['level']} — full ribbon above anchor, "
                 f"EMA structure intact."
             ),
@@ -358,7 +419,7 @@ def _route_iam(symbol: str, sig: dict):
         execute_from_resolution(
             symbol, resolution,
             time_window="NEAR_TERM",
-            confidence=65.0 + sig["align_score"] * 5.0,
+            confidence=confidence,
             price=sig["price"],
         )
     except Exception as e:
