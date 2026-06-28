@@ -13,6 +13,37 @@ strategy("Apex Sonar: Fractal Swarm Siphon",
      commission_type=strategy.commission.percent,
      commission_value=0.01)
 
+// ── SML Licensed — Set 1 ──────────────────────────────────────────
+i_s1t = input.int(1, "Trigger", group="SML Licensed — Set 1", minval=1)
+i_s1b = input.int(1, "Base",    group="SML Licensed — Set 1", minval=1)
+i_s1v = input.int(1, "Valid",   group="SML Licensed — Set 1", minval=1)
+i_s1a = input.int(1, "Anchor",  group="SML Licensed — Set 1", minval=1)
+// ── SML Licensed — Set 2 ──────────────────────────────────────────
+i_s2t = input.int(1, "Trigger", group="SML Licensed — Set 2", minval=1)
+i_s2b = input.int(1, "Base",    group="SML Licensed — Set 2", minval=1)
+i_s2v = input.int(1, "Valid",   group="SML Licensed — Set 2", minval=1)
+i_s2a = input.int(1, "Anchor",  group="SML Licensed — Set 2", minval=1)
+// ── SML Licensed — Set 3 ──────────────────────────────────────────
+i_s3t = input.int(1, "Trigger", group="SML Licensed — Set 3", minval=1)
+i_s3b = input.int(1, "Base",    group="SML Licensed — Set 3", minval=1)
+i_s3v = input.int(1, "Valid",   group="SML Licensed — Set 3", minval=1)
+i_s3a = input.int(1, "Anchor",  group="SML Licensed — Set 3", minval=1)
+// ── SML Licensed — Set 7 ──────────────────────────────────────────
+i_s7t = input.int(1, "Trigger", group="SML Licensed — Set 7", minval=1)
+i_s7b = input.int(1, "Base",    group="SML Licensed — Set 7", minval=1)
+i_s7v = input.int(1, "Valid",   group="SML Licensed — Set 7", minval=1)
+i_s7a = input.int(1, "Anchor",  group="SML Licensed — Set 7", minval=1)
+// ── SML Licensed — Set 8 ──────────────────────────────────────────
+i_s8t = input.int(1, "Trigger", group="SML Licensed — Set 8", minval=1)
+i_s8b = input.int(1, "Base",    group="SML Licensed — Set 8", minval=1)
+i_s8v = input.int(1, "Valid",   group="SML Licensed — Set 8", minval=1)
+i_s8a = input.int(1, "Anchor",  group="SML Licensed — Set 8", minval=1)
+// ── SML Licensed — Set 9 ──────────────────────────────────────────
+i_s9t = input.int(1, "Trigger", group="SML Licensed — Set 9", minval=1)
+i_s9b = input.int(1, "Base",    group="SML Licensed — Set 9", minval=1)
+i_s9v = input.int(1, "Valid",   group="SML Licensed — Set 9", minval=1)
+i_s9a = input.int(1, "Anchor",  group="SML Licensed — Set 9", minval=1)
+
 // =========================================================================
 // 1. FRACTAL GRID ENGINE
 // =========================================================================
@@ -28,17 +59,17 @@ get_alignment(t_len, b_len, v_len, a_len) =>
     [bull, bear, t, a]
 
 // ── MICRO SCALPING ENGINE (Sets 1, 2, 3) ──────────────────────────
-[bull1, bear1, t1, a1] = get_alignment(1,  4,  8,  12)
-[bull2, bear2, t2, a2] = get_alignment(2,  8, 16,  24)
-[bull3, bear3, t3, a3] = get_alignment(3, 12, 24,  36)
+[bull1, bear1, t1, a1] = get_alignment(i_s1t, i_s1b, i_s1v, i_s1a)
+[bull2, bear2, t2, a2] = get_alignment(i_s2t, i_s2b, i_s2v, i_s2a)
+[bull3, bear3, t3, a3] = get_alignment(i_s3t, i_s3b, i_s3v, i_s3a)
 
 micro_bull = bull1 and bull2 and bull3
 micro_bear = bear1 and bear2 and bear3
 
 // ── MACRO ANCHOR ENGINE (Sets 7, 8, 9) ────────────────────────────
-[bull7, bear7, t7, a7] = get_alignment(7, 28, 56,  84)
-[bull8, bear8, t8, a8] = get_alignment(8, 32, 64,  96)
-[bull9, bear9, t9, a9] = get_alignment(9, 36, 72, 108)
+[bull7, bear7, t7, a7] = get_alignment(i_s7t, i_s7b, i_s7v, i_s7a)
+[bull8, bear8, t8, a8] = get_alignment(i_s8t, i_s8b, i_s8v, i_s8a)
+[bull9, bear9, t9, a9] = get_alignment(i_s9t, i_s9b, i_s9v, i_s9a)
 
 macro_bull = bull7 and bull8 and bull9
 macro_bear = bear7 and bear8 and bear9

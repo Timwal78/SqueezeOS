@@ -1,35 +1,55 @@
 // © ScriptMasterLabs — SML Base-4 Fractal Grid
-// ================================================================
-// Proprietary Harmonic Matrix Engine
-// ─────────────────────────────────
 // Discovery: Timothy Walton | ScriptMasterLabs
-//
-// MATHEMATICAL KEY:
-//   Any seed X generates a perfectly uniform 4-EMA harmonic stack:
-//   X  →  4X  →  8X  →  12X   (constant delta = 4X across all gaps)
-//
-// THE 9-SET MATRIX (X = 1 through 9):
-//   Set 1 (X=1):  1  · 4  · 8  · 12
-//   Set 2 (X=2):  2  · 8  · 16 · 24
-//   Set 3 (X=3):  3  · 12 · 24 · 36
-//   Set 4 (X=4):  4  · 16 · 32 · 48
-//   Set 5 (X=5):  5  · 20 · 40 · 60
-//   Set 6 (X=6):  6  · 24 · 48 · 72
-//   Set 7 (X=7):  7  · 28 · 56 · 84
-//   Set 8 (X=8):  8  · 32 · 64 · 96
-//   Set 9 (X=9):  9  · 36 · 72 · 108
-//
-// HARMONIC CONVERGENCE POINTS (where sets cross-pollinate):
-//   24 appears in Sets 2, 3, 6   → institutional deep-water level
-//   36 appears in Sets 3, 9      → macro anchor resonance
-//   48 appears in Sets 4, 6      → 8-day rhythm on 65-min chart
-//   72 appears in Sets 6, 9      → 12-day macro bedrock
-//
-// CONVERGENCE ALERT fires when 3+ sets are stacked within 0.5% of price
-// ================================================================
+// Proprietary Harmonic Matrix Engine
 //@version=5
 indicator("SML Base-4 Fractal Grid [ScriptMasterLabs]",
           shorttitle="SML·B4·Grid", overlay=true, max_lines_count=500)
+
+// ── Sequence Inputs (SML Licensed) ───────────────────────────────
+i_s1t = input.int(1, "S1 Trigger", group="SML Licensed — Set 1", minval=1)
+i_s1b = input.int(1, "S1 Base",    group="SML Licensed — Set 1", minval=1)
+i_s1v = input.int(1, "S1 Valid",   group="SML Licensed — Set 1", minval=1)
+i_s1a = input.int(1, "S1 Anchor",  group="SML Licensed — Set 1", minval=1)
+
+i_s2t = input.int(1, "S2 Trigger", group="SML Licensed — Set 2", minval=1)
+i_s2b = input.int(1, "S2 Base",    group="SML Licensed — Set 2", minval=1)
+i_s2v = input.int(1, "S2 Valid",   group="SML Licensed — Set 2", minval=1)
+i_s2a = input.int(1, "S2 Anchor",  group="SML Licensed — Set 2", minval=1)
+
+i_s3t = input.int(1, "S3 Trigger", group="SML Licensed — Set 3", minval=1)
+i_s3b = input.int(1, "S3 Base",    group="SML Licensed — Set 3", minval=1)
+i_s3v = input.int(1, "S3 Valid",   group="SML Licensed — Set 3", minval=1)
+i_s3a = input.int(1, "S3 Anchor",  group="SML Licensed — Set 3", minval=1)
+
+i_s4t = input.int(1, "S4 Trigger", group="SML Licensed — Set 4", minval=1)
+i_s4b = input.int(1, "S4 Base",    group="SML Licensed — Set 4", minval=1)
+i_s4v = input.int(1, "S4 Valid",   group="SML Licensed — Set 4", minval=1)
+i_s4a = input.int(1, "S4 Anchor",  group="SML Licensed — Set 4", minval=1)
+
+i_s5t = input.int(1, "S5 Trigger", group="SML Licensed — Set 5", minval=1)
+i_s5b = input.int(1, "S5 Base",    group="SML Licensed — Set 5", minval=1)
+i_s5v = input.int(1, "S5 Valid",   group="SML Licensed — Set 5", minval=1)
+i_s5a = input.int(1, "S5 Anchor",  group="SML Licensed — Set 5", minval=1)
+
+i_s6t = input.int(1, "S6 Trigger", group="SML Licensed — Set 6", minval=1)
+i_s6b = input.int(1, "S6 Base",    group="SML Licensed — Set 6", minval=1)
+i_s6v = input.int(1, "S6 Valid",   group="SML Licensed — Set 6", minval=1)
+i_s6a = input.int(1, "S6 Anchor",  group="SML Licensed — Set 6", minval=1)
+
+i_s7t = input.int(1, "S7 Trigger", group="SML Licensed — Set 7", minval=1)
+i_s7b = input.int(1, "S7 Base",    group="SML Licensed — Set 7", minval=1)
+i_s7v = input.int(1, "S7 Valid",   group="SML Licensed — Set 7", minval=1)
+i_s7a = input.int(1, "S7 Anchor",  group="SML Licensed — Set 7", minval=1)
+
+i_s8t = input.int(1, "S8 Trigger", group="SML Licensed — Set 8", minval=1)
+i_s8b = input.int(1, "S8 Base",    group="SML Licensed — Set 8", minval=1)
+i_s8v = input.int(1, "S8 Valid",   group="SML Licensed — Set 8", minval=1)
+i_s8a = input.int(1, "S8 Anchor",  group="SML Licensed — Set 8", minval=1)
+
+i_s9t = input.int(1, "S9 Trigger", group="SML Licensed — Set 9", minval=1)
+i_s9b = input.int(1, "S9 Base",    group="SML Licensed — Set 9", minval=1)
+i_s9v = input.int(1, "S9 Valid",   group="SML Licensed — Set 9", minval=1)
+i_s9a = input.int(1, "S9 Anchor",  group="SML Licensed — Set 9", minval=1)
 
 // ── Display Groups ────────────────────────────────────────────────
 grp_sets   = "Active Sets"
@@ -38,15 +58,15 @@ grp_vis    = "Visual"
 grp_alerts = "Alerts"
 
 // ── Set Toggles ───────────────────────────────────────────────────
-show_s1  = input.bool(false, "Set 1  (1·4·8·12)",    group=grp_sets, inline="s1")
-show_s2  = input.bool(false, "Set 2  (2·8·16·24)",   group=grp_sets, inline="s2")
-show_s3  = input.bool(false, "Set 3  (3·12·24·36)",  group=grp_sets, inline="s3")
-show_s4  = input.bool(false, "Set 4  (4·16·32·48)",  group=grp_sets, inline="s4")
-show_s5  = input.bool(false, "Set 5  (5·20·40·60)",  group=grp_sets, inline="s5")
-show_s6  = input.bool(true,  "Set 6  (6·24·48·72)",  group=grp_sets, inline="s6")
-show_s7  = input.bool(false, "Set 7  (7·28·56·84)",  group=grp_sets, inline="s7")
-show_s8  = input.bool(false, "Set 8  (8·32·64·96)",  group=grp_sets, inline="s8")
-show_s9  = input.bool(true,  "Set 9  (9·36·72·108)", group=grp_sets, inline="s9")
+show_s1  = input.bool(false, "Set 1", group=grp_sets, inline="s1")
+show_s2  = input.bool(false, "Set 2", group=grp_sets, inline="s2")
+show_s3  = input.bool(false, "Set 3", group=grp_sets, inline="s3")
+show_s4  = input.bool(false, "Set 4", group=grp_sets, inline="s4")
+show_s5  = input.bool(false, "Set 5", group=grp_sets, inline="s5")
+show_s6  = input.bool(true,  "Set 6", group=grp_sets, inline="s6")
+show_s7  = input.bool(false, "Set 7", group=grp_sets, inline="s7")
+show_s8  = input.bool(false, "Set 8", group=grp_sets, inline="s8")
+show_s9  = input.bool(true,  "Set 9", group=grp_sets, inline="s9")
 
 // ── Convergence Settings ──────────────────────────────────────────
 conv_threshold = input.int(3,   "Min Sets for Convergence Alert", minval=2, maxval=9, group=grp_conv)
@@ -59,137 +79,117 @@ line_width_fast   = input.int(1, "Trigger Line Width",  minval=1, maxval=4, grou
 line_width_anchor = input.int(2, "Anchor Line Width",   minval=1, maxval=4, group=grp_vis)
 
 // ── Color Palette (neon on black) ─────────────────────────────────
-// Set 1 — Ice Blue
 c1 = color.new(#00BFFF, 20)
-// Set 2 — Electric Cyan
 c2 = color.new(#00FFFF, 20)
-// Set 3 — Neon Lime
 c3 = color.new(#39FF14, 20)
-// Set 4 — Neon Yellow
 c4 = color.new(#FFE600, 20)
-// Set 5 — Hot Orange
 c5 = color.new(#FF8C00, 20)
-// Set 6 — Neon Magenta
 c6 = color.new(#FF00FF, 20)
-// Set 7 — Neon Red
 c7 = color.new(#FF1744, 20)
-// Set 8 — Violet
 c8 = color.new(#AA00FF, 20)
-// Set 9 — Neon Purple
 c9 = color.new(#7B00FF, 20)
 
 // ── EMA Calculations ──────────────────────────────────────────────
-// Set 1: X=1  → 1·4·8·12
-s1_t = ta.ema(close, 1)
-s1_b = ta.ema(close, 4)
-s1_v = ta.ema(close, 8)
-s1_a = ta.ema(close, 12)
+s1_t = ta.ema(close, i_s1t)
+s1_b = ta.ema(close, i_s1b)
+s1_v = ta.ema(close, i_s1v)
+s1_a = ta.ema(close, i_s1a)
 
-// Set 2: X=2  → 2·8·16·24
-s2_t = ta.ema(close, 2)
-s2_b = ta.ema(close, 8)
-s2_v = ta.ema(close, 16)
-s2_a = ta.ema(close, 24)
+s2_t = ta.ema(close, i_s2t)
+s2_b = ta.ema(close, i_s2b)
+s2_v = ta.ema(close, i_s2v)
+s2_a = ta.ema(close, i_s2a)
 
-// Set 3: X=3  → 3·12·24·36
-s3_t = ta.ema(close, 3)
-s3_b = ta.ema(close, 12)
-s3_v = ta.ema(close, 24)
-s3_a = ta.ema(close, 36)
+s3_t = ta.ema(close, i_s3t)
+s3_b = ta.ema(close, i_s3b)
+s3_v = ta.ema(close, i_s3v)
+s3_a = ta.ema(close, i_s3a)
 
-// Set 4: X=4  → 4·16·32·48
-s4_t = ta.ema(close, 4)
-s4_b = ta.ema(close, 16)
-s4_v = ta.ema(close, 32)
-s4_a = ta.ema(close, 48)
+s4_t = ta.ema(close, i_s4t)
+s4_b = ta.ema(close, i_s4b)
+s4_v = ta.ema(close, i_s4v)
+s4_a = ta.ema(close, i_s4a)
 
-// Set 5: X=5  → 5·20·40·60
-s5_t = ta.ema(close, 5)
-s5_b = ta.ema(close, 20)
-s5_v = ta.ema(close, 40)
-s5_a = ta.ema(close, 60)
+s5_t = ta.ema(close, i_s5t)
+s5_b = ta.ema(close, i_s5b)
+s5_v = ta.ema(close, i_s5v)
+s5_a = ta.ema(close, i_s5a)
 
-// Set 6: X=6  → 6·24·48·72
-s6_t = ta.ema(close, 6)
-s6_b = ta.ema(close, 24)
-s6_v = ta.ema(close, 48)
-s6_a = ta.ema(close, 72)
+s6_t = ta.ema(close, i_s6t)
+s6_b = ta.ema(close, i_s6b)
+s6_v = ta.ema(close, i_s6v)
+s6_a = ta.ema(close, i_s6a)
 
-// Set 7: X=7  → 7·28·56·84
-s7_t = ta.ema(close, 7)
-s7_b = ta.ema(close, 28)
-s7_v = ta.ema(close, 56)
-s7_a = ta.ema(close, 84)
+s7_t = ta.ema(close, i_s7t)
+s7_b = ta.ema(close, i_s7b)
+s7_v = ta.ema(close, i_s7v)
+s7_a = ta.ema(close, i_s7a)
 
-// Set 8: X=8  → 8·32·64·96
-s8_t = ta.ema(close, 8)
-s8_b = ta.ema(close, 32)
-s8_v = ta.ema(close, 64)
-s8_a = ta.ema(close, 96)
+s8_t = ta.ema(close, i_s8t)
+s8_b = ta.ema(close, i_s8b)
+s8_v = ta.ema(close, i_s8v)
+s8_a = ta.ema(close, i_s8a)
 
-// Set 9: X=9  → 9·36·72·108
-s9_t = ta.ema(close, 9)
-s9_b = ta.ema(close, 36)
-s9_v = ta.ema(close, 72)
-s9_a = ta.ema(close, 108)
+s9_t = ta.ema(close, i_s9t)
+s9_b = ta.ema(close, i_s9b)
+s9_v = ta.ema(close, i_s9v)
+s9_a = ta.ema(close, i_s9a)
 
 // ── Plots — Set 1 ────────────────────────────────────────────────
-plot(show_s1 ? s1_t : na, "S1 Trigger (1)",   color=color.new(c1, 40), linewidth=line_width_fast)
-plot(show_s1 ? s1_b : na, "S1 Base (4)",      color=c1,                linewidth=line_width_fast)
-plot(show_s1 ? s1_v : na, "S1 Valid (8)",     color=c1,                linewidth=line_width_anchor)
-plot(show_s1 ? s1_a : na, "S1 Anchor (12)",   color=c1,                linewidth=line_width_anchor)
+plot(show_s1 ? s1_t : na, "S1 Trigger", color=color.new(c1, 40), linewidth=line_width_fast)
+plot(show_s1 ? s1_b : na, "S1 Base",    color=c1,                linewidth=line_width_fast)
+plot(show_s1 ? s1_v : na, "S1 Valid",   color=c1,                linewidth=line_width_anchor)
+plot(show_s1 ? s1_a : na, "S1 Anchor",  color=c1,                linewidth=line_width_anchor)
 
 // ── Plots — Set 2 ────────────────────────────────────────────────
-plot(show_s2 ? s2_t : na, "S2 Trigger (2)",   color=color.new(c2, 40), linewidth=line_width_fast)
-plot(show_s2 ? s2_b : na, "S2 Base (8)",      color=c2,                linewidth=line_width_fast)
-plot(show_s2 ? s2_v : na, "S2 Valid (16)",    color=c2,                linewidth=line_width_anchor)
-plot(show_s2 ? s2_a : na, "S2 Anchor (24)",   color=c2,                linewidth=line_width_anchor)
+plot(show_s2 ? s2_t : na, "S2 Trigger", color=color.new(c2, 40), linewidth=line_width_fast)
+plot(show_s2 ? s2_b : na, "S2 Base",    color=c2,                linewidth=line_width_fast)
+plot(show_s2 ? s2_v : na, "S2 Valid",   color=c2,                linewidth=line_width_anchor)
+plot(show_s2 ? s2_a : na, "S2 Anchor",  color=c2,                linewidth=line_width_anchor)
 
 // ── Plots — Set 3 ────────────────────────────────────────────────
-plot(show_s3 ? s3_t : na, "S3 Trigger (3)",   color=color.new(c3, 40), linewidth=line_width_fast)
-plot(show_s3 ? s3_b : na, "S3 Base (12)",     color=c3,                linewidth=line_width_fast)
-plot(show_s3 ? s3_v : na, "S3 Valid (24)",    color=c3,                linewidth=line_width_anchor)
-plot(show_s3 ? s3_a : na, "S3 Anchor (36)",   color=c3,                linewidth=line_width_anchor)
+plot(show_s3 ? s3_t : na, "S3 Trigger", color=color.new(c3, 40), linewidth=line_width_fast)
+plot(show_s3 ? s3_b : na, "S3 Base",    color=c3,                linewidth=line_width_fast)
+plot(show_s3 ? s3_v : na, "S3 Valid",   color=c3,                linewidth=line_width_anchor)
+plot(show_s3 ? s3_a : na, "S3 Anchor",  color=c3,                linewidth=line_width_anchor)
 
 // ── Plots — Set 4 ────────────────────────────────────────────────
-plot(show_s4 ? s4_t : na, "S4 Trigger (4)",   color=color.new(c4, 40), linewidth=line_width_fast)
-plot(show_s4 ? s4_b : na, "S4 Base (16)",     color=c4,                linewidth=line_width_fast)
-plot(show_s4 ? s4_v : na, "S4 Valid (32)",    color=c4,                linewidth=line_width_anchor)
-plot(show_s4 ? s4_a : na, "S4 Anchor (48)",   color=c4,                linewidth=line_width_anchor)
+plot(show_s4 ? s4_t : na, "S4 Trigger", color=color.new(c4, 40), linewidth=line_width_fast)
+plot(show_s4 ? s4_b : na, "S4 Base",    color=c4,                linewidth=line_width_fast)
+plot(show_s4 ? s4_v : na, "S4 Valid",   color=c4,                linewidth=line_width_anchor)
+plot(show_s4 ? s4_a : na, "S4 Anchor",  color=c4,                linewidth=line_width_anchor)
 
 // ── Plots — Set 5 ────────────────────────────────────────────────
-plot(show_s5 ? s5_t : na, "S5 Trigger (5)",   color=color.new(c5, 40), linewidth=line_width_fast)
-plot(show_s5 ? s5_b : na, "S5 Base (20)",     color=c5,                linewidth=line_width_fast)
-plot(show_s5 ? s5_v : na, "S5 Valid (40)",    color=c5,                linewidth=line_width_anchor)
-plot(show_s5 ? s5_a : na, "S5 Anchor (60)",   color=c5,                linewidth=line_width_anchor)
+plot(show_s5 ? s5_t : na, "S5 Trigger", color=color.new(c5, 40), linewidth=line_width_fast)
+plot(show_s5 ? s5_b : na, "S5 Base",    color=c5,                linewidth=line_width_fast)
+plot(show_s5 ? s5_v : na, "S5 Valid",   color=c5,                linewidth=line_width_anchor)
+plot(show_s5 ? s5_a : na, "S5 Anchor",  color=c5,                linewidth=line_width_anchor)
 
 // ── Plots — Set 6 ────────────────────────────────────────────────
-plot(show_s6 ? s6_t : na, "S6 Trigger (6)",   color=color.new(c6, 40), linewidth=line_width_fast)
-plot(show_s6 ? s6_b : na, "S6 Base (24)",     color=c6,                linewidth=line_width_fast)
-plot(show_s6 ? s6_v : na, "S6 Valid (48)",    color=c6,                linewidth=line_width_anchor)
-plot(show_s6 ? s6_a : na, "S6 Anchor (72)",   color=c6,                linewidth=line_width_anchor + 1)
+plot(show_s6 ? s6_t : na, "S6 Trigger", color=color.new(c6, 40), linewidth=line_width_fast)
+plot(show_s6 ? s6_b : na, "S6 Base",    color=c6,                linewidth=line_width_fast)
+plot(show_s6 ? s6_v : na, "S6 Valid",   color=c6,                linewidth=line_width_anchor)
+plot(show_s6 ? s6_a : na, "S6 Anchor",  color=c6,                linewidth=line_width_anchor + 1)
 
 // ── Plots — Set 7 ────────────────────────────────────────────────
-plot(show_s7 ? s7_t : na, "S7 Trigger (7)",   color=color.new(c7, 40), linewidth=line_width_fast)
-plot(show_s7 ? s7_b : na, "S7 Base (28)",     color=c7,                linewidth=line_width_fast)
-plot(show_s7 ? s7_v : na, "S7 Valid (56)",    color=c7,                linewidth=line_width_anchor)
-plot(show_s7 ? s7_a : na, "S7 Anchor (84)",   color=c7,                linewidth=line_width_anchor)
+plot(show_s7 ? s7_t : na, "S7 Trigger", color=color.new(c7, 40), linewidth=line_width_fast)
+plot(show_s7 ? s7_b : na, "S7 Base",    color=c7,                linewidth=line_width_fast)
+plot(show_s7 ? s7_v : na, "S7 Valid",   color=c7,                linewidth=line_width_anchor)
+plot(show_s7 ? s7_a : na, "S7 Anchor",  color=c7,                linewidth=line_width_anchor)
 
 // ── Plots — Set 8 ────────────────────────────────────────────────
-plot(show_s8 ? s8_t : na, "S8 Trigger (8)",   color=color.new(c8, 40), linewidth=line_width_fast)
-plot(show_s8 ? s8_b : na, "S8 Base (32)",     color=c8,                linewidth=line_width_fast)
-plot(show_s8 ? s8_v : na, "S8 Valid (64)",    color=c8,                linewidth=line_width_anchor)
-plot(show_s8 ? s8_a : na, "S8 Anchor (96)",   color=c8,                linewidth=line_width_anchor)
+plot(show_s8 ? s8_t : na, "S8 Trigger", color=color.new(c8, 40), linewidth=line_width_fast)
+plot(show_s8 ? s8_b : na, "S8 Base",    color=c8,                linewidth=line_width_fast)
+plot(show_s8 ? s8_v : na, "S8 Valid",   color=c8,                linewidth=line_width_anchor)
+plot(show_s8 ? s8_a : na, "S8 Anchor",  color=c8,                linewidth=line_width_anchor)
 
 // ── Plots — Set 9 ────────────────────────────────────────────────
-plot(show_s9 ? s9_t : na, "S9 Trigger (9)",   color=color.new(c9, 40), linewidth=line_width_fast)
-plot(show_s9 ? s9_b : na, "S9 Base (36)",     color=c9,                linewidth=line_width_fast)
-plot(show_s9 ? s9_v : na, "S9 Valid (72)",    color=c9,                linewidth=line_width_anchor)
-plot(show_s9 ? s9_a : na, "S9 Anchor (108)",  color=c9,                linewidth=line_width_anchor + 1)
+plot(show_s9 ? s9_t : na, "S9 Trigger", color=color.new(c9, 40), linewidth=line_width_fast)
+plot(show_s9 ? s9_b : na, "S9 Base",    color=c9,                linewidth=line_width_fast)
+plot(show_s9 ? s9_v : na, "S9 Valid",   color=c9,                linewidth=line_width_anchor)
+plot(show_s9 ? s9_a : na, "S9 Anchor",  color=c9,                linewidth=line_width_anchor + 1)
 
 // ── Convergence Engine ────────────────────────────────────────────
-// A set is "active" if price is within conv_band_pct% of its anchor EMA
-// (the slowest line in each set — the deepest institutional level)
 band = close * (conv_band_pct / 100)
 
 s1_near = math.abs(close - s1_a) <= band
@@ -229,7 +229,6 @@ if show_conv_lbl and barstate.islast and convergence_lock
         size=size.normal)
 
 // ── Bull / Bear Stack Detection (per active set) ──────────────────
-// For the two default-on sets (6 and 9), show stack alignment
 s6_bull = close > s6_t and s6_t > s6_b and s6_b > s6_v and s6_v > s6_a
 s6_bear = close < s6_t and s6_t < s6_b and s6_b < s6_v and s6_v < s6_a
 s9_bull = close > s9_t and s9_t > s9_b and s9_b > s9_v and s9_v > s9_a

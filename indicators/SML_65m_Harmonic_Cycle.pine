@@ -1,89 +1,79 @@
-// © ScriptMasterLabs — SML 65m Harmonic Cycle [+33 Sequence]
+// © ScriptMasterLabs — SML 65m Harmonic Cycle [Licensed]
 // ================================================================
 // LOAD ON 65-MINUTE CHART ONLY
 //
 // 390 min/session ÷ 65 min/bar = 6 bars per day (exact, zero remainder)
 // This is the only standard timeframe that divides the NYSE session perfectly.
 //
-// +33 Harmonic Sequence — anchored to session microstructure:
+// The sequence alternates REVERSAL and SETTLEMENT nodes.
+//   Reversal nodes:   fast-twitch reaction nodes at session midpoints
+//   Settlement nodes: institutional closing-print nodes
 //
-//   EMA 3   → Day 1   midday  (12:45 PM) ← REVERSAL node
-//   EMA 36  → Day 6   close   ( 4:00 PM) ← SETTLEMENT node
-//   EMA 69  → Day 12  midday  (12:45 PM) ← REVERSAL node
-//   EMA 102 → Day 17  close   ( 4:00 PM) ← SETTLEMENT node
-//   EMA 135 → Day 23  midday  (12:45 PM) ← REVERSAL node
-//
-// The sequence alternates: REVERSAL → SETTLEMENT → REVERSAL → ...
-//   Reversal nodes  (3, 69, 135): dead center of the intraday session
-//                                 where short-term reversals print
-//   Settlement nodes (36, 102):   final closing print of the day
-//                                 where institutional settlement volume spikes
-//
-// The daily chart gives the macro vector.
-// This chart tells you the exact hour the energy shifts.
-//
-// Pair with: SML Sovereign Stack (daily) for 365/741 macro anchor
-//            SML E1 Tactical Matrix  for 6·33·66·99·123 micro-coil overlay
+// Pair with: SML Sovereign Stack (daily) for macro anchor alignment
+//            SML E1 Tactical Matrix for micro-coil overlay
 // ================================================================
 //@version=5
-indicator("SML 65m Harmonic Cycle [+33 Sequence]",
-          shorttitle="SML·65H·+33", overlay=true)
+indicator("SML 65m Harmonic Cycle [Licensed]",
+          shorttitle="SML·65H", overlay=true)
+
+// ── Sequence Inputs (SML Licensed) ───────────────────────────────
+n1_len = input.int(1, "Reversal Node 1",    group="SML Licensed — 65H Sequence", minval=1)
+n2_len = input.int(1, "Settlement Node 1",  group="SML Licensed — 65H Sequence", minval=1)
+n3_len = input.int(1, "Reversal Node 2",    group="SML Licensed — 65H Sequence", minval=1)
+n4_len = input.int(1, "Settlement Node 2",  group="SML Licensed — 65H Sequence", minval=1)
+n5_len = input.int(1, "Reversal Node 3",    group="SML Licensed — 65H Sequence", minval=1)
 
 // ═══ INPUTS ═══════════════════════════════════════════════════════
-show_reversal   = input.bool(true, "Reversal Nodes   (EMA 3 · 69 · 135)",   group="Nodes")
-show_settlement = input.bool(true, "Settlement Nodes (EMA 36 · 102)",        group="Nodes")
+show_reversal   = input.bool(true, "Reversal Nodes",   group="Nodes")
+show_settlement = input.bool(true, "Settlement Nodes", group="Nodes")
 
 show_labels = input.bool(true, "Show Signal Label",       group="Display")
 show_bands  = input.bool(true, "Show Signal Background",  group="Display")
 coil_thresh = input.float(0.8, "Harmonic Coil Width %",   group="Display", minval=0.1, step=0.1)
 
 // ═══ EMAs ═════════════════════════════════════════════════════════
-// +33 sequence starting at 3 — each step = 5.5 days × 6 bars/day
-// Odd nodes (bar ÷ 6 has remainder 0.5) → midday reversal
-// Even nodes (bar ÷ 6 is integer)       → closing settlement
-
-e3   = ta.ema(close, 3)    // Day 1 midday  — REVERSAL  node (3 mod 6 = 3)
-e36  = ta.ema(close, 36)   // Day 6 close   — SETTLEMENT node (36 mod 6 = 0)
-e69  = ta.ema(close, 69)   // Day 12 midday — REVERSAL  node (69 mod 6 = 3)
-e102 = ta.ema(close, 102)  // Day 17 close  — SETTLEMENT node (102 mod 6 = 0)
-e135 = ta.ema(close, 135)  // Day 23 midday — REVERSAL  node (135 mod 6 = 3)
+e_n1 = ta.ema(close, n1_len)    // Reversal node 1
+e_n2 = ta.ema(close, n2_len)    // Settlement node 1
+e_n3 = ta.ema(close, n3_len)    // Reversal node 2
+e_n4 = ta.ema(close, n4_len)    // Settlement node 2
+e_n5 = ta.ema(close, n5_len)    // Reversal node 3
 
 // ═══ SIGNAL LOGIC ═════════════════════════════════════════════════
 
 // Full 5-node alignment
-bull_stack = e3 > e36 and e36 > e69 and e69 > e102 and e102 > e135
-bear_stack = e3 < e36 and e36 < e69 and e69 < e102 and e102 < e135
+bull_stack = e_n1 > e_n2 and e_n2 > e_n3 and e_n3 > e_n4 and e_n4 > e_n5
+bear_stack = e_n1 < e_n2 and e_n2 < e_n3 and e_n3 < e_n4 and e_n4 < e_n5
 
-// Lock score: count aligned pairs (e3>e36, e36>e69, e69>e102, e102>e135)
-bull_pairs = (e3 > e36 ? 1 : 0) + (e36 > e69 ? 1 : 0) + (e69 > e102 ? 1 : 0) + (e102 > e135 ? 1 : 0)
-bear_pairs = (e3 < e36 ? 1 : 0) + (e36 < e69 ? 1 : 0) + (e69 < e102 ? 1 : 0) + (e102 < e135 ? 1 : 0)
+// Lock score: count aligned pairs
+bull_pairs = (e_n1 > e_n2 ? 1 : 0) + (e_n2 > e_n3 ? 1 : 0) + (e_n3 > e_n4 ? 1 : 0) + (e_n4 > e_n5 ? 1 : 0)
+bear_pairs = (e_n1 < e_n2 ? 1 : 0) + (e_n2 < e_n3 ? 1 : 0) + (e_n3 < e_n4 ? 1 : 0) + (e_n4 < e_n5 ? 1 : 0)
 
-// Stretch from slowest reversal anchor (EMA 135 = Day 23 midday)
-stretch_135 = (close - e135) / e135 * 100
+// Stretch from slowest reversal anchor (node 5)
+stretch_n5 = (close - e_n5) / e_n5 * 100
 
 // Harmonic compression — all 5 nodes collapsing into a coil
-spread = math.abs((e3 - e135) / e135 * 100)
+spread = math.abs((e_n1 - e_n5) / e_n5 * 100)
 harmonic_coil = spread < coil_thresh
 
-// Key crossovers — fast reversal node crossing slow settlement node
-rev_ignition   = ta.crossover( e3, e36)   // Rev node accelerating through Settlement — bullish ignition
-rev_breakdown  = ta.crossunder(e3, e36)   // Rev node dropping through Settlement — bearish breakdown
-settle_reclaim = ta.crossover( e36, e69)  // Settlement reclaiming the next Rev node — trend resuming
+// Key crossovers — fast reversal node crossing settlement node
+rev_ignition   = ta.crossover( e_n1, e_n2)
+rev_breakdown  = ta.crossunder(e_n1, e_n2)
+settle_reclaim = ta.crossover( e_n2, e_n3)
 
 // ═══ PLOTS ════════════════════════════════════════════════════════
 
 // Reversal nodes — gold/warm (midday session energy)
-plot(show_reversal   ? e3   : na, "R · EMA 3   (Day 1  Midday — Reversal)",
+plot(show_reversal   ? e_n1 : na, "R · Node 1 (Reversal)",
      color=color.new(#FFD700, 10), linewidth=2)
-plot(show_reversal   ? e69  : na, "R · EMA 69  (Day 12 Midday — Reversal)",
+plot(show_reversal   ? e_n3 : na, "R · Node 3 (Reversal)",
      color=color.new(#FF9900, 10), linewidth=2)
-plot(show_reversal   ? e135 : na, "R · EMA 135 (Day 23 Midday — Reversal)",
+plot(show_reversal   ? e_n5 : na, "R · Node 5 (Reversal)",
      color=color.new(#FF6600,  5), linewidth=3)
 
 // Settlement nodes — blue/institutional (closing bell energy)
-plot(show_settlement ? e36  : na, "S · EMA 36  (Day 6  Close  — Settlement)",
+plot(show_settlement ? e_n2 : na, "S · Node 2 (Settlement)",
      color=color.new(#0088FF, 10), linewidth=2, style=plot.style_line)
-plot(show_settlement ? e102 : na, "S · EMA 102 (Day 17 Close  — Settlement)",
+plot(show_settlement ? e_n4 : na, "S · Node 4 (Settlement)",
      color=color.new(#0044CC,  5), linewidth=3, style=plot.style_line)
 
 // ═══ BACKGROUND ═══════════════════════════════════════════════════
@@ -103,14 +93,14 @@ if show_labels and barstate.islast
     label.delete(sig_lbl)
 
     // Node state tags
-    n1 = e3   > e36  ? "3↑"  : "3↓"
-    n2 = e36  > e69  ? "36↑" : "36↓"
-    n3 = e69  > e102 ? "69↑" : "69↓"
-    n4 = e102 > e135 ? "102↑": "102↓"
-    node_line = n1 + " · " + n2 + " · " + n3 + " · " + n4
+    n1t = e_n1 > e_n2 ? "N1↑" : "N1↓"
+    n2t = e_n2 > e_n3 ? "N2↑" : "N2↓"
+    n3t = e_n3 > e_n4 ? "N3↑" : "N3↓"
+    n4t = e_n4 > e_n5 ? "N4↑" : "N4↓"
+    node_line = n1t + " · " + n2t + " · " + n3t + " · " + n4t
 
-    sig_txt = bull_stack      ? "65H: HARMONIC BULL (5/5)\n+" + str.tostring(stretch_135, "#.##") + "% above EMA135\n" + node_line :
-              bear_stack      ? "65H: HARMONIC BEAR (5/5)\n"  + str.tostring(stretch_135, "#.##") + "% below EMA135\n" + node_line :
+    sig_txt = bull_stack      ? "65H: HARMONIC BULL (5/5)\n+" + str.tostring(stretch_n5, "#.##") + "% above Reversal Anchor\n" + node_line :
+              bear_stack      ? "65H: HARMONIC BEAR (5/5)\n"  + str.tostring(stretch_n5, "#.##") + "% below Reversal Anchor\n" + node_line :
               bull_pairs >= 3 ? "65H: PARTIAL BULL (" + str.tostring(bull_pairs) + "/4 pairs)\n" + node_line :
               bear_pairs >= 3 ? "65H: PARTIAL BEAR (" + str.tostring(bear_pairs) + "/4 pairs)\n" + node_line :
               harmonic_coil   ? "65H: HARMONIC COIL\nSpread " + str.tostring(spread, "#.##") + "% — nodes collapsing\n" + node_line :
@@ -128,24 +118,24 @@ if show_labels and barstate.islast
 
 alertcondition(bull_stack,
     "65H Full Harmonic Bull (5/5 nodes)",
-    "{{ticker}} [65m] — HARMONIC BULL: All 5 +33 nodes aligned. Price above EMA3>36>69>102>135.")
+    "{{ticker}} [65m] — HARMONIC BULL: All 5 nodes aligned bullish.")
 
 alertcondition(bear_stack,
     "65H Full Harmonic Bear (5/5 nodes)",
-    "{{ticker}} [65m] — HARMONIC BEAR: All 5 +33 nodes aligned. Price below EMA3<36<69<102<135.")
+    "{{ticker}} [65m] — HARMONIC BEAR: All 5 nodes aligned bearish.")
 
 alertcondition(rev_ignition,
-    "65H Reversal Ignition (EMA3 crosses EMA36)",
-    "{{ticker}} [65m] — REVERSAL IGNITION: Midday reversal node (EMA3) crossed above settlement node (EMA36). Bullish harmonic sequence loading.")
+    "65H Reversal Ignition",
+    "{{ticker}} [65m] — REVERSAL IGNITION: Reversal node crossed above settlement node. Bullish harmonic sequence loading.")
 
 alertcondition(rev_breakdown,
-    "65H Reversal Breakdown (EMA3 crosses under EMA36)",
-    "{{ticker}} [65m] — REVERSAL BREAKDOWN: Midday reversal node (EMA3) dropped below settlement node (EMA36). Bearish harmonic sequence loading.")
+    "65H Reversal Breakdown",
+    "{{ticker}} [65m] — REVERSAL BREAKDOWN: Reversal node dropped below settlement node. Bearish harmonic sequence loading.")
 
 alertcondition(harmonic_coil,
     "65H Harmonic Coil — All Nodes Compressing",
     "{{ticker}} [65m] — HARMONIC COIL: All 5 nodes compressed within " + str.tostring(coil_thresh, "#.#") + "%. Energy loading before expansion.")
 
 alertcondition(settle_reclaim,
-    "65H Settlement Reclaim (EMA36 crosses EMA69)",
-    "{{ticker}} [65m] — SETTLEMENT RECLAIM: Day 6 close node crossed Day 12 midday node — trend resuming bullish.")
+    "65H Settlement Reclaim",
+    "{{ticker}} [65m] — SETTLEMENT RECLAIM: Settlement node crossed reversal node — trend resuming bullish.")

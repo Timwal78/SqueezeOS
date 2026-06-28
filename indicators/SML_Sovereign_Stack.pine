@@ -2,17 +2,13 @@
 // ================================================================
 // Four-layer institutional EMA architecture
 //
-// Layer 1 — Geometric Stack   (3 · 9 · 18 · 36 · 72)
-//           Captures fractional momentum expansion in base-4 time
-// Layer 2 — Arithmetic Stack  (13 · 26 · 39 · 52 · 65)
-//           Classic institutional swing rhythm (13-bar cadence)
-// Layer 3 — Annual Anchor     (365)
-//           One calendar year of daily bars — primary daily-chart anchor
-// Layer 4 — Macro Anchor      (741)
-//           Long-cycle macro floor; aligns with Triple Lock Engine
+// Layer 1 — Geometric Stack   (fast momentum expansion)
+// Layer 2 — Arithmetic Stack  (institutional swing rhythm)
+// Layer 3 — Annual Anchor     (primary daily-chart anchor)
+// Layer 4 — Macro Anchor      (long-cycle macro floor)
 //
 // Triple Lock fires when all three stacks + anchors align.
-// Use on DAILY timeframe for the 365 anchor to be meaningful.
+// Use on DAILY timeframe for the annual anchor to be meaningful.
 // On 15m/1h, add SML E1 Tactical Matrix for micro-coil overlay.
 //
 // Related: SML Triple Lock Engine [Beastmode+] for full signal suite
@@ -20,11 +16,27 @@
 //@version=5
 indicator("SML Sovereign Stack™", shorttitle="SML·Sovereign", overlay=true)
 
+// ── Sequence Inputs (SML Licensed) ───────────────────────────────
+ig1 = input.int(1, "Geo L1 (Fastest)", group="SML Licensed — Geometric Stack", minval=1)
+ig2 = input.int(1, "Geo L2",           group="SML Licensed — Geometric Stack", minval=1)
+ig3 = input.int(1, "Geo L3",           group="SML Licensed — Geometric Stack", minval=1)
+ig4 = input.int(1, "Geo L4",           group="SML Licensed — Geometric Stack", minval=1)
+ig5 = input.int(1, "Geo L5 (Anchor)",  group="SML Licensed — Geometric Stack", minval=1)
+
+ia1 = input.int(1, "Ari L1 (Fastest)", group="SML Licensed — Arithmetic Stack", minval=1)
+ia2 = input.int(1, "Ari L2",           group="SML Licensed — Arithmetic Stack", minval=1)
+ia3 = input.int(1, "Ari L3",           group="SML Licensed — Arithmetic Stack", minval=1)
+ia4 = input.int(1, "Ari L4",           group="SML Licensed — Arithmetic Stack", minval=1)
+ia5 = input.int(1, "Ari L5 (Anchor)",  group="SML Licensed — Arithmetic Stack", minval=1)
+
+i_anc = input.int(1, "Annual Anchor", group="SML Licensed — Anchors", minval=1)
+i_mac = input.int(1, "Macro Anchor",  group="SML Licensed — Anchors", minval=1)
+
 // ═══ INPUTS ═══════════════════════════════════════════════════════
-show_geo  = input.bool(true, "Geometric Stack  (3 · 9 · 18 · 36 · 72)", group="Layers")
-show_ari  = input.bool(true, "Arithmetic Stack (13 · 26 · 39 · 52 · 65)", group="Layers")
-show_anc  = input.bool(true, "Annual Anchor    (365)",                     group="Layers")
-show_mac  = input.bool(true, "Macro Anchor     (741)",                     group="Layers")
+show_geo  = input.bool(true, "Geometric Stack",  group="Layers")
+show_ari  = input.bool(true, "Arithmetic Stack", group="Layers")
+show_anc  = input.bool(true, "Annual Anchor",    group="Layers")
+show_mac  = input.bool(true, "Macro Anchor",     group="Layers")
 
 show_labels = input.bool(true, "Show Signal Label",      group="Display")
 show_bands  = input.bool(true, "Show Signal Background", group="Display")
@@ -32,24 +44,24 @@ show_bands  = input.bool(true, "Show Signal Background", group="Display")
 // ═══ EMAs ═════════════════════════════════════════════════════════
 
 // Layer 1 — Geometric Stack
-g1 = ta.ema(close, 3)
-g2 = ta.ema(close, 9)
-g3 = ta.ema(close, 18)
-g4 = ta.ema(close, 36)
-g5 = ta.ema(close, 72)
+g1 = ta.ema(close, ig1)
+g2 = ta.ema(close, ig2)
+g3 = ta.ema(close, ig3)
+g4 = ta.ema(close, ig4)
+g5 = ta.ema(close, ig5)
 
 // Layer 2 — Arithmetic Stack
-a1 = ta.ema(close, 13)
-a2 = ta.ema(close, 26)
-a3 = ta.ema(close, 39)
-a4 = ta.ema(close, 52)
-a5 = ta.ema(close, 65)
+a1 = ta.ema(close, ia1)
+a2 = ta.ema(close, ia2)
+a3 = ta.ema(close, ia3)
+a4 = ta.ema(close, ia4)
+a5 = ta.ema(close, ia5)
 
-// Layer 3 — Annual Anchor (365 daily bars = 1 calendar year)
-e365 = ta.ema(close, 365)
+// Layer 3 — Annual Anchor
+e_anc = ta.ema(close, i_anc)
 
 // Layer 4 — Macro Anchor
-e741 = ta.ema(close, 741)
+e_mac = ta.ema(close, i_mac)
 
 // ═══ SIGNAL LOGIC ═════════════════════════════════════════════════
 
@@ -62,48 +74,48 @@ ari_bull = a1 > a2 and a2 > a3 and a3 > a4 and a4 > a5
 ari_bear = a1 < a2 and a2 < a3 and a3 < a4 and a4 < a5
 
 // Anchor position
-anc365_bull = close > e365
-anc365_bear = close < e365
-mac741_bull = close > e741
-mac741_bear = close < e741
+anc_bull = close > e_anc
+anc_bear = close < e_anc
+mac_bull = close > e_mac
+mac_bear = close < e_mac
 
 // Lock scores (0–4)
-bull_locks = (geo_bull ? 1 : 0) + (ari_bull ? 1 : 0) + (anc365_bull ? 1 : 0) + (mac741_bull ? 1 : 0)
-bear_locks = (geo_bear ? 1 : 0) + (ari_bear ? 1 : 0) + (anc365_bear ? 1 : 0) + (mac741_bear ? 1 : 0)
+bull_locks = (geo_bull ? 1 : 0) + (ari_bull ? 1 : 0) + (anc_bull ? 1 : 0) + (mac_bull ? 1 : 0)
+bear_locks = (geo_bear ? 1 : 0) + (ari_bear ? 1 : 0) + (anc_bear ? 1 : 0) + (mac_bear ? 1 : 0)
 
-sovereign_bull = bull_locks == 4   // all four layers aligned bullish
-sovereign_bear = bear_locks == 4   // all four layers aligned bearish
+sovereign_bull = bull_locks == 4
+sovereign_bear = bear_locks == 4
 partial_bull   = bull_locks == 3
 partial_bear   = bear_locks == 3
 
-// Stretch from annual anchor (365-bar daily EMA)
-stretch_365 = (close - e365) / e365 * 100
+// Stretch from annual anchor
+stretch_anc = (close - e_anc) / e_anc * 100
 
 // Compression — price coiled within 1% of annual anchor
-annual_coil = math.abs(stretch_365) < 1.0
+annual_coil = math.abs(stretch_anc) < 1.0
 
 // ═══ PLOTS ════════════════════════════════════════════════════════
 
 // Geometric Stack (warm spectrum)
-plot(show_geo ? g1 : na, "G · EMA 3  (Geo Seed)",   color=color.new(#ff9900, 30), linewidth=1)
-plot(show_geo ? g2 : na, "G · EMA 9  (Geo Fast)",   color=color.new(#ffbb00, 25), linewidth=1)
-plot(show_geo ? g3 : na, "G · EMA 18 (Geo Mid)",    color=color.new(#ffdd00, 20), linewidth=1)
-plot(show_geo ? g4 : na, "G · EMA 36 (Geo Slow)",   color=color.new(#aadd00, 15), linewidth=1)
-plot(show_geo ? g5 : na, "G · EMA 72 (Geo Anchor)", color=color.new(color.lime, 5), linewidth=2)
+plot(show_geo ? g1 : na, "G · L1 (Geo Seed)",   color=color.new(#ff9900, 30), linewidth=1)
+plot(show_geo ? g2 : na, "G · L2 (Geo Fast)",   color=color.new(#ffbb00, 25), linewidth=1)
+plot(show_geo ? g3 : na, "G · L3 (Geo Mid)",    color=color.new(#ffdd00, 20), linewidth=1)
+plot(show_geo ? g4 : na, "G · L4 (Geo Slow)",   color=color.new(#aadd00, 15), linewidth=1)
+plot(show_geo ? g5 : na, "G · L5 (Geo Anchor)", color=color.new(color.lime, 5), linewidth=2)
 
 // Arithmetic Stack (cool spectrum)
-plot(show_ari ? a1 : na, "A · EMA 13 (Ari Seed)",   color=color.new(#00ddff, 30), linewidth=1)
-plot(show_ari ? a2 : na, "A · EMA 26 (Ari Fast)",   color=color.new(#00aaff, 25), linewidth=1)
-plot(show_ari ? a3 : na, "A · EMA 39 (Ari Mid)",    color=color.new(#0077ff, 20), linewidth=1)
-plot(show_ari ? a4 : na, "A · EMA 52 (Ari Slow)",   color=color.new(#0044ff, 15), linewidth=1)
-plot(show_ari ? a5 : na, "A · EMA 65 (Ari Cap)",    color=color.new(#0022cc, 5),  linewidth=2)
+plot(show_ari ? a1 : na, "A · L1 (Ari Seed)",   color=color.new(#00ddff, 30), linewidth=1)
+plot(show_ari ? a2 : na, "A · L2 (Ari Fast)",   color=color.new(#00aaff, 25), linewidth=1)
+plot(show_ari ? a3 : na, "A · L3 (Ari Mid)",    color=color.new(#0077ff, 20), linewidth=1)
+plot(show_ari ? a4 : na, "A · L4 (Ari Slow)",   color=color.new(#0044ff, 15), linewidth=1)
+plot(show_ari ? a5 : na, "A · L5 (Ari Cap)",    color=color.new(#0022cc, 5),  linewidth=2)
 
 // Annual Anchor — primary daily-chart reference line
-plot(show_anc ? e365 : na, "S · EMA 365 (Annual Anchor)",
+plot(show_anc ? e_anc : na, "S · Annual Anchor",
      color=color.new(color.yellow, 0), linewidth=3, style=plot.style_line)
 
 // Macro Anchor
-plot(show_mac ? e741 : na, "S · EMA 741 (Macro Anchor)",
+plot(show_mac ? e_mac : na, "S · Macro Anchor",
      color=color.new(color.red, 0), linewidth=3, style=plot.style_line)
 
 // ═══ BACKGROUND ═══════════════════════════════════════════════════
@@ -124,15 +136,15 @@ if show_labels and barstate.islast
 
     g_tag  = geo_bull  ? "GEO ▲"  : geo_bear  ? "GEO ▼"  : "GEO —"
     a_tag  = ari_bull  ? "ARI ▲"  : ari_bear  ? "ARI ▼"  : "ARI —"
-    n_tag  = anc365_bull ? "365 ▲" : anc365_bear ? "365 ▼" : "365 —"
-    m_tag  = mac741_bull ? "741 ▲" : mac741_bear ? "741 ▼" : "741 —"
+    n_tag  = anc_bull  ? "Anc ▲"  : anc_bear  ? "Anc ▼"  : "Anc —"
+    m_tag  = mac_bull  ? "Mac ▲"  : mac_bear  ? "Mac ▼"  : "Mac —"
     layers = g_tag + "  |  " + a_tag + "  |  " + n_tag + "  |  " + m_tag
 
-    sig_txt = sovereign_bull ? "SOVEREIGN BULL (" + str.tostring(bull_locks) + "/4 locks)\n" + str.tostring(stretch_365, "#.##") + "% above Annual EMA\n" + layers :
-              sovereign_bear ? "SOVEREIGN BEAR (" + str.tostring(bear_locks) + "/4 locks)\n" + str.tostring(stretch_365, "#.##") + "% below Annual EMA\n" + layers :
+    sig_txt = sovereign_bull ? "SOVEREIGN BULL (" + str.tostring(bull_locks) + "/4 locks)\n" + str.tostring(stretch_anc, "#.##") + "% above Annual Anchor\n" + layers :
+              sovereign_bear ? "SOVEREIGN BEAR (" + str.tostring(bear_locks) + "/4 locks)\n" + str.tostring(stretch_anc, "#.##") + "% below Annual Anchor\n" + layers :
               partial_bull   ? "PARTIAL BULL ("   + str.tostring(bull_locks) + "/4 locks)\n" + layers :
               partial_bear   ? "PARTIAL BEAR ("   + str.tostring(bear_locks) + "/4 locks)\n" + layers :
-              annual_coil    ? "ANNUAL COIL\nPrice within 1% of EMA365\n" + layers :
+              annual_coil    ? "ANNUAL COIL\nPrice within 1% of Annual Anchor\n" + layers :
               "NEUTRAL (" + str.tostring(bull_locks) + "B / " + str.tostring(bear_locks) + "Be)\n" + layers
 
     lbl_col = sovereign_bull or partial_bull ? color.green  :
@@ -147,24 +159,24 @@ if show_labels and barstate.islast
 
 alertcondition(sovereign_bull,
     "Sovereign Stack — Full Bull Lock (4/4)",
-    "{{ticker}} — SOVEREIGN BULL: All 4 layers aligned. GEO+ARI stacks bull, price above EMA365 and EMA741.")
+    "{{ticker}} — SOVEREIGN BULL: All 4 layers aligned. GEO+ARI stacks bull, price above annual and macro anchors.")
 
 alertcondition(sovereign_bear,
     "Sovereign Stack — Full Bear Lock (4/4)",
-    "{{ticker}} — SOVEREIGN BEAR: All 4 layers aligned. GEO+ARI stacks bear, price below EMA365 and EMA741.")
+    "{{ticker}} — SOVEREIGN BEAR: All 4 layers aligned. GEO+ARI stacks bear, price below annual and macro anchors.")
 
 alertcondition(annual_coil,
-    "Sovereign Stack — Annual Coil (price pinned to EMA365)",
-    "{{ticker}} — ANNUAL COIL: Price within 1% of EMA365 annual anchor — coil loading.")
+    "Sovereign Stack — Annual Coil (price pinned to Annual Anchor)",
+    "{{ticker}} — ANNUAL COIL: Price within 1% of annual anchor — coil loading.")
 
-alertcondition(ta.crossover(close, e365),
-    "Sovereign Stack — Price Reclaims EMA365 (Annual Anchor)",
-    "{{ticker}} — EMA365 RECLAIM: Price crossed above annual EMA — daily structure flipping bullish.")
+alertcondition(ta.crossover(close, e_anc),
+    "Sovereign Stack — Price Reclaims Annual Anchor",
+    "{{ticker}} — ANNUAL ANCHOR RECLAIM: Price crossed above annual anchor — daily structure flipping bullish.")
 
-alertcondition(ta.crossunder(close, e365),
-    "Sovereign Stack — Price Loses EMA365 (Annual Anchor)",
-    "{{ticker}} — EMA365 LOST: Price crossed below annual EMA — daily structure flipping bearish.")
+alertcondition(ta.crossunder(close, e_anc),
+    "Sovereign Stack — Price Loses Annual Anchor",
+    "{{ticker}} — ANNUAL ANCHOR LOST: Price crossed below annual anchor — daily structure flipping bearish.")
 
-alertcondition(ta.crossover(close, e741),
-    "Sovereign Stack — Price Reclaims EMA741 (Macro Anchor)",
-    "{{ticker}} — EMA741 RECLAIM: Price crossed above macro anchor.")
+alertcondition(ta.crossover(close, e_mac),
+    "Sovereign Stack — Price Reclaims Macro Anchor",
+    "{{ticker}} — MACRO ANCHOR RECLAIM: Price crossed above macro anchor.")
