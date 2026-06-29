@@ -1,28 +1,22 @@
-// © ScriptMasterLabs — SML Engine 3: Lucas Phi² Volume Accumulation
+// © ScriptMasterLabs — SML Engine 3: Volume Accumulation [Licensed]
 // ================================================================
 // VOLUME DIMENSION ONLY — Add as a separate pane beneath price chart
-// Sequence: 11 · 47 · 123 · 321
-//
-// Digital roots: 2-2-6-6 (mirror symmetry containment field)
-//   11 → DR=2  |  47 → DR=2  (ignition band: fast-twitch)
-//  123 → DR=6  | 321 → DR=6  (dark-pool baselines: macro)
-//
-// Phi² = 2.618 expansion verified:
-//   123 ÷ 47  = 2.617  ←→  Phi² = 2.618
-//   321 ÷ 123 = 2.609  ←→  Phi² = 2.618
-//
-// "As Above, So Below" mirror lock:
-//   VMA11 > VMA47 (ignition trending up) AND VMA123 > VMA321 (macro up)
 //
 // Cross-engine trigger (Lie Detector):
 //   Load SML Engine 1 on the price pane simultaneously.
 //   When E1 shows SUPPRESSED price + E3 shows volume shattering
-//   through VMA123/321 → MMs accumulating off-exchange.
+//   through the dark-pool baselines → MMs accumulating off-exchange.
 //   That is your dark-pool entry signal.
 // ================================================================
 //@version=5
-indicator("SML Engine 3 — Lucas Phi² Volume [Volume Only]",
+indicator("SML Engine 3 — Volume Accumulation [Volume Only]",
           shorttitle="SML·E3·Vol", overlay=false)
+
+// ── Sequence Inputs (SML Licensed) ───────────────────────────────
+v1_len = input.int(1, "VMA Level 1 (Fast Ignition)",       group="SML Licensed — Sequence A", minval=1)
+v2_len = input.int(1, "VMA Level 2",                       group="SML Licensed — Sequence A", minval=1)
+v3_len = input.int(1, "VMA Level 3 (Dark Pool Base)",      group="SML Licensed — Sequence A", minval=1)
+v4_len = input.int(1, "VMA Level 4 (Dark Pool Ceiling)",   group="SML Licensed — Sequence A", minval=1)
 
 // ── Inputs ───────────────────────────────────────────────────────
 show_raw_vol   = input.bool(true,  "Show Raw Volume Bars")
@@ -30,34 +24,33 @@ show_labels    = input.bool(true,  "Show Signal Labels")
 show_bands     = input.bool(true,  "Show Signal Backgrounds")
 
 // ── VMAs — VOLUME only ────────────────────────────────────────────
-vma11  = ta.ema(volume, 11)
-vma47  = ta.ema(volume, 47)
-vma123 = ta.ema(volume, 123)
-vma321 = ta.ema(volume, 321)
+vma1 = ta.ema(volume, v1_len)
+vma2 = ta.ema(volume, v2_len)
+vma3 = ta.ema(volume, v3_len)
+vma4 = ta.ema(volume, v4_len)
 
 // ── Band crossings ────────────────────────────────────────────────
-vol_above_11  = volume > vma11
-vol_above_47  = volume > vma47
-vol_above_123 = volume > vma123
-vol_above_321 = volume > vma321
+vol_above_1 = volume > vma1
+vol_above_2 = volume > vma2
+vol_above_3 = volume > vma3
+vol_above_4 = volume > vma4
 
-// ── Mirror lock ("As Above, So Below") — purely volume-based ─────
-// Ignition band and macro baseline both trending the same direction
-ignition_up  = vma11 > vma47     // VMA11 above VMA47 = ignition bullish
-macro_up     = vma123 > vma321   // VMA123 above VMA321 = macro bullish
+// ── Mirror lock — purely volume-based ─────────────────────────────
+ignition_up  = vma1 > vma2
+macro_up     = vma3 > vma4
 mirror_bull  = ignition_up and macro_up
 mirror_bear  = not ignition_up and not macro_up
 
-// ── Phi² expansion check: VMA47 / VMA11 ≈ 2.618 ─────────────────
-phi_sq_ratio  = vma47 / vma11
+// ── Phi² expansion check ──────────────────────────────────────────
+phi_sq_ratio  = vma2 / vma1
 phi_expanding = phi_sq_ratio > 2.35 and phi_sq_ratio < 2.90
 
 // ── Signals ───────────────────────────────────────────────────────
-ceiling_breach    = vol_above_321 and mirror_bull
-dark_pool_accum   = vol_above_123 and mirror_bull and not vol_above_321
-phi_ignition      = vol_above_47  and phi_expanding and not dark_pool_accum
-ignition_active   = vol_above_11  and not phi_ignition and not dark_pool_accum
-distribution      = mirror_bear   and vol_above_47
+ceiling_breach    = vol_above_4 and mirror_bull
+dark_pool_accum   = vol_above_3 and mirror_bull and not vol_above_4
+phi_ignition      = vol_above_2 and phi_expanding and not dark_pool_accum
+ignition_active   = vol_above_1 and not phi_ignition and not dark_pool_accum
+distribution      = mirror_bear and vol_above_2
 
 // ── Volume bar color ──────────────────────────────────────────────
 vol_color = ceiling_breach  ? color.new(color.purple, 10) :
@@ -65,21 +58,21 @@ vol_color = ceiling_breach  ? color.new(color.purple, 10) :
             phi_ignition    ? color.new(color.aqua,   20) :
             ignition_active ? color.new(color.teal,   40) :
             distribution    ? color.new(color.red,    30) :
-            volume > vma11  ? color.new(color.gray,   50) :
+            volume > vma1   ? color.new(color.gray,   50) :
                               color.new(color.gray,   75)
 
 // ── Plots ─────────────────────────────────────────────────────────
 plot(show_raw_vol ? volume : na, "Volume",
      style=plot.style_columns, color=vol_color)
 
-plot(vma11,  "VMA 11  (Ignition Low  · DR=2)",
+plot(vma1, "VMA Level 1 (Fast Ignition)",
      color=color.new(color.aqua,   10), linewidth=1)
-plot(vma47,  "VMA 47  (Ignition High · DR=2)",
-     color=color.new(color.teal,   5),  linewidth=2)
-plot(vma123, "VMA 123 (Dark Pool Base · DR=6)",
-     color=color.new(color.blue,   5),  linewidth=2)
-plot(vma321, "VMA 321 (Dark Pool Ceiling · DR=6)",
-     color=color.new(color.purple, 5),  linewidth=3)
+plot(vma2, "VMA Level 2",
+     color=color.new(color.teal,    5), linewidth=2)
+plot(vma3, "VMA Level 3 (Dark Pool Base)",
+     color=color.new(color.blue,    5), linewidth=2)
+plot(vma4, "VMA Level 4 (Dark Pool Ceiling)",
+     color=color.new(color.purple,  5), linewidth=3)
 
 // ── Signal backgrounds ────────────────────────────────────────────
 bgcolor(show_bands and ceiling_breach  ? color.new(color.purple, 75) : na, title="Dark Pool Ceiling Breach")
@@ -88,7 +81,7 @@ bgcolor(show_bands and phi_ignition    ? color.new(color.aqua,   85) : na, title
 bgcolor(show_bands and distribution    ? color.new(color.red,    88) : na, title="Distribution")
 
 // ── Phi² ratio display ────────────────────────────────────────────
-plot(vma47 > 0 ? vma47 / vma11 * vma11 : na, display=display.none)  // ratio for data window
+plot(vma2 > 0 ? vma2 / vma1 * vma1 : na, display=display.none)
 
 // ── Labels ────────────────────────────────────────────────────────
 var label sig_lbl  = na
@@ -98,10 +91,10 @@ if show_labels and barstate.islast
     label.delete(sig_lbl)
     label.delete(phi_lbl)
 
-    sig_txt = ceiling_breach  ? "DARK POOL\nCEILING BREACH\nVol > VMA321" :
-              dark_pool_accum ? "DARK POOL\nACCUMULATION\nVol > VMA123" :
-              phi_ignition    ? "PHI² IGNITION\nVMA47/VMA11 = " + str.tostring(phi_sq_ratio, "#.###") :
-              ignition_active ? "IGNITION BAND\nVol > VMA11" :
+    sig_txt = ceiling_breach  ? "DARK POOL\nCEILING BREACH\nVol > Dark Pool Ceiling" :
+              dark_pool_accum ? "DARK POOL\nACCUMULATION\nVol > Dark Pool Base" :
+              phi_ignition    ? "PHI² IGNITION\nVMA ratio = " + str.tostring(phi_sq_ratio, "#.###") :
+              ignition_active ? "IGNITION BAND\nVol > Fast VMA" :
               distribution    ? "DISTRIBUTION\nMirror lock bear" : "NEUTRAL"
     sig_col = ceiling_breach  ? color.purple :
               dark_pool_accum ? color.blue   :
@@ -113,7 +106,7 @@ if show_labels and barstate.islast
         text=sig_txt, color=sig_col, textcolor=color.white,
         style=label.style_label_down, size=size.normal)
 
-    phi_lbl := label.new(bar_index - 5, vma47,
+    phi_lbl := label.new(bar_index - 5, vma2,
         text="Φ² ratio: " + str.tostring(phi_sq_ratio, "#.###") + "\n(target 2.618)",
         color=phi_expanding ? color.new(color.aqua, 40) : color.new(color.gray, 60),
         textcolor=color.white, style=label.style_label_left, size=size.small)
@@ -121,20 +114,20 @@ if show_labels and barstate.islast
 // ── Alerts ────────────────────────────────────────────────────────
 alertcondition(ceiling_breach,
     "E3 Dark Pool Ceiling Breach",
-    "{{ticker}} — DARK POOL CEILING BREACH: Volume above VMA321 with mirror lock active. E1 price suppression = LIE DETECTOR firing.")
+    "{{ticker}} — DARK POOL CEILING BREACH: Volume above dark-pool ceiling with mirror lock active. E1 price suppression = LIE DETECTOR firing.")
 
 alertcondition(dark_pool_accum,
     "E3 Dark Pool Accumulation",
-    "{{ticker}} — DARK POOL ACCUMULATION: Volume above VMA123. Phi² baseline engaged.")
+    "{{ticker}} — DARK POOL ACCUMULATION: Volume above dark-pool baseline. Macro baseline engaged.")
 
 alertcondition(phi_ignition,
     "E3 Phi² Ignition",
-    "{{ticker}} — PHI² IGNITION: VMA47/VMA11 = " + str.tostring(phi_sq_ratio, "#.###") + " (target 2.618). Volume geometric expansion active.")
+    "{{ticker}} — PHI² IGNITION: Fast VMA ratio = " + str.tostring(phi_sq_ratio, "#.###") + " (target 2.618). Volume geometric expansion active.")
 
-alertcondition(ta.crossover(volume, vma123),
-    "E3 Volume Crosses VMA123",
-    "{{ticker}} — Volume crossed above VMA123 dark-pool baseline. Watch for full ceiling breach.")
+alertcondition(ta.crossover(volume, vma3),
+    "E3 Volume Crosses Dark Pool Base",
+    "{{ticker}} — Volume crossed above dark-pool baseline. Watch for full ceiling breach.")
 
-alertcondition(ta.crossover(volume, vma321),
-    "E3 Volume Crosses VMA321 (Ceiling)",
-    "{{ticker}} — Volume crossed above VMA321 dark-pool ceiling. Maximum institutional kinetics.")
+alertcondition(ta.crossover(volume, vma4),
+    "E3 Volume Crosses Dark Pool Ceiling",
+    "{{ticker}} — Volume crossed above dark-pool ceiling. Maximum institutional kinetics.")

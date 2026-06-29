@@ -5,6 +5,52 @@
 // Formula and period lengths are trade secrets. Do not publish.
 indicator("SML Base-4 Fractal Grid", shorttitle="SML·B4·GRID", overlay=true)
 
+// ── Sequence Inputs (SML Licensed) ───────────────────────────────
+i_s1t = input.int(1, "S1 Trigger", group="SML Licensed — Set 1", minval=1)
+i_s1b = input.int(1, "S1 Base",    group="SML Licensed — Set 1", minval=1)
+i_s1v = input.int(1, "S1 Valid",   group="SML Licensed — Set 1", minval=1)
+i_s1a = input.int(1, "S1 Anchor",  group="SML Licensed — Set 1", minval=1)
+
+i_s2t = input.int(1, "S2 Trigger", group="SML Licensed — Set 2", minval=1)
+i_s2b = input.int(1, "S2 Base",    group="SML Licensed — Set 2", minval=1)
+i_s2v = input.int(1, "S2 Valid",   group="SML Licensed — Set 2", minval=1)
+i_s2a = input.int(1, "S2 Anchor",  group="SML Licensed — Set 2", minval=1)
+
+i_s3t = input.int(1, "S3 Trigger", group="SML Licensed — Set 3", minval=1)
+i_s3b = input.int(1, "S3 Base",    group="SML Licensed — Set 3", minval=1)
+i_s3v = input.int(1, "S3 Valid",   group="SML Licensed — Set 3", minval=1)
+i_s3a = input.int(1, "S3 Anchor",  group="SML Licensed — Set 3", minval=1)
+
+i_s4t = input.int(1, "S4 Trigger", group="SML Licensed — Set 4", minval=1)
+i_s4b = input.int(1, "S4 Base",    group="SML Licensed — Set 4", minval=1)
+i_s4v = input.int(1, "S4 Valid",   group="SML Licensed — Set 4", minval=1)
+i_s4a = input.int(1, "S4 Anchor",  group="SML Licensed — Set 4", minval=1)
+
+i_s5t = input.int(1, "S5 Trigger", group="SML Licensed — Set 5", minval=1)
+i_s5b = input.int(1, "S5 Base",    group="SML Licensed — Set 5", minval=1)
+i_s5v = input.int(1, "S5 Valid",   group="SML Licensed — Set 5", minval=1)
+i_s5a = input.int(1, "S5 Anchor",  group="SML Licensed — Set 5", minval=1)
+
+i_s6t = input.int(1, "S6 Trigger", group="SML Licensed — Set 6", minval=1)
+i_s6b = input.int(1, "S6 Base",    group="SML Licensed — Set 6", minval=1)
+i_s6v = input.int(1, "S6 Valid",   group="SML Licensed — Set 6", minval=1)
+i_s6a = input.int(1, "S6 Anchor",  group="SML Licensed — Set 6", minval=1)
+
+i_s7t = input.int(1, "S7 Trigger", group="SML Licensed — Set 7", minval=1)
+i_s7b = input.int(1, "S7 Base",    group="SML Licensed — Set 7", minval=1)
+i_s7v = input.int(1, "S7 Valid",   group="SML Licensed — Set 7", minval=1)
+i_s7a = input.int(1, "S7 Anchor",  group="SML Licensed — Set 7", minval=1)
+
+i_s8t = input.int(1, "S8 Trigger", group="SML Licensed — Set 8", minval=1)
+i_s8b = input.int(1, "S8 Base",    group="SML Licensed — Set 8", minval=1)
+i_s8v = input.int(1, "S8 Valid",   group="SML Licensed — Set 8", minval=1)
+i_s8a = input.int(1, "S8 Anchor",  group="SML Licensed — Set 8", minval=1)
+
+i_s9t = input.int(1, "S9 Trigger", group="SML Licensed — Set 9", minval=1)
+i_s9b = input.int(1, "S9 Base",    group="SML Licensed — Set 9", minval=1)
+i_s9v = input.int(1, "S9 Valid",   group="SML Licensed — Set 9", minval=1)
+i_s9a = input.int(1, "S9 Anchor",  group="SML Licensed — Set 9", minval=1)
+
 // ── Set Visibility ────────────────────────────────────────────────
 show_s1 = input.bool(false, "S1 — Tier 1", group="Active Sets", inline="r1")
 show_s2 = input.bool(false, "S2 — Tier 2", group="Active Sets", inline="r2")
@@ -19,27 +65,21 @@ conv_min = input.int(3,     "Min sets for convergence", minval=2, maxval=9, grou
 near_pct = input.float(0.5, "Near-price band %",        minval=0.1, maxval=3.0, group="Convergence")
 
 // ── Harmonic Matrix — 9 tiers × 4-layer proprietary stack ─────────
-s1t=ta.ema(close,1);  s1b=ta.ema(close,4);  s1v=ta.ema(close,8);  s1a=ta.ema(close,12)
-s2t=ta.ema(close,2);  s2b=ta.ema(close,8);  s2v=ta.ema(close,16); s2a=ta.ema(close,24)
-s3t=ta.ema(close,3);  s3b=ta.ema(close,12); s3v=ta.ema(close,24); s3a=ta.ema(close,36)
-s4t=ta.ema(close,4);  s4b=ta.ema(close,16); s4v=ta.ema(close,32); s4a=ta.ema(close,48)
-s5t=ta.ema(close,5);  s5b=ta.ema(close,20); s5v=ta.ema(close,40); s5a=ta.ema(close,60)
-s6t=ta.ema(close,6);  s6b=ta.ema(close,24); s6v=ta.ema(close,48); s6a=ta.ema(close,72)
-s7t=ta.ema(close,7);  s7b=ta.ema(close,28); s7v=ta.ema(close,56); s7a=ta.ema(close,84)
-s8t=ta.ema(close,8);  s8b=ta.ema(close,32); s8v=ta.ema(close,64); s8a=ta.ema(close,96)
-s9t=ta.ema(close,9);  s9b=ta.ema(close,36); s9v=ta.ema(close,72); s9a=ta.ema(close,108)
+s1t=ta.ema(close,i_s1t); s1b=ta.ema(close,i_s1b); s1v=ta.ema(close,i_s1v); s1a=ta.ema(close,i_s1a)
+s2t=ta.ema(close,i_s2t); s2b=ta.ema(close,i_s2b); s2v=ta.ema(close,i_s2v); s2a=ta.ema(close,i_s2a)
+s3t=ta.ema(close,i_s3t); s3b=ta.ema(close,i_s3b); s3v=ta.ema(close,i_s3v); s3a=ta.ema(close,i_s3a)
+s4t=ta.ema(close,i_s4t); s4b=ta.ema(close,i_s4b); s4v=ta.ema(close,i_s4v); s4a=ta.ema(close,i_s4a)
+s5t=ta.ema(close,i_s5t); s5b=ta.ema(close,i_s5b); s5v=ta.ema(close,i_s5v); s5a=ta.ema(close,i_s5a)
+s6t=ta.ema(close,i_s6t); s6b=ta.ema(close,i_s6b); s6v=ta.ema(close,i_s6v); s6a=ta.ema(close,i_s6a)
+s7t=ta.ema(close,i_s7t); s7b=ta.ema(close,i_s7b); s7v=ta.ema(close,i_s7v); s7a=ta.ema(close,i_s7a)
+s8t=ta.ema(close,i_s8t); s8b=ta.ema(close,i_s8b); s8v=ta.ema(close,i_s8v); s8a=ta.ema(close,i_s8a)
+s9t=ta.ema(close,i_s9t); s9b=ta.ema(close,i_s9b); s9v=ta.ema(close,i_s9v); s9a=ta.ema(close,i_s9a)
 
 // ── Tier colors ───────────────────────────────────────────────────
 c1=#00BFFF; c2=#00FFFF; c3=#39FF14; c4=#FFE600; c5=#FF8C00
 c6=#FF00FF; c7=#FF1744; c8=#AA00FF; c9=#7B00FF
 
 // ── Full 36-line Harmonic Ribbon ──────────────────────────────────
-// L1 = Trigger (fastest / most transparent)
-// L2 = Base
-// L3 = Vector
-// L4 = Anchor (slowest / most solid)
-// Fills between consecutive layers — proprietary visual envelope
-
 p1t=plot(show_s1?s1t:na,"S1 L1",color=color.new(c1,55),linewidth=1)
 p1b=plot(show_s1?s1b:na,"S1 L2",color=color.new(c1,42),linewidth=1)
 p1v=plot(show_s1?s1v:na,"S1 L3",color=color.new(c1,30),linewidth=1)
@@ -185,7 +225,6 @@ f_row(row, set_lbl, tier_lbl, anchor_val, is_bull, is_bear, is_near, row_col) =>
          bgcolor=near_bg, text_color=sc, text_size=size.small, text_halign=text.align_right)
 
 if barstate.islast
-    // Row 0 — Header
     conv_hdr = max_conv  ? "MAX CONV  9/9" :
                conv_lock ? str.tostring(near_count) + "/9  CONV LOCK" :
                str.tostring(near_count) + "/9  watching"
@@ -200,14 +239,12 @@ if barstate.islast
     table.cell(T, 4, 0, conv_hdr,
          bgcolor=hdr_bg, text_color=hdr_col, text_size=size.small, text_halign=text.align_center)
 
-    // Row 1 — Column headers
     table.cell(T, 0, 1, "SET",    bgcolor=#1A1A1A, text_color=#555555, text_size=size.tiny)
     table.cell(T, 1, 1, "TIER",   bgcolor=#1A1A1A, text_color=#555555, text_size=size.tiny)
     table.cell(T, 2, 1, "ANCHOR", bgcolor=#1A1A1A, text_color=#555555, text_size=size.tiny)
     table.cell(T, 3, 1, "DIST %", bgcolor=#1A1A1A, text_color=#555555, text_size=size.tiny)
     table.cell(T, 4, 1, "STATUS", bgcolor=#1A1A1A, text_color=#555555, text_size=size.tiny)
 
-    // Rows 2-10 — one per tier
     f_row(2,  "S1", "Micro", s1a, s1_bull, s1_bear, s1_near, c1)
     f_row(3,  "S2", "Micro", s2a, s2_bull, s2_bear, s2_near, c2)
     f_row(4,  "S3", "Micro", s3a, s3_bull, s3_bear, s3_near, c3)
@@ -218,7 +255,6 @@ if barstate.islast
     f_row(9,  "S8", "Macro", s8a, s8_bull, s8_bear, s8_near, c8)
     f_row(10, "S9", "Macro", s9a, s9_bull, s9_bear, s9_near, c9)
 
-    // Row 11 — Summary counts
     table.cell(T, 0, 11, "BULL  " + str.tostring(bull_count),
          bgcolor=color.new(#00FF66, 80), text_color=#00FF66, text_size=size.small)
     table.cell(T, 1, 11, "BEAR  " + str.tostring(bear_count),
@@ -229,7 +265,6 @@ if barstate.islast
          bgcolor=#111111, text_color=#555555, text_size=size.small)
     table.cell(T, 4, 11, "", bgcolor=#0A0A0A, text_color=#0A0A0A, text_size=size.small)
 
-    // Row 12 — Cross-node separator
     table.cell(T, 0, 12, "── HARMONIC CROSS-NODES ────────────────",
          bgcolor=#0D0D0D, text_color=#333333, text_size=size.tiny, text_halign=text.align_left)
     table.cell(T, 1, 12, "", bgcolor=#0D0D0D, text_color=#333333, text_size=size.tiny)
@@ -237,7 +272,6 @@ if barstate.islast
     table.cell(T, 3, 12, "", bgcolor=#0D0D0D, text_color=#333333, text_size=size.tiny)
     table.cell(T, 4, 12, "", bgcolor=#0D0D0D, text_color=#333333, text_size=size.tiny)
 
-    // Row 13 — Node Alpha (shared level: S2 anchor / S3 mid / S6 base)
     table.cell(T, 0, 13, "NODE  α",   bgcolor=#0A0A0A, text_color=#555555, text_size=size.tiny)
     table.cell(T, 1, 13, "S2 · S3 · S6",
          bgcolor=#0A0A0A, text_color=#00FFFF, text_size=size.tiny)
@@ -248,7 +282,6 @@ if barstate.islast
     table.cell(T, 4, 13, s2_near ? "NEAR" : "",
          bgcolor=#0A0A0A, text_color=#9900FF, text_size=size.tiny, text_halign=text.align_right)
 
-    // Row 14 — Node Beta (shared level: S6 anchor / S9 mid)
     table.cell(T, 0, 14, "NODE  β",   bgcolor=#0A0A0A, text_color=#555555, text_size=size.tiny)
     table.cell(T, 1, 14, "S6 · S9",
          bgcolor=#0A0A0A, text_color=#FF00FF, text_size=size.tiny)
@@ -259,7 +292,6 @@ if barstate.islast
     table.cell(T, 4, 14, s6_near ? "NEAR" : "",
          bgcolor=#0A0A0A, text_color=#9900FF, text_size=size.tiny, text_halign=text.align_right)
 
-    // Row 15 — Dual-tier lock status
     ds_bg  = dual_bull ? color.new(#00FF66, 60) : dual_bear ? color.new(#FF0055, 60) : #111111
     ds_txt = dual_bull ? "▲  S6 + S9  DUAL BULL  LOCK" :
              dual_bear ? "▼  S6 + S9  DUAL BEAR  LOCK" : "S6 + S9  await alignment"
