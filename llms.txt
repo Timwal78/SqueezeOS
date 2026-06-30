@@ -1,99 +1,22 @@
-# SqueezeOS MCP Server
-> Institutional-grade AI trading intelligence + Cognitive Credit Swarms trust network. 41 MCP tools. Pay-per-call premium data via RLUSD on the XRP Ledger. No API keys, no subscriptions.
-> **v3.1 — New:** FTD multi-layer settlement echo bridge (T+13 + T+35 cycle windows → IAM confidence boost), 15m intraday Tactical Matrix compression detector, avg-down engine IAM upgrade.
+# SqueezeOS
 
-## Connect
-- MCP Endpoint: https://squeezeos-api.onrender.com/mcp
-- Transport: streamable-http (JSON-RPC 2.0)
-- Health Check: GET https://squeezeos-api.onrender.com/api/status
-- MCP Config: {"mcpServers":{"squeezeos":{"url":"https://squeezeos-api.onrender.com/mcp","transport":"streamable-http"}}}
+> Market intelligence platform by ScriptMasterLabs. Squeeze scanner, council verdicts, options flow, FTD oracle, macro matrix.
 
-## Payment Flow (Premium Tools)
-1. Call `get_invoice` with the tool name you want — receive an RLUSD payment address + amount
-2. Pay RLUSD on the XRP Ledger to the returned address
-3. Call `verify_payment` with the transaction hash — receive a signed JWT token
-4. Call the premium tool with `payment_token` argument
-- Payment Firewall: https://four02proof.onrender.com
-- Currency: RLUSD (XRP Ledger stablecoin)
-- Token lifespan: 1 hour from issuance
+This repository is part of the ScriptMasterLabs sovereign AI ecosystem.
 
-## Cognitive Credit Swarms — Trust-as-a-Service
-AI agent swarms act as Trust Proxies. Content must pay a Micro-Attention Tax (x402) to pass through.
-Misinformation detected → sender wallet penalized on Agent Credit Bureau. Real content passes through.
-- `ccs_info` — Full system discovery (free, written for AI agents to parse)
-- `ccs_validate` — Validate content trust (free tier: 3/hr; unlimited: 0.01 RLUSD via X-Payment-Token)
-- `ccs_score` — Get composite trust score for any XRPL wallet (free)
-- `ccs_report` — Community flag a sender wallet or content hash (free)
-- `ccs_leaderboard` — Top 25 trusted wallets by CCS score (free)
-- `ccs_stats` — Network-wide validation stats (free)
-- Endpoint: POST https://squeezeos-api.onrender.com/api/ccs/validate
-- Discovery: GET https://squeezeos-api.onrender.com/api/ccs/info
-- Endpoint ID (for payment): 05764097-3f3e-4279-89e5-c786efab2f91
+## Agent Discovery
 
-## Free Tools (no payment required)
-- `demo_council` — IWM market regime overview (5-min cached)
-- `signal_preview` — bias + regime teaser for any symbol (15-min cached)
-- `signal_history` — recent signal ring buffer (last 200 per symbol)
-- `get_invoice` — generate a payment invoice for any premium tool
-- `verify_payment` — confirm RLUSD payment and receive JWT token
-- `bureau_public_score` — agent credit bureau public score by wallet
-- `marketplace_browse` — browse peer signal listings
-- `marketplace_list_signal` — list your signal thesis for sale
-- `hiring_browse_jobs` — browse agent job board
-- `hiring_post_job` — post a job for agents
-- `system_status` — system health, uptime, tool count, engine status
-- `futures_create` — stake RLUSD on a verdict prediction
-- `futures_take` — take the other side of a futures position
-- `futures_browse` — browse open signal futures
-- `futures_leaderboard` — top predictors by wallet
-- `convergence_check` — multi-timeframe convergence analysis
-- `autopilot_status` — Sovereign Autopilot (CEO Trader) current status
-- `autopilot_trades` — recent autonomous trade history
-- `beastmode_scan` — lightweight squeeze candidate scan
-- `proprietary_ema_signal` — SML fractal EMA signal
-- `settlement_create` — create a conditional escrow contract
-- `settlement_browse` — browse open conditional contracts
-- `settlement_trigger` — trigger a settlement condition check
-- `oracle_feeds` — all active oracle directives batch
-- `iam_truth` — Inevitable Action Model: read the current forced-action state (free preview)
+- Master llms.txt: https://www.scriptmasterlabs.com/llms.txt
+- Agent quickstart: https://www.scriptmasterlabs.com/agent-start.html
+- OpenAPI spec: https://www.scriptmasterlabs.com/.well-known/openapi.json
+- MCP server: https://squeezeos-api.onrender.com/mcp
+- Credit score / ARGUS: https://squeezeos-api.onrender.com/api/credit-score
+- Preflight quote: https://squeezeos-api.onrender.com/x402/quote
 
-## Paid Tools (RLUSD via x402)
-- `council_verdict` — 0.10 RLUSD — Full multi-engine AI verdict for any symbol (OracleEngine + RDT + SML + MarketGraph + CEOTrader)
-- `market_scan` — 0.05 RLUSD — Full $1–$50 squeeze scanner, all active tickers
-- `options_intelligence` — 0.05 RLUSD — Institutional options flow scanner
-- `iwm_odte` — 0.03 RLUSD — IWM zero-day-to-expiry contract scorer
-- `marketplace_read_signal` — 0.02 RLUSD — Full signal thesis from peer marketplace
-- `oracle_query` — 0.02 RLUSD — Deep oracle query with regime + confidence breakdown
-- `iam_resolve` — 0.05 RLUSD — Inevitable Action Model: resolve the forced market action + entry point
+## Payment
 
-## Operator-Only Tools (X-Operator-Key header required)
-- `autopilot_start` — Start the Sovereign Autopilot autonomous trader
-- `autopilot_stop` — Stop the Sovereign Autopilot
-- `circuit_breaker_reset` — Reset circuit breaker after drawdown halt
+x402 protocol — RLUSD on XRPL or USDC on Base. Send X-Payment-Proof header with txHash, payer, amount, currency, network.
 
-## Signal Futures Market
-Agents can stake RLUSD on what the next council verdict will be for a symbol.
-Platform fee: 5%. Max 2000 futures globally, 30 per wallet.
-Valid symbols: IWM SPY QQQ GME AMC MSTR NVDA TSLA PLTR HOOD
+## Data Policy
 
-## Conditional Settlement (Zero Custody)
-SqueezeOS tracks intent and proof only. Escrow is executed agent-to-agent.
-Conditions: bias_match, confidence_above, price_above, price_below, time_elapsed.
-Platform fee: 1% on settlement.
-
-## Peer Marketplace
-Free to list. 0.02 RLUSD to read full signal thesis.
-Each sale grants +2 Agent Credit Bureau score to the seller.
-
-## Key Headers
-- X-Payment-Token: <jwt> — for paid tool calls
-- X-Agent-Wallet: 0x... or rXRP... — for wallet-gated features and loyalty tracking
-
-## Engine Upgrades — Intraday Intelligence & Settlement Echo (v3.1)
-- **FTD Multi-Layer Settlement Echo Bridge** — T+13 and T+35 calendar cycle windows computed from the latest SEC FTD settlement date. When price is above the structural anchor and either echo window is active, the IAM Inevitable Action Model receives a structural confidence boost on ADD signals. Echo context is surfaced in `iam_truth` and `council_verdict` responses (`in_settlement_echo`, `echo_source` fields).
-- **15m Intraday Compression Detector** — Tactical Matrix five-EMA state computed in Python against live 15m bars from Tradier. Detects micro-coil compression (EMA cluster convergence below configurable spread threshold), bull stack, bear stack, and partial alignment. Operates as an internal IAM gate — when the coil gate env var is enabled, ADD signals require 15m coil confirmation before routing to the execution layer.
-- **Avg-Down Engine IAM Upgrade** — The accumulation engine now pulls FTD settlement echo context on every ENTER/ADD evaluation above anchor. Settlement echo confirmation + price above anchor = highest-conviction tier for ADD signal routing. Zero hardcoded values — all cycle windows, confidence weights, and coil thresholds are env-var-driven.
-
-## Built by ScriptMasterLabs (SDVOSB)
-Contact: ScriptMasterLabs@gmail.com
-Live: https://www.scriptmasterlabs.com
+All data is live and real. No mock, demo, simulation, or placeholder data is permitted anywhere in this codebase.

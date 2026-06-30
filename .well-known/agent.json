@@ -1,0 +1,17 @@
+{
+  "schema_version": "2024-11-05",
+  "name": "SqueezeOS",
+  "description": "Market intelligence platform — squeeze scanner, council verdicts, options flow, FTD oracle. Part of the ScriptMasterLabs sovereign AI ecosystem.",
+  "provider": {
+    "organization": "ScriptMasterLabs",
+    "url": "https://www.scriptmasterlabs.com"
+  },
+  "payment_protocol": "x402",
+  "payment_assets": ["RLUSD/XRPL", "USDC/Base"],
+  "mcp_server": "https://squeezeos-api.onrender.com/mcp",
+  "agent_quickstart": "https://www.scriptmasterlabs.com/agent-start.html",
+  "credit_score": "https://squeezeos-api.onrender.com/api/credit-score",
+  "preflight_quote": "https://squeezeos-api.onrender.com/x402/quote",
+  "llms_txt": "https://www.scriptmasterlabs.com/llms.txt",
+  "openapi_spec": "https://www.scriptmasterlabs.com/.well-known/openapi.json"
+}
