@@ -251,8 +251,30 @@ def ccs_validate():
         return jsonify({"error": "CONTENT_TOO_LONG", "message": "Maximum 10,000 characters per validation call."}), 400
 
     paid = False
+
+    # Operator/agent key bypass — mirrors proof402_integration.require_payment's
+    # bypass exactly, so agents (e.g. LEVIATHAN) that already collected payment
+    # upstream via ACP can call this route as an authorized backend without a
+    # real X-Payment-Token and without being subject to the shared-IP free-tier
+    # rate limit meant for unpaid end users.
+    auth_header = request.headers.get("Authorization", "")
+    bearer_key = auth_header.split("Bearer ")[-1].strip() if "Bearer " in auth_header else ""
+    passed_key = (
+        request.headers.get("X-Owner-Key")
+        or request.headers.get("X-API-Key")
+        or bearer_key
+    )
+    if passed_key:
+        from proof402_integration import OWNER_API_KEY
+        agent_keys = [k.strip() for k in os.getenv("AGENT_API_KEYS", "").split(",") if k.strip()]
+        valid_keys = [k for k in [os.getenv("OPERATOR_API_KEY"), OWNER_API_KEY] if k] + agent_keys
+        if passed_key in valid_keys:
+            paid = True
+
     token = request.headers.get("X-Payment-Token")
-    if token:
+    if paid:
+        pass
+    elif token:
         token_result = _check_payment_token(token)
         if not token_result.get("valid"):
             reason = token_result.get("reason", "ERR_TOKEN_INVALID")
