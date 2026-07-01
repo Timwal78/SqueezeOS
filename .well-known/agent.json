@@ -10,8 +10,8 @@
   "payment_assets": ["RLUSD/XRPL", "USDC/Base"],
   "mcp_server": "https://squeezeos-api.onrender.com/mcp",
   "agent_quickstart": "https://www.scriptmasterlabs.com/agent-start.html",
-  "credit_score": "https://squeezeos-api.onrender.com/api/credit-score",
-  "preflight_quote": "https://squeezeos-api.onrender.com/x402/quote",
-  "llms_txt": "https://www.scriptmasterlabs.com/llms.txt",
-  "openapi_spec": "https://www.scriptmasterlabs.com/.well-known/openapi.json"
+  "credit_score": "https://four02proof.onrender.com/v1/bureau/score/{wallet}",
+  "preflight_quote": "https://ghost-layer.onrender.com/v1/x402/quote",
+  "llms_txt": "https://squeezeos-api.onrender.com/llms.txt",
+  "openapi_spec": "https://squeezeos-api.onrender.com/.well-known/openapi.json"
 }

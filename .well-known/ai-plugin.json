@@ -2,7 +2,7 @@
   "schema_version": "v1",
   "name_for_human": "SqueezeOS",
   "name_for_model": "squeezeos",
-  "description_for_human": "Institutional trading MCP server with 33 tools. Short-squeeze detection, FTD analysis, x402 payment gating.",
+  "description_for_human": "Institutional trading MCP server with 47 tools. Short-squeeze detection, FTD analysis, x402 payment gating.",
   "description_for_model": "Provides institutional trading signals including short-squeeze detection, FTD cycle analysis, market regime, and earnings intelligence via MCP protocol with x402 micropayment gating.",
   "auth": {
     "type": "none"
