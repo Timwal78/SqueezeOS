@@ -46,6 +46,7 @@ from core.ftd_data import (
     get_store,
 )
 from proof402_integration import (
+    OWNER_API_KEY,
     PROOF402_SERVER,
     _issue_invoice,
     _verify_token_local,
@@ -53,6 +54,25 @@ from proof402_integration import (
 
 logger = logging.getLogger("SqueezeOS-FTD-API")
 ftd_bp = Blueprint("ftd", __name__)
+
+
+def _operator_key_wallet() -> str | None:
+    """
+    Operator/agent key bypass, mirroring require_payment's exact logic.
+    Returns a sentinel wallet string if the caller passed a valid
+    OPERATOR_API_KEY / OWNER_API_KEY / AGENT_API_KEYS value, else None.
+    Lets agents (e.g. LEVIATHAN) that already collected payment upstream via
+    ACP call these FTD routes as an authorized backend without a real
+    X-Payment-Token or X-PAYMENT header.
+    """
+    auth_header = request.headers.get("Authorization", "")
+    bearer_key = auth_header.split("Bearer ")[-1].strip() if "Bearer " in auth_header else ""
+    passed_key = request.headers.get("X-Owner-Key") or request.headers.get("X-API-Key") or bearer_key
+    if not passed_key:
+        return None
+    agent_keys = [k.strip() for k in os.getenv("AGENT_API_KEYS", "").split(",") if k.strip()]
+    valid_keys = [k for k in [os.getenv("OPERATOR_API_KEY"), OWNER_API_KEY] if k] + agent_keys
+    return "API_KEY_USER" if passed_key in valid_keys else None
 
 # Endpoint IDs registered with 402Proof. These are deterministic UUIDs so the
 # 402Proof dashboard can refer to them across deployments. Keep them stable.
@@ -66,6 +86,10 @@ FTD_DEEP_ENDPOINT_ID = "a4b5c6d7-e003-4f3e-aa24-d52e3bc12b5a"   # 0.05 RLUSD
 
 def _gate(endpoint_id: str, price_rlusd: str):
     """Return (wallet, None) on success, or (None, flask_response) on 402/401."""
+    operator_wallet = _operator_key_wallet()
+    if operator_wallet is not None:
+        return operator_wallet, None
+
     token = request.headers.get("X-Payment-Token", "")
     if token:
         res = _verify_token_local(token)
@@ -627,6 +651,10 @@ def _gate_dual(endpoint_id: str, price_rlusd: str, price_usdc: str, description:
     import base64 as _b64
     import json as _json
     from x402_flask import _payment_requirements, _facilitator, _402 as _x402_402
+
+    operator_wallet = _operator_key_wallet()
+    if operator_wallet is not None:
+        return operator_wallet, None, None
 
     token = request.headers.get("X-Payment-Token", "")
     if token:
