@@ -5,14 +5,14 @@
       "url": "https://squeezeos-api.onrender.com/mcp",
       "transport": "streamable-http",
       "name": "SqueezeOS — Institutional Market Intelligence",
-      "description": "41 MCP tools: institutional equity intelligence (squeeze scanner, options flow, IWM 0DTE, AI council verdicts, IAM resolver, autopilot) + Cognitive Credit Swarms (content trust validation, Micro-Attention Tax, sender reputation on Agent Credit Bureau). Pay-per-call via x402. Pay-per-call via x402 (RLUSD on XRPL or USDC on Base). Free tools included.",
+      "description": "47 MCP tools: institutional equity intelligence (squeeze scanner, options flow, IWM 0DTE, AI council verdicts, IAM resolver, autopilot) + Cognitive Credit Swarms (content trust validation, Micro-Attention Tax, sender reputation on Agent Credit Bureau) + Sovereign signal suite (741 Macro, 365 Anchor, Triple Lock). Pay-per-call via x402 (RLUSD on XRPL or USDC on Base). Free tools included.",
       "version": "5.0.0"
     }
   },
   "mcp_version": "1.0",
   "name": "sml-oracle",
   "display_name": "SqueezeOS — Institutional Market Intelligence (Script Master Labs)",
-  "description": "DISAMBIGUATION: This is SqueezeOS by Script Master Labs — institutional AI trading intelligence. NOT Logitech SqueezeOS (media player OS). 41 MCP tools: squeeze scanner, options flow, IWM 0DTE analysis, AI council verdicts, IAM resolver, autopilot controls, convergence signals — all gated by x402 micropayment. No API keys required. Free tools included.",
+  "description": "DISAMBIGUATION: This is SqueezeOS by Script Master Labs — institutional AI trading intelligence. NOT Logitech SqueezeOS (media player OS). 47 MCP tools: squeeze scanner, options flow, IWM 0DTE analysis, AI council verdicts, IAM resolver, autopilot controls, convergence signals, Cognitive Credit Swarms trust network, Sovereign signal suite — all gated by x402 micropayment. No API keys required. Free tools included.",
   "homepage": "https://www.scriptmasterlabs.com",
   "mcp_endpoint": "https://squeezeos-api.onrender.com/mcp",
   "transport": "streamable-http",
@@ -66,7 +66,13 @@
     "beastmode_scan",
     "proprietary_ema_signal",
     "oracle_feeds",
-    "iam_truth"
+    "iam_truth",
+    "ccs_info",
+    "ccs_score",
+    "ccs_report",
+    "ccs_leaderboard",
+    "ccs_stats",
+    "post_to_slack"
   ],
   "paid_tools": [
     { "name": "council_verdict",          "price_rlusd": 0.10 },
@@ -75,7 +81,13 @@
     { "name": "iwm_odte",                 "price_rlusd": 0.03 },
     { "name": "marketplace_read_signal",  "price_rlusd": 0.02 },
     { "name": "oracle_query",             "price_rlusd": 0.02 },
-    { "name": "iam_resolve",              "price_rlusd": 0.05 }
+    { "name": "iam_resolve",              "price_rlusd": 0.05 },
+    { "name": "ccs_validate",             "price_rlusd": 0.01 },
+    { "name": "sovereign_741",            "price_rlusd": 0.02 },
+    { "name": "sovereign_365",            "price_rlusd": 0.03 },
+    { "name": "macro_741_scan",           "price_rlusd": 0.04 },
+    { "name": "sovereign_triplelock",     "price_rlusd": 0.05 },
+    { "name": "sovereign_full",           "price_rlusd": 0.10 }
   ],
   "agent_quick_start": [
     "1. Call any free tool (e.g. demo_council, signal_preview) — no payment needed",
