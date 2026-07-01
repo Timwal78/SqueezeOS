@@ -245,7 +245,16 @@ def create_app():
         response.headers['X-Frame-Options'] = 'DENY'
         response.headers['X-XSS-Protection'] = '1; mode=block'
         response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
-        response.headers['Content-Security-Policy'] = "default-src 'self'"
+        # style-src allows 'unsafe-inline' because the FTD dashboard and Agent
+        # Passport pages both use a single embedded <style> block rather than
+        # an external stylesheet -- default-src 'self' alone silently drops
+        # inline <style> tags per the CSP spec (confirmed live: the HTML
+        # structure rendered correctly but zero CSS applied). img-src allows
+        # data: because both pages' apple-touch-icon is an inline data-URI
+        # SVG, which default-src 'self' also blocks. Script sources remain
+        # restricted to 'self' only -- this does not affect XSS protection
+        # against injected scripts.
+        response.headers['Content-Security-Policy'] = "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
         response.headers['Link'] = '<https://squeezeos-api.onrender.com/.well-known/agents.json>; rel="payment"'
         if 'text/html' in response.content_type:
             response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
