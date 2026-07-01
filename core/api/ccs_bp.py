@@ -389,16 +389,8 @@ def ccs_score():
 
     ledger = _get_wallet_trust(wallet)
 
-    # Optionally pull Credit Bureau score from 402Proof
-    bureau_score = None
-    try:
-        import urllib.request as _urlreq, json as _json
-        proof_base = os.getenv("PROOF402_SERVER_URL", "https://four02proof.onrender.com")
-        with _urlreq.urlopen(f"{proof_base}/v1/agent/{wallet}", timeout=5) as r:
-            bureau_data = _json.loads(r.read())
-            bureau_score = bureau_data.get("score")
-    except Exception:
-        pass
+    from proof402_integration import fetch_credit_bureau_score
+    bureau_score = fetch_credit_bureau_score(wallet)
 
     return jsonify({
         "wallet": wallet,
