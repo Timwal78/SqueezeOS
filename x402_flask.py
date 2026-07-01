@@ -142,6 +142,27 @@ def x402_guard(price_usdc: str, description: str, discoverable: bool = True):
             resource = request.base_url
             reqs = _payment_requirements(price_usdc, description, resource)
 
+            # ── Operator/agent key bypass ──
+            # Mirrors proof402_integration.require_payment's bypass exactly:
+            # a request carrying a valid OPERATOR_API_KEY / OWNER_API_KEY / one
+            # of AGENT_API_KEYS skips on-chain x402 settlement. Needed for
+            # agents (e.g. LEVIATHAN) that already collected payment upstream
+            # via ACP and are calling this route as an authorized backend, not
+            # as a paying end-user — this decorator previously had no such
+            # bypass, so every ACP-resold job routed through it 402'd even
+            # after the buyer had already paid LEVIATHAN.
+            auth_header = request.headers.get("Authorization", "")
+            bearer_key = auth_header.split("Bearer ")[-1].strip() if "Bearer " in auth_header else ""
+            passed_key = (
+                request.headers.get("X-Owner-Key")
+                or request.headers.get("X-API-Key")
+                or bearer_key
+            )
+            agent_keys = [k.strip() for k in os.environ.get("AGENT_API_KEYS", "").split(",") if k.strip()]
+            valid_keys = [k for k in [os.environ.get("OPERATOR_API_KEY"), os.environ.get("OWNER_API_KEY")] if k] + agent_keys
+            if passed_key and passed_key in valid_keys:
+                return fn(*args, **kwargs)
+
             # ── AP2 mandate gate (Google Agent Payments Protocol) ──
             # Modes via env AP2_MODE: "off" | "optional" (default) | "required"
             ap2_mode = os.environ.get("AP2_MODE", "optional").lower()
