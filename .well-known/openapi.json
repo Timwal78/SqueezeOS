@@ -3,7 +3,7 @@
   "info": {
     "title": "Script Master Labs \u2014 SqueezeOS, 402Proof & Ghost Layer API",
     "version": "3.0.0",
-    "description": "ScriptMasterLabs institutional API \u2014 x402/HTTP-402 micropayment gated. AI agents: pay per call in USDC on Base or RLUSD on XRPL. Enterprise: OAuth 2.0 client credentials flow. MCP: 33 tools at /mcp (JSON-RPC 2.0).",
+    "description": "ScriptMasterLabs institutional API \u2014 x402/HTTP-402 micropayment gated. AI agents: pay per call in USDC on Base or RLUSD on XRPL. Enterprise: OAuth 2.0 client credentials flow. MCP: 47 tools at /mcp (JSON-RPC 2.0).",
     "contact": {
       "name": "Script Master Labs",
       "url": "https://www.scriptmasterlabs.com"
@@ -2321,7 +2321,7 @@
       },
       "post": {
         "operationId": "mcpJsonRpc",
-        "summary": "MCP JSON-RPC 2.0 endpoint \u2014 33 tools",
+        "summary": "MCP JSON-RPC 2.0 endpoint \u2014 47 tools",
         "description": "Full MCP protocol endpoint. Supports initialize, tools/list, tools/call. 33 institutional-grade tools across market intelligence, oracle data, futures, settlement, and agent economy.",
         "tags": [
           "MCP"
@@ -3186,7 +3186,7 @@
     },
     {
       "name": "MCP",
-      "description": "Model Context Protocol JSON-RPC 2.0 server \u2014 33 tools"
+      "description": "Model Context Protocol JSON-RPC 2.0 server \u2014 47 tools"
     }
   ]
 }
