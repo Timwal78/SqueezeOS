@@ -46,14 +46,21 @@ _DISCOVERY_PATHS = frozenset({
     "/llms.txt", "/robots.txt", "/openapi.json",
     "/.well-known/mcp.json", "/.well-known/openapi.json",
     "/.well-known/agents.json", "/.well-known/ai-plugin.json",
-    "/.well-known/server.json",
+    "/.well-known/server.json", "/.well-known/x402",
 })
 
 _FREE_PREFIXES = (
     "/api/demo", "/api/preview", "/api/history",
-    "/api/marketplace", "/api/hiring", "/api/status",
+    "/api/marketplace", "/api/hiring",
     "/api/relay/nodes", "/api/events",
 )
+
+# /api/status is Render's health-check target (render.yaml) and the
+# keepalive.yml cron's ping target, not a business signal -- it dwarfs real
+# agent traffic and was inflating FREE_TRIAL counts with self-pings. Staged
+# separately and excluded from agent/funnel aggregates below, but still
+# recorded in raw all-time/top-path counters for transparency.
+_INFRA_HEALTHCHECK_PATHS = frozenset({"/api/status"})
 
 _PREMIUM_PREFIXES = (
     "/api/council", "/api/scan", "/api/options",
@@ -61,6 +68,8 @@ _PREMIUM_PREFIXES = (
 )
 
 def _funnel_stage(path: str, status: int, has_token: bool) -> str:
+    if path in _INFRA_HEALTHCHECK_PATHS:
+        return "INFRA_HEALTHCHECK"
     if path in _DISCOVERY_PATHS:
         return "DISCOVERED"
     if status == 402:
@@ -180,7 +189,7 @@ def agent_dashboard():
 
     for e in entries_24h:
         t = e["agent_type"]
-        if t != "human":
+        if t != "human" and e["stage"] != "INFRA_HEALTHCHECK":
             type_24h[t] += 1
             stage_24h[e["stage"]] += 1
             path_24h[e["path"]] += 1
@@ -199,8 +208,8 @@ def agent_dashboard():
         "CONVERTED":       stage_24h.get("CONVERTED", 0),
     }
 
-    disc = funnel["DISCOVERED"] or 1
-    free = funnel["FREE_TRIAL"] or 1
+    disc = funnel["DISCOVERED"]
+    free = funnel["FREE_TRIAL"]
 
     with _counters_lock:
         total_all_time = _counters["total"]
@@ -226,16 +235,19 @@ def agent_dashboard():
             "top_paths":            dict(sorted(path_24h.items(), key=lambda x: -x[1])[:10]),
         },
         "last_7d": {
-            "total_agent_requests": sum(1 for e in entries_7d if e["agent_type"] != "human"),
+            "total_agent_requests": sum(1 for e in entries_7d if e["agent_type"] != "human" and e["stage"] != "INFRA_HEALTHCHECK"),
             "paid_requests":        sum(1 for e in entries_7d if e["paid"]),
             "unique_wallets":       len({e["wallet"] for e in entries_7d if e["wallet"]}),
         },
         "funnel_24h": {
             **funnel,
-            "discovery_to_free_pct":     round(funnel["FREE_TRIAL"] / disc * 100, 1),
-            "free_to_invoice_pct":        round(funnel["INVOICED"] / free * 100, 1),
-            "invoice_to_convert_pct":     round(funnel["CONVERTED"] / max(funnel["INVOICED"], 1) * 100, 1),
-            "overall_conversion_pct":     round(funnel["CONVERTED"] / max(total_agents_24h, 1) * 100, 2),
+            # None (not 0 or an inflated %) when the denominator is actually
+            # zero -- a fabricated ratio like "30100%" is worse than admitting
+            # the rate is undefined with no discovery/free/invoice events yet.
+            "discovery_to_free_pct":     round(funnel["FREE_TRIAL"] / disc * 100, 1) if disc else None,
+            "free_to_invoice_pct":        round(funnel["INVOICED"] / free * 100, 1) if free else None,
+            "invoice_to_convert_pct":     round(funnel["CONVERTED"] / funnel["INVOICED"] * 100, 1) if funnel["INVOICED"] else None,
+            "overall_conversion_pct":     round(funnel["CONVERTED"] / total_agents_24h * 100, 2) if total_agents_24h else None,
         },
         "shortlist_analysis": {
             "description": "Agents that hit free/preview endpoints but never paid",
@@ -250,7 +262,8 @@ def agent_dashboard():
 def agent_live():
     """Last 50 agent requests — real-time feed."""
     with _log_lock:
-        recent = [e for e in reversed(_log[-200:]) if e["agent_type"] != "human"][:50]
+        recent = [e for e in reversed(_log[-200:])
+                  if e["agent_type"] != "human" and e["stage"] != "INFRA_HEALTHCHECK"][:50]
     return jsonify({
         "requests": recent,
         "count":    len(recent),
@@ -267,7 +280,7 @@ def agent_funnel():
     funnel: dict[str, int] = defaultdict(int)
     by_type: dict[str, int] = defaultdict(int)
     for e in entries:
-        if e["agent_type"] == "human":
+        if e["agent_type"] == "human" or e["stage"] == "INFRA_HEALTHCHECK":
             continue
         funnel[e["stage"]] += 1
         by_type[e["agent_type"]] += 1
