@@ -122,7 +122,8 @@ For AWS Marketplace listings, Mastercard developer portal integration, ISO 20022
 
 **Email:** scriptmasterlabs@gmail.com  
 **Entity:** Script Master Labs LLC (SDVOSB — Service-Disabled Veteran-Owned Small Business)  
-**Location:** Kinston, North Carolina, USA
+**Location:** Kinston, North Carolina, USA  
+**SAM.gov Registration:** Active — UEI `G24VZA4RLMK3`, CAGE code `21U51` (renewal due 2027-06-21)
 
 ---
 

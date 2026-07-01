@@ -4,7 +4,15 @@
   "description": "Market intelligence platform — squeeze scanner, council verdicts, options flow, FTD oracle. Part of the ScriptMasterLabs sovereign AI ecosystem.",
   "provider": {
     "organization": "ScriptMasterLabs",
-    "url": "https://www.scriptmasterlabs.com"
+    "url": "https://www.scriptmasterlabs.com",
+    "legal_entity_name": "SCRIPT MASTER LABS, LLC",
+    "federal_registration": {
+      "system": "SAM.gov",
+      "uei": "G24VZA4RLMK3",
+      "cage_code": "21U51",
+      "status": "active",
+      "renewal_due": "2027-06-21"
+    }
   },
   "payment_protocol": "x402",
   "payment_assets": ["RLUSD/XRPL", "USDC/Base"],

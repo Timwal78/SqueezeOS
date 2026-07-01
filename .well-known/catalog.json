@@ -3,6 +3,14 @@
   "schema_version": "1.0",
   "catalog_id": "com.scriptmasterlabs",
   "operator": "Script Master Labs",
+  "legal_entity_name": "SCRIPT MASTER LABS, LLC",
+  "federal_registration": {
+    "system": "SAM.gov",
+    "uei": "G24VZA4RLMK3",
+    "cage_code": "21U51",
+    "status": "active",
+    "renewal_due": "2027-06-21"
+  },
   "homepage": "https://www.scriptmasterlabs.com",
   "contact": "https://www.scriptmasterlabs.com",
   "description": "Full-stack AI agent economy on the XRP Ledger. Zero API keys. Zero custody. Zero subscriptions. Every service is pay-per-call via x402/RLUSD micropayment. Includes market intelligence, ZK routing, payment firewall, agent credit bureau, prediction markets, swarm coordination, and remittance rails.",

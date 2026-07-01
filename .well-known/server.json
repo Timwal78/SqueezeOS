@@ -56,6 +56,9 @@
   "_meta": {
     "io.modelcontextprotocol.registry/publisher-provided": {
       "operator": "Script Master Labs",
+      "legal_entity_name": "SCRIPT MASTER LABS, LLC",
+      "sam_gov_uei": "G24VZA4RLMK3",
+      "sam_gov_cage_code": "21U51",
       "contact": "https://www.scriptmasterlabs.com",
       "payment_protocol": "x402",
       "free_demo": "https://squeezeos-api.onrender.com/api/demo/council",
