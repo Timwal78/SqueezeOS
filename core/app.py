@@ -31,6 +31,7 @@ from core.api.settlement_bp import settlement_bp
 from core.api.futures_bp import futures_bp
 from core.api.oracle_data_bp import oracle_data_bp, start_oracle_pollers
 from core.api.ftd_bp import ftd_bp
+from core.api.passport_bp import passport_bp
 from core.ftd_data import start_ftd_pollers
 from core.api.agent_analytics import analytics_bp, before_analytics, after_analytics
 from core.api.agent_interceptor import add_discovery_headers
@@ -142,6 +143,7 @@ def create_app():
     app.register_blueprint(futures_bp,     url_prefix='/api/futures')
     app.register_blueprint(oracle_data_bp, url_prefix='/api/oracle')
     app.register_blueprint(ftd_bp,         url_prefix='/api/ftd')
+    app.register_blueprint(passport_bp,    url_prefix='/api/passport')
     app.register_blueprint(stigmergy_bp,  url_prefix='/api/stigmergy')
     app.register_blueprint(notary_bp,     url_prefix='/api/notary')
     app.register_blueprint(triple_lock_bp, url_prefix='/api/triple-lock')

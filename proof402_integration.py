@@ -64,6 +64,26 @@ PROOF402_SERVER     = os.getenv('PROOF402_SERVER_URL', 'https://four02proof.onre
 PROOF402_SECRET     = os.getenv('PROOF402_TOKEN_SECRET', '')  # same as Render TOKEN_SECRET
 OWNER_API_KEY       = os.getenv('OWNER_API_KEY', '')          # set this to bypass payment as owner
 
+
+def fetch_credit_bureau_score(wallet: str, timeout: float = 5.0):
+    """
+    Best-effort fetch of an agent's Agent Credit Bureau score (300-850) from
+    402Proof. Returns None (never raises) if 402Proof is unreachable or the
+    wallet has no score yet -- callers must treat None as "unavailable", not
+    zero. Shared by ccs_bp.py and passport_bp.py so both sources of truth
+    stay in sync when this call's shape changes.
+    """
+    if not wallet:
+        return None
+    try:
+        import requests
+        resp = requests.get(f"{PROOF402_SERVER}/v1/agent/{wallet}", timeout=timeout)
+        if resp.ok:
+            return resp.json().get("score")
+    except Exception:
+        pass
+    return None
+
 # ── Endpoint IDs (registered in 402Proof dashboard) ──────────────────────────
 ENDPOINTS = {
     '/api/council':          '12a0e7a1-6812-4c3f-aa24-de6e3bc12b5a',  # 0.10 RLUSD
