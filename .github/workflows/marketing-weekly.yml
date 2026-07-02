@@ -1,0 +1,183 @@
+name: SML Marketing Department — Weekly Campaign
+
+on:
+  schedule:
+    # Every Monday at 08:00 ET (13:00 UTC) — start of the work week
+    - cron: '0 13 * * 1'
+  workflow_dispatch:
+    inputs:
+      agents:
+        description: 'Agents to run (comma-separated: ranger,scout,federal,director or "all")'
+        default: 'all'
+        required: false
+
+jobs:
+  directory-ranger:
+    name: Directory Ranger — Find unlisted platforms
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.11'
+      - run: pip install anthropic requests
+      - name: Run Directory Ranger
+        env:
+          ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
+          SQUEEZEOS_BASE_URL: https://squeezeos-api.onrender.com
+          SEO_OUTPUT_DIR:     agent/outputs
+          DEPT_MODEL:         claude-opus-4-8
+        run: python -c "from agent.dept import directory_ranger; directory_ranger.run()"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ranger-report-${{ github.run_id }}
+          path: agent/outputs/listings/
+          retention-days: 90
+
+  community-scout:
+    name: Community Scout — Find developer conversations
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.11'
+      - run: pip install anthropic requests
+      - name: Run Community Scout
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SEO_OUTPUT_DIR:    agent/outputs
+          DEPT_MODEL:        claude-opus-4-8
+        run: python -c "from agent.dept import community_scout; community_scout.run()"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scout-report-${{ github.run_id }}
+          path: agent/outputs/scout/
+          retention-days: 90
+
+  federal-scout:
+    name: Federal Scout — Find government AI opportunities
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.11'
+      - run: pip install anthropic requests
+      - name: Run Federal Scout
+        env:
+          ANTHROPIC_API_KEY:   ${{ secrets.ANTHROPIC_API_KEY }}
+          SQUEEZEOS_BASE_URL:  https://squeezeos-api.onrender.com
+          MCP_X402_BASE_URL:   https://mcp-x402.onrender.com
+          X402_PAYMENT_TOKEN:  ${{ secrets.X402_PAYMENT_TOKEN }}
+          SEO_OUTPUT_DIR:      agent/outputs
+          DEPT_MODEL:          claude-opus-4-8
+        run: python -c "from agent.dept import federal_scout; federal_scout.run()"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: federal-report-${{ github.run_id }}
+          path: agent/outputs/federal/
+          retention-days: 90
+
+  campaign-director:
+    name: Campaign Director — Weekly KPI report
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [directory-ranger, community-scout, federal-scout]
+    if: always()   # run even if individual agents had errors
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.11'
+      - run: pip install anthropic requests
+      # Download outputs from earlier jobs so director can read them
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: '*-report-${{ github.run_id }}'
+          path: agent/outputs/
+          merge-multiple: true
+        continue-on-error: true
+      - name: Run Campaign Director (synthesis only)
+        env:
+          ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
+          SQUEEZEOS_BASE_URL: https://squeezeos-api.onrender.com
+          SEO_SLACK_WEBHOOK:  ${{ secrets.SEO_SLACK_WEBHOOK }}
+          SEO_OUTPUT_DIR:     agent/outputs
+          DEPT_MODEL:         claude-opus-4-8
+        run: |
+          python -c "
+          import os, json, datetime, re, glob, requests, anthropic
+
+          ANTH_KEY   = os.environ['ANTHROPIC_API_KEY']
+          SQUEEZEOS  = os.environ.get('SQUEEZEOS_BASE_URL','https://squeezeos-api.onrender.com')
+          SLACK      = os.environ.get('SEO_SLACK_WEBHOOK','')
+          OUT_DIR    = os.environ.get('SEO_OUTPUT_DIR','agent/outputs')
+          today      = datetime.date.today().isoformat()
+
+          def load_all(subdir):
+              out = []
+              for p in glob.glob(f'{OUT_DIR}/{subdir}/*.json'):
+                  try:
+                      with open(p) as f: out.append(json.load(f))
+                  except: pass
+              return out
+
+          listings = load_all('listings')
+          scout    = load_all('scout')
+          federal  = load_all('federal')
+          content  = load_all('content')
+
+          try:
+              status = requests.get(f'{SQUEEZEOS}/api/status', timeout=15).json()
+          except:
+              status = {}
+
+          summary = {
+              'date': today,
+              'listings_runs': len(listings),
+              'scout_runs':    len(scout),
+              'federal_runs':  len(federal),
+              'content_pages': len(content),
+              'api_status':    status.get('status','unknown'),
+              'listing_sample': (listings[0].get('already_listed',[]) if listings else [])[:5],
+              'unlisted':      (listings[0].get('not_listed',[]) if listings else [])[:5],
+              'top_opps':      (scout[0].get('top_opportunities',[]) if scout else [])[:3],
+              'fed_high':      (federal[0].get('high_relevance',[]) if federal else [])[:2],
+          }
+
+          client = anthropic.Anthropic(api_key=ANTH_KEY)
+          resp = client.messages.create(
+              model=os.environ.get('DEPT_MODEL','claude-opus-4-8'),
+              max_tokens=1024,
+              messages=[{'role':'user','content':f'Write a 4-sentence weekly marketing campaign report for Script Master Labs based on: {json.dumps(summary)}. Format as plain text. Include: directories covered, community opps found, federal opps, next priorities.'}],
+          )
+          briefing = resp.content[0].text if resp.content else 'Report unavailable.'
+
+          print('\\n' + '='*60)
+          print('SML WEEKLY CAMPAIGN REPORT —', today)
+          print('='*60)
+          print(briefing)
+          print(f'\\nListings checked: {len((listings[0].get(\"already_listed\",[]) if listings else []) + (listings[0].get(\"not_listed\",[]) if listings else []))}')
+          print(f'Community opps: {len(scout[0].get(\"opportunities\",[]) if scout else [])}')
+          print(f'Federal opps: {len(federal[0].get(\"high_relevance\",[]) if federal else [])}')
+
+          if SLACK:
+              try:
+                  requests.post(SLACK, json={'text': f'*SML Weekly Campaign — {today}*\\n>{briefing}'}, timeout=10)
+                  print('Slack delivered')
+              except Exception as e:
+                  print(f'Slack failed: {e}')
+          "
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: campaign-report-${{ github.run_id }}
+          path: agent/outputs/campaign/
+          retention-days: 90
