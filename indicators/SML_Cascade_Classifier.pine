@@ -9,12 +9,13 @@
 //
 // Institutional-grade additions (tuned for 15m/65m intraday use):
 // order-flow confirmation gate, volatility-regime floor, ADX trend-regime
-// filter, higher-timeframe (default 4H) trend alignment filter, a
-// confirmed-bar-only signal gate to eliminate intrabar repaint, an ATR
-// stop-loss on the performance tracker (previously every signal rode the
-// full prediction horizon uncut, the single biggest driver of max
-// drawdown), and a max-concurrent-signals cap to stop correlated losers
-// from stacking on fast-moving symbols.
+// filter, HH/HL swing-structure filter (complements ADX — catches trend
+// breaks that magnitude-only ADX misses), higher-timeframe (default 4H)
+// trend alignment filter, a confirmed-bar-only signal gate to eliminate
+// intrabar repaint, an ATR stop-loss on the performance tracker
+// (previously every signal rode the full prediction horizon uncut, the
+// single biggest driver of max drawdown), and a max-concurrent-signals
+// cap to stop correlated losers from stacking on fast-moving symbols.
 indicator("SML Cascade Classifier", shorttitle="SML-Cascade", overlay=true, max_bars_back=500, max_labels_count=500, max_lines_count=500, max_boxes_count=500)
 // ═══════════════════════════════════════════════════════════════════════════════
 //
@@ -73,6 +74,8 @@ i_adxMin      = input.float(20.0, "Min ADX", minval=10.0, maxval=40.0, step=1.0,
 i_requireHTF  = input.bool(true, "Require Higher-Timeframe Trend Alignment", group=grp_regime, tooltip="SML addition: block counter-trend entries against the higher-timeframe structure. Default 4H suits 15m/65m intraday charts — longs need price above the HTF EMA with the HTF EMA rising, shorts the mirror.")
 i_htfRes      = input.timeframe("240", "Higher Timeframe", group=grp_regime, tooltip="Default 240 (4H). For a 15m chart consider 60-240; for a 65m chart consider 240-D.")
 i_htfEmaLen   = input.int(50, "HTF EMA Length", minval=10, maxval=200, group=grp_regime)
+i_requireStructure = input.bool(true, "Require HH/HL Swing Structure", group=grp_regime, tooltip="SML addition: ADX measures trend strength (magnitude) but is direction-blind to reversal — it can stay elevated right as a trend is exhausting. Swing structure catches the moment a trend actually breaks: a failed higher-high, or price taking out the last higher-low, often the exact move that blows through a stop. Longs require the two most recent confirmed pivots to be a higher-high AND higher-low; shorts the mirror (lower-high/lower-low).")
+i_pivotLen    = input.int(5, "Structure Pivot Bars (L/R)", minval=2, maxval=20, group=grp_regime, tooltip="Bars on each side required to confirm a swing pivot. Lower = more responsive but noisier; higher = fewer, more reliable pivots.")
 grp_risk = "🛡 Risk Management"
 i_useStopLoss  = input.bool(true, "Use ATR Stop-Loss", group=grp_risk, tooltip="SML addition: the original performance tracker held every signal for the full Prediction Horizon with no exit — a trade that moved hard against you rode the entire horizon before closing, which is the single biggest driver of max drawdown. Now every open signal is checked every bar for a stop-loss hit and exits immediately at the stop instead of waiting.")
 i_stopAtrMult  = input.float(1.5, "Stop-Loss ATR Multiple", minval=0.5, maxval=5.0, step=0.25, group=grp_risk, tooltip="Stop distance = entry price ± (ATR × this multiple) at the time of entry.")
@@ -140,6 +143,27 @@ bool htfRising = htfEma > htfEmaPrev
 bool htfFalling = htfEma < htfEmaPrev
 bool htfGateLong = not i_requireHTF or (close > htfEma and htfRising)
 bool htfGateShort = not i_requireHTF or (close < htfEma and htfFalling)
+
+// SML addition: HH/HL (and LH/LL) swing-structure filter. Complementary to ADX —
+// ADX is magnitude-only and lags a reversal, while a broken pivot structure often
+// flags the exact bar a trend is cracking. Tracks the two most recently confirmed
+// swing highs/lows (confirmed i_pivotLen bars after they occur, so no repaint).
+float _ph = ta.pivothigh(high, i_pivotLen, i_pivotLen)
+float _pl = ta.pivotlow(low, i_pivotLen, i_pivotLen)
+var float swingHigh = na
+var float swingHighPrev = na
+var float swingLow = na
+var float swingLowPrev = na
+if not na(_ph)
+    swingHighPrev := swingHigh
+    swingHigh := _ph
+if not na(_pl)
+    swingLowPrev := swingLow
+    swingLow := _pl
+bool structureBullish = not na(swingHigh) and not na(swingHighPrev) and not na(swingLow) and not na(swingLowPrev) and swingHigh > swingHighPrev and swingLow > swingLowPrev
+bool structureBearish = not na(swingHigh) and not na(swingHighPrev) and not na(swingLow) and not na(swingLowPrev) and swingHigh < swingHighPrev and swingLow < swingLowPrev
+bool structureGateLong = not i_requireStructure or structureBullish
+bool structureGateShort = not i_requireStructure or structureBearish
 // ═══════════════════════════════════════════════════════════════════════════════
 // FLOW INTELLIGENCE
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -303,8 +327,8 @@ bool flowConfirmsShortDir = ctx.unified_agg < 0.45 or ctx.absorption > 0.5
 // on a confirmation we have no way to compute — fall back to volatility-gated only.
 bool flowGateLong = not i_requireFlowConfirm or not fpAvail or flowConfirmsLongDir
 bool flowGateShort = not i_requireFlowConfirm or not fpAvail or flowConfirmsShortDir
-bool long_raw = prediction > signal_threshold and smooth_confidence > 0.5 and volConfirmed and flowGateLong and adxConfirmed and htfGateLong and concurrencyOk
-bool short_raw = prediction < -signal_threshold and smooth_confidence > 0.5 and volConfirmed and flowGateShort and adxConfirmed and htfGateShort and concurrencyOk
+bool long_raw = prediction > signal_threshold and smooth_confidence > 0.5 and volConfirmed and flowGateLong and adxConfirmed and htfGateLong and structureGateLong and concurrencyOk
+bool short_raw = prediction < -signal_threshold and smooth_confidence > 0.5 and volConfirmed and flowGateShort and adxConfirmed and htfGateShort and structureGateShort and concurrencyOk
 var bool prev_long = false
 var bool prev_short = false
 var int lastSignalBar = -9999
@@ -513,9 +537,9 @@ int gaugeFill = math.round(smooth_confidence * 15)
 string gaugeStr = ""
 for i = 1 to 15
     gaugeStr += i <= gaugeFill ? "█" : "░"
-var table dash = table.new(f_dashPos(i_dashPos), 4, 24, bgcolor=color.new(C_VOID, 5), border_width=1, border_color=color.new(color.gray, 80), frame_width=2, frame_color=color.new(colAccent, 70))
+var table dash = table.new(f_dashPos(i_dashPos), 4, 25, bgcolor=color.new(C_VOID, 5), border_width=1, border_color=color.new(color.gray, 80), frame_width=2, frame_color=color.new(colAccent, 70))
 if barstate.islast and i_dashEnable
-    table.clear(dash, 0, 0, 3, 23)
+    table.clear(dash, 0, 0, 3, 24)
     int r = 0
     if i_dashSize == DASH_FULL
         table.cell(dash, 0, r, "🌊 SML CASCADE CLASSIFIER" + (fpAvail ? " 🔬" : ""), text_color=color.white, bgcolor=color.new(colAccent, 70), text_size=size.small, text_halign=text.align_center)
@@ -589,6 +613,13 @@ if barstate.islast and i_dashEnable
         table.cell(dash, 1, r, adxText, text_color=adxCol, bgcolor=C_PANEL, text_size=size.tiny)
         table.cell(dash, 2, r, "HTF " + i_htfRes, text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
         table.cell(dash, 3, r, htfText, text_color=htfCol, bgcolor=C_PANEL, text_size=size.tiny)
+        r += 1
+        string structText = structureBullish ? "▲ HH/HL" : structureBearish ? "▼ LH/LL" : "─ Mixed"
+        color structCol = structureBullish ? colBull : structureBearish ? colBear : color.gray
+        table.cell(dash, 0, r, "Structure", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 1, r, structText, text_color=structCol, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 2, r, "", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 3, r, "", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
         r += 1
         table.cell(dash, 0, r, "─ Flow Intel ─", text_color=C_CYAN, bgcolor=color.new(#1A1A1A, 40), text_size=size.tiny, text_halign=text.align_center)
         table.merge_cells(dash, 0, r, 3, r)
