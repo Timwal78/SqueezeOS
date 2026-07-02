@@ -9,8 +9,12 @@
 //
 // Institutional-grade additions (tuned for 15m/65m intraday use):
 // order-flow confirmation gate, volatility-regime floor, ADX trend-regime
-// filter, higher-timeframe (default 4H) trend alignment filter, and a
-// confirmed-bar-only signal gate to eliminate intrabar repaint.
+// filter, higher-timeframe (default 4H) trend alignment filter, a
+// confirmed-bar-only signal gate to eliminate intrabar repaint, an ATR
+// stop-loss on the performance tracker (previously every signal rode the
+// full prediction horizon uncut, the single biggest driver of max
+// drawdown), and a max-concurrent-signals cap to stop correlated losers
+// from stacking on fast-moving symbols.
 indicator("SML Cascade Classifier", shorttitle="SML-Cascade", overlay=true, max_bars_back=500, max_labels_count=500, max_lines_count=500, max_boxes_count=500)
 // ═══════════════════════════════════════════════════════════════════════════════
 //
@@ -69,6 +73,10 @@ i_adxMin      = input.float(20.0, "Min ADX", minval=10.0, maxval=40.0, step=1.0,
 i_requireHTF  = input.bool(true, "Require Higher-Timeframe Trend Alignment", group=grp_regime, tooltip="SML addition: block counter-trend entries against the higher-timeframe structure. Default 4H suits 15m/65m intraday charts — longs need price above the HTF EMA with the HTF EMA rising, shorts the mirror.")
 i_htfRes      = input.timeframe("240", "Higher Timeframe", group=grp_regime, tooltip="Default 240 (4H). For a 15m chart consider 60-240; for a 65m chart consider 240-D.")
 i_htfEmaLen   = input.int(50, "HTF EMA Length", minval=10, maxval=200, group=grp_regime)
+grp_risk = "🛡 Risk Management"
+i_useStopLoss  = input.bool(true, "Use ATR Stop-Loss", group=grp_risk, tooltip="SML addition: the original performance tracker held every signal for the full Prediction Horizon with no exit — a trade that moved hard against you rode the entire horizon before closing, which is the single biggest driver of max drawdown. Now every open signal is checked every bar for a stop-loss hit and exits immediately at the stop instead of waiting.")
+i_stopAtrMult  = input.float(1.5, "Stop-Loss ATR Multiple", minval=0.5, maxval=5.0, step=0.25, group=grp_risk, tooltip="Stop distance = entry price ± (ATR × this multiple) at the time of entry.")
+i_maxConcurrent = input.int(3, "Max Concurrent Open Signals", minval=1, maxval=20, group=grp_risk, tooltip="SML addition: caps how many overlapping trades can be open at once. Without this, several signals can stack against you simultaneously on a fast-moving symbol, turning one bad move into several correlated losers at once — a major contributor to drawdown spikes.")
 grp_flow = "🔬 Flow Intelligence"
 i_fpEnabled    = input.bool(true, "Enable Footprint Data", group=grp_flow)
 i_fpTicks      = input.int(100, "Ticks per Row", minval=1, maxval=500, group=grp_flow)
@@ -268,11 +276,21 @@ float confidencePct = smooth_confidence * 100.0
 // ═══════════════════════════════════════════════════════════════════════════════
 // SIGNAL GENERATION WITH COOLDOWN
 // ═══════════════════════════════════════════════════════════════════════════════
+// Tracking arrays declared here (rather than down in Performance Tracking) so the
+// concurrency gate below can see how many signals are currently open.
+var array<float> signal_history = array.new_float(0)
+var array<bool> signal_types = array.new_bool(0)
+var array<int> signal_bars = array.new_int(0)
+var array<float> signal_stop = array.new_float(0)
 // SML addition: volatility floor — refuse to classify in compressed/illiquid
 // chop where ATR is well below its own 50-bar average. The KNN can still find
 // "nearest" historical neighbors in dead action; that similarity isn't signal.
 float volatility_regime = atr_val / ta.sma(atr_val, 50)
 bool volConfirmed = volatility_regime >= i_minVolRegime
+// SML addition: concurrency cap — without this, multiple overlapping signals can
+// stack against you simultaneously on a fast-moving symbol, turning one adverse
+// move into several correlated losers at once. A major contributor to drawdown.
+bool concurrencyOk = array.size(signal_bars) < i_maxConcurrent
 // SML addition: order-flow confirmation, now an actual gate instead of a
 // cosmetic label tag. Direction-only booleans (not gated on first_long/short
 // yet, to avoid a circular dependency) — used both to gate signal generation
@@ -285,8 +303,8 @@ bool flowConfirmsShortDir = ctx.unified_agg < 0.45 or ctx.absorption > 0.5
 // on a confirmation we have no way to compute — fall back to volatility-gated only.
 bool flowGateLong = not i_requireFlowConfirm or not fpAvail or flowConfirmsLongDir
 bool flowGateShort = not i_requireFlowConfirm or not fpAvail or flowConfirmsShortDir
-bool long_raw = prediction > signal_threshold and smooth_confidence > 0.5 and volConfirmed and flowGateLong and adxConfirmed and htfGateLong
-bool short_raw = prediction < -signal_threshold and smooth_confidence > 0.5 and volConfirmed and flowGateShort and adxConfirmed and htfGateShort
+bool long_raw = prediction > signal_threshold and smooth_confidence > 0.5 and volConfirmed and flowGateLong and adxConfirmed and htfGateLong and concurrencyOk
+bool short_raw = prediction < -signal_threshold and smooth_confidence > 0.5 and volConfirmed and flowGateShort and adxConfirmed and htfGateShort and concurrencyOk
 var bool prev_long = false
 var bool prev_short = false
 var int lastSignalBar = -9999
@@ -318,21 +336,31 @@ var float peak_equity = 0.0
 var float current_streak = 0
 var float equity_curve = 10000.0
 var float max_equity = 10000.0
-var array<float> signal_history = array.new_float(0)
-var array<bool> signal_types = array.new_bool(0)
-var array<int> signal_bars = array.new_int(0)
 if first_long or first_short
     total_signals += 1
     array.push(signal_history, close)
     array.push(signal_types, first_long)
     array.push(signal_bars, bar_index)
+    // SML addition: stop distance fixed at entry-bar ATR, not recalculated later —
+    // matches how a real stop order would be placed and avoids the stop silently
+    // widening/tightening after the fact as volatility changes.
+    float stopDist = atr14 * i_stopAtrMult
+    array.push(signal_stop, first_long ? close - stopDist : close + stopDist)
 if array.size(signal_bars) > 0
     for i = array.size(signal_bars) - 1 to 0
         int sig_bar = array.get(signal_bars, i)
-        if bar_index - sig_bar >= prediction_horizon
-            float entry_price = array.get(signal_history, i)
-            bool is_long = array.get(signal_types, i)
-            float sig_return = (is_long ? close - entry_price : entry_price - close) / entry_price
+        float entry_price = array.get(signal_history, i)
+        bool is_long = array.get(signal_types, i)
+        float stop_price = array.get(signal_stop, i)
+        // SML fix: previously every open signal rode the full prediction_horizon
+        // with no exit — a trade that moved hard against you kept accumulating
+        // loss for the entire horizon instead of being cut. Checked every bar now,
+        // not just at horizon expiry, so a stop hit closes the trade immediately.
+        bool stopHit = i_useStopLoss and (is_long ? low <= stop_price : high >= stop_price)
+        bool horizonHit = bar_index - sig_bar >= prediction_horizon
+        if stopHit or horizonHit
+            float exit_price = stopHit ? stop_price : close
+            float sig_return = (is_long ? exit_price - entry_price : entry_price - exit_price) / entry_price
             if sig_return > 0
                 winning_signals += 1
                 gross_win += sig_return
@@ -348,6 +376,7 @@ if array.size(signal_bars) > 0
             array.remove(signal_bars, i)
             array.remove(signal_history, i)
             array.remove(signal_types, i)
+            array.remove(signal_stop, i)
 float completed = total_signals - array.size(signal_bars)
 float win_rate = completed > 0 ? winning_signals / completed * 100.0 : 0.0
 // SML fix: original formula wasn't a real profit factor (didn't separate gross
@@ -484,9 +513,9 @@ int gaugeFill = math.round(smooth_confidence * 15)
 string gaugeStr = ""
 for i = 1 to 15
     gaugeStr += i <= gaugeFill ? "█" : "░"
-var table dash = table.new(f_dashPos(i_dashPos), 4, 23, bgcolor=color.new(C_VOID, 5), border_width=1, border_color=color.new(color.gray, 80), frame_width=2, frame_color=color.new(colAccent, 70))
+var table dash = table.new(f_dashPos(i_dashPos), 4, 24, bgcolor=color.new(C_VOID, 5), border_width=1, border_color=color.new(color.gray, 80), frame_width=2, frame_color=color.new(colAccent, 70))
 if barstate.islast and i_dashEnable
-    table.clear(dash, 0, 0, 3, 22)
+    table.clear(dash, 0, 0, 3, 23)
     int r = 0
     if i_dashSize == DASH_FULL
         table.cell(dash, 0, r, "🌊 SML CASCADE CLASSIFIER" + (fpAvail ? " 🔬" : ""), text_color=color.white, bgcolor=color.new(colAccent, 70), text_size=size.small, text_halign=text.align_center)
@@ -609,6 +638,13 @@ if barstate.islast and i_dashEnable
         table.cell(dash, 2, r, "Equity", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
         color eqCol = equity_curve > 10000 ? C_GREEN : C_RED
         table.cell(dash, 3, r, "$" + str.tostring(equity_curve, "#"), text_color=eqCol, bgcolor=C_PANEL, text_size=size.tiny)
+        r += 1
+        int openCount = array.size(signal_bars)
+        color openCol = openCount >= i_maxConcurrent ? C_ORANGE : color.white
+        table.cell(dash, 0, r, "Open", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 1, r, str.tostring(openCount, "#") + "/" + str.tostring(i_maxConcurrent, "#"), text_color=openCol, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 2, r, "Stop", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 3, r, i_useStopLoss ? str.tostring(i_stopAtrMult, "#.##") + "x ATR" : "Off", text_color=i_useStopLoss ? C_GREEN : C_RED, bgcolor=C_PANEL, text_size=size.tiny)
         r += 1
         table.cell(dash, 0, r, "─────────────────", text_color=color.new(colAccent, 60), bgcolor=color.new(#1A1A1A, 40), text_size=size.tiny, text_halign=text.align_center)
         table.merge_cells(dash, 0, r, 3, r)
