@@ -597,13 +597,13 @@ class TruthLayer:
             }
             if result.data_quality == "NO_DATA":
                 # Analysts without real data return a fixed 50.0 pressure
-                # placeholder (see e.g. VolatilityObligationAnalyst.analyze's
-                # INSUFFICIENT_DATA branch) — that's a sentinel for "no
-                # opinion," not a real mid-scale stress reading. Blending it
-                # into the weighted average would fabricate system stress out
-                # of missing data (every symbol converging toward the same
-                # placeholder-driven number regardless of real conditions is
-                # exactly what happened before this fix). Excluded entirely.
+                # sentinel (see e.g. VolatilityObligationAnalyst.analyze's
+                # INSUFFICIENT_DATA branch) meaning "no opinion," not a real
+                # mid-scale stress reading. Blending it into the weighted
+                # average would fabricate system stress out of missing data
+                # (every symbol converging toward the same sentinel-driven
+                # number regardless of real conditions is exactly what
+                # happened before this fix). Excluded entirely.
                 no_data_count += 1
                 continue
             total_stress += result.pressure * w
@@ -656,7 +656,7 @@ class ActionResolutionOracle:
 
         # Refuse to resolve a mandatory action from data that mostly isn't
         # there. TruthLayer.aggregate() now excludes NO_DATA analysts from
-        # the weighted stress instead of blending in their placeholder
+        # the weighted stress instead of blending in their sentinel
         # pressure, but if too few analysts actually had real data, the
         # remaining "stress" is a thin, unreliable read — resolving BUY/SELL
         # from it would be fabricating a live-money directive out of
