@@ -1,80 +1,82 @@
-// © ScriptMasterLabs — SML Fibonacci Matrix + Macro Anchor [Licensed]
+// © ScriptMasterLabs — SML 5-EMA Fibonacci Matrix + 365 Anchor
 // ================================================================
 // Fibonacci cascade mapped to price action and liquidity structure.
 //
-// CORE CAPITAL RULE (non-negotiable):
-//   Price ABOVE Macro Anchor → DEPLOY ZONE   — entries permitted
-//   Price BELOW Macro Anchor → LOCKED OUT    — no new positions
+// EMA 55  · EMA 89  · EMA 144  · EMA 233  → Fibonacci cascade
+// EMA 365                                  → Macro anchor (line in the sand)
 //
-// Use on DAILY chart. Macro Anchor = one calendar year of closing prices.
+// CORE CAPITAL RULE (non-negotiable):
+//   Price ABOVE 365 → DEPLOY ZONE   — entries and averaging down permitted
+//   Price BELOW 365 → LOCKED OUT    — no new positions, no averaging down
+//
+// The cascade filters noise within the deploy zone:
+//   55 > 89 > 144 > 233 → Full Fibonacci bull structure
+//   55 < 89 < 144 < 233 → Full Fibonacci bear structure
+//
+// Use on DAILY chart. EMA 365 = one calendar year of closing prices.
 // ================================================================
 //@version=6
-indicator("SML Fibonacci Matrix + Macro Anchor [Licensed]",
-          shorttitle="SML·FibMatrix", overlay=true)
-
-// ── Sequence Inputs (SML Licensed) ───────────────────────────────
-f1_len = input.int(1, "Level 1 (Fastest)", group="SML Licensed — Fibonacci Cascade", minval=1)
-f2_len = input.int(1, "Level 2",           group="SML Licensed — Fibonacci Cascade", minval=1)
-f3_len = input.int(1, "Level 3",           group="SML Licensed — Fibonacci Cascade", minval=1)
-f4_len = input.int(1, "Level 4 (Slowest)", group="SML Licensed — Fibonacci Cascade", minval=1)
-fa_len = input.int(1, "Macro Anchor",      group="SML Licensed — Fibonacci Cascade", minval=1)
+indicator("SML 5-EMA Fibonacci Matrix + 365 Anchor",
+          shorttitle="SML·FibMatrix·365", overlay=true)
 
 // ═══ INPUTS ═══════════════════════════════════════════════════════
 anchor_zone = input.float(1.0,  "Anchor Test Zone ±%",  group="Structure",
-              tooltip="Within this % of macro anchor = decision point. Default 1%.",
+              tooltip="Within this % of EMA365 = decision point. Default 1%.",
               minval=0.1, step=0.1)
 show_labels = input.bool(true,  "Show Signal Label",     group="Display")
 show_bands  = input.bool(true,  "Show Background",       group="Display")
 
-// ═══ CASCADE EMAs ══════════════════════════════════════════════════
-e_f1 = ta.ema(close, f1_len)
-e_f2 = ta.ema(close, f2_len)
-e_f3 = ta.ema(close, f3_len)
-e_f4 = ta.ema(close, f4_len)
-e_fa = ta.ema(close, fa_len)    // LINE IN THE SAND — capital deployment gate
+// ═══ FIBONACCI CASCADE EMAs ════════════════════════════════════════
+e55  = ta.ema(close, 55)
+e89  = ta.ema(close, 89)
+e144 = ta.ema(close, 144)
+e233 = ta.ema(close, 233)
+e365 = ta.ema(close, 365)    // LINE IN THE SAND — capital deployment gate
 
 // ═══ STRUCTURAL ALIGNMENT ═════════════════════════════════════════
 
 // Capital deployment gate
-above_anchor = close > e_fa
-below_anchor = close < e_fa
+above_anchor = close > e365
+below_anchor = close < e365
 
 // Anchor proximity
-anchor_stretch = (close - e_fa) / e_fa * 100
+anchor_stretch = (close - e365) / e365 * 100
 anchor_test    = math.abs(anchor_stretch) < anchor_zone
 
-// Cascade alignment
-fib_bull = e_f1 > e_f2 and e_f2 > e_f3 and e_f3 > e_f4
-fib_bear = e_f1 < e_f2 and e_f2 < e_f3 and e_f3 < e_f4
+// Fibonacci cascade alignment
+fib_bull = e55 > e89 and e89 > e144 and e144 > e233
+fib_bear = e55 < e89 and e89 < e144 and e144 < e233
 
-// Pair scores
-bull_pairs = (e_f1 > e_f2 ? 1 : 0) + (e_f2 > e_f3 ? 1 : 0) + (e_f3 > e_f4 ? 1 : 0)
-bear_pairs = (e_f1 < e_f2 ? 1 : 0) + (e_f2 < e_f3 ? 1 : 0) + (e_f3 < e_f4 ? 1 : 0)
+// Pair scores (3 consecutive pairs: 55/89, 89/144, 144/233)
+bull_pairs = (e55 > e89 ? 1 : 0) + (e89 > e144 ? 1 : 0) + (e144 > e233 ? 1 : 0)
+bear_pairs = (e55 < e89 ? 1 : 0) + (e89 < e144 ? 1 : 0) + (e144 < e233 ? 1 : 0)
 
 // Highest-conviction combined states
-full_bull = fib_bull and above_anchor
-full_bear = fib_bear and below_anchor
+full_bull = fib_bull and above_anchor    // cascade aligned + deploy zone
+full_bear = fib_bear and below_anchor    // cascade aligned + locked out
 
-// Cascade coil
-cascade_spread = math.abs((e_f1 - e_f4) / e_f4 * 100)
+// Cascade coil — all 4 Fibonacci EMAs compressing
+cascade_spread = math.abs((e55 - e233) / e233 * 100)
 cascade_coil   = cascade_spread < 1.5
 
-// Crossover signals
-fib_ignition  = ta.crossover( e_f1, e_f2)
-fib_breakdown = ta.crossunder(e_f1, e_f2)
+// Crossover signals on the fast Fibonacci pair
+fib_ignition  = ta.crossover( e55, e89)   // fast Fib punching through second Fib — bullish
+fib_breakdown = ta.crossunder(e55, e89)   // fast Fib dropping through second Fib — bearish
 
 // ═══ PLOTS ════════════════════════════════════════════════════════
 
-plot(e_f1, "Level 1 (Fastest)", color=color.new(color.aqua,    5), linewidth=1)
-plot(e_f2, "Level 2",           color=color.new(color.teal,    5), linewidth=1)
-plot(e_f3, "Level 3",           color=color.new(color.orange,  5), linewidth=2)
-plot(e_f4, "Level 4 (Slowest)", color=color.new(color.purple,  5), linewidth=2)
+// Fibonacci cascade (ascending speed → descending transparency)
+plot(e55,  "EMA 55  (Fib 1 — Fastest)", color=color.new(color.aqua,    5), linewidth=1)
+plot(e89,  "EMA 89  (Fib 2)",           color=color.new(color.teal,    5), linewidth=1)
+plot(e144, "EMA 144 (Fib 3)",           color=color.new(color.orange,  5), linewidth=2)
+plot(e233, "EMA 233 (Fib 4 — Slowest)", color=color.new(color.purple,  5), linewidth=2)
 
-// Macro Anchor — the line in the sand (always visible)
-plot(e_fa, "Macro Anchor (Line in the Sand)",
+// 365 Anchor — the line in the sand (always visible, highest z-order)
+plot(e365, "EMA 365 (Macro Anchor · Line in the Sand)",
      color=color.new(color.red, 0), linewidth=3)
 
 // ═══ BACKGROUND ═══════════════════════════════════════════════════
+// Priority: full conviction > partial alignment > anchor test > deploy/locked base
 
 bg = full_bull                          ? color.new(color.green,  58) :
      full_bear                          ? color.new(color.red,    58) :
@@ -83,7 +85,7 @@ bg = full_bull                          ? color.new(color.green,  58) :
      below_anchor and anchor_test       ? color.new(color.orange, 84) :
      cascade_coil                       ? color.new(color.blue,   84) :
      above_anchor                       ? color.new(color.green,  92) :
-                                          color.new(color.red,    92)
+                                          color.new(color.red,    92)  // LOCKED OUT base
 
 bgcolor(show_bands ? bg : na, title="SML FibMatrix Background")
 
@@ -95,15 +97,15 @@ if show_labels and barstate.islast
 
     deploy_tag = above_anchor ? "DEPLOY ZONE ✓" : "LOCKED OUT ✗"
     pct_tag    = str.tostring(math.abs(anchor_stretch), "#.##") + "% " +
-                 (above_anchor ? "above" : "below") + " anchor"
-    pair_tag   = str.tostring(above_anchor ? bull_pairs : bear_pairs) + "/3 cascade pairs"
+                 (above_anchor ? "above" : "below") + " 365"
+    pair_tag   = str.tostring(above_anchor ? bull_pairs : bear_pairs) + "/3 Fib pairs"
 
     sig_txt =
-      full_bull    ? "FIB MATRIX: FULL BULL CASCADE\nAll levels aligned · " + deploy_tag + "\n+" + str.tostring(anchor_stretch, "#.##") + "% above macro anchor" :
-      full_bear    ? "FIB MATRIX: FULL BEAR CASCADE\nAll levels aligned · " + deploy_tag + "\n" + str.tostring(anchor_stretch, "#.##") + "% below macro anchor" :
+      full_bull    ? "FIB MATRIX: FULL BULL CASCADE\n55>89>144>233 · " + deploy_tag + "\n+" + str.tostring(anchor_stretch, "#.##") + "% above 365 anchor" :
+      full_bear    ? "FIB MATRIX: FULL BEAR CASCADE\n55<89<144<233 · " + deploy_tag + "\n" + str.tostring(anchor_stretch, "#.##") + "% below 365 anchor" :
       anchor_test  ? "FIB MATRIX: ANCHOR TEST\n" + deploy_tag + " · " + pct_tag + "\n" + pair_tag + " aligned" :
-      cascade_coil ? "FIB MATRIX: CASCADE COIL\nLevels compressing · " + deploy_tag + "\n" + pair_tag + " · " + pct_tag :
-      above_anchor ? "FIB MATRIX: DEPLOY ZONE ✓\n" + pair_tag + " aligned\n+" + str.tostring(anchor_stretch, "#.##") + "% above anchor" :
+      cascade_coil ? "FIB MATRIX: CASCADE COIL\nFib EMAs compressing · " + deploy_tag + "\n" + pair_tag + " · " + pct_tag :
+      above_anchor ? "FIB MATRIX: DEPLOY ZONE ✓\n" + pair_tag + " aligned\n+" + str.tostring(anchor_stretch, "#.##") + "% above 365" :
                      "FIB MATRIX: LOCKED OUT ✗\nNo entries. No averaging down.\n" + pct_tag + " · " + pair_tag
 
     lbl_col = full_bull                        ? color.green  :
@@ -120,32 +122,32 @@ if show_labels and barstate.islast
 
 alertcondition(full_bull,
     "Fib Matrix — Full Bull Cascade + Deploy Zone",
-    "{{ticker}} — FIB CASCADE BULL: All levels aligned, price above macro anchor. DEPLOY ZONE active.")
+    "{{ticker}} — FIB CASCADE BULL: 55>89>144>233 aligned, price above 365. DEPLOY ZONE active.")
 
 alertcondition(full_bear,
     "Fib Matrix — Full Bear Cascade + Locked Out",
-    "{{ticker}} — FIB CASCADE BEAR: All levels aligned, price below macro anchor. LOCKED OUT.")
+    "{{ticker}} — FIB CASCADE BEAR: 55<89<144<233 aligned, price below 365. LOCKED OUT.")
 
-alertcondition(ta.crossover(close, e_fa),
-    "Fib Matrix — Macro Anchor Reclaimed (Deploy Zone Opens)",
-    "{{ticker}} — ANCHOR RECLAIMED: Price crossed above macro anchor. Capital deployment now permitted.")
+alertcondition(ta.crossover(close, e365),
+    "Fib Matrix — 365 Anchor Reclaimed (Deploy Zone Opens)",
+    "{{ticker}} — 365 RECLAIMED: Price crossed above annual anchor. Capital deployment now permitted.")
 
-alertcondition(ta.crossunder(close, e_fa),
-    "Fib Matrix — Macro Anchor Lost (Locked Out)",
-    "{{ticker}} — ANCHOR LOST: Price crossed below macro anchor. NO new entries. NO averaging down.")
+alertcondition(ta.crossunder(close, e365),
+    "Fib Matrix — 365 Anchor Lost (Locked Out)",
+    "{{ticker}} — 365 LOST: Price crossed below annual anchor. NO new entries. NO averaging down.")
 
 alertcondition(anchor_test,
-    "Fib Matrix — Anchor Test (Price within ±1% of Macro Anchor)",
-    "{{ticker}} — ANCHOR TEST: Price testing the macro anchor line in the sand. Deploy zone decision imminent.")
+    "Fib Matrix — Anchor Test (Price within ±1% of EMA365)",
+    "{{ticker}} — ANCHOR TEST: Price testing the 365 line in the sand. Deploy zone decision imminent.")
 
 alertcondition(cascade_coil,
-    "Fib Matrix — Cascade Coil",
-    "{{ticker}} — CASCADE COIL: Fibonacci cascade compressing. Expansion imminent. Check anchor side.")
+    "Fib Matrix — Fibonacci Cascade Coil",
+    "{{ticker}} — CASCADE COIL: EMA 55/89/144/233 compressing. Expansion imminent. Check 365 side.")
 
 alertcondition(fib_ignition,
-    "Fib Matrix — Fast Level Ignition",
-    "{{ticker}} — FIB IGNITION: Fast level crossed above second level. Fastest pair flipping bullish.")
+    "Fib Matrix — EMA55 crosses EMA89 (Fast Fib Ignition)",
+    "{{ticker}} — FIB IGNITION: EMA55 crossed above EMA89. Fastest Fibonacci pair flipping bullish.")
 
 alertcondition(fib_breakdown,
-    "Fib Matrix — Fast Level Breakdown",
-    "{{ticker}} — FIB BREAKDOWN: Fast level dropped below second level. Fastest pair flipping bearish.")
+    "Fib Matrix — EMA55 drops under EMA89 (Fast Fib Breakdown)",
+    "{{ticker}} — FIB BREAKDOWN: EMA55 dropped below EMA89. Fastest Fibonacci pair flipping bearish.")

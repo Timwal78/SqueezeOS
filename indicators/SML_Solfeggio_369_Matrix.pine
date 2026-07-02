@@ -1,40 +1,43 @@
-// © ScriptMasterLabs — SML Solfeggio 3·6·9 Harmonic Matrix [Licensed]
+// © ScriptMasterLabs — SML Solfeggio 3·6·9 Harmonic Matrix
 // ============================================================
-// THREE-NODE HARMONIC STRUCTURE
+// Mathematical Foundation: Solfeggio Frequency Digital Root Reduction
+//   (Nikola Tesla 3·6·9 modulus-9 arithmetic)
 //
-//   NODE 3 — Fast Reaction Ribbon   (fastest momentum signal)
-//   NODE 6 — Liquidity / Value Zone (institutional fair value)
-//   NODE 9 — Macro Structural Anchor (hard invalidation line)
+//   NODE 3 — Fast Reaction Ribbon   (digital root 3):
+//     174 Hz → 1+7+4 = 12 → 3   ·  417 Hz → 4+1+7 = 12 → 3   ·  741 Hz → 7+4+1 = 12 → 3
+//     → EMA 17 · EMA 41 · EMA 74
+//
+//   NODE 6 — Liquidity / Value Zone (digital root 6):
+//     285 Hz → 2+8+5 = 15 → 6   ·  528 Hz → 5+2+8 = 15 → 6   ·  852 Hz → 8+5+2 = 15 → 6
+//     → EMA 28 · EMA 52 · EMA 85
+//
+//   NODE 9 — Macro Structural Anchor (digital root 9):
+//     396 Hz → 3+9+6 = 18 → 9   ·  639 Hz → 6+3+9 = 18 → 9   ·  963 Hz → 9+6+3 = 18 → 9
+//     → EMA 39 · EMA 63 · EMA 96
 //
 // SIGNALS:
-//   HARMONIC COIL      — All 9 EMAs compress within threshold
+//   HARMONIC COIL      — All 9 EMAs compress within threshold (institutional accumulation)
 //   BULL / BEAR IGNITION — First bar of full three-tier expansion
-//   NODE 6 PULLBACK    — Price returns to liquidity zone in a live trend
-//   MACRO INVALIDATION — Price closing through macro anchor (cycle inversion)
+//   NODE 6 PULLBACK    — Price returns to liquidity zone inside a live trend
+//   MACRO INVALIDATION — Price closing through EMA 96 (cycle inversion)
 //
 // ALIGNMENT RULES:
-//   Full Bull: N3 internally stacked AND N6 stacked AND N9 stacked
-//              AND N3 slowest > N6 fastest AND N6 slowest > N9 fastest
+//   Full Bull: N3 internally stacked (17>41>74) AND N6 stacked (28>52>85)
+//              AND N9 stacked (39>63>96) AND N3 slowest (74) > N6 fastest (28)
+//              AND N6 slowest (85) > N9 fastest (39)
 //   Full Bear: Mirror of the above (all relationships inverted)
+//
+// STRATEGY AUTOMATON (optional — enable via input):
+//   Long Entry : bull_ignition (or coil breakout into bull expansion)
+//   Long Exit  : close < EMA 96 (macro cycle invalidation)
+//   Short Entry: bear_ignition
+//   Short Exit : close > EMA 96
 // ============================================================
 //@version=6
-strategy("SML Solfeggio 3·6·9 Harmonic Matrix [Licensed]", shorttitle="SML·369",
+strategy("SML Solfeggio 3·6·9 Harmonic Matrix", shorttitle="SML·369",
          overlay=true, initial_capital=10000,
          default_qty_type=strategy.percent_of_equity, default_qty_value=100,
          pyramiding=0, calc_on_every_tick=false)
-
-// ── Sequence Inputs (SML Licensed) ───────────────────────────────
-p3_1 = input.int(1, "Node 3 · L1 (Fast)",   group="SML Licensed — Node 3", minval=1)
-p3_2 = input.int(1, "Node 3 · L2",          group="SML Licensed — Node 3", minval=1)
-p3_3 = input.int(1, "Node 3 · L3 (Slow)",   group="SML Licensed — Node 3", minval=1)
-
-p6_1 = input.int(1, "Node 6 · L1 (Fast)",   group="SML Licensed — Node 6", minval=1)
-p6_2 = input.int(1, "Node 6 · L2",          group="SML Licensed — Node 6", minval=1)
-p6_3 = input.int(1, "Node 6 · L3 (Slow)",   group="SML Licensed — Node 6", minval=1)
-
-p9_1 = input.int(1, "Node 9 · L1 (Fast)",   group="SML Licensed — Node 9", minval=1)
-p9_2 = input.int(1, "Node 9 · L2",          group="SML Licensed — Node 9", minval=1)
-p9_3 = input.int(1, "Node 9 · Anchor",      group="SML Licensed — Node 9", minval=1)
 
 // ═══════════════════════════════════════════════════════════════════════
 // INPUTS
@@ -43,7 +46,7 @@ p9_3 = input.int(1, "Node 9 · Anchor",      group="SML Licensed — Node 9", mi
 coil_threshold  = input.float(1.5,  "Harmonic Coil Threshold %",
                                minval=0.1, maxval=10.0, step=0.1,
                                group="Signal Thresholds",
-                               tooltip="Spread between highest and lowest of all 9 EMAs as % of macro anchor. Below this = HARMONIC COIL compression phase.")
+                               tooltip="Spread between highest and lowest of all 9 EMAs as % of EMA 96. Below this = HARMONIC COIL compression phase.")
 
 show_node3      = input.bool(true, "Node 3 — Reaction Ribbon (Cyan)",   group="Display")
 show_node6      = input.bool(true, "Node 6 — Liquidity Zone (Purple)",  group="Display")
@@ -55,64 +58,67 @@ enable_longs    = input.bool(true, "Enable Long Entries",               group="S
 enable_shorts   = input.bool(true, "Enable Short Entries",              group="Strategy")
 
 // ═══════════════════════════════════════════════════════════════════════
-// EMA MATRIX
+// EMA MATRIX — computed on every bar (no history-tracking corruption)
 // ═══════════════════════════════════════════════════════════════════════
 
 // Node 3 — Reaction Ribbon
-e_n3_1 = ta.ema(close, p3_1)
-e_n3_2 = ta.ema(close, p3_2)
-e_n3_3 = ta.ema(close, p3_3)
+ema17 = ta.ema(close, 17)    // 174 Hz ÷ 10 ≈ 17
+ema41 = ta.ema(close, 41)    // 417 Hz ÷ 10 ≈ 41
+ema74 = ta.ema(close, 74)    // 741 Hz ÷ 10 ≈ 74
 
 // Node 6 — Liquidity / Value Zone
-e_n6_1 = ta.ema(close, p6_1)
-e_n6_2 = ta.ema(close, p6_2)
-e_n6_3 = ta.ema(close, p6_3)
+ema28 = ta.ema(close, 28)    // 285 Hz ÷ 10 ≈ 28
+ema52 = ta.ema(close, 52)    // 528 Hz ÷ 10 ≈ 52
+ema85 = ta.ema(close, 85)    // 852 Hz ÷ 10 ≈ 85
 
 // Node 9 — Macro Structural Anchor
-e_n9_1 = ta.ema(close, p9_1)
-e_n9_2 = ta.ema(close, p9_2)
-e_n9_3 = ta.ema(close, p9_3)
+ema39 = ta.ema(close, 39)    // 396 Hz ÷ 10 ≈ 39
+ema63 = ta.ema(close, 63)    // 639 Hz ÷ 10 ≈ 63
+ema96 = ta.ema(close, 96)    // 963 Hz ÷ 10 ≈ 96
 
 // ═══════════════════════════════════════════════════════════════════════
 // VISUALIZATION
 // ═══════════════════════════════════════════════════════════════════════
 
 // Node 3 — Cyan (fastest momentum signal)
-p_n3_1 = plot(show_node3 ? e_n3_1 : na, "N3 · L1", color.new(color.cyan,  0), linewidth=2)
-p_n3_2 = plot(show_node3 ? e_n3_2 : na, "N3 · L2", color.new(color.cyan, 30), linewidth=1)
-p_n3_3 = plot(show_node3 ? e_n3_3 : na, "N3 · L3", color.new(color.cyan, 50), linewidth=1)
+p17 = plot(show_node3 ? ema17 : na, "N3 · EMA 17", color.new(color.cyan,  0), linewidth=2)
+p41 = plot(show_node3 ? ema41 : na, "N3 · EMA 41", color.new(color.cyan, 30), linewidth=1)
+p74 = plot(show_node3 ? ema74 : na, "N3 · EMA 74", color.new(color.cyan, 50), linewidth=1)
 
 // Node 6 — Purple (liquidity / fair value zone)
-p_n6_1 = plot(show_node6 ? e_n6_1 : na, "N6 · L1", color.new(color.purple,  0), linewidth=2)
-p_n6_2 = plot(show_node6 ? e_n6_2 : na, "N6 · L2", color.new(color.purple, 30), linewidth=1)
-p_n6_3 = plot(show_node6 ? e_n6_3 : na, "N6 · L3", color.new(color.purple, 50), linewidth=1)
+p28 = plot(show_node6 ? ema28 : na, "N6 · EMA 28", color.new(color.purple,  0), linewidth=2)
+p52 = plot(show_node6 ? ema52 : na, "N6 · EMA 52", color.new(color.purple, 30), linewidth=1)
+p85 = plot(show_node6 ? ema85 : na, "N6 · EMA 85", color.new(color.purple, 50), linewidth=1)
 
 // Node 9 — Orange (macro structural anchor, hard invalidation line)
-p_n9_1 = plot(show_node9 ? e_n9_1 : na, "N9 · L1",          color.new(color.orange,  0), linewidth=2)
-p_n9_2 = plot(show_node9 ? e_n9_2 : na, "N9 · L2",          color.new(color.orange, 30), linewidth=1)
-p_n9_3 = plot(show_node9 ? e_n9_3 : na, "N9 · Macro Anchor", color.new(color.orange, 50), linewidth=2)
+p39 = plot(show_node9 ? ema39 : na, "N9 · EMA 39",         color.new(color.orange,  0), linewidth=2)
+p63 = plot(show_node9 ? ema63 : na, "N9 · EMA 63",         color.new(color.orange, 30), linewidth=1)
+p96 = plot(show_node9 ? ema96 : na, "N9 · EMA 96 (Macro)", color.new(color.orange, 50), linewidth=2)
 
-// Node 6 liquidity fill
-fill(p_n6_1, p_n6_3, show_node6_fill ? color.new(color.purple, 88) : na, "Node 6 Liquidity Zone")
+// Node 6 liquidity fill (between EMA 28 and EMA 85)
+fill(p28, p85, show_node6_fill ? color.new(color.purple, 88) : na, "Node 6 Liquidity Zone")
 
 // ═══════════════════════════════════════════════════════════════════════
 // ALIGNMENT LOGIC
+// Intra-ribbon stack  →  ensures each node is internally ordered
+// Cross-ribbon gate   →  ensures the three nodes are ordered relative to each other
 // ═══════════════════════════════════════════════════════════════════════
 
 // Intra-node stacking
-bool n3_bull = e_n3_1 > e_n3_2 and e_n3_2 > e_n3_3
-bool n6_bull = e_n6_1 > e_n6_2 and e_n6_2 > e_n6_3
-bool n9_bull = e_n9_1 > e_n9_2 and e_n9_2 > e_n9_3
+bool n3_bull = ema17 > ema41 and ema41 > ema74
+bool n6_bull = ema28 > ema52 and ema52 > ema85
+bool n9_bull = ema39 > ema63 and ema63 > ema96
 
-bool n3_bear = e_n3_1 < e_n3_2 and e_n3_2 < e_n3_3
-bool n6_bear = e_n6_1 < e_n6_2 and e_n6_2 < e_n6_3
-bool n9_bear = e_n9_1 < e_n9_2 and e_n9_2 < e_n9_3
+bool n3_bear = ema17 < ema41 and ema41 < ema74
+bool n6_bear = ema28 < ema52 and ema52 < ema85
+bool n9_bear = ema39 < ema63 and ema63 < ema96
 
 // Cross-ribbon order (slowest of faster node must clear fastest of slower node)
-bool cross_bull_n3_n6 = e_n3_3 > e_n6_1
-bool cross_bull_n6_n9 = e_n6_3 > e_n9_1
-bool cross_bear_n3_n6 = e_n3_3 < e_n6_1
-bool cross_bear_n6_n9 = e_n6_3 < e_n9_1
+// Bull: EMA 74 (N3 tail) > EMA 28 (N6 head)  +  EMA 85 (N6 tail) > EMA 39 (N9 head)
+bool cross_bull_n3_n6 = ema74 > ema28
+bool cross_bull_n6_n9 = ema85 > ema39
+bool cross_bear_n3_n6 = ema74 < ema28
+bool cross_bear_n6_n9 = ema85 < ema39
 
 // Full harmonic expansion
 bool full_bull = n3_bull and n6_bull and n9_bull and cross_bull_n3_n6 and cross_bull_n6_n9
@@ -126,32 +132,36 @@ int bear_nodes = (n3_bear ? 1 : 0) + (n6_bear ? 1 : 0) + (n9_bear ? 1 : 0)
 // HARMONIC COIL — all 9 EMAs compressed into a tight accordion band
 // ═══════════════════════════════════════════════════════════════════════
 
-float ema_max = math.max(e_n3_1, math.max(e_n3_2, math.max(e_n3_3,
-                math.max(e_n6_1, math.max(e_n6_2, math.max(e_n6_3,
-                math.max(e_n9_1, math.max(e_n9_2, e_n9_3))))))))
-float ema_min = math.min(e_n3_1, math.min(e_n3_2, math.min(e_n3_3,
-                math.min(e_n6_1, math.min(e_n6_2, math.min(e_n6_3,
-                math.min(e_n9_1, math.min(e_n9_2, e_n9_3))))))))
+float ema_max = math.max(ema17, math.max(ema41, math.max(ema74,
+                math.max(ema28, math.max(ema52, math.max(ema85,
+                math.max(ema39, math.max(ema63, ema96))))))))
+float ema_min = math.min(ema17, math.min(ema41, math.min(ema74,
+                math.min(ema28, math.min(ema52, math.min(ema85,
+                math.min(ema39, math.min(ema63, ema96))))))))
 
-float spread_pct = e_n9_3 != 0 ? (ema_max - ema_min) / e_n9_3 * 100.0 : na
+float spread_pct = ema96 != 0 ? (ema_max - ema_min) / ema96 * 100.0 : na
 bool  harmonic_coil = not na(spread_pct) and spread_pct < coil_threshold
 
 // ═══════════════════════════════════════════════════════════════════════
 // DERIVED SIGNALS
 // ═══════════════════════════════════════════════════════════════════════
 
+// Ignition: first bar of full expansion (edge detection)
 bool bull_ignition = full_bull and not full_bull[1]
 bool bear_ignition = full_bear and not full_bear[1]
 
+// Coil entry into expansion: coil was active, then expansion fires
 bool coil_bull_breakout = bull_ignition and harmonic_coil[1]
 bool coil_bear_breakout = bear_ignition and harmonic_coil[1]
 
-bool in_n6_zone       = close >= math.min(e_n6_1, e_n6_3) and close <= math.max(e_n6_1, e_n6_3)
+// Node 6 pullback: price re-enters liquidity zone inside a live trend
+bool in_n6_zone       = close >= math.min(ema28, ema85) and close <= math.max(ema28, ema85)
 bool n6_pullback_bull = full_bull and in_n6_zone and not (full_bull[1] and in_n6_zone[1])
 bool n6_pullback_bear = full_bear and in_n6_zone and not (full_bear[1] and in_n6_zone[1])
 
-bool macro_invalidation_long  = close < e_n9_3 and close[1] >= e_n9_3[1]
-bool macro_invalidation_short = close > e_n9_3 and close[1] <= e_n9_3[1]
+// Macro invalidation: close breaks the structural anchor on a closing basis
+bool macro_invalidation_long  = close < ema96 and close[1] >= ema96[1]
+bool macro_invalidation_short = close > ema96 and close[1] <= ema96[1]
 
 // ═══════════════════════════════════════════════════════════════════════
 // BACKGROUNDS
@@ -211,7 +221,7 @@ if show_labels
                   size      = size.tiny)
 
 // ═══════════════════════════════════════════════════════════════════════
-// STRATEGY EXECUTION
+// STRATEGY EXECUTION — strict v6 if-block pattern (no `when` parameter)
 // ═══════════════════════════════════════════════════════════════════════
 
 if enable_longs and bull_ignition
@@ -232,11 +242,11 @@ if macro_invalidation_short
 
 alertcondition(bull_ignition,
                title   = "Bull Ignition",
-               message = "SML 369 — BULL IGNITION: Full harmonic expansion. All ribbons stacked and cross-ordered.")
+               message = "SML 369 — BULL IGNITION: Full harmonic expansion. N3 (17·41·74) > N6 (28·52·85) > N9 (39·63·96). All ribbons stacked and cross-ordered.")
 
 alertcondition(bear_ignition,
                title   = "Bear Ignition",
-               message = "SML 369 — BEAR IGNITION: Full harmonic bear expansion. All ribbons inverted and cross-ordered.")
+               message = "SML 369 — BEAR IGNITION: Full harmonic bear expansion. N3 below N6 below N9. All ribbons inverted and cross-ordered.")
 
 alertcondition(coil_bull_breakout,
                title   = "Coil → Bull Breakout",
@@ -252,7 +262,7 @@ alertcondition(harmonic_coil and not harmonic_coil[1],
 
 alertcondition(n6_pullback_bull,
                title   = "Node 6 Bull Pullback",
-               message = "SML 369 — NODE 6 PULLBACK: Price re-entered the liquidity zone during active bull expansion. Potential add zone.")
+               message = "SML 369 — NODE 6 PULLBACK: Price re-entered the liquidity zone (EMA 28–85) during active bull expansion. Potential add zone.")
 
 alertcondition(n6_pullback_bear,
                title   = "Node 6 Bear Pullback",
@@ -260,8 +270,8 @@ alertcondition(n6_pullback_bear,
 
 alertcondition(macro_invalidation_long,
                title   = "Macro Cycle Invalidation (Bull)",
-               message = "SML 369 — MACRO INVALIDATION: Close breached macro anchor from above. Structural bull cycle inverted — close or hedge long positions.")
+               message = "SML 369 — MACRO INVALIDATION: Close breached EMA 96 from above. Structural bull cycle inverted — close or hedge long positions.")
 
 alertcondition(macro_invalidation_short,
                title   = "Macro Cycle Invalidation (Bear)",
-               message = "SML 369 — MACRO INVALIDATION: Close breached macro anchor from below. Structural bear cycle inverted — close or hedge short positions.")
+               message = "SML 369 — MACRO INVALIDATION: Close breached EMA 96 from below. Structural bear cycle inverted — close or hedge short positions.")

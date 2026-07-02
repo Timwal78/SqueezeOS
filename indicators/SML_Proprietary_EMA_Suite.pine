@@ -1,82 +1,64 @@
 // © ScriptMasterLabs — SML Proprietary EMA Suite [E1 Full Engine]
 // ================================================================
-// ENGINE 1 — SEQUENCE A + SEQUENCE B + SEQUENCE C
+// ENGINE 1 — TESLA SEQUENCE + HARMONIC STACK + TACTICAL MATRIX
 //
-// Sequence A (macro structure):   price EMA cascade
-// Sequence B (swing momentum):    intermediate swing EMA cascade
-// Sequence C (15m/1h intraday):   tactical micro-coil cascade
+// Tesla Sequence  (macro structure):   1 · 24 · 578 · 963
+// Harmonic Stack  (swing momentum):   30 · 60 · 90 · 120 · 741
+// Tactical Matrix (15m/1h intraday):  6 · 33 · 66 · 99 · 123
 //
 // DIMENSIONAL ISOLATION:
 //   Engine 1  → EMAs on PRICE (all 3 families above)
-//   Engine 3  → VMAs on VOLUME ← separate script
+//   Engine 3  → VMAs on VOLUME (11·47·123·321) ← separate script
 //   Engine 2  → Settlement Clock / FTD countdown ← backend chronometer
 //
-// Lie Detector:        SEQ A SUPPRESSED + E3 ceiling_breach → dark-pool accumulation
+// Lie Detector:        TESLA SUPPRESSED + E3 ceiling_breach → dark-pool accumulation
 // Triple Convergence:  All 3 families aligned = institutional-grade confirmation
 // ================================================================
 //@version=5
 indicator("SML Proprietary EMA Suite [E1 Full Engine]",
           shorttitle="SML·E1·Full", overlay=true)
 
-// ── Sequence Inputs (SML Licensed) ───────────────────────────────
-sa1 = input.int(1, "Seq A · L1 (Seed)",   group="SML Licensed — Sequence A", minval=1)
-sa2 = input.int(1, "Seq A · L2",          group="SML Licensed — Sequence A", minval=1)
-sa3 = input.int(1, "Seq A · L3",          group="SML Licensed — Sequence A", minval=1)
-sa4 = input.int(1, "Seq A · Anchor",      group="SML Licensed — Sequence A", minval=1)
-
-sb1 = input.int(1, "Seq B · L1 (Base)",   group="SML Licensed — Sequence B", minval=1)
-sb2 = input.int(1, "Seq B · L2",          group="SML Licensed — Sequence B", minval=1)
-sb3 = input.int(1, "Seq B · L3",          group="SML Licensed — Sequence B", minval=1)
-sb4 = input.int(1, "Seq B · L4",          group="SML Licensed — Sequence B", minval=1)
-sb5 = input.int(1, "Seq B · Anchor",      group="SML Licensed — Sequence B", minval=1)
-
-sc1 = input.int(1, "Seq C · L1 (Seed)",   group="SML Licensed — Sequence C", minval=1)
-sc2 = input.int(1, "Seq C · L2",          group="SML Licensed — Sequence C", minval=1)
-sc3 = input.int(1, "Seq C · L3",          group="SML Licensed — Sequence C", minval=1)
-sc4 = input.int(1, "Seq C · L4",          group="SML Licensed — Sequence C", minval=1)
-sc5 = input.int(1, "Seq C · Anchor",      group="SML Licensed — Sequence C", minval=1)
-
 // ═══ INPUTS ═══════════════════════════════════════════════════════
-show_tesla    = input.bool(true, "Sequence A (Macro Structure)",     group="Engine 1 — Sequence A")
-show_harmonic = input.bool(true, "Sequence B (Swing Momentum)",      group="Engine 1 — Sequence B")
-show_tactical = input.bool(true, "Sequence C (15m/1h Intraday)",     group="Engine 1 — Sequence C")
+show_tesla    = input.bool(true, "Tesla Sequence  (1 · 24 · 578 · 963)",       group="Engine 1 — Tesla Sequence")
+show_harmonic = input.bool(true, "Harmonic Stack  (30 · 60 · 90 · 120 · 741)", group="Engine 1 — Harmonic Stack")
+show_tactical = input.bool(true, "Tactical Matrix (6 · 33 · 66 · 99 · 123)",   group="Engine 1 — Tactical Matrix (15m/1h)")
 
-ignition_thresh = input.float(15.0, "Seq A Ignition Stretch %",    group="Signal Thresholds", minval=5.0, step=0.5)
-stretch_thresh  = input.float(8.0,  "Seq A Stretch Alert %",       group="Signal Thresholds", minval=2.0, step=0.5)
-suppress_thresh = input.float(5.0,  "Seq A Suppression Zone %",    group="Signal Thresholds", minval=0.5, step=0.5)
-micro_coil_pct  = input.float(0.8,  "Seq C Micro-Coil Width %",    group="Signal Thresholds", minval=0.1, step=0.1)
+ignition_thresh = input.float(15.0, "Tesla Ignition Stretch %",    group="Signal Thresholds", minval=5.0, step=0.5)
+stretch_thresh  = input.float(8.0,  "Tesla Stretch Alert %",       group="Signal Thresholds", minval=2.0, step=0.5)
+suppress_thresh = input.float(5.0,  "Tesla Suppression Zone %",    group="Signal Thresholds", minval=0.5, step=0.5)
+micro_coil_pct  = input.float(0.8,  "Tactical Micro-Coil Width %", group="Signal Thresholds", minval=0.1, step=0.1)
 
 show_labels = input.bool(true, "Show Signal Labels",       group="Display")
 show_bands  = input.bool(true, "Show Signal Backgrounds",  group="Display")
 
 // ═══ EMAs ═════════════════════════════════════════════════════════
 
-// Sequence A — macro price structure
-ema_a1 = ta.ema(close, sa1)
-ema_a2 = ta.ema(close, sa2)
-ema_a3 = ta.ema(close, sa3)
-ema_a4 = ta.ema(close, sa4)
+// Tesla Sequence — macro price structure
+ema1   = ta.ema(close, 1)     // Seed — equals close; visual price trace reference
+ema24  = ta.ema(close, 24)
+ema578 = ta.ema(close, 578)
+ema963 = ta.ema(close, 963)
 
-// Sequence B — swing momentum
-ema_b1 = ta.ema(close, sb1)
-ema_b2 = ta.ema(close, sb2)
-ema_b3 = ta.ema(close, sb3)
-ema_b4 = ta.ema(close, sb4)
-ema_b5 = ta.ema(close, sb5)
+// Harmonic Stack — swing momentum
+ema30  = ta.ema(close, 30)
+ema60  = ta.ema(close, 60)
+ema90  = ta.ema(close, 90)
+ema120 = ta.ema(close, 120)
+ema741 = ta.ema(close, 741)
 
-// Sequence C — micro-coil / intraday (best on 15m or 1h)
-ema_c1 = ta.ema(close, sc1)
-ema_c2 = ta.ema(close, sc2)
-ema_c3 = ta.ema(close, sc3)
-ema_c4 = ta.ema(close, sc4)
-ema_c5 = ta.ema(close, sc5)
+// Tactical Matrix — micro-coil / intraday (best on 15m or 1h)
+ema6   = ta.ema(close, 6)
+ema33  = ta.ema(close, 33)
+ema66  = ta.ema(close, 66)
+ema99  = ta.ema(close, 99)
+ema123 = ta.ema(close, 123)
 
 // ═══ SIGNAL LOGIC ═════════════════════════════════════════════════
 
-// — Sequence A —
-stretch_pct        = (close - ema_a4) / ema_a4 * 100
-tesla_bull         = close > ema_a2 and ema_a2 > ema_a3 and ema_a3 > ema_a4
-tesla_bear         = close < ema_a2 and ema_a2 < ema_a3 and ema_a3 < ema_a4
+// — Tesla Sequence —
+stretch_pct        = (close - ema963) / ema963 * 100
+tesla_bull         = close > ema24 and ema24 > ema578 and ema578 > ema963
+tesla_bear         = close < ema24 and ema24 < ema578 and ema578 < ema963
 tesla_suppressed   = not tesla_bull and not tesla_bear and math.abs(stretch_pct) < suppress_thresh
 tesla_compression  = math.abs(stretch_pct) < 1.5
 
@@ -85,57 +67,57 @@ elastic_ignition_bear = stretch_pct < -ignition_thresh and tesla_bear
 bull_stretch          = stretch_pct >  stretch_thresh  and tesla_bull and not elastic_ignition_bull
 bear_stretch          = stretch_pct < -stretch_thresh  and tesla_bear and not elastic_ignition_bear
 
-// — Sequence B —
-harm_bull     = ema_b1 > ema_b2 and ema_b2 > ema_b3 and ema_b3 > ema_b4 and ema_b4 > ema_b5
-harm_bear     = ema_b1 < ema_b2 and ema_b2 < ema_b3 and ema_b3 < ema_b4 and ema_b4 < ema_b5
-harm_compress = math.abs((ema_b1 - ema_b5) / ema_b5 * 100) < 2.0
+// — Harmonic Stack —
+harm_bull     = ema30 > ema60 and ema60 > ema90 and ema90 > ema120 and ema120 > ema741
+harm_bear     = ema30 < ema60 and ema60 < ema90 and ema90 < ema120 and ema120 < ema741
+harm_compress = math.abs((ema30 - ema741) / ema741 * 100) < 2.0
 
-// — Sequence C —
-tact_bull      = ema_c1 > ema_c2 and ema_c2 > ema_c3 and ema_c3 > ema_c4 and ema_c4 > ema_c5
-tact_bear      = ema_c1 < ema_c2 and ema_c2 < ema_c3 and ema_c3 < ema_c4 and ema_c4 < ema_c5
-tact_spread    = math.abs((ema_c1 - ema_c5) / ema_c5 * 100)
+// — Tactical Matrix —
+tact_bull      = ema6 > ema33 and ema33 > ema66 and ema66 > ema99 and ema99 > ema123
+tact_bear      = ema6 < ema33 and ema33 < ema66 and ema66 < ema99 and ema99 < ema123
+tact_spread    = math.abs((ema6 - ema123) / ema123 * 100)
 micro_coil     = tact_spread < micro_coil_pct
-tact_ignition  = ta.crossover(ema_c1, ema_c2)
-tact_breakdown = ta.crossunder(ema_c1, ema_c2)
+tact_ignition  = ta.crossover(ema6, ema33)    // micro-coil expanding bullish
+tact_breakdown = ta.crossunder(ema6, ema33)   // micro-coil expanding bearish
 
-// — Triple Convergence —
+// — Triple Convergence (all 3 families aligned simultaneously) —
 triple_bull = tesla_bull and harm_bull and tact_bull
 triple_bear = tesla_bear and harm_bear and tact_bear
 
 // ═══ PLOTS ════════════════════════════════════════════════════════
 
-// Sequence A
-plot(show_tesla ? ema_a1 : na, "E1 · Seq A · L1 (Seed)",
+// Tesla Sequence
+plot(show_tesla ? ema1   : na, "E1 · EMA 1   (Seed · Price Trace)",
      color=color.new(color.silver, 55), linewidth=1)
-plot(show_tesla ? ema_a2 : na, "E1 · Seq A · L2 (Ignition Rail)",
+plot(show_tesla ? ema24  : na, "E1 · EMA 24  (Seed × 24 · Ignition Rail)",
      color=color.new(color.yellow, 10), linewidth=1)
-plot(show_tesla ? ema_a3 : na, "E1 · Seq A · L3 (Elastic Resistance)",
+plot(show_tesla ? ema578 : na, "E1 · EMA 578 (24² · Elastic Resistance)",
      color=color.new(color.orange,  5), linewidth=2)
-plot(show_tesla ? ema_a4 : na, "E1 · Seq A · Anchor (Macro Floor)",
+plot(show_tesla ? ema963 : na, "E1 · EMA 963 (Tesla Macro Floor)",
      color=color.new(color.red,     0), linewidth=3)
 
-// Sequence B
-plot(show_harmonic ? ema_b1 : na, "H · Seq B · L1 (Base)",
+// Harmonic Stack
+plot(show_harmonic ? ema30  : na, "H · EMA 30  (Harmonic Base)",
      color=color.new(color.aqua,   20), linewidth=1)
-plot(show_harmonic ? ema_b2 : na, "H · Seq B · L2",
+plot(show_harmonic ? ema60  : na, "H · EMA 60  (Harmonic Mid-Low)",
      color=color.new(color.teal,   15), linewidth=1)
-plot(show_harmonic ? ema_b3 : na, "H · Seq B · L3",
+plot(show_harmonic ? ema90  : na, "H · EMA 90  (Harmonic Mid-High)",
      color=color.new(color.green,  10), linewidth=1)
-plot(show_harmonic ? ema_b4 : na, "H · Seq B · L4 (Cap)",
+plot(show_harmonic ? ema120 : na, "H · EMA 120 (Harmonic Cap)",
      color=color.new(#00ff88,       5), linewidth=2)
-plot(show_harmonic ? ema_b5 : na, "H · Seq B · Anchor",
+plot(show_harmonic ? ema741 : na, "H · EMA 741 (Macro Harmonic Anchor)",
      color=color.new(color.purple,  0), linewidth=2)
 
-// Sequence C
-plot(show_tactical ? ema_c1 : na, "T · Seq C · L1 (Seed)",
+// Tactical Matrix
+plot(show_tactical ? ema6   : na, "T · EMA 6   (Tactical Seed)",
      color=color.new(color.white,  50), linewidth=1)
-plot(show_tactical ? ema_c2 : na, "T · Seq C · L2 (Fast)",
+plot(show_tactical ? ema33  : na, "T · EMA 33  (Tactical Fast)",
      color=color.new(#00cfff,      20), linewidth=1)
-plot(show_tactical ? ema_c3 : na, "T · Seq C · L3 (Mid)",
+plot(show_tactical ? ema66  : na, "T · EMA 66  (Tactical Mid)",
      color=color.new(#0088ff,      15), linewidth=1)
-plot(show_tactical ? ema_c4 : na, "T · Seq C · L4 (Slow)",
+plot(show_tactical ? ema99  : na, "T · EMA 99  (Tactical Slow)",
      color=color.new(#4444ff,      10), linewidth=1)
-plot(show_tactical ? ema_c5 : na, "T · Seq C · Anchor",
+plot(show_tactical ? ema123 : na, "T · EMA 123 (Tactical Anchor)",
      color=color.new(#8800ff,       5), linewidth=2)
 
 // ═══ BACKGROUND (priority cascade — highest conviction first) ═════
@@ -159,22 +141,22 @@ var label sig_lbl = na
 if show_labels and barstate.islast
     label.delete(sig_lbl)
 
-    t_tag = tesla_bull ? "SeqA ▲" : tesla_bear ? "SeqA ▼" : "SeqA —"
-    h_tag = harm_bull  ? "SeqB ▲" : harm_bear  ? "SeqB ▼" : "SeqB —"
-    x_tag = tact_bull  ? "SeqC ▲" : tact_bear  ? "SeqC ▼" : "SeqC —"
+    t_tag = tesla_bull ? "Tesla ▲" : tesla_bear ? "Tesla ▼" : "Tesla —"
+    h_tag = harm_bull  ? "Harm ▲"  : harm_bear  ? "Harm ▼"  : "Harm —"
+    x_tag = tact_bull  ? "Tact ▲"  : tact_bear  ? "Tact ▼"  : "Tact —"
     matrix_line = t_tag + "  |  " + h_tag + "  |  " + x_tag
 
     sig_txt =
-      triple_bull           ? "E1: TRIPLE CONVERGENCE BULL\n+" + str.tostring(stretch_pct, "#.##") + "% · All 3 sequences aligned\n" + matrix_line :
-      triple_bear           ? "E1: TRIPLE CONVERGENCE BEAR\n"  + str.tostring(stretch_pct, "#.##") + "% · All 3 sequences aligned\n" + matrix_line :
-      elastic_ignition_bull ? "E1: ELASTIC IGNITION BULL\n+"   + str.tostring(stretch_pct, "#.##") + "% from macro anchor\n" + matrix_line :
-      elastic_ignition_bear ? "E1: ELASTIC IGNITION BEAR\n"    + str.tostring(stretch_pct, "#.##") + "% from macro anchor\n" + matrix_line :
+      triple_bull           ? "E1: TRIPLE CONVERGENCE BULL\n+" + str.tostring(stretch_pct, "#.##") + "% · All 3 matrices aligned\n" + matrix_line :
+      triple_bear           ? "E1: TRIPLE CONVERGENCE BEAR\n"  + str.tostring(stretch_pct, "#.##") + "% · All 3 matrices aligned\n" + matrix_line :
+      elastic_ignition_bull ? "E1: ELASTIC IGNITION BULL\n+"   + str.tostring(stretch_pct, "#.##") + "% from EMA963\n" + matrix_line :
+      elastic_ignition_bear ? "E1: ELASTIC IGNITION BEAR\n"    + str.tostring(stretch_pct, "#.##") + "% from EMA963\n" + matrix_line :
       bull_stretch          ? "E1: BULL STRETCH\n+"            + str.tostring(stretch_pct, "#.##") + "%\n" + matrix_line :
       bear_stretch          ? "E1: BEAR STRETCH\n"             + str.tostring(stretch_pct, "#.##") + "%\n" + matrix_line :
       micro_coil            ? "E1: TACTICAL MICRO-COIL\nSpread " + str.tostring(tact_spread, "#.##") + "% — expansion imminent\n" + matrix_line :
-      harm_compress         ? "E1: SEQ B COMPRESSION\n5-layer coil tightening\n" + matrix_line :
+      harm_compress         ? "E1: HARMONIC COMPRESSION\n5-layer coil tightening\n" + matrix_line :
       tesla_suppressed      ? "E1: SUPPRESSED\nWatch E3 volume pane now\n" + matrix_line :
-      tesla_compression     ? "E1: SEQ A COMPRESSION\nCoil at macro floor\n" + matrix_line :
+      tesla_compression     ? "E1: TESLA COMPRESSION\nCoil at macro floor\n" + matrix_line :
       "E1: NEUTRAL\n" + matrix_line
 
     lbl_col = triple_bull or elastic_ignition_bull or bull_stretch ? color.green  :
@@ -191,40 +173,40 @@ if show_labels and barstate.islast
 
 alertcondition(triple_bull,
     "E1 Triple Convergence Bull",
-    "{{ticker}} — TRIPLE CONVERGENCE BULL: Seq A + Seq B + Seq C all aligned bullish")
+    "{{ticker}} — TRIPLE CONVERGENCE BULL: Tesla + Harmonic + Tactical all aligned bullish")
 
 alertcondition(triple_bear,
     "E1 Triple Convergence Bear",
-    "{{ticker}} — TRIPLE CONVERGENCE BEAR: Seq A + Seq B + Seq C all aligned bearish")
+    "{{ticker}} — TRIPLE CONVERGENCE BEAR: Tesla + Harmonic + Tactical all aligned bearish")
 
 alertcondition(elastic_ignition_bull,
     "E1 Elastic Ignition Bull",
-    "{{ticker}} — ELASTIC IGNITION BULL: Price >" + str.tostring(ignition_thresh, "#") + "% above macro anchor")
+    "{{ticker}} — ELASTIC IGNITION BULL: Price >" + str.tostring(ignition_thresh, "#") + "% above EMA963")
 
 alertcondition(elastic_ignition_bear,
     "E1 Elastic Ignition Bear",
-    "{{ticker}} — ELASTIC IGNITION BEAR: Price >" + str.tostring(ignition_thresh, "#") + "% below macro anchor")
+    "{{ticker}} — ELASTIC IGNITION BEAR: Price >" + str.tostring(ignition_thresh, "#") + "% below EMA963")
 
 alertcondition(micro_coil,
     "E1 Tactical Micro-Coil Detected",
     "{{ticker}} — MICRO-COIL: Tactical matrix compressed to " + str.tostring(micro_coil_pct, "#.#") + "% width — expansion imminent")
 
 alertcondition(tact_ignition,
-    "E1 Tactical Ignition (fast × slow crossover)",
-    "{{ticker}} — TACTICAL IGNITION: Fast level crossed above slow level — micro-coil expanding bullish")
+    "E1 Tactical Ignition (EMA6 × EMA33 crossover)",
+    "{{ticker}} — TACTICAL IGNITION: EMA6 crossed above EMA33 — micro-coil expanding bullish")
 
 alertcondition(tact_breakdown,
-    "E1 Tactical Breakdown (fast × slow crossunder)",
-    "{{ticker}} — TACTICAL BREAKDOWN: Fast level crossed under slow level — micro-coil expanding bearish")
+    "E1 Tactical Breakdown (EMA6 × EMA33 crossunder)",
+    "{{ticker}} — TACTICAL BREAKDOWN: EMA6 crossed under EMA33 — micro-coil expanding bearish")
 
 alertcondition(tesla_suppressed,
     "E1 Suppression Zone — Monitor E3",
     "{{ticker}} — SUPPRESSED: Price coiled. Open E3 volume pane for dark-pool accumulation signal.")
 
-alertcondition(ta.crossover(close, ema_a3),
-    "E1 Price Reclaims Mid Resistance",
-    "{{ticker}} — MID RESISTANCE RECLAIM: Price crossed above elastic resistance line")
+alertcondition(ta.crossover(close, ema578),
+    "E1 Price Reclaims EMA578",
+    "{{ticker}} — EMA578 RECLAIM: Price crossed above 24² elastic resistance")
 
-alertcondition(ta.crossover(close, ema_b5),
-    "E1 Price Reclaims Macro Harmonic Anchor",
-    "{{ticker}} — MACRO ANCHOR RECLAIM: Price crossed above macro harmonic anchor")
+alertcondition(ta.crossover(close, ema741),
+    "E1 Price Reclaims EMA741 (Macro Harmonic Anchor)",
+    "{{ticker}} — EMA741 RECLAIM: Price crossed above macro harmonic anchor")

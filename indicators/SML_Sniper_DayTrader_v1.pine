@@ -1,22 +1,8 @@
 //@version=6
 // SML Sniper Day Trader v1.1 — Institutional Intraday Execution Bridge
+// Trigger: EMA 13/34 crossover | Gate: 7-factor score + VWAP + ADX + Pillar/Tracker
 // Webhook: https://squeezeos-api.onrender.com/api/webhooks/tradingview
 indicator("SML Sniper Day Trader v1.1", overlay=true, max_labels_count=500, max_boxes_count=500, max_bars_back=1000)
-
-// ── Sequence Inputs (SML Licensed) ───────────────────────────────
-i_trig1 = input.int(1, "Trigger Fast", group="SML Licensed — Trigger", minval=1)
-i_trig2 = input.int(1, "Trigger Slow", group="SML Licensed — Trigger", minval=1)
-
-ip2 = input.int(1, "Pillar L2", group="SML Licensed — Pillar Stack", minval=1)
-ip3 = input.int(1, "Pillar L3", group="SML Licensed — Pillar Stack", minval=1)
-ip4 = input.int(1, "Pillar L4", group="SML Licensed — Pillar Stack", minval=1)
-ip5 = input.int(1, "Pillar L5 (Anchor)", group="SML Licensed — Pillar Stack", minval=1)
-
-it1 = input.int(1, "Tracker L1 (Fastest)", group="SML Licensed — Tracker Stack", minval=1)
-it2 = input.int(1, "Tracker L2",           group="SML Licensed — Tracker Stack", minval=1)
-it3 = input.int(1, "Tracker L3",           group="SML Licensed — Tracker Stack", minval=1)
-it4 = input.int(1, "Tracker L4",           group="SML Licensed — Tracker Stack", minval=1)
-it5 = input.int(1, "Tracker L5 (Anchor)",  group="SML Licensed — Tracker Stack", minval=1)
 
 color c_teal = #40E0D0
 
@@ -33,15 +19,15 @@ var string G_EXEC = "▶  EXECUTION GATE"
 float minScore    = input.float(60.0, "Min Score % to fire", minval=0.0, maxval=100.0, step=5.0, group=G_EXEC)
 bool requireVwap  = input.bool(true,  "Require VWAP side", group=G_EXEC)
 bool requireAdx   = input.bool(true,  "Require ADX > 25", group=G_EXEC)
-bool requirePillar = input.bool(true, "Require Pillar Stack alignment", group=G_EXEC)
-bool requireTrack  = input.bool(false,"Require Tracker Stack alignment", group=G_EXEC)
+bool requirePillar = input.bool(true, "Require Pillar 13→65 alignment", group=G_EXEC)
+bool requireTrack  = input.bool(false,"Require Tracker 9→61 alignment", group=G_EXEC)
 
 var string G_WH = "▶  SQUEEZEOS WEBHOOK"
 string wh_pass   = input.string("SQUEEZE_AUTH_992", "Webhook Passphrase", group=G_WH)
 string wh_system = input.string("SML_Sniper", "System Name", group=G_WH)
 
-float ema_trig1 = ta.ema(close, i_trig1)
-float ema_trig2 = ta.ema(close, i_trig2)
+float ema13  = ta.ema(close, 13)
+float ema34  = ta.ema(close, 34)
 float vwapV  = ta.vwap(hlc3)
 float atr    = ta.atr(14)
 float rsiVal = ta.rsi(close, 14)
@@ -50,20 +36,20 @@ float rsi5m  = request.security(syminfo.tickerid, "5", ta.rsi(close, 14), lookah
 [_, _, adxVal] = ta.dmi(14, 14)
 float volAvg = ta.sma(volume, 20)
 
-float eP_l2 = ta.ema(close, ip2)
-float eP_l3 = ta.ema(close, ip3)
-float eP_l4 = ta.ema(close, ip4)
-float eP_l5 = ta.ema(close, ip5)
-bool P13_bull = ema_trig1 > eP_l2 and eP_l2 > eP_l3 and eP_l3 > eP_l4 and eP_l4 > eP_l5
-bool P13_bear = ema_trig1 < eP_l2 and eP_l2 < eP_l3 and eP_l3 < eP_l4 and eP_l4 < eP_l5
+float eP13b = ta.ema(close, 26)
+float eP13c = ta.ema(close, 39)
+float eP13d = ta.ema(close, 52)
+float eP13e = ta.ema(close, 65)
+bool P13_bull = ema13 > eP13b and eP13b > eP13c and eP13c > eP13d and eP13d > eP13e
+bool P13_bear = ema13 < eP13b and eP13b < eP13c and eP13c < eP13d and eP13d < eP13e
 
-float eT_l1 = ta.ema(close, it1)
-float eT_l2 = ta.ema(close, it2)
-float eT_l3 = ta.ema(close, it3)
-float eT_l4 = ta.ema(close, it4)
-float eT_l5 = ta.ema(close, it5)
-bool T9_bull = eT_l1 > eT_l2 and eT_l2 > eT_l3 and eT_l3 > eT_l4 and eT_l4 > eT_l5
-bool T9_bear = eT_l1 < eT_l2 and eT_l2 < eT_l3 and eT_l3 < eT_l4 and eT_l4 < eT_l5
+float eT9a = ta.ema(close, 9)
+float eT9b = ta.ema(close, 22)
+float eT9c = ta.ema(close, 35)
+float eT9d = ta.ema(close, 48)
+float eT9e = ta.ema(close, 61)
+bool T9_bull = eT9a > eT9b and eT9b > eT9c and eT9c > eT9d and eT9d > eT9e
+bool T9_bear = eT9a < eT9b and eT9b < eT9c and eT9c < eT9d and eT9d < eT9e
 
 bool macroAlignBull = (not requirePillar or P13_bull) and (not requireTrack or T9_bull)
 bool macroAlignBear = (not requirePillar or P13_bear) and (not requireTrack or T9_bear)
@@ -72,8 +58,8 @@ float bScore = 0.0
 bScore += (close > vwapV ? 1.0 : 0.0)
 bScore += (rsiVal > 50 ? 1.0 : 0.0)
 bScore += (macdMain > macdSig ? 1.0 : 0.0)
-bScore += (ema_trig1 > ema_trig2 ? 1.0 : 0.0)
-bScore += (adxVal > 25 and close > ema_trig1 ? 1.0 : 0.0)
+bScore += (ema13 > ema34 ? 1.0 : 0.0)
+bScore += (adxVal > 25 and close > ema13 ? 1.0 : 0.0)
 bScore += (volume > volAvg and close > open ? 1.0 : 0.0)
 bScore += (rsi5m > 50 ? 1.0 : 0.0)
 float bullPct = (bScore / 7.0) * 100.0
@@ -82,8 +68,8 @@ float rScore = 0.0
 rScore += (close < vwapV ? 1.0 : 0.0)
 rScore += (rsiVal < 50 ? 1.0 : 0.0)
 rScore += (macdMain < macdSig ? 1.0 : 0.0)
-rScore += (ema_trig1 < ema_trig2 ? 1.0 : 0.0)
-rScore += (adxVal > 25 and close < ema_trig1 ? 1.0 : 0.0)
+rScore += (ema13 < ema34 ? 1.0 : 0.0)
+rScore += (adxVal > 25 and close < ema13 ? 1.0 : 0.0)
 rScore += (volume > volAvg and close < open ? 1.0 : 0.0)
 rScore += (rsi5m < 50 ? 1.0 : 0.0)
 float bearPct = (rScore / 7.0) * 100.0
@@ -108,8 +94,8 @@ var bool  t3Hit   = false
 var bool  t4Hit   = false
 var bool  t5Hit   = false
 
-bool xBuy  = ta.crossover(ema_trig1, ema_trig2)
-bool xSell = ta.crossunder(ema_trig1, ema_trig2)
+bool xBuy  = ta.crossover(ema13, ema34)
+bool xSell = ta.crossunder(ema13, ema34)
 bool triggerBuy  = xBuy  and lastSig <= 0 and buyGated
 bool triggerSell = xSell and lastSig >= 0 and sellGated
 
@@ -143,18 +129,18 @@ if lastSig == -1
     t4Hit := t4Hit or low <= t4
     t5Hit := t5Hit or low <= t5
 
-plot(eP_l2, "Pillar L2", color=color.new(#FF8C00, 80), linewidth=1)
-plot(eP_l3, "Pillar L3", color=color.new(#FF8C00, 80), linewidth=1)
-plot(eP_l4, "Pillar L4", color=color.new(#FF8C00, 80), linewidth=1)
-plot(eP_l5, "Pillar L5", color=color.new(#FF8C00, 55), linewidth=2)
+plot(eP13b, "Pillar 26", color=color.new(#FF8C00, 80), linewidth=1)
+plot(eP13c, "Pillar 39", color=color.new(#FF8C00, 80), linewidth=1)
+plot(eP13d, "Pillar 52", color=color.new(#FF8C00, 80), linewidth=1)
+plot(eP13e, "Pillar 65", color=color.new(#FF8C00, 55), linewidth=2)
 
 int rAlpha = P13_bull ? 0 : P13_bear ? 0 : 30
-p13 = plot(ema_trig1, "Trigger Fast", color=color.new(color.green, rAlpha), linewidth=2)
-p34 = plot(ema_trig2, "Trigger Slow", color=color.new(color.red,   rAlpha), linewidth=2)
-fill(p13, p34, color=ema_trig1 > ema_trig2 ? color.new(color.green, 100 - ribOpac) : color.new(color.red, 100 - ribOpac))
+p13 = plot(ema13, "EMA 13", color=color.new(color.green, rAlpha), linewidth=2)
+p34 = plot(ema34, "EMA 34", color=color.new(color.red,   rAlpha), linewidth=2)
+fill(p13, p34, color=ema13 > ema34 ? color.new(color.green, 100 - ribOpac) : color.new(color.red, 100 - ribOpac))
 plot(vwapV, "VWAP", color=close > vwapV ? color.green : color.red, linewidth=2)
 
-bool isRetest = (lastSig == 1 and low <= ema_trig1 and low > ema_trig2) or (lastSig == -1 and high >= ema_trig1 and high < ema_trig2)
+bool isRetest = (lastSig == 1 and low <= ema13 and low > ema34) or (lastSig == -1 and high >= ema13 and high < ema34)
 barcolor((triggerBuy or triggerSell) ? color.black : isRetest ? color.orange : na)
 plotshape(triggerBuy,  text="BUY",  style=shape.labelup,   location=location.belowbar, color=color.green, textcolor=color.white, size=size.normal)
 plotshape(triggerSell, text="SELL", style=shape.labeldown, location=location.abovebar, color=color.red,   textcolor=color.white, size=size.normal)
@@ -229,14 +215,14 @@ if barstate.islast
     f_row(d,  5, "RSI (14)",     str.tostring(rsiVal, "#.#"), rsiVal > 50 ? color.green : color.red, dashSize)
     f_row(d,  6, "MACD Trend",   macdMain > macdSig ? "BULL" : "BEAR", macdMain > macdSig ? color.green : color.red, dashSize)
     f_row(d,  7, "ADX Power",    str.tostring(adxVal, "#.#"), adxVal > 25 ? color.green : color.gray, dashSize)
-    f_row(d,  8, "Primary Trigger", ema_trig1 > ema_trig2 ? "BULL CROSS" : "BEAR CROSS", ema_trig1 > ema_trig2 ? color.green : color.red, dashSize)
+    f_row(d,  8, "EMA 13/34",    ema13 > ema34 ? "BULL CROSS" : "BEAR CROSS", ema13 > ema34 ? color.green : color.red, dashSize)
     f_row(d,  9, "ATR (14)",     str.tostring(atr, "#.##"), color.black, dashSize)
     f_row(d, 10, "Vol Status",   volume > volAvg ? "HIGH" : "LOW", volume > volAvg ? color.green : color.gray, dashSize)
     f_row(d, 11, "5m RSI",       str.tostring(rsi5m, "#.#"), rsi5m > 50 ? color.green : color.red, dashSize)
     string p13_txt = P13_bull ? "▲ ALIGNED BULL" : P13_bear ? "▼ ALIGNED BEAR" : "neutral"
     string t9_txt  = T9_bull  ? "▲ ALIGNED BULL" : T9_bear  ? "▼ ALIGNED BEAR" : "neutral"
-    f_row(d, 12, "Pillar Stack",  p13_txt, P13_bull ? color.new(#FF8C00, 0) : P13_bear ? color.new(#FF8C00, 0) : color.gray, dashSize)
-    f_row(d, 13, "Tracker Stack", t9_txt,  T9_bull  ? color.new(#00BFFF, 0) : T9_bear  ? color.new(#00BFFF, 0) : color.gray, dashSize)
+    f_row(d, 12, "Pillar 13→65", p13_txt, P13_bull ? color.new(#FF8C00, 0) : P13_bear ? color.new(#FF8C00, 0) : color.gray, dashSize)
+    f_row(d, 13, "Tracker 9→61", t9_txt,  T9_bull  ? color.new(#00BFFF, 0) : T9_bear  ? color.new(#00BFFF, 0) : color.gray, dashSize)
     string mac_txt = macroAlignBull ? "MACRO BULL OPEN" : macroAlignBear ? "MACRO BEAR OPEN" : "MACRO GATED"
     f_row(d, 14, "Macro Conf",   mac_txt, macroAlignBull ? color.green : macroAlignBear ? color.red : color.gray, dashSize)
     f_row(d, 15, "SL Price",     str.tostring(slP, "#.##"), color.red, dashSize)
@@ -247,8 +233,8 @@ if barstate.islast
     f_row(d, 18, "Signal",       sig_txt, triggerBuy ? color.green : triggerSell ? color.red : color.black, dashSize)
     f_row(d, 19, "System",       wh_system + "  v1.1", color.blue, dashSize)
 
-alertcondition(triggerBuy  and buyGated,  "SML Sniper: BUY",  "SNIPER BUY — {{ticker}} @ {{close}} [SML]")
-alertcondition(triggerSell and sellGated, "SML Sniper: SELL", "SNIPER SELL — {{ticker}} @ {{close}} [SML]")
+alertcondition(triggerBuy  and buyGated,  "SML Sniper: BUY",  "SNIPER BUY 13/34 — {{ticker}} @ {{close}} [SML]")
+alertcondition(triggerSell and sellGated, "SML Sniper: SELL", "SNIPER SELL 13/34 — {{ticker}} @ {{close}} [SML]")
 
 string _px = str.tostring(close, "#.00")
 string _tk = syminfo.ticker
