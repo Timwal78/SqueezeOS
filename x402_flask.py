@@ -58,7 +58,7 @@ def _payment_requirements(price_usdc: str, description: str, resource: str) -> d
     }
 
 
-def _rlusd_requirements(price_rlusd: str, description: str, resource: str) -> dict:
+def _rlusd_requirements(price_rlusd: str, description: str, resource: str) -> "dict | None":
     """
     XRPL/RLUSD entry for the 402 `accepts` array.
 
@@ -66,7 +66,19 @@ def _rlusd_requirements(price_rlusd: str, description: str, resource: str) -> di
     entry use the 402Proof invoice/verify flow declared under `extra.flow`.
     Endpoint UUID is looked up by path so the agent can POST it straight to
     /v1/invoice without an extra discovery round-trip.
+
+    SML fix: previously fell back to a hardcoded wallet
+    (rUJhaK2ibfTFVdAn8m9jMCcJQ1xo6FmNPZ) nobody on the team recognized or
+    held the key to when XRPL_PAY_TO wasn't set — a real risk, since a
+    naive x402 client can pay the top-level `payTo` field directly without
+    following the documented invoice/verify flow. Returns None instead so
+    the caller omits this rail entirely rather than ever advertising an
+    unconfigured/unrecognized wallet as a place to send real money.
     """
+    xrpl_pay_to = os.environ.get("XRPL_PAY_TO", "")
+    if not xrpl_pay_to:
+        return None
+
     try:
         from proof402_integration import ENDPOINTS as _RLUSD_ENDPOINTS
     except Exception:
@@ -83,7 +95,7 @@ def _rlusd_requirements(price_rlusd: str, description: str, resource: str) -> di
         "resource": resource,
         "description": description,
         "mimeType": "application/json",
-        "payTo": os.environ.get("XRPL_PAY_TO", "rUJhaK2ibfTFVdAn8m9jMCcJQ1xo6FmNPZ"),
+        "payTo": xrpl_pay_to,
         "maxTimeoutSeconds": MAX_TIMEOUT,
         "asset": "RLUSD",
         "extra": {
@@ -111,7 +123,8 @@ def _402(requirements: dict, reason: str = ""):
         description=requirements["description"],
         resource=requirements["resource"],
     )
-    accepts.append(rlusd)
+    if rlusd is not None:
+        accepts.append(rlusd)
     body = {"x402Version": X402_VERSION, "accepts": accepts, "error": reason}
     resp = make_response(jsonify(body), 402)
     resp.headers["Content-Type"] = "application/json"
@@ -204,6 +217,23 @@ def x402_guard(price_usdc: str, description: str, discoverable: bool = True):
             if settle.get("success", False):
                 resp.headers["X-PAYMENT-RESPONSE"] = base64.b64encode(
                     json.dumps(settle).encode()).decode()
+                # SML fix: the RLUSD rail (proof402_integration.require_payment)
+                # has always fired a Discord payment alert on success — this
+                # Coinbase/USDC rail never did, so a real settled payment left
+                # zero trace anywhere except the on-chain transfer itself. An
+                # $8 USDC payment surfaced with no record in Discord or the
+                # in-memory analytics funnel (which also resets on every
+                # redeploy) before this was caught.
+                try:
+                    from proof402_integration import _fire_payment_discord
+                    payer = (
+                        settle.get("payer")
+                        or payment_payload.get("payload", {}).get("authorization", {}).get("from", "")
+                        or "unknown"
+                    )
+                    _fire_payment_discord(payer, request.path, 2)
+                except Exception:
+                    pass
             return resp
         return wrapper
     return decorator

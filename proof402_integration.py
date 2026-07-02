@@ -49,7 +49,18 @@ _PAYMENT_PRICES = {
 
 def _fire_payment_discord(wallet: str, path: str, tier: int) -> None:
     """Non-blocking: fire Discord payment alert in a daemon thread."""
-    price = _PAYMENT_PRICES.get(path, 0.0)
+    # SML fix: exact-match lookup silently dropped the alert for path-param
+    # routes like /api/iam/<symbol> (request.path is e.g. /api/iam/GME,
+    # never an exact key in _PAYMENT_PRICES) -- a real payment on those
+    # routes fired no alert at all, same class of "payment happened but
+    # left no trace" gap as the one that hid the $8 USDC payment. Falls
+    # back to a prefix match against registered path stems.
+    price = _PAYMENT_PRICES.get(path)
+    if price is None:
+        for stem, stem_price in _PAYMENT_PRICES.items():
+            if path.startswith(stem.rstrip('/') + '/'):
+                price = stem_price
+                break
     if not price:
         return
     da = _get_discord()
