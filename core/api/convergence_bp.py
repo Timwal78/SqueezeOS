@@ -15,6 +15,7 @@ from core.convergence_engine import ConvergenceEngine, scan_beastmode_universe
 from core.counsel_agent import generate_ai_counsel
 from core.engine2_settlement import get_clock, stamp_ignition, get_all_active
 from core.discord_payload import fire_discord
+from core.execution_lock import claim_entry
 
 logger = logging.getLogger("SML.Convergence.API")
 convergence_bp = Blueprint("convergence", __name__)
@@ -237,6 +238,15 @@ def _fire_execution(symbol: str, result: dict, dm=None) -> None:
             logger.info(f"[EXEC] {symbol} GOD MODE BEAR fired but no existing long to close — skipping close leg")
 
         # ── Opportunistic PUT buy on the bearish signal ──────────────────────
+        # Cross-engine claim: unlike the equity close above (self-correcting —
+        # both engines check the real, shared Tradier account before selling,
+        # so a second attempt just finds nothing left), a put buy-to-open has
+        # no natural cap. Skip if iam_executor.py already claimed this leg.
+        if not claim_entry(symbol, "PUT_ENTRY", "convergence_bp"):
+            logger.info(f"[EXEC] {symbol} PUT entry already claimed by another engine this window — skipping")
+            _fire_robinhood_webhook(symbol, "SELL", sml, {"mode": "protect_only"})
+            return
+
         try:
             from core.convergence_engine import scan_options
             contract = scan_options(symbol, trade_type="put", current_price=price)
@@ -270,6 +280,13 @@ def _fire_execution(symbol: str, result: dict, dm=None) -> None:
         return
 
     # ── bull_fired: open/add long equity position ────────────────────────────
+    # Cross-engine claim: a fresh equity buy has no natural cap the way a
+    # sell-to-close does, so this is the leg that actually needs coordination
+    # with iam_executor.py (same Tradier account, independent GOD_MODE gate).
+    if not claim_entry(symbol, "LONG_ENTRY", "convergence_bp"):
+        logger.info(f"[EXEC] {symbol} LONG entry already claimed by another engine this window — skipping")
+        return
+
     quantity = max(1, int(_BEAST_MAX_PRICE // price))
     quantity = min(quantity, _BEAST_MAX_SHARES)
 
