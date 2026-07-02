@@ -73,6 +73,12 @@ def analyze(closes: List[float]) -> dict:
             "prime_stacked": 0,
             "watch_stacked": 0,
             "execute_gate":  False,
+            "bear_signal":   "INSUFFICIENT_DATA",
+            "bear_tier":     "NONE",
+            "bear_god_stacked":   0,
+            "bear_prime_stacked": 0,
+            "bear_watch_stacked": 0,
+            "bear_execute_gate":  False,
         }
 
     last_price = float(closes[-1])
@@ -89,6 +95,9 @@ def analyze(closes: List[float]) -> dict:
     god_stacked = 0
     prime_stacked = 0
     watch_stacked = 0
+    bear_god_stacked = 0
+    bear_prime_stacked = 0
+    bear_watch_stacked = 0
 
     # Compute all 18 ranked configurations in rank order
     for cfg in HARMONIC_CONFIGS:
@@ -104,6 +113,14 @@ def analyze(closes: List[float]) -> dict:
             last_price > emas[0]
             and all(emas[i] > emas[i+1] for i in range(len(emas) - 1))
         )
+        # Bearish stack: mirror image — price < EMA1 < EMA2 < ... < EMAn.
+        # Same proprietary period configurations (HARMONIC_CONFIGS) run in the
+        # opposite direction — this is not a new proprietary parameter set,
+        # just the symmetric test of the same ranked EMA sequences.
+        is_stacked_bear = (
+            last_price < emas[0]
+            and all(emas[i] < emas[i+1] for i in range(len(emas) - 1))
+        )
 
         if is_stacked:
             if cfg["tier"] == "GOD_MODE":
@@ -112,6 +129,13 @@ def analyze(closes: List[float]) -> dict:
                 prime_stacked += 1
             else:
                 watch_stacked += 1
+        elif is_stacked_bear:
+            if cfg["tier"] == "GOD_MODE":
+                bear_god_stacked += 1
+            elif cfg["tier"] == "PRIME":
+                bear_prime_stacked += 1
+            else:
+                bear_watch_stacked += 1
 
         entry = {
             "rank":     cfg["rank"],
@@ -122,6 +146,7 @@ def analyze(closes: List[float]) -> dict:
             "pf":       cfg["pf"],
             "sequence": seq,
             "stacked":  is_stacked,
+            "stacked_bear": is_stacked_bear,
             "ema_values": [round(e, 2) for e in emas],
         }
         if cfg.get("phi"):
@@ -132,6 +157,7 @@ def analyze(closes: List[float]) -> dict:
     # ── Signal logic ──────────────────────────────────────────────────────────
     # Execution gate: GOD_MODE tier requires ≥3 SET9 configs stacked
     execute_gate = god_stacked >= 3
+    bear_execute_gate = bear_god_stacked >= 3
 
     if god_stacked == 6:
         signal = "GOD_MODE_BULL"
@@ -161,19 +187,57 @@ def analyze(closes: List[float]) -> dict:
         signal = "NEUTRAL"
         tier   = "NONE"
 
+    # Mirror of the bullish tier ladder above, same thresholds, bearish labels.
+    if bear_god_stacked == 6:
+        bear_signal = "GOD_MODE_BEAR"
+        bear_tier   = "GOD_MODE"
+    elif bear_god_stacked >= 4:
+        bear_signal = "FRACTAL_LOCK_BEAR"
+        bear_tier   = "GOD_MODE"
+    elif bear_god_stacked >= 3:
+        bear_signal = "INSTITUTIONAL_CONVERGENCE_BEAR"
+        bear_tier   = "GOD_MODE"
+    elif bear_god_stacked >= 1 and bear_prime_stacked >= 2:
+        bear_signal = "PRIME_CONVERGENCE_BEAR"
+        bear_tier   = "PRIME"
+    elif bear_prime_stacked >= 4:
+        bear_signal = "PRIME_ALIGNMENT_BEAR"
+        bear_tier   = "PRIME"
+    elif bear_prime_stacked >= 2:
+        bear_signal = "PRIME_PARTIAL_BEAR"
+        bear_tier   = "PRIME"
+    elif bear_watch_stacked >= 2:
+        bear_signal = "WATCH_ACTIVE_BEAR"
+        bear_tier   = "WATCH"
+    elif bear_watch_stacked >= 1 or bear_prime_stacked >= 1:
+        bear_signal = "WATCH_PARTIAL_BEAR"
+        bear_tier   = "WATCH"
+    else:
+        bear_signal = "NEUTRAL"
+        bear_tier   = "NONE"
+
     # Harmonic convergence = any GOD_MODE stacked (institutional threshold)
     harmonic_convergence = god_stacked > 0
+    bear_harmonic_convergence = bear_god_stacked > 0
 
     # Weighted composite score: rank 1 = weight 18, rank 18 = weight 1
     # Only count stacked configs
     weighted_sum = 0.0
     weight_total = 0.0
+    bear_weighted_sum = 0.0
+    bear_weight_total = 0.0
     for cfg in HARMONIC_CONFIGS:
-        if matrix.get(cfg["id"], {}).get("stacked"):
+        entry = matrix.get(cfg["id"], {})
+        if entry.get("stacked"):
             w = 19 - cfg["rank"]  # rank 1 → weight 18, rank 18 → weight 1
             weighted_sum += cfg["score"] * w * cfg["pf"]
             weight_total += w
+        elif entry.get("stacked_bear"):
+            w = 19 - cfg["rank"]
+            bear_weighted_sum += cfg["score"] * w * cfg["pf"]
+            bear_weight_total += w
     harmonic_score = round(weighted_sum / weight_total, 2) if weight_total > 0 else 0.0
+    bear_harmonic_score = round(bear_weighted_sum / bear_weight_total, 2) if bear_weight_total > 0 else 0.0
 
     # Decision directive
     if execute_gate:
@@ -184,6 +248,15 @@ def analyze(closes: List[float]) -> dict:
         decision = "WATCH — BUILDING MOMENTUM"
     else:
         decision = "WAIT"
+
+    if bear_execute_gate:
+        bear_decision = "EXECUTE — GOD MODE BEAR CONFIRMED"
+    elif bear_tier == "PRIME":
+        bear_decision = "STANDBY — PRIME ALIGNMENT (BEAR)"
+    elif bear_tier == "WATCH":
+        bear_decision = "WATCH — BUILDING MOMENTUM (BEAR)"
+    else:
+        bear_decision = "WAIT"
 
     return {
         "matrix":              matrix,
@@ -198,11 +271,26 @@ def analyze(closes: List[float]) -> dict:
         "execute_gate":        execute_gate,
         "decision":            decision,
         "highest_stacked_set": 9 if god_stacked > 0 else (6 if prime_stacked > 0 else (3 if watch_stacked > 0 else 0)),
+        # ── Bearish mirror (see is_stacked_bear above) ──────────────────────
+        "bear_signal":              bear_signal,
+        "bear_tier":                bear_tier,
+        "bear_god_stacked":         bear_god_stacked,
+        "bear_prime_stacked":       bear_prime_stacked,
+        "bear_watch_stacked":       bear_watch_stacked,
+        "bear_harmonic_convergence": bear_harmonic_convergence,
+        "bear_harmonic_score":      bear_harmonic_score,
+        "bear_execute_gate":        bear_execute_gate,
+        "bear_decision":            bear_decision,
         "bars_used":           n,
         "atr":                 atr,
         "levels": {
             "invalidation": round(last_price - atr * 1.5, 4),
             "tp1":          round(last_price + atr * 2.0, 4),
             "tp2":          round(last_price + atr * 4.0, 4),
+        },
+        "bear_levels": {
+            "invalidation": round(last_price + atr * 1.5, 4),
+            "tp1":          round(last_price - atr * 2.0, 4),
+            "tp2":          round(last_price - atr * 4.0, 4),
         },
     }

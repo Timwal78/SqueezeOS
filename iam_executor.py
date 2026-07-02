@@ -225,8 +225,38 @@ ODTE_ONLY_SYMBOLS = lambda: {
 # ── Tradier execution ──────────────────────────────────────────────────────────
 def _execute_tradier(sym: str, action: str, resolution: dict, price: float) -> dict:
     instrument = INSTRUMENT()
+    is_odte = sym.upper() in ODTE_ONLY_SYMBOLS()
 
-    if sym.upper() in ODTE_ONLY_SYMBOLS():
+    if action == "SELL":
+        # Bearish resolution: never open a naked equity short. First close any
+        # existing long to protect gains (position-tracking via tradier_api.get_position),
+        # then treat the reversal as a PUT-buying opportunity — same policy as
+        # core/api/convergence_bp.py's bear leg. This runs regardless of
+        # IAM_INSTRUMENT, since "protect the long, buy the put" applies whether the
+        # position was opened as equity or options.
+        results: dict = {"mode": "bear_protect_and_put"}
+        close_result = _close_equity_position(sym, price)
+        if close_result is not None:
+            results["close"] = close_result
+
+        if is_odte and _is_extended_hours():
+            results["put"] = {"status": "skipped", "message": f"{sym} is 0DTE-only; no same-day options in extended hours"}
+        elif _is_extended_hours():
+            results["put"] = {"status": "skipped", "message": "options unavailable in extended hours"}
+        else:
+            expiry_override = 0 if is_odte else None
+            results["put"] = _execute_tradier_options(sym, action, resolution, price, expiry_days_override=expiry_override)
+
+        close_ok = bool(close_result) and (
+            close_result.get("status") == "success" or close_result.get("placed") or close_result.get("mode") == "paper"
+        )
+        put_result = results["put"]
+        put_ok = put_result.get("status") == "success" or put_result.get("placed") or put_result.get("mode") == "paper"
+        results["status"] = "success" if (close_ok or put_ok) else put_result.get("status", "error")
+        results["placed"] = close_ok or put_ok
+        return results
+
+    if is_odte:
         # No equity fallback for these symbols under any circumstance — if same-day
         # options aren't tradeable right now (extended hours), skip rather than fall
         # back to equity, since equity carries no expiry and the whole point is that
@@ -246,6 +276,47 @@ def _execute_tradier(sym: str, action: str, resolution: dict, price: float) -> d
         return _execute_tradier_options(sym, action, resolution, price)
     else:
         return _execute_tradier_equity(sym, action, price)
+
+
+def _close_equity_position(sym: str, price: float) -> Optional[dict]:
+    """
+    Position-aware close: looks up any existing equity long via tradier_api.get_position()
+    and sells the FULL held quantity to close it — never a fixed/computed size, since the
+    goal is securing whatever gains have accrued, not opening a new directional bet.
+    Returns None if flat (nothing to close).
+    """
+    try:
+        from tradier_api import get_position, place_equity_order
+        position = get_position(sym)
+        if not position or position.get("quantity", 0) <= 0:
+            logger.info(f"[IAM-EXEC] {sym} SELL signal — no existing long to close")
+            return None
+
+        qty = int(position["quantity"])
+
+        if PAPER_MODE():
+            logger.info(f"[IAM-EXEC][PAPER] Would close long: SELL {qty}x {sym} @ ${price:.2f} (protect gains)")
+            return {"mode": "paper", "side": "sell", "qty": qty, "price": price, "placed": False}
+
+        if _is_extended_hours():
+            if price <= 0:
+                logger.warning(f"[IAM-EXEC] {sym} close skipped — extended hours requires a live price for the limit order")
+                return {"status": "skipped", "message": "no live price for extended-hours limit close"}
+            limit_px = round(price * 0.998, 2)
+            duration = _ext_hours_duration()
+            result = place_equity_order(sym, qty, "sell", order_type="limit",
+                                        duration=duration, limit_price=limit_px)
+        else:
+            result = place_equity_order(sym, qty, "sell", order_type="market", duration="day")
+
+        result["qty"]   = qty
+        result["price"] = price
+        result["side"]  = "sell"
+        logger.info(f"[IAM-EXEC] 🔻 Closed long to protect gains — SELL {qty}x {sym} @ ${price:.2f}")
+        return result
+    except Exception as e:
+        logger.error(f"[IAM-EXEC] close-position error for {sym}: {e}")
+        return {"status": "error", "message": str(e)}
 
 
 def _execute_tradier_equity(sym: str, action: str, price: float) -> dict:

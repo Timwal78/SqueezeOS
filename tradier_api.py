@@ -357,6 +357,55 @@ def get_account_balance() -> Optional[float]:
         return None
 
 
+def get_positions() -> List[Dict[str, Any]]:
+    """
+    Return all open positions for the configured account.
+    Each entry: {"symbol": str, "quantity": float, "cost_basis": float, ...}
+    (raw Tradier fields passed through). Returns [] if unavailable or no
+    positions — callers must not treat an empty/error response as "flat"
+    for a specific symbol without checking for an actual error, since a
+    downstream trade decision (e.g. deciding whether to close a position)
+    depends on this being accurate.
+    """
+    acct = _account_id()
+    if not acct:
+        logger.error("[TRADIER] TRADIER_ACCOUNT_ID not set — cannot fetch positions")
+        return []
+    data = _get(f"/accounts/{acct}/positions", {})
+    if not data:
+        logger.warning(f"[TRADIER] /accounts/{acct}/positions returned no data")
+        return []
+    positions = (data.get("positions") or {})
+    if positions == "null" or not positions:
+        return []
+    raw = positions.get("position", [])
+    if isinstance(raw, dict):
+        raw = [raw]
+    out = []
+    for p in raw:
+        try:
+            out.append({
+                "symbol":     p.get("symbol", ""),
+                "quantity":   float(p.get("quantity", 0)),
+                "cost_basis": float(p.get("cost_basis", 0)),
+                "date_acquired": p.get("date_acquired"),
+            })
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def get_position(symbol: str) -> Optional[Dict[str, Any]]:
+    """Convenience: return the position dict for one equity symbol, or None if flat.
+    Matches on exact symbol (not option OCC symbols under an equity root).
+    """
+    symbol = symbol.upper().strip()
+    for p in get_positions():
+        if p["symbol"].upper() == symbol:
+            return p
+    return None
+
+
 def place_equity_order(symbol: str, quantity: int, side: str,
                        order_type: str = "market", duration: str = "day",
                        limit_price: Optional[float] = None) -> Dict[str, Any]:
