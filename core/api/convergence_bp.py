@@ -181,8 +181,19 @@ def _fire_execution(symbol: str, result: dict, dm=None) -> None:
     if not _pdt_check_and_record():
         return
 
-    signal = result.get("signal", "")
-    side   = "buy" if "BULL" in signal or signal in ("BEASTMODE", "GOD_MODE", "DUAL_GRID_LOCK") else "sell"
+    # This function is only ever reached via the GOD MODE execution gate above
+    # (sml.execute_gate and sml.tier=="GOD_MODE"), which comes from
+    # core/harmonic_matrix_engine.py — a bull-only detector (is_stacked requires
+    # last_price > emas[0] > emas[1] > ...; there is no bearish branch). The
+    # previous logic guessed direction from result["signal"] (the top-level
+    # convergence tier label — GOD_MODE/BEASTMODE/APEX_SINGULARITY/etc), which
+    # collapses e6's GOD_MODE_BULL and GOD_MODE_BEAR into the same string and is
+    # therefore not a reliable direction signal; several tier values (e.g.
+    # APEX_SINGULARITY, FRACTAL_LOCK) would fall through to "sell" even while
+    # co-occurring with a confirmed-bullish Grid-1 gate, placing a short into a
+    # bullish setup. Since the only thing that ever gates this function is
+    # bull-only, always execute long.
+    side = "buy"
 
     # ── Live price ───────────────────────────────────────────────────────────
     try:
@@ -200,7 +211,7 @@ def _fire_execution(symbol: str, result: dict, dm=None) -> None:
 
     logger.info(
         f"[EXEC] 🚀 GOD MODE FIRE — {side.upper()} {quantity}x {symbol} @ ${price:.2f} "
-        f"| SET9:{god_count}/6 | signal:{signal}"
+        f"| SET9:{god_count}/6 | signal:{result.get('signal', '')}"
     )
 
     # ── 1. Tradier cloud execution ───────────────────────────────────────────
