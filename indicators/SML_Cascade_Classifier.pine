@@ -9,15 +9,17 @@
 //
 // Institutional-grade additions (tuned for 15m/65m intraday use):
 // order-flow confirmation gate, volatility-regime floor, ADX trend-regime
-// filter, HH/HL swing-structure filter (complements ADX — catches trend
-// breaks that magnitude-only ADX misses), higher-timeframe (default 4H)
-// trend alignment filter, a confirmed-bar-only signal gate to eliminate
-// intrabar repaint, a timeframe-auto-scaled ATR stop-loss on the
-// performance tracker (previously every signal rode the full prediction
-// horizon uncut, the single biggest driver of max drawdown — and a fixed
-// stop multiple tuned on one timeframe was found to gut the edge on a
-// faster one), and a max-concurrent-signals cap to stop correlated
-// losers from stacking on fast-moving symbols.
+// filter, a timeframe-auto-scaled HH/HL swing-structure filter (complements
+// ADX — catches trend breaks that magnitude-only ADX misses; a live 15m-vs-65m
+// A/B found the unscaled bar-count version was reading short-term noise as
+// structure on faster charts, halving trade count and flipping a profitable
+// result to a loser), higher-timeframe (default 4H) trend alignment filter, a
+// confirmed-bar-only signal gate to eliminate intrabar repaint, a timeframe-
+// auto-scaled ATR stop-loss on the performance tracker (previously every
+// signal rode the full prediction horizon uncut, the single biggest driver of
+// max drawdown — and a fixed stop multiple tuned on one timeframe was also
+// found to gut the edge on a faster one), and a max-concurrent-signals cap to
+// stop correlated losers from stacking on fast-moving symbols.
 indicator("SML Cascade Classifier", shorttitle="SML-Cascade", overlay=true, max_bars_back=500, max_labels_count=500, max_lines_count=500, max_boxes_count=500)
 // ═══════════════════════════════════════════════════════════════════════════════
 //
@@ -77,7 +79,8 @@ i_requireHTF  = input.bool(true, "Require Higher-Timeframe Trend Alignment", gro
 i_htfRes      = input.timeframe("240", "Higher Timeframe", group=grp_regime, tooltip="Default 240 (4H). For a 15m chart consider 60-240; for a 65m chart consider 240-D.")
 i_htfEmaLen   = input.int(50, "HTF EMA Length", minval=10, maxval=200, group=grp_regime)
 i_requireStructure = input.bool(true, "Require HH/HL Swing Structure", group=grp_regime, tooltip="SML addition: ADX measures trend strength (magnitude) but is direction-blind to reversal — it can stay elevated right as a trend is exhausting. Swing structure catches the moment a trend actually breaks: a failed higher-high, or price taking out the last higher-low, often the exact move that blows through a stop. Longs require the two most recent confirmed pivots to be a higher-high AND higher-low; shorts the mirror (lower-high/lower-low).")
-i_pivotLen    = input.int(5, "Structure Pivot Bars (L/R)", minval=2, maxval=20, group=grp_regime, tooltip="Bars on each side required to confirm a swing pivot. Lower = more responsive but noisier; higher = fewer, more reliable pivots.")
+i_pivotLen    = input.int(5, "Base Structure Pivot Bars (65m reference)", minval=2, maxval=20, group=grp_regime, tooltip="Bars on each side required to confirm a swing pivot. This is a bar count, tuned as the base value at the 65m reference; see Auto-Scale below for how it maps to other timeframes.")
+i_autoScalePivot = input.bool(true, "Auto-Scale Pivot Length by Timeframe", group=grp_regime, tooltip="SML addition: confirmed on a live 65m-vs-15m GME comparison — the structure filter roughly halved trade count and flipped a +38% 15m result to -10% once it was disabled/enabled, because a fixed bar-count pivot doesn't represent the same real-time swing significance across timeframes. A 5-bar pivot on 65m spans ~5.4 hours; the same 5 bars on 15m span only ~75 minutes, which is closer to noise than real trend structure. Scales the base pivot length so it represents roughly the same real-time window on any chart, using 65m as the reference point. Turn off to use the base bar count unscaled on every timeframe.")
 grp_risk = "🛡 Risk Management"
 i_useStopLoss  = input.bool(true, "Use ATR Stop-Loss", group=grp_risk, tooltip="SML addition: the original performance tracker held every signal for the full Prediction Horizon with no exit — a trade that moved hard against you rode the entire horizon before closing, which is the single biggest driver of max drawdown. Now every open signal is checked every bar for a stop-loss hit and exits immediately at the stop instead of waiting.")
 i_stopAtrMult  = input.float(1.5, "Base Stop-Loss ATR Multiple (65m reference)", minval=0.5, maxval=5.0, step=0.25, group=grp_risk, tooltip="Stop distance = entry price ± (ATR × effective multiple) at the time of entry. This is the base multiple; see Auto-Scale below.")
@@ -159,12 +162,25 @@ f_effStopMult() =>
     math.max(0.75, math.min(scaled, 3.0))
 float effStopAtrMult = i_autoScaleStop ? f_effStopMult() : i_stopAtrMult
 
+// SML fix: pivot length scaled to real time, not raw bar count. Same class of
+// bug as the stop-loss multiple — a 5-bar pivot spans ~5.4 hours on 65m but
+// only ~75 minutes on 15m, so the unscaled version was reading short-term noise
+// as "structure" on faster charts. Clamped to [2, 50] bars; must resolve to a
+// "simple int" for ta.pivothigh/pivotlow, which this does since it only depends
+// on inputs and the chart's (fixed, non-series) timeframe.
+f_effPivotLen() =>
+    float refSec = 3900.0
+    float tfSec = timeframe.in_seconds()
+    int scaled = math.round(i_pivotLen * refSec / tfSec)
+    int(math.max(2, math.min(scaled, 50)))
+int effPivotLen = i_autoScalePivot ? f_effPivotLen() : i_pivotLen
+
 // SML addition: HH/HL (and LH/LL) swing-structure filter. Complementary to ADX —
 // ADX is magnitude-only and lags a reversal, while a broken pivot structure often
 // flags the exact bar a trend is cracking. Tracks the two most recently confirmed
-// swing highs/lows (confirmed i_pivotLen bars after they occur, so no repaint).
-float _ph = ta.pivothigh(high, i_pivotLen, i_pivotLen)
-float _pl = ta.pivotlow(low, i_pivotLen, i_pivotLen)
+// swing highs/lows (confirmed effPivotLen bars after they occur, so no repaint).
+float _ph = ta.pivothigh(high, effPivotLen, effPivotLen)
+float _pl = ta.pivotlow(low, effPivotLen, effPivotLen)
 var float swingHigh = na
 var float swingHighPrev = na
 var float swingLow = na
@@ -633,8 +649,8 @@ if barstate.islast and i_dashEnable
         color structCol = structureBullish ? colBull : structureBearish ? colBear : color.gray
         table.cell(dash, 0, r, "Structure", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
         table.cell(dash, 1, r, structText, text_color=structCol, bgcolor=C_PANEL, text_size=size.tiny)
-        table.cell(dash, 2, r, "", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
-        table.cell(dash, 3, r, "", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 2, r, "Pivot Bars", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 3, r, str.tostring(effPivotLen, "#"), text_color=color.white, bgcolor=C_PANEL, text_size=size.tiny)
         r += 1
         table.cell(dash, 0, r, "─ Flow Intel ─", text_color=C_CYAN, bgcolor=color.new(#1A1A1A, 40), text_size=size.tiny, text_halign=text.align_center)
         table.merge_cells(dash, 0, r, 3, r)
