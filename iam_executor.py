@@ -28,6 +28,11 @@ Environment variables (all default to safe/disabled):
   IAM_OPTION_CONTRACT_QTY   = 1         # number of option contracts
   IAM_DELTA_MIN             = 0.32       # delta bracket lower bound
   IAM_DELTA_MAX             = 0.40       # delta bracket upper bound
+  IAM_ODTE_ONLY_SYMBOLS     = IWM        # comma-separated; these symbols ALWAYS route
+                                          # to same-day (0DTE) options, never equity,
+                                          # regardless of IAM_INSTRUMENT/IAM_OPTION_EXPIRY_DAYS —
+                                          # never held overnight or later. Still fully
+                                          # eligible for the dynamic scan universe.
   TRADIER_ACCOUNT_ID        = ...        # required for live Tradier orders
 """
 
@@ -209,9 +214,28 @@ def _gate_check(sym: str, resolution: dict, time_window: str,
     return None  # all gates passed
 
 
+# Symbols that must NEVER be held overnight — 0DTE options only, no equity route
+# regardless of IAM_INSTRUMENT/IAM_OPTION_EXPIRY_DAYS. Still fully eligible for the
+# dynamic scan universe (iam_scanner.py) — this only constrains execution, not discovery.
+ODTE_ONLY_SYMBOLS = lambda: {
+    s.strip().upper() for s in os.environ.get("IAM_ODTE_ONLY_SYMBOLS", "IWM").split(",") if s.strip()
+}
+
+
 # ── Tradier execution ──────────────────────────────────────────────────────────
 def _execute_tradier(sym: str, action: str, resolution: dict, price: float) -> dict:
     instrument = INSTRUMENT()
+
+    if sym.upper() in ODTE_ONLY_SYMBOLS():
+        # No equity fallback for these symbols under any circumstance — if same-day
+        # options aren't tradeable right now (extended hours), skip rather than fall
+        # back to equity, since equity carries no expiry and the whole point is that
+        # this symbol is never held past today.
+        if _is_extended_hours():
+            logger.info(f"[IAM-EXEC] {sym} is 0DTE-only — skipping (no equity fallback, options unavailable in extended hours)")
+            return {"status": "skipped", "message": f"{sym} is 0DTE-only; no same-day options in extended hours"}
+        return _execute_tradier_options(sym, action, resolution, price, expiry_days_override=0)
+
     # Tradier does not support options orders in extended hours — fall back to equity
     if _is_extended_hours():
         logger.info(f"[IAM-EXEC] Extended hours: routing {sym} to equity (options unavailable)")
@@ -251,21 +275,28 @@ def _execute_tradier_equity(sym: str, action: str, price: float) -> dict:
         return {"status": "error", "message": str(e)}
 
 
-def _execute_tradier_options(sym: str, action: str, resolution: dict, price: float) -> dict:
+def _execute_tradier_options(sym: str, action: str, resolution: dict, price: float,
+                              expiry_days_override: int | None = None) -> dict:
     """
     Route IAM action to 0DTE or near-term options via Tradier.
     BUY  → buy calls (action = buy_to_open)
     SELL → buy puts  (action = buy_to_open)
     Contract selection targets the 0.32–0.40 delta bracket (gamma inflection zone).
+
+    `expiry_days_override`, when set, takes precedence over IAM_OPTION_EXPIRY_DAYS —
+    used by ODTE_ONLY_SYMBOLS (see _execute_tradier) to force same-day expiry
+    regardless of the global setting.
     """
     try:
         from tradier_api import place_option_order
         import tradier_api as tradier
 
         # Determine expiry: today for 0DTE, or nearest available
+        expiry_days = expiry_days_override if expiry_days_override is not None else OPTION_EXPIRY_DAYS()
         now   = datetime.now(timezone.utc) - timedelta(hours=4)
-        expiry_dt = now + timedelta(days=OPTION_EXPIRY_DAYS())
-        # Skip weekends
+        expiry_dt = now + timedelta(days=expiry_days)
+        # Skip weekends (a no-op for the 0DTE-only path, which only ever runs during
+        # market hours on a trading day — see _is_market_hours in _gate_check)
         while expiry_dt.weekday() >= 5:
             expiry_dt += timedelta(days=1)
         expiry_str = expiry_dt.strftime("%Y-%m-%d")
