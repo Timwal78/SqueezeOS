@@ -1,0 +1,615 @@
+//@version=6
+// SML Lorentzian Classifier — K-Nearest-Neighbors Pattern Engine
+// Adapted for SqueezeOS: SML branding, wired to the SqueezeOS TradingView
+// webhook bridge (core/api/tradingview_webhook_bp.py) so first_long/first_short
+// signals route through the same IAM/Discord/Robinhood pipeline as every
+// other SML Pine source. Core Lorentzian KNN engine, feature set, and
+// dashboard are unchanged — that's the original engineering worth keeping.
+// Webhook: https://squeezeos-api.onrender.com/api/webhooks/tradingview
+indicator("SML Lorentzian Classifier", shorttitle="SML-Lorenz", overlay=true, max_bars_back=500, max_labels_count=500, max_lines_count=500, max_boxes_count=500)
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+//    ██╗      ██████╗ ██████╗ ███████╗███╗   ██╗████████╗███████╗██╗ █████╗ ███╗   ██╗
+//    ██║     ██╔═══██╗██╔══██╗██╔════╝████╗  ██║╚══██╔══╝╚══███╔╝██║██╔══██╗████╗  ██║
+//    ██║     ██║   ██║██████╔╝█████╗  ██╔██╗ ██║   ██║     ███╔╝ ██║███████║██╔██╗ ██║
+//    ██║     ██║   ██║██╔══██╗██╔══╝  ██║╚██╗██║   ██║    ███╔╝  ██║██╔══██║██║╚██╗██║
+//    ███████╗╚██████╔╝██║  ██║███████╗██║ ╚████║   ██║   ███████╗██║██║  ██║██║ ╚████║
+//    ╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═══╝   ╚═╝   ╚══════╝╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝
+//
+//    LORENTZIAN CLASSIFICATION ENGINE — SML Edition
+//    K-Nearest Neighbors with Lorentzian Distance Kernel
+//
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+//  PHILOSOPHY:
+//  Markets repeat — not exactly, but in statistical patterns. The Lorentzian
+//  distance kernel d(x,y) = log(1 + |x - y|) is uniquely suited to financial
+//  data because it compresses outliers (fat tails) while preserving signal in
+//  the normal range. By finding the K most similar historical moments and
+//  weighting their outcomes, we classify the current bar's probable direction.
+//
+//  ENHANCED MATHEMATICS:
+//  • True Lorentzian kernel: d(x,y) = Σ log(1 + |xᵢ - yᵢ|)
+//  • Feature importance weighting via rolling correlation
+//  • Temporal decay: recent patterns weighted exponentially higher
+//  • Adaptive bandwidth: kernel scales by local feature density
+//  • Confidence = |Σw⁺ - Σw⁻| / Σw (directional weight imbalance)
+//
+// ═══════════════════════════════════════════════════════════════════════════════
+import DskyzInvestments/MarketStructureLib/1 as msl
+import DskyzInvestments/DafeVisLib/1 as vis1
+// ═══════════════════════════════════════════════════════════════════════════════
+// INPUTS
+// ═══════════════════════════════════════════════════════════════════════════════
+grp_lorentz = "🌌 Lorentzian Engine"
+k_neighbors       = input.int(4, "K Nearest Neighbors", minval=1, maxval=20, group=grp_lorentz, tooltip="Number of historical patterns to consider.\n• 3-5: Fast adaptation\n• 7-10: Balanced\n• 15-20: Stable, fewer false signals")
+lookback           = input.int(100, "Historical Lookback", minval=50, maxval=500, group=grp_lorentz, tooltip="How many bars of history to search for similar patterns.")
+prediction_horizon = input.int(5, "Prediction Horizon", minval=1, maxval=20, group=grp_lorentz, tooltip="How many bars ahead to predict.\n• 1-3: Scalping\n• 5-8: Day trading\n• 10-20: Swing")
+i_temporalDecay    = input.float(0.98, "Temporal Decay", minval=0.9, maxval=1.0, step=0.005, group=grp_lorentz, tooltip="Decay factor for older patterns. 1.0 = no decay, 0.95 = strong recency bias.")
+grp_features = "📊 Feature Engineering"
+use_price      = input.bool(true, "Price Change Features", group=grp_features)
+use_volume     = input.bool(true, "Volume Profile Features", group=grp_features)
+use_volatility = input.bool(true, "Volatility Features", group=grp_features)
+use_momentum   = input.bool(true, "Momentum Features", group=grp_features)
+grp_signals = "🎯 Signal Generation"
+signal_threshold   = input.float(0.85, "Signal Threshold", minval=0.5, maxval=0.9, step=0.05, group=grp_signals, tooltip="Minimum prediction strength to generate signal.\n• 0.5-0.6: More signals\n• 0.7-0.8: Balanced\n• 0.85+: High confidence only")
+smooth_predictions = input.int(3, "Prediction Smoothing", minval=1, maxval=10, group=grp_signals)
+i_cooldown         = input.int(5, "Signal Cooldown (Bars)", minval=1, maxval=50, group=grp_signals)
+i_requireFlowConfirm = input.bool(true, "Require Order-Flow Confirmation", group=grp_signals, tooltip="SML addition: don't just tag confirmed signals, refuse to fire unconfirmed ones. When footprint data is available, a signal must show real absorption/aggression in the predicted direction before it's classified — filters out KNN matches that line up statistically but aren't backed by real order flow.")
+i_minVolRegime        = input.float(0.5, "Min Volatility Regime", minval=0.1, maxval=1.0, step=0.05, group=grp_signals, tooltip="SML addition: skip signals when ATR is compressed below this multiple of its 50-bar average — filters dead/illiquid chop where KNN matches are statistical noise.")
+grp_flow = "🔬 Flow Intelligence"
+i_fpEnabled    = input.bool(true, "Enable Footprint Data", group=grp_flow)
+i_fpTicks      = input.int(100, "Ticks per Row", minval=1, maxval=500, group=grp_flow)
+i_fpVaPct      = input.int(70, "Value Area %", minval=50, maxval=90, group=grp_flow)
+grp_visual = "🎨 Visual Mode"
+string VIS_NEXUS    = "Neural Nexus"
+string VIS_LORENTZ  = "Lorentzian Field"
+string VIS_CIPHER   = "Cipher Matrix"
+i_visualMode   = input.string(VIS_NEXUS, "Visual Theme", options=[VIS_NEXUS, VIS_LORENTZ, VIS_CIPHER], group=grp_visual)
+i_showConfRibbon = input.bool(true, "Show Confidence Ribbon", group=grp_visual)
+i_showPredLine   = input.bool(true, "Show Prediction Line", group=grp_visual)
+i_bgZones        = input.bool(true, "Show Background Zones", group=grp_visual)
+grp_dash = "📋 Dashboard"
+i_dashEnable   = input.bool(true, "Show Dashboard", group=grp_dash)
+string DASH_FULL    = "Full"
+string DASH_COMPACT = "Compact"
+string DASH_MINI    = "Mini"
+i_dashSize     = input.string(DASH_FULL, "Size", options=[DASH_FULL, DASH_COMPACT, DASH_MINI], group=grp_dash)
+i_dashPos      = input.string("Top Right", "Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group=grp_dash)
+grp_wh = "▶  SQUEEZEOS WEBHOOK"
+string wh_pass   = input.string("SQUEEZE_AUTH_992", "Webhook Passphrase", group=grp_wh)
+string wh_system = input.string("SML_Lorentzian", "System Name", group=grp_wh)
+// ═══════════════════════════════════════════════════════════════════════════════
+// COLOR PALETTE
+// ═══════════════════════════════════════════════════════════════════════════════
+color C_CYAN      = #00FFFF
+color C_MAGENTA   = #FF00FF
+color C_GOLD      = #FFD700
+color C_PURPLE    = #9D00FF
+color C_GREEN     = #00FF88
+color C_RED       = #FF0055
+color C_ORANGE    = #FF6600
+color C_ELECTRIC  = #7DF9FF
+color C_NEON_BLUE = #00BFFF
+color C_VOID      = #0D0D1A
+color C_PANEL     = #0A0A14
+color C_BORDER    = #1E1E32
+color colBull = i_visualMode == VIS_NEXUS ? C_CYAN : i_visualMode == VIS_LORENTZ ? C_GREEN : #00FF41
+color colBear = i_visualMode == VIS_NEXUS ? C_MAGENTA : i_visualMode == VIS_LORENTZ ? C_RED : #FF3333
+color colAccent = i_visualMode == VIS_NEXUS ? C_PURPLE : i_visualMode == VIS_LORENTZ ? C_GOLD : C_CYAN
+color colNeutral = i_visualMode == VIS_NEXUS ? C_ELECTRIC : i_visualMode == VIS_LORENTZ ? C_ORANGE : color.gray
+// ═══════════════════════════════════════════════════════════════════════════════
+// CORE CALCULATIONS
+// ═══════════════════════════════════════════════════════════════════════════════
+float atr14 = ta.atr(14)
+float avgVol = ta.sma(volume, 20)
+// ═══════════════════════════════════════════════════════════════════════════════
+// FLOW INTELLIGENCE
+// ═══════════════════════════════════════════════════════════════════════════════
+footprint reqFP = i_fpEnabled ? request.footprint(i_fpTicks, i_fpVaPct) : na
+bool fpAvail = not na(reqFP)
+var float prevPocMid = na
+msl.MarketContext ctx = msl.get_market_context(open, high, low, close, volume, reqFP, avgVol, prevPocMid, atr14)
+if fpAvail
+    volume_row pocRow = reqFP.poc()
+    prevPocMid := (pocRow.up_price() + pocRow.down_price()) / 2.0
+float unifiedDelta = ctx.unified_delta
+// ═══════════════════════════════════════════════════════════════════════════════
+// FEATURE ENGINEERING
+// ═══════════════════════════════════════════════════════════════════════════════
+float price_feat1 = use_price ? (close - close[1]) / close[1] : 0
+float price_feat2 = use_price ? (close - close[2]) / close[2] : 0
+float price_feat3 = use_price ? (close - close[3]) / close[3] : 0
+float price_feat4 = use_price ? (close - close[5]) / close[5] : 0
+float price_feat5 = use_price ? (close - close[8]) / close[8] : 0
+float vol_feat1 = use_volume ? volume / avgVol : 0
+float vol_feat2 = use_volume ? volume[1] / avgVol : 0
+float vol_feat3 = use_volume ? volume[2] / avgVol : 0
+float atr_val = ta.atr(14)
+[bb_middle, bb_upper, bb_lower] = ta.bb(close, 20, 2)
+float bb_width = bb_upper - bb_lower
+float volat_feat1 = use_volatility ? atr_val / close : 0
+float volat_feat2 = use_volatility ? bb_width / close : 0
+float rsi_val = ta.rsi(close, 14)
+[macd_line, signal_line_macd, histogram_macd] = ta.macd(close, 12, 26, 9)
+float mom_feat1 = use_momentum ? (rsi_val - 50) / 50 : 0
+float mom_feat2 = use_momentum ? macd_line / close : 0
+normalize_series(float series, int len) =>
+    float min_val = ta.lowest(series, len)
+    float max_val = ta.highest(series, len)
+    float range_val = max_val - min_val
+    range_val > 0 ? 2 * (series - min_val) / range_val - 1 : 0.0
+float n_price1 = normalize_series(price_feat1, lookback)
+float n_price2 = normalize_series(price_feat2, lookback)
+float n_price3 = normalize_series(price_feat3, lookback)
+float n_price4 = normalize_series(price_feat4, lookback)
+float n_price5 = normalize_series(price_feat5, lookback)
+float n_vol1 = normalize_series(vol_feat1, lookback)
+float n_vol2 = normalize_series(vol_feat2, lookback)
+float n_vol3 = normalize_series(vol_feat3, lookback)
+float n_volat1 = normalize_series(volat_feat1, lookback)
+float n_volat2 = normalize_series(volat_feat2, lookback)
+float n_mom1 = mom_feat1
+float n_mom2 = normalize_series(mom_feat2, lookback)
+// ═══════════════════════════════════════════════════════════════════════════════
+// LORENTZIAN DISTANCE & KNN PREDICTION
+// ═══════════════════════════════════════════════════════════════════════════════
+var array<float> dist_array = array.new_float(lookback, 999999.0)
+var array<float> outcome_array = array.new_float(lookback, 0.0)
+array<float> curr_features = array.new_float(0)
+array.push(curr_features, n_price1)
+array.push(curr_features, n_price2)
+array.push(curr_features, n_price3)
+array.push(curr_features, n_price4)
+array.push(curr_features, n_price5)
+array.push(curr_features, n_vol1)
+array.push(curr_features, n_vol2)
+array.push(curr_features, n_vol3)
+array.push(curr_features, n_volat1)
+array.push(curr_features, n_volat2)
+array.push(curr_features, n_mom1)
+array.push(curr_features, n_mom2)
+float weighted_sum = 0.0
+float total_weight = 0.0
+float confidence_up = 0.0
+float confidence_down = 0.0
+int neighbors_found = 0
+float avg_distance = 0.0
+if barstate.isconfirmed and bar_index >= (lookback + prediction_horizon + 10)
+    int start_idx = prediction_horizon
+    int end_idx = math.min(lookback - 1, bar_index - prediction_horizon - 10)
+    for i = start_idx to end_idx
+        array<float> hist_features = array.new_float(0)
+        array.push(hist_features, n_price1[i])
+        array.push(hist_features, n_price2[i])
+        array.push(hist_features, n_price3[i])
+        array.push(hist_features, n_price4[i])
+        array.push(hist_features, n_price5[i])
+        array.push(hist_features, n_vol1[i])
+        array.push(hist_features, n_vol2[i])
+        array.push(hist_features, n_vol3[i])
+        array.push(hist_features, n_volat1[i])
+        array.push(hist_features, n_volat2[i])
+        array.push(hist_features, n_mom1[i])
+        array.push(hist_features, n_mom2[i])
+        // True Lorentzian distance: d(x,y) = Σ log(1 + |xᵢ - yᵢ|)
+        float distance = 0.0
+        for j = 0 to array.size(curr_features) - 1
+            if j < array.size(hist_features)
+                float diff = array.get(curr_features, j) - array.get(hist_features, j)
+                distance += math.log(1.0 + math.abs(diff))
+        // Apply temporal decay (recent patterns weighted higher)
+        float decay = math.pow(i_temporalDecay, float(i))
+        distance := distance / math.max(decay, 0.01)
+        array.set(dist_array, i, distance)
+        float future_return = close[i - prediction_horizon] - close[i]
+        float outcome = future_return > 0 ? 1.0 : -1.0
+        array.set(outcome_array, i, outcome)
+// KNN: Find K nearest neighbors
+array<float> temp_dist = array.copy(dist_array)
+if bar_index >= (lookback + prediction_horizon + 10)
+    int start_idx = prediction_horizon
+    int end_idx = math.min(lookback - 1, bar_index - prediction_horizon - 10)
+    for k = 0 to k_neighbors - 1
+        float min_dist = 999999.0
+        int min_idx = -1
+        for i = start_idx to end_idx
+            float dist = array.get(temp_dist, i)
+            if dist < min_dist
+                min_dist := dist
+                min_idx := i
+        if min_idx >= 0 and min_dist < 999999.0
+            float weight = 1.0 / (1.0 + min_dist)
+            float outcome = array.get(outcome_array, min_idx)
+            weighted_sum += outcome * weight
+            total_weight += weight
+            if outcome > 0
+                confidence_up += weight
+            else
+                confidence_down += weight
+            neighbors_found += 1
+            avg_distance += min_dist
+            array.set(temp_dist, min_idx, 999999.0)
+avg_distance := neighbors_found > 0 ? avg_distance / neighbors_found : 0.0
+float raw_prediction = total_weight > 0 ? weighted_sum / total_weight : 0.0
+float prediction = ta.ema(raw_prediction, smooth_predictions)
+float confidence = total_weight > 0 ? math.abs(confidence_up - confidence_down) / total_weight : 0.0
+float smooth_confidence = ta.ema(confidence, smooth_predictions)
+float confidencePct = smooth_confidence * 100.0
+// ═══════════════════════════════════════════════════════════════════════════════
+// SIGNAL GENERATION WITH COOLDOWN
+// ═══════════════════════════════════════════════════════════════════════════════
+// SML addition: volatility floor — refuse to classify in compressed/illiquid
+// chop where ATR is well below its own 50-bar average. The KNN can still find
+// "nearest" historical neighbors in dead action; that similarity isn't signal.
+float volatility_regime = atr_val / ta.sma(atr_val, 50)
+bool volConfirmed = volatility_regime >= i_minVolRegime
+// SML addition: order-flow confirmation, now an actual gate instead of a
+// cosmetic label tag. Direction-only booleans (not gated on first_long/short
+// yet, to avoid a circular dependency) — used both to gate signal generation
+// below and to annotate confirmed signals afterward.
+string flowAction = ctx.absorption > 0.6 ? "ABSORBING" : ctx.unified_agg > 0.65 ? "BUYING" : ctx.unified_agg < 0.35 ? "SELLING" : "NEUTRAL"
+color flowCol = ctx.absorption > 0.6 ? C_GOLD : ctx.unified_agg > 0.65 ? C_GREEN : ctx.unified_agg < 0.35 ? C_RED : color.gray
+bool flowConfirmsLongDir = ctx.unified_agg > 0.55 or ctx.absorption > 0.5
+bool flowConfirmsShortDir = ctx.unified_agg < 0.45 or ctx.absorption > 0.5
+// When footprint data isn't available for this symbol/plan, don't block signals
+// on a confirmation we have no way to compute — fall back to volatility-gated only.
+bool flowGateLong = not i_requireFlowConfirm or not fpAvail or flowConfirmsLongDir
+bool flowGateShort = not i_requireFlowConfirm or not fpAvail or flowConfirmsShortDir
+bool long_raw = prediction > signal_threshold and smooth_confidence > 0.5 and volConfirmed and flowGateLong
+bool short_raw = prediction < -signal_threshold and smooth_confidence > 0.5 and volConfirmed and flowGateShort
+var bool prev_long = false
+var bool prev_short = false
+var int lastSignalBar = -9999
+bool cooldownClear = (bar_index - lastSignalBar) >= i_cooldown
+bool first_long = long_raw and not prev_long and cooldownClear
+bool first_short = short_raw and not prev_short and cooldownClear
+if first_long or first_short
+    lastSignalBar := bar_index
+prev_long := long_raw
+prev_short := short_raw
+bool flowConfirmsLong = first_long and flowConfirmsLongDir
+bool flowConfirmsShort = first_short and flowConfirmsShortDir
+// ═══════════════════════════════════════════════════════════════════════════════
+// PERFORMANCE TRACKING
+// ═══════════════════════════════════════════════════════════════════════════════
+var float total_signals = 0
+var float winning_signals = 0
+var float total_pnl = 0.0
+var float gross_win = 0.0
+var float gross_loss = 0.0
+var float max_drawdown = 0.0
+var float peak_equity = 0.0
+var float current_streak = 0
+var float equity_curve = 10000.0
+var float max_equity = 10000.0
+var array<float> signal_history = array.new_float(0)
+var array<bool> signal_types = array.new_bool(0)
+var array<int> signal_bars = array.new_int(0)
+if first_long or first_short
+    total_signals += 1
+    array.push(signal_history, close)
+    array.push(signal_types, first_long)
+    array.push(signal_bars, bar_index)
+if array.size(signal_bars) > 0
+    for i = array.size(signal_bars) - 1 to 0
+        int sig_bar = array.get(signal_bars, i)
+        if bar_index - sig_bar >= prediction_horizon
+            float entry_price = array.get(signal_history, i)
+            bool is_long = array.get(signal_types, i)
+            float sig_return = (is_long ? close - entry_price : entry_price - close) / entry_price
+            if sig_return > 0
+                winning_signals += 1
+                gross_win += sig_return
+                current_streak := current_streak >= 0 ? current_streak + 1 : 1
+            else
+                gross_loss += math.abs(sig_return)
+                current_streak := current_streak <= 0 ? current_streak - 1 : -1
+            total_pnl += sig_return
+            equity_curve := equity_curve * (1.0 + sig_return)
+            max_equity := math.max(max_equity, equity_curve)
+            float dd = (max_equity - equity_curve) / max_equity
+            max_drawdown := math.max(max_drawdown, dd)
+            array.remove(signal_bars, i)
+            array.remove(signal_history, i)
+            array.remove(signal_types, i)
+float completed = total_signals - array.size(signal_bars)
+float win_rate = completed > 0 ? winning_signals / completed * 100.0 : 0.0
+// SML fix: original formula wasn't a real profit factor (didn't separate gross
+// wins from gross losses) and the result was never even displayed. Real
+// definition: gross winning return / gross losing return.
+float profitFactor = gross_loss > 0 ? gross_win / gross_loss : (gross_win > 0 ? 999.0 : 0.0)
+float trend_strength = ta.rsi(ta.ema(close, 14) - ta.ema(close, 50), 14)
+float volume_regime = volume / ta.sma(volume, 50)
+// ═══════════════════════════════════════════════════════════════════════════════
+// THE MANIFOLD — Visual Engine
+// ═══════════════════════════════════════════════════════════════════════════════
+float fieldStrength = smooth_confidence * math.abs(prediction)
+float fieldWidth = atr14 * (0.3 + fieldStrength * 2.0)
+float fieldBias = prediction * atr14 * 0.8
+float field_top1 = close + fieldBias + fieldWidth * 0.3
+float field_bot1 = close + fieldBias - fieldWidth * 0.3
+float field_top2 = close + fieldBias + fieldWidth * 0.6
+float field_bot2 = close + fieldBias - fieldWidth * 0.6
+float field_top3 = close + fieldBias + fieldWidth
+float field_bot3 = close + fieldBias - fieldWidth
+int fieldAlpha = int(math.max(50, 85 - fieldStrength * 50))
+p_ft1 = plot(field_top1, color=color.new(color.white, 100), display=display.none, editable=false)
+p_fb1 = plot(field_bot1, color=color.new(color.white, 100), display=display.none, editable=false)
+p_ft2 = plot(field_top2, color=color.new(color.white, 100), display=display.none, editable=false)
+p_fb2 = plot(field_bot2, color=color.new(color.white, 100), display=display.none, editable=false)
+p_ft3 = plot(field_top3, color=color.new(color.white, 100), display=display.none, editable=false)
+p_fb3 = plot(field_bot3, color=color.new(color.white, 100), display=display.none, editable=false)
+color fieldCol = prediction > 0 ? colBull : prediction < 0 ? colBear : colNeutral
+fill(p_ft1, p_fb1, color=color.new(fieldCol, fieldAlpha), title="Field Core")
+fill(p_ft2, p_fb2, color=color.new(fieldCol, math.min(95, fieldAlpha + 12)), title="Field Inner")
+fill(p_ft3, p_fb3, color=color.new(fieldCol, math.min(97, fieldAlpha + 22)), title="Field Outer")
+float pred_offset = i_showPredLine ? atr14 * prediction * 1.5 : na
+float pred_line = not na(pred_offset) ? close + pred_offset : na
+plot(pred_line, "Prediction", color=prediction > 0 ? colBull : colBear, linewidth=2, style=plot.style_circles)
+float predTarget = close + prediction * atr14 * 2.5
+float predMid = close + prediction * atr14 * 1.2
+p_price = plot(close, color=color.new(color.white, 100), display=display.none, editable=false)
+p_pred = plot(i_showPredLine ? predMid : na, "Prediction Gravity",
+     color=color.new(prediction > 0 ? colBull : colBear, 30), linewidth=2, style=plot.style_line)
+float helixPhase = math.sin(bar_index * 0.15) * atr14 * 0.3 * (1.0 - smooth_confidence)
+float helix_top = close + atr14 * smooth_confidence * 0.8 + helixPhase
+float helix_bot = close - atr14 * smooth_confidence * 0.8 - helixPhase
+plot(i_showConfRibbon ? helix_top : na, "Helix Upper", color=color.new(colAccent, 40 + int((1.0 - smooth_confidence) * 40)), linewidth=1)
+plot(i_showConfRibbon ? helix_bot : na, "Helix Lower", color=color.new(colAccent, 40 + int((1.0 - smooth_confidence) * 40)), linewidth=1)
+color bgColor = na
+if i_bgZones
+    if long_raw
+        bgColor := color.new(colBull, 94)
+    else if short_raw
+        bgColor := color.new(colBear, 94)
+bgcolor(bgColor, title="Classification Background")
+plotshape(first_long, title="Long Arrow", style=shape.triangleup, location=location.belowbar, color=colBull, size=size.small)
+plotshape(first_short, title="Short Arrow", style=shape.triangledown, location=location.abovebar, color=colBear, size=size.small)
+if barstate.isconfirmed
+    if first_long
+        float origin = low - atr14 * 0.4
+        line.new(bar_index, origin, bar_index - 3, origin - atr14 * 0.7, color=color.new(colBull, 30), width=2, style=line.style_solid)
+        line.new(bar_index, origin, bar_index + 3, origin - atr14 * 0.7, color=color.new(colBull, 30), width=2, style=line.style_solid)
+        line.new(bar_index, origin, bar_index - 5, origin - atr14 * 0.35, color=color.new(colBull, 50), width=1, style=line.style_solid)
+        line.new(bar_index, origin, bar_index + 5, origin - atr14 * 0.35, color=color.new(colBull, 50), width=1, style=line.style_solid)
+        line.new(bar_index, origin, bar_index - 2, origin + atr14 * 0.5, color=color.new(color.white, 65), width=1, style=line.style_dotted)
+        line.new(bar_index, origin, bar_index + 2, origin + atr14 * 0.5, color=color.new(color.white, 65), width=1, style=line.style_dotted)
+        line.new(bar_index, origin, bar_index, origin - atr14 * 1.5, color=color.new(colBull, 45), width=3, style=line.style_solid)
+        line.new(bar_index, origin, bar_index, origin - atr14 * 1.2, color=color.new(color.white, 70), width=1, style=line.style_solid)
+        box.new(bar_index - 1, low, bar_index + 1, low - atr14 * 0.5, bgcolor=color.new(colBull, 70), border_color=color.new(colBull, 30), border_width=2)
+    if first_short
+        float origin = high + atr14 * 0.4
+        line.new(bar_index, origin, bar_index - 3, origin + atr14 * 0.7, color=color.new(colBear, 30), width=2, style=line.style_solid)
+        line.new(bar_index, origin, bar_index + 3, origin + atr14 * 0.7, color=color.new(colBear, 30), width=2, style=line.style_solid)
+        line.new(bar_index, origin, bar_index - 5, origin + atr14 * 0.35, color=color.new(colBear, 50), width=1, style=line.style_solid)
+        line.new(bar_index, origin, bar_index + 5, origin + atr14 * 0.35, color=color.new(colBear, 50), width=1, style=line.style_solid)
+        line.new(bar_index, origin, bar_index - 2, origin - atr14 * 0.5, color=color.new(color.white, 65), width=1, style=line.style_dotted)
+        line.new(bar_index, origin, bar_index + 2, origin - atr14 * 0.5, color=color.new(color.white, 65), width=1, style=line.style_dotted)
+        line.new(bar_index, origin, bar_index, origin + atr14 * 1.5, color=color.new(colBear, 45), width=3, style=line.style_solid)
+        line.new(bar_index, origin, bar_index, origin + atr14 * 1.2, color=color.new(color.white, 70), width=1, style=line.style_solid)
+        box.new(bar_index - 1, high + atr14 * 0.5, bar_index + 1, high, bgcolor=color.new(colBear, 70), border_color=color.new(colBear, 30), border_width=2)
+var int lastLongBar = na
+var float lastLongY = na
+var int lastShortBar = na
+var float lastShortY = na
+if barstate.isconfirmed
+    if first_long
+        if not na(lastLongBar) and bar_index - lastLongBar < 80
+            line.new(lastLongBar, lastLongY, bar_index, low - atr14 * 0.3, color=color.new(colBull, 40), width=2, style=line.style_arrow_right)
+            line.new(lastLongBar, lastLongY - atr14 * 0.15, bar_index, low - atr14 * 0.45, color=color.new(colBull, 70), width=1, style=line.style_dotted)
+        lastLongBar := bar_index
+        lastLongY := low - atr14 * 0.3
+    if first_short
+        if not na(lastShortBar) and bar_index - lastShortBar < 80
+            line.new(lastShortBar, lastShortY, bar_index, high + atr14 * 0.3, color=color.new(colBear, 40), width=2, style=line.style_arrow_right)
+            line.new(lastShortBar, lastShortY + atr14 * 0.15, bar_index, high + atr14 * 0.45, color=color.new(colBear, 70), width=1, style=line.style_dotted)
+        lastShortBar := bar_index
+        lastShortY := high + atr14 * 0.3
+if first_long and barstate.isconfirmed
+    string flowTag = flowConfirmsLong ? " ✓F" : ""
+    string confStr = str.tostring(confidencePct, "#.#")
+    label.new(bar_index, low - atr14 * 1.0, "⚡ LONG\n" + confStr + "%" + flowTag, style=label.style_label_up, color=colBull, textcolor=color.white, size=size.small)
+if first_short and barstate.isconfirmed
+    string flowTag = flowConfirmsShort ? " ✓F" : ""
+    string confStr = str.tostring(confidencePct, "#.#")
+    label.new(bar_index, high + atr14 * 1.0, "⚡ SHORT\n" + confStr + "%" + flowTag, style=label.style_label_down, color=colBear, textcolor=color.white, size=size.small)
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONFIDENCE HEATMAP
+// ═══════════════════════════════════════════════════════════════════════════════
+color barCol = na
+if smooth_confidence > 0.7
+    barCol := prediction > 0 ?
+         color.from_gradient(smooth_confidence, 0.7, 1.0, color.new(colBull, 40), colBull) : color.from_gradient(smooth_confidence, 0.7, 1.0, color.new(colBear, 40), colBear)
+else if smooth_confidence > 0.4
+    barCol := prediction > 0 ?
+         color.from_gradient(smooth_confidence, 0.4, 0.7, color.new(colBull, 70), color.new(colBull, 40)) : color.from_gradient(smooth_confidence, 0.4, 0.7, color.new(colBear, 70), color.new(colBear, 40))
+else
+    barCol := color.new(color.gray, 50)
+barcolor(barCol, title="Classification Heatmap Bars")
+// ═══════════════════════════════════════════════════════════════════════════════
+// 11. DASHBOARD
+// ═══════════════════════════════════════════════════════════════════════════════
+f_dashPos(string p) =>
+    switch p
+        "Top Right"    => position.top_right
+        "Top Left"     => position.top_left
+        "Bottom Right" => position.bottom_right
+        => position.bottom_left
+string sigText = prediction > signal_threshold ? "▲ LONG" : prediction < -signal_threshold ? "▼ SHORT" : "○ NEUTRAL"
+color sigCol = prediction > signal_threshold ? colBull : prediction < -signal_threshold ? colBear : color.gray
+string regimeText = trend_strength > 60 ? "▲ TRENDING" : trend_strength < 40 ? "▼ RANGING" : "■ MIXED"
+color regimeCol = trend_strength > 60 ? colBull : trend_strength < 40 ? colBear : color.gray
+string volText = volatility_regime > 1.2 ? "🔴 HIGH" : volatility_regime < 0.8 ? "🟢 LOW" : "○ NORM"
+color volCol = volatility_regime > 1.2 ? C_RED : volatility_regime < 0.8 ? C_GREEN : color.gray
+int barsRemain = math.max(0, i_cooldown - (bar_index - lastSignalBar))
+string cdText = cooldownClear ? "✓ Ready" : str.tostring(barsRemain) + " bars"
+color cdCol = cooldownClear ? C_GREEN : C_ORANGE
+int gaugeFill = math.round(smooth_confidence * 15)
+string gaugeStr = ""
+for i = 1 to 15
+    gaugeStr += i <= gaugeFill ? "█" : "░"
+var table dash = table.new(f_dashPos(i_dashPos), 4, 22, bgcolor=color.new(C_VOID, 5), border_width=1, border_color=color.new(color.gray, 80), frame_width=2, frame_color=color.new(colAccent, 70))
+if barstate.islast and i_dashEnable
+    table.clear(dash, 0, 0, 3, 21)
+    int r = 0
+    if i_dashSize == DASH_FULL
+        table.cell(dash, 0, r, "🌌 SML LORENTZIAN CLASSIFIER" + (fpAvail ? " 🔬" : ""), text_color=color.white, bgcolor=color.new(colAccent, 70), text_size=size.small, text_halign=text.align_center)
+        table.merge_cells(dash, 0, r, 3, r)
+        r += 1
+        table.cell(dash, 0, r, "─ Classification ─", text_color=colAccent, bgcolor=color.new(#1A1A1A, 40), text_size=size.tiny, text_halign=text.align_center)
+        table.merge_cells(dash, 0, r, 3, r)
+        r += 1
+        table.cell(dash, 0, r, "Signal", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 1, r, sigText, text_color=sigCol, bgcolor=color.new(sigCol, 85), text_size=size.small)
+        table.cell(dash, 2, r, "Pred", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 3, r, str.tostring(prediction, "#.###"), text_color=sigCol, bgcolor=C_PANEL, text_size=size.small)
+        r += 1
+        color confCol = smooth_confidence > 0.7 ? C_GREEN : smooth_confidence > 0.4 ? C_GOLD : C_RED
+        table.cell(dash, 0, r, "Conf", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 1, r, str.tostring(confidencePct, "#.#") + "%", text_color=confCol, bgcolor=C_PANEL, text_size=size.small)
+        table.cell(dash, 2, r, gaugeStr, text_color=confCol, bgcolor=color.new(C_VOID, 0), text_size=size.tiny, text_halign=text.align_left)
+        table.merge_cells(dash, 2, r, 3, r)
+        r += 1
+        table.cell(dash, 0, r, "K/Found", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 1, r, str.tostring(neighbors_found) + "/" + str.tostring(k_neighbors), text_color=color.white, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 2, r, "Avg Dist", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 3, r, str.tostring(avg_distance, "#.##"), text_color=colNeutral, bgcolor=C_PANEL, text_size=size.tiny)
+        r += 1
+        table.cell(dash, 0, r, "Cooldown", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 1, r, cdText, text_color=cdCol, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 2, r, "Horizon", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 3, r, str.tostring(prediction_horizon) + " bars", text_color=color.white, bgcolor=C_PANEL, text_size=size.tiny)
+        r += 1
+        table.cell(dash, 0, r, "─ Confidence Trail ─", text_color=C_GOLD, bgcolor=color.new(#1A1A1A, 40), text_size=size.tiny, text_halign=text.align_center)
+        table.merge_cells(dash, 0, r, 3, r)
+        r += 1
+        string heatStr = ""
+        for i = 9 to 0
+            float hConf = nz(smooth_confidence[i], 0)
+            heatStr += hConf > 0.7 ? "🟢" : hConf > 0.4 ? "🟡" : "🔴"
+        string predStr = ""
+        for i = 9 to 0
+            float hPred = nz(prediction[i], 0)
+            predStr += hPred > 0.3 ? "▲" : hPred < -0.3 ? "▼" : "─"
+        table.cell(dash, 0, r, "Conf", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 1, r, heatStr, text_color=color.white, bgcolor=color.new(C_VOID, 0), text_size=size.tiny)
+        table.merge_cells(dash, 1, r, 3, r)
+        r += 1
+        table.cell(dash, 0, r, "Pred", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 1, r, predStr, text_color=colNeutral, bgcolor=color.new(C_VOID, 0), text_size=size.tiny)
+        table.merge_cells(dash, 1, r, 3, r)
+        r += 1
+        table.cell(dash, 0, r, "─ Market Context ─", text_color=C_NEON_BLUE, bgcolor=color.new(#1A1A1A, 40), text_size=size.tiny, text_halign=text.align_center)
+        table.merge_cells(dash, 0, r, 3, r)
+        r += 1
+        table.cell(dash, 0, r, "Regime", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 1, r, regimeText, text_color=regimeCol, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 2, r, "Volatility", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 3, r, volText, text_color=volCol, bgcolor=C_PANEL, text_size=size.tiny)
+        r += 1
+        string rsiText = rsi_val > 70 ? "OB " + str.tostring(rsi_val, "#") : rsi_val < 30 ? "OS " + str.tostring(rsi_val, "#") : str.tostring(rsi_val, "#.#")
+        color rsiCol = rsi_val > 70 ? C_RED : rsi_val < 30 ? C_GREEN : color.gray
+        string volRText = volume_regime > 1.5 ? "🔥 " + str.tostring(volume_regime, "#.#") + "x" : str.tostring(volume_regime, "#.#") + "x"
+        color volRCol = volume_regime > 1.5 ? C_GREEN : volume_regime < 0.7 ? C_RED : color.gray
+        table.cell(dash, 0, r, "RSI", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 1, r, rsiText, text_color=rsiCol, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 2, r, "Volume", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 3, r, volRText, text_color=volRCol, bgcolor=C_PANEL, text_size=size.tiny)
+        r += 1
+        table.cell(dash, 0, r, "─ Flow Intel ─", text_color=C_CYAN, bgcolor=color.new(#1A1A1A, 40), text_size=size.tiny, text_halign=text.align_center)
+        table.merge_cells(dash, 0, r, 3, r)
+        r += 1
+        string srcFlowText = fpAvail ? "🔬 LIVE" : "📊 OHLCV"
+        color srcFlowCol = fpAvail ? C_GREEN : C_ORANGE
+        table.cell(dash, 0, r, "Source", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 1, r, srcFlowText, text_color=srcFlowCol, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 2, r, "Action", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 3, r, flowAction, text_color=flowCol, bgcolor=C_PANEL, text_size=size.tiny)
+        r += 1
+        string deltaText = (unifiedDelta > 0 ? "+" : "") + str.tostring(unifiedDelta, "#.#")
+        color deltaCol = unifiedDelta > 0 ? C_GREEN : unifiedDelta < 0 ? C_RED : color.gray
+        string absText = ctx.absorption > 0.6 ? "ABSORB" : ctx.absorption > 0.3 ? "PARTIAL" : "─"
+        color absCol = ctx.absorption > 0.6 ? C_GOLD : ctx.absorption > 0.3 ? C_ORANGE : color.gray
+        table.cell(dash, 0, r, "Delta", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 1, r, deltaText, text_color=deltaCol, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 2, r, "Absorb", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 3, r, absText, text_color=absCol, bgcolor=C_PANEL, text_size=size.tiny)
+        r += 1
+        table.cell(dash, 0, r, "─ Performance ─", text_color=C_GOLD, bgcolor=color.new(#1A1A1A, 40), text_size=size.tiny, text_halign=text.align_center)
+        table.merge_cells(dash, 0, r, 3, r)
+        r += 1
+        color wrCol = win_rate >= 55 ? C_GREEN : win_rate >= 45 ? color.gray : C_RED
+        table.cell(dash, 0, r, "Trades", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 1, r, str.tostring(completed, "#"), text_color=color.white, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 2, r, "Win%", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 3, r, str.tostring(win_rate, "#.#") + "%", text_color=wrCol, bgcolor=color.new(wrCol, 85), text_size=size.tiny)
+        r += 1
+        color pfCol = profitFactor >= 1.5 ? C_GREEN : profitFactor >= 1.0 ? color.gray : C_RED
+        table.cell(dash, 0, r, "PF", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 1, r, profitFactor >= 999.0 ? "∞" : str.tostring(profitFactor, "#.##"), text_color=pfCol, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 2, r, "VolRegime", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        color vrCol = volConfirmed ? C_GREEN : C_RED
+        table.cell(dash, 3, r, str.tostring(volatility_regime, "#.##") + (volConfirmed ? "" : " ✗"), text_color=vrCol, bgcolor=C_PANEL, text_size=size.tiny)
+        r += 1
+        color pnlCol = total_pnl > 0 ? C_GREEN : total_pnl < 0 ? C_RED : color.gray
+        color streakCol = current_streak > 0 ? C_GREEN : current_streak < 0 ? C_RED : color.gray
+        string streakText = current_streak > 0 ? "+" + str.tostring(current_streak, "#") : str.tostring(current_streak, "#")
+        table.cell(dash, 0, r, "PnL", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 1, r, str.tostring(total_pnl * 100, "#.##") + "%", text_color=pnlCol, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 2, r, "Streak", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 3, r, streakText, text_color=streakCol, bgcolor=C_PANEL, text_size=size.tiny)
+        r += 1
+        table.cell(dash, 0, r, "MaxDD", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 1, r, str.tostring(max_drawdown * 100, "#.#") + "%", text_color=C_RED, bgcolor=color.new(C_RED, 90), text_size=size.tiny)
+        table.cell(dash, 2, r, "Equity", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        color eqCol = equity_curve > 10000 ? C_GREEN : C_RED
+        table.cell(dash, 3, r, "$" + str.tostring(equity_curve, "#"), text_color=eqCol, bgcolor=C_PANEL, text_size=size.tiny)
+        r += 1
+        table.cell(dash, 0, r, "─────────────────", text_color=color.new(colAccent, 60), bgcolor=color.new(#1A1A1A, 40), text_size=size.tiny, text_halign=text.align_center)
+        table.merge_cells(dash, 0, r, 3, r)
+        r += 1
+        string statusText = first_long ? "⚡ LONG CLASSIFIED" : first_short ? "⚡ SHORT CLASSIFIED" : long_raw ? "▲ Long Field Active" : short_raw ? "▼ Short Field Active" : "○ Scanning manifold..."
+        color statusCol2 = first_long ? colBull : first_short ? colBear : long_raw ? color.new(colBull, 40) : short_raw ? color.new(colBear, 40) : color.gray
+        color statusBg = (first_long or first_short) ? color.new(statusCol2, 70) : color.new(C_VOID, 0)
+        table.cell(dash, 0, r, statusText, text_color=statusCol2, bgcolor=statusBg, text_size=size.tiny, text_halign=text.align_center)
+        table.merge_cells(dash, 0, r, 3, r)
+    else if i_dashSize == DASH_COMPACT
+        table.cell(dash, 0, 0, "🌌 SML-LORENZ", text_color=color.white, bgcolor=color.new(colAccent, 70), text_size=size.tiny)
+        table.merge_cells(dash, 0, 0, 1, 0)
+        table.cell(dash, 0, 1, "Signal", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 1, 1, sigText, text_color=sigCol, bgcolor=color.new(sigCol, 85), text_size=size.tiny)
+        table.cell(dash, 0, 2, "Conf", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        color confCol2 = smooth_confidence > 0.7 ? C_GREEN : smooth_confidence > 0.4 ? C_GOLD : C_RED
+        table.cell(dash, 1, 2, str.tostring(confidencePct, "#.#") + "%", text_color=confCol2, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 0, 3, "Win%", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        color wrCol2 = win_rate >= 55 ? C_GREEN : win_rate >= 45 ? color.gray : C_RED
+        table.cell(dash, 1, 3, str.tostring(win_rate, "#.#") + "%", text_color=wrCol2, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 0, 4, "Flow", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 1, 4, flowAction, text_color=flowCol, bgcolor=C_PANEL, text_size=size.tiny)
+    else
+        table.cell(dash, 0, 0, sigText, text_color=sigCol, bgcolor=color.new(C_VOID, 30), text_size=size.normal)
+        table.cell(dash, 0, 1, str.tostring(confidencePct, "#") + "%", text_color=color.white, bgcolor=color.new(C_VOID, 30), text_size=size.tiny)
+// ═══════════════════════════════════════════════════════════════════════════════
+// WATERMARK
+// ═══════════════════════════════════════════════════════════════════════════════
+var table watermark = table.new(position.bottom_right, 1, 1, bgcolor=color.new(C_VOID, 80), border_color=color.new(colAccent, 50), border_width=1)
+if barstate.islast
+    table.cell(watermark, 0, 0, "⚡ ScriptMaster Labs | SqueezeOS ⚡", text_color=color.new(colAccent, 40), text_size=size.normal)
+// ═══════════════════════════════════════════════════════════════════════════════
+// 13. ALERTS
+// ═══════════════════════════════════════════════════════════════════════════════
+alertcondition(first_long, title="Lorentzian Long", message="SML Lorentzian Classifier: LONG Signal Detected")
+alertcondition(first_short, title="Lorentzian Short", message="SML Lorentzian Classifier: SHORT Signal Detected")
+alertcondition(smooth_confidence > 0.85, title="Extreme Confidence", message="SML Lorentzian Classifier: Extreme Confidence Level Detected")
+
+// ── SqueezeOS webhook payload ──────────────────────────────────────────────
+// Matches core/api/tradingview_webhook_bp.py's expected schema exactly (same
+// shape as SML_Sniper_DayTrader_v1_2.pine) so this routes through the same
+// IAM execution / Discord / Robinhood-poll pipeline as every other SML source.
+string _px = str.tostring(close, "#.00")
+string _tk = syminfo.ticker
+if first_long
+    alert("{\"passphrase\":\"" + wh_pass + "\",\"system\":\"" + wh_system + "\",\"ticker\":\"" + _tk + "\",\"action\":\"BUY\",\"price\":" + _px + "}", alert.freq_once_per_bar_close)
+else if first_short
+    alert("{\"passphrase\":\"" + wh_pass + "\",\"system\":\"" + wh_system + "\",\"ticker\":\"" + _tk + "\",\"action\":\"SELL\",\"price\":" + _px + "}", alert.freq_once_per_bar_close)
