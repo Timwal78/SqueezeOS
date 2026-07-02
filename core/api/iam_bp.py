@@ -26,8 +26,15 @@ from core.legacy import get_service, clean_data
 import core.signal_history as signal_history
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-from x402_flask import x402_guard
+# SML fix: was gated by x402_guard alone (Coinbase/USDC only) — the
+# iam_resolve MCP tool description (mcp_bp.py:678) explicitly tells agents to
+# pay via RLUSD/XRPL, which silently never worked here. dual_payment accepts
+# both; the endpoint_id below matches mcp_bp.py:869 exactly since this route
+# has a path param (request.path can't be a static ENDPOINTS dict key).
+from proof402_integration import dual_payment
 from discord_alerts import DiscordAlerts
+
+IAM_ENDPOINT_ID = "a7f3d2b1-9e4c-4a8f-b5c6-d7e8f9a0b1c2"  # 0.05 RLUSD — matches mcp_bp.py:869
 
 logger = logging.getLogger("IAM-BP")
 iam_bp = Blueprint("iam", __name__)
@@ -116,7 +123,7 @@ def _redact_obligation(block: dict) -> dict:
 
 
 @iam_bp.route("/<symbol>", methods=["GET"])
-@x402_guard(
+@dual_payment(
     price_usdc="0.05",
     description=(
         "IAM Full Resolution — mandatory action the market is forced to take. "
@@ -125,6 +132,7 @@ def _redact_obligation(block: dict) -> dict:
         "per-analyst obligation pressure (0-100%), and total system stress. "
         "Internal AMM parameters redacted."
     ),
+    rlusd_endpoint_id=IAM_ENDPOINT_ID,
 )
 def iam_resolve(symbol):
     """

@@ -47,9 +47,13 @@ def _broadcast_sse(event: dict):
         except ValueError:
             pass
 
-# proof402_integration.py lives at repo root (kept as secondary XRPL/RLUSD rail)
+# proof402_integration.py lives at repo root
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-from x402_flask import x402_guard
+# SML fix: these routes were gated by x402_guard alone, which only accepts
+# Coinbase/USDC (X-PAYMENT) — every manifest and MCP tool description tells
+# agents to pay via RLUSD/XRPL instead, so that flow silently never worked
+# here. dual_payment accepts both, Coinbase first by default.
+from proof402_integration import dual_payment
 
 logger = logging.getLogger("SqueezeOS-Premium")
 premium_bp = Blueprint('premium', __name__)
@@ -68,7 +72,7 @@ def _rate_limit_premium():
 # ── /api/council ─────────────────────────────────────────────────────────────
 
 @premium_bp.route('/council', methods=['POST', 'GET'])
-@x402_guard(price_usdc="0.10", description="AI Council Verdict — multi-engine signal aggregate. Returns regime (EXECUTION/STEALTH/CONFLICT/COLLAPSE), directional bias, confidence (0-100), and full institutional thesis for any equity symbol.")
+@dual_payment(price_usdc="0.10", description="AI Council Verdict — multi-engine signal aggregate. Returns regime (EXECUTION/STEALTH/CONFLICT/COLLAPSE), directional bias, confidence (0-100), and full institutional thesis for any equity symbol.")
 def council():
     """
     AI Council Verdict — multi-engine signal aggregate.
@@ -202,7 +206,7 @@ def council():
 # ── /api/scan ─────────────────────────────────────────────────────────────────
 
 @premium_bp.route('/scan', methods=['GET', 'POST'])
-@x402_guard(price_usdc="0.05", description="Full universe market scan — squeeze signals and grade-A options picks across the $1-$50 universe (up to 250 symbols).")
+@dual_payment(price_usdc="0.05", description="Full universe market scan — squeeze signals and grade-A options picks across the $1-$50 universe (up to 250 symbols).")
 def scan():
     """
     Full $1-$50 market scanner — live squeeze + options picks.
@@ -229,7 +233,7 @@ def scan():
 # ── /api/options ──────────────────────────────────────────────────────────────
 
 @premium_bp.route('/options', methods=['GET', 'POST'])
-@x402_guard(price_usdc="0.05", description="Institutional options flow scanner — sweeps, whale detection, unusual volume, dark-pool prints. Tradier brokerage-grade feed.")
+@dual_payment(price_usdc="0.05", description="Institutional options flow scanner — sweeps, whale detection, unusual volume, dark-pool prints. Tradier brokerage-grade feed.")
 def options_flow():
     """
     Options intelligence — sweeps, whales, unusual volume for requested symbol.
@@ -264,7 +268,7 @@ def options_flow():
 # ── /api/iwm ──────────────────────────────────────────────────────────────────
 
 @premium_bp.route('/iwm', methods=['GET', 'POST'])
-@x402_guard(price_usdc="0.03", description="IWM 0DTE contract scorer — scored by delta/gamma profile, parity watch, realized vol, expiry-day institutional activity.")
+@dual_payment(price_usdc="0.03", description="IWM 0DTE contract scorer — scored by delta/gamma profile, parity watch, realized vol, expiry-day institutional activity.")
 def iwm():
     """
     IWM 0DTE institutional scanner — scored contracts, parity watch, regime.
