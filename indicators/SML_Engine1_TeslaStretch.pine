@@ -1,23 +1,22 @@
-// © ScriptMasterLabs — SML Engine 1: Elastic Stretch [Price]
+// © ScriptMasterLabs — SML Engine 1: Tesla Elastic Stretch
 // ================================================================
 // PRICE DIMENSION ONLY
+// Sequence: 1 · 24 · 578 · 963
+//
+// 24x seed → 24x² ≈ 578 → macro anchor 963
+// Tesla triad: digits of 963 = 9·6·3 (descending Tesla sequence)
 //
 // Measures how far price has been elastically dragged from the
-// macro floor by market-maker suppression.
+// 963-bar macro floor by market-maker suppression.
 //
-// When price is SUPPRESSED (coiled below mid resistance),
+// When price is SUPPRESSED (coiled below 578, minimal stretch),
 // watch SML Engine 3 volume pane for dark-pool kinetics.
 // ================================================================
 //@version=5
-indicator("SML Engine 1 — Elastic Stretch [Price]",
-          shorttitle="SML·E1·Stretch", overlay=true)
+indicator("SML Engine 1 — Tesla Elastic Stretch [Price]",
+          shorttitle="SML·E1·Tesla", overlay=true)
 
-// ── Sequence Inputs (SML Licensed) ───────────────────────────────
-sa2 = input.int(1, "Seq A · Level 2", group="SML Licensed — Sequence A", minval=1)
-sa3 = input.int(1, "Seq A · Level 3", group="SML Licensed — Sequence A", minval=1)
-sa4 = input.int(1, "Seq A · Anchor",  group="SML Licensed — Sequence A", minval=1)
-
-// ── Signal Thresholds ─────────────────────────────────────────────
+// ── Inputs ───────────────────────────────────────────────────────
 ignition_thresh = input.float(15.0, "Ignition Stretch %",   minval=1.0)
 stretch_thresh  = input.float(8.0,  "Stretch Alert %",      minval=1.0)
 suppress_thresh = input.float(5.0,  "Suppression Zone %",   minval=0.5)
@@ -25,16 +24,16 @@ show_labels     = input.bool(true,  "Show Signal Labels")
 show_bands      = input.bool(true,  "Show Stretch Backgrounds")
 
 // ── EMAs — PRICE only ─────────────────────────────────────────────
-ema_sa2 = ta.ema(close, sa2)
-ema_sa3 = ta.ema(close, sa3)
-ema_sa4 = ta.ema(close, sa4)
+ema24  = ta.ema(close, 24)
+ema578 = ta.ema(close, 578)
+ema963 = ta.ema(close, 963)
 
-// ── Stretch from macro anchor ─────────────────────────────────────
-stretch_pct = (close - ema_sa4) / ema_sa4 * 100
+// ── Stretch from macro floor ──────────────────────────────────────
+stretch_pct = (close - ema963) / ema963 * 100
 
 // ── Stack states ──────────────────────────────────────────────────
-bull_stack = close > ema_sa2 and ema_sa2 > ema_sa3 and ema_sa3 > ema_sa4
-bear_stack = close < ema_sa2 and ema_sa2 < ema_sa3 and ema_sa3 < ema_sa4
+bull_stack = close > ema24 and ema24 > ema578 and ema578 > ema963
+bear_stack = close < ema24 and ema24 < ema578 and ema578 < ema963
 suppressed = not bull_stack and math.abs(stretch_pct) < suppress_thresh
 compression = math.abs(stretch_pct) < 1.5
 
@@ -45,14 +44,14 @@ bull_stretch = math.abs(stretch_pct) > stretch_thresh and bull_stack and not ela
 bear_stretch = math.abs(stretch_pct) > stretch_thresh and bear_stack and not elastic_ignition_bear
 
 // ── Plots ─────────────────────────────────────────────────────────
-plot(ema_sa2, "E1 · Seq A · Level 2",
+plot(ema24,  "E1 · EMA 24  (Seed × 24)",
      color=color.new(color.yellow, 15), linewidth=1)
-plot(ema_sa3, "E1 · Seq A · Level 3",
+plot(ema578, "E1 · EMA 578 (24²)",
      color=color.new(color.orange, 10), linewidth=2)
-plot(ema_sa4, "E1 · Seq A · Anchor",
+plot(ema963, "E1 · EMA 963 (Tesla Macro Floor)",
      color=color.new(color.red,    5),  linewidth=3)
 
-// ── Stretch meter line (price vs macro anchor) ────────────────────
+// ── Stretch meter line (price vs macro floor) ─────────────────────
 hline(0, "Zero", color=color.gray, linestyle=hline.style_dotted)
 
 // ── Signal backgrounds ────────────────────────────────────────────
@@ -67,8 +66,8 @@ bgcolor(show_bands and compression           ? color.new(color.blue,   92) : na,
 var label sig_lbl = na
 if show_labels and barstate.islast
     label.delete(sig_lbl)
-    sig_txt = elastic_ignition_bull ? "ELASTIC IGNITION BULL\n+" + str.tostring(stretch_pct, "#.##") + "% from Macro Anchor" :
-              elastic_ignition_bear ? "ELASTIC IGNITION BEAR\n" + str.tostring(stretch_pct, "#.##") + "% from Macro Anchor" :
+    sig_txt = elastic_ignition_bull ? "ELASTIC IGNITION BULL\n+" + str.tostring(stretch_pct, "#.##") + "% from EMA963" :
+              elastic_ignition_bear ? "ELASTIC IGNITION BEAR\n" + str.tostring(stretch_pct, "#.##") + "% from EMA963" :
               bull_stretch          ? "BULL STRETCH\n+" + str.tostring(stretch_pct, "#.##") + "% above floor" :
               bear_stretch          ? "BEAR STRETCH\n" + str.tostring(stretch_pct, "#.##") + "% below floor" :
               suppressed            ? "SUPPRESSED\nCoiling — watch E3 volume" :
@@ -86,16 +85,16 @@ if show_labels and barstate.islast
 // ── Alerts ────────────────────────────────────────────────────────
 alertcondition(elastic_ignition_bull,
     "E1 Elastic Ignition Bull",
-    "{{ticker}} — ELASTIC IGNITION BULL: Price >" + str.tostring(ignition_thresh) + "% above Macro Anchor with full stack")
+    "{{ticker}} — ELASTIC IGNITION BULL: Price >" + str.tostring(ignition_thresh) + "% above EMA963 with full Tesla stack")
 
 alertcondition(elastic_ignition_bear,
     "E1 Elastic Ignition Bear",
-    "{{ticker}} — ELASTIC IGNITION BEAR: Price >" + str.tostring(ignition_thresh) + "% below Macro Anchor")
+    "{{ticker}} — ELASTIC IGNITION BEAR: Price >" + str.tostring(ignition_thresh) + "% below EMA963")
 
 alertcondition(suppressed,
     "E1 Suppression Zone Active",
-    "{{ticker}} — SUPPRESSED: Price coiled below mid resistance. Monitor Engine 3 volume for dark-pool accumulation.")
+    "{{ticker}} — SUPPRESSED: Price coiled below 578 EMA. Monitor Engine 3 volume for dark-pool accumulation.")
 
-alertcondition(ta.crossover(close, ema_sa3),
-    "E1 Price Reclaims Mid Resistance",
-    "{{ticker}} — MID RESISTANCE RECLAIM: Price crossed above elastic resistance line")
+alertcondition(ta.crossover(close, ema578),
+    "E1 Price Reclaims 578 EMA",
+    "{{ticker}} — EMA578 RECLAIM: Price crossed above the 24² elastic resistance line")

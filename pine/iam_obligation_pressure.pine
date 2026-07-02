@@ -89,7 +89,7 @@ p_mean_rev   = math.min(100.0, math.max(0.0, dist_atr / 4.0 * 100.0))
 // ── 5. STRUCTURAL PRESSURE ─────────────────────────────────────────
 //    RSI extremes signal structural imbalance — market is structurally
 //    obligated to rebalance when RSI is at extremes (>70 or <30).
-rsi_raw      = ta.rsi(close, 14)
+rsi_raw      = ta.rsi(close, length_struct)
 // Distance from 50 (neutral), scaled so 50→0%, 70→100%, 30→100%
 rsi_dist     = math.abs(rsi_raw - 50.0)
 p_structural = math.min(100.0, math.max(0.0, rsi_dist / 20.0 * 100.0))

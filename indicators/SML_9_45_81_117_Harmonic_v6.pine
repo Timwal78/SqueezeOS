@@ -1,34 +1,29 @@
 //@version=6
-// © ScriptMasterLabs — SML Harmonic Stack [Licensed]
+// © ScriptMasterLabs — SML 9·45·81·117 Harmonic Stack
 // Discovery: Timothy Walton | ScriptMasterLabs
-indicator("SML Harmonic Stack [Licensed]", shorttitle="SML·HStack", overlay=true)
-
-// ── Sequence Inputs (SML Licensed) ───────────────────────────────
-i_l1 = input.int(1, "L1 (Fastest)", group="SML Licensed — Harmonic Stack", minval=1)
-i_l2 = input.int(1, "L2",          group="SML Licensed — Harmonic Stack", minval=1)
-i_l3 = input.int(1, "L3",          group="SML Licensed — Harmonic Stack", minval=1)
-i_l4 = input.int(1, "L4 (Anchor)", group="SML Licensed — Harmonic Stack", minval=1)
+// Constant delta = 36 between every level. No guesswork.
+indicator("SML 9·45·81·117 Harmonic Stack", shorttitle="SML·9·45·81·117", overlay=true)
 
 // ── Source & EMAs ─────────────────────────────────────────────────
 src  = input.source(close, "Source")
-e_l1 = ta.ema(src, i_l1)
-e_l2 = ta.ema(src, i_l2)
-e_l3 = ta.ema(src, i_l3)
-e_l4 = ta.ema(src, i_l4)
+e9   = ta.ema(src, 9)
+e45  = ta.ema(src, 45)
+e81  = ta.ema(src, 81)
+e117 = ta.ema(src, 117)
 
 // ── Gap Analysis (uniform = strong trend, compressed = knot) ──────
-gap_fast = e_l1 - e_l2
-gap_mid  = e_l2 - e_l3
-gap_slow = e_l3 - e_l4
+gap_fast = e9  - e45
+gap_mid  = e45 - e81
+gap_slow = e81 - e117
 
 max_g    = math.max(math.abs(gap_fast), math.abs(gap_mid), math.abs(gap_slow))
 min_g    = math.min(math.abs(gap_fast), math.abs(gap_mid), math.abs(gap_slow))
 unif_pct = max_g > 0.0001 ? math.round((1.0 - (max_g - min_g) / max_g) * 100) : 100
 
 // ── States ────────────────────────────────────────────────────────
-full_bull = src > e_l1 and e_l1 > e_l2 and e_l2 > e_l3 and e_l3 > e_l4
-full_bear = src < e_l1 and e_l1 < e_l2 and e_l2 < e_l3 and e_l3 < e_l4
-above_l4  = src > e_l4
+full_bull = src > e9  and e9  > e45 and e45 > e81 and e81 > e117
+full_bear = src < e9  and e9  < e45 and e45 < e81 and e81 < e117
+above_117 = src > e117
 
 band_3 = src * 0.003
 knot   = math.abs(gap_fast) < band_3 and
@@ -36,10 +31,10 @@ knot   = math.abs(gap_fast) < band_3 and
          math.abs(gap_slow) < band_3
 
 // ── Distances ─────────────────────────────────────────────────────
-d_l1 = (src - e_l1) / e_l1 * 100
-d_l2 = (src - e_l2) / e_l2 * 100
-d_l3 = (src - e_l3) / e_l3 * 100
-d_l4 = (src - e_l4) / e_l4 * 100
+d9   = (src - e9)   / e9   * 100
+d45  = (src - e45)  / e45  * 100
+d81  = (src - e81)  / e81  * 100
+d117 = (src - e117) / e117 * 100
 
 // ── Pre-compute ribbon colors (avoids multi-line ternary in fill) ─
 r_col1 = full_bull ? color.new(#00FF66, 85) : full_bear ? color.new(#FF0055, 85) : color.new(#555555, 92)
@@ -47,35 +42,35 @@ r_col2 = full_bull ? color.new(#00FF66, 90) : full_bear ? color.new(#FF0055, 90)
 r_col3 = full_bull ? color.new(#00FF66, 93) : full_bear ? color.new(#FF0055, 93) : color.new(#333333, 95)
 
 // ── Plots ─────────────────────────────────────────────────────────
-p_l1 = plot(e_l1, "L1 — Spearhead",      color=#00FFFF, linewidth=1)
-p_l2 = plot(e_l2, "L2 — Baseline",       color=#00FF66, linewidth=2)
-p_l3 = plot(e_l3, "L3 — Intermediate",   color=#FF8C00, linewidth=2)
-p_l4 = plot(e_l4, "L4 — Macro Anchor",   color=#FF0055, linewidth=3)
+p9   = plot(e9,   "EMA 9  — Spearhead",         color=#00FFFF, linewidth=1)
+p45  = plot(e45,  "EMA 45 — Front-Run Baseline", color=#00FF66, linewidth=2)
+p81  = plot(e81,  "EMA 81 — Intermediate Valid", color=#FF8C00, linewidth=2)
+p117 = plot(e117, "EMA 117 — Macro Anchor 6Mo",  color=#FF0055, linewidth=3)
 
-fill(p_l1, p_l2, color=r_col1, title="Ribbon L1→L2")
-fill(p_l2, p_l3, color=r_col2, title="Ribbon L2→L3")
-fill(p_l3, p_l4, color=r_col3, title="Ribbon L3→L4")
+fill(p9,   p45,  color=r_col1, title="Ribbon 9→45")
+fill(p45,  p81,  color=r_col2, title="Ribbon 45→81")
+fill(p81,  p117, color=r_col3, title="Ribbon 81→117")
 
 bgcolor(knot ? color.new(#9900FF, 65) : na, title="Knot Compression — Breakout Loading")
 
 // ── Shapes ────────────────────────────────────────────────────────
-plotshape(ta.crossover(src, e_l4),
-     title="Macro Reclaim", style=shape.star,
+plotshape(ta.crossover(src, e117),
+     title="Macro Reclaim E117", style=shape.star,
      location=location.belowbar, color=#00FF66, size=size.normal)
 
-plotshape(ta.crossunder(src, e_l4),
-     title="Macro Breakdown", style=shape.xcross,
+plotshape(ta.crossunder(src, e117),
+     title="Macro Breakdown E117", style=shape.xcross,
      location=location.abovebar, color=#FF0055, size=size.small)
 
 // ── Signal Label ──────────────────────────────────────────────────
 var label sig_lbl = label(na)
 if barstate.islast
     label.delete(sig_lbl)
-    sig_txt = knot      ? "◈ KNOT — BREAKOUT LOADING\nAll levels coiled" :
-              full_bull ? "▲ FULL BULL STACK\nL1 > L2 > L3 > L4" :
-              full_bear ? "▼ FULL BEAR STACK\nL1 < L2 < L3 < L4" :
-              above_l4  ? "ABOVE MACRO FLOOR\nLong bias intact" : "MIXED — AWAIT STACK"
-    sig_col = knot ? #9900FF : full_bull ? #00FF66 : full_bear ? #FF0055 : above_l4 ? #00BFFF : #888888
+    sig_txt = knot      ? "◈ KNOT — BREAKOUT LOADING\n9·45·81·117 coiled" :
+              full_bull ? "▲ FULL BULL STACK\n9 > 45 > 81 > 117" :
+              full_bear ? "▼ FULL BEAR STACK\n9 < 45 < 81 < 117" :
+              above_117 ? "ABOVE MACRO FLOOR\nLong bias intact" : "MIXED — AWAIT STACK"
+    sig_col = knot ? #9900FF : full_bull ? #00FF66 : full_bear ? #FF0055 : above_117 ? #00BFFF : #888888
     sig_lbl := label.new(bar_index,
          full_bear ? low * 0.997 : high * 1.003,
          text=sig_txt, color=sig_col, textcolor=color.white,
@@ -101,15 +96,15 @@ if barstate.islast
     // Row 0 — Title
     sig_hdr = knot ? "◈ KNOT" : full_bull ? "▲ BULL" : full_bear ? "▼ BEAR" : "MIXED"
     hdr_col = knot ? #9900FF : full_bull ? #00FF66 : full_bear ? #FF0055 : #888888
-    table.cell(T, 0, 0, "SML  HARMONIC  STACK",
+    table.cell(T, 0, 0, "SML  9·45·81·117  HARMONIC",
          bgcolor=#111111, text_color=#AAAAAA, text_size=size.small, text_halign=text.align_left)
     table.cell(T, 1, 0, sig_hdr,
          bgcolor=color.new(hdr_col, 60), text_color=hdr_col, text_size=size.small, text_halign=text.align_center)
 
-    // Row 1 — License
-    table.cell(T, 0, 1, "LICENSED",
+    // Row 1 — Math key
+    table.cell(T, 0, 1, "HARMONIC DELTA",
          bgcolor=#111111, text_color=#555555, text_size=size.small, text_halign=text.align_left)
-    table.cell(T, 1, 1, "STACK",
+    table.cell(T, 1, 1, "Δ = 36  per level",
          bgcolor=#111111, text_color=#00FFFF, text_size=size.small, text_halign=text.align_right)
 
     // Row 2 — Separator label
@@ -118,29 +113,29 @@ if barstate.islast
     table.cell(T, 1, 2, "VALUE  /  DIST%",
          bgcolor=#0D0D0D, text_color=#444444, text_size=size.tiny, text_halign=text.align_right)
 
-    // Row 3 — L1
-    table.cell(T, 0, 3, "L1   Spearhead",
+    // Row 3 — EMA 9
+    table.cell(T, 0, 3, "EMA 9   Spearhead",
          bgcolor=#0A0A0A, text_color=#00FFFF, text_size=size.small, text_halign=text.align_left)
-    table.cell(T, 1, 3, str.tostring(e_l1, "#.##") + "  " + f_dist(d_l1),
-         bgcolor=#0A0A0A, text_color=f_dcol(d_l1), text_size=size.small, text_halign=text.align_right)
+    table.cell(T, 1, 3, str.tostring(e9, "#.##") + "  " + f_dist(d9),
+         bgcolor=#0A0A0A, text_color=f_dcol(d9), text_size=size.small, text_halign=text.align_right)
 
-    // Row 4 — L2
-    table.cell(T, 0, 4, "L2   Front-Run",
+    // Row 4 — EMA 45
+    table.cell(T, 0, 4, "EMA 45  Front-Run  (beats 50)",
          bgcolor=#0A0A0A, text_color=#00FF66, text_size=size.small, text_halign=text.align_left)
-    table.cell(T, 1, 4, str.tostring(e_l2, "#.##") + "  " + f_dist(d_l2),
-         bgcolor=#0A0A0A, text_color=f_dcol(d_l2), text_size=size.small, text_halign=text.align_right)
+    table.cell(T, 1, 4, str.tostring(e45, "#.##") + "  " + f_dist(d45),
+         bgcolor=#0A0A0A, text_color=f_dcol(d45), text_size=size.small, text_halign=text.align_right)
 
-    // Row 5 — L3
-    table.cell(T, 0, 5, "L3   Validator",
+    // Row 5 — EMA 81
+    table.cell(T, 0, 5, "EMA 81  Validator  (chop filter)",
          bgcolor=#0A0A0A, text_color=#FF8C00, text_size=size.small, text_halign=text.align_left)
-    table.cell(T, 1, 5, str.tostring(e_l3, "#.##") + "  " + f_dist(d_l3),
-         bgcolor=#0A0A0A, text_color=f_dcol(d_l3), text_size=size.small, text_halign=text.align_right)
+    table.cell(T, 1, 5, str.tostring(e81, "#.##") + "  " + f_dist(d81),
+         bgcolor=#0A0A0A, text_color=f_dcol(d81), text_size=size.small, text_halign=text.align_right)
 
-    // Row 6 — L4
-    table.cell(T, 0, 6, "L4   Macro Anchor",
+    // Row 6 — EMA 117
+    table.cell(T, 0, 6, "EMA 117  Macro Anchor  (6-month)",
          bgcolor=#0A0A0A, text_color=#FF0055, text_size=size.small, text_halign=text.align_left)
-    table.cell(T, 1, 6, str.tostring(e_l4, "#.##") + "  " + f_dist(d_l4),
-         bgcolor=#0A0A0A, text_color=f_dcol(d_l4), text_size=size.small, text_halign=text.align_right)
+    table.cell(T, 1, 6, str.tostring(e117, "#.##") + "  " + f_dist(d117),
+         bgcolor=#0A0A0A, text_color=f_dcol(d117), text_size=size.small, text_halign=text.align_right)
 
     // Row 7 — Separator
     table.cell(T, 0, 7, "─── GAP ANALYSIS ───────────────",
@@ -150,21 +145,21 @@ if barstate.islast
 
     // Row 8 — Gap fast
     g_col = gap_fast > 0 ? #00FF66 : #FF0055
-    table.cell(T, 0, 8, "Gap  L1 → L2",
+    table.cell(T, 0, 8, "Gap  9 → 45",
          bgcolor=#0A0A0A, text_color=#666666, text_size=size.small, text_halign=text.align_left)
     table.cell(T, 1, 8, str.tostring(gap_fast, "#.###"),
          bgcolor=#0A0A0A, text_color=g_col, text_size=size.small, text_halign=text.align_right)
 
     // Row 9 — Gap mid
     gm_col = gap_mid > 0 ? #00FF66 : #FF0055
-    table.cell(T, 0, 9, "Gap  L2 → L3",
+    table.cell(T, 0, 9, "Gap  45 → 81",
          bgcolor=#0A0A0A, text_color=#666666, text_size=size.small, text_halign=text.align_left)
     table.cell(T, 1, 9, str.tostring(gap_mid, "#.###"),
          bgcolor=#0A0A0A, text_color=gm_col, text_size=size.small, text_halign=text.align_right)
 
     // Row 10 — Gap slow
     gs_col = gap_slow > 0 ? #00FF66 : #FF0055
-    table.cell(T, 0, 10, "Gap  L3 → L4",
+    table.cell(T, 0, 10, "Gap  81 → 117",
          bgcolor=#0A0A0A, text_color=#666666, text_size=size.small, text_halign=text.align_left)
     table.cell(T, 1, 10, str.tostring(gap_slow, "#.###"),
          bgcolor=#0A0A0A, text_color=gs_col, text_size=size.small, text_halign=text.align_right)
@@ -186,27 +181,27 @@ if barstate.islast
          bgcolor=k_bg, text_color=k_col, text_size=size.small, text_halign=text.align_right)
 
     // Row 13 — Separator
-    table.cell(T, 0, 13, "─── TIMEFRAME ALIGNMENT ─────────",
+    table.cell(T, 0, 13, "─── 65-MIN CALENDAR ALIGNMENT ──",
          bgcolor=#0D0D0D, text_color=#333333, text_size=size.tiny, text_halign=text.align_left)
-    table.cell(T, 1, 13, "Multi-timeframe",
+    table.cell(T, 1, 13, "390÷65 = 6 candles/day",
          bgcolor=#0D0D0D, text_color=#333333, text_size=size.tiny, text_halign=text.align_right)
 
-    // Rows 14-17 — level descriptions
-    table.cell(T, 0, 14, "L1  →", bgcolor=#0A0A0A, text_color=#555555, text_size=size.tiny, text_halign=text.align_left)
-    table.cell(T, 1, 14, "Short-term", bgcolor=#0A0A0A, text_color=#00FFFF, text_size=size.tiny, text_halign=text.align_right)
+    // Rows 14-17 — calendar breakdown
+    table.cell(T, 0, 14, "EMA 9  →", bgcolor=#0A0A0A, text_color=#555555, text_size=size.tiny, text_halign=text.align_left)
+    table.cell(T, 1, 14, "1.5 trading days", bgcolor=#0A0A0A, text_color=#00FFFF, text_size=size.tiny, text_halign=text.align_right)
 
-    table.cell(T, 0, 15, "L2 →", bgcolor=#0A0A0A, text_color=#555555, text_size=size.tiny, text_halign=text.align_left)
-    table.cell(T, 1, 15, "Mid-fast", bgcolor=#0A0A0A, text_color=#00FF66, text_size=size.tiny, text_halign=text.align_right)
+    table.cell(T, 0, 15, "EMA 45 →", bgcolor=#0A0A0A, text_color=#555555, text_size=size.tiny, text_halign=text.align_left)
+    table.cell(T, 1, 15, "7.5 days  (front-runs 50 crowd)", bgcolor=#0A0A0A, text_color=#00FF66, text_size=size.tiny, text_halign=text.align_right)
 
-    table.cell(T, 0, 16, "L3 →", bgcolor=#0A0A0A, text_color=#555555, text_size=size.tiny, text_halign=text.align_left)
-    table.cell(T, 1, 16, "Mid-slow", bgcolor=#0A0A0A, text_color=#FF8C00, text_size=size.tiny, text_halign=text.align_right)
+    table.cell(T, 0, 16, "EMA 81 →", bgcolor=#0A0A0A, text_color=#555555, text_size=size.tiny, text_halign=text.align_left)
+    table.cell(T, 1, 16, "13.5 trading days", bgcolor=#0A0A0A, text_color=#FF8C00, text_size=size.tiny, text_halign=text.align_right)
 
-    table.cell(T, 0, 17, "L4 →", bgcolor=#0A0A0A, text_color=#555555, text_size=size.tiny, text_halign=text.align_left)
-    table.cell(T, 1, 17, "Long-term", bgcolor=#0A0A0A, text_color=#FF0055, text_size=size.tiny, text_halign=text.align_right)
+    table.cell(T, 0, 17, "EMA 117 →", bgcolor=#0A0A0A, text_color=#555555, text_size=size.tiny, text_halign=text.align_left)
+    table.cell(T, 1, 17, "19.5 days  (rolling 1-month)", bgcolor=#0A0A0A, text_color=#FF0055, text_size=size.tiny, text_halign=text.align_right)
 
     // Row 18 — Stack status
     st_bg  = full_bull ? color.new(#00FF66, 65) : full_bear ? color.new(#FF0055, 65) : color.new(#1A1A1A, 0)
-    st_txt = full_bull ? "▲  L1 > L2 > L3 > L4  FULL BULL" : full_bear ? "▼  L1 < L2 < L3 < L4  FULL BEAR" : "──  MIXED  await alignment"
+    st_txt = full_bull ? "▲  9 > 45 > 81 > 117  FULL BULL" : full_bear ? "▼  9 < 45 < 81 < 117  FULL BEAR" : "──  MIXED  await alignment"
     table.cell(T, 0, 18, "STACK STATUS",
          bgcolor=st_bg, text_color=#888888, text_size=size.small, text_halign=text.align_left)
     table.cell(T, 1, 18, st_txt,
@@ -225,28 +220,32 @@ if barstate.islast
          bgcolor=#0D0D1A, text_color=#4444AA, text_size=size.tiny, text_halign=text.align_right)
 
 // ── Discord Webhook JSON via alert() ─────────────────────────────
+// In TradingView: create alert → set webhook URL to your Discord
+// channel webhook. TradingView POSTs the message body to Discord.
+
 f_color() =>
     knot ? 10027263 : full_bull ? 65382 : full_bear ? 16711765 : 43775
 
 f_json(title_str) =>
     col_str = str.tostring(f_color())
     px_str  = str.tostring(src, "#.##")
-    d_l1s   = f_dist(d_l1)
-    d_l2s   = f_dist(d_l2)
-    d_l4s   = f_dist(d_l4)
+    d9s     = f_dist(d9)
+    d45s    = f_dist(d45)
+    d81s    = f_dist(d81)
+    d117s   = f_dist(d117)
     stk     = full_bull ? "BULL" : full_bear ? "BEAR" : "MIXED"
     unif_s  = str.tostring(unif_pct) + "%"
-    '{"username":"SML HStack","embeds":[{"title":"' + title_str +
+    '{"username":"SML 9.45.81.117","embeds":[{"title":"' + title_str +
          '","color":' + col_str +
          ',"fields":[{"name":"Ticker","value":"' + syminfo.ticker + '","inline":true},' +
          '{"name":"Price","value":"$' + px_str + '","inline":true},' +
          '{"name":"Stack","value":"' + stk + '","inline":true},' +
-         '{"name":"L1 Dist","value":"' + d_l1s + '","inline":true},' +
-         '{"name":"L2 Dist","value":"' + d_l2s + '","inline":true},' +
-         '{"name":"L4 Dist","value":"' + d_l4s + '","inline":true},' +
+         '{"name":"E9 Dist","value":"' + d9s + '","inline":true},' +
+         '{"name":"E45 Dist","value":"' + d45s + '","inline":true},' +
+         '{"name":"E117 Dist","value":"' + d117s + '","inline":true},' +
          '{"name":"Uniformity","value":"' + unif_s + '","inline":true},' +
          '{"name":"Knot","value":"' + (knot ? "ACTIVE" : "off") + '","inline":true}],' +
-         '"footer":{"text":"ScriptMasterLabs | Harmonic Stack"}}]}'
+         '"footer":{"text":"ScriptMasterLabs | Harmonic Delta=36"}}]}'
 
 if knot and not knot[1]
     alert(f_json("KNOT COMPRESSION — " + syminfo.ticker), alert.freq_once_per_bar)
@@ -257,8 +256,8 @@ if full_bull and not full_bull[1]
 if full_bear and not full_bear[1]
     alert(f_json("FULL BEAR STACK — " + syminfo.ticker), alert.freq_once_per_bar)
 
-if ta.crossover(src, e_l4)
-    alert(f_json("MACRO RECLAIM — " + syminfo.ticker), alert.freq_once_per_bar)
+if ta.crossover(src, e117)
+    alert(f_json("MACRO RECLAIM E117 — " + syminfo.ticker), alert.freq_once_per_bar)
 
-if ta.crossunder(src, e_l4)
-    alert(f_json("MACRO BREAKDOWN — " + syminfo.ticker), alert.freq_once_per_bar)
+if ta.crossunder(src, e117)
+    alert(f_json("MACRO BREAKDOWN E117 — " + syminfo.ticker), alert.freq_once_per_bar)

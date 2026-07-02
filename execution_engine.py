@@ -282,7 +282,8 @@ class ExecutionEngine:
             trade = {
                 'id': trade_id, 'symbol': symbol, 'side': side, 'qty': quantity,
                 'entry_price': price, 'current_price': price,
-                'sl': price * 0.96, 'tp': price * 1.12,
+                'sl': price * 0.96 if side == 'BUY' else price * 1.04,
+                'tp': price * 1.12 if side == 'BUY' else price * 0.88,
                 'status': 'OPEN', 'opened_at': time.time(), 'mode': 'LIVE',
                 'order_id': oid, 'reason': reason
             }
