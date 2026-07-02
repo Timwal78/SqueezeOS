@@ -969,10 +969,52 @@ class DataManager:
 
         return results
     def get_historical_bars(self, symbol: str, timeframe: str = '1Day', limit: int = 40) -> List[dict]:
-        return self.alpaca.get_historical_bars(symbol, timeframe, limit)
+        # Was hardcoded to Alpaca only, with no fallback — every one of this
+        # method's ~10 callers across the codebase (Oracle, IAM, CEO Trader,
+        # the proprietary EMA suite endpoint, Triple Lock, IWM 0DTE, etc.)
+        # silently got zero bars back on any deployment without
+        # ALPACA_API_KEY configured, since AlpacaProvider.get_historical_bars
+        # returns [] immediately when unavailable. get_bars() already has the
+        # correct Tradier → Alpaca → Polygon priority chain used everywhere
+        # else in the app — delegate to it instead of duplicating a
+        # single-provider path that silently degrades.
+        return self.get_bars(symbol, timeframe, limit)
 
     def get_bars(self, symbol: str, timeframe: str = '1D', limit: int = 60) -> List[dict]:
-        """Fetch historical bars primarily using Polygon, fallback to Alpaca."""
+        """Fetch historical bars — Tradier (daily only) first, then Polygon, then Alpaca.
+
+        Tradier is checked first for daily bars specifically because it's the
+        provider actually configured/working on deployments without a Polygon
+        or Alpaca key (data_providers.py has no Tradier path for intraday
+        bars — tradier_api.get_history_df() only supports daily/weekly/monthly
+        via Tradier's /markets/history endpoint). Without this, every daily-bar
+        caller (Oracle's macro basket check, IAM's obligation analysts, the
+        proprietary EMA suite, CEO Trader, etc.) silently got zero bars back on
+        any deployment running Tradier-only, since the old code went straight
+        to Polygon → Alpaca with no Tradier fallback at all — contradicting the
+        documented Tradier → Alpaca → Polygon priority order and explaining
+        widespread "missing history" symptoms with Tradier fully configured
+        and working.
+        """
+        if timeframe.upper() in ('1D', '1DAY', 'DAY', 'DAILY'):
+            try:
+                from tradier_api import get_history_df
+                df = get_history_df(symbol, days=max(limit + 10, 30), interval="daily")
+                if df is not None and not df.empty:
+                    bars = [
+                        {
+                            "date": ts.strftime("%Y-%m-%d"),
+                            "o": float(row["Open"]), "h": float(row["High"]),
+                            "l": float(row["Low"]), "c": float(row["Close"]),
+                            "v": float(row["Volume"]),
+                        }
+                        for ts, row in df.tail(limit).iterrows()
+                    ]
+                    if bars:
+                        return bars
+            except Exception as e:
+                logger.warning(f"[DATA] Tradier get_bars error for {symbol}: {e}")
+
         try:
             if self.polygon.available:
                 # Map timeframe to Polygon formats (e.g. 1D -> 1, day)
@@ -1019,7 +1061,7 @@ class DataManager:
         # treat an empty/short bar list as "skip this symbol", which is the
         # correct behavior when live data isn't actually available.
         _ALPACA_TF_MAP = {
-            '1D': '1Day',
+            '1D': '1Day', '1DAY': '1Day', 'DAY': '1Day', 'DAILY': '1Day',
             '1MIN': '1Min', '1M': '1Min',
             '5MIN': '5Min', '5M': '5Min',
             '15MIN': '15Min', '15M': '15Min',
