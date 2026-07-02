@@ -56,7 +56,9 @@ def _beastmode_refresh_loop():
                         logger.warning(f"[BEASTMODE] discord fire failed: {_de}")
 
                     sml = hit.get("sml_matrix") or {}
-                    if sml.get("execute_gate") and sml.get("tier") == "GOD_MODE":
+                    bull_gate = sml.get("execute_gate") and sml.get("tier") == "GOD_MODE"
+                    bear_gate = sml.get("bear_execute_gate") and sml.get("bear_tier") == "GOD_MODE"
+                    if bull_gate or bear_gate:
                         sym = hit.get("symbol", "")
                         if sym:
                             try:
@@ -161,13 +163,27 @@ def _fire_execution(symbol: str, result: dict, dm=None) -> None:
         )
         return
 
-    sml        = result.get("sml_matrix") or {}
-    god_count  = sml.get("god_stacked", 0)
+    sml         = result.get("sml_matrix") or {}
+    god_count   = sml.get("god_stacked", 0)
+    bear_count  = sml.get("bear_god_stacked", 0)
 
-    # ── Tiered execution gate: require MIN_GOD_STACKED (default 5 or 6 of 6) ─
-    if god_count < _MIN_GOD_STACKED:
-        logger.info(f"[EXEC] {symbol} god_stacked={god_count} < {_MIN_GOD_STACKED} — not executing")
+    # ── Bidirectional gate — bull (open long) vs bear (protect gains + puts) ─
+    # core/harmonic_matrix_engine.py now emits a mirrored bearish ladder
+    # (bear_execute_gate/bear_tier/bear_god_stacked) alongside the original
+    # bull-only fields. Bear takes priority: if we're holding a long and a
+    # GOD-tier bearish reversal fires, closing to protect gains matters more
+    # than a fresh entry firing the same tick.
+    bear_fired = sml.get("bear_execute_gate") and sml.get("bear_tier") == "GOD_MODE" and bear_count >= _MIN_GOD_STACKED
+    bull_fired = sml.get("execute_gate") and sml.get("tier") == "GOD_MODE" and god_count >= _MIN_GOD_STACKED
+
+    if not bear_fired and not bull_fired:
+        logger.info(
+            f"[EXEC] {symbol} god_stacked={god_count} bear_god_stacked={bear_count} "
+            f"< {_MIN_GOD_STACKED} — not executing"
+        )
         return
+
+    side = "sell" if bear_fired else "buy"
 
     # ── Per-symbol cooldown ──────────────────────────────────────────────────
     now  = time.time()
@@ -181,20 +197,6 @@ def _fire_execution(symbol: str, result: dict, dm=None) -> None:
     if not _pdt_check_and_record():
         return
 
-    # This function is only ever reached via the GOD MODE execution gate above
-    # (sml.execute_gate and sml.tier=="GOD_MODE"), which comes from
-    # core/harmonic_matrix_engine.py — a bull-only detector (is_stacked requires
-    # last_price > emas[0] > emas[1] > ...; there is no bearish branch). The
-    # previous logic guessed direction from result["signal"] (the top-level
-    # convergence tier label — GOD_MODE/BEASTMODE/APEX_SINGULARITY/etc), which
-    # collapses e6's GOD_MODE_BULL and GOD_MODE_BEAR into the same string and is
-    # therefore not a reliable direction signal; several tier values (e.g.
-    # APEX_SINGULARITY, FRACTAL_LOCK) would fall through to "sell" even while
-    # co-occurring with a confirmed-bullish Grid-1 gate, placing a short into a
-    # bullish setup. Since the only thing that ever gates this function is
-    # bull-only, always execute long.
-    side = "buy"
-
     # ── Live price ───────────────────────────────────────────────────────────
     try:
         q     = _t.get_quote(symbol)
@@ -206,6 +208,64 @@ def _fire_execution(symbol: str, result: dict, dm=None) -> None:
         logger.warning(f"[EXEC] {symbol} no live price — aborting")
         return
 
+    if bear_fired:
+        # ── Bearish GOD signal: protect any existing long first, then treat
+        # the reversal as a fresh PUT-buying opportunity (never a naked short —
+        # this bot only ever holds long equity or long option positions).
+        try:
+            position = _t.get_position(symbol)
+        except Exception as e:
+            logger.error(f"[EXEC] {symbol} position lookup failed: {e}")
+            position = None
+
+        if position and position.get("quantity", 0) > 0:
+            close_qty = int(position["quantity"])
+            logger.info(
+                f"[EXEC] 🔻 GOD MODE BEAR — closing existing long to protect gains: "
+                f"SELL {close_qty}x {symbol} @ ${price:.2f} | SET9(bear):{bear_count}/6"
+            )
+            try:
+                tradier_result = _t.place_equity_order(symbol, close_qty, "sell")
+                logger.info(f"[EXEC] Tradier close → {tradier_result.get('status')} order_id={tradier_result.get('order_id','')}")
+            except Exception as e:
+                logger.error(f"[EXEC] Tradier close error: {e}")
+        else:
+            logger.info(f"[EXEC] {symbol} GOD MODE BEAR fired but no existing long to close — skipping close leg")
+
+        # ── Opportunistic PUT buy on the bearish signal ──────────────────────
+        try:
+            from core.convergence_engine import scan_options
+            contract = scan_options(symbol, trade_type="put", current_price=price)
+        except Exception as e:
+            logger.error(f"[EXEC] {symbol} PUT scan error: {e}")
+            contract = {"error": str(e)}
+
+        if contract.get("error"):
+            logger.warning(f"[EXEC] {symbol} PUT scan failed — {contract['error']}")
+        else:
+            option_symbol = contract.get("description") or contract.get("symbol")
+            ask = contract.get("ask") or contract.get("premium") or 0
+            try:
+                ask = float(ask or 0)
+            except (TypeError, ValueError):
+                ask = 0.0
+            if option_symbol and ask > 0:
+                logger.info(
+                    f"[EXEC] 🚀 GOD MODE BEAR — buying PUT {option_symbol} "
+                    f"strike={contract.get('strike')} delta={contract.get('delta')} @ ${ask:.2f}"
+                )
+                try:
+                    opt_result = _t.place_option_order(option_symbol, 1, "buy_to_open")
+                    logger.info(f"[EXEC] Tradier PUT → {opt_result.get('status')} order_id={opt_result.get('order_id','')}")
+                except Exception as e:
+                    logger.error(f"[EXEC] Tradier PUT error: {e}")
+            else:
+                logger.warning(f"[EXEC] {symbol} PUT contract missing symbol/ask — skipping")
+
+        _fire_robinhood_webhook(symbol, "SELL", sml, {"mode": "protect_and_put"})
+        return
+
+    # ── bull_fired: open/add long equity position ────────────────────────────
     quantity = max(1, int(_BEAST_MAX_PRICE // price))
     quantity = min(quantity, _BEAST_MAX_SHARES)
 
@@ -222,26 +282,32 @@ def _fire_execution(symbol: str, result: dict, dm=None) -> None:
         logger.error(f"[EXEC] Tradier error: {e}")
 
     # ── 2. Robinhood Windows executor webhook ────────────────────────────────
+    _fire_robinhood_webhook(symbol, side.upper(), sml, {"mode": "equity"})
+
+
+def _fire_robinhood_webhook(symbol: str, action: str, sml: dict, extra: dict) -> None:
+    """POST the trade intent to the Windows Robinhood executor, if configured."""
     rh_url = os.environ.get("ROBINHOOD_EXECUTOR_URL", "")
-    if rh_url:
-        try:
-            import json, urllib.request as _ul, hmac as _hmac, hashlib as _hl
-            secret  = os.environ.get("WEBHOOK_SECRET", "squeezeos-webhook-default-secret")
-            payload = json.dumps({
-                "ticker":         symbol,
-                "action":         side.upper(),
-                "mode":           "equity",
-                "sml_matrix":     sml,
-                "harmonic_score": sml.get("harmonic_score", 0),
-            }).encode()
-            sig = "sha256=" + _hmac.new(secret.encode(), payload, _hl.sha256).hexdigest()
-            req = _ul.Request(rh_url, data=payload,
-                              headers={"Content-Type": "application/json",
-                                       "X-SqueezeOS-Signature": sig})
-            with _ul.urlopen(req, timeout=5) as resp:
-                logger.info(f"[EXEC] Robinhood webhook → {resp.status}")
-        except Exception as e:
-            logger.warning(f"[EXEC] Robinhood webhook failed: {e}")
+    if not rh_url:
+        return
+    try:
+        import json, urllib.request as _ul, hmac as _hmac, hashlib as _hl
+        secret  = os.environ.get("WEBHOOK_SECRET", "squeezeos-webhook-default-secret")
+        payload = json.dumps({
+            "ticker":         symbol,
+            "action":         action,
+            "sml_matrix":     sml,
+            "harmonic_score": sml.get("harmonic_score", 0),
+            **extra,
+        }).encode()
+        sig = "sha256=" + _hmac.new(secret.encode(), payload, _hl.sha256).hexdigest()
+        req = _ul.Request(rh_url, data=payload,
+                          headers={"Content-Type": "application/json",
+                                   "X-SqueezeOS-Signature": sig})
+        with _ul.urlopen(req, timeout=5) as resp:
+            logger.info(f"[EXEC] Robinhood webhook → {resp.status}")
+    except Exception as e:
+        logger.warning(f"[EXEC] Robinhood webhook failed: {e}")
 
 
 @convergence_bp.route("/market/scan", methods=["GET"])
@@ -314,7 +380,9 @@ def convergence_signal(symbol):
     # Only fires live orders when tier=GOD_MODE AND execute_gate=True.
     # Routes to Tradier (cloud, 24/7) + Robinhood webhook (Windows executor).
     sml = result.get("sml_matrix") or {}
-    if sml.get("execute_gate") and sml.get("tier") == "GOD_MODE":
+    bull_gate = sml.get("execute_gate") and sml.get("tier") == "GOD_MODE"
+    bear_gate = sml.get("bear_execute_gate") and sml.get("bear_tier") == "GOD_MODE"
+    if bull_gate or bear_gate:
         _fire_execution(symbol, result, dm)
 
 

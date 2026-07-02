@@ -147,8 +147,10 @@ def run_auto_execution(sweet: dict, sorted_syms: list, dm) -> int:
             result = engine.analyze(sym, closes, volumes, bars_with_dates=bars, run_sniper=True)
             sml = result.get("sml_matrix") or {}
 
-            # Gate 6: convergence — only GOD MODE with execute_gate
-            if sml.get("execute_gate") and sml.get("tier") == "GOD_MODE":
+            # Gate 6: convergence — GOD MODE with execute_gate, bull or bear
+            bull_gate = sml.get("execute_gate") and sml.get("tier") == "GOD_MODE"
+            bear_gate = sml.get("bear_execute_gate") and sml.get("bear_tier") == "GOD_MODE"
+            if bull_gate or bear_gate:
                 # MANUAL ALERT MODE: if EXECUTION_MODE=alert (or arm switch off for
                 # auto), send a copy-paste Discord alert for hand-execution on
                 # Robinhood instead of placing an autonomous order.
@@ -230,10 +232,15 @@ def dry_run(sweet: dict, sorted_syms: list, dm, limit: int = None) -> dict:
                 "tier": sml.get("tier"),
                 "god_stacked": sml.get("god_stacked"),
                 "execute_gate": sml.get("execute_gate"),
+                "bear_tier": sml.get("bear_tier"),
+                "bear_god_stacked": sml.get("bear_god_stacked"),
+                "bear_execute_gate": sml.get("bear_execute_gate"),
             }
-            if sml.get("execute_gate") and sml.get("tier") == "GOD_MODE":
+            bull_gate = sml.get("execute_gate") and sml.get("tier") == "GOD_MODE"
+            bear_gate = sml.get("bear_execute_gate") and sml.get("bear_tier") == "GOD_MODE"
+            if bull_gate or bear_gate:
                 out["would_execute"].append(row)
-            elif sml.get("god_stacked", 0) >= 3:  # show what's getting close
+            elif sml.get("god_stacked", 0) >= 3 or sml.get("bear_god_stacked", 0) >= 3:  # show what's getting close
                 out["near_misses"].append(row)
         except Exception as e:
             out["errors"].append(f"{sym}: {str(e)[:80]}")
