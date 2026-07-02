@@ -272,12 +272,6 @@ class ConvergenceEngine:
         else:
             signal = "NEUTRAL"
 
-        # ── Options Sniper (Phase 3) ──────────────────────────────
-        sniper_result = None
-        if run_sniper:
-            trade_type = "call" if not e1.get("bear_stack") else "put"
-            sniper_result = scan_options(symbol, trade_type, current_price=closes[-1])
-
         # ── SML Harmonic Matrix — Proprietary Ranked Engine (Grid 1) ────────────
         try:
             sml_data = _harmonic.analyze(closes)
@@ -285,6 +279,30 @@ class ConvergenceEngine:
             import traceback
             logger.error(f"[SML] {symbol} harmonic matrix error: {e}\n{traceback.format_exc()}")
             sml_data = {"error": str(e), "matrix": {}}
+
+        # ── Options Sniper (Phase 3) ──────────────────────────────
+        # Contract direction (call vs put) must agree with whichever side of the
+        # harmonic Grid-1 matrix actually fired — this is the SAME signal that
+        # gates GOD_MODE execution in core/api/convergence_bp.py's _fire_execution().
+        # Previously this ran BEFORE sml_data existed and picked direction from
+        # e1.bear_stack instead — a different, earlier engine with no relationship
+        # to the bull/bear gate that decides whether we're even executing bullish
+        # or bearish. That could hand the sniper (and anything downstream that
+        # trusts options_sniper's "type", including live execution) a contract
+        # in the wrong direction from the actual confirmed signal. Now: prefer the
+        # harmonic engine's own bull/bear read, and only fall back to E1's stack
+        # for the (common) case where the harmonic matrix hasn't confirmed either
+        # side yet but a sniper contract is still wanted for a weaker convergence.
+        sniper_result = None
+        if run_sniper:
+            harmonic_signal = sml_data.get("signal", "") or ""
+            if "BEAR" in harmonic_signal:
+                trade_type = "put"
+            elif "BULL" in harmonic_signal or sml_data.get("god_stacked", 0) > 0:
+                trade_type = "call"
+            else:
+                trade_type = "call" if not e1.get("bear_stack") else "put"
+            sniper_result = scan_options(symbol, trade_type, current_price=closes[-1])
 
         # ── Grid 369 — Proprietary 3×3 Anchor Matrix (Grid 2) ────────────────
         try:
@@ -365,19 +383,25 @@ def scan_beastmode_universe(services: dict, tf: str = "1D", on_progress=None) ->
     active_syms = sorted(quotes.keys(), key=lambda s: quotes[s].get("volRatio", 0), reverse=True)
 
     # No artificial cap — scan the full discovered universe sorted by momentum.
-    # Memory stays bounded because we fetch 60 bars per symbol (sufficient for all
-    # SET9 indicators: EMA-34, RSI-14, MACD-26, ADX-14, BB-20) instead of 250.
+    # Fetch 250 bars per symbol — the harmonic matrix's largest EMA span is 45
+    # (SET9_GAP9_5EMA, rank #3 GOD_MODE config); an EMA needs roughly 3-5x its
+    # span in bars to actually converge. The previous limit=60 left 3 of the 7
+    # GOD_MODE-tier configs (spans 33/36/45) computed on under-warmed EMAs still
+    # biased toward their seed value — noisy votes feeding directly into
+    # god_stacked, the count that gates live execution. 250 bars keeps memory
+    # bounded across a full-universe scan while giving every config ~6-7x its
+    # span, matching the value already proven safe on the single-symbol route.
     universe = list(set(MANDATORY_TICKERS + active_syms))
 
     total = len(universe)
     for idx, symbol in enumerate(universe, 1):
         try:
             if hasattr(dm, "get_bars"):
-                bars = dm.get_bars(symbol, timeframe=tf, limit=60) or []
+                bars = dm.get_bars(symbol, timeframe=tf, limit=250) or []
                 if not bars and tf == "1D":
-                    bars = dm.get_bars(symbol, timeframe="1Min", limit=60) or []
+                    bars = dm.get_bars(symbol, timeframe="1Min", limit=250) or []
             else:
-                bars = dm.get_historical_bars(symbol, timeframe=tf, limit=60) or []
+                bars = dm.get_historical_bars(symbol, timeframe=tf, limit=250) or []
             closes  = [float(b.get("c") or b.get("close", 0)) for b in bars if b.get("c") or b.get("close")]
             volumes = [float(b.get("v") or b.get("volume", 0)) for b in bars if b.get("v") or b.get("volume")]
 

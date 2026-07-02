@@ -86,6 +86,39 @@ def _get_macro_regime(symbol: str) -> str:
         regime = "UNKNOWN"
     _macro_cache[symbol] = {"regime": regime, "ts": now}
     return regime
+
+
+_anchor365_cache: dict = {}
+_ANCHOR365_CACHE_TTL = 3600   # daily EMA moves slowly — 1hr cache is plenty
+
+
+def _get_365_anchor(symbol: str) -> str:
+    """
+    Query internal 365-day EMA anchor gate on SqueezeOS server (core/api/macro_bp.py).
+    Requires MACRO_GATE_SECRET (same secret as the 741 gate) in executor.env —
+    endpoint is not public. Fails open: no secret configured or fetch error →
+    UNKNOWN (never blocks trades). Returns "ABOVE" | "BELOW" | "UNKNOWN".
+    """
+    if not _MACRO_GATE_SECRET:
+        return "UNKNOWN"
+    now = time.time()
+    cached = _anchor365_cache.get(symbol)
+    if cached and now - cached["ts"] < _ANCHOR365_CACHE_TTL:
+        return cached["signal"]
+    try:
+        req = URLRequest(f"{SQUEEZEOS_API_URL}/api/anchor365/{symbol}",
+                         headers={"User-Agent": "SqueezeOS-RH-Executor/2.0",
+                                  "X-Macro-Secret": _MACRO_GATE_SECRET})
+        with urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+        signal = data.get("signal", "UNKNOWN")
+    except Exception as e:
+        logger.warning(f"[365-ANCHOR] {symbol} fetch failed: {e} — failing open")
+        signal = "UNKNOWN"
+    _anchor365_cache[symbol] = {"signal": signal, "ts": now}
+    return signal
+
+
 ROBINHOOD_USER     = os.environ.get("ROBINHOOD_USERNAME", "")
 ROBINHOOD_PASS     = os.environ.get("ROBINHOOD_PASSWORD", "")
 POLL_INTERVAL_S    = int(os.environ.get("POLL_INTERVAL_S", "180"))     # poll every 3 minutes
@@ -100,6 +133,13 @@ MAX_DAILY_LOSS_USD   = float(os.environ.get("MAX_DAILY_LOSS_USD", "100.0"))
 MAX_ORDERS_PER_DAY   = int(os.environ.get("MAX_ORDERS_PER_DAY", "25"))
 MAX_DAILY_NOTIONAL   = float(os.environ.get("MAX_DAILY_NOTIONAL_USD", "1500.0"))
 MAX_PER_SCAN         = int(os.environ.get("MAX_PER_SCAN", "3"))
+
+# Symbols that must NEVER be held overnight — 0DTE options only, no equity route.
+# Mirrors IAM_ODTE_ONLY_SYMBOLS in iam_executor.py (same operator rule: IWM is
+# same-day options only, never purchased for next-day-or-later).
+ODTE_ONLY_SYMBOLS = {
+    s.strip().upper() for s in os.environ.get("ROBINHOOD_ODTE_ONLY_SYMBOLS", "IWM").split(",") if s.strip()
+}
 
 # ── State ──────────────────────────────────────────────────────────────────────
 _rh_logged_in   = False
@@ -381,6 +421,66 @@ def _discord(symbol: str, side: str, qty: int, price: float, sml: dict, result: 
         logger.warning(f"[Discord] Failed: {e}")
 
 
+def _direction_gates_pass(symbol: str, side: str, log_prefix: str = "EXEC") -> bool:
+    """
+    Shared pre-trade direction gates — 741 macro regime, 365-day EMA anchor,
+    Proprietary 5-EMA stack, and dark-pool volume (321 anchor). Used by both
+    the equity path (_execute) and the options path (_execute_option) so a
+    contract buy is never allowed to skip checks a share buy would have to
+    pass. All gates fail OPEN (never block) on missing secrets or fetch
+    errors — an unreachable check must never widen what already blocked.
+    Returns True if the trade may proceed.
+    """
+    # ── 741 Pure Macro Matrix gate (BUY only) ────────────────────────────────
+    if side == "buy":
+        macro = _get_macro_regime(symbol)
+        if macro == "PERFECT_BEARISH_REGIME":
+            logger.warning(f"[{log_prefix}] {symbol} BUY blocked — 741 macro regime is PERFECT_BEARISH_REGIME")
+            return False
+        logger.info(f"[{log_prefix}] {symbol} macro regime={macro} — BUY allowed")
+
+        # ── 365-day EMA anchor gate (BUY only) ───────────────────────────────
+        anchor365 = _get_365_anchor(symbol)
+        if anchor365 == "BELOW":
+            logger.warning(f"[{log_prefix}] {symbol} BUY blocked — price is BELOW the 365-day EMA anchor")
+            return False
+        logger.info(f"[{log_prefix}] {symbol} 365-day anchor={anchor365} — BUY allowed")
+
+    # ── Proprietary 5-EMA Stack + Dark-Pool Volume (321) Guardrails ─────────
+    try:
+        url = f"{SQUEEZEOS_API_URL}/api/ema/{symbol}"
+        req = URLRequest(url, headers={"User-Agent": "SqueezeOS-RH-Executor/2.0"})
+        with urlopen(req, timeout=10) as resp:
+            ema_data = json.loads(resp.read())
+
+        if ema_data.get("status") == "success":
+            suite = ema_data.get("ema_suite", {})
+            e5 = suite.get("engine_5", {})
+            e5_signal = e5.get("signal", "")
+            if side == "buy" and e5_signal == "BEAR_STACK_5EMA":
+                logger.warning(f"[{log_prefix}] {symbol} blocked — Proprietary 5-EMA stack is BEARISH")
+                return False
+            if side == "sell" and e5_signal == "BULL_STACK_5EMA":
+                logger.warning(f"[{log_prefix}] {symbol} blocked — Proprietary 5-EMA stack is BULLISH")
+                return False
+
+            # Engine 3 — dark-pool volume kinetics (the "321" anchor). Volume
+            # distribution (mirror_lock_bear) on a BUY, or fresh accumulation
+            # (mirror_lock_bull) on a SELL/close, is the same "don't fight the
+            # tape" logic already applied to Engine 5 above.
+            e3 = suite.get("engine_3", {})
+            if side == "buy" and (e3.get("mirror_lock_bear") or e3.get("signal") == "DISTRIBUTION"):
+                logger.warning(f"[{log_prefix}] {symbol} blocked — dark-pool volume (321) shows DISTRIBUTION")
+                return False
+            if side == "sell" and e3.get("signal") in ("DARK_POOL_CEILING_BREACH", "DARK_POOL_ACCUMULATION"):
+                logger.warning(f"[{log_prefix}] {symbol} blocked — dark-pool volume (321) shows active ACCUMULATION")
+                return False
+    except Exception as e:
+        logger.warning(f"[{log_prefix}] Proprietary 5-EMA/321 check failed for {symbol}: {e}")
+
+    return True
+
+
 # ── Order execution ────────────────────────────────────────────────────────────
 def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
     """scan_counter is a single-element list [n] so callers can track per-scan count."""
@@ -408,39 +508,19 @@ def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
         logger.info(f"[EXEC] {symbol} god_stacked={god_count} < {MIN_GOD_STACKED} — skip")
         return
 
-    # ── 741 Pure Macro Matrix gate (BUY only) ────────────────────────────────
-    if side == "buy":
-        macro = _get_macro_regime(symbol)
-        if macro == "PERFECT_BEARISH_REGIME":
-            logger.warning(f"[EXEC] {symbol} BUY blocked — 741 macro regime is PERFECT_BEARISH_REGIME")
-            return
-        logger.info(f"[EXEC] {symbol} macro regime={macro} — BUY allowed")
+    if not _direction_gates_pass(symbol, side, log_prefix="EXEC"):
+        return
 
-    # ── Proprietary 5-EMA Stack Guardrail ───────────────────────────────────
-    try:
-        url = f"{SQUEEZEOS_API_URL}/api/ema/{symbol}"
-        req = URLRequest(url, headers={"User-Agent": "SqueezeOS-RH-Executor/2.0"})
-        with urlopen(req, timeout=10) as resp:
-            ema_data = json.loads(resp.read())
-            
-        if ema_data.get("status") == "success":
-            e5 = ema_data.get("ema_suite", {}).get("engine_5", {})
-            e5_signal = e5.get("signal", "")
-            if side == "buy" and e5_signal == "BEAR_STACK_5EMA":
-                logger.warning(f"[EXEC] {symbol} blocked — Proprietary 5-EMA stack is BEARISH")
-                return
-            if side == "sell" and e5_signal == "BULL_STACK_5EMA":
-                logger.warning(f"[EXEC] {symbol} blocked — Proprietary 5-EMA stack is BULLISH")
-                return
-    except Exception as e:
-        logger.warning(f"[EXEC] Proprietary 5-EMA check failed for {symbol}: {e}")
-
-    # IWM trades 0DTE options only — never buy shares. Alert and stop here.
-    if symbol == "IWM":
+    # 0DTE-only symbols (IWM) trade options only — never buy shares. The beastmode
+    # poll routes these through _execute_option() with a real sniper contract
+    # before ever reaching this function; this branch only exists as a fallback
+    # for the TV webhook / oracle poll paths, which don't have a server-selected
+    # contract available, so they can only alert rather than auto-execute.
+    if symbol in ODTE_ONLY_SYMBOLS:
         if now - last >= COOLDOWN_S:
             _last_execution[symbol] = now
             _save_last_execution(_last_execution)
-            logger.info(f"[EXEC] IWM GOD MODE {god_count}/6 — 0DTE OPTIONS ALERT ONLY (no share order)")
+            logger.info(f"[EXEC] {symbol} GOD MODE {god_count}/6 — 0DTE OPTIONS ALERT ONLY (no sniper contract available on this path)")
             try:
                 price = 0.0
                 import robin_stocks.robinhood as rh
@@ -562,6 +642,156 @@ def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
     _discord(symbol, side, qty, price, sml, result)
 
 
+ROBINHOOD_OPTION_QTY = int(os.environ.get("ROBINHOOD_OPTION_QTY", "1"))
+
+
+def _discord_option(symbol: str, option_type: str, sniper: dict, qty: int, limit_price: float, sml: dict, result: dict):
+    if not _DISCORD_URL:
+        return
+    mode   = "📋 PAPER" if PAPER_MODE else "🔴 LIVE"
+    placed = result.get("placed") or result.get("paper")
+    error  = result.get("error")
+    status = "✅ EXECUTED" if placed else (f"❌ {error}" if error else "⏭️ SKIPPED")
+    payload = {"embeds": [{"title": f"⚡ GOD MODE {option_type.upper()} — {symbol} [{mode}]",
+        "color": 0x00FF66 if placed else 0xFF0055,
+        "fields": [
+            {"name": "Status",     "value": status,                                                     "inline": True},
+            {"name": "Mode",       "value": mode,                                                        "inline": True},
+            {"name": "Contract",   "value": f"{qty}x {symbol} {sniper.get('strike')}{option_type[0].upper()} {sniper.get('expiration')} @ ${limit_price:.2f}", "inline": False},
+            {"name": "Delta",      "value": str(sniper.get("delta", "—")),                                "inline": True},
+            {"name": "SET9 Stacked","value": f"{sml.get('god_stacked',0)}/6",                            "inline": True},
+        ],
+        "footer": {"text": "ScriptMaster Labs | SqueezeOS | Robinhood Executor"},
+        "timestamp": datetime.now().isoformat(),
+    }]}
+    try:
+        import urllib.request as _ul
+        data = json.dumps(payload).encode()
+        req  = _ul.Request(_DISCORD_URL, data=data, headers={"Content-Type": "application/json"})
+        with _ul.urlopen(req, timeout=8):
+            pass
+    except Exception as e:
+        logger.warning(f"[Discord] Option alert failed: {e}")
+
+
+def _execute_option(symbol: str, option_type: str, sml: dict, sniper: dict, scan_counter: list):
+    """
+    Buy-to-open a single option contract on Robinhood using the contract already
+    selected server-side (core/convergence_engine.py's scan_options() — same
+    0.35-0.45 delta bracket logic Tradier execution uses). We never re-derive
+    strike/expiration/delta locally: the server picked one specific listed
+    contract, and that's the one we place on Robinhood — same underlying,
+    same exchange-standardized strike/expiration, different broker.
+
+    Only ever buy_to_open. No naked options, no selling to open, no shorting.
+    """
+    global _orders_today, _daily_notional_usd
+    if _circuit_open():
+        return
+    if symbol in _BLOCKLIST:
+        logger.warning(f"[EXEC-OPT] {symbol} is on the blocklist — skip")
+        return
+    if scan_counter[0] >= MAX_PER_SCAN:
+        logger.info(f"[EXEC-OPT] {symbol} — per-scan batch limit {MAX_PER_SCAN} reached, deferring")
+        return
+    if sniper.get("error"):
+        logger.info(f"[EXEC-OPT] {symbol} {option_type} — no contract available: {sniper['error']}")
+        return
+
+    strike     = sniper.get("strike")
+    expiration = sniper.get("expiration")
+    ask        = sniper.get("ask") or sniper.get("premium")
+    try:
+        strike = float(strike)
+        ask    = float(ask)
+    except (TypeError, ValueError):
+        strike = None
+        ask    = 0.0
+
+    if not strike or not expiration or ask <= 0:
+        logger.warning(f"[EXEC-OPT] {symbol} {option_type} — incomplete contract from server (strike={strike} exp={expiration} ask={ask}) — skip")
+        return
+
+    # Same direction gates as the equity path (741 macro / 365 anchor / 5-EMA /
+    # 321 dark-pool volume). A call is a bullish bet same as a share buy, so it
+    # goes through the "buy" gates. A put is the bearish/protective side — those
+    # same bearish-blocking gates would be backwards here, so puts skip them
+    # entirely (mirrors how _execute()'s "sell" side only gets the inverse checks).
+    if option_type == "call" and not _direction_gates_pass(symbol, "buy", log_prefix="EXEC-OPT"):
+        return
+
+    if not _pdt_allowed():
+        return
+
+    now = time.time()
+    _last_execution[symbol] = now
+    _save_last_execution(_last_execution)
+
+    qty         = ROBINHOOD_OPTION_QTY
+    limit_price = round(ask * 1.05, 2)   # 5% above ask, matches Tradier route's slippage buffer
+    cost        = limit_price * 100 * qty
+
+    with _lock:
+        remaining_notional = MAX_DAILY_NOTIONAL - _daily_notional_usd
+    if cost > remaining_notional:
+        logger.warning(f"[EXEC-OPT] {symbol} {option_type} — ${cost:.2f} would exceed remaining daily notional budget (${remaining_notional:.2f} left), skipping")
+        return
+
+    logger.info(
+        f"[EXEC-OPT] RH GOD MODE — BUY {qty}x {symbol} {strike}{option_type[0].upper()} "
+        f"{expiration} @ ${limit_price:.2f} limit | delta={sniper.get('delta')}"
+    )
+
+    result = {}
+    if PAPER_MODE:
+        logger.info(f"[PAPER] Would BUY {qty}x {symbol} {strike}{option_type[0].upper()} {expiration} @ ${limit_price:.2f}")
+        result = {"paper": True}
+        scan_counter[0] += 1
+        with _lock:
+            _orders_today += 1
+            _daily_notional_usd += cost
+    else:
+        if not _ensure_login():
+            result = {"error": "login_failed"}
+        else:
+            try:
+                import robin_stocks.robinhood as rh
+                r = rh.orders.order_buy_option_limit(
+                    positionEffect="open",
+                    creditOrDebit="debit",
+                    price=limit_price,
+                    symbol=symbol,
+                    quantity=qty,
+                    expirationDate=expiration,
+                    strike=strike,
+                    optionType=option_type,
+                    timeInForce="gtc",
+                )
+                logger.info(f"[RH] Raw option response for {symbol}: {r}")
+                rh_state = (r or {}).get("state", "") if isinstance(r, dict) else ""
+                order_id = str((r or {}).get("id", "") or (r or {}).get("order_id", "") or "no-id") if isinstance(r, dict) else "no-id"
+                _GOOD_STATES = {"confirmed", "queued", "unconfirmed", "partially_filled", "filled"}
+                if rh_state in _GOOD_STATES or (isinstance(r, dict) and "id" in r):
+                    logger.info(f"[RH] Option order confirmed {symbol} {option_type} x{qty} | id={order_id} state={rh_state}")
+                    result = {"placed": True, "raw": r}
+                    scan_counter[0] += 1
+                    with _lock:
+                        _orders_today += 1
+                        _daily_notional_usd += cost
+                else:
+                    err_detail = (r or {}).get("detail", "") if isinstance(r, dict) else str(r)
+                    logger.error(f"[RH] Option order NOT confirmed {symbol} {option_type}: {err_detail}")
+                    result = {"error": err_detail or "unknown", "raw": r}
+            except Exception as e:
+                err = str(e)
+                logger.error(f"[RH] Option order error: {err}")
+                if "logged in" in err.lower():
+                    _invalidate_login()
+                result = {"error": err}
+
+    _discord_option(symbol, option_type, sniper, qty, limit_price, sml, result)
+
+
 # ── Beastmode poll (server-side SET9 convergence scanner) ─────────────────────
 def _poll_beastmode() -> int:
     """Returns number of orders placed this poll. 0 = no signals or all filtered."""
@@ -599,6 +829,7 @@ def _poll_beastmode() -> int:
     for hit in signals:
         symbol  = (hit.get("symbol") or "").upper().strip()
         sml     = hit.get("sml_matrix") or {}
+        sniper  = hit.get("options_sniper") or {}
         tier    = sml.get("tier", "")
         stacked = sml.get("god_stacked", 0)
         signal  = sml.get("signal", "")
@@ -625,7 +856,7 @@ def _poll_beastmode() -> int:
             skipped["cooldown"] += 1
             logger.info(f"[POLL] {symbol} {effective_tier} {stacked}/6 — cooldown {int(cooldown_remaining)}s left")
             continue
-        god_hits.append((symbol, sml, effective_tier))
+        god_hits.append((symbol, sml, effective_tier, sniper))
 
     logger.info(
         f"[POLL] beastmode: {len(signals)} raw | {len(god_hits)} ready | "
@@ -639,14 +870,34 @@ def _poll_beastmode() -> int:
 
     scan_counter = [0]
     deferred     = 0
-    for symbol, sml, tier_label in god_hits:
+    for symbol, sml, tier_label, sniper in god_hits:
         signal = sml.get("signal", "")
-        side   = "buy" if "BULL" in signal or signal in ("BEASTMODE", "GOD_MODE", "DUAL_GRID_LOCK") else "sell"
+        # Explicit bear check rather than an incomplete bull allowlist: the
+        # harmonic engine's 3-stack bull label ("INSTITUTIONAL_CONVERGENCE")
+        # has no "_BULL" suffix unlike the 4/6-stack labels, so checking for
+        # "BULL in signal or signal in (...)" silently misread it as bearish.
+        # Every bear label is consistently suffixed "_BEAR" — check that instead.
+        is_bear = "BEAR" in signal
+        side    = "sell" if is_bear else "buy"
         if scan_counter[0] >= MAX_PER_SCAN:
             deferred += 1
             continue
         logger.info(f"[POLL] {tier_label}: {symbol} {side.upper()} stacked={sml.get('god_stacked',0)}/6")
+
+        if symbol in ODTE_ONLY_SYMBOLS:
+            # 0DTE-only symbols (IWM) never get an equity order — the sniper
+            # contract the server already selected (forced same-day expiry for
+            # these symbols) is the only route in or out.
+            option_type = "put" if is_bear else "call"
+            _execute_option(symbol, option_type, sml, sniper, scan_counter)
+            continue
+
         _execute(symbol, side, sml, scan_counter)
+        if is_bear:
+            # Protect gains + treat the reversal as a PUT opportunity — mirrors
+            # core/api/convergence_bp.py's bear leg (close existing long, then
+            # buy the put), now on the Robinhood path too.
+            _execute_option(symbol, "put", sml, sniper, scan_counter)
 
     if deferred:
         logger.info(f"[POLL] {deferred} signal(s) deferred — per-scan limit {MAX_PER_SCAN} reached (next cycle)")
