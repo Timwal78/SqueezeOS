@@ -585,7 +585,8 @@ class TruthLayer:
         pressures     = {}
         total_stress  = 0.0
         weight_sum    = 0.0
-        data_quality  = "LIVE"
+        live_count    = 0
+        no_data_count = 0
 
         for name, result in results.items():
             w = _COMMITTEE_WEIGHTS.get(name, 0.1)
@@ -594,13 +595,30 @@ class TruthLayer:
                 "label":       result.label,
                 "data_quality": result.data_quality,
             }
+            if result.data_quality == "NO_DATA":
+                # Analysts without real data return a fixed 50.0 pressure
+                # placeholder (see e.g. VolatilityObligationAnalyst.analyze's
+                # INSUFFICIENT_DATA branch) — that's a sentinel for "no
+                # opinion," not a real mid-scale stress reading. Blending it
+                # into the weighted average would fabricate system stress out
+                # of missing data (every symbol converging toward the same
+                # placeholder-driven number regardless of real conditions is
+                # exactly what happened before this fix). Excluded entirely.
+                no_data_count += 1
+                continue
             total_stress += result.pressure * w
             weight_sum   += w
-            if result.data_quality == "NO_DATA":
-                data_quality = "PARTIAL"
+            live_count   += 1
 
         weighted_stress = (total_stress / weight_sum) if weight_sum > 0 else 0.0
         time_window     = _classify_time_window(weighted_stress)
+
+        if live_count == 0:
+            data_quality = "NO_DATA"
+        elif no_data_count > 0:
+            data_quality = "PARTIAL"
+        else:
+            data_quality = "LIVE"
 
         return {
             "obligations":       pressures,
@@ -608,6 +626,7 @@ class TruthLayer:
             "directional_bias":  "NONE",   # Truth Layer is always directionally neutral
             "time_window":       time_window,
             "data_quality":      data_quality,
+            "live_analyst_count": live_count,
         }
 
 
@@ -634,6 +653,18 @@ class ActionResolutionOracle:
         if truth["total_system_stress"] < 15:
             return self._no_action(symbol, price, truth,
                                    "System stress below resolution threshold — no obligation active.")
+
+        # Refuse to resolve a mandatory action from data that mostly isn't
+        # there. TruthLayer.aggregate() now excludes NO_DATA analysts from
+        # the weighted stress instead of blending in their placeholder
+        # pressure, but if too few analysts actually had real data, the
+        # remaining "stress" is a thin, unreliable read — resolving BUY/SELL
+        # from it would be fabricating a live-money directive out of
+        # insufficient information, not a real obligation.
+        if truth.get("data_quality") == "NO_DATA" or truth.get("live_analyst_count", 0) < 2:
+            return self._no_action(symbol, price, truth,
+                                   f"Insufficient live data ({truth.get('live_analyst_count', 0)} of "
+                                   f"{len(analyst_results)} analysts had real data) — cannot resolve a real obligation.")
 
         # Step 1: Project stress reduction for each candidate action
         candidates = {}

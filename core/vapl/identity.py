@@ -110,9 +110,11 @@ class ProvenanceSoul:
         )
 
 
-def generate_soul() -> ProvenanceSoul:
-    priv = Ed25519PrivateKey.generate()
-    priv_bytes = priv.private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption())
+def _soul_from_private_key_bytes(priv_bytes: bytes, created_at: str | None = None) -> ProvenanceSoul:
+    """Deterministically rebuild a ProvenanceSoul from a raw 32-byte Ed25519
+    private key. The public key, DID, and multibase encoding are all derived
+    from the private key, so the same key always reconstructs the same soul."""
+    priv = Ed25519PrivateKey.from_private_bytes(priv_bytes)
     pub_bytes = priv.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
     did = public_key_bytes_to_did(pub_bytes)
     key_id = did[len('did:key:'):]
@@ -123,5 +125,16 @@ def generate_soul() -> ProvenanceSoul:
         public_key_bytes=pub_bytes,
         private_key_bytes=priv_bytes,
         public_key_multibase=multibase,
-        created_at=datetime.now(timezone.utc).isoformat(),
+        created_at=created_at or datetime.now(timezone.utc).isoformat(),
     )
+
+
+def soul_from_private_key_b64(key_b64: str) -> ProvenanceSoul:
+    """Rebuild the persistent service soul from VAPL_SOUL_PRIVATE_KEY_B64."""
+    return _soul_from_private_key_bytes(_b64url_decode(key_b64))
+
+
+def generate_soul() -> ProvenanceSoul:
+    priv = Ed25519PrivateKey.generate()
+    priv_bytes = priv.private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption())
+    return _soul_from_private_key_bytes(priv_bytes)
