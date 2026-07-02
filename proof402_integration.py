@@ -39,6 +39,8 @@ _PAYMENT_PRICES = {
     '/api/signals/triplelock': 0.05,
     '/api/signals/full':       0.10,
     '/api/cascade/signal':     0.25,
+    '/api/triple-lock':        0.25,
+    '/api/iam':                0.05,  # /api/iam/<symbol> — path param, priced here for Discord notify only
     '/api/ccs/validate':       0.01,
     '/api/compliance/anomaly': 5.00,
     '/api/compliance/audit':   5.00,
@@ -99,10 +101,17 @@ ENDPOINTS = {
     '/api/signals/full':       'b8c9d0e1-f2a3-4567-89ab-234567890123',  # 0.10 RLUSD
     # CASCADE ACCUMULATOR — execution tier
     '/api/cascade/signal':     'c4sc4de1-8f2a-4b3e-9c1d-5e6f7a8b9c0d',  # 0.25 RLUSD
+    # TRIPLE_LOCK_VERDICT — was documented in .well-known/agents.json with no
+    # endpoint_id at all (no RLUSD rail existed for this route until the
+    # dual_payment fix below). Minted here as the source of truth.
+    '/api/triple-lock':        '9d8c7b6a-5f4e-3d2c-1b0a-9c8d7e6f5a4b',  # 0.25 RLUSD
     # Oracle routes use path params so payment is verified inline in oracle_data_bp.py:
     # '/api/oracle/latest/<feed>'  → ORACLE_READ_ENDPOINT_ID   e7f8a9b0-...  0.02 RLUSD
     # '/api/oracle/query'          → ORACLE_READ_ENDPOINT_ID   e7f8a9b0-...  0.02 RLUSD
     # '/api/oracle/stream'         → ORACLE_STREAM_ENDPOINT_ID f8a9b0c1-...  0.05 RLUSD
+    # /api/iam/<symbol> uses a path param so its endpoint_id (matching the
+    # iam_resolve MCP tool description, mcp_bp.py:869) is passed explicitly to
+    # dual_payment() in iam_bp.py rather than looked up here by path.
 }
 
 
@@ -412,6 +421,66 @@ def require_payment(f):
         return jsonify(body), 402
 
     return decorated
+
+
+def dual_payment(price_usdc: str, description: str, rlusd_endpoint_id: str = None):
+    """
+    Accept EITHER Coinbase/USDC (x402 X-PAYMENT header, verified via the CDP
+    facilitator) OR RLUSD/XRPL (X-Payment-Token, this module's own flow) on
+    the same route. Coinbase/USDC is checked first and is the default rail;
+    falls through to the RLUSD flow only when no X-PAYMENT header is present.
+
+    Fixes a real bug found in production: /api/council, /api/scan,
+    /api/options, /api/iwm, /api/iam/<symbol>, and /api/triple-lock were
+    gated by x402_flask.x402_guard alone, which only checks X-PAYMENT — every
+    manifest and MCP tool description tells agents to pay via the RLUSD/XRPL
+    flow, so an agent that faithfully paid that way and retried with a valid
+    X-Payment-Token got rejected forever, because the token was never checked.
+
+    rlusd_endpoint_id defaults to ENDPOINTS.get(request.path), which works
+    for static paths. Pass it explicitly for path-param routes (e.g.
+    /api/iam/<symbol>) where request.path can't be a dict key ahead of time —
+    mirrors the inline _gate() pattern oracle_data_bp.py already uses for the
+    same reason.
+    """
+    def decorator(f):
+        from x402_flask import x402_guard  # lazy: x402_flask imports ENDPOINTS from here
+        usdc_gated = x402_guard(price_usdc, description)(f)
+
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            if request.headers.get("X-PAYMENT"):
+                return usdc_gated(*args, **kwargs)
+
+            token = request.headers.get("X-Payment-Token")
+            if not token:
+                return usdc_gated(*args, **kwargs)  # no token either — let x402_guard issue the 402
+
+            endpoint_id = rlusd_endpoint_id or ENDPOINTS.get(request.path)
+            if not endpoint_id:
+                return usdc_gated(*args, **kwargs)
+
+            result = _verify_token_local(token)
+            if not result.get("valid"):
+                reason = result.get("reason", "ERR_TOKEN_INVALID")
+                resp = {"error": reason, "message": _ERROR_MESSAGES.get(reason, "Token rejected.")}
+                if reason == "ERR_TOKEN_EXPIRED":
+                    resp["expired_at"] = result.get("expired_at")
+                return jsonify(resp), 401
+            if result.get("endpoint_id") != endpoint_id:
+                return jsonify({
+                    "error":   "ERR_ENDPOINT_MISMATCH",
+                    "message": "Token was issued for a different endpoint.",
+                    "remedy":  f"Obtain a new invoice for {request.path} at {PROOF402_SERVER}/v1/invoice",
+                }), 401
+
+            wallet = result.get("wallet", "")
+            _g.proof402_wallet      = wallet
+            _g.proof402_endpoint_id = endpoint_id
+            _fire_payment_discord(wallet, request.path, 2)
+            return f(*args, **kwargs)
+        return wrapper
+    return decorator
 
 
 # ── Usage — drop into api_v2.py ───────────────────────────────────────────────

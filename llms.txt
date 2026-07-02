@@ -10,8 +10,8 @@ This repository is part of the ScriptMasterLabs sovereign AI ecosystem.
 - Agent quickstart: https://www.scriptmasterlabs.com/agent-start.html
 - OpenAPI spec: https://www.scriptmasterlabs.com/.well-known/openapi.json
 - MCP server: https://squeezeos-api.onrender.com/mcp
-- Credit score / ARGUS: https://squeezeos-api.onrender.com/api/credit-score
-- Preflight quote: https://squeezeos-api.onrender.com/x402/quote
+- Credit score / ARGUS: https://four02proof.onrender.com/v1/bureau/score/{wallet}
+- Preflight quote: https://ghost-layer.onrender.com/v1/x402/quote
 
 ## Payment
 
