@@ -12,10 +12,12 @@
 // filter, HH/HL swing-structure filter (complements ADX — catches trend
 // breaks that magnitude-only ADX misses), higher-timeframe (default 4H)
 // trend alignment filter, a confirmed-bar-only signal gate to eliminate
-// intrabar repaint, an ATR stop-loss on the performance tracker
-// (previously every signal rode the full prediction horizon uncut, the
-// single biggest driver of max drawdown), and a max-concurrent-signals
-// cap to stop correlated losers from stacking on fast-moving symbols.
+// intrabar repaint, a timeframe-auto-scaled ATR stop-loss on the
+// performance tracker (previously every signal rode the full prediction
+// horizon uncut, the single biggest driver of max drawdown — and a fixed
+// stop multiple tuned on one timeframe was found to gut the edge on a
+// faster one), and a max-concurrent-signals cap to stop correlated
+// losers from stacking on fast-moving symbols.
 indicator("SML Cascade Classifier", shorttitle="SML-Cascade", overlay=true, max_bars_back=500, max_labels_count=500, max_lines_count=500, max_boxes_count=500)
 // ═══════════════════════════════════════════════════════════════════════════════
 //
@@ -78,7 +80,8 @@ i_requireStructure = input.bool(true, "Require HH/HL Swing Structure", group=grp
 i_pivotLen    = input.int(5, "Structure Pivot Bars (L/R)", minval=2, maxval=20, group=grp_regime, tooltip="Bars on each side required to confirm a swing pivot. Lower = more responsive but noisier; higher = fewer, more reliable pivots.")
 grp_risk = "🛡 Risk Management"
 i_useStopLoss  = input.bool(true, "Use ATR Stop-Loss", group=grp_risk, tooltip="SML addition: the original performance tracker held every signal for the full Prediction Horizon with no exit — a trade that moved hard against you rode the entire horizon before closing, which is the single biggest driver of max drawdown. Now every open signal is checked every bar for a stop-loss hit and exits immediately at the stop instead of waiting.")
-i_stopAtrMult  = input.float(1.5, "Stop-Loss ATR Multiple", minval=0.5, maxval=5.0, step=0.25, group=grp_risk, tooltip="Stop distance = entry price ± (ATR × this multiple) at the time of entry.")
+i_stopAtrMult  = input.float(1.5, "Base Stop-Loss ATR Multiple (65m reference)", minval=0.5, maxval=5.0, step=0.25, group=grp_risk, tooltip="Stop distance = entry price ± (ATR × effective multiple) at the time of entry. This is the base multiple; see Auto-Scale below.")
+i_autoScaleStop = input.bool(true, "Auto-Scale Stop by Timeframe", group=grp_risk, tooltip="SML addition: a fixed ATR stop multiple tuned on one timeframe doesn't transfer 1:1 to another. Lower timeframes are proportionally noisier relative to their own ATR, so a stop tuned on 65m (1.5x) is too tight on 15m — it was found to cut winners short before the prediction horizon could play out, flipping a profitable 15m result into a net loser. Scales the base multiple wider on faster charts and tighter on slower ones, using 65m as the reference point. Turn off to use the base multiple unscaled on every timeframe.")
 i_maxConcurrent = input.int(3, "Max Concurrent Open Signals", minval=1, maxval=20, group=grp_risk, tooltip="SML addition: caps how many overlapping trades can be open at once. Without this, several signals can stack against you simultaneously on a fast-moving symbol, turning one bad move into several correlated losers at once — a major contributor to drawdown spikes.")
 grp_flow = "🔬 Flow Intelligence"
 i_fpEnabled    = input.bool(true, "Enable Footprint Data", group=grp_flow)
@@ -143,6 +146,18 @@ bool htfRising = htfEma > htfEmaPrev
 bool htfFalling = htfEma < htfEmaPrev
 bool htfGateLong = not i_requireHTF or (close > htfEma and htfRising)
 bool htfGateShort = not i_requireHTF or (close < htfEma and htfFalling)
+
+// SML addition: timeframe-aware stop scaling. 65 minutes is the reference point
+// (base multiple applies unscaled there); faster charts get a wider multiple
+// since their bars are proportionally noisier relative to their own ATR, slower
+// charts get a tighter one. Clamped to [0.75x, 3.0x] to avoid extremes on very
+// fast (1m) or very slow (Weekly+) charts.
+f_effStopMult() =>
+    float refSec = 3900.0
+    float tfSec = timeframe.in_seconds()
+    float scaled = i_stopAtrMult * math.pow(refSec / tfSec, 0.3)
+    math.max(0.75, math.min(scaled, 3.0))
+float effStopAtrMult = i_autoScaleStop ? f_effStopMult() : i_stopAtrMult
 
 // SML addition: HH/HL (and LH/LL) swing-structure filter. Complementary to ADX —
 // ADX is magnitude-only and lags a reversal, while a broken pivot structure often
@@ -368,7 +383,7 @@ if first_long or first_short
     // SML addition: stop distance fixed at entry-bar ATR, not recalculated later —
     // matches how a real stop order would be placed and avoids the stop silently
     // widening/tightening after the fact as volatility changes.
-    float stopDist = atr14 * i_stopAtrMult
+    float stopDist = atr14 * effStopAtrMult
     array.push(signal_stop, first_long ? close - stopDist : close + stopDist)
 if array.size(signal_bars) > 0
     for i = array.size(signal_bars) - 1 to 0
@@ -675,7 +690,7 @@ if barstate.islast and i_dashEnable
         table.cell(dash, 0, r, "Open", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
         table.cell(dash, 1, r, str.tostring(openCount, "#") + "/" + str.tostring(i_maxConcurrent, "#"), text_color=openCol, bgcolor=C_PANEL, text_size=size.tiny)
         table.cell(dash, 2, r, "Stop", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
-        table.cell(dash, 3, r, i_useStopLoss ? str.tostring(i_stopAtrMult, "#.##") + "x ATR" : "Off", text_color=i_useStopLoss ? C_GREEN : C_RED, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 3, r, i_useStopLoss ? str.tostring(effStopAtrMult, "#.##") + "x ATR" : "Off", text_color=i_useStopLoss ? C_GREEN : C_RED, bgcolor=C_PANEL, text_size=size.tiny)
         r += 1
         table.cell(dash, 0, r, "─────────────────", text_color=color.new(colAccent, 60), bgcolor=color.new(#1A1A1A, 40), text_size=size.tiny, text_halign=text.align_center)
         table.merge_cells(dash, 0, r, 3, r)
