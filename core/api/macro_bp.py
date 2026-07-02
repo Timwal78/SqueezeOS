@@ -113,3 +113,19 @@ def macro_single(symbol: str):
         return jsonify({"error": "unauthorized"}), 403
     result = _compute_regime(symbol.upper().strip())
     return jsonify({"status": "success", **result})
+
+
+@macro_bp.route("/anchor365/<symbol>", methods=["GET"])
+def anchor_365_single(symbol: str):
+    """
+    Internal executor gate for the 365-day EMA anchor — requires X-Macro-Secret
+    header, same secret as /macro/<symbol>. Not a public product; the paid
+    version is GET /api/signals/365/<symbol> (x402, 0.03 RLUSD) in
+    signal_products_bp.py. This route exists ONLY so the Windows Robinhood
+    executor can consult the anchor as a pre-trade gate without paying itself.
+    """
+    if not _SECRET or request.headers.get("X-Macro-Secret") != _SECRET:
+        return jsonify({"error": "unauthorized"}), 403
+    from core.api.signal_products_bp import _get_365_signal
+    result = _get_365_signal(symbol.upper().strip())
+    return jsonify({"status": "success", **result})
