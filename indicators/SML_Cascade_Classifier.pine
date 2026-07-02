@@ -6,6 +6,11 @@
 // other SML Pine source. Core Lorentzian-kernel KNN engine, feature set, and
 // dashboard are unchanged — that's the original engineering worth keeping.
 // Webhook: https://squeezeos-api.onrender.com/api/webhooks/tradingview
+//
+// Institutional-grade additions (tuned for 15m/65m intraday use):
+// order-flow confirmation gate, volatility-regime floor, ADX trend-regime
+// filter, higher-timeframe (default 4H) trend alignment filter, and a
+// confirmed-bar-only signal gate to eliminate intrabar repaint.
 indicator("SML Cascade Classifier", shorttitle="SML-Cascade", overlay=true, max_bars_back=500, max_labels_count=500, max_lines_count=500, max_boxes_count=500)
 // ═══════════════════════════════════════════════════════════════════════════════
 //
@@ -57,6 +62,13 @@ smooth_predictions = input.int(3, "Prediction Smoothing", minval=1, maxval=10, g
 i_cooldown         = input.int(5, "Signal Cooldown (Bars)", minval=1, maxval=50, group=grp_signals)
 i_requireFlowConfirm = input.bool(true, "Require Order-Flow Confirmation", group=grp_signals, tooltip="SML addition: don't just tag confirmed signals, refuse to fire unconfirmed ones. When footprint data is available, a signal must show real absorption/aggression in the predicted direction before it's classified — filters out KNN matches that line up statistically but aren't backed by real order flow.")
 i_minVolRegime        = input.float(0.5, "Min Volatility Regime", minval=0.1, maxval=1.0, step=0.05, group=grp_signals, tooltip="SML addition: skip signals when ATR is compressed below this multiple of its 50-bar average — filters dead/illiquid chop where KNN matches are statistical noise.")
+grp_regime = "🏛 Institutional Regime Filters"
+i_requireADX  = input.bool(true, "Require ADX Trend Regime", group=grp_regime, tooltip="SML addition: refuse to classify when ADX shows a non-trending market. KNN pattern-matching in chop produces statistically 'nearest' neighbors that aren't real trend continuation setups.")
+i_adxLen      = input.int(14, "ADX Length", minval=5, maxval=50, group=grp_regime)
+i_adxMin      = input.float(20.0, "Min ADX", minval=10.0, maxval=40.0, step=1.0, group=grp_regime)
+i_requireHTF  = input.bool(true, "Require Higher-Timeframe Trend Alignment", group=grp_regime, tooltip="SML addition: block counter-trend entries against the higher-timeframe structure. Default 4H suits 15m/65m intraday charts — longs need price above the HTF EMA with the HTF EMA rising, shorts the mirror.")
+i_htfRes      = input.timeframe("240", "Higher Timeframe", group=grp_regime, tooltip="Default 240 (4H). For a 15m chart consider 60-240; for a 65m chart consider 240-D.")
+i_htfEmaLen   = input.int(50, "HTF EMA Length", minval=10, maxval=200, group=grp_regime)
 grp_flow = "🔬 Flow Intelligence"
 i_fpEnabled    = input.bool(true, "Enable Footprint Data", group=grp_flow)
 i_fpTicks      = input.int(100, "Ticks per Row", minval=1, maxval=500, group=grp_flow)
@@ -103,6 +115,23 @@ color colNeutral = i_visualMode == VIS_NEXUS ? C_ELECTRIC : i_visualMode == VIS_
 // ═══════════════════════════════════════════════════════════════════════════════
 float atr14 = ta.atr(14)
 float avgVol = ta.sma(volume, 20)
+// ═══════════════════════════════════════════════════════════════════════════════
+// SML addition: INSTITUTIONAL REGIME FILTERS (ADX + higher-timeframe alignment)
+// Standard institutional practice for intraday KNN/pattern-classification systems:
+// don't trade pattern matches in a non-trending tape, and don't fire counter to
+// the higher-timeframe structure. Both are hard gates on signal generation below.
+// ═══════════════════════════════════════════════════════════════════════════════
+[_diPlus, _diMinus, _adxVal] = ta.dmi(i_adxLen, i_adxLen)
+bool adxConfirmed = not i_requireADX or _adxVal >= i_adxMin
+
+f_htfEma() =>
+    float e = ta.ema(close, i_htfEmaLen)
+    [e, e[1]]
+[htfEma, htfEmaPrev] = request.security(syminfo.tickerid, i_htfRes, f_htfEma(), lookahead=barmerge.lookahead_off)
+bool htfRising = htfEma > htfEmaPrev
+bool htfFalling = htfEma < htfEmaPrev
+bool htfGateLong = not i_requireHTF or (close > htfEma and htfRising)
+bool htfGateShort = not i_requireHTF or (close < htfEma and htfFalling)
 // ═══════════════════════════════════════════════════════════════════════════════
 // FLOW INTELLIGENCE
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -256,14 +285,20 @@ bool flowConfirmsShortDir = ctx.unified_agg < 0.45 or ctx.absorption > 0.5
 // on a confirmation we have no way to compute — fall back to volatility-gated only.
 bool flowGateLong = not i_requireFlowConfirm or not fpAvail or flowConfirmsLongDir
 bool flowGateShort = not i_requireFlowConfirm or not fpAvail or flowConfirmsShortDir
-bool long_raw = prediction > signal_threshold and smooth_confidence > 0.5 and volConfirmed and flowGateLong
-bool short_raw = prediction < -signal_threshold and smooth_confidence > 0.5 and volConfirmed and flowGateShort
+bool long_raw = prediction > signal_threshold and smooth_confidence > 0.5 and volConfirmed and flowGateLong and adxConfirmed and htfGateLong
+bool short_raw = prediction < -signal_threshold and smooth_confidence > 0.5 and volConfirmed and flowGateShort and adxConfirmed and htfGateShort
 var bool prev_long = false
 var bool prev_short = false
 var int lastSignalBar = -9999
 bool cooldownClear = (bar_index - lastSignalBar) >= i_cooldown
-bool first_long = long_raw and not prev_long and cooldownClear
-bool first_short = short_raw and not prev_short and cooldownClear
+// SML fix: gate the actual signal on barstate.isconfirmed. The original fired
+// first_long/first_short on every intrabar tick, meaning a signal could appear
+// then vanish before bar close — a known repaint issue in this class of KNN
+// strategy that inflates backtest win rates with signals that were never live.
+// Alerts already fire on bar close (alert.freq_once_per_bar_close below), but
+// the visual arrow/label/webhook trigger now matches that same guarantee.
+bool first_long = long_raw and not prev_long and cooldownClear and barstate.isconfirmed
+bool first_short = short_raw and not prev_short and cooldownClear and barstate.isconfirmed
 if first_long or first_short
     lastSignalBar := bar_index
 prev_long := long_raw
@@ -449,9 +484,9 @@ int gaugeFill = math.round(smooth_confidence * 15)
 string gaugeStr = ""
 for i = 1 to 15
     gaugeStr += i <= gaugeFill ? "█" : "░"
-var table dash = table.new(f_dashPos(i_dashPos), 4, 22, bgcolor=color.new(C_VOID, 5), border_width=1, border_color=color.new(color.gray, 80), frame_width=2, frame_color=color.new(colAccent, 70))
+var table dash = table.new(f_dashPos(i_dashPos), 4, 23, bgcolor=color.new(C_VOID, 5), border_width=1, border_color=color.new(color.gray, 80), frame_width=2, frame_color=color.new(colAccent, 70))
 if barstate.islast and i_dashEnable
-    table.clear(dash, 0, 0, 3, 21)
+    table.clear(dash, 0, 0, 3, 22)
     int r = 0
     if i_dashSize == DASH_FULL
         table.cell(dash, 0, r, "🌊 SML CASCADE CLASSIFIER" + (fpAvail ? " 🔬" : ""), text_color=color.white, bgcolor=color.new(colAccent, 70), text_size=size.small, text_halign=text.align_center)
@@ -516,6 +551,15 @@ if barstate.islast and i_dashEnable
         table.cell(dash, 1, r, rsiText, text_color=rsiCol, bgcolor=C_PANEL, text_size=size.tiny)
         table.cell(dash, 2, r, "Volume", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
         table.cell(dash, 3, r, volRText, text_color=volRCol, bgcolor=C_PANEL, text_size=size.tiny)
+        r += 1
+        string adxText = str.tostring(_adxVal, "#.#") + (adxConfirmed ? "" : " ✗")
+        color adxCol = adxConfirmed ? C_GREEN : C_RED
+        string htfText = htfGateLong ? "▲ Long OK" : htfGateShort ? "▼ Short OK" : "✗ Blocked"
+        color htfCol = htfGateLong ? colBull : htfGateShort ? colBear : C_RED
+        table.cell(dash, 0, r, "ADX", text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 1, r, adxText, text_color=adxCol, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 2, r, "HTF " + i_htfRes, text_color=color.gray, bgcolor=C_PANEL, text_size=size.tiny)
+        table.cell(dash, 3, r, htfText, text_color=htfCol, bgcolor=C_PANEL, text_size=size.tiny)
         r += 1
         table.cell(dash, 0, r, "─ Flow Intel ─", text_color=C_CYAN, bgcolor=color.new(#1A1A1A, 40), text_size=size.tiny, text_halign=text.align_center)
         table.merge_cells(dash, 0, r, 3, r)
