@@ -44,6 +44,8 @@ import zoneinfo
 from datetime import datetime, timezone, timedelta, time as _dtime
 from typing import Optional
 
+from core.execution_lock import claim_entry
+
 logger = logging.getLogger("IAM-EXEC")
 
 def _get_macro_regime(symbol: str) -> str:
@@ -243,6 +245,13 @@ def _execute_tradier(sym: str, action: str, resolution: dict, price: float) -> d
             results["put"] = {"status": "skipped", "message": f"{sym} is 0DTE-only; no same-day options in extended hours"}
         elif _is_extended_hours():
             results["put"] = {"status": "skipped", "message": "options unavailable in extended hours"}
+        elif not claim_entry(sym, "PUT_ENTRY", "iam_executor"):
+            # A put buy-to-open has no natural cap the way the equity close above
+            # does (that's self-correcting — both engines check the real, shared
+            # Tradier account before selling). core/api/convergence_bp.py already
+            # claimed this leg this window.
+            logger.info(f"[IAM-EXEC] {sym} PUT entry already claimed by another engine this window — skipping")
+            results["put"] = {"status": "skipped", "message": "claimed by another engine"}
         else:
             expiry_override = 0 if is_odte else None
             results["put"] = _execute_tradier_options(sym, action, resolution, price, expiry_days_override=expiry_override)
@@ -255,6 +264,14 @@ def _execute_tradier(sym: str, action: str, resolution: dict, price: float) -> d
         results["status"] = "success" if (close_ok or put_ok) else put_result.get("status", "error")
         results["placed"] = close_ok or put_ok
         return results
+
+    # ── BUY entry — equity buy or call buy-to-open, whichever route is taken
+    # below. Claimed once here (not per-branch) since every path past this
+    # point for a BUY action opens a fresh long. core/api/convergence_bp.py's
+    # own GOD_MODE gate trades the same Tradier account independently.
+    if not claim_entry(sym, "LONG_ENTRY", "iam_executor"):
+        logger.info(f"[IAM-EXEC] {sym} LONG entry already claimed by another engine this window — skipping")
+        return {"status": "skipped", "message": "claimed by another engine"}
 
     if is_odte:
         # No equity fallback for these symbols under any circumstance — if same-day
