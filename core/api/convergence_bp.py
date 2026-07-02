@@ -25,7 +25,11 @@ convergence_bp = Blueprint("convergence", __name__)
 # HTTP request caused 30s+ hangs and Render health-check crash loops.
 # Instead, a background thread refreshes this cache on an interval and the
 # /beastmode route returns it instantly.
-_beast_cache = {"hits": [], "ts": 0, "tf": "1D", "progress": {"done": 0, "total": 0}}
+# Default DUAL_LOCK/GOD_MODE scan timeframe — operator-preferred 65Min (65-minute
+# bars) rather than daily, since the harmonic EMA-stack math is timeframe-agnostic
+# and 65Min reacts on an intraday cadence. Override via BEASTMODE_DEFAULT_TF.
+_BEAST_DEFAULT_TF = os.environ.get("BEASTMODE_DEFAULT_TF", "65MIN").upper()
+_beast_cache = {"hits": [], "ts": 0, "tf": _BEAST_DEFAULT_TF, "progress": {"done": 0, "total": 0}}
 _beast_last_good = {"hits": [], "ts": 0}   # last scan that produced ≥1 hit — never wiped
 _beast_lock = threading.Lock()
 _BEAST_REFRESH_S = int(os.environ.get("BEASTMODE_REFRESH_S", "45"))
@@ -38,7 +42,7 @@ def _beastmode_refresh_loop():
         try:
             dm = get_service("dm")
             if dm:
-                tf = _beast_cache.get("tf", "1D")
+                tf = _beast_cache.get("tf", _BEAST_DEFAULT_TF)
 
                 def _on_progress(hits_so_far, done, total, _tf=tf):
                     with _beast_lock:
@@ -398,10 +402,17 @@ def convergence_signal(symbol):
 @convergence_bp.route("/beastmode", methods=["GET"])
 def beastmode_scan():
     """Return cached full-universe convergence hits (refreshed by background thread)."""
-    tf = request.args.get("tf", "1D").upper()
+    # Only honor an explicit ?tf= override — do NOT default-overwrite the cache's
+    # configured scan timeframe on every plain poll. The Windows executor and other
+    # unattended pollers hit this route with no query string at all; previously
+    # that silently reset the background scanner's timeframe back to whatever
+    # request.args.get()'s default was on every single poll, undoing any
+    # configured default (e.g. BEASTMODE_DEFAULT_TF) within one refresh cycle.
+    tf_override = request.args.get("tf")
 
     with _beast_lock:
-        _beast_cache["tf"] = tf
+        if tf_override:
+            _beast_cache["tf"] = tf_override.upper()
         hits = list(_beast_cache["hits"])
         ts = _beast_cache["ts"]
         progress = dict(_beast_cache.get("progress", {}))

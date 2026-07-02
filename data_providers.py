@@ -1011,10 +1011,25 @@ class DataManager:
         except Exception as e:
             logger.error(f"[DATA] Polygon get_bars error: {e}")
             
-        # Fallback to Alpaca
-        alpaca_tf = '1Day'
-        if timeframe.upper() in ['1MIN', '1M']: alpaca_tf = '1Min'
-        elif timeframe.upper() in ['5MIN', '5M']: alpaca_tf = '5Min'
+        # Fallback to Alpaca — map every timeframe Polygon supports through 1:1.
+        # Never silently substitute a different granularity (e.g. daily bars for
+        # a requested 65Min scan): that would feed the harmonic engine data it
+        # didn't ask for with no indication anything degraded. If the requested
+        # timeframe has no Alpaca equivalent, return no data — callers already
+        # treat an empty/short bar list as "skip this symbol", which is the
+        # correct behavior when live data isn't actually available.
+        _ALPACA_TF_MAP = {
+            '1D': '1Day',
+            '1MIN': '1Min', '1M': '1Min',
+            '5MIN': '5Min', '5M': '5Min',
+            '15MIN': '15Min', '15M': '15Min',
+            '65MIN': '65Min', '65M': '65Min',
+            '4HOUR': '4Hour', '4H': '4Hour',
+        }
+        alpaca_tf = _ALPACA_TF_MAP.get(timeframe.upper())
+        if alpaca_tf is None:
+            logger.warning(f"[DATA] No Alpaca fallback mapping for timeframe={timeframe} — returning no data (not substituting a different granularity)")
+            return []
         return self.alpaca.get_historical_bars(symbol, alpaca_tf, limit)
 
     def get_option_contracts(self, symbol: str, max_dte: int = 10) -> List[dict]:
