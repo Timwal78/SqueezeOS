@@ -92,13 +92,31 @@ class Engine7_Parabolic:
                                 limit_price = round(current_price - dynamic_discount, 2)
                                 
                                 logger.critical(f"[APEX] EXECUTING EMERGENCY LIQUIDATION for {symbol}: SELL {qty} @ {limit_price} (Dynamic Discount: -${dynamic_discount:.2f})")
-                                exec_eng.execute_trade(
-                                    symbol=symbol,
-                                    directive="SELL",
-                                    qty=qty,
-                                    price=limit_price,
-                                    reason=f"APEX_TERMINATED: {sig}"
-                                )
+                                # execute_trade()'s real signature is
+                                # (symbol, side, quantity, price, reason) — this
+                                # call previously used directive=/qty=, which
+                                # don't exist on that function and would raise
+                                # a TypeError, silently killing this tracking
+                                # thread instead of liquidating. Also wrapped
+                                # in try/except now — an emergency liquidation
+                                # path failing silently (thread just dies, no
+                                # alert) defeats the point of it being a safety
+                                # mechanism.
+                                try:
+                                    exec_eng.execute_trade(
+                                        symbol=symbol,
+                                        side="SELL",
+                                        quantity=qty,
+                                        price=limit_price,
+                                        reason=f"APEX_TERMINATED: {sig}"
+                                    )
+                                except Exception as _liq_err:
+                                    logger.critical(f"[APEX] EMERGENCY LIQUIDATION FAILED for {symbol}: {_liq_err}")
+                                    state.push_terminal(
+                                        "APEX_LIQUIDATION_FAILED",
+                                        f"Emergency liquidation for {symbol} raised an error — position may still be open: {_liq_err}",
+                                        symbol, score=-100.0,
+                                    )
                                 
                                 # ── 402Proof Settlement Attestation ──
                                 try:

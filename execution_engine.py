@@ -20,6 +20,8 @@ try:
 except ImportError:
     DeltaNeutralityEngine = None
 
+from core.execution_lock import claim_entry
+
 try:
     from BEAST.gex.sml_gex_engine import GEXEngine
     from BEAST.hedger.autonomous_hedger import AutonomousHedger, HedgerConfig
@@ -258,6 +260,39 @@ class ExecutionEngine:
         validation = self.should_execute(symbol, side, is_live=True)
         if not validation['allow']:
             return {"status": "FILTERED", "reason": validation['reason']}
+
+        if side == 'BUY':
+            # Cross-engine claim — this Tradier account is also traded by
+            # core/api/convergence_bp.py's GOD MODE execution and
+            # iam_executor.py's IAM execution, each with their own independent
+            # gate. A fresh buy has no natural cap, unlike a sell (checked
+            # against the real held quantity right below), so only the entry
+            # side needs coordination.
+            if not claim_entry(symbol, "LONG_ENTRY", "ceo_trader"):
+                logger.info(f"[EXEC] {symbol} LONG entry already claimed by another engine this window — skipping")
+                return {"status": "SKIPPED", "reason": "claimed by another engine"}
+        else:
+            # Position-aware sell — this engine previously placed a bare SELL
+            # for whatever quantity the caller computed, with no verification
+            # that the account actually held that many shares. Unlike a BUY,
+            # an unverified SELL isn't just "extra exposure" — it's a naked
+            # short with uncapped downside if nothing (or fewer shares) were
+            # actually held. Cap to the real position, same policy already
+            # applied to convergence_bp.py and iam_executor.py.
+            try:
+                from tradier_api import get_position
+                position = get_position(symbol)
+            except Exception as e:
+                logger.error(f"[EXEC] {symbol} position lookup failed: {e} — refusing to sell without verification")
+                return {"status": "REJECTED", "reason": f"position lookup failed: {e}"}
+
+            held = int(position["quantity"]) if position and position.get("quantity", 0) > 0 else 0
+            if held <= 0:
+                logger.info(f"[EXEC] {symbol} SELL signal — no existing long to close, skipping (no shorts)")
+                return {"status": "SKIPPED", "reason": "no position to close"}
+            if quantity > held:
+                logger.warning(f"[EXEC] {symbol} SELL requested {quantity}x but only {held}x held — capping to {held}")
+                quantity = held
 
         logger.info(f"🚀 LIVE ORDER: {side} {quantity} {symbol} @ {price:.2f} | {reason}")
 
