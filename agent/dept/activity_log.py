@@ -27,3 +27,19 @@ def post_activity(agent: str, action: str, status: str = "info") -> None:
         )
     except Exception:
         pass  # non-critical — never let feed logging break a real agent run
+
+
+def post_directory_snapshot(already_listed: list, not_listed: list) -> None:
+    """Publish the real result of a Directory Ranger run so the public
+    dashboard can show actual per-directory status instead of a guess."""
+    if not _SECRET:
+        return
+    try:
+        requests.post(
+            f"{_SQUEEZEOS}/api/marketing/directories",
+            json={"already_listed": already_listed, "not_listed": not_listed},
+            headers={"X-Marketing-Secret": _SECRET},
+            timeout=10,
+        )
+    except Exception:
+        pass

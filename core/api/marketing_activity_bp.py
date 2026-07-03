@@ -6,7 +6,7 @@ step of a real agent (Directory Ranger, Community Scout, Federal Scout,
 Content Factory) or the CEO (Campaign Director) that supervises them.
 Nothing in this module generates, loops, or fabricates an entry — if
 there's no real run to report, GET returns an empty list and callers
-must render an honest empty/awaiting-data state, never placeholder rows.
+must render an honest empty/awaiting-data state, never a fabricated row.
 
 Write access requires MARKETING_ACTIVITY_SECRET so this feed can't be
 spammed with fake entries by anyone who finds the endpoint — the entire
@@ -31,12 +31,14 @@ from flask import Blueprint, request, jsonify
 log = logging.getLogger("SqueezeOS-MarketingActivity")
 marketing_activity_bp = Blueprint("marketing_activity", __name__)
 
-_SECRET     = os.environ.get("MARKETING_ACTIVITY_SECRET", "")
-_REDIS_URL  = os.environ.get("REDIS_URL", "")
-_FEED_KEY   = "marketing:activity"
-_MAX_ENTRIES = 50
+_SECRET       = os.environ.get("MARKETING_ACTIVITY_SECRET", "")
+_REDIS_URL    = os.environ.get("REDIS_URL", "")
+_FEED_KEY     = "marketing:activity"
+_LISTINGS_KEY = "marketing:directories:latest"
+_MAX_ENTRIES  = 50
 
-_mem_feed = []  # fallback if Redis unavailable — resets on restart, same as other in-memory stores here
+_mem_feed = []       # fallback if Redis unavailable — resets on restart, same as other in-memory stores here
+_mem_listings = None
 
 
 def _get_redis():
@@ -99,3 +101,48 @@ def get_activity():
         "count": len(entries),
         "last_run_by_agent": last_run_by_agent,
     })
+
+
+@marketing_activity_bp.route("/directories", methods=["POST"])
+def post_directories():
+    """Store the real result of the most recent Directory Ranger run —
+    which platforms are actually listed vs. not, per the live HTTP checks
+    it just performed. Overwrites the previous snapshot; there is no
+    history here, only "the last real audit result"."""
+    if not _SECRET:
+        return jsonify({"error": "MARKETING_ACTIVITY_SECRET not configured"}), 503
+    if request.headers.get("X-Marketing-Secret", "") != _SECRET:
+        return jsonify({"error": "invalid secret"}), 403
+
+    body = request.get_json(silent=True) or {}
+    snapshot = {
+        "already_listed": body.get("already_listed", []),
+        "not_listed":      body.get("not_listed", []),
+        "checked_at":      time.time(),
+    }
+
+    r = _get_redis()
+    if r:
+        r.set(_LISTINGS_KEY, json.dumps(snapshot))
+    else:
+        global _mem_listings
+        _mem_listings = snapshot
+
+    return jsonify({"received": True}), 200
+
+
+@marketing_activity_bp.route("/directories", methods=["GET"])
+def get_directories():
+    """Return the last real Directory Ranger audit. Empty/null fields mean
+    no real audit has run yet — never backfilled with a guess."""
+    r = _get_redis()
+    if r:
+        raw = r.get(_LISTINGS_KEY)
+        snapshot = json.loads(raw) if raw else None
+    else:
+        snapshot = _mem_listings
+
+    if not snapshot:
+        return jsonify({"already_listed": [], "not_listed": [], "checked_at": None, "audited": False})
+
+    return jsonify({**snapshot, "audited": True})

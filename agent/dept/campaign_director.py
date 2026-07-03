@@ -8,7 +8,7 @@ report. If a specialist fails, that failure is reported as-is — it is
 never papered over or replaced with a fabricated success.
 
 Specialists supervised (each does one job only):
-  - Directory Ranger  — checks 25 real directories, generates listing packages
+  - Directory Ranger  — checks 24 real directories, generates listing packages
   - Community Scout   — finds real Reddit/HN developer conversations
   - Federal Scout      — finds real federal contract opportunities
 
@@ -26,7 +26,7 @@ import requests
 import anthropic
 
 from . import directory_ranger, community_scout, federal_scout
-from .activity_log import post_activity
+from .activity_log import post_activity, post_directory_snapshot
 
 ANTH_KEY      = os.environ["ANTHROPIC_API_KEY"]
 MODEL         = os.environ.get("DEPT_MODEL", "claude-sonnet-5")
@@ -111,12 +111,17 @@ def run_all_agents() -> dict:
 
     results["directory_ranger"] = _dispatch(
         "directory_ranger", "Directory Ranger",
-        "audit all 25 tracked directories and package listings for any gaps",
+        "audit all 24 tracked directories and package listings for any gaps",
         directory_ranger.run,
-        lambda r: f"{len(r.get('already_listed', []))}/25 directories confirmed listed, "
+        lambda r: f"{len(r.get('already_listed', []))}/24 directories confirmed listed, "
                   f"{len(r.get('not_listed', []))} unlisted, "
                   f"{r.get('packages_generated', 0)} new submission packages generated",
     )
+    if not results["directory_ranger"].get("error"):
+        post_directory_snapshot(
+            results["directory_ranger"].get("already_listed", []),
+            results["directory_ranger"].get("not_listed", []),
+        )
 
     results["community_scout"] = _dispatch(
         "community_scout", "Community Scout",
