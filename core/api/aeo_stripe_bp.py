@@ -20,6 +20,8 @@ import logging
 import redis
 from flask import Blueprint, request, jsonify
 
+from core.api.aeo_treasury_bp import accrue_usd
+
 log = logging.getLogger(__name__)
 
 aeo_stripe_bp = Blueprint("aeo_stripe", __name__)
@@ -140,7 +142,26 @@ def aeo_stripe_webhook():
         if customer_id:
             _revoke_key(customer_id)
 
+    elif event_type in ("invoice.paid", "invoice.payment_succeeded"):
+        _handle_invoice_paid(data_obj)
+
     return jsonify({"received": True}), 200
+
+
+def _handle_invoice_paid(invoice: dict):
+    """Accrue the treasury's 5% cut of a successfully paid subscription invoice."""
+    lines = invoice.get("lines", {}).get("data", [])
+    price_ids = {li.get("price", {}).get("id", "") for li in lines}
+    if not (price_ids & {_SIGNAL_PRICE_ID, _SOVEREIGN_PRICE_ID}):
+        return  # not an AEO Suite invoice — ignore
+
+    amount_usd = invoice.get("amount_paid", 0) / 100.0
+    if amount_usd <= 0:
+        return
+    try:
+        accrue_usd(amount_usd, source="stripe:aeo")
+    except Exception as e:
+        log.error("AEO Stripe: treasury accrual failed: %s", e)
 
 
 def _handle_subscription_created(sub: dict):
