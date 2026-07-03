@@ -22,6 +22,25 @@
 - Stripe webhook: `POST /api/cascade/stripe/webhook` → issues Redis API keys on subscription
 - Required Render env vars: `CASCADE_STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_SECRET_KEY`, `REDIS_URL`
 
+## AEO/GEO Intelligence Suite — Live Product
+
+- Pricing page: `aeo.scriptmasterlabs.com` (SML_Portfolio repo, `aeo.html`)
+- Tiers: Scout (free, heuristics), Signal ($49/mo, BYOK), Sovereign ($149/mo, priority BYOK)
+- Blueprint: `core/api/aeo_stripe_bp.py` — registered at `/api/aeo/stripe/webhook` and `/api/aeo/key/validate`
+- Stripe products (live mode, account `acct_1S07wtQL50L4TFzs`):
+  - Signal: `price_1TpAMgQL50L4TFzsWONxGtl8`
+  - Sovereign: `price_1TpAMoQL50L4TFzsAsM9vLbw`
+- Required Render env vars: `AEO_STRIPE_SIGNAL_PRICE_ID`, `AEO_STRIPE_SOVEREIGN_PRICE_ID`, `AEO_STRIPE_WEBHOOK_SECRET`, `STRIPE_SECRET_KEY` (shared), `REDIS_URL` (shared)
+- Self-advertising loop: `.github/workflows/aeo-selfad.yml` (daily 06:00 ET) runs `.github/scripts/aeo_selfad_loop.py` — S1 gap detection → S2 narrative check → S3 citation probe → S4 agent-economy read. Optional n8n upgrade path documented in `n8n/README.md` — not required, GitHub Actions keeps running either way.
+
+### AEO Treasury — revenue ledger + auto-hire (`core/api/aeo_treasury_bp.py`)
+
+- `GET /api/aeo/treasury` — bookkeeping ledger tracking a 5% cut of AEO Suite revenue. **This is accounting only — it does not move real money.** Stripe settles in USD to the bank account on file; there is no automatic USD→RLUSD conversion anywhere in this codebase.
+- `accrue_usd()` is called from `aeo_stripe_bp._handle_invoice_paid()` on every paid AEO invoice (`invoice.paid` / `invoice.payment_succeeded` Stripe events — **must be added to the webhook endpoint's event list in the Stripe dashboard**, they weren't in the original 4-event setup).
+- When the ledger crosses `AEO_TREASURY_HIRE_THRESHOLD_RLUSD` (default 25.0), it auto-posts a real job to the existing zero-custody `hiring_bp` board using `AEO_TREASURY_XRPL_ADDRESS` as poster — no private key involved, posting a job never requires signing.
+- `AEO_TREASURY_XRPL_ADDRESS` is unset by default (same "not yet configured" pattern as SML-Vault-Executor below) — until it's set, the ledger still accrues but auto-hire silently no-ops and logs why.
+- Getting a hired agent actually paid still requires the treasury wallet to hold real RLUSD — that's a manual funding step (e.g., periodically converting a slice of Stripe payout revenue and sending it on-chain), not something this code does automatically.
+
 ## SML-Vault-Executor — What's Needed When Vault Build Starts
 
 Missing env vars (not yet configured — vault not funded):
