@@ -22,7 +22,7 @@ import anthropic
 from . import directory_ranger, community_scout, federal_scout
 
 ANTH_KEY      = os.environ["ANTHROPIC_API_KEY"]
-MODEL         = os.environ.get("DEPT_MODEL", "claude-opus-4-8")
+MODEL         = os.environ.get("DEPT_MODEL", "claude-sonnet-5")
 SLACK_WEBHOOK = os.environ.get("SEO_SLACK_WEBHOOK", "")
 OUTPUT_DIR    = os.environ.get("SEO_OUTPUT_DIR", "agent/outputs")
 SQUEEZEOS     = os.environ.get("SQUEEZEOS_BASE_URL", "https://squeezeos-api.onrender.com")
