@@ -154,6 +154,57 @@
       "signals": ["AWAITING_DATA", "ON_THRESHOLD_LIST", "T13_MARKER", "T21_MARKER", "T35_MARKER", "SETTLEMENT_ECHO", "RANK_PERCENTILE"]
     },
     {
+      "id": "citation_score",
+      "name": "AgentRank™ — Citation Authority Scoring",
+      "endpoint": "/api/citation-score/",
+      "method": "GET",
+      "cost": "0",
+      "currency": "RLUSD",
+      "free": true,
+      "description": "Tracks Reddit and HN citations of ScriptMasterLabs services. Returns 0–100 citation authority score per service (squeezeos, scriptmasterlabs, ghost-layer, 402proof). Weekly automated probes + on-demand trigger. Demand-context queries included. POST /api/citation-score/probe to trigger a fresh scan."
+    },
+    {
+      "id": "narrative_optimize",
+      "name": "P04 API Narrative Optimizer",
+      "endpoint": "/api/scriptmaster/narrative",
+      "method": "GET",
+      "cost": "0",
+      "currency": "RLUSD",
+      "free": true,
+      "description": "Scans llms.txt and .well-known/mcp.json for copy quality issues that reduce AI discoverability. Flags vague language, passive voice, and non-specific descriptions. Returns ranked issues with priority HIGH/MEDIUM and suggested fixes. No AI model required — pure heuristic scan."
+    },
+    {
+      "id": "provider_score",
+      "name": "ARGUS AgentPageRank™ — Provider Quality Score",
+      "endpoint": "/x402/provider-score/",
+      "method": "GET",
+      "cost": "0",
+      "currency": "RLUSD",
+      "free": true,
+      "description": "Scores this provider 0–850 based on live AI agent traffic: volume (log-scaled), diversity (agent type count), conversion rate (free→premium funnel), repeat visits. Grades: UNRANKED / EARLY / EMERGING / ESTABLISHED / INSTITUTIONAL / SOVEREIGN. Sub-routes: /breakdown (component scores), /trend (7-day), /leaderboard (top providers)."
+    },
+    {
+      "id": "semantic_gaps",
+      "name": "Semantic Gap Detector™ — Unmet Demand Intelligence",
+      "endpoint": "/api/graph/gaps/",
+      "method": "GET",
+      "cost": "0",
+      "currency": "RLUSD",
+      "free": true,
+      "description": "Crawls Reddit and HN for 'I need an API for X' demand signals. Clusters unmet demand by topic, cross-references against SML capabilities, returns ranked opportunity gaps with covered/gap classification. POST /api/graph/gaps/scan to trigger fresh crawl. 6h auto-refresh."
+    },
+    {
+      "id": "agent_economy",
+      "name": "AEIN™ Agent Economy Intelligence Network",
+      "endpoint": "/x402/agent-economy/",
+      "method": "GET",
+      "cost": "0 — 0.25",
+      "currency": "RLUSD",
+      "free": false,
+      "description": "ComScore for AI agent commerce. Free summary: top agent types, conversion rate, hourly heatmap. Free leaderboard: most active agent wallets. Premium report (0.25 RLUSD): full funnel analytics — discovery, free trial, invoice, payment, premium conversion rates per agent type + anomaly flags (HIGH_CONVERSION, LOW_CONVERSION, DISCOVERY_DROPOFF).",
+      "endpoint_id": "c8d9e0f1-a2b3-4c5d-6e7f-890123456789"
+    },
+    {
       "id": "intraday_compression",
       "name": "15m Tactical Matrix Compression Detector",
       "endpoint": "internal — IAM gate + iam_truth response field",

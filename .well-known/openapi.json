@@ -3,7 +3,7 @@
   "info": {
     "title": "Script Master Labs \u2014 SqueezeOS, 402Proof & Ghost Layer API",
     "version": "3.0.0",
-    "description": "ScriptMasterLabs institutional API \u2014 x402/HTTP-402 micropayment gated. AI agents: pay per call in USDC on Base or RLUSD on XRPL. Enterprise: OAuth 2.0 client credentials flow. MCP: 47 tools at /mcp (JSON-RPC 2.0).",
+    "description": "ScriptMasterLabs institutional API \u2014 x402/HTTP-402 micropayment gated. AI agents: pay per call in USDC on Base or RLUSD on XRPL. Enterprise: OAuth 2.0 client credentials flow. MCP: 52 tools at /mcp (JSON-RPC 2.0). AEO/GEO suite: AgentRank\u2122 citation scoring, ARGUS provider score, semantic gap detector, agent economy intelligence.",
     "contact": {
       "name": "Script Master Labs",
       "url": "https://www.scriptmasterlabs.com"
