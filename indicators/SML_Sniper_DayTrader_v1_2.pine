@@ -1,6 +1,6 @@
 //@version=6
 // SML Sniper Day Trader v1.2 — Institutional Intraday Execution Bridge
-// Trigger: EMA 13/34 crossover | Gate: 7-factor score + VWAP + ADX + Pillar/Tracker
+// Trigger: EMA 55/144 crossover (SML Fibonacci Cascade) | Gate: 7-factor score + VWAP + ADX + Pillar/Tracker
 // Webhook: https://squeezeos-api.onrender.com/api/webhooks/tradingview
 //
 // v1.2 changes vs v1.1 (audited — v1.1 had NO buy/sell inversion; this is a
@@ -49,8 +49,8 @@ var string G_WH = "▶  SQUEEZEOS WEBHOOK"
 string wh_pass   = input.string("SQUEEZE_AUTH_992", "Webhook Passphrase", group=G_WH)
 string wh_system = input.string("SML_Sniper", "System Name", group=G_WH)
 
-float ema13  = ta.ema(close, 13)
-float ema34  = ta.ema(close, 34)
+float emaFast = ta.ema(close, 55)
+float emaSlow = ta.ema(close, 144)
 float vwapV  = ta.vwap(hlc3)
 float atr    = ta.atr(14)
 float rsiVal = ta.rsi(close, 14)
@@ -59,12 +59,13 @@ float rsi5m  = request.security(syminfo.tickerid, "5", ta.rsi(close, 14), lookah
 [_, _, adxVal] = ta.dmi(14, 14)
 float volAvg = ta.sma(volume, 20)
 
+float pillarE1 = ta.ema(close, 13)
 float eP13b = ta.ema(close, 26)
 float eP13c = ta.ema(close, 39)
 float eP13d = ta.ema(close, 52)
 float eP13e = ta.ema(close, 65)
-bool P13_bull = ema13 > eP13b and eP13b > eP13c and eP13c > eP13d and eP13d > eP13e
-bool P13_bear = ema13 < eP13b and eP13b < eP13c and eP13c < eP13d and eP13d < eP13e
+bool P13_bull = pillarE1 > eP13b and eP13b > eP13c and eP13c > eP13d and eP13d > eP13e
+bool P13_bear = pillarE1 < eP13b and eP13b < eP13c and eP13c < eP13d and eP13d < eP13e
 
 float eT9a = ta.ema(close, 9)
 float eT9b = ta.ema(close, 22)
@@ -81,8 +82,8 @@ float bScore = 0.0
 bScore += (close > vwapV ? 1.0 : 0.0)
 bScore += (rsiVal > 50 ? 1.0 : 0.0)
 bScore += (macdMain > macdSig ? 1.0 : 0.0)
-bScore += (ema13 > ema34 ? 1.0 : 0.0)
-bScore += (adxVal > 25 and close > ema13 ? 1.0 : 0.0)
+bScore += (emaFast > emaSlow ? 1.0 : 0.0)
+bScore += (adxVal > 25 and close > emaFast ? 1.0 : 0.0)
 bScore += (volume > volAvg and close > open ? 1.0 : 0.0)
 bScore += (rsi5m > 50 ? 1.0 : 0.0)
 float bullPct = (bScore / 7.0) * 100.0
@@ -91,8 +92,8 @@ float rScore = 0.0
 rScore += (close < vwapV ? 1.0 : 0.0)
 rScore += (rsiVal < 50 ? 1.0 : 0.0)
 rScore += (macdMain < macdSig ? 1.0 : 0.0)
-rScore += (ema13 < ema34 ? 1.0 : 0.0)
-rScore += (adxVal > 25 and close < ema13 ? 1.0 : 0.0)
+rScore += (emaFast < emaSlow ? 1.0 : 0.0)
+rScore += (adxVal > 25 and close < emaFast ? 1.0 : 0.0)
 rScore += (volume > volAvg and close < open ? 1.0 : 0.0)
 rScore += (rsi5m < 50 ? 1.0 : 0.0)
 float bearPct = (rScore / 7.0) * 100.0
@@ -101,7 +102,7 @@ string biasText = (bullPct - bearPct) >= 40 ? "STRONG BULL" : (bearPct - bullPct
 color  biasCol  = biasText == "STRONG BULL" ? color.green : biasText == "STRONG BEAR" ? color.red : color.gray
 
 // Session window: skips the first/last few minutes of the regular session,
-// where spread and false-break rates are highest for a 13/34 EMA cross.
+// where spread and false-break rates are highest for a 55/144 EMA cross.
 bool inSession = not useSession or not na(time(timeframe.period, sessStr, "America/New_York"))
 
 bool baseBuyGated  = bullPct >= minScore and (not requireVwap or close > vwapV) and (not requireAdx or adxVal > 25) and macroAlignBull
@@ -125,8 +126,8 @@ var bool  t3Hit   = false
 var bool  t4Hit   = false
 var bool  t5Hit   = false
 
-bool xBuy  = ta.crossover(ema13, ema34)
-bool xSell = ta.crossunder(ema13, ema34)
+bool xBuy  = ta.crossover(emaFast, emaSlow)
+bool xSell = ta.crossunder(emaFast, emaSlow)
 bool cooldownOk = not useCooldown or na(lastSigBar) or (bar_index - lastSigBar) >= cooldownBars
 bool triggerBuy  = xBuy  and lastSig <= 0 and buyGated  and cooldownOk and barstate.isconfirmed
 bool triggerSell = xSell and lastSig >= 0 and sellGated and cooldownOk and barstate.isconfirmed
@@ -182,12 +183,12 @@ plot(eP13d, "Pillar 52", color=color.new(#FF8C00, 80), linewidth=1)
 plot(eP13e, "Pillar 65", color=color.new(#FF8C00, 55), linewidth=2)
 
 int rAlpha = P13_bull ? 0 : P13_bear ? 0 : 30
-p13 = plot(ema13, "EMA 13", color=color.new(color.green, rAlpha), linewidth=2)
-p34 = plot(ema34, "EMA 34", color=color.new(color.red,   rAlpha), linewidth=2)
-fill(p13, p34, color=ema13 > ema34 ? color.new(color.green, 100 - ribOpac) : color.new(color.red, 100 - ribOpac))
+p13 = plot(emaFast, "EMA 55", color=color.new(color.green, rAlpha), linewidth=2)
+p34 = plot(emaSlow, "EMA 144", color=color.new(color.red,   rAlpha), linewidth=2)
+fill(p13, p34, color=emaFast > emaSlow ? color.new(color.green, 100 - ribOpac) : color.new(color.red, 100 - ribOpac))
 plot(vwapV, "VWAP", color=close > vwapV ? color.green : color.red, linewidth=2)
 
-bool isRetest = (lastSig == 1 and low <= ema13 and low > ema34) or (lastSig == -1 and high >= ema13 and high < ema34)
+bool isRetest = (lastSig == 1 and low <= emaFast and low > emaSlow) or (lastSig == -1 and high >= emaFast and high < emaSlow)
 barcolor((triggerBuy or triggerSell) ? color.black : isRetest ? color.orange : na)
 plotshape(triggerBuy,  text="BUY",  style=shape.labelup,   location=location.belowbar, color=color.green, textcolor=color.white, size=size.normal)
 plotshape(triggerSell, text="SELL", style=shape.labeldown, location=location.abovebar, color=color.red,   textcolor=color.white, size=size.normal)
@@ -270,7 +271,7 @@ if barstate.islast
     f_row(d,  5, "RSI (14)",     str.tostring(rsiVal, "#.#"), rsiVal > 50 ? color.green : color.red, dashSize)
     f_row(d,  6, "MACD Trend",   macdMain > macdSig ? "BULL" : "BEAR", macdMain > macdSig ? color.green : color.red, dashSize)
     f_row(d,  7, "ADX Power",    str.tostring(adxVal, "#.#"), adxVal > 25 ? color.green : color.gray, dashSize)
-    f_row(d,  8, "EMA 13/34",    ema13 > ema34 ? "BULL CROSS" : "BEAR CROSS", ema13 > ema34 ? color.green : color.red, dashSize)
+    f_row(d,  8, "EMA 55/144",   emaFast > emaSlow ? "BULL CROSS" : "BEAR CROSS", emaFast > emaSlow ? color.green : color.red, dashSize)
     f_row(d,  9, "ATR (14)",     str.tostring(atr, "#.##"), color.black, dashSize)
     f_row(d, 10, "Vol Status",   volume > volAvg ? "HIGH" : "LOW", volume > volAvg ? color.green : color.gray, dashSize)
     f_row(d, 11, "5m RSI",       str.tostring(rsi5m, "#.#"), rsi5m > 50 ? color.green : color.red, dashSize)
@@ -293,8 +294,8 @@ if barstate.islast
     f_row(d, 21, "Signal",       sig_txt, triggerBuy ? color.green : triggerSell ? color.red : color.black, dashSize)
     f_row(d, 22, "System",       wh_system + "  v1.2", color.blue, dashSize)
 
-alertcondition(triggerBuy,  "SML Sniper: BUY",  "SNIPER BUY 13/34 — {{ticker}} @ {{close}} [SML]")
-alertcondition(triggerSell, "SML Sniper: SELL", "SNIPER SELL 13/34 — {{ticker}} @ {{close}} [SML]")
+alertcondition(triggerBuy,  "SML Sniper: BUY",  "SNIPER BUY 55/144 — {{ticker}} @ {{close}} [SML]")
+alertcondition(triggerSell, "SML Sniper: SELL", "SNIPER SELL 55/144 — {{ticker}} @ {{close}} [SML]")
 
 string _px = str.tostring(close, "#.00")
 string _tk = syminfo.ticker
