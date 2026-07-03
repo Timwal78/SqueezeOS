@@ -8,7 +8,7 @@
 
 | Service | Render Name | URL | Status | Purpose |
 |---------|-------------|-----|--------|---------|
-| SqueezeOS API | `squeezeos-api` | `https://squeezeos-api.onrender.com` | ✅ Live | Main Flask monorepo — AI Council, CASCADE ACCUMULATOR, Slack bot, 47 MCP tools |
+| SqueezeOS API | `squeezeos-api` | `https://squeezeos-api.onrender.com` | ✅ Live | Main Flask monorepo — AI Council, CASCADE ACCUMULATOR, Slack bot, 52 MCP tools |
 | SML Vault Executor | `sml-vault-executor` | `https://sml-vault-executor.onrender.com` | 🅿️ Parked | Future vault execution layer (Base mainnet). Currently runs squeezeos-api repo as placeholder. Gets its own codebase when vault is funded. Custom domain: `dash.scriptmasterlabs.com` |
 
 **NEVER confuse these two services.** `squeezeos-api` is production. `sml-vault-executor` is parked/future.

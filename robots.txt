@@ -23,6 +23,4 @@ Allow: /
 User-agent: cohere-ai
 Allow: /
 
-Disallow: /api/
-
 Sitemap: https://www.scriptmasterlabs.com/sitemap.xml

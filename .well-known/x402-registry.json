@@ -164,6 +164,23 @@
     },
 
     {
+      "service": "SqueezeOS — AEO/GEO Intelligence Suite",
+      "base_url": "https://squeezeos-api.onrender.com",
+      "description": "Answer Engine Optimization and Generative Engine Optimization tools. Track AI citation authority, API narrative quality, agent traffic scores, semantic demand gaps, and agent economy analytics.",
+      "endpoints": [
+        {
+          "endpoint_id": "c8d9e0f1-a2b3-4c5d-6e7f-890123456789",
+          "path": "/x402/agent-economy/report",
+          "method": "GET",
+          "cost": "0.25",
+          "currency": "RLUSD",
+          "description": "Full AEIN™ agent economy report: funnel analytics per agent type, hourly heatmap, anomaly flags (HIGH_CONVERSION, LOW_CONVERSION, DISCOVERY_DROPOFF). ComScore for AI agent commerce.",
+          "free_alternative": "GET /x402/agent-economy/ (summary, no cost)"
+        }
+      ]
+    },
+
+    {
       "service": "SqueezeOS — Signal Relay Mesh (Bulk Discount, 40% off)",
       "base_url": "https://squeezeos-api.onrender.com",
       "note": "Relay endpoints require Agent Credit Bureau score ≥ 600 at https://four02proof.onrender.com/v1/bureau/score/{wallet}",
@@ -218,6 +235,12 @@
     { "service": "402Proof",  "path": "/v1/bureau/score/{wallet}","description": "Public credit score (300-850)" },
     { "service": "Ghost Layer","path": "/health",                  "description": "XRPL + Base + Xahau network status" },
     { "service": "TipMaster", "path": "/api/resolve/{username}",  "description": "Farcaster username → XRPL wallet address" },
-    { "service": "TipMaster", "path": "/api/leaderboard",         "description": "Top tipped users leaderboard" }
+    { "service": "TipMaster", "path": "/api/leaderboard",         "description": "Top tipped users leaderboard" },
+    { "service": "SqueezeOS", "path": "/api/citation-score/",     "description": "AgentRank™ — 0-100 citation authority score per SML service (Reddit + HN)" },
+    { "service": "SqueezeOS", "path": "/api/citation-score/history", "description": "Historical citation score log" },
+    { "service": "SqueezeOS", "path": "/x402/provider-score/",   "description": "ARGUS AgentPageRank™ — 0-850 provider quality score from live agent traffic" },
+    { "service": "SqueezeOS", "path": "/api/graph/gaps/",         "description": "Semantic Gap Detector™ — ranked unmet demand from forum crawl" },
+    { "service": "SqueezeOS", "path": "/x402/agent-economy/",     "description": "AEIN™ — AI agent economy summary: top types, conversion rate, heatmap" }
   ]
 }
+
