@@ -60,6 +60,7 @@ from core.api.citation_scout_bp import citation_scout_bp, start_citation_scout
 from core.api.provider_score_bp import provider_score_bp
 from core.api.gap_detector_bp import gap_detector_bp, start_gap_detector
 from core.api.agent_economy_bp import agent_economy_bp
+from core.api.aeo_stripe_bp import aeo_stripe_bp
 import core.signal_history as signal_history
 from core.legacy import start_whale_stalker, init_services, get_service, clean_data
 from core.market_graph import get_graph
@@ -177,6 +178,7 @@ def create_app():
     app.register_blueprint(provider_score_bp,  url_prefix='/x402/provider-score')
     app.register_blueprint(gap_detector_bp,    url_prefix='/api/graph/gaps')
     app.register_blueprint(agent_economy_bp,   url_prefix='/x402/agent-economy')
+    app.register_blueprint(aeo_stripe_bp)
 
     # Stellar Forge growth engine — feature-flagged, dormant unless enabled.
     # Registers the affiliate/loyalty/payout surface only when explicitly turned
