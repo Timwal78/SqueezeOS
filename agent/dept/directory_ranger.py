@@ -56,6 +56,9 @@ DIRECTORIES = [
     {"name": "AlternativeTo",    "check_url": "https://alternativeto.net/browse/search/?q=squeezeos",      "category": "enterprise"},
 ]
 
+# NOTE: MCP tool count below must match len(_TOOLS) in core/api/mcp_bp.py —
+# see CLAUDE.md's "MCP tool count" convention. Keep in sync or listing
+# packages ship stale numbers to real directories.
 SML_PROFILE = {
     "company":     "Script Master Labs, LLC",
     "sam_uei":     "G24VZA4RLMK3",
@@ -66,7 +69,7 @@ SML_PROFILE = {
     "description": (
         "Script Master Labs provides a sovereign AI infrastructure stack for autonomous agents and developers: "
         "44 x402 pay-per-call API endpoints (SEC filings, FDA warnings, federal grants, compliance, market signals), "
-        "a 49-tool MCP server (SqueezeOS) for real-time institutional market intelligence, "
+        "a 52-tool MCP server (SqueezeOS) for real-time institutional market intelligence, "
         "Ghost Layer (private XRP routing), RLUSD Rails (Xahau remittance), "
         "and a CASCADE ACCUMULATOR for institutional squeeze signal delivery. "
         "No subscriptions — agents pay RLUSD micropayments on XRPL and receive signed JWTs."

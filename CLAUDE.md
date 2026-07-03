@@ -560,6 +560,27 @@ Secrets: `AGENT_XRPL_SEED`, `AGENT_XRPL_ADDRESS`, `ANTHROPIC_API_KEY` (GitHub Ac
 
 ---
 
+## Marketing Department (`agent/dept/`) — CEO + specialist agents
+
+Real, Claude-powered agents. No agent in this department fabricates a result — each either does the real work (live HTTP checks, real API reads) or reports a real error. Runs **daily** via `.github/workflows/marketing-daily.yml` (08:00 ET) — a single job that calls `campaign_director.run()` directly, not a duplicate inline script.
+
+| Role | Module | Real job |
+|------|--------|----------|
+| **CEO** | `campaign_director.py` | Dispatches work to the 3 specialists below, verifies each one actually produced usable output (not just "didn't crash"), reports every real result to the live activity feed, then synthesizes an executive report and posts it to Slack |
+| Directory Ranger | `directory_ranger.py` | Live HTTP checks against 25 real AI/MCP/dev directories; generates ready-to-submit listing copy for unlisted ones. Does **not** auto-submit — a human still has to paste the generated package in |
+| Community Scout | `community_scout.py` | Reads real Reddit (12 subreddits) + HackerNews for developer conversations relevant to SML's products |
+| Federal Scout | `federal_scout.py` | Uses SML's own x402 federal data endpoints to find real government AI/tech contract opportunities (SAM UEI `G24VZA4RLMK3`) |
+
+**Content Factory** (`SML_Portfolio/agent/content_factory.py`) is a separate daily agent (`content-factory.yml`, 06:00 UTC) that generates and commits real SEO pages — it isn't orchestrated by the CEO since it lives in a different repo, but it reports to the same activity feed.
+
+### Live activity feed (`core/api/marketing_activity_bp.py`)
+
+`GET /api/marketing/activity` — public, returns the most recent real agent events (capped 50). This is the **only** legitimate source for any "live agent activity" UI. If you see a hardcoded/looping array of agent action strings anywhere in a frontend (there was one in `SML_Portfolio/agentswarm-seo.html` — removed), that's fake and must be wired to this endpoint instead, never left as a static array.
+
+`POST /api/marketing/activity` requires `X-Marketing-Secret` matching `MARKETING_ACTIVITY_SECRET` — without it the endpoint returns 503. This exists specifically so the feed can't be spammed with fabricated entries; the entire point of this feed is that every line in it is a verifiably real event, not because the data is sensitive.
+
+---
+
 ## Deployment — Source of Truth
 
 > ⛔ STOP. Before touching any URL, service name, or deployment config — read this table first.

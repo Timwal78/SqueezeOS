@@ -1,18 +1,24 @@
 """
-SML CAMPAIGN DIRECTOR
-=====================
-Sole mission: Run all marketing department agents, aggregate KPIs, and post
-a weekly campaign status report to Slack.
+SML CAMPAIGN DIRECTOR — the CEO of the marketing department.
 
-This is the department head — it does not do original research but coordinates
-all specialist agents and synthesizes their outputs into an executive report.
+Runs every specialist agent, verifies each one actually produced real
+output (not just "didn't crash"), reports honest progress to the public
+activity feed as it goes, and synthesizes everything into an executive
+report. If a specialist fails, that failure is reported as-is — it is
+never papered over or replaced with a fabricated success.
 
-Schedule: Weekly (Mondays at 08:00 ET)
+Specialists supervised (each does one job only):
+  - Directory Ranger  — checks 25 real directories, generates listing packages
+  - Community Scout   — finds real Reddit/HN developer conversations
+  - Federal Scout      — finds real federal contract opportunities
+
+Schedule: Daily (see .github/workflows/marketing-daily.yml)
 
 Env:
-  ANTHROPIC_API_KEY    (required)
-  SEO_SLACK_WEBHOOK    (optional — Slack delivery)
-  SEO_OUTPUT_DIR       (default: agent/outputs)
+  ANTHROPIC_API_KEY          (required)
+  SEO_SLACK_WEBHOOK          (optional — Slack delivery)
+  SEO_OUTPUT_DIR             (default: agent/outputs)
+  MARKETING_ACTIVITY_SECRET  (required to publish to the live activity feed)
 """
 
 import os, sys, json, datetime, glob, re
@@ -20,6 +26,7 @@ import requests
 import anthropic
 
 from . import directory_ranger, community_scout, federal_scout
+from .activity_log import post_activity
 
 ANTH_KEY      = os.environ["ANTHROPIC_API_KEY"]
 MODEL         = os.environ.get("DEPT_MODEL", "claude-sonnet-5")
@@ -29,6 +36,8 @@ SQUEEZEOS     = os.environ.get("SQUEEZEOS_BASE_URL", "https://squeezeos-api.onre
 
 SESSION = requests.Session()
 SESSION.headers["User-Agent"] = "SMLCampaignDirector/1.0 (agent.scriptmasterlabs.com)"
+
+CEO_LABEL = "CEO (Campaign Director)"
 
 
 def load_recent_output(subdir: str, pattern: str = "*.json", days: int = 7) -> list[dict]:
@@ -66,34 +75,63 @@ def post_slack(text: str) -> None:
         print(f"[DIRECTOR] Slack failed: {e}")
 
 
+def _dispatch(agent_key: str, agent_label: str, task_desc: str, run_fn, summarize_fn) -> dict:
+    """Assign one specialist's task, run it, verify the result, and report
+    the real outcome to the live activity feed — success or failure, exactly
+    as it happened. No result here is ever invented."""
+    print(f"\n[CEO] Assigning to {agent_label}: {task_desc}")
+    post_activity(CEO_LABEL, f"Assigned to {agent_label}: {task_desc}")
+
+    try:
+        result = run_fn()
+        if not isinstance(result, dict) or result.get("error"):
+            reason = result.get("error", "returned no usable output") if isinstance(result, dict) else "returned no usable output"
+            print(f"[CEO] {agent_label} did not complete cleanly: {reason}")
+            post_activity(agent_label, f"Run failed: {reason}", status="error")
+            return {"error": reason}
+        summary = summarize_fn(result)
+        print(f"[CEO] {agent_label} completed: {summary}")
+        post_activity(agent_label, f"Completed: {summary}", status="success")
+        return result
+    except Exception as e:
+        reason = str(e)[:200]
+        print(f"[CEO] {agent_label} failed: {reason}")
+        post_activity(agent_label, f"Run failed: {reason}", status="error")
+        return {"error": reason}
+
+
 def run_all_agents() -> dict:
     """Run all department agents and collect outputs."""
     today = datetime.date.today().isoformat()
     results = {}
 
-    print("\n[DIRECTOR] === SML MARKETING CAMPAIGN RUN ===")
-    print(f"[DIRECTOR] Date: {today}\n")
+    print("\n[CEO] === SML MARKETING CAMPAIGN RUN ===")
+    print(f"[CEO] Date: {today}\n")
+    post_activity(CEO_LABEL, f"Starting daily campaign run for {today}")
 
-    print("[DIRECTOR] Starting Directory Ranger...")
-    try:
-        results["directory_ranger"] = directory_ranger.run()
-    except Exception as e:
-        results["directory_ranger"] = {"error": str(e)}
-        print(f"[DIRECTOR] Directory Ranger failed: {e}")
+    results["directory_ranger"] = _dispatch(
+        "directory_ranger", "Directory Ranger",
+        "audit all 25 tracked directories and package listings for any gaps",
+        directory_ranger.run,
+        lambda r: f"{len(r.get('already_listed', []))}/25 directories confirmed listed, "
+                  f"{len(r.get('not_listed', []))} unlisted, "
+                  f"{r.get('packages_generated', 0)} new submission packages generated",
+    )
 
-    print("\n[DIRECTOR] Starting Community Scout...")
-    try:
-        results["community_scout"] = community_scout.run()
-    except Exception as e:
-        results["community_scout"] = {"error": str(e)}
-        print(f"[DIRECTOR] Community Scout failed: {e}")
+    results["community_scout"] = _dispatch(
+        "community_scout", "Community Scout",
+        "scan developer communities for real conversations about SML's products",
+        community_scout.run,
+        lambda r: f"{len(r.get('opportunities', []))} opportunities found across monitored channels, "
+                  f"{len(r.get('top_opportunities', []))} flagged as top priority",
+    )
 
-    print("\n[DIRECTOR] Starting Federal Scout...")
-    try:
-        results["federal_scout"] = federal_scout.run()
-    except Exception as e:
-        results["federal_scout"] = {"error": str(e)}
-        print(f"[DIRECTOR] Federal Scout failed: {e}")
+    results["federal_scout"] = _dispatch(
+        "federal_scout", "Federal Scout",
+        "identify federal contract opportunities matching SML's SAM registration",
+        federal_scout.run,
+        lambda r: f"{len(r.get('high_relevance', []))} high-relevance federal opportunities identified",
+    )
 
     return results
 
@@ -120,7 +158,7 @@ def synthesize_report(agent_results: dict, api_status: dict) -> dict:
         },
     }
 
-    prompt = f"""You are the SML Campaign Director. Synthesize this week's marketing department outputs into an executive report.
+    prompt = f"""You are the SML Campaign Director. Synthesize today's marketing department outputs into an executive report.
 
 Data:
 {json.dumps(context, indent=2, default=str)[:6000]}
@@ -200,7 +238,13 @@ def run() -> dict:
     path = f"{OUTPUT_DIR}/campaign/{today}_campaign_report.json"
     with open(path, "w") as f:
         json.dump(report, f, indent=2)
-    print(f"\n[DIRECTOR] Campaign report saved: {path}")
+    print(f"\n[CEO] Campaign report saved: {path}")
+
+    failures = [k for k, v in agent_results.items() if isinstance(v, dict) and v.get("error")]
+    if failures:
+        post_activity(CEO_LABEL, f"Run complete with issues — failed: {', '.join(failures)}", status="error")
+    else:
+        post_activity(CEO_LABEL, f"Run complete — health: {report.get('health', 'UNKNOWN')}. {report.get('week_summary', '')}".strip(), status="success")
 
     slack_text = format_slack_report(report)
     print("\n" + "="*60)
