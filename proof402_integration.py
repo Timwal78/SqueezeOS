@@ -38,8 +38,9 @@ _PAYMENT_PRICES = {
     '/api/signals/365':        0.03,
     '/api/signals/triplelock': 0.05,
     '/api/signals/full':       0.10,
-    '/api/cascade/signal':     0.25,
-    '/api/triple-lock':        0.25,
+    '/api/cascade/signal':          0.25,
+    '/api/triple-lock':             0.25,
+    '/x402/agent-economy/report':   0.25,
     '/api/iam':                0.05,  # /api/iam/<symbol> — path param, priced here for Discord notify only
     '/api/ccs/validate':       0.01,
     '/api/compliance/anomaly': 5.00,
@@ -112,6 +113,8 @@ ENDPOINTS = {
     '/api/signals/full':       'b8c9d0e1-f2a3-4567-89ab-234567890123',  # 0.10 RLUSD
     # CASCADE ACCUMULATOR — execution tier
     '/api/cascade/signal':     'c4sc4de1-8f2a-4b3e-9c1d-5e6f7a8b9c0d',  # 0.25 RLUSD
+    # AEIN premium report
+    '/x402/agent-economy/report': 'c8d9e0f1-a2b3-4c5d-6e7f-890123456789',  # 0.25 RLUSD
     # TRIPLE_LOCK_VERDICT — was documented in .well-known/agents.json with no
     # endpoint_id at all (no RLUSD rail existed for this route until the
     # dual_payment fix below). Minted here as the source of truth.
@@ -138,6 +141,7 @@ _FREE_PREVIEW_BY_PATH = {
     '/api/signals/triplelock': '/api/signals/info',
     '/api/signals/full':       '/api/signals/info',
     '/api/cascade/signal':     '/api/cascade/info',
+    '/x402/agent-economy/report': '/x402/agent-economy/',
 }
 
 

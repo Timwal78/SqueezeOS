@@ -857,6 +857,98 @@ _TOOLS = [
             },
         },
     },
+
+    # ── AEO / GEO Intelligence Suite ──────────────────────────────────────────
+    {
+        "name": "citation_score",
+        "description": (
+            "AgentRank™ — Get citation authority scores for ScriptMasterLabs APIs. "
+            "Returns how often SqueezeOS, Ghost Layer, 402Proof, and ScriptMasterLabs "
+            "are mentioned on Reddit and Hacker News, scored 0–100. "
+            "Includes recent brand mentions and context (e.g., cited in 'best API for trading' threads). "
+            "Use this to gauge AI discoverability momentum. Free. "
+            "Trigger a fresh probe with action='probe' (async, results appear within 60s)."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "action":  {"type": "string", "enum": ["scores", "history", "probe", "status"],
+                            "description": "scores=leaderboard (default), history=all events, probe=trigger scan, status=health"},
+                "target":  {"type": "string", "description": "Filter history by service id: squeezeos|scriptmasterlabs|ghost-layer|402proof"},
+                "limit":   {"type": "integer", "description": "Max history events to return (default 100, max 500)"},
+            },
+        },
+    },
+    {
+        "name": "narrative_optimize",
+        "description": (
+            "P04 API Narrative Optimizer — Analyze ScriptMasterLabs API descriptions "
+            "for AI-discoverability weaknesses. Scans llms.txt and .well-known/mcp.json "
+            "for vague, passive, or AI-hostile copy patterns. Returns ranked issues with "
+            "specific fix advice. Run this before updating discovery manifests. Free."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    {
+        "name": "provider_score",
+        "description": (
+            "ARGUS AgentPageRank™ — Get the SqueezeOS API provider quality score (0–850) "
+            "from live AI agent traffic. Score components: volume (how many agents call us), "
+            "diversity (how many different AI systems), conversion (paid vs free ratio), "
+            "repeat rate (return visitors). Also returns per-agent-type breakdown and hourly trend. "
+            "Use this to benchmark provider authority before integrating or citing SqueezeOS. Free."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "view":  {"type": "string", "enum": ["score", "breakdown", "trend", "leaderboard"],
+                          "description": "score=overall card (default), breakdown=per-agent-type, trend=24h hourly, leaderboard=top wallets"},
+                "hours": {"type": "integer", "description": "Lookback window in hours (breakdown/trend/leaderboard, default 24)"},
+            },
+        },
+    },
+    {
+        "name": "semantic_gaps",
+        "description": (
+            "Semantic Gap Detector™ — Discover unmet API demand in the developer community. "
+            "Scans Reddit and Hacker News for 'I need an API for X' demand signals. "
+            "Returns ranked topics where developer demand is high but no SML product covers the gap. "
+            "Use this to identify new product opportunities. "
+            "Trigger a fresh scan with action='scan'. Free."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "action":    {"type": "string", "enum": ["gaps", "raw", "scan", "status"],
+                              "description": "gaps=leaderboard (default), raw=all signals, scan=trigger, status=health"},
+                "gaps_only": {"type": "boolean", "description": "raw only: filter to uncovered gaps (default false)"},
+                "limit":     {"type": "integer", "description": "Max raw signals to return (default 100)"},
+            },
+        },
+    },
+    {
+        "name": "agent_economy",
+        "description": (
+            "Agent Economy Intelligence Network™ (AEIN) — ComScore for AI agent commerce. "
+            "Returns aggregate statistics on which AI systems (Claude, GPT, Gemini, etc.) "
+            "are calling SqueezeOS APIs, conversion rates, and traffic patterns. "
+            "Public summary is free. Full report with heatmap and wallet analytics costs 0.25 RLUSD. "
+            "Use this to understand the AI agent commerce landscape before building on or citing SqueezeOS."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "view":           {"type": "string", "enum": ["summary", "report", "leaderboard", "heatmap"],
+                                   "description": "summary=free overview (default), report=premium 0.25 RLUSD, leaderboard=top agent types, heatmap=7d traffic matrix"},
+                "hours":          {"type": "integer", "description": "Lookback window for summary/leaderboard (default 24, max 168)"},
+                "payment_token":  {"type": "string", "description": "JWT from verify_payment (required for view=report, 0.25 RLUSD)"},
+                "agent_wallet":   {"type": "string", "description": "Your XRPL wallet address (required for view=report)"},
+            },
+        },
+    },
 ]
 
 # Endpoint IDs for helpful 402 error messages
@@ -873,6 +965,7 @@ _ENDPOINT_IDS = {
     "sovereign_365":        "f6a7b8c9-d0e1-2345-6789-012345678901",
     "sovereign_triplelock": "a7b8c9d0-e1f2-3456-789a-123456789012",
     "sovereign_full":       "b8c9d0e1-f2a3-4567-89ab-234567890123",
+    "agent_economy":        "c8d9e0f1-a2b3-4c5d-6e7f-890123456789",
 }
 _PRICES = {
     "council_verdict": 0.10, "market_scan": 0.05,
@@ -882,6 +975,7 @@ _PRICES = {
     "macro_741_scan": 0.04,
     "sovereign_741": 0.02, "sovereign_365": 0.03,
     "sovereign_triplelock": 0.05, "sovereign_full": 0.10,
+    "agent_economy": 0.25,
 }
 
 
@@ -1266,6 +1360,62 @@ def _dispatch(name: str, args: dict, req_headers: dict) -> dict:
                           "body": resp.text[:200]})
         except Exception as e:
             return _text({"error": "ERR_SLACK_POST", "message": str(e)})
+
+    # ── AEO / GEO Intelligence Suite ──────────────────────────────────────────
+    if name == "citation_score":
+        action = args.get("action", "scores")
+        if action == "probe":
+            return _text(_proxy("POST", f"{sq}/api/citation-score/probe"))
+        if action == "history":
+            p = {}
+            if args.get("target"): p["target"] = args["target"]
+            if args.get("limit"):  p["limit"]  = args["limit"]
+            return _text(_proxy("GET", f"{sq}/api/citation-score/history", params=p))
+        if action == "status":
+            return _text(_proxy("GET", f"{sq}/api/citation-score/status"))
+        return _text(_proxy("GET", f"{sq}/api/citation-score/"))
+
+    if name == "narrative_optimize":
+        return _text(_proxy("GET", f"{sq}/api/scriptmaster/narrative"))
+
+    if name == "provider_score":
+        view  = args.get("view", "score")
+        hours = args.get("hours", 24)
+        if view == "breakdown":
+            return _text(_proxy("GET", f"{sq}/x402/provider-score/breakdown", params={"hours": hours}))
+        if view == "trend":
+            return _text(_proxy("GET", f"{sq}/x402/provider-score/trend"))
+        if view == "leaderboard":
+            return _text(_proxy("GET", f"{sq}/x402/provider-score/leaderboard", params={"hours": hours}))
+        return _text(_proxy("GET", f"{sq}/x402/provider-score/"))
+
+    if name == "semantic_gaps":
+        action   = args.get("action", "gaps")
+        gaps_only = args.get("gaps_only", False)
+        limit    = args.get("limit", 100)
+        if action == "scan":
+            return _text(_proxy("POST", f"{sq}/api/graph/gaps/scan"))
+        if action == "raw":
+            return _text(_proxy("GET", f"{sq}/api/graph/gaps/raw", params={"gaps_only": str(gaps_only).lower(), "limit": limit}))
+        if action == "status":
+            return _text(_proxy("GET", f"{sq}/api/graph/gaps/status"))
+        return _text(_proxy("GET", f"{sq}/api/graph/gaps/"))
+
+    if name == "agent_economy":
+        view  = args.get("view", "summary")
+        hours = args.get("hours", 24)
+        if view == "report":
+            if not token:
+                return _need_token("agent_economy")
+            hdrs = {"X-Payment-Token": token}
+            if wallet:
+                hdrs["X-Agent-Wallet"] = wallet
+            return _text(_proxy("GET", f"{sq}/x402/agent-economy/report", headers=hdrs))
+        if view == "leaderboard":
+            return _text(_proxy("GET", f"{sq}/x402/agent-economy/leaderboard", params={"hours": hours}))
+        if view == "heatmap":
+            return _text(_proxy("GET", f"{sq}/x402/agent-economy/heatmap"))
+        return _text(_proxy("GET", f"{sq}/x402/agent-economy/", params={"hours": hours}))
 
     return {
         "content": [{"type": "text", "text": json.dumps({"error": "ERR_UNKNOWN_TOOL", "tool": name})}],
