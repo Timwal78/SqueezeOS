@@ -79,30 +79,14 @@ jobs:
 
               for entry in "${FAILURES[@]}"; do
                 IFS='|' read -r svc_name svc_status svc_url <<< "$entry"
-                FIELDS=$(echo "$FIELDS" | python3 -c "
-import json, sys
-fields = json.load(sys.stdin)
-fields.append({
-  'name': '🔴 ' + '''$svc_name''',
-  'value': '**Status:** ' + '''$svc_status''' + '\n**URL:** ' + '''$svc_url''',
-  'inline': False
-})
-print(json.dumps(fields))
-")
+                FIELDS=$(echo "$FIELDS" | jq --arg name "🔴 $svc_name" --arg status "$svc_status" --arg url "$svc_url" \
+                  '. + [{name: $name, value: ("**Status:** " + $status + "\n**URL:** " + $url), inline: false}]')
               done
 
               for entry in "${WARNINGS[@]}"; do
                 IFS='|' read -r svc_name svc_status svc_url <<< "$entry"
-                FIELDS=$(echo "$FIELDS" | python3 -c "
-import json, sys
-fields = json.load(sys.stdin)
-fields.append({
-  'name': '🟡 ' + '''$svc_name''',
-  'value': '**Status:** ' + '''$svc_status''' + '\n**URL:** ' + '''$svc_url''',
-  'inline': False
-})
-print(json.dumps(fields))
-")
+                FIELDS=$(echo "$FIELDS" | jq --arg name "🟡 $svc_name" --arg status "$svc_status" --arg url "$svc_url" \
+                  '. + [{name: $name, value: ("**Status:** " + $status + "\n**URL:** " + $url), inline: false}]')
               done
 
               COLOR=15158332   # red for hard failures
@@ -112,34 +96,24 @@ print(json.dumps(fields))
                 TITLE="⚠️ SML Service Warning"
               fi
 
-              python3 - <<PYEOF
-import json, urllib.request, os
+              PAYLOAD=$(jq -n \
+                --arg title "$TITLE" \
+                --argjson color "$COLOR" \
+                --arg desc "Proactive monitoring detected an issue. Investigate immediately." \
+                --argjson fields "$FIELDS" \
+                --arg footer "service-monitor.yml — every 10 min" \
+                --arg ts "$NOW" \
+                '{username: "SML Sentinel", embeds: [{title: $title, color: $color, description: $desc, fields: $fields, footer: {text: $footer}, timestamp: $ts}]}')
 
-payload = {
-  "username": "SML Sentinel",
-  "embeds": [{
-    "title": "$TITLE",
-    "color": $COLOR,
-    "description": "Proactive monitoring detected an issue. Investigate immediately.",
-    "fields": $FIELDS,
-    "footer": {"text": "service-monitor.yml — every 10 min"},
-    "timestamp": "$NOW"
-  }]
-}
-
-data = json.dumps(payload).encode()
-req = urllib.request.Request(
-  os.environ["DISCORD_WEBHOOK"],
-  data=data,
-  headers={"Content-Type": "application/json"},
-  method="POST"
-)
-try:
-  with urllib.request.urlopen(req, timeout=10) as r:
-    print(f"Discord alert sent: {r.status}")
-except Exception as e:
-  print(f"Discord alert failed: {e}")
-PYEOF
+              HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+                -X POST "$DISCORD_WEBHOOK" \
+                -H "Content-Type: application/json" \
+                -d "$PAYLOAD")
+              if [[ "$HTTP_CODE" =~ ^2 ]]; then
+                echo "Discord alert sent: $HTTP_CODE"
+              else
+                echo "Discord alert failed: $HTTP_CODE"
+              fi
             fi
 
             # Fail job only for hard errors (not warnings like 403 Vercel gate)
