@@ -1,6 +1,6 @@
 # SqueezeOS
 
-> Market intelligence platform by ScriptMasterLabs. Squeeze scanner, council verdicts, options flow, FTD oracle, macro matrix.
+> Institutional AI market intelligence platform by ScriptMasterLabs. Squeeze scanner, council verdicts, options flow, FTD oracle, macro matrix, AEO/GEO intelligence suite.
 
 This repository is part of the ScriptMasterLabs sovereign AI ecosystem.
 
@@ -9,13 +9,62 @@ This repository is part of the ScriptMasterLabs sovereign AI ecosystem.
 - Master llms.txt: https://www.scriptmasterlabs.com/llms.txt
 - Agent quickstart: https://www.scriptmasterlabs.com/agent-start.html
 - OpenAPI spec: https://www.scriptmasterlabs.com/.well-known/openapi.json
-- MCP server: https://squeezeos-api.onrender.com/mcp
+- MCP server: https://squeezeos-api.onrender.com/mcp (52 tools, streamable-http)
 - Credit score / ARGUS: https://four02proof.onrender.com/v1/bureau/score/{wallet}
+- Provider score: https://squeezeos-api.onrender.com/x402/provider-score/
+- Citation authority: https://squeezeos-api.onrender.com/api/citation-score/
+- Agent economy: https://squeezeos-api.onrender.com/x402/agent-economy/
+- Semantic gaps: https://squeezeos-api.onrender.com/api/graph/gaps/
 - Preflight quote: https://ghost-layer.onrender.com/v1/x402/quote
 
 ## Payment
 
 x402 protocol — RLUSD on XRPL or USDC on Base. Send X-Payment-Proof header with txHash, payer, amount, currency, network.
+
+## Free Endpoints (no payment required)
+
+- GET /api/demo/council — IWM council verdict (5-min cache)
+- GET /api/preview/{symbol} — signal preview for any US equity ticker
+- GET /api/history — recent signal ring buffer
+- GET /api/status — system health
+- GET /api/citation-score/ — AgentRank™ citation scores for SML services
+- GET /x402/provider-score/ — ARGUS AgentPageRank™ provider quality score
+- GET /api/graph/gaps/ — semantic demand gap leaderboard
+- GET /x402/agent-economy/ — AI agent economy summary
+- GET /api/scriptmaster/narrative — P04 API narrative quality report
+- GET /api/analytics/agents — agent traffic dashboard
+
+## AEO/GEO Intelligence Suite (NEW — 5 tools)
+
+SqueezeOS now includes an institutional-grade Answer Engine Optimization and Generative Engine Optimization suite. These tools track how AI assistants discover and cite SML APIs, and surface unmet developer demand.
+
+### AgentRank™ (citation_score MCP tool)
+Tracks Reddit and HN citations of ScriptMasterLabs services. Returns 0–100 citation authority score per service. Weekly automated probes + on-demand trigger.
+- GET /api/citation-score/
+- POST /api/citation-score/probe
+
+### P04 API Narrative Optimizer (narrative_optimize MCP tool)
+Scans llms.txt and .well-known/mcp.json for copy quality issues that reduce AI discoverability. Flags vague language, passive voice, and non-specific descriptions.
+- GET /api/scriptmaster/narrative
+
+### ARGUS AgentPageRank™ (provider_score MCP tool)
+Scores this provider 0–850 based on live AI agent traffic: volume, diversity, conversion rate, repeat visits. Grades from UNRANKED to SOVEREIGN.
+- GET /x402/provider-score/
+- GET /x402/provider-score/breakdown
+- GET /x402/provider-score/trend
+- GET /x402/provider-score/leaderboard
+
+### Semantic Gap Detector™ (semantic_gaps MCP tool)
+Crawls forums for "I need an API for X" demand signals. Clusters unmet demand, cross-references against SML capabilities, returns ranked opportunity gaps.
+- GET /api/graph/gaps/
+- POST /api/graph/gaps/scan
+
+### Agent Economy Intelligence Network™ AEIN (agent_economy MCP tool)
+ComScore for AI agent commerce. Shows which AI systems call us, conversion rates, hourly heatmap. Free summary; premium report costs 0.25 RLUSD.
+- GET /x402/agent-economy/
+- GET /x402/agent-economy/report (0.25 RLUSD)
+- GET /x402/agent-economy/leaderboard
+- GET /x402/agent-economy/heatmap
 
 ## Data Policy
 

@@ -56,6 +56,10 @@ from core.api.cascade_bp import cascade_bp
 from core.api.slack_bp import slack_bp
 from core.api.ccs_bp import ccs_bp
 from core.api.compliance_bp import compliance_bp
+from core.api.citation_scout_bp import citation_scout_bp, start_citation_scout
+from core.api.provider_score_bp import provider_score_bp
+from core.api.gap_detector_bp import gap_detector_bp, start_gap_detector
+from core.api.agent_economy_bp import agent_economy_bp
 import core.signal_history as signal_history
 from core.legacy import start_whale_stalker, init_services, get_service, clean_data
 from core.market_graph import get_graph
@@ -168,6 +172,11 @@ def create_app():
     app.register_blueprint(slack_bp,           url_prefix='/api/slack')
     app.register_blueprint(ccs_bp,             url_prefix='/api/ccs')
     app.register_blueprint(compliance_bp,      url_prefix='/api/compliance')
+    # AEO/SEO/GEO Intelligence Suite
+    app.register_blueprint(citation_scout_bp,  url_prefix='/api/citation-score')
+    app.register_blueprint(provider_score_bp,  url_prefix='/x402/provider-score')
+    app.register_blueprint(gap_detector_bp,    url_prefix='/api/graph/gaps')
+    app.register_blueprint(agent_economy_bp,   url_prefix='/x402/agent-economy')
 
     # Stellar Forge growth engine — feature-flagged, dormant unless enabled.
     # Registers the affiliate/loyalty/payout surface only when explicitly turned
@@ -203,6 +212,10 @@ def create_app():
 
         # Start institutional telemetry rotator (Goal 3)
         start_telemetry_rotator()
+
+        # AEO/GEO background engines
+        start_citation_scout()
+        start_gap_detector()
 
         # Start Real-World Data Oracle pollers (SEC EDGAR, FDA, USPTO)
         start_oracle_pollers()

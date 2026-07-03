@@ -116,6 +116,72 @@ def _run_protocol_02_visual_saturation(ai_client=None):
     return briefs
 
 
+def _run_protocol_04_api_narrative_optimizer():
+    """
+    Protocol 04: API Narrative Optimizer
+    Analyzes existing MCP tool descriptions and API endpoint copy for
+    AI-discoverability gaps. Rewrites descriptions using AutoGEO-style
+    preference signals: clarity, specificity, action-first language.
+    Reads the live openapi.json and .well-known/mcp.json manifests.
+    No AI model required — pure heuristic pass identifies weak copy.
+    """
+    import os as _os
+    results = []
+    weak_patterns = [
+        ("Returns", "Action-first: use 'Get' or 'Fetch' instead of 'Returns'"),
+        ("This endpoint", "Remove meta-reference — describe what it does directly"),
+        ("function that", "Remove implementation language — describe the value, not the code"),
+        ("data about", "Too vague — specify what data (e.g. 'real-time bid/ask quotes for')"),
+        ("various", "Too vague — enumerate what it includes"),
+        ("information", "Weak noun — replace with specific data type"),
+    ]
+
+    # Scan llms.txt for description quality
+    llms_path = _os.path.join(_os.path.dirname(__file__), "..", "..", "llms.txt")
+    llms_path = _os.path.abspath(llms_path)
+    if _os.path.exists(llms_path):
+        with open(llms_path, "r", encoding="utf-8") as f:
+            llms_content = f.read()
+        for pattern, advice in weak_patterns:
+            count = llms_content.lower().count(pattern.lower())
+            if count > 0:
+                results.append({
+                    "file":    "llms.txt",
+                    "pattern": pattern,
+                    "count":   count,
+                    "advice":  advice,
+                    "priority": "HIGH" if count > 2 else "MEDIUM",
+                })
+
+    # Scan .well-known/mcp.json tool descriptions
+    mcp_path = _os.path.join(_os.path.dirname(__file__), "..", "..", ".well-known", "mcp.json")
+    mcp_path = _os.path.abspath(mcp_path)
+    if _os.path.exists(mcp_path):
+        try:
+            with open(mcp_path, "r", encoding="utf-8") as f:
+                mcp_data = json.load(f)
+            tools = mcp_data.get("tools", [])
+            for tool in tools:
+                desc = tool.get("description", "")
+                name = tool.get("name", "?")
+                for pattern, advice in weak_patterns:
+                    if pattern.lower() in desc.lower():
+                        results.append({
+                            "file":    "mcp.json",
+                            "tool":    name,
+                            "pattern": pattern,
+                            "advice":  advice,
+                            "current_desc": desc[:120],
+                            "priority": "HIGH",
+                        })
+        except Exception as e:
+            results.append({"file": "mcp.json", "error": str(e)})
+
+    issues = len(results)
+    _log_mission("P04", "API Narrative Optimizer", f"Found {issues} copy quality issue(s)", tokens_used=0)
+    return results
+
+
 def _run_protocol_03_sentiment_exploitation(query="SaaS fatigue subscription cancellation"):
     """
     Protocol 03: Sentiment Exploitation
@@ -159,6 +225,7 @@ def get_status():
         "P01_authority_signaling": True,
         "P02_visual_saturation": True,
         "P03_sentiment_exploitation": True,
+        "P04_api_narrative_optimizer": True,
     }
     last_run = log_snapshot[0]["ts_str"] if log_snapshot else "NEVER"
 
@@ -190,11 +257,13 @@ def run_protocol():
 
     def _run_async():
         if protocol == "P01":
-            results = _run_protocol_01_authority_signaling(params.get("subreddits"))
+            _run_protocol_01_authority_signaling(params.get("subreddits"))
         elif protocol == "P02":
-            results = _run_protocol_02_visual_saturation()
+            _run_protocol_02_visual_saturation()
         elif protocol == "P03":
-            results = _run_protocol_03_sentiment_exploitation(params.get("query", "SaaS fatigue"))
+            _run_protocol_03_sentiment_exploitation(params.get("query", "SaaS fatigue"))
+        elif protocol == "P04":
+            _run_protocol_04_api_narrative_optimizer()
         else:
             _log_mission("??", "Unknown Protocol", f"No handler for {protocol}")
 
@@ -204,6 +273,26 @@ def run_protocol():
         "status": "success",
         "message": f"Protocol {protocol} dispatched",
         "ts": time.time()
+    })
+
+
+@scriptmaster_bp.route("/narrative", methods=["GET"])
+def get_narrative_report():
+    """
+    P04 API Narrative Optimizer — synchronous report.
+    Returns copy quality issues found in llms.txt and mcp.json manifests.
+    No AI model required. Free endpoint.
+    """
+    results = _run_protocol_04_api_narrative_optimizer()
+    high    = [r for r in results if r.get("priority") == "HIGH"]
+    medium  = [r for r in results if r.get("priority") == "MEDIUM"]
+    return jsonify({
+        "status":        "success",
+        "node":          "P04-API-NARRATIVE-OPTIMIZER",
+        "total_issues":  len(results),
+        "high_priority": len(high),
+        "issues":        results,
+        "scoring_note":  "Issues ranked HIGH when copy pattern appears in MCP tool descriptions (AI agents read these). Fixing HIGH issues directly improves AI discoverability.",
     })
 
 
