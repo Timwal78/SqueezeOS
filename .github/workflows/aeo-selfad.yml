@@ -1,0 +1,35 @@
+name: AEO Self-Advertising Loop (S1→S4)
+
+on:
+  schedule:
+    # 06:00 ET daily (11:00 UTC) — after overnight Reddit activity peaks
+    - cron: '0 11 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (log results, no writes)'
+        required: false
+        default: 'false'
+
+jobs:
+  aeo-loop:
+    name: Run S1→S4 AEO autonomous loop
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run AEO self-advertising loop
+        env:
+          SQUEEZEOS_BASE: https://squeezeos-api.onrender.com
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: python .github/scripts/aeo_selfad_loop.py
