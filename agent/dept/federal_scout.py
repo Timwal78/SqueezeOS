@@ -24,7 +24,7 @@ import requests
 import anthropic
 
 ANTH_KEY      = os.environ["ANTHROPIC_API_KEY"]
-MODEL         = os.environ.get("DEPT_MODEL", "claude-opus-4-8")
+MODEL         = os.environ.get("DEPT_MODEL", "claude-sonnet-5")
 MCP_X402      = os.environ.get("MCP_X402_BASE_URL", "https://mcp-x402.onrender.com")
 SQUEEZEOS     = os.environ.get("SQUEEZEOS_BASE_URL", "https://squeezeos-api.onrender.com")
 PAYMENT_TOKEN = os.environ.get("X402_PAYMENT_TOKEN", "")

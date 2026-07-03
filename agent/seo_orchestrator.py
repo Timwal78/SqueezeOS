@@ -49,7 +49,7 @@ SQUEEZEOS      = os.environ.get("SQUEEZEOS_BASE_URL", "https://squeezeos-api.onr
 ANTHROPIC_KEY  = os.environ["ANTHROPIC_API_KEY"]
 SLACK_WEBHOOK  = os.environ.get("SEO_SLACK_WEBHOOK", "")
 OUTPUT_DIR     = os.environ.get("SEO_OUTPUT_DIR", "agent/outputs")
-MODEL          = os.environ.get("SEO_MODEL", "claude-opus-4-8")
+MODEL          = os.environ.get("SEO_MODEL", "claude-sonnet-5")
 DEFAULT_SYMBOLS = ["IWM", "SPY", "QQQ", "NVDA", "MSTR"]
 TARGET_KEYWORDS = [k.strip() for k in os.environ.get(
     "SEO_TARGET_KEYWORDS",

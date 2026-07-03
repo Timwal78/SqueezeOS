@@ -396,7 +396,7 @@ Generate a JSON brief with this exact structure:
 Return ONLY the JSON. No markdown. No explanation."""
 
     message = client.messages.create(
-        model="claude-opus-4-7",
+        model="claude-sonnet-5",
         max_tokens=1024,
         messages=[{"role": "user", "content": prompt}],
     )

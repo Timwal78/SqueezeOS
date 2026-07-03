@@ -24,7 +24,7 @@ import requests
 import anthropic
 
 ANTH_KEY   = os.environ["ANTHROPIC_API_KEY"]
-MODEL      = os.environ.get("DEPT_MODEL", "claude-opus-4-8")
+MODEL      = os.environ.get("DEPT_MODEL", "claude-sonnet-5")
 OUTPUT_DIR = os.environ.get("SEO_OUTPUT_DIR", "agent/outputs")
 
 SESSION = requests.Session()
