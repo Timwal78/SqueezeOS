@@ -54,6 +54,9 @@ DIRECTORIES = [
     {"name": "G2 Software",      "check_url": "https://www.g2.com/search#q=scriptmasterlabs",              "category": "enterprise"},
     {"name": "ProductHunt",      "check_url": "https://www.producthunt.com/search?q=scriptmasterlabs",     "category": "enterprise"},
     {"name": "AlternativeTo",    "check_url": "https://alternativeto.net/browse/search/?q=squeezeos",      "category": "enterprise"},
+    # Dev community
+    {"name": "Devhunt.org",      "check_url": "https://devhunt.org/search?q=squeezeos",                    "category": "ai_tool"},
+    {"name": "dev.to",           "check_url": "https://dev.to/search?q=squeezeos",                          "category": "ai_tool"},
 ]
 
 # NOTE: MCP tool count below must match len(_TOOLS) in core/api/mcp_bp.py —
