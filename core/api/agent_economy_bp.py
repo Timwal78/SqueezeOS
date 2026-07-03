@@ -125,7 +125,7 @@ def economy_summary():
 
 
 @agent_economy_bp.route("/report", methods=["GET"])
-@require_payment(_AEIN_ENDPOINT_ID)
+@require_payment
 def economy_report():
     """
     Premium AEIN Report — full AI agent commerce intelligence.
