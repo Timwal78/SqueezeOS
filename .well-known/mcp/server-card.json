@@ -1,6 +1,6 @@
 {
   "name": "SqueezeOS",
-  "description": "Institutional market intelligence for AI agents — 33 tools including council verdicts, squeeze scanner, options flow, oracle data feeds, futures, agent-to-agent settlement, and x402 micropayments via USDC on Base or RLUSD on XRPL.",
+  "description": "Institutional market intelligence for AI agents — 52 tools including council verdicts, squeeze scanner, options flow, oracle data feeds, futures, agent-to-agent settlement, Cognitive Credit Swarms, IAM resolver, Sovereign signal suite, AEO/GEO intelligence suite, and x402 micropayments via USDC on Base or RLUSD on XRPL.",
   "version": "7.0.0",
   "url": "https://squeezeos-api.onrender.com/mcp",
   "protocol": "MCP JSON-RPC 2.0",
@@ -38,12 +38,31 @@
     {"name": "settlement_browse",      "description": "Browse open conditional settlement contracts."},
     {"name": "settlement_trigger",     "description": "Check if a settlement contract's condition is met."},
     {"name": "oracle_feeds",           "description": "Free catalog of all available Real-World Data Oracle feeds."},
-    {"name": "oracle_query",           "description": "Search or retrieve events from the oracle data feed."}
+    {"name": "oracle_query",           "description": "Search or retrieve events from the oracle data feed."},
+    {"name": "ccs_validate",           "description": "Cognitive Credit Swarms content trust validation — trust score, verdict, manipulation flags."},
+    {"name": "ccs_score",              "description": "Cognitive Credit Score for any XRPL wallet — composite trust grade A/B/C/D."},
+    {"name": "ccs_report",             "description": "Community-flag a sender wallet or content hash as misinformation."},
+    {"name": "ccs_leaderboard",        "description": "Top 25 most trusted wallets in the Cognitive Credit Swarms network."},
+    {"name": "ccs_stats",              "description": "Network-wide Cognitive Credit Swarms statistics."},
+    {"name": "ccs_info",               "description": "Cognitive Credit Swarms discovery endpoint — system description and how-it-works."},
+    {"name": "iam_resolve",            "description": "IAM Inevitable Action Model — resolves what action the market is forced to take."},
+    {"name": "iam_truth",              "description": "IAM Truth Layer — neutral obligation-pressure state for a symbol, no direction forced."},
+    {"name": "macro_741_scan",         "description": "741 Pure Macro Matrix — 5-layer EMA structural alignment engine."},
+    {"name": "sovereign_741",          "description": "SML 741 Macro Highway Signal — bullish/bearish/consolidation label only."},
+    {"name": "sovereign_365",          "description": "SML 365-Day EMA Anchor Signal — above/below macro structure label only."},
+    {"name": "sovereign_triplelock",   "description": "SML Triple Lock Consensus Signal — rarest max-conviction alignment label."},
+    {"name": "sovereign_full",         "description": "SML Sovereign Full Stack Signal — combines 741 Macro, 365 Anchor, and Triple Lock."},
+    {"name": "post_to_slack",          "description": "Post a sanitized market signal brief to Slack via incoming webhook."},
+    {"name": "citation_score",         "description": "AgentRank™ citation authority scores for ScriptMasterLabs APIs."},
+    {"name": "narrative_optimize",     "description": "P04 API Narrative Optimizer — audits discovery-manifest copy for AI-discoverability weaknesses."},
+    {"name": "provider_score",         "description": "ARGUS AgentPageRank™ — provider quality score 0-850 from live AI agent traffic."},
+    {"name": "semantic_gaps",          "description": "Semantic Gap Detector™ — unmet API demand signals from Reddit/HN."},
+    {"name": "agent_economy",          "description": "Agent Economy Intelligence Network™ (AEIN) — ComScore for AI agent commerce. Free summary; 0.25 RLUSD full report."}
   ],
   "payment": {
     "protocol": "x402",
     "networks": ["base", "xrpl", "xahau"],
     "asset": "USDC / RLUSD",
-    "free_tools": ["demo_council", "signal_preview", "system_status", "bureau_public_score", "marketplace_browse", "hiring_browse_jobs", "futures_browse", "futures_leaderboard", "settlement_browse", "oracle_feeds", "get_invoice", "verify_payment"]
+    "free_tools": ["demo_council", "signal_preview", "signal_history", "get_invoice", "verify_payment", "bureau_public_score", "marketplace_browse", "marketplace_list_signal", "hiring_browse_jobs", "hiring_post_job", "system_status", "futures_create", "futures_take", "futures_browse", "futures_leaderboard", "settlement_create", "settlement_browse", "settlement_trigger", "convergence_check", "autopilot_status", "autopilot_trades", "autopilot_start", "autopilot_stop", "circuit_breaker_reset", "beastmode_scan", "proprietary_ema_signal", "oracle_feeds", "iam_truth", "ccs_info", "ccs_score", "ccs_report", "ccs_leaderboard", "ccs_stats", "post_to_slack", "citation_score", "narrative_optimize", "provider_score", "semantic_gaps", "agent_economy"]
   }
 }
