@@ -607,7 +607,7 @@ Real, Claude-powered agents. No agent in this department fabricates a result —
 | `copytrader/` | XRPL Copy-Trader Engine™ | `https://sml-copytrader.onrender.com` | ⚠️ Deployed with PostgreSQL — needs `COPYTRADER_DB_URL`, `OPERATOR_WALLET_SEED`, `OPERATOR_WALLET_ADDRESS`, `DISCORD_WEBHOOK_COPYTRADER` |
 | `launchpad/` | Memecoin Launchpad (Forge)™ | `https://sml-launchpad.onrender.com` | ⚠️ Deployed with PostgreSQL — needs `LAUNCHPAD_DB_URL`, `OPERATOR_WALLET_SEED`, `OPERATOR_WALLET_ADDRESS`, `DISCORD_WEBHOOK_LAUNCHPAD` |
 | `x402-gateway/` | x402 Payment Gateway (Go) | `https://forge-gateway-a822.onrender.com` | ⚠️ Go service — needs `MERCHANT_WALLET_ADDRESS`, `ANTHROPIC_API_KEY`, `XRPL_NOTARY_WALLET_ADDRESS`, `XRPL_NOTARY_WALLET_SEED`, `REDIS_URL` |
-| `shadow-desk/` | Shadow Desk MCP Server (Go) | `https://shadow-desk.onrender.com` | ⚠️ Go service — needs `INGEST_SECRET`, `ALPHA_PROVIDER_WALLET`, `PLATFORM_WALLET`, `ADMIN_API_KEY` |
+| `shadow-desk/` | Shadow Desk MCP Server (Go) | `https://shadow-desk.onrender.com` | 🅿️ Manually suspended on Render (2026-07-04). Also still needs `INGEST_SECRET`, `ALPHA_PROVIDER_WALLET`, `PLATFORM_WALLET`, `ADMIN_API_KEY` before it can go live |
 | `dashboard/` | Forge Dashboard (React/Vite) | `https://sml-forge-dashboard.onrender.com` | ✅ Static site — `VITE_GATEWAY_URL=https://forge-gateway-a822.onrender.com` |
 
 **echo-forge repo** (`github.com/Timwal78/echo-forge`, public) — historical pattern matching engine (Polygon.io + ML cosine similarity). Dockerized, NOT yet deployed to Render as of May 2026.
@@ -631,7 +631,7 @@ Real, Claude-powered agents. No agent in this department fabricates a result —
 | SML Copy-Trader | Render | `sml-copytrader.onrender.com` | XRPL whale copy-trading engine (SML-XRPL-FEE-FORGE/copytrader) |
 | SML Launchpad | Render | `sml-launchpad.onrender.com` | Memecoin bonding curve launchpad (SML-XRPL-FEE-FORGE/launchpad) |
 | Forge x402 Gateway | Render | `forge-gateway-a822.onrender.com` | x402 payment protocol + BYOK LLM proxy (SML-XRPL-FEE-FORGE/x402-gateway) |
-| Shadow Desk | Render | `shadow-desk.onrender.com` | MCP signal server + billing (SML-XRPL-FEE-FORGE/shadow-desk) |
+| Shadow Desk | Render | `shadow-desk.onrender.com` | 🅿️ **Manually suspended on Render as of 2026-07-04.** MCP signal server + billing (SML-XRPL-FEE-FORGE/shadow-desk) — was never fully configured either (still missing `INGEST_SECRET`, `ALPHA_PROVIDER_WALLET`, `PLATFORM_WALLET`, `ADMIN_API_KEY`, see row above). Removed from `.well-known/institutional.json`'s `payment_rails` and `x402-registry.json`'s payment gateway list — restore both if unsuspended and configured. |
 | Script Master Labs | Vercel | `scriptmasterlabs.com` | Operator homepage + Ghost Layer Sovereign frontend |
 
 ---

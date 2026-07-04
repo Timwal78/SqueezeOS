@@ -67,8 +67,7 @@
         { "rail": "402Proof", "asset": "RLUSD", "network": "XRPL", "url": "https://four02proof.onrender.com" },
         { "rail": "Ghost Layer (XRPL)", "asset": "RLUSD", "network": "XRPL", "url": "https://ghost-layer.onrender.com" },
         { "rail": "Ghost Layer (Base)", "asset": "USDC", "network": "Base L2", "url": "https://ghost-layer.onrender.com" },
-        { "rail": "Forge x402 Gateway", "asset": "RLUSD", "network": "XRPL", "url": "https://forge-gateway-a822.onrender.com" },
-        { "rail": "Shadow Desk MCP", "asset": "RLUSD", "network": "XRPL", "url": "https://shadow-desk.onrender.com" }
+        { "rail": "Forge x402 Gateway", "asset": "RLUSD", "network": "XRPL", "url": "https://forge-gateway-a822.onrender.com" }
       ],
       "risk_controls": {
         "max_order_usd": 150,

@@ -125,13 +125,6 @@
           "network": "XRPL mainnet",
           "gateway": "https://forge-gateway-a822.onrender.com",
           "note": "BYOK LLM proxy with embedded x402 billing. AI agents can pay inline."
-        },
-        {
-          "rail": "Shadow Desk MCP",
-          "asset": "RLUSD",
-          "network": "XRPL mainnet",
-          "gateway": "https://shadow-desk.onrender.com",
-          "note": "MCP server with inline billing. Call as a tool — payment handled in protocol."
         }
       ],
       "endpoints": [
