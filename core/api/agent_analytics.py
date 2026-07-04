@@ -67,11 +67,58 @@ _PREMIUM_PREFIXES = (
     "/api/iwm", "/api/futures", "/api/settlement",
 )
 
-def _funnel_stage(path: str, status: int, has_token: bool) -> str:
+# /mcp is a single JSON-RPC URL that every tool call -- free or paid -- goes
+# through, so path-prefix staging alone can't see past it: every /mcp hit
+# fell into OTHER regardless of what was actually called. These mirror the
+# real free_tools/paid_tools split in .well-known/mcp.json (kept in sync
+# with core/api/mcp_bp.py's _TOOLS list).
+_MCP_PROTOCOL_METHODS = frozenset({"initialize", "tools/list", "ping"})
+
+_MCP_FREE_TOOLS = frozenset({
+    "demo_council", "signal_preview", "signal_history", "get_invoice", "verify_payment",
+    "bureau_public_score", "marketplace_browse", "marketplace_list_signal",
+    "hiring_browse_jobs", "hiring_post_job", "system_status", "futures_create",
+    "futures_take", "futures_browse", "futures_leaderboard", "settlement_create",
+    "settlement_browse", "settlement_trigger", "convergence_check", "autopilot_status",
+    "autopilot_trades", "autopilot_start", "autopilot_stop", "circuit_breaker_reset",
+    "beastmode_scan", "proprietary_ema_signal", "oracle_feeds", "iam_truth",
+    "ccs_info", "ccs_score", "ccs_report", "ccs_leaderboard", "ccs_stats", "post_to_slack",
+    "citation_score", "narrative_optimize", "provider_score", "semantic_gaps",
+})
+
+_MCP_PAID_TOOLS = frozenset({
+    "council_verdict", "market_scan", "options_intelligence", "iwm_odte",
+    "marketplace_read_signal", "oracle_query", "iam_resolve", "ccs_validate",
+    "sovereign_741", "sovereign_365", "macro_741_scan", "sovereign_triplelock", "sovereign_full",
+})
+
+# agent_economy is dual-tier on a single tool name: public summary is free,
+# the "report" view costs 0.25 RLUSD (mcp.json's paid_tools entry for it
+# carries an extra "view": "report" field marking the paid argument value).
+_MCP_DUAL_TIER_TOOLS = {"agent_economy": "report"}
+
+def _funnel_stage(path: str, status: int, has_token: bool,
+                  mcp_method: str = "", mcp_tool: str = "", mcp_view: str = "") -> str:
     if path in _INFRA_HEALTHCHECK_PATHS:
         return "INFRA_HEALTHCHECK"
     if path in _DISCOVERY_PATHS:
         return "DISCOVERED"
+    if path == "/mcp":
+        if mcp_method != "tools/call":
+            # initialize / tools/list / ping / notifications/* -- protocol
+            # handshake, not a business action.
+            return "DISCOVERED"
+        if mcp_tool in _MCP_DUAL_TIER_TOOLS:
+            if has_token:
+                return "CONVERTED"
+            if mcp_view == _MCP_DUAL_TIER_TOOLS[mcp_tool]:
+                return "PREMIUM_ATTEMPT"
+            return "FREE_TRIAL"
+        if mcp_tool in _MCP_PAID_TOOLS:
+            return "CONVERTED" if has_token else "PREMIUM_ATTEMPT"
+        if mcp_tool in _MCP_FREE_TOOLS:
+            return "FREE_TRIAL"
+        return "OTHER"
     if status == 402:
         return "INVOICED"
     if has_token and any(path.startswith(p) for p in _PREMIUM_PREFIXES):
@@ -101,9 +148,10 @@ _counters = {
 _counters_lock = threading.Lock()
 
 def record_request(path: str, method: str, status: int, ua: str,
-                   ip: str, wallet: str, has_token: bool, ms: float) -> None:
+                   ip: str, wallet: str, has_token: bool, ms: float,
+                   mcp_method: str = "", mcp_tool: str = "", mcp_view: str = "") -> None:
     agent_type = _classify_agent(ua)
-    stage      = _funnel_stage(path, status, has_token)
+    stage      = _funnel_stage(path, status, has_token, mcp_method, mcp_tool, mcp_view)
 
     entry = {
         "ts":         datetime.now(timezone.utc).isoformat(),
@@ -118,6 +166,9 @@ def record_request(path: str, method: str, status: int, ua: str,
         "wallet":     wallet,
         "paid":       has_token,
         "ms":         round(ms, 1),
+        "mcp_method": mcp_method,
+        "mcp_tool":   mcp_tool,
+        "mcp_view":   mcp_view,
     }
 
     with _log_lock:
@@ -163,8 +214,27 @@ def after_analytics(response):
     if path.startswith("/_"):
         return response
 
+    mcp_method = ""
+    mcp_tool   = ""
+    mcp_view   = ""
+    if path == "/mcp":
+        body = request.get_json(silent=True) or {}
+        mcp_method = body.get("method") or ""
+        params = body.get("params") or {}
+        arguments = params.get("arguments") or {}
+        if mcp_method == "tools/call":
+            mcp_tool = params.get("name") or ""
+            mcp_view = arguments.get("view") or ""
+        # mcp_bp.py's _dispatch() accepts payment_token via JSON-RPC args as
+        # well as the X-Payment-Token header -- only checking the header
+        # here would misclassify args-based payments as PREMIUM_ATTEMPT.
+        if not has_token:
+            has_token = bool(arguments.get("payment_token"))
+        if not wallet:
+            wallet = arguments.get("agent_wallet") or ""
+
     record_request(path, request.method, response.status_code,
-                   ua, ip, wallet, has_token, ms)
+                   ua, ip, wallet, has_token, ms, mcp_method, mcp_tool, mcp_view)
     return response
 
 # ── Analytics endpoints ───────────────────────────────────────────────────────
