@@ -353,7 +353,7 @@
         "GET /api/resolve/{username} — Farcaster username → XRPL wallet (free)",
         "GET /api/leaderboard — Top tipped users (free)"
       ],
-      "status": "live"
+      "status": "suspended"
     },
     "sml_beast_orchestrator": {
       "description": "SML Beast Orchestrator — Open-source reference implementation of an autonomous x402-driven SEO content engine + BB7 backlink outreach agent. Demos sub-50ms XRPL settlement for outreach, zero custody throughout (fire-and-forget Payment only, no escrow). MIT licensed.",
