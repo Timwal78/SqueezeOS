@@ -234,8 +234,6 @@
     { "service": "402Proof",  "path": "/v1/agent/{wallet}",       "description": "Agent passport and stats" },
     { "service": "402Proof",  "path": "/v1/bureau/score/{wallet}","description": "Public credit score (300-850)" },
     { "service": "Ghost Layer","path": "/health",                  "description": "XRPL + Base + Xahau network status" },
-    { "service": "TipMaster", "path": "/api/resolve/{username}",  "description": "Farcaster username → XRPL wallet address" },
-    { "service": "TipMaster", "path": "/api/leaderboard",         "description": "Top tipped users leaderboard" },
     { "service": "SqueezeOS", "path": "/api/citation-score/",     "description": "AgentRank™ — 0-100 citation authority score per SML service (Reddit + HN)" },
     { "service": "SqueezeOS", "path": "/api/citation-score/history", "description": "Historical citation score log" },
     { "service": "SqueezeOS", "path": "/x402/provider-score/",   "description": "ARGUS AgentPageRank™ — 0-850 provider quality score from live agent traffic" },

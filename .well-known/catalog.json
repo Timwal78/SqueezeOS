@@ -159,7 +159,7 @@
       "tagline": "Resolve Farcaster usernames to XRPL wallets. P2P tipping without custody.",
       "description": "Developer API for zero-custody Farcaster tipping on the XRP Ledger. Resolves Farcaster usernames directly to registered XRPL wallet addresses. Tips flow wallet-to-wallet — TipMaster never holds funds. Farcaster bot integration via Neynar. Free username resolution and leaderboard. Built for the agentic tipping economy.",
       "category": ["social", "payments", "xrpl", "farcaster"],
-      "status": "live",
+      "status": "suspended",
       "url": "https://tipmaster.onrender.com",
       "custom_domain": "https://tips.scriptmasterlabs.com",
       "payment_required": false,
