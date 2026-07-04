@@ -1,6 +1,6 @@
-name: SML Marketing Department — Daily Campaign Run
+name: SML Marketing Department — Campaign Loop
 
-# Runs the real CEO (campaign_director.run_all_agents) once a day. The CEO
+# Runs the real CEO (campaign_director.run_all_agents) every 4 hours. The CEO
 # dispatches work to Directory Ranger, Community Scout, and Federal Scout
 # in-process, verifies each one actually produced real output, reports every
 # real result (success or failure) to the public activity feed as it happens,
@@ -11,12 +11,18 @@ name: SML Marketing Department — Daily Campaign Run
 # That's gone — this workflow now calls the actual, tested campaign_director
 # module directly, so what runs here is exactly what's version-controlled
 # and reviewed, not a second copy of the logic.
+#
+# Bumped from 1x/day to every 4h (6x/day): Community Scout and Federal Scout
+# surface real, time-sensitive opportunities (Reddit/HN threads, federal
+# contracts) that go stale within a day. Directory Ranger just re-checks the
+# same 25 directories each run, so extra runs cost a little CI/API time but
+# never produce duplicate submissions.
 
 on:
   schedule:
-    # Daily 08:00 ET (12:00 UTC) — offset from the AEO self-ad loop's 06:00 ET
-    # run so the two don't compete for Render cold-start / API rate limits.
-    - cron: '0 12 * * *'
+    # Every 4 hours, offset 15m past the hour so it doesn't collide with the
+    # AEO self-ad loop's 06:00 ET run for Render cold-start / API rate limits.
+    - cron: '15 */4 * * *'
   workflow_dispatch: {}
 
 jobs:
