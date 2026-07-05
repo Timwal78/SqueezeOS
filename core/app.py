@@ -52,6 +52,7 @@ from core.api.macro741_bp import macro741_bp
 from core.api.macro_bp import macro_bp
 from core.api.signal_products_bp import signal_products_bp
 from core.api.avg_down_bp import avg_down_bp
+from core.api.vault_bp import vault_bp
 from core.api.cascade_bp import cascade_bp
 from core.api.slack_bp import slack_bp
 from core.api.ccs_bp import ccs_bp
@@ -170,6 +171,7 @@ def create_app():
     app.register_blueprint(macro741_bp,        url_prefix='/api')
     app.register_blueprint(macro_bp,           url_prefix='/api')
     app.register_blueprint(avg_down_bp,        url_prefix='/api/avg-down')
+    app.register_blueprint(vault_bp,           url_prefix='/api/vault')
     app.register_blueprint(cascade_bp,         url_prefix='/api/cascade')
     app.register_blueprint(signal_products_bp, url_prefix='/api/signals')
     app.register_blueprint(slack_bp,           url_prefix='/api/slack')
@@ -245,6 +247,12 @@ def create_app():
         # SML Avg-Down Engine — automated pyramid builder on 5-layer EMA ribbon
         from avg_down_engine import start_avg_down_engine
         start_avg_down_engine()
+
+        # SML Vault Engine — same pyramid strategy on crypto via CCXT, zero
+        # custody (operator's own exchange account only). No-ops with a log
+        # line if SML_EMA_PERIODS / SML_VAULT_SYMBOLS aren't configured.
+        from sml_vault_engine import start_vault_engine
+        start_vault_engine()
 
         # Self-pinger — keeps Render free-tier warm; pings own /api/status every 10 min
         _start_self_pinger()
