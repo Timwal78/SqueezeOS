@@ -47,6 +47,8 @@ _PAYMENT_PRICES = {
     '/api/compliance/audit':   5.00,
     '/api/compliance/regulator/query': 2.50,
     '/api/truth/verify': 0.02,  # path-param route /api/truth/verify/<symbol>, priced here for Discord notify only
+    '/api/memory/store': 0.01,
+    '/api/memory/recall': 0.01,
 }
 
 def _fire_payment_discord(wallet: str, path: str, tier: int) -> None:
@@ -120,6 +122,10 @@ ENDPOINTS = {
     # endpoint_id at all (no RLUSD rail existed for this route until the
     # dual_payment fix below). Minted here as the source of truth.
     '/api/triple-lock':        '9d8c7b6a-5f4e-3d2c-1b0a-9c8d7e6f5a4b',  # 0.25 RLUSD
+    # Memory Graph — static paths, looked up here by dual_payment's default
+    # ENDPOINTS.get(request.path) (unlike truth_bp.py's path-param route).
+    '/api/memory/store':       '21a91f63-9a46-49cd-8590-dec5a7b4668e',  # 0.01 RLUSD
+    '/api/memory/recall':      '3377523c-7c8f-40a9-b5ee-bb755a795c67',  # 0.01 RLUSD
     # Oracle routes use path params so payment is verified inline in oracle_data_bp.py:
     # '/api/oracle/latest/<feed>'  → ORACLE_READ_ENDPOINT_ID   e7f8a9b0-...  0.02 RLUSD
     # '/api/oracle/query'          → ORACLE_READ_ENDPOINT_ID   e7f8a9b0-...  0.02 RLUSD
