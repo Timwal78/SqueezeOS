@@ -974,6 +974,71 @@ _TOOLS = [
             },
         },
     },
+
+    # ── Memory Graph — persistent, provenance-tracked agent memory ──────────────
+    {
+        "name": "memory_store",
+        "description": (
+            "Memory Graph. Cost: 0.01 RLUSD. Persists an agent memory in Redis "
+            "(durable across sessions) with the caller's own provenance kept "
+            "exactly as submitted — this tool never invents or upgrades a "
+            "confidence score. provenance.confidence is required. "
+            "Pass payment_token from verify_payment plus agent_wallet."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["content", "agent_id", "provenance"],
+            "properties": {
+                "content": {"type": "string"},
+                "agent_id": {"type": "string"},
+                "type": {"type": "string", "enum": ["episodic", "semantic", "procedural", "custom"]},
+                "tags": {"type": "array", "items": {"type": "string"}},
+                "provenance": {
+                    "type": "object",
+                    "required": ["confidence"],
+                    "properties": {
+                        "source_type": {"type": "string"},
+                        "source_id": {"type": "string"},
+                        "confidence": {"type": "number"},
+                    },
+                },
+                "payment_token": {"type": "string"},
+                "agent_wallet": {"type": "string"},
+            },
+        },
+    },
+    {
+        "name": "memory_recall",
+        "description": (
+            "Memory Graph. Cost: 0.01 RLUSD. Literal keyword/tag search over an "
+            "agent's own stored memories, ranked by recency. Not semantic or "
+            "vector search — no embedding model is involved, and the response "
+            "says so explicitly (match_method field). "
+            "Pass payment_token from verify_payment plus agent_wallet."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["agent_id"],
+            "properties": {
+                "agent_id": {"type": "string"},
+                "query": {"type": "string"},
+                "type": {"type": "string"},
+                "tags": {"type": "string", "description": "comma-separated"},
+                "limit": {"type": "number"},
+                "payment_token": {"type": "string"},
+                "agent_wallet": {"type": "string"},
+            },
+        },
+    },
+    {
+        "name": "memory_stats",
+        "description": "Free. Real count of an agent's stored memories by type, and which storage backend is active (redis or in-memory-fallback).",
+        "inputSchema": {
+            "type": "object",
+            "required": ["agent_id"],
+            "properties": {"agent_id": {"type": "string"}},
+        },
+    },
 ]
 
 # Endpoint IDs for helpful 402 error messages
@@ -992,6 +1057,8 @@ _ENDPOINT_IDS = {
     "sovereign_full":       "b8c9d0e1-f2a3-4567-89ab-234567890123",
     "agent_economy":        "c8d9e0f1-a2b3-4c5d-6e7f-890123456789",
     "truth_verify":         "d20a9662-7a64-4b71-8efa-23b72dc994f3",
+    "memory_store":         "21a91f63-9a46-49cd-8590-dec5a7b4668e",
+    "memory_recall":        "3377523c-7c8f-40a9-b5ee-bb755a795c67",
 }
 _PRICES = {
     "council_verdict": 0.10, "market_scan": 0.05,
@@ -1003,6 +1070,8 @@ _PRICES = {
     "sovereign_triplelock": 0.05, "sovereign_full": 0.10,
     "agent_economy": 0.25,
     "truth_verify": 0.02,
+    "memory_store": 0.01,
+    "memory_recall": 0.01,
 }
 
 
@@ -1259,6 +1328,39 @@ def _dispatch(name: str, args: dict, req_headers: dict) -> dict:
             _text(_proxy("GET", f"{sq}/api/truth/verify/{symbol}", headers=ph)),
             _tier, _seed,
         )
+
+    # ── Memory Graph — persistent, provenance-tracked agent memory ──────────────
+    if name == "memory_store":
+        if not payment_token: return _need_token(name)
+        body = {
+            "content": args.get("content"),
+            "agent_id": args.get("agent_id"),
+            "type": args.get("type", "episodic"),
+            "tags": args.get("tags", []),
+            "provenance": args.get("provenance", {}),
+        }
+        return _compress_mcp_result(
+            _text(_proxy("POST", f"{sq}/api/memory/store", headers=ph, json_body=body)),
+            _tier, _seed,
+        )
+
+    if name == "memory_recall":
+        if not payment_token: return _need_token(name)
+        params = {
+            "agent_id": args.get("agent_id"),
+            "query": args.get("query"),
+            "type": args.get("type"),
+            "tags": args.get("tags"),
+            "limit": args.get("limit"),
+        }
+        return _compress_mcp_result(
+            _text(_proxy("GET", f"{sq}/api/memory/recall", headers=ph, params=params)),
+            _tier, _seed,
+        )
+
+    if name == "memory_stats":
+        agent_id = args.get("agent_id", "")
+        return _text(_proxy("GET", f"{sq}/api/memory/stats/{agent_id}"))
 
     # ── 741 Pure Macro Matrix ─────────────────────────────────────────────────
     if name == "macro_741_scan":
