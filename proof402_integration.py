@@ -46,6 +46,7 @@ _PAYMENT_PRICES = {
     '/api/compliance/anomaly': 5.00,
     '/api/compliance/audit':   5.00,
     '/api/compliance/regulator/query': 2.50,
+    '/api/truth/verify': 0.02,  # path-param route /api/truth/verify/<symbol>, priced here for Discord notify only
 }
 
 def _fire_payment_discord(wallet: str, path: str, tier: int) -> None:
@@ -126,6 +127,8 @@ ENDPOINTS = {
     # /api/iam/<symbol> uses a path param so its endpoint_id (matching the
     # iam_resolve MCP tool description, mcp_bp.py:869) is passed explicitly to
     # dual_payment() in iam_bp.py rather than looked up here by path.
+    # /api/truth/verify/<symbol> is the same shape — TRUTH_ENDPOINT_ID
+    # (d20a9662-...) is passed explicitly to dual_payment() in truth_bp.py.
 }
 
 

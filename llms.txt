@@ -9,7 +9,7 @@ This repository is part of the ScriptMasterLabs sovereign AI ecosystem.
 - Master llms.txt: https://www.scriptmasterlabs.com/llms.txt
 - Agent quickstart: https://www.scriptmasterlabs.com/agent-start.html
 - OpenAPI spec: https://www.scriptmasterlabs.com/.well-known/openapi.json
-- MCP server: https://squeezeos-api.onrender.com/mcp (52 tools, streamable-http)
+- MCP server: https://squeezeos-api.onrender.com/mcp (53 tools, streamable-http)
 - Credit score / ARGUS: https://four02proof.onrender.com/v1/bureau/score/{wallet}
 - Provider score: https://squeezeos-api.onrender.com/x402/provider-score/
 - Citation authority: https://squeezeos-api.onrender.com/api/citation-score/

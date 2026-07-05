@@ -949,6 +949,31 @@ _TOOLS = [
             },
         },
     },
+
+    # ── Truth Engine — live multi-provider price consensus ──────────────────────
+    {
+        "name": "truth_verify",
+        "description": (
+            "Truth Engine. Cost: 0.02 RLUSD. Queries Tradier, Alpaca, and Polygon "
+            "independently for the same symbol and returns a consensus price with a "
+            "real measured variance/spread across whichever sources actually responded "
+            "(not a single quote relabeled three times). Confidence is a direct function "
+            "of source agreement, not a fixed number. Response includes an HMAC-SHA256 "
+            "proof hash so it can be verified as unaltered after this server produced it. "
+            "If fewer than 2 providers respond, consensus_method is marked "
+            "'single-source-unverified' rather than faking a second opinion. "
+            "Pass payment_token from verify_payment plus agent_wallet."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["symbol"],
+            "properties": {
+                "symbol": {"type": "string", "description": "Ticker symbol, e.g. IWM"},
+                "payment_token": {"type": "string"},
+                "agent_wallet": {"type": "string"},
+            },
+        },
+    },
 ]
 
 # Endpoint IDs for helpful 402 error messages
@@ -966,6 +991,7 @@ _ENDPOINT_IDS = {
     "sovereign_triplelock": "a7b8c9d0-e1f2-3456-789a-123456789012",
     "sovereign_full":       "b8c9d0e1-f2a3-4567-89ab-234567890123",
     "agent_economy":        "c8d9e0f1-a2b3-4c5d-6e7f-890123456789",
+    "truth_verify":         "d20a9662-7a64-4b71-8efa-23b72dc994f3",
 }
 _PRICES = {
     "council_verdict": 0.10, "market_scan": 0.05,
@@ -976,6 +1002,7 @@ _PRICES = {
     "sovereign_741": 0.02, "sovereign_365": 0.03,
     "sovereign_triplelock": 0.05, "sovereign_full": 0.10,
     "agent_economy": 0.25,
+    "truth_verify": 0.02,
 }
 
 
@@ -1223,6 +1250,15 @@ def _dispatch(name: str, args: dict, req_headers: dict) -> dict:
     if name == "iam_truth":
         symbol = (args.get("symbol") or "IWM").upper()
         return _text(_proxy("GET", f"{sq}/api/iam/truth/{symbol}"))
+
+    # ── Truth Engine — live multi-provider price consensus ──────────────────────
+    if name == "truth_verify":
+        if not payment_token: return _need_token(name)
+        symbol = (args.get("symbol") or "IWM").upper()
+        return _compress_mcp_result(
+            _text(_proxy("GET", f"{sq}/api/truth/verify/{symbol}", headers=ph)),
+            _tier, _seed,
+        )
 
     # ── 741 Pure Macro Matrix ─────────────────────────────────────────────────
     if name == "macro_741_scan":
