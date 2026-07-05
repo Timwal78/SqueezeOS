@@ -66,6 +66,7 @@ from core.api.aeo_treasury_bp import aeo_treasury_bp
 from core.api.marketing_activity_bp import marketing_activity_bp
 from core.api.truth_bp import truth_bp
 from core.api.memory_bp import memory_bp
+from core.api.fred_bp import fred_bp
 import core.signal_history as signal_history
 from core.legacy import start_whale_stalker, init_services, get_service, clean_data
 from core.market_graph import get_graph
@@ -189,6 +190,7 @@ def create_app():
     app.register_blueprint(marketing_activity_bp, url_prefix='/api/marketing')
     app.register_blueprint(truth_bp,           url_prefix='/api/truth')
     app.register_blueprint(memory_bp,          url_prefix='/api/memory')
+    app.register_blueprint(fred_bp,            url_prefix='/api/fred')
 
     # Stellar Forge growth engine — feature-flagged, dormant unless enabled.
     # Registers the affiliate/loyalty/payout surface only when explicitly turned
