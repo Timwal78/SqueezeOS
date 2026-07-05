@@ -1039,6 +1039,23 @@ _TOOLS = [
             "properties": {"agent_id": {"type": "string"}},
         },
     },
+
+    # ── FRED — Federal Reserve Economic Data (macro series) ──────────────────────
+    {
+        "name": "fred_series",
+        "description": (
+            "Free. Latest real observation for any FRED (Federal Reserve Economic "
+            "Data) series — CPI (CPIAUCSL), unemployment (UNRATE), Fed funds rate "
+            "(FEDFUNDS), 10Y treasury yield (DGS10), GDP, etc. Public government "
+            "data, not gated. Returns a real error (not a placeholder) if "
+            "FRED_API_KEY isn't configured or the series has no data."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["series_id"],
+            "properties": {"series_id": {"type": "string", "description": "FRED series ID, e.g. CPIAUCSL"}},
+        },
+    },
 ]
 
 # Endpoint IDs for helpful 402 error messages
@@ -1361,6 +1378,11 @@ def _dispatch(name: str, args: dict, req_headers: dict) -> dict:
     if name == "memory_stats":
         agent_id = args.get("agent_id", "")
         return _text(_proxy("GET", f"{sq}/api/memory/stats/{agent_id}"))
+
+    # ── FRED — Federal Reserve Economic Data ─────────────────────────────────────
+    if name == "fred_series":
+        series_id = (args.get("series_id") or "").upper()
+        return _text(_proxy("GET", f"{sq}/api/fred/series/{series_id}"))
 
     # ── 741 Pure Macro Matrix ─────────────────────────────────────────────────
     if name == "macro_741_scan":

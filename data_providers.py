@@ -615,6 +615,105 @@ class AlphaVantageProvider:
 
 
 # ============================================================
+# FRED PROVIDER — Federal Reserve Economic Data (macro series)
+# ============================================================
+class FredProvider:
+    """Real macro indicators (CPI, unemployment, Fed funds rate, treasury
+    yields, etc.) from the St. Louis Fed's public FRED API. Free tier: no
+    hard rate limit is published, but FRED asks for reasonable use — this
+    applies the same lightweight throttle pattern as the other providers.
+    Never fabricates a series value: if the API call fails or the key is
+    missing, callers get an explicit error, not a placeholder number."""
+
+    def __init__(self):
+        self.api_key = os.environ.get('FRED_API_KEY', '')
+        self.base = 'https://api.stlouisfed.org/fred'
+        self.last_call = 0
+        self.min_interval = 0.5
+        if self.available:
+            logger.info(f"[FRED] Ready ({self.api_key[:6]}...)")
+        else:
+            logger.warning("[FRED] Not configured — set FRED_API_KEY")
+
+    @property
+    def available(self) -> bool:
+        return bool(self.api_key)
+
+    def _rate_limit(self):
+        elapsed = time.time() - self.last_call
+        if elapsed < self.min_interval:
+            time.sleep(self.min_interval - elapsed)
+        self.last_call = time.time()
+
+    def get_latest_observation(self, series_id: str) -> dict:
+        """Most recent real value for a FRED series (e.g. CPIAUCSL, UNRATE,
+        FEDFUNDS, DGS10, GDP). Returns {} if unavailable or the series has
+        no data — never a synthetic value."""
+        if not self.available:
+            return {}
+        self._rate_limit()
+        try:
+            r = requests.get(
+                f"{self.base}/series/observations",
+                params={
+                    'series_id': series_id,
+                    'api_key': self.api_key,
+                    'file_type': 'json',
+                    'sort_order': 'desc',
+                    'limit': 1,
+                },
+                timeout=15,
+            )
+            if r.status_code != 200:
+                logger.warning(f"[FRED] {series_id}: HTTP {r.status_code} — {r.text[:200]}")
+                return {}
+            obs = r.json().get('observations', [])
+            if not obs or obs[0].get('value') in (None, '.'):
+                return {}
+            o = obs[0]
+            return {
+                'series_id': series_id,
+                'value': float(o['value']),
+                'date': o.get('date'),
+                'source': 'fred',
+            }
+        except Exception as e:
+            logger.error(f"[FRED] {series_id}: {e}")
+            return {}
+
+    def get_series_info(self, series_id: str) -> dict:
+        """Real series metadata (title, units, frequency) — not hardcoded
+        labels, since a caller passing an arbitrary FRED series_id must get
+        the actual title FRED has for it."""
+        if not self.available:
+            return {}
+        self._rate_limit()
+        try:
+            r = requests.get(
+                f"{self.base}/series",
+                params={'series_id': series_id, 'api_key': self.api_key, 'file_type': 'json'},
+                timeout=15,
+            )
+            if r.status_code != 200:
+                return {}
+            seriess = r.json().get('seriess', [])
+            if not seriess:
+                return {}
+            s = seriess[0]
+            return {
+                'series_id': series_id,
+                'title': s.get('title'),
+                'units': s.get('units'),
+                'frequency': s.get('frequency'),
+                'seasonal_adjustment': s.get('seasonal_adjustment'),
+                'last_updated': s.get('last_updated'),
+            }
+        except Exception as e:
+            logger.error(f"[FRED] series info {series_id}: {e}")
+            return {}
+
+
+# ============================================================
 # TRADIER PROVIDER — live execution + options quotes
 # ============================================================
 class TradierProvider:
@@ -837,6 +936,7 @@ class DataManager:
         self.polygon = PolygonProvider()
         self.alphav = AlphaVantageProvider()
         self.tradier = TradierProvider()
+        self.fred = FredProvider()
         logger.info("[DATA] Ready")
 
     def provider_status(self) -> dict:
@@ -845,6 +945,7 @@ class DataManager:
             'alpaca': self.alpaca.available,
             'polygon': self.polygon.available,
             'alphavantage': self.alphav.available,
+            'fred': self.fred.available,
         }
 
     # --- AUTO-DISCOVERY ---

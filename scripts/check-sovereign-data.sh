@@ -46,6 +46,9 @@ ALLOWLIST=(
   "sml_matrix_webhook.py:ROBINHOOD MCP HOOK \\(placeholder"
   "stellar_forge/economy/store.py:Translate the neutral '\\?' placeholder"
   "core/api/truth_bp.py:No hardcoded prices, no simulated consensus"
+  "data_providers.py:callers get an explicit error, not a placeholder number"
+  "core/api/mcp_bp.py:Returns a real error \\(not a placeholder\\) if"
+  "core/api/fred_bp.py:placeholder\\."
 )
 
 is_allowlisted() {
