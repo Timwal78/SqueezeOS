@@ -45,6 +45,7 @@ ALLOWLIST=(
   "core/api/convergence_bp.py:Uses realistic placeholder data"
   "sml_matrix_webhook.py:ROBINHOOD MCP HOOK \\(placeholder"
   "stellar_forge/economy/store.py:Translate the neutral '\\?' placeholder"
+  "core/api/truth_bp.py:No hardcoded prices, no simulated consensus"
 )
 
 is_allowlisted() {
