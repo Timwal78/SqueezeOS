@@ -206,6 +206,18 @@
       ],
       "priority_bid_header": "X-Grace-Tip",
       "priority_bid_description": "Include X-Grace-Tip: <rlusd_amount> to bid for rank-1 priority. Highest tip in the 5ms window = rank 1 = fastest data delivery. Auction results include X-Auction-Rank and X-Merkle-Leaf headers."
+    },
+
+    {
+      "service": "ScriptMaster Agentic Vending Router",
+      "base_url": "https://scriptmaster-vending-router.onrender.com",
+      "note": "Canonical x402 protocol — accepts[0] is always Base/USDC (standard x402-fetch/x402-axios clients, CDP-facilitator-aware agents), accepts[1] is XRPL/RLUSD. Also reachable over MCP JSON-RPC at /mcp.",
+      "mcp_endpoint": "https://scriptmaster-vending-router.onrender.com/mcp",
+      "agents_json": "https://scriptmaster-vending-router.onrender.com/.well-known/agents.json",
+      "endpoints": [
+        { "path": "/ghost-layer/notarize", "method": "POST", "cost": "0.15", "currency": "USDC or RLUSD", "description": "Mints a real Xahau URIToken decision-notarization receipt via Ghost Layer — no XRPL wallet required from the caller, this service pays Ghost Layer's own notary fee on your behalf" },
+        { "path": "/vend/dynamic", "method": "POST", "cost": "0.01 + 0.005/KB (capped 2.00)", "currency": "USDC or RLUSD", "description": "Generic payload vending, priced by serialized payload size — returns a SHA-256 digest and byte length" }
+      ]
     }
   ],
 
