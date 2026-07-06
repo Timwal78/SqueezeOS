@@ -397,17 +397,32 @@ def require_payment(f):
 
         _base = os.getenv('SQUEEZEOS_BASE_URL', 'https://squeezeos-api.onrender.com')
         free_preview = _free_preview_for(path)
+        _resource_desc = f"SqueezeOS — {path.strip('/').replace('/', ' ').title()}"
         body = {
             # ── x402 standard fields (Coinbase CDP / AP2 compatible) ─────────
-            'x402Version': 1,
+            # v2 shape, same fix as x402_flask.py's _402(): `amount` alongside
+            # `maxAmountRequired`, top-level `resource` as an object. Note this
+            # rail is RLUSD/XRPL-only (no Base/USDC accept) -- routes gated by
+            # plain @require_payment (not @dual_payment) will still read as
+            # "no x402 payment option" to a Base/USDC-only crawler like
+            # x402scan regardless of version, since there's no USDC accept
+            # here for it to recognize. That's a rail-coverage gap, not fixed
+            # by this version/shape bump -- use @dual_payment for USDC support.
+            'x402Version': 2,
             'error': 'X402',
+            'resource': {
+                'url': f"{_base}{path}",
+                'description': _resource_desc,
+                'mimeType': 'application/json',
+            },
             'accepts': [{
                 'scheme':            'exact',
                 'network':           'xrpl',
+                'amount':            str(inv.get('amount', '0')),
                 'maxAmountRequired': str(inv.get('amount', '0')),
                 'asset':             inv.get('asset', 'RLUSD'),
                 'resource':          f"{_base}{path}",
-                'description':       f"SqueezeOS — {path.strip('/').replace('/', ' ').title()}",
+                'description':       _resource_desc,
                 'mimeType':          'application/json',
                 'payTo':             inv.get('pay_to', ''),
                 'maxTimeoutSeconds': 300,

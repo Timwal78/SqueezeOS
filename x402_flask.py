@@ -17,7 +17,7 @@ import requests
 from functools import wraps
 from flask import request, jsonify, make_response
 
-X402_VERSION = 1
+X402_VERSION = 2
 
 NETWORK      = os.environ.get("X402_NETWORK", "base-sepolia")
 PAY_TO       = os.environ.get("X402_PAY_TO", "0x4e14B249D9A4c9c9352D780eCEB508A8eB7a7700")
@@ -44,10 +44,17 @@ def _usdc_atomic(price_usdc: str) -> str:
 
 def _payment_requirements(price_usdc: str, description: str, resource: str) -> dict:
     cfg = USDC.get(NETWORK, USDC["base-sepolia"])
+    units = _usdc_atomic(price_usdc)
     return {
         "scheme": "exact",
         "network": NETWORK,
-        "maxAmountRequired": _usdc_atomic(price_usdc),
+        # x402 v2 wants both: `amount` is the field the validator checks;
+        # `maxAmountRequired` is kept because our own facilitator chain
+        # settles off it. Confirmed against a live sibling deployment
+        # (SML_Portfolio/mcp-x402) whose engineering notes record this
+        # exact validator requirement — not a guess.
+        "amount": units,
+        "maxAmountRequired": units,
         "resource": resource,
         "description": description,
         "mimeType": "application/json",
@@ -91,6 +98,7 @@ def _rlusd_requirements(price_rlusd: str, description: str, resource: str) -> "d
     return {
         "scheme": "xrpl-invoice",
         "network": "xrpl",
+        "amount": str(price_rlusd),
         "maxAmountRequired": str(price_rlusd),
         "resource": resource,
         "description": description,
@@ -125,7 +133,21 @@ def _402(requirements: dict, reason: str = ""):
     )
     if rlusd is not None:
         accepts.append(rlusd)
-    body = {"x402Version": X402_VERSION, "accepts": accepts, "error": reason}
+    body = {
+        "x402Version": X402_VERSION,
+        "error": reason,
+        # v2 top-level `resource` is an OBJECT, not the plain string each
+        # accept entry still carries for backward compat. Missing this was
+        # confirmed (via the sibling mcp-x402 deployment's own debugging
+        # history) to make x402scan/Bazaar discovery reject the response
+        # outright rather than just flag it as outdated.
+        "resource": {
+            "url": requirements["resource"],
+            "description": requirements["description"],
+            "mimeType": requirements["mimeType"],
+        },
+        "accepts": accepts,
+    }
     resp = make_response(jsonify(body), 402)
     resp.headers["Content-Type"] = "application/json"
     return resp
