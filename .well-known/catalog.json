@@ -28,7 +28,7 @@
       "id": "squeezeos",
       "name": "SqueezeOS — Institutional AI Market Intelligence",
       "tagline": "Multi-engine AI trading signals for autonomous agents. Pay per call. No API keys.",
-      "description": "Squeeze scanner, institutional options flow, IWM 0DTE analysis, AI council verdicts, TRIPLE_LOCK_VERDICT premium tier, SML Sovereign Signal Suite (741 Macro Highway / 365 Anchor / Triple Lock / Full Stack), Decision Notary bridge (Xahau URIToken minting for EU AI Act audit trails), signal futures prediction market, regulatory event oracle (SEC 8-K, FDA, USPTO), FTD Data Oracle (SEC Reg SHO Fails-To-Deliver + settlement cycle echo bridge), Cognitive Credit Swarms (content trust validation, Micro-Attention Tax via x402, sender wallet reputation), Agent Credit Bureau, and AEO/GEO Intelligence Suite: AgentRank™ citation scoring (tracks how often SML APIs are cited by AI assistants and developer forums), ARGUS AgentPageRank™ provider score (0–850 live quality score from AI agent traffic), Semantic Gap Detector™ (unmet API demand discovery from Reddit/HN), P04 API Narrative Optimizer (copy quality auditor for AI discoverability), and Agent Economy Intelligence Network™ AEIN (ComScore for AI agent commerce — 0.25 RLUSD premium report). 57 MCP tools. All premium calls gated by x402 RLUSD. Free demo, preview, citation scores, provider scores, gap detector, and AEO summary always available.",
+      "description": "Squeeze scanner, institutional options flow, IWM 0DTE analysis, AI council verdicts, TRIPLE_LOCK_VERDICT premium tier, SML Sovereign Signal Suite (741 Macro Highway / 365 Anchor / Triple Lock / Full Stack), Decision Notary bridge (Xahau URIToken minting for EU AI Act audit trails), signal futures prediction market, regulatory event oracle (SEC 8-K, FDA, USPTO), FTD Data Oracle (SEC Reg SHO Fails-To-Deliver + settlement cycle echo bridge), Cognitive Credit Swarms (content trust validation, Micro-Attention Tax via x402, sender wallet reputation), Agent Credit Bureau, and AEO/GEO Intelligence Suite: AgentRank™ citation scoring (tracks how often SML APIs are cited by AI assistants and developer forums), ARGUS AgentPageRank™ provider score (0–850 live quality score from AI agent traffic), Semantic Gap Detector™ (unmet API demand discovery from Reddit/HN), P04 API Narrative Optimizer (copy quality auditor for AI discoverability), and Agent Economy Intelligence Network™ AEIN (ComScore for AI agent commerce — 0.25 RLUSD premium report). 58 MCP tools. All premium calls gated by x402 RLUSD. Free demo, preview, citation scores, provider scores, gap detector, and AEO summary always available.",
       "category": ["finance", "trading", "market-intelligence", "agent-economy"],
       "status": "live",
       "url": "https://squeezeos-api.onrender.com",
@@ -294,7 +294,7 @@
       "payment_asset": "RLUSD",
       "payment_network": "XRPL",
       "free_tools": ["demo_council", "signal_preview", "signal_history", "system_status", "ccs_info", "ccs_score", "ccs_leaderboard", "oracle_feeds", "marketplace_browse", "hiring_browse_jobs", "futures_browse", "citation_score", "narrative_optimize", "provider_score", "semantic_gaps", "agent_economy"],
-      "tool_count": 57,
+      "tool_count": 58,
       "categories": ["finance", "trading", "market-data", "agent-economy"]
     },
     "google_ap2": {
