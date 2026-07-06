@@ -250,6 +250,29 @@
       "payment_protocol": "x402",
       "payment_asset": "RLUSD",
       "tags": ["harmonics", "pattern-recognition", "trading", "xrpl", "uritoken", "nft", "x402"]
+    },
+
+    {
+      "id": "scriptmaster-vending-router",
+      "name": "ScriptMaster Agentic Vending Router",
+      "tagline": "x402 vending stack for AI agents — pay-per-call by payload size, plus a Xahau decision-notary resale that needs no XRPL wallet on the caller's side.",
+      "description": "General-purpose x402-gated MCP server (@scriptmasterlabs/mcp-x402). Dynamic-priced payload vending (base + per-KB, capped), and a resale of Ghost Layer's real Xahau decision-notarization service — this router pays Ghost Layer's own notary fee on the caller's behalf, so an agent holding only USDC on Base can still get a Xahau-notarized cryptographic receipt with an Ed25519 attestation certificate. Base/USDC is the primary settlement rail (accepts[0] in every 402 challenge, matching the standard x402-fetch/x402-axios client and CDP-facilitator-aware agents), XRPL/RLUSD is the secondary rail.",
+      "category": ["agent-economy", "payments", "x402", "infrastructure"],
+      "status": "live",
+      "url": "https://scriptmaster-vending-router.onrender.com",
+      "mcp_endpoint": "https://scriptmaster-vending-router.onrender.com/mcp",
+      "mcp_transport": "streamable-http",
+      "agents_json": "https://scriptmaster-vending-router.onrender.com/.well-known/agents.json",
+      "health": "https://scriptmaster-vending-router.onrender.com/health",
+      "payment_required": true,
+      "payment_protocol": "x402",
+      "free_tier": true,
+      "pricing": [
+        { "endpoint": "/ghost-layer/notarize", "method": "POST", "cost": "0.15", "currency": "USDC or RLUSD", "description": "Mints a real Xahau URIToken decision receipt via Ghost Layer — no XRPL wallet required from the caller" },
+        { "endpoint": "/vend/dynamic", "method": "POST", "cost": "0.01 + 0.005/KB", "currency": "USDC or RLUSD", "description": "Generic payload vending, priced by payload size (capped at 2.00)" }
+      ],
+      "free_endpoints": ["/health", "/.well-known/manifest.json", "/.well-known/agents.json", "/ghost-layer/status"],
+      "tags": ["x402", "mcp", "agent-economy", "usdc", "rlusd", "base", "xrpl", "ghost-layer", "notarize", "cdp-facilitator"]
     }
   ],
 
@@ -349,6 +372,11 @@
     "loom": {
       "url": "https://signal-auction-loom.vercel.app",
       "ws":  "wss://ghost-layer.onrender.com/ws/loom"
+    },
+    "scriptmaster_vending_router": {
+      "agents_json": "https://scriptmaster-vending-router.onrender.com/.well-known/agents.json",
+      "manifest_json": "https://scriptmaster-vending-router.onrender.com/.well-known/manifest.json",
+      "mcp_json": "https://scriptmaster-vending-router.onrender.com/mcp"
     }
   }
 }
