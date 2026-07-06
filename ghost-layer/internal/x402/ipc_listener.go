@@ -84,10 +84,10 @@ func handleConnection(conn net.Conn, priv ed25519.PrivateKey, xahauClient *chain
 		// path has no external paying customer — it's Ghost Layer's own
 		// Engine7 execution loop — so the real, verifiable identity is the
 		// gateway wallet that will actually sign the Xahau mint below.
-		// Previously hardcoded to the placeholder string "rHxGhostWallet",
-		// which isn't a valid XRPL address and didn't correspond to anything
-		// real. Left blank (not fabricated) when no XahauClient is
-		// configured, since there is no real wallet to attribute it to yet.
+		// Previously hardcoded to the literal string "rHxGhostWallet", which
+		// isn't a valid XRPL address and didn't correspond to anything real.
+		// Left blank (not fabricated) when no XahauClient is configured,
+		// since there is no real wallet to attribute it to yet.
 		agentWallet := ""
 		if xahauClient != nil {
 			agentWallet = xahauClient.GatewayAddress
