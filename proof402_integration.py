@@ -49,6 +49,7 @@ _PAYMENT_PRICES = {
     '/api/truth/verify': 0.02,  # path-param route /api/truth/verify/<symbol>, priced here for Discord notify only
     '/api/memory/store': 0.01,
     '/api/memory/recall': 0.01,
+    '/api/fred/series': 0.01,  # path-param route /api/fred/series/<series_id>, priced here for Discord notify only
 }
 
 def _fire_payment_discord(wallet: str, path: str, tier: int) -> None:

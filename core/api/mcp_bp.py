@@ -1042,18 +1042,37 @@ _TOOLS = [
 
     # ── FRED — Federal Reserve Economic Data (macro series) ──────────────────────
     {
-        "name": "fred_series",
+        "name": "fred_preview",
         "description": (
-            "Free. Latest real observation for any FRED (Federal Reserve Economic "
-            "Data) series — CPI (CPIAUCSL), unemployment (UNRATE), Fed funds rate "
-            "(FEDFUNDS), 10Y treasury yield (DGS10), GDP, etc. Public government "
-            "data, not gated. Returns a real error (not a placeholder) if "
-            "FRED_API_KEY isn't configured or the series has no data."
+            "Free. Latest value + date only (no metadata) for a small whitelisted "
+            "set of well-known FRED series: CPIAUCSL, UNRATE, FEDFUNDS, DGS10, GDP. "
+            "Use fred_series (paid) for any series_id plus full metadata."
         ),
         "inputSchema": {
             "type": "object",
             "required": ["series_id"],
-            "properties": {"series_id": {"type": "string", "description": "FRED series ID, e.g. CPIAUCSL"}},
+            "properties": {"series_id": {"type": "string", "description": "One of CPIAUCSL, UNRATE, FEDFUNDS, DGS10, GDP"}},
+        },
+    },
+    {
+        "name": "fred_series",
+        "description": (
+            "Cost: 0.01 RLUSD. Latest real observation plus full series metadata "
+            "(title, units, frequency, seasonal adjustment, last updated) for any "
+            "FRED (Federal Reserve Economic Data) series — CPI (CPIAUCSL), "
+            "unemployment (UNRATE), Fed funds rate (FEDFUNDS), 10Y treasury yield "
+            "(DGS10), GDP, etc. Returns a real error (not a placeholder) if "
+            "FRED_API_KEY isn't configured or the series has no data. "
+            "Pass payment_token from verify_payment plus agent_wallet."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["series_id"],
+            "properties": {
+                "series_id": {"type": "string", "description": "FRED series ID, e.g. CPIAUCSL"},
+                "payment_token": {"type": "string"},
+                "agent_wallet": {"type": "string"},
+            },
         },
     },
 ]
@@ -1076,6 +1095,7 @@ _ENDPOINT_IDS = {
     "truth_verify":         "d20a9662-7a64-4b71-8efa-23b72dc994f3",
     "memory_store":         "21a91f63-9a46-49cd-8590-dec5a7b4668e",
     "memory_recall":        "3377523c-7c8f-40a9-b5ee-bb755a795c67",
+    "fred_series":          "57e061f2-04ca-4e2c-943f-41afae56e316",
 }
 _PRICES = {
     "council_verdict": 0.10, "market_scan": 0.05,
@@ -1089,6 +1109,7 @@ _PRICES = {
     "truth_verify": 0.02,
     "memory_store": 0.01,
     "memory_recall": 0.01,
+    "fred_series": 0.01,
 }
 
 
@@ -1380,9 +1401,17 @@ def _dispatch(name: str, args: dict, req_headers: dict) -> dict:
         return _text(_proxy("GET", f"{sq}/api/memory/stats/{agent_id}"))
 
     # ── FRED — Federal Reserve Economic Data ─────────────────────────────────────
-    if name == "fred_series":
+    if name == "fred_preview":
         series_id = (args.get("series_id") or "").upper()
-        return _text(_proxy("GET", f"{sq}/api/fred/series/{series_id}"))
+        return _text(_proxy("GET", f"{sq}/api/fred/preview/{series_id}"))
+
+    if name == "fred_series":
+        if not payment_token: return _need_token(name)
+        series_id = (args.get("series_id") or "").upper()
+        return _compress_mcp_result(
+            _text(_proxy("GET", f"{sq}/api/fred/series/{series_id}", headers=ph)),
+            _tier, _seed,
+        )
 
     # ── 741 Pure Macro Matrix ─────────────────────────────────────────────────
     if name == "macro_741_scan":
