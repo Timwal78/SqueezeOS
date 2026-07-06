@@ -19,8 +19,11 @@ func main() {
 	fix.GlobalServer = fix.NewFixServer(":4021", "INSTITUTIONAL_PB", "SQUEEZEOS_PROD")
 	go fix.GlobalServer.Start()
 
-	// Start the listener
-	x402.StartIPCListener(privKey)
+	// Start the listener. No real XahauClient here — this is a local test
+	// harness with a throwaway in-memory keypair, so SubmitToXahau() will
+	// honestly log that notarization was skipped rather than fabricate a
+	// result (previously it minted a fake random "ledger hash").
+	x402.StartIPCListener(privKey, nil)
 	
 	// Block for 15 seconds to allow Python script to connect and execute
 	time.Sleep(15 * time.Second)

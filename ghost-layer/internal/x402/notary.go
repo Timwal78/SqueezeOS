@@ -5,11 +5,13 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
-	"encoding/json"
+	"fmt"
 	"log"
 	"strconv"
 	"sync/atomic"
 	"time"
+
+	"ghost-layer-core/internal/chain"
 )
 
 // LockKeyMemory is a no-op on Linux/container environments.
@@ -94,49 +96,42 @@ func SignDecision(decisionHash, xahauTx, agentWallet, model, endpoint, tier, gra
 	return cert, nil
 }
 
-// XahauMemo represents a single memo entry in an XRPL transaction
-type XahauMemo struct {
-	Memo struct {
-		MemoData   string `json:"MemoData"`
-		MemoFormat string `json:"MemoFormat"`
-		MemoType   string `json:"MemoType"`
-	} `json:"Memo"`
-}
-
-// SubmitToXahau packages the DecisionCertificate into a Xahau Memos block
-// and mocks the JSON-RPC submission to the Xahau testnet.
-func SubmitToXahau(cert DecisionCertificate) {
-	// 1. Serialize the Payload (Hex Encode for XRPL compliance)
-	memoData := hex.EncodeToString([]byte(cert.DecisionHash + "|" + cert.Signature))
-	memoFormat := hex.EncodeToString([]byte("text/plain"))
-	memoType := hex.EncodeToString([]byte("402Proof"))
-
-	memo := XahauMemo{}
-	memo.Memo.MemoData = memoData
-	memo.Memo.MemoFormat = memoFormat
-	memo.Memo.MemoType = memoType
-
-	// Mocking the JSON payload that would be sent to the JSON-RPC endpoint
-	payload := map[string]interface{}{
-		"method": "submit",
-		"params": []interface{}{
-			map[string]interface{}{
-				"tx_blob": "MOCKED_SIGNED_TX_BLOB_CONTAINING_MEMO",
-				"Memos":   []XahauMemo{memo},
-			},
-		},
+// SubmitToXahau mints cert as a real Xahau URIToken via xahauClient — the same
+// MintURIToken call the HTTP /v1/notarize handler in cmd/bridge/main.go uses.
+//
+// This used to fabricate a random "ledger hash" and log it as a settled
+// transaction (see git history) without ever contacting Xahau — a direct
+// violation of this project's own no-fake-data policy: a SOVEREIGN-grade
+// certificate implies real on-chain attestation, and nothing was on-chain.
+//
+// xahauClient may be nil (not yet configured on this deployment, matching
+// the same "not yet configured" pattern used elsewhere in this codebase,
+// e.g. SML-Vault-Executor / AEO Treasury) — in that case this logs the
+// omission honestly instead of pretending to have submitted anything.
+//
+// Note: cert.Signature was already computed by SignDecision() before this
+// runs (with XahauTx as passed in, often ""), so a real tx hash minted here
+// is NOT retroactively folded back into the signed certificate already
+// returned to the caller — this call is fire-and-forget specifically to
+// keep the IPC hot path non-blocking, and its real result is only logged and
+// broadcast to the FIX drop-copy stream, not re-signed. Anything reading a
+// returned certificate's XahauTx field must not assume it reflects this
+// call's outcome.
+func SubmitToXahau(cert DecisionCertificate, xahauClient *chain.XahauClient) {
+	if xahauClient == nil {
+		log.Printf("[XAHAU] ERR_XAHAU_NOT_CONFIGURED — decision_hash=%s NOT notarized (no XahauClient configured)", cert.DecisionHash)
+		return
 	}
 
-	payloadJSON, _ := json.MarshalIndent(payload, "", "  ")
-	log.Printf("[XAHAU] Outbound Payload Prepared:\n%s\n", string(payloadJSON))
+	memoJSON := fmt.Sprintf(`{"decision_hash":%q,"signature":%q,"certificate_id":%q}`,
+		cert.DecisionHash, cert.Signature, cert.CertificateID)
+	uniqueURI := fmt.Sprintf("%s-%d", cert.DecisionHash, time.Now().UnixNano())
 
-	// 2. Simulate Network Latency for the Sandbox PoC
-	time.Sleep(150 * time.Millisecond)
+	txHash, err := xahauClient.MintURIToken(uniqueURI, nil, memoJSON)
+	if err != nil {
+		log.Printf("[XAHAU] ERR_MINT_FAILED for decision_hash=%s: %v", cert.DecisionHash, err)
+		return
+	}
 
-	// 3. Mock the Ledger Hash Response
-	mockHashBytes := make([]byte, 32)
-	rand.Read(mockHashBytes)
-	mockLedgerHash := hex.EncodeToString(mockHashBytes)
-
-	log.Printf("[XAHAU] SUCCESS - 402Proof Settled. Ledger Hash: %s\n", mockLedgerHash)
+	log.Printf("[XAHAU] SUCCESS - decision_hash=%s minted as real Xahau tx: %s", cert.DecisionHash, txHash)
 }
