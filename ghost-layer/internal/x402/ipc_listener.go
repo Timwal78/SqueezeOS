@@ -12,6 +12,7 @@ import (
 	"os"
 	"runtime"
 
+	"ghost-layer-core/internal/chain"
 	"ghost-layer-core/internal/fix"
 )
 
@@ -26,7 +27,10 @@ type ExecutionPayload struct {
 }
 
 // StartIPCListener boots the OS-gated socket listener for Python payloads.
-func StartIPCListener(privKey ed25519.PrivateKey) {
+// xahauClient may be nil when Xahau isn't configured on this deployment —
+// decisions are still hashed and signed, but SubmitToXahau() will log that
+// notarization was skipped rather than fabricate a result (see notary.go).
+func StartIPCListener(privKey ed25519.PrivateKey, xahauClient *chain.XahauClient) {
 	var listener net.Listener
 	var err error
 
@@ -49,12 +53,12 @@ func StartIPCListener(privKey ed25519.PrivateKey) {
 			if err != nil {
 				continue
 			}
-			go handleConnection(conn, privKey)
+			go handleConnection(conn, privKey, xahauClient)
 		}
 	}()
 }
 
-func handleConnection(conn net.Conn, priv ed25519.PrivateKey) {
+func handleConnection(conn net.Conn, priv ed25519.PrivateKey, xahauClient *chain.XahauClient) {
 	defer conn.Close()
 	var payload ExecutionPayload
 
@@ -94,9 +98,10 @@ func handleConnection(conn net.Conn, priv ed25519.PrivateKey) {
 			return
 		}
 
-		// Dispatch the Xahau testnet submission asynchronously
-		// This guarantees zero blocking on the 0.43 ms IPC loop
-		go SubmitToXahau(cert)
+		// Dispatch the real Xahau mint asynchronously — keeps the 0.43 ms IPC
+		// loop non-blocking regardless of Xahau's ledger confirmation time.
+		// See SubmitToXahau's doc comment: this no longer fabricates a result.
+		go SubmitToXahau(cert, xahauClient)
 
 		// Dispatch to the Drop-Copy FIX stream asynchronously via the OutboundQueue
 		if fix.GlobalServer != nil {
