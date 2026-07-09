@@ -144,18 +144,24 @@ i_s9_l3 = input.int(1, "L3", group="SML Licensed — Set 9 (GOD-C)", minval=1)
 i_s9_l4 = input.int(1, "L4", group="SML Licensed — Set 9 (GOD-C)", minval=1)
 i_s9_l5 = input.int(1, "L5", group="SML Licensed — Set 9 (GOD-C)", minval=1)
 
+// Generic 5-EMA helper — takes 5 independent periods, no formula relationship
+// between them (Pine tuple destructuring requires a function call, not a
+// bare array literal, on the right-hand side).
+f_ema5(p1, p2, p3, p4, p5) =>
+    [ta.ema(close, p1), ta.ema(close, p2), ta.ema(close, p3), ta.ema(close, p4), ta.ema(close, p5)]
+
 // Tier III — WATCH (3 configs)
-[e1a, e1b, e1c, e1d, e1e] = [ta.ema(close, i_s1_l1), ta.ema(close, i_s1_l2), ta.ema(close, i_s1_l3), ta.ema(close, i_s1_l4), ta.ema(close, i_s1_l5)]
-[e2a, e2b, e2c, e2d, e2e] = [ta.ema(close, i_s2_l1), ta.ema(close, i_s2_l2), ta.ema(close, i_s2_l3), ta.ema(close, i_s2_l4), ta.ema(close, i_s2_l5)]
-[e3a, e3b, e3c, e3d, e3e] = [ta.ema(close, i_s3_l1), ta.ema(close, i_s3_l2), ta.ema(close, i_s3_l3), ta.ema(close, i_s3_l4), ta.ema(close, i_s3_l5)]
+[e1a, e1b, e1c, e1d, e1e] = f_ema5(i_s1_l1, i_s1_l2, i_s1_l3, i_s1_l4, i_s1_l5)
+[e2a, e2b, e2c, e2d, e2e] = f_ema5(i_s2_l1, i_s2_l2, i_s2_l3, i_s2_l4, i_s2_l5)
+[e3a, e3b, e3c, e3d, e3e] = f_ema5(i_s3_l1, i_s3_l2, i_s3_l3, i_s3_l4, i_s3_l5)
 // Tier II — PRIME (3 configs)
-[e4a, e4b, e4c, e4d, e4e] = [ta.ema(close, i_s4_l1), ta.ema(close, i_s4_l2), ta.ema(close, i_s4_l3), ta.ema(close, i_s4_l4), ta.ema(close, i_s4_l5)]
-[e5a, e5b, e5c, e5d, e5e] = [ta.ema(close, i_s5_l1), ta.ema(close, i_s5_l2), ta.ema(close, i_s5_l3), ta.ema(close, i_s5_l4), ta.ema(close, i_s5_l5)]
-[e6a, e6b, e6c, e6d, e6e] = [ta.ema(close, i_s6_l1), ta.ema(close, i_s6_l2), ta.ema(close, i_s6_l3), ta.ema(close, i_s6_l4), ta.ema(close, i_s6_l5)]
+[e4a, e4b, e4c, e4d, e4e] = f_ema5(i_s4_l1, i_s4_l2, i_s4_l3, i_s4_l4, i_s4_l5)
+[e5a, e5b, e5c, e5d, e5e] = f_ema5(i_s5_l1, i_s5_l2, i_s5_l3, i_s5_l4, i_s5_l5)
+[e6a, e6b, e6c, e6d, e6e] = f_ema5(i_s6_l1, i_s6_l2, i_s6_l3, i_s6_l4, i_s6_l5)
 // Tier I — GOD MODE (3 configs) — Set 7 = FLAGSHIP
-[e7a, e7b, e7c, e7d, e7e] = [ta.ema(close, i_s7_l1), ta.ema(close, i_s7_l2), ta.ema(close, i_s7_l3), ta.ema(close, i_s7_l4), ta.ema(close, i_s7_l5)]
-[e8a, e8b, e8c, e8d, e8e] = [ta.ema(close, i_s8_l1), ta.ema(close, i_s8_l2), ta.ema(close, i_s8_l3), ta.ema(close, i_s8_l4), ta.ema(close, i_s8_l5)]
-[e9a, e9b, e9c, e9d, e9e] = [ta.ema(close, i_s9_l1), ta.ema(close, i_s9_l2), ta.ema(close, i_s9_l3), ta.ema(close, i_s9_l4), ta.ema(close, i_s9_l5)]
+[e7a, e7b, e7c, e7d, e7e] = f_ema5(i_s7_l1, i_s7_l2, i_s7_l3, i_s7_l4, i_s7_l5)
+[e8a, e8b, e8c, e8d, e8e] = f_ema5(i_s8_l1, i_s8_l2, i_s8_l3, i_s8_l4, i_s8_l5)
+[e9a, e9b, e9c, e9d, e9e] = f_ema5(i_s9_l1, i_s9_l2, i_s9_l3, i_s9_l4, i_s9_l5)
 // =========================================================================
 
 // ── Volume / ATR ──────────────────────────────────────────────────────────────
