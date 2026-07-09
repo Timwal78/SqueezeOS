@@ -49,14 +49,22 @@ SEARCH_QUERIES = [
     "MCP server finance",
     "pay per call AI API",
     "agent micropayment",
+    "answer engine optimization AI",
+    "AEO citation tracking",
+    "AI agent credit score",
+    "GEO generative engine optimization",
+    "SEO agent swarm",
 ]
 
 SML_VALUE_PROPS = {
-    "mcp_trading":    "SqueezeOS MCP server at squeezeos-api.onrender.com/mcp — 49 tools for institutional market intelligence",
+    "mcp_trading":    "SqueezeOS MCP server at squeezeos-api.onrender.com/mcp — 52 tools for institutional market intelligence",
     "x402":           "x402 protocol implementation: agents pay RLUSD on XRPL, get signed JWT, call premium endpoints — no subscriptions",
-    "signals":        "CASCADE ACCUMULATOR: real-time squeeze momentum signals, options flow, dark pool activity via /api/council",
+    "signals":        "CASCADE ACCUMULATOR: real-time squeeze momentum signals, options flow, dark pool activity via /api/council ($149/mo or 0.25 RLUSD/call)",
     "federal_data":   "44 x402 endpoints: SEC 10-K, FDA warnings, SBIR grants, NIH grants, FINRA compliance — all pay-per-call",
     "ghost_layer":    "Ghost Layer: private XRPL+Base routing for MEV-resistant transactions",
+    "aeo_suite":      "AEO/GEO Intelligence Suite: AgentRank citation scoring, ARGUS provider score, Semantic Gap Detector — free Scout tier, $49-149/mo BYOK tiers (aeo.scriptmasterlabs.com)",
+    "credit_bureau":  "SML Agent Credit Bureau: FICO-style 300-850 credit scores for XRPL agent wallets, free score lookup, paid full report (scriptmasterlabs.com/agent-credit-bureau)",
+    "agentswarm_seo": "AgentSwarm SEO: autonomous multi-agent SEO swarm with a live Swarm Intelligence Score (SIS) and real .well-known/AI-discovery file generation (scriptmasterlabs.com/agentswarm-seo)",
 }
 
 
@@ -145,8 +153,13 @@ TOOLS = [
                 "title":        {"type": "string"},
                 "context":      {"type": "string", "description": "Thread body or key excerpt"},
                 "opportunity_type": {"type": "string", "enum": ["question_answerable", "product_mention", "problem_match", "announcement_reply"]},
+                "value_prop_key": {
+                    "type": "string",
+                    "enum": list(SML_VALUE_PROPS.keys()),
+                    "description": "Which SML product is actually most relevant to this specific thread — pick based on the title/context, not the opportunity_type.",
+                },
             },
-            "required": ["platform", "url", "title", "context", "opportunity_type"],
+            "required": ["platform", "url", "title", "context", "opportunity_type", "value_prop_key"],
         },
     },
 ]
@@ -159,13 +172,9 @@ def execute_tool(name: str, inputs: dict) -> str:
         return json.dumps(search_hn(inputs["query"]))
     elif name == "analyze_opportunity":
         opp_type = inputs.get("opportunity_type", "question_answerable")
-        vp_map = {
-            "question_answerable": "x402" if "payment" in inputs.get("title","").lower() else "mcp_trading",
-            "product_mention":     "mcp_trading",
-            "problem_match":       "signals",
-            "announcement_reply":  "federal_data",
-        }
-        vp_key = vp_map.get(opp_type, "mcp_trading")
+        vp_key = inputs.get("value_prop_key") or "mcp_trading"
+        if vp_key not in SML_VALUE_PROPS:
+            vp_key = "mcp_trading"
         return json.dumps({
             "url":          inputs["url"],
             "title":        inputs["title"],

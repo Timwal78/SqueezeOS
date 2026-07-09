@@ -39,12 +39,14 @@ SML_CAPABILITIES = {
     "cage":             "21U51",
     "naics_codes":      ["541511", "541512", "541519", "511210", "523130"],
     "core_capabilities": [
-        "Autonomous AI agent infrastructure (MCP protocol, 49 tools)",
+        "Autonomous AI agent infrastructure (MCP protocol, 52 tools)",
         "Real-time market intelligence API (institutional-grade, pay-per-call)",
         "x402 HTTP micropayment protocol implementation",
         "XRPL/Xahau blockchain payment rails (RLUSD)",
         "Federal data aggregation (SEC, FDA, NIH, SBIR, Congress, FINRA, EPA)",
         "Compliance monitoring and anomaly detection",
+        "AI content authenticity, citation, and provider trust scoring (AEO/GEO Intelligence Suite)",
+        "Zero-custody agent wallet reputation and credit scoring (Agent Credit Bureau)",
         "Sovereign data infrastructure (zero-telemetry, no vendor lock-in)",
     ],
     "relevant_agencies": ["DoD", "NSF", "NIH", "DARPA", "DHS", "Treasury", "SEC", "CFTC"],
@@ -169,7 +171,7 @@ def execute_tool(name: str, inputs: dict) -> str:
             "sml_match_statement": (
                 f"Script Master Labs, LLC (SAM UEI: G24VZA4RLMK3, CAGE: 21U51) offers a sovereign AI "
                 f"infrastructure stack directly applicable to {inputs.get('opportunity_title')}. "
-                f"Our MCP-protocol API server provides 49 real-time intelligence tools, "
+                f"Our MCP-protocol API server provides 52 real-time intelligence tools, "
                 f"44 x402 pay-per-call federal data endpoints (SEC, FDA, NIH, SBIR, Congress, FINRA, EPA), "
                 f"and an autonomous agent payment layer via XRPL/RLUSD — enabling {inputs.get('agency', 'federal agencies')} "
                 f"to deploy AI agents that pay for their own data and report in real-time. "
