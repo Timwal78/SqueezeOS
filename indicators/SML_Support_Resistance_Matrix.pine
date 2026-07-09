@@ -44,26 +44,28 @@ var bool InsideBarAtSupport = false
 // ══════════════════════════════════════════
 // RESISTANCE ZONE ARRAYS
 // ══════════════════════════════════════════
-var line[]  rTopLines  = array.new_line()
-var line[]  rBotLines  = array.new_line()
-var float[] rZoneHArr  = array.new_float()
-var float[] rZoneLArr  = array.new_float()
-var int[]   rZoneStart = array.new_int()
-var bool[]  rWasAway   = array.new_bool()
-var float   RZoneH     = na
-var float   RZoneL     = na
+var line[]     rTopLines  = array.new_line()
+var line[]     rBotLines  = array.new_line()
+var linefill[] rFillArr   = array.new_linefill()
+var float[]    rZoneHArr  = array.new_float()
+var float[]    rZoneLArr  = array.new_float()
+var int[]      rZoneStart = array.new_int()
+var bool[]     rWasAway   = array.new_bool()
+var float      RZoneH     = na
+var float      RZoneL     = na
 
 // ══════════════════════════════════════════
 // SUPPORT ZONE ARRAYS
 // ══════════════════════════════════════════
-var line[]  sTopLines  = array.new_line()
-var line[]  sBotLines  = array.new_line()
-var float[] sZoneHArr  = array.new_float()
-var float[] sZoneLArr  = array.new_float()
-var int[]   sZoneStart = array.new_int()
-var bool[]  sWasAway   = array.new_bool()
-var float   SZoneH     = na
-var float   SZoneL     = na
+var line[]     sTopLines  = array.new_line()
+var line[]     sBotLines  = array.new_line()
+var linefill[] sFillArr   = array.new_linefill()
+var float[]    sZoneHArr  = array.new_float()
+var float[]    sZoneLArr  = array.new_float()
+var int[]      sZoneStart = array.new_int()
+var bool[]     sWasAway   = array.new_bool()
+var float      SZoneH     = na
+var float      SZoneL     = na
 
 // ══════════════════════════════════════════
 // PIVOT HIGH VALUES (last 4)
@@ -125,9 +127,10 @@ TBotL        = ta.valuewhen(tbc, math.min(low,  low[1]),  0)
 addResZone(startIdx, zH, zL) =>
     tl = line.new(startIdx, zH, bar_index, zH, color = ResColor, width = 1)
     bl = line.new(startIdx, zL, bar_index, zL, color = ResColor, width = 1)
-    linefill.new(tl, bl, color = color.new(ResColor, ZoneAlpha))
+    fl = linefill.new(tl, bl, color = color.new(ResColor, ZoneAlpha))
     array.push(rTopLines, tl)
     array.push(rBotLines, bl)
+    array.push(rFillArr, fl)
     array.push(rZoneHArr, zH)
     array.push(rZoneLArr, zL)
     array.push(rZoneStart, bar_index)
@@ -136,9 +139,10 @@ addResZone(startIdx, zH, zL) =>
 addSupZone(startIdx, zH, zL) =>
     tl = line.new(startIdx, zH, bar_index, zH, color = SupColor, width = 1)
     bl = line.new(startIdx, zL, bar_index, zL, color = SupColor, width = 1)
-    linefill.new(tl, bl, color = color.new(SupColor, ZoneAlpha))
+    fl = linefill.new(tl, bl, color = color.new(SupColor, ZoneAlpha))
     array.push(sTopLines, tl)
     array.push(sBotLines, bl)
+    array.push(sFillArr, fl)
     array.push(sZoneHArr, zH)
     array.push(sZoneLArr, zL)
     array.push(sZoneStart, bar_index)
@@ -198,6 +202,7 @@ if array.size(rTopLines) > 0
         startBar = array.get(rZoneStart, i)
         tl       = array.get(rTopLines,  i)
         bl       = array.get(rBotLines,  i)
+        fl       = array.get(rFillArr,   i)
         wasAway  = array.get(rWasAway,   i)
         isBroken  = close > zH
         isExpired = ZoneExpiry > 0 and (bar_index - startBar) > ZoneExpiry
@@ -206,8 +211,12 @@ if array.size(rTopLines) > 0
             if ShowBroken and isBroken
                 line.set_color(tl, BrokenColor)
                 line.set_color(bl, BrokenColor)
+                linefill.set_color(fl, color.new(BrokenColor, ZoneAlpha))
+            else
+                linefill.delete(fl)
             array.remove(rTopLines, i)
             array.remove(rBotLines, i)
+            array.remove(rFillArr,  i)
             array.remove(rZoneHArr, i)
             array.remove(rZoneLArr, i)
             array.remove(rZoneStart, i)
@@ -245,6 +254,7 @@ if array.size(sTopLines) > 0
         startBar = array.get(sZoneStart, i)
         tl       = array.get(sTopLines,  i)
         bl       = array.get(sBotLines,  i)
+        fl       = array.get(sFillArr,   i)
         wasAway  = array.get(sWasAway,   i)
         isBroken  = close < zL
         isExpired = ZoneExpiry > 0 and (bar_index - startBar) > ZoneExpiry
@@ -253,8 +263,12 @@ if array.size(sTopLines) > 0
             if ShowBroken and isBroken
                 line.set_color(tl, BrokenColor)
                 line.set_color(bl, BrokenColor)
+                linefill.set_color(fl, color.new(BrokenColor, ZoneAlpha))
+            else
+                linefill.delete(fl)
             array.remove(sTopLines, i)
             array.remove(sBotLines, i)
+            array.remove(sFillArr,  i)
             array.remove(sZoneHArr, i)
             array.remove(sZoneLArr, i)
             array.remove(sZoneStart, i)
@@ -356,7 +370,7 @@ if ShowPatterns
 // ══════════════════════════════════════════
 // SML HUD DASHBOARD
 // ══════════════════════════════════════════
-var table hud = table.new(position.top_right, 2, 9,
+var table hud = table.new(position.top_right, 2, 11,
     bgcolor = color.new(#050505, 5), border_color = SML_ACCENT, border_width = 1,
     frame_color = SML_ACCENT, frame_width = 2)
 
@@ -364,21 +378,37 @@ if ShowHUD and barstate.islast
     rCount = array.size(rZoneHArr)
     sCount = array.size(sZoneHArr)
 
-    float nearestResDist = na
+    // Nearest zone by midpoint distance, but the price shown is the zone's
+    // NEAR edge — the first level price actually has to react to, not the
+    // zone's center. Resistance sits above price, so its near edge is the
+    // low (zL); support sits below price, so its near edge is the high (zH).
+    float nearestResDist  = na
+    float nearestResPrice = na
+    float nearestResFar   = na
     if rCount > 0
         for j = 0 to rCount - 1
-            zMid = (array.get(rZoneHArr, j) + array.get(rZoneLArr, j)) / 2
-            d = math.abs(zMid - close) / close * 100
+            zH2  = array.get(rZoneHArr, j)
+            zL2  = array.get(rZoneLArr, j)
+            zMid = (zH2 + zL2) / 2
+            d    = math.abs(zMid - close) / close * 100
             if na(nearestResDist) or d < nearestResDist
-                nearestResDist := d
+                nearestResDist  := d
+                nearestResPrice := zL2
+                nearestResFar   := zH2
 
-    float nearestSupDist = na
+    float nearestSupDist  = na
+    float nearestSupPrice = na
+    float nearestSupFar   = na
     if sCount > 0
         for j = 0 to sCount - 1
-            zMid = (array.get(sZoneHArr, j) + array.get(sZoneLArr, j)) / 2
-            d = math.abs(zMid - close) / close * 100
+            zH2  = array.get(sZoneHArr, j)
+            zL2  = array.get(sZoneLArr, j)
+            zMid = (zH2 + zL2) / 2
+            d    = math.abs(zMid - close) / close * 100
             if na(nearestSupDist) or d < nearestSupDist
-                nearestSupDist := d
+                nearestSupDist  := d
+                nearestSupPrice := zH2
+                nearestSupFar   := zL2
 
     barsSincePattern = na(lastPatternBar) ? na : bar_index - lastPatternBar
 
@@ -400,26 +430,38 @@ if ShowHUD and barstate.islast
     table.cell(hud, 0, 3, 'SUPPORT ZONES', text_color = SML_ACCENT, text_size = size.small)
     table.cell(hud, 1, 3, str.tostring(sCount), text_color = SupColor, text_size = size.normal)
 
-    // Row 4 — Nearest resistance
-    table.cell(hud, 0, 4, 'NEAREST RESISTANCE', text_color = SML_ACCENT, text_size = size.small)
-    table.cell(hud, 1, 4, na(nearestResDist) ? '—' : str.tostring(nearestResDist, '#.##') + '%', text_color = ResColor, text_size = size.small)
+    // Row 4 — Resistance target (near edge price, the first level to react)
+    resTxt = na(nearestResPrice) ? '—' : '$' + str.tostring(nearestResPrice, '#.##') + '  (' + str.tostring(nearestResDist, '#.##') + '%)'
+    table.cell(hud, 0, 4, 'RESISTANCE TARGET', text_color = SML_ACCENT, text_size = size.small)
+    table.cell(hud, 1, 4, resTxt, text_color = ResColor, text_size = size.small)
 
-    // Row 5 — Nearest support
-    table.cell(hud, 0, 5, 'NEAREST SUPPORT', text_color = SML_ACCENT, text_size = size.small)
-    table.cell(hud, 1, 5, na(nearestSupDist) ? '—' : str.tostring(nearestSupDist, '#.##') + '%', text_color = SupColor, text_size = size.small)
+    // Row 5 — Resistance zone range (full zone width = natural target ceiling)
+    resRangeTxt = na(nearestResFar) ? '—' : '$' + str.tostring(nearestResPrice, '#.##') + ' – $' + str.tostring(nearestResFar, '#.##')
+    table.cell(hud, 0, 5, 'RES ZONE RANGE', text_color = SML_ACCENT, text_size = size.tiny)
+    table.cell(hud, 1, 5, resRangeTxt, text_color = color.new(ResColor, 30), text_size = size.tiny)
 
-    // Row 6 — Proximity status
+    // Row 6 — Support target (near edge price, the first level to react)
+    supTxt = na(nearestSupPrice) ? '—' : '$' + str.tostring(nearestSupPrice, '#.##') + '  (' + str.tostring(nearestSupDist, '#.##') + '%)'
+    table.cell(hud, 0, 6, 'SUPPORT TARGET', text_color = SML_ACCENT, text_size = size.small)
+    table.cell(hud, 1, 6, supTxt, text_color = SupColor, text_size = size.small)
+
+    // Row 7 — Support zone range (full zone width = natural stop floor)
+    supRangeTxt = na(nearestSupFar) ? '—' : '$' + str.tostring(nearestSupFar, '#.##') + ' – $' + str.tostring(nearestSupPrice, '#.##')
+    table.cell(hud, 0, 7, 'SUP ZONE RANGE', text_color = SML_ACCENT, text_size = size.tiny)
+    table.cell(hud, 1, 7, supRangeTxt, text_color = color.new(SupColor, 30), text_size = size.tiny)
+
+    // Row 8 — Proximity status
     proxTxt = nearResistance and nearSupport ? 'R + S' : nearResistance ? 'RESISTANCE' : nearSupport ? 'SUPPORT' : '—'
-    table.cell(hud, 0, 6, 'PROXIMITY', text_color = SML_ACCENT, text_size = size.small)
-    table.cell(hud, 1, 6, proxTxt, text_color = SML_CYAN, text_size = size.small)
+    table.cell(hud, 0, 8, 'PROXIMITY', text_color = SML_ACCENT, text_size = size.small)
+    table.cell(hud, 1, 8, proxTxt, text_color = SML_CYAN, text_size = size.small)
 
-    // Row 7 — Last pattern
-    table.cell(hud, 0, 7, 'LAST PATTERN', text_color = SML_ACCENT, text_size = size.small)
-    table.cell(hud, 1, 7, lastPatternName, text_color = SML_GOLD, text_size = size.small)
+    // Row 9 — Last pattern
+    table.cell(hud, 0, 9, 'LAST PATTERN', text_color = SML_ACCENT, text_size = size.small)
+    table.cell(hud, 1, 9, lastPatternName, text_color = SML_GOLD, text_size = size.small)
 
-    // Row 8 — Bars since last pattern
-    table.cell(hud, 0, 8, 'BARS SINCE', text_color = SML_ACCENT, text_size = size.small)
-    table.cell(hud, 1, 8, na(barsSincePattern) ? '—' : str.tostring(barsSincePattern), text_color = color.white, text_size = size.small)
+    // Row 10 — Bars since last pattern
+    table.cell(hud, 0, 10, 'BARS SINCE', text_color = SML_ACCENT, text_size = size.small)
+    table.cell(hud, 1, 10, na(barsSincePattern) ? '—' : str.tostring(barsSincePattern), text_color = color.white, text_size = size.small)
 
 // ══════════════════════════════════════════
 // PLOTS & ALERTS
