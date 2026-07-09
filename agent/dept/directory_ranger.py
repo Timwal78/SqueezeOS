@@ -74,13 +74,16 @@ SML_PROFILE = {
         "44 x402 pay-per-call API endpoints (SEC filings, FDA warnings, federal grants, compliance, market signals), "
         "a 52-tool MCP server (SqueezeOS) for real-time institutional market intelligence, "
         "Ghost Layer (private XRP routing), RLUSD Rails (Xahau remittance), "
-        "and a CASCADE ACCUMULATOR for institutional squeeze signal delivery. "
-        "No subscriptions — agents pay RLUSD micropayments on XRPL and receive signed JWTs."
+        "a CASCADE ACCUMULATOR for institutional squeeze signal delivery, "
+        "an AEO/GEO Intelligence Suite (AgentRank citation scoring, provider trust scores, semantic gap detection), "
+        "and an Agent Credit Bureau (FICO-style 300-850 credit scores for XRPL agent wallets). "
+        "No subscriptions required — agents pay RLUSD micropayments on XRPL and receive signed JWTs, "
+        "or subscribe monthly for the AEO/CASCADE products."
     ),
-    "categories":  ["MCP Server", "Trading Intelligence", "x402 Protocol", "AI Agent Infrastructure", "Financial Data API"],
-    "pricing":     "Pay-per-call via x402 (RLUSD on XRPL). From 0.02–0.25 RLUSD/call.",
+    "categories":  ["MCP Server", "Trading Intelligence", "x402 Protocol", "AI Agent Infrastructure", "Financial Data API", "AEO/SEO Tools"],
+    "pricing":     "Pay-per-call via x402 (RLUSD on XRPL, 0.02-0.25 RLUSD/call) or monthly subscription ($49-149/mo for AEO/CASCADE tiers).",
     "github":      "https://github.com/timwal78/squeezeos",
-    "keywords":    ["MCP", "x402", "trading signals", "institutional", "autonomous agents", "XRPL", "RLUSD", "squeeze scanner"],
+    "keywords":    ["MCP", "x402", "trading signals", "institutional", "autonomous agents", "XRPL", "RLUSD", "squeeze scanner", "AEO", "GEO", "agent credit score"],
 }
 
 
