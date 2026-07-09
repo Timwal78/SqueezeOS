@@ -133,6 +133,9 @@ MAX_DAILY_LOSS_USD   = float(os.environ.get("MAX_DAILY_LOSS_USD", "100.0"))
 MAX_ORDERS_PER_DAY   = int(os.environ.get("MAX_ORDERS_PER_DAY", "25"))
 MAX_DAILY_NOTIONAL   = float(os.environ.get("MAX_DAILY_NOTIONAL_USD", "1500.0"))
 MAX_PER_SCAN         = int(os.environ.get("MAX_PER_SCAN", "3"))
+STOP_LOSS_PCT        = float(os.environ.get("STOP_LOSS_PCT", "5.0"))    # close position if down this % from avg cost
+TAKE_PROFIT_PCT      = float(os.environ.get("TAKE_PROFIT_PCT", "15.0")) # close position if up this % from avg cost
+POSITION_MONITOR_ENABLED = os.environ.get("POSITION_MONITOR_ENABLED", "true").lower() == "true"
 
 # Symbols that must NEVER be held overnight — 0DTE options only, no equity route.
 # Mirrors IAM_ODTE_ONLY_SYMBOLS in iam_executor.py (same operator rule: IWM is
@@ -484,7 +487,7 @@ def _direction_gates_pass(symbol: str, side: str, log_prefix: str = "EXEC") -> b
 # ── Order execution ────────────────────────────────────────────────────────────
 def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
     """scan_counter is a single-element list [n] so callers can track per-scan count."""
-    global _orders_today, _daily_notional_usd
+    global _orders_today, _daily_notional_usd, _daily_loss_usd
     if _circuit_open():
         return
 
@@ -548,6 +551,7 @@ def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
         logger.warning(f"[EXEC] {symbol} no live price — abort")
         return
 
+    avg_cost = 0.0
     if side == "sell":
         # Sell only what we actually own — never short, never guess quantity.
         try:
@@ -559,6 +563,7 @@ def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
                     instr = rh.stocks.get_instrument_by_url(pos["instrument"])
                     if (instr or {}).get("symbol", "").upper() == symbol:
                         owned_qty = int(float(pos.get("quantity") or 0))
+                        avg_cost = float(pos.get("average_buy_price") or 0)
                         break
                 except Exception:
                     pass
@@ -628,6 +633,16 @@ def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
                     with _lock:
                         _orders_today += 1
                         _daily_notional_usd += qty * price
+                        # Realized P&L on this exit — the only place _daily_loss_usd is
+                        # ever updated. Without this the MAX_DAILY_LOSS_USD circuit
+                        # breaker is checked every cycle but never actually trips.
+                        if side == "sell" and avg_cost > 0:
+                            realized_pnl = (price - avg_cost) * qty
+                            if realized_pnl < 0:
+                                _daily_loss_usd += abs(realized_pnl)
+                                logger.warning(f"[DAILY] Realized loss ${abs(realized_pnl):.2f} on {symbol} — daily loss now ${_daily_loss_usd:.2f}/${MAX_DAILY_LOSS_USD:.0f}")
+                            else:
+                                logger.info(f"[DAILY] Realized gain ${realized_pnl:.2f} on {symbol}")
                         logger.info(f"[DAILY] Orders: {_orders_today}/{MAX_ORDERS_PER_DAY} | Notional: ${_daily_notional_usd:.2f}/${MAX_DAILY_NOTIONAL:.0f}")
                 else:
                     logger.error(f"[RH] Order NOT confirmed {symbol} {side}: state='{rh_state}' detail='{rh_detail}'")
@@ -640,6 +655,59 @@ def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
                 result = {"error": err}
 
     _discord(symbol, side, qty, price, sml, result)
+
+
+# ── Position monitor — the only price-based exit in this executor ──────────────
+# Every other SELL path (GOD_MODE bear reversal, Oracle SELL/SHIELD) is
+# signal-based only: a position can sit through an arbitrary drawdown waiting
+# for an equally rare opposing signal to fire. This runs every poll cycle,
+# before any new BUY signals are processed, and closes anything that's moved
+# past STOP_LOSS_PCT or TAKE_PROFIT_PCT from its average cost basis.
+def _check_stop_losses() -> int:
+    if not POSITION_MONITOR_ENABLED or PAPER_MODE:
+        return 0
+    if not _ensure_login():
+        return 0
+
+    try:
+        import robin_stocks.robinhood as rh
+        positions = rh.account.get_open_stock_positions()
+    except Exception as e:
+        logger.warning(f"[STOP-LOSS] could not fetch positions: {e}")
+        return 0
+
+    scan_counter = [0]
+    placed = 0
+    for pos in (positions or []):
+        try:
+            qty = float(pos.get("quantity") or 0)
+            avg_cost = float(pos.get("average_buy_price") or 0)
+            if qty <= 0 or avg_cost <= 0:
+                continue
+            import robin_stocks.robinhood as rh
+            instr = rh.stocks.get_instrument_by_url(pos["instrument"])
+            symbol = (instr or {}).get("symbol", "").upper()
+            if not symbol:
+                continue
+            price = float(rh.stocks.get_latest_price(symbol)[0] or 0)
+            if price <= 0:
+                continue
+            pct_move = (price - avg_cost) / avg_cost * 100.0
+
+            if pct_move <= -STOP_LOSS_PCT:
+                logger.warning(f"[STOP-LOSS] {symbol} down {pct_move:.1f}% (avg ${avg_cost:.2f} -> ${price:.2f}) — closing position")
+                sml_proxy = {"god_stacked": MIN_GOD_STACKED, "tier": "GOD_MODE", "signal": "STOP_LOSS"}
+                _execute(symbol, "sell", sml_proxy, scan_counter)
+                placed += 1
+            elif pct_move >= TAKE_PROFIT_PCT:
+                logger.info(f"[TAKE-PROFIT] {symbol} up {pct_move:.1f}% (avg ${avg_cost:.2f} -> ${price:.2f}) — closing position")
+                sml_proxy = {"god_stacked": MIN_GOD_STACKED, "tier": "GOD_MODE", "signal": "TAKE_PROFIT"}
+                _execute(symbol, "sell", sml_proxy, scan_counter)
+                placed += 1
+        except Exception as e:
+            logger.warning(f"[STOP-LOSS] position check error: {e}")
+
+    return placed
 
 
 ROBINHOOD_OPTION_QTY = int(os.environ.get("ROBINHOOD_OPTION_QTY", "1"))
@@ -1094,6 +1162,7 @@ def main():
     logger.info(f"  Max order   : ${MAX_ORDER_USD} / {MAX_EQUITY_SHARES} shares")
     logger.info(f"  Daily cap   : {MAX_ORDERS_PER_DAY} orders / ${MAX_DAILY_NOTIONAL:.0f} notional / ${MAX_DAILY_LOSS_USD:.0f} loss limit")
     logger.info(f"  Per-scan    : max {MAX_PER_SCAN} orders per poll cycle")
+    logger.info(f"  Position mon: stop-loss {STOP_LOSS_PCT}% / take-profit {TAKE_PROFIT_PCT}% (enabled={POSITION_MONITOR_ENABLED})")
     logger.info(f"  Paper mode  : {PAPER_MODE}")
     logger.info(f"  Kill switch : {KILL_SWITCH}")
     logger.info("=" * 60)
@@ -1147,14 +1216,15 @@ def main():
                 time.sleep(POLL_INTERVAL_S)
                 continue
             logger.info(f"[POLL] Scanning... (RH: {rh_status} | orders today: {_orders_today}/{MAX_ORDERS_PER_DAY} | notional: ${_daily_notional_usd:.0f}/${MAX_DAILY_NOTIONAL:.0f})")
+            stop_placed   = _check_stop_losses()
             beast_placed  = _poll_beastmode()
             tv_placed     = _poll_tv_pending()
             oracle_placed = _poll_oracle()
-            total_placed  = beast_placed + tv_placed + oracle_placed
+            total_placed  = stop_placed + beast_placed + tv_placed + oracle_placed
             if total_placed == 0:
                 logger.info("[POLL] No signals this cycle — waiting for next scan")
             else:
-                logger.info(f"[POLL] Cycle complete — {total_placed} order(s) placed ({beast_placed} GOD MODE, {tv_placed} Pine, {oracle_placed} Oracle)")
+                logger.info(f"[POLL] Cycle complete — {total_placed} order(s) placed ({stop_placed} stop/take-profit, {beast_placed} GOD MODE, {tv_placed} Pine, {oracle_placed} Oracle)")
         except Exception as e:
             logger.error(f"[LOOP] Unexpected error: {e}")
         logger.info(f"[POLL] Next scan in {POLL_INTERVAL_S}s")
