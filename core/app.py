@@ -30,6 +30,7 @@ from core.api.honeypot import honeypot_bp, honeypot_before_request
 from core.api.settlement_bp import settlement_bp
 from core.api.futures_bp import futures_bp
 from core.api.oracle_data_bp import oracle_data_bp, start_oracle_pollers
+from core.oracle_engine import start_oracle_batch_scanner
 from core.api.ftd_bp import ftd_bp
 from core.api.passport_bp import passport_bp
 from core.ftd_data import start_ftd_pollers
@@ -213,6 +214,10 @@ def create_app():
 
         # Start background beastmode convergence scanner (cached, non-blocking)
         start_beastmode_scanner()
+
+        # Start background oracle batch scanner (cached, non-blocking — see
+        # core/oracle_engine.py for why /api/oracle needs this same treatment)
+        start_oracle_batch_scanner()
 
         # Start IAM background obligation scanner — dynamic top-N from market scanner
         from iam_scanner import start_iam_scanner
@@ -580,22 +585,26 @@ def create_app():
     @app.route('/api/oracle', methods=['GET'])
     @app.route('/api/oracle/<symbol>', methods=['GET'])
     def oracle_signal(symbol=None):
-        from core.oracle_engine import OracleEngine, ORACLE_SYMBOLS, run_oracle_batch
-        services = {
-            "dm":            get_service("dm"),
-            "whale_stalker": get_service("whale_stalker"),
-            "sml":           get_service("sml"),
-        }
+        from core.oracle_engine import OracleEngine, ORACLE_SYMBOLS, get_oracle_batch_cache
         if symbol:
+            services = {
+                "dm":            get_service("dm"),
+                "whale_stalker": get_service("whale_stalker"),
+                "sml":           get_service("sml"),
+            }
             sym = symbol.upper().strip()
             engine = OracleEngine(services)
             result = engine.analyze(sym)
             return jsonify({"status": "success", "oracle": result})
         else:
-            # 100% FETCH — use the live scan universe; ORACLE_SYMBOLS is emergency fallback only
-            live_universe = list(state.quotes.keys()) if state.quotes else None
-            batch_symbols = live_universe if live_universe else ORACLE_SYMBOLS
-            results = run_oracle_batch(batch_symbols, services)
+            # Cached — see core/oracle_engine.py's background batch scanner. This used
+            # to run run_oracle_batch() live on every request against the full dynamic
+            # universe (hundreds-to-thousands of tickers post Law-2 discovery), which
+            # blew past callers' read timeouts (e.g. the Robinhood executor's 20s) on
+            # every single poll. Now it just serves the last background-refreshed scan.
+            cache = get_oracle_batch_cache()
+            results = cache["results"]
+            batch_size = cache["universe_size"] or len(ORACLE_SYMBOLS)
             ranked = sorted(
                 [v for v in results.values() if v.get("directive") != "SHIELD"],
                 key=lambda x: x.get("confidence", 0), reverse=True
@@ -605,7 +614,9 @@ def create_app():
                 "status": "success",
                 "master": master,
                 "symbols": results,
-                "universe_size": len(batch_symbols),
+                "universe_size": batch_size,
+                "cache_age_s": round(time.time() - cache["ts"], 1) if cache["ts"] else None,
+                "stale": cache["stale"],
                 "timestamp": datetime.now().isoformat(),
             })
 

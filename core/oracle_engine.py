@@ -14,12 +14,15 @@ GitNexus-verified engine chain:
   data_providers.py     → TradierProvider (live quotes)
 """
 import logging
+import os
+import threading
 import time
 from datetime import datetime
 from typing import Optional
 import pandas as pd
 
 from core.proprietary_ema_engine import redact_engine_block as _redact_engine
+from core.state import state
 
 logger = logging.getLogger("Oracle")
 
@@ -459,3 +462,67 @@ def run_oracle_batch(symbols: list, services: dict) -> dict:
 # Emergency fallback only — the live scan universe (state.quotes.keys()) drives the real list.
 # These 3 are always included even when the scanner hasn't warmed up yet.
 ORACLE_SYMBOLS = ["IWM", "GME", "AMC"]
+
+
+# ── Oracle batch background cache ────────────────────────────────────────────
+# run_oracle_batch() analyzes the full live scan universe (hundreds-to-thousands
+# of tickers post Law-2 discovery). Running it synchronously per HTTP request on
+# /api/oracle blew past callers' timeouts (e.g. the Robinhood executor's 20s
+# read timeout) on every single poll. Same fix as /api/beastmode: a background
+# thread refreshes this cache on an interval and the route returns it instantly.
+_ORACLE_BATCH_REFRESH_S = int(os.environ.get("ORACLE_BATCH_REFRESH_S", "60"))
+_oracle_cache      = {"results": {}, "ts": 0, "universe_size": 0}
+_oracle_last_good  = {"results": {}, "ts": 0, "universe_size": 0}  # never wiped
+_oracle_lock = threading.Lock()
+_oracle_thread_started = False
+
+
+def _oracle_batch_refresh_loop():
+    logger.info("[Oracle] Background batch refresh thread active (every %ss)", _ORACLE_BATCH_REFRESH_S)
+    time.sleep(8)  # let services init
+    while True:
+        try:
+            from core.legacy import get_service  # deferred — legacy.py imports this module at top level
+            services = {
+                "dm":            get_service("dm"),
+                "whale_stalker": get_service("whale_stalker"),
+                "sml":           get_service("sml"),
+            }
+            live_universe = list(state.quotes.keys()) if state.quotes else None
+            batch_symbols = live_universe if live_universe else ORACLE_SYMBOLS
+            results = run_oracle_batch(batch_symbols, services)
+            with _oracle_lock:
+                _oracle_cache["results"]      = results
+                _oracle_cache["universe_size"] = len(batch_symbols)
+                _oracle_cache["ts"]            = time.time()
+                if results:
+                    _oracle_last_good["results"]      = results
+                    _oracle_last_good["universe_size"] = len(batch_symbols)
+                    _oracle_last_good["ts"]            = time.time()
+            logger.info(f"[Oracle] batch cache refreshed — {len(results)} symbols")
+        except Exception as e:
+            logger.error(f"[Oracle] batch refresh error: {e}")
+        time.sleep(_ORACLE_BATCH_REFRESH_S)
+
+
+def start_oracle_batch_scanner():
+    global _oracle_thread_started
+    if _oracle_thread_started:
+        return
+    _oracle_thread_started = True
+    threading.Thread(target=_oracle_batch_refresh_loop, daemon=True, name="SML-Oracle-Batch-Scanner").start()
+
+
+def get_oracle_batch_cache() -> dict:
+    """Cached oracle batch results (refreshed by background thread). Falls back to last-good on empty."""
+    with _oracle_lock:
+        results       = dict(_oracle_cache["results"])
+        ts            = _oracle_cache["ts"]
+        universe_size = _oracle_cache["universe_size"]
+        stale = False
+        if not results and _oracle_last_good["results"]:
+            results       = dict(_oracle_last_good["results"])
+            ts            = _oracle_last_good["ts"]
+            universe_size = _oracle_last_good["universe_size"]
+            stale = True
+    return {"results": results, "ts": ts, "universe_size": universe_size, "stale": stale}
