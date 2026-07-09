@@ -9,7 +9,7 @@
 //  The column shows: signal score (0-100) or 0 when flat
 // ═══════════════════════════════════════════════════════════════════════════
 //
-//  ARCHITECTURE — Base-4 Harmonic Matrix (X → 4X → 8X → 12X)
+//  ARCHITECTURE — Harmonic Fractal Grid
 //  ─────────────────────────────────────────────────────────────
 //  9 structural tiers. Each tier monitors a different temporal depth
 //  of market microstructure. Sets are grouped into three engine layers:
@@ -53,6 +53,52 @@ show_table = input.bool(true, "Show Institutional Grid Table", group=grp_v)
 show_label = input.bool(true, "Show Signal Labels",            group=grp_v)
 show_risk  = input.bool(true, "Show Stop / Target Lines",      group=grp_v)
 
+// ── SML Licensed Inputs — 9 Sets × 4 Levels ──────────────────────
+i_s1t = input.int(1, "Trigger", group="SML Licensed — Set 1", minval=1)
+i_s1b = input.int(1, "Base",    group="SML Licensed — Set 1", minval=1)
+i_s1v = input.int(1, "Valid",   group="SML Licensed — Set 1", minval=1)
+i_s1a = input.int(1, "Anchor",  group="SML Licensed — Set 1", minval=1)
+
+i_s2t = input.int(1, "Trigger", group="SML Licensed — Set 2", minval=1)
+i_s2b = input.int(1, "Base",    group="SML Licensed — Set 2", minval=1)
+i_s2v = input.int(1, "Valid",   group="SML Licensed — Set 2", minval=1)
+i_s2a = input.int(1, "Anchor",  group="SML Licensed — Set 2", minval=1)
+
+i_s3t = input.int(1, "Trigger", group="SML Licensed — Set 3", minval=1)
+i_s3b = input.int(1, "Base",    group="SML Licensed — Set 3", minval=1)
+i_s3v = input.int(1, "Valid",   group="SML Licensed — Set 3", minval=1)
+i_s3a = input.int(1, "Anchor",  group="SML Licensed — Set 3", minval=1)
+
+i_s4t = input.int(1, "Trigger", group="SML Licensed — Set 4", minval=1)
+i_s4b = input.int(1, "Base",    group="SML Licensed — Set 4", minval=1)
+i_s4v = input.int(1, "Valid",   group="SML Licensed — Set 4", minval=1)
+i_s4a = input.int(1, "Anchor",  group="SML Licensed — Set 4", minval=1)
+
+i_s5t = input.int(1, "Trigger", group="SML Licensed — Set 5", minval=1)
+i_s5b = input.int(1, "Base",    group="SML Licensed — Set 5", minval=1)
+i_s5v = input.int(1, "Valid",   group="SML Licensed — Set 5", minval=1)
+i_s5a = input.int(1, "Anchor",  group="SML Licensed — Set 5", minval=1)
+
+i_s6t = input.int(1, "Trigger", group="SML Licensed — Set 6", minval=1)
+i_s6b = input.int(1, "Base",    group="SML Licensed — Set 6", minval=1)
+i_s6v = input.int(1, "Valid",   group="SML Licensed — Set 6", minval=1)
+i_s6a = input.int(1, "Anchor",  group="SML Licensed — Set 6", minval=1)
+
+i_s7t = input.int(1, "Trigger", group="SML Licensed — Set 7", minval=1)
+i_s7b = input.int(1, "Base",    group="SML Licensed — Set 7", minval=1)
+i_s7v = input.int(1, "Valid",   group="SML Licensed — Set 7", minval=1)
+i_s7a = input.int(1, "Anchor",  group="SML Licensed — Set 7", minval=1)
+
+i_s8t = input.int(1, "Trigger", group="SML Licensed — Set 8", minval=1)
+i_s8b = input.int(1, "Base",    group="SML Licensed — Set 8", minval=1)
+i_s8v = input.int(1, "Valid",   group="SML Licensed — Set 8", minval=1)
+i_s8a = input.int(1, "Anchor",  group="SML Licensed — Set 8", minval=1)
+
+i_s9t = input.int(1, "Trigger", group="SML Licensed — Set 9", minval=1)
+i_s9b = input.int(1, "Base",    group="SML Licensed — Set 9", minval=1)
+i_s9v = input.int(1, "Valid",   group="SML Licensed — Set 9", minval=1)
+i_s9a = input.int(1, "Anchor",  group="SML Licensed — Set 9", minval=1)
+
 // ═══════════════════════════════════════════════════════════════════════════
 //  ENGINE CORE — Single function computes all 4 EMAs per set
 // ═══════════════════════════════════════════════════════════════════════════
@@ -67,15 +113,15 @@ get_set(t_len, b_len, v_len, a_len) =>
     [bull, bear, t, a]
 
 // ── All 9 sets ────────────────────────────────────────────────────────────
-[bull1, bear1, t1, a1] = get_set(1,  4,  8,  12)
-[bull2, bear2, t2, a2] = get_set(2,  8, 16,  24)
-[bull3, bear3, t3, a3] = get_set(3, 12, 24,  36)
-[bull4, bear4, t4, a4] = get_set(4, 16, 32,  48)
-[bull5, bear5, t5, a5] = get_set(5, 20, 40,  60)
-[bull6, bear6, t6, a6] = get_set(6, 24, 48,  72)
-[bull7, bear7, t7, a7] = get_set(7, 28, 56,  84)
-[bull8, bear8, t8, a8] = get_set(8, 32, 64,  96)
-[bull9, bear9, t9, a9] = get_set(9, 36, 72, 108)
+[bull1, bear1, t1, a1] = get_set(i_s1t, i_s1b, i_s1v, i_s1a)
+[bull2, bear2, t2, a2] = get_set(i_s2t, i_s2b, i_s2v, i_s2a)
+[bull3, bear3, t3, a3] = get_set(i_s3t, i_s3b, i_s3v, i_s3a)
+[bull4, bear4, t4, a4] = get_set(i_s4t, i_s4b, i_s4v, i_s4a)
+[bull5, bear5, t5, a5] = get_set(i_s5t, i_s5b, i_s5v, i_s5a)
+[bull6, bear6, t6, a6] = get_set(i_s6t, i_s6b, i_s6v, i_s6a)
+[bull7, bear7, t7, a7] = get_set(i_s7t, i_s7b, i_s7v, i_s7a)
+[bull8, bear8, t8, a8] = get_set(i_s8t, i_s8b, i_s8v, i_s8a)
+[bull9, bear9, t9, a9] = get_set(i_s9t, i_s9b, i_s9v, i_s9a)
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  SIPHON ENGINES — Tier 2 Configuration (backtest-validated)
@@ -176,10 +222,10 @@ plot(target_long_px,  "Target Long",  color=#00FF66, linewidth=1, style=plot.sty
 plot(stop_short_px,   "Stop Short",   color=#FF0055, linewidth=1, style=plot.style_linebr)
 plot(target_short_px, "Target Short", color=#00FF66, linewidth=1, style=plot.style_linebr)
 
-plot(t1, "S1 Trigger (EMA1  — Micro)", color=#00FFFF, linewidth=1)
-plot(a1, "S1 Anchor  (EMA12 — Micro)", color=#00FF66, linewidth=1)
-plot(t9, "S9 Trigger (EMA9  — Macro)", color=#9900FF, linewidth=2)
-plot(a9, "S9 Anchor  (EMA108— Macro)", color=#FF0055, linewidth=3)
+plot(t1, "S1 Trigger (Micro)", color=#00FFFF, linewidth=1)
+plot(a1, "S1 Anchor  (Micro)", color=#00FF66, linewidth=1)
+plot(t9, "S9 Trigger (Macro)", color=#9900FF, linewidth=2)
+plot(a9, "S9 Anchor  (Macro)", color=#FF0055, linewidth=3)
 
 bgcolor(siphon_long  and score_pct >= min_score ? color.new(#00FF66, 80) : na, title="Siphon Long Zone")
 bgcolor(siphon_short and score_pct >= min_score ? color.new(#FF0055, 80) : na, title="Siphon Short Zone")
@@ -200,21 +246,11 @@ var label sig_lbl = label(na)
 if show_label and barstate.islast
     label.delete(sig_lbl)
     if siphon_long and score_pct >= min_score
-        lbl_txt = "⚡ SIPHON LONG\nScore: " + str.tostring(score_pct) + "/100" +
-             "\nDiv: " + str.tostring(struct_div_pct, "#.1") + "%" +
-             "\nATR×" + str.tostring(atr_mult, "#.1") +
-             "\nVol: ×" + str.tostring(vol_surge, "#.1")
-        sig_lbl := label.new(bar_index, low * 0.997,
-             text=lbl_txt, color=#00FF66, textcolor=#000000,
-             style=label.style_label_up, size=size.normal)
+        lbl_txt = "⚡ SIPHON LONG\nScore: " + str.tostring(score_pct) + "/100\nDiv: " + str.tostring(struct_div_pct, "#.1") + "%\nATR×" + str.tostring(atr_mult, "#.1") + "\nVol: ×" + str.tostring(vol_surge, "#.1")
+        sig_lbl := label.new(bar_index, low * 0.997, text=lbl_txt, color=#00FF66, textcolor=#000000, style=label.style_label_up, size=size.normal)
     else if siphon_short and score_pct >= min_score
-        lbl_txt = "⚡ SIPHON SHORT\nScore: " + str.tostring(score_pct) + "/100" +
-             "\nDiv: " + str.tostring(struct_div_pct, "#.1") + "%" +
-             "\nATR×" + str.tostring(atr_mult, "#.1") +
-             "\nVol: ×" + str.tostring(vol_surge, "#.1")
-        sig_lbl := label.new(bar_index, high * 1.003,
-             text=lbl_txt, color=#FF0055, textcolor=#FFFFFF,
-             style=label.style_label_down, size=size.normal)
+        lbl_txt = "⚡ SIPHON SHORT\nScore: " + str.tostring(score_pct) + "/100\nDiv: " + str.tostring(struct_div_pct, "#.1") + "%\nATR×" + str.tostring(atr_mult, "#.1") + "\nVol: ×" + str.tostring(vol_surge, "#.1")
+        sig_lbl := label.new(bar_index, high * 1.003, text=lbl_txt, color=#FF0055, textcolor=#FFFFFF, style=label.style_label_down, size=size.normal)
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  INSTITUTIONAL GRID TABLE
@@ -240,7 +276,7 @@ f_abg(is_bull, is_bear, is_micro_sig, is_macro_sig) =>
     is_micro_sig and is_bull ? color.new(#00FF66, 75) :
      is_macro_sig and is_bear ? color.new(#FF0055, 75) : #050505
 
-f_set_row(row, tier_lbl, set_lbl, t_per, a_per, anchor_val, is_bull, is_bear, is_m, is_M) =>
+f_set_row(row, tier_lbl, set_lbl, anchor_val, is_bull, is_bear, is_m, is_M) =>
     abg  = f_abg(is_bull, is_bear, is_m, is_M)
     acol = f_acol(is_bull, is_bear, is_m, is_M)
     atxt = f_align(is_bull, is_bear, is_m, is_M)
@@ -249,9 +285,9 @@ f_set_row(row, tier_lbl, set_lbl, t_per, a_per, anchor_val, is_bull, is_bear, is
          bgcolor=abg, text_color=t_col, text_size=size.small, text_halign=text.align_center)
     table.cell(GT, 1, row, set_lbl,
          bgcolor=abg, text_color=acol, text_size=size.small, text_halign=text.align_center)
-    table.cell(GT, 2, row, "T:" + str.tostring(t_per),
+    table.cell(GT, 2, row, "T",
          bgcolor=#050505, text_color=#333333, text_size=size.tiny)
-    table.cell(GT, 3, row, "A" + str.tostring(a_per) + ":" + str.tostring(anchor_val, "#.##"),
+    table.cell(GT, 3, row, "A:" + str.tostring(anchor_val, "#.##"),
          bgcolor=#050505, text_color=#555555, text_size=size.tiny)
     table.cell(GT, 4, row, atxt,
          bgcolor=abg, text_color=acol, text_size=size.small, text_halign=text.align_right)
@@ -292,15 +328,15 @@ if barstate.islast and show_table
     table.cell(GT, 3, 2, "ANCHOR",    bgcolor=#0D0D0D, text_color=#3A3A3A, text_size=size.tiny)
     table.cell(GT, 4, 2, "ALIGNMENT", bgcolor=#0D0D0D, text_color=#3A3A3A, text_size=size.tiny)
 
-    f_set_row(3,  "MICRO", "S1", 1,  12,  a1, bull1, bear1, true,  false)
-    f_set_row(4,  "MICRO", "S2", 2,  24,  a2, bull2, bear2, true,  false)
-    f_set_row(5,  "swing", "S3", 3,  36,  a3, bull3, bear3, false, false)
-    f_set_row(6,  "swing", "S4", 4,  48,  a4, bull4, bear4, false, false)
-    f_set_row(7,  "swing", "S5", 5,  60,  a5, bull5, bear5, false, false)
-    f_set_row(8,  "swing", "S6", 6,  72,  a6, bull6, bear6, false, false)
-    f_set_row(9,  "swing", "S7", 7,  84,  a7, bull7, bear7, false, false)
-    f_set_row(10, "MACRO", "S8", 8,  96,  a8, bull8, bear8, false, true)
-    f_set_row(11, "MACRO", "S9", 9,  108, a9, bull9, bear9, false, true)
+    f_set_row(3,  "MICRO", "S1", a1, bull1, bear1, true,  false)
+    f_set_row(4,  "MICRO", "S2", a2, bull2, bear2, true,  false)
+    f_set_row(5,  "swing", "S3", a3, bull3, bear3, false, false)
+    f_set_row(6,  "swing", "S4", a4, bull4, bear4, false, false)
+    f_set_row(7,  "swing", "S5", a5, bull5, bear5, false, false)
+    f_set_row(8,  "swing", "S6", a6, bull6, bear6, false, false)
+    f_set_row(9,  "swing", "S7", a7, bull7, bear7, false, false)
+    f_set_row(10, "MACRO", "S8", a8, bull8, bear8, false, true)
+    f_set_row(11, "MACRO", "S9", a9, bull9, bear9, false, true)
 
     table.cell(GT, 0, 12, "── STRUCTURAL METRICS ──────────────────────",
          bgcolor=#080808, text_color=#222222, text_size=size.tiny, text_halign=text.align_left)

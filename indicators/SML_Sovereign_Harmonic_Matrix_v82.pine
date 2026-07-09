@@ -1,0 +1,720 @@
+//@version=6
+indicator("SML — SOVEREIGN HARMONIC MATRIX [v8.2]", overlay=true, max_labels_count=500, max_bars_back=1000)
+
+// ── Colors ────────────────────────────────────────────────────────────────────
+color SML_GREEN  = #00FF7F
+color SML_LIME   = #39FF14
+color SML_PINK   = #FF1493
+color SML_GOLD   = #fcfcfc
+color SML_ORANGE = #ffa600
+color SML_CYAN   = #00FFFF
+color SML_ACCENT = color.new(#00FF7F, 40)
+
+// ── Pitch Mode ────────────────────────────────────────────────────────────────
+var string G_PITCH = "▶  PITCH MODE"
+bool pitch_mode = input.bool(false, "PITCH MODE — Screenshot Ready", group=G_PITCH)
+
+// ── Set Visibility ────────────────────────────────────────────────────────────
+var string G_SETS = "▶  SET VISIBILITY"
+bool show_s1 = input.bool(true, "Set 1  WATCH-A  [ Tier III · Config 1 ]", group=G_SETS)
+bool show_s2 = input.bool(true, "Set 2  WATCH-B  [ Tier III · Config 2 ]", group=G_SETS)
+bool show_s3 = input.bool(true, "Set 3  WATCH-C  [ Tier III · Config 3 ]", group=G_SETS)
+bool show_s4 = input.bool(true, "Set 4  PRIME-A  [ Tier II  · Config 1 ]", group=G_SETS)
+bool show_s5 = input.bool(true, "Set 5  PRIME-B  [ Tier II  · Config 2 ]", group=G_SETS)
+bool show_s6 = input.bool(true, "Set 6  PRIME-C  [ Tier II  · Config 3 ]", group=G_SETS)
+bool show_s7 = input.bool(true, "Set 7  GOD-A  ★ [ Tier I   · Flagship  ]", group=G_SETS)
+bool show_s8 = input.bool(true, "Set 8  GOD-B    [ Tier I   · Config 2  ]", group=G_SETS)
+bool show_s9 = input.bool(true, "Set 9  GOD-C    [ Tier I   · Config 3  ]", group=G_SETS)
+
+// ── Convergence Engine ────────────────────────────────────────────────────────
+var string G_ENG = "▶  CONVERGENCE ENGINE"
+bool  use_auto_thresh   = input.bool(false, "Auto-Threshold (ATR-Adaptive)", group=G_ENG)
+float auto_thresh_mult  = input.float(0.5,  "Auto-Threshold Sensitivity",   group=G_ENG, minval=0.1, maxval=2.0,  step=0.1)
+float threshold_pct     = input.float(1.0,  "Manual Compression Threshold (%)", group=G_ENG, minval=0.1, maxval=20.0, step=0.1)
+int   min_sets_conv     = input.int(3, "Min Sets — CONVERGENCE",         group=G_ENG, minval=2, maxval=9)
+int   min_sets_crit     = input.int(5, "Min Sets — CRITICAL MASS",       group=G_ENG, minval=3, maxval=9)
+int   min_sets_apex     = input.int(7, "Min Sets — APEX SINGULARITY",    group=G_ENG, minval=4, maxval=9)
+int   min_sets_full     = input.int(9, "Min Sets — FULL SPECTRUM",       group=G_ENG, minval=6, maxval=9)
+
+// ── MTF ───────────────────────────────────────────────────────────────────────
+var string G_MTF = "▶  MULTI-TIMEFRAME MODULE"
+bool   use_mtf      = input.bool(true,  "Enable Multi-Timeframe Analysis", group=G_MTF)
+string tf1          = input.timeframe("60",  "Higher Timeframe 1", group=G_MTF)
+string tf2          = input.timeframe("240", "Higher Timeframe 2", group=G_MTF)
+int    mtf_min_conv = input.int(3, "HTF Min Sets for Alignment", group=G_MTF, minval=2, maxval=9)
+
+// ── SQI ───────────────────────────────────────────────────────────────────────
+var string G_SQI = "▶  SIGNAL QUALITY INDEX"
+bool show_sqi      = input.bool(true, "Show SQI in HUD",                 group=G_SQI)
+int  sqi_prime_lvl = input.int(75,   "Prime Setup Threshold (SQI >=)",   group=G_SQI, minval=50, maxval=95)
+
+// ── Visuals ───────────────────────────────────────────────────────────────────
+var string G_VIS = "▶  VISUAL CONTROLS"
+bool show_hud     = input.bool(true, "Show HUD Dashboard",      group=G_VIS)
+bool show_markers = input.bool(true, "Show Convergence Markers", group=G_VIS)
+bool show_labels  = input.bool(true, "Show Event Labels",        group=G_VIS)
+bool show_kinetic = input.bool(true, "Show Kinetic Band",        group=G_VIS)
+bool show_fill    = input.bool(true, "Show Confluence Fill",     group=G_VIS)
+int  line_alpha   = input.int(70,    "EMA Transparency",         group=G_VIS, minval=0, maxval=95)
+int  label_freq   = input.int(2,     "Label Throttle — every N events (1=all, 3=sparse)", group=G_VIS, minval=1, maxval=10)
+
+// ── Set Colors ────────────────────────────────────────────────────────────────
+var string G_COL = "▶  SET COLORS"
+color col_s1 = input.color(SML_ORANGE,                  "S1 WATCH-A", group=G_COL, inline="1")
+color col_s2 = input.color(color.new(#FF8C00,0),        "S2 WATCH-B", group=G_COL, inline="2")
+color col_s3 = input.color(color.new(color.fuchsia,0),  "S3 WATCH-C", group=G_COL, inline="3")
+color col_s4 = input.color(color.new(color.purple,0),   "S4 PRIME-A", group=G_COL, inline="4")
+color col_s5 = input.color(color.new(color.lime,0),     "S5 PRIME-B", group=G_COL, inline="5")
+color col_s6 = input.color(color.new(color.green,0),    "S6 PRIME-C", group=G_COL, inline="6")
+color col_s7 = input.color(SML_GOLD,                    "S7 GOD-A ★", group=G_COL, inline="7")
+color col_s8 = input.color(color.new(#FFE066,0),        "S8 GOD-B",   group=G_COL, inline="8")
+color col_s9 = input.color(color.new(color.white,0),    "S9 GOD-C",   group=G_COL, inline="9")
+
+// ── Volume ────────────────────────────────────────────────────────────────────
+var string G_VOL = "▶  VOLUME CONFIRMATION"
+bool  use_vol_confirm = input.bool(true,  "Require Volume Spike", group=G_VOL)
+int   vol_ma_len      = input.int(20,     "Volume MA Length",     group=G_VOL, minval=5, maxval=200)
+float vol_mult        = input.float(1.5,  "Volume Multiplier",    group=G_VOL, minval=1.0, step=0.1)
+
+// ── ATR ───────────────────────────────────────────────────────────────────────
+var string G_ATR = "▶  VOLATILITY REGIME"
+int atr_len = input.int(14,  "ATR Length",   group=G_ATR, minval=1,  maxval=50)
+int atr_lb  = input.int(100, "ATR Lookback", group=G_ATR, minval=20, maxval=500)
+
+// ── Risk Management ───────────────────────────────────────────────────────────
+var string G_RISK = "▶  RISK MANAGEMENT"
+float sl_atr_mult = input.float(1.5, "Stop-Loss (× ATR)",    group=G_RISK, minval=0.25, maxval=10.0, step=0.25)
+float tp_atr_mult = input.float(3.0, "Price Target (× ATR)", group=G_RISK, minval=0.25, maxval=20.0, step=0.25)
+
+// ── SML Licensed Inputs — 9 Sets × 5 Levels ──────────────────────────────────
+i_s1_l1 = input.int(1, "L1", group="SML Licensed — Set 1 (WATCH-A)", minval=1)
+i_s1_l2 = input.int(1, "L2", group="SML Licensed — Set 1 (WATCH-A)", minval=1)
+i_s1_l3 = input.int(1, "L3", group="SML Licensed — Set 1 (WATCH-A)", minval=1)
+i_s1_l4 = input.int(1, "L4", group="SML Licensed — Set 1 (WATCH-A)", minval=1)
+i_s1_l5 = input.int(1, "L5", group="SML Licensed — Set 1 (WATCH-A)", minval=1)
+
+i_s2_l1 = input.int(1, "L1", group="SML Licensed — Set 2 (WATCH-B)", minval=1)
+i_s2_l2 = input.int(1, "L2", group="SML Licensed — Set 2 (WATCH-B)", minval=1)
+i_s2_l3 = input.int(1, "L3", group="SML Licensed — Set 2 (WATCH-B)", minval=1)
+i_s2_l4 = input.int(1, "L4", group="SML Licensed — Set 2 (WATCH-B)", minval=1)
+i_s2_l5 = input.int(1, "L5", group="SML Licensed — Set 2 (WATCH-B)", minval=1)
+
+i_s3_l1 = input.int(1, "L1", group="SML Licensed — Set 3 (WATCH-C)", minval=1)
+i_s3_l2 = input.int(1, "L2", group="SML Licensed — Set 3 (WATCH-C)", minval=1)
+i_s3_l3 = input.int(1, "L3", group="SML Licensed — Set 3 (WATCH-C)", minval=1)
+i_s3_l4 = input.int(1, "L4", group="SML Licensed — Set 3 (WATCH-C)", minval=1)
+i_s3_l5 = input.int(1, "L5", group="SML Licensed — Set 3 (WATCH-C)", minval=1)
+
+i_s4_l1 = input.int(1, "L1", group="SML Licensed — Set 4 (PRIME-A)", minval=1)
+i_s4_l2 = input.int(1, "L2", group="SML Licensed — Set 4 (PRIME-A)", minval=1)
+i_s4_l3 = input.int(1, "L3", group="SML Licensed — Set 4 (PRIME-A)", minval=1)
+i_s4_l4 = input.int(1, "L4", group="SML Licensed — Set 4 (PRIME-A)", minval=1)
+i_s4_l5 = input.int(1, "L5", group="SML Licensed — Set 4 (PRIME-A)", minval=1)
+
+i_s5_l1 = input.int(1, "L1", group="SML Licensed — Set 5 (PRIME-B)", minval=1)
+i_s5_l2 = input.int(1, "L2", group="SML Licensed — Set 5 (PRIME-B)", minval=1)
+i_s5_l3 = input.int(1, "L3", group="SML Licensed — Set 5 (PRIME-B)", minval=1)
+i_s5_l4 = input.int(1, "L4", group="SML Licensed — Set 5 (PRIME-B)", minval=1)
+i_s5_l5 = input.int(1, "L5", group="SML Licensed — Set 5 (PRIME-B)", minval=1)
+
+i_s6_l1 = input.int(1, "L1", group="SML Licensed — Set 6 (PRIME-C)", minval=1)
+i_s6_l2 = input.int(1, "L2", group="SML Licensed — Set 6 (PRIME-C)", minval=1)
+i_s6_l3 = input.int(1, "L3", group="SML Licensed — Set 6 (PRIME-C)", minval=1)
+i_s6_l4 = input.int(1, "L4", group="SML Licensed — Set 6 (PRIME-C)", minval=1)
+i_s6_l5 = input.int(1, "L5", group="SML Licensed — Set 6 (PRIME-C)", minval=1)
+
+i_s7_l1 = input.int(1, "L1", group="SML Licensed — Set 7 (GOD-A)", minval=1)
+i_s7_l2 = input.int(1, "L2", group="SML Licensed — Set 7 (GOD-A)", minval=1)
+i_s7_l3 = input.int(1, "L3", group="SML Licensed — Set 7 (GOD-A)", minval=1)
+i_s7_l4 = input.int(1, "L4", group="SML Licensed — Set 7 (GOD-A)", minval=1)
+i_s7_l5 = input.int(1, "L5", group="SML Licensed — Set 7 (GOD-A)", minval=1)
+
+i_s8_l1 = input.int(1, "L1", group="SML Licensed — Set 8 (GOD-B)", minval=1)
+i_s8_l2 = input.int(1, "L2", group="SML Licensed — Set 8 (GOD-B)", minval=1)
+i_s8_l3 = input.int(1, "L3", group="SML Licensed — Set 8 (GOD-B)", minval=1)
+i_s8_l4 = input.int(1, "L4", group="SML Licensed — Set 8 (GOD-B)", minval=1)
+i_s8_l5 = input.int(1, "L5", group="SML Licensed — Set 8 (GOD-B)", minval=1)
+
+i_s9_l1 = input.int(1, "L1", group="SML Licensed — Set 9 (GOD-C)", minval=1)
+i_s9_l2 = input.int(1, "L2", group="SML Licensed — Set 9 (GOD-C)", minval=1)
+i_s9_l3 = input.int(1, "L3", group="SML Licensed — Set 9 (GOD-C)", minval=1)
+i_s9_l4 = input.int(1, "L4", group="SML Licensed — Set 9 (GOD-C)", minval=1)
+i_s9_l5 = input.int(1, "L5", group="SML Licensed — Set 9 (GOD-C)", minval=1)
+
+// =========================================================================
+// APEX ANCHOR MATRIX ENGINE — Proprietary Harmonic Grid
+// Tier I  GOD  : anchor A (flagship) | Tier II PRIME | Tier III WATCH
+// =========================================================================
+
+// Tier III — WATCH (3 configs)
+float e1a = ta.ema(close, i_s1_l1)
+float e1b = ta.ema(close, i_s1_l2)
+float e1c = ta.ema(close, i_s1_l3)
+float e1d = ta.ema(close, i_s1_l4)
+float e1e = ta.ema(close, i_s1_l5)
+
+float e2a = ta.ema(close, i_s2_l1)
+float e2b = ta.ema(close, i_s2_l2)
+float e2c = ta.ema(close, i_s2_l3)
+float e2d = ta.ema(close, i_s2_l4)
+float e2e = ta.ema(close, i_s2_l5)
+
+float e3a = ta.ema(close, i_s3_l1)
+float e3b = ta.ema(close, i_s3_l2)
+float e3c = ta.ema(close, i_s3_l3)
+float e3d = ta.ema(close, i_s3_l4)
+float e3e = ta.ema(close, i_s3_l5)
+
+// Tier II — PRIME (3 configs)
+float e4a = ta.ema(close, i_s4_l1)
+float e4b = ta.ema(close, i_s4_l2)
+float e4c = ta.ema(close, i_s4_l3)
+float e4d = ta.ema(close, i_s4_l4)
+float e4e = ta.ema(close, i_s4_l5)
+
+float e5a = ta.ema(close, i_s5_l1)
+float e5b = ta.ema(close, i_s5_l2)
+float e5c = ta.ema(close, i_s5_l3)
+float e5d = ta.ema(close, i_s5_l4)
+float e5e = ta.ema(close, i_s5_l5)
+
+float e6a = ta.ema(close, i_s6_l1)
+float e6b = ta.ema(close, i_s6_l2)
+float e6c = ta.ema(close, i_s6_l3)
+float e6d = ta.ema(close, i_s6_l4)
+float e6e = ta.ema(close, i_s6_l5)
+
+// Tier I — GOD MODE (3 configs)
+float e7a = ta.ema(close, i_s7_l1)
+float e7b = ta.ema(close, i_s7_l2)
+float e7c = ta.ema(close, i_s7_l3)
+float e7d = ta.ema(close, i_s7_l4)
+float e7e = ta.ema(close, i_s7_l5)
+
+float e8a = ta.ema(close, i_s8_l1)
+float e8b = ta.ema(close, i_s8_l2)
+float e8c = ta.ema(close, i_s8_l3)
+float e8d = ta.ema(close, i_s8_l4)
+float e8e = ta.ema(close, i_s8_l5)
+
+float e9a = ta.ema(close, i_s9_l1)
+float e9b = ta.ema(close, i_s9_l2)
+float e9c = ta.ema(close, i_s9_l3)
+float e9d = ta.ema(close, i_s9_l4)
+float e9e = ta.ema(close, i_s9_l5)
+// =========================================================================
+
+// ── Volume / ATR ──────────────────────────────────────────────────────────────
+float vol_ma           = ta.sma(volume, vol_ma_len)
+bool  vol_spike        = volume > vol_ma * vol_mult
+bool  vol_confirm      = not use_vol_confirm or vol_spike
+float atr_now          = ta.atr(atr_len)
+float atr_high         = ta.highest(atr_now, atr_lb)
+float atr_low          = ta.lowest(atr_now,  atr_lb)
+float atr_pct          = atr_high != atr_low ? (atr_now - atr_low) / (atr_high - atr_low) * 100.0 : 50.0
+string vol_regime      = atr_pct < 25.0 ? "COMPRESSED" : atr_pct > 75.0 ? "EXPANDED" : "NORMAL"
+bool regime_compressed = atr_pct < 25.0
+float effective_threshold = use_auto_thresh ? math.max(0.1, (atr_now / close) * 100.0 * auto_thresh_mult) : threshold_pct
+
+// ── Spread / Compression Index ────────────────────────────────────────────────
+get_spread(float a, float b, float c, float d, float e) =>
+    float hi = math.max(a, math.max(b, math.max(c, math.max(d, e))))
+    float lo = math.min(a, math.min(b, math.min(c, math.min(d, e))))
+    ((hi - lo) / close) * 100.0
+
+float sp1 = get_spread(e1a, e1b, e1c, e1d, e1e)
+float sp2 = get_spread(e2a, e2b, e2c, e2d, e2e)
+float sp3 = get_spread(e3a, e3b, e3c, e3d, e3e)
+float sp4 = get_spread(e4a, e4b, e4c, e4d, e4e)
+float sp5 = get_spread(e5a, e5b, e5c, e5d, e5e)
+float sp6 = get_spread(e6a, e6b, e6c, e6d, e6e)
+float sp7 = get_spread(e7a, e7b, e7c, e7d, e7e)
+float sp8 = get_spread(e8a, e8b, e8c, e8d, e8e)
+float sp9 = get_spread(e9a, e9b, e9c, e9d, e9e)
+
+int   ci_lb          = 252
+float sp_avg_raw     = (sp1 + sp2 + sp3 + sp4 + sp5 + sp6 + sp7 + sp8 + sp9) / 9.0
+float sp_hi          = ta.highest(sp_avg_raw, ci_lb)
+float sp_lo          = ta.lowest(sp_avg_raw,  ci_lb)
+float harmonic_score = sp_hi != sp_lo ? math.max(0.0, math.min(100.0, (1.0 - (sp_avg_raw - sp_lo) / (sp_hi - sp_lo)) * 100.0)) : 50.0
+
+get_set_score(float sp) =>
+    float hi = ta.highest(sp, ci_lb)
+    float lo = ta.lowest(sp,  ci_lb)
+    hi != lo ? math.max(0.0, math.min(100.0, (1.0 - (sp - lo) / (hi - lo)) * 100.0)) : 50.0
+
+float sc1 = get_set_score(sp1)
+float sc2 = get_set_score(sp2)
+float sc3 = get_set_score(sp3)
+float sc4 = get_set_score(sp4)
+float sc5 = get_set_score(sp5)
+float sc6 = get_set_score(sp6)
+float sc7 = get_set_score(sp7)
+float sc8 = get_set_score(sp8)
+float sc9 = get_set_score(sp9)
+
+bool coil_s1 = sp1 < effective_threshold
+bool coil_s2 = sp2 < effective_threshold
+bool coil_s3 = sp3 < effective_threshold
+bool coil_s4 = sp4 < effective_threshold
+bool coil_s5 = sp5 < effective_threshold
+bool coil_s6 = sp6 < effective_threshold
+bool coil_s7 = sp7 < effective_threshold
+bool coil_s8 = sp8 < effective_threshold
+bool coil_s9 = sp9 < effective_threshold
+
+int god_stacked   = (coil_s7 ? 1 : 0) + (coil_s8 ? 1 : 0) + (coil_s9 ? 1 : 0)
+int prime_stacked = (coil_s4 ? 1 : 0) + (coil_s5 ? 1 : 0) + (coil_s6 ? 1 : 0)
+int watch_stacked = (coil_s1 ? 1 : 0) + (coil_s2 ? 1 : 0) + (coil_s3 ? 1 : 0)
+int total_coiled  = god_stacked + prime_stacked + watch_stacked
+float avg_spread  = sp_avg_raw
+
+// DUAL GRID LOCK — 2 of the 3 GOD-tier configs compressed simultaneously
+// TRIPLE GRID LOCK — all 3 GOD-tier configs compressed (the strongest state)
+bool flagship_active  = coil_s7
+bool dual_grid_lock   = god_stacked >= 2
+bool triple_grid_lock = god_stacked == 3
+bool dgl_fire         = dual_grid_lock   and not dual_grid_lock[1]
+bool dgl_release      = not dual_grid_lock and dual_grid_lock[1]
+bool tgl_fire         = triple_grid_lock and not triple_grid_lock[1]
+
+var int bars_in_dgl = 0
+bars_in_dgl := dual_grid_lock ? bars_in_dgl + 1 : 0
+
+// ── MTF ───────────────────────────────────────────────────────────────────────
+[htf1_coiled, htf1_score] = request.security(syminfo.tickerid, tf1, [total_coiled, harmonic_score], lookahead=barmerge.lookahead_off)
+[htf2_coiled, htf2_score] = request.security(syminfo.tickerid, tf2, [total_coiled, harmonic_score], lookahead=barmerge.lookahead_off)
+bool htf1_converging = use_mtf and nz(htf1_coiled) >= mtf_min_conv
+bool htf2_converging = use_mtf and nz(htf2_coiled) >= mtf_min_conv
+int  mtf_aligned     = (htf1_converging ? 1 : 0) + (htf2_converging ? 1 : 0)
+bool full_mtf_stack  = mtf_aligned == 2
+bool mtf_stack_fired = full_mtf_stack and not full_mtf_stack[1]
+
+// ── Cloud / Momentum ──────────────────────────────────────────────────────────
+float cloud_center    = (e1a + e1e + e5a + e5e + e9a + e9e) / 6.0
+float cloud_vel_5     = nz(cloud_center[5]) > 0.0 ? (cloud_center - cloud_center[5]) / cloud_center[5] * 100.0 : 0.0
+float comp_accel      = harmonic_score - nz(harmonic_score[5], harmonic_score)
+string momentum_state = math.abs(cloud_vel_5) < 0.05 ? "CONSOLIDATING" : cloud_vel_5 > 0.0 ? "ADVANCING" : "RETREATING"
+string comp_vector    = comp_accel > 3.0 ? "ACCELERATING" : comp_accel < -3.0 ? "DECELERATING" : "NEUTRAL"
+
+// ── Anchor Band ───────────────────────────────────────────────────────────────
+float anc_hi   = math.max(math.max(math.max(e1e,e2e),math.max(e3e,e4e)),math.max(math.max(e5e,e6e),math.max(e7e,math.max(e8e,e9e))))
+float anc_lo   = math.min(math.min(math.min(e1e,e2e),math.min(e3e,e4e)),math.min(math.min(e5e,e6e),math.min(e7e,math.min(e8e,e9e))))
+float anc_raw  = (anc_hi - anc_lo) / close * 100.0
+float anc_hi_h = ta.highest(anc_raw, ci_lb)
+float anc_lo_h = ta.lowest(anc_raw,  ci_lb)
+float kp_score = anc_hi_h != anc_lo_h ? math.max(0.0, math.min(100.0, (1.0 - (anc_raw - anc_lo_h) / (anc_hi_h - anc_lo_h)) * 100.0)) : 50.0
+float kp_upper = anc_hi
+float kp_lower = anc_lo
+
+// ── Bias ──────────────────────────────────────────────────────────────────────
+int    bias_count  = ((close > e1e)?1:0) + ((close > e5e)?1:0) + ((close > e9e)?1:0)
+string macro_bias  = bias_count==3 ? "NET LONG POSTURE" : bias_count==0 ? "NET SHORT POSTURE" : bias_count==2 ? "MILD BULLISH SKEW" : "MILD BEARISH SKEW"
+color  macro_color = bias_count==3 ? SML_GREEN : bias_count==0 ? color.red : bias_count==2 ? SML_LIME : SML_ORANGE
+
+// ── State Machine ─────────────────────────────────────────────────────────────
+bool state_convergence = total_coiled >= min_sets_conv
+bool state_critical    = total_coiled >= min_sets_crit
+bool state_apex        = total_coiled >= min_sets_apex
+bool state_full        = total_coiled >= min_sets_full
+int  prev_coiled       = nz(total_coiled[1], 0)
+bool fire_convergence  = state_convergence and not (prev_coiled >= min_sets_conv)
+bool fire_critical     = state_critical    and not (prev_coiled >= min_sets_crit)
+bool fire_apex         = state_apex        and not (prev_coiled >= min_sets_apex)
+bool fire_full         = state_full        and not (prev_coiled >= min_sets_full)
+bool exit_convergence  = not state_convergence and (prev_coiled >= min_sets_conv)
+bool evt_convergence   = fire_convergence and not fire_critical
+bool evt_critical      = fire_critical    and not fire_apex
+bool evt_apex          = fire_apex        and not fire_full
+bool evt_full          = fire_full
+
+var int bars_in_conv = 0
+bars_in_conv := state_convergence ? bars_in_conv + 1 : 0
+
+// Label throttle — reduces clutter on busy sections
+var int lbl_tick = 0
+lbl_tick := (evt_convergence or evt_critical or evt_apex or evt_full or dgl_fire) ? lbl_tick + 1 : lbl_tick
+bool lbl_allowed = (lbl_tick % label_freq) == 0
+
+float score_roc = harmonic_score - nz(harmonic_score[3], harmonic_score)
+string score_dir = score_roc > 2.0 ? "TIGHTENING" : score_roc < -2.0 ? "EXPANDING" : "STABLE"
+
+// ── Directional Entry Signals ─────────────────────────────────────────────────
+// v8.2 decouples entries from compression: buy/sell fire on the bias flip itself
+// (price crossing back above/below the anchor EMAs), which is what happens at reversals.
+string signal_tier = state_full ? "FULL SPECTRUM" : state_apex ? "APEX" : state_critical ? "CRITICAL" : state_convergence ? "CONVERGENCE" : "TRENDING"
+bool bullish_bias      = bias_count >= 2
+bool bearish_bias      = bias_count <= 1
+bool bias_flip_bullish = bullish_bias and not bullish_bias[1]
+bool bias_flip_bearish = bearish_bias and not bearish_bias[1]
+bool buy_signal        = bias_flip_bullish and vol_confirm
+bool sell_signal       = bias_flip_bearish and vol_confirm
+
+// ── SQI ───────────────────────────────────────────────────────────────────────
+float sqi_compression = harmonic_score * 0.40
+float sqi_mtf_pts     = (htf1_converging ? 15.0 : 0.0) + (htf2_converging ? 15.0 : 0.0)
+float sqi_volume_pts  = vol_spike ? 15.0 : volume > vol_ma * 0.8 ? 7.5 : 0.0
+float sqi_regime_pts  = regime_compressed ? 15.0 : atr_pct < 50.0 ? 7.5 : 0.0
+float sqi_total       = sqi_compression + sqi_mtf_pts + sqi_volume_pts + sqi_regime_pts
+bool  is_prime_setup  = state_convergence and sqi_total >= sqi_prime_lvl
+color sqi_color       = sqi_total >= 90.0 ? SML_GOLD : sqi_total >= 75.0 ? SML_GREEN : sqi_total >= 50.0 ? SML_ORANGE : SML_ACCENT
+
+// ── Signal Memory + Risk Levels ───────────────────────────────────────────────
+var string last_signal_type  = "NONE"
+var float  last_signal_price = na
+var float  last_signal_sqi   = na
+var string last_signal_tier  = ""
+var int    last_signal_bar   = na
+var float  active_stop       = na
+var float  active_target     = na
+
+if buy_signal
+    last_signal_type  := "BUY"
+    last_signal_price := close
+    last_signal_sqi   := sqi_total
+    last_signal_tier  := signal_tier
+    last_signal_bar   := bar_index
+    active_stop       := close - atr_now * sl_atr_mult
+    active_target     := close + atr_now * tp_atr_mult
+if sell_signal
+    last_signal_type  := "SELL"
+    last_signal_price := close
+    last_signal_sqi   := sqi_total
+    last_signal_tier  := signal_tier
+    last_signal_bar   := bar_index
+    active_stop       := close + atr_now * sl_atr_mult
+    active_target     := close - atr_now * tp_atr_mult
+
+int bars_since_signal = na(last_signal_bar) ? na : bar_index - last_signal_bar
+
+// ── Plot Colors ───────────────────────────────────────────────────────────────
+bool show_set = not pitch_mode
+
+color pc1a = color.new(col_s1, 40)
+color pc2a = color.new(col_s2, 40)
+color pc3a = color.new(col_s3, 40)
+color pc4a = color.new(col_s4, 40)
+color pc5a = color.new(col_s5, 40)
+color pc6a = color.new(col_s6, 40)
+color pc7a = color.new(col_s7, 40)
+color pc8a = color.new(col_s8, 40)
+color pc9a = color.new(col_s9, 40)
+
+int   kp_al    = pitch_mode ? (state_full?0:state_apex?10:state_critical?20:35) : (state_full?15:state_apex?35:70)
+color kp_col   = color.new(color.white, kp_al)
+color fill_col = triple_grid_lock ? color.new(SML_GOLD,  82) : state_full ? color.new(SML_GOLD, 88) : state_apex ? color.new(color.white, 90) : state_critical ? color.new(SML_PINK, 90) : state_convergence ? color.new(SML_GREEN, 90) : color.new(color.gray, 97)
+
+// ── EMA Plots — Macro (structural) lines only ────────────────────────────────
+plot(show_set and show_s1 ? e1e : na, "W-A Macro", pc1a, linewidth=2)
+plot(show_set and show_s2 ? e2e : na, "W-B Macro", pc2a, linewidth=2)
+plot(show_set and show_s3 ? e3e : na, "W-C Macro", pc3a, linewidth=2)
+plot(show_set and show_s4 ? e4e : na, "P-A Macro", pc4a, linewidth=2)
+plot(show_set and show_s5 ? e5e : na, "P-B Macro", pc5a, linewidth=2)
+plot(show_set and show_s6 ? e6e : na, "P-C Macro", pc6a, linewidth=2)
+plot(show_set and show_s7 ? e7e : na, "G-A Macro ★",pc7a, linewidth=3)
+plot(show_set and show_s8 ? e8e : na, "G-B Macro", pc8a, linewidth=2)
+plot(show_set and show_s9 ? e9e : na, "G-C Macro", pc9a, linewidth=2)
+
+p_kp_top = plot(show_kinetic ? kp_upper : na, "Anchor Ceil",  kp_col, linewidth=pitch_mode?3:2, style=plot.style_stepline)
+p_kp_bot = plot(show_kinetic ? kp_lower : na, "Anchor Floor", kp_col, linewidth=pitch_mode?3:2, style=plot.style_stepline)
+fill(p_kp_top, p_kp_bot, show_fill ? fill_col : na, title="Confluence Fill")
+
+plot(active_stop,   "Stop Loss",    color=color.new(color.red, 0), style=plot.style_linebr, linewidth=2)
+plot(active_target, "Price Target", color=color.new(SML_GOLD, 0), style=plot.style_linebr, linewidth=2)
+
+// ── Markers — shapes BELOW/ABOVE bar ─────────────────────────────────────────
+bool confirmed = barstate.isconfirmed
+plotshape(show_markers and evt_convergence  and confirmed, "CV",  shape.diamond,    location.belowbar, color.new(SML_GREEN, 10), size=size.tiny,   offset=0)
+plotshape(show_markers and evt_critical     and confirmed, "CR",  shape.triangleup, location.belowbar, color.new(SML_PINK,  0),  size=size.small,  offset=0)
+plotshape(show_markers and evt_apex         and confirmed, "AX",  shape.diamond,    location.belowbar, color.new(color.white,0), size=size.tiny, offset=0)
+plotshape(show_markers and evt_full         and confirmed, "FS",  shape.circle,     location.belowbar, color.new(SML_GOLD,  0),  size=size.small,  offset=0)
+plotshape(show_markers and exit_convergence and confirmed, "EX",  shape.xcross,     location.belowbar, color.new(SML_ACCENT,20), size=size.tiny,   offset=0)
+plotshape(show_markers and dgl_fire         and confirmed, "DGL", shape.labelup,    location.belowbar, color.new(SML_GOLD,  0),  size=size.small,  offset=0, text="💎", textcolor=color.black)
+plotshape(show_markers and tgl_fire         and confirmed, "TGL", shape.labelup,    location.belowbar, color.new(color.white,0), size=size.small,  offset=0, text="👑", textcolor=color.black)
+plotshape(show_markers and dgl_release      and confirmed, "DGLX",shape.xcross,     location.belowbar, color.new(SML_GOLD, 40),  size=size.tiny,   offset=0)
+plotshape(show_markers and is_prime_setup and full_mtf_stack and confirmed, "PR", shape.triangleup, location.abovebar, color.new(SML_CYAN,0), size=size.small, offset=0)
+plotshape(show_markers and buy_signal       and confirmed, "BUY",  shape.triangleup,   location.belowbar, SML_GREEN, size=size.small, offset=0, text="BUY",  textcolor=color.white)
+plotshape(show_markers and sell_signal      and confirmed, "SELL", shape.triangledown, location.abovebar, color.red, size=size.small, offset=0, text="SELL", textcolor=color.white)
+
+// ── Labels — compact text, throttled, staggered ───────────────────────────────
+color TRANSP  = color.new(color.black, 100)
+string hs_str = str.tostring(math.round(harmonic_score))
+string sq_str = str.tostring(math.round(sqi_total))
+string g_str  = str.tostring(god_stacked)
+string mtfsuf = full_mtf_stack ? " MTF✓" : (htf1_converging or htf2_converging) ? " MTF~" : ""
+
+// Stagger y offset cycling 3 levels so adjacent labels don't pile up
+float stagger = close * (bar_index % 3 == 0 ? 0.000 : bar_index % 3 == 1 ? 0.006 : 0.012)
+float lbl_y   = cloud_center - stagger
+
+if show_labels and confirmed and lbl_allowed
+    if evt_convergence
+        label.new(bar_index, lbl_y, "CONV " + str.tostring(total_coiled) + "/9" + mtfsuf, color=TRANSP, textcolor=SML_GREEN, style=label.style_label_up, size=size.tiny)
+    else if evt_critical
+        label.new(bar_index, lbl_y, "CRIT " + str.tostring(total_coiled) + "/9" + mtfsuf, color=TRANSP, textcolor=SML_PINK, style=label.style_label_up, size=size.tiny)
+    else if evt_apex
+        label.new(bar_index, lbl_y, "APEX " + hs_str + " Q:" + sq_str + mtfsuf, color=TRANSP, textcolor=color.white, style=label.style_label_up, size=size.small)
+    else if evt_full
+        label.new(bar_index, lbl_y, "FSC ALL-9  CI:" + hs_str + mtfsuf, color=TRANSP, textcolor=SML_GOLD, style=label.style_label_up, size=size.small)
+
+// DUAL / TRIPLE GRID LOCK always show — pinned above high so they never overlap body labels
+if show_labels and confirmed and dgl_fire and not tgl_fire
+    label.new(bar_index, high * 1.008, "💎 DUAL " + g_str + "/3", color=color.new(SML_GOLD,0), textcolor=color.black, style=label.style_label_down, size=size.tiny)
+
+if show_labels and confirmed and tgl_fire
+    label.new(bar_index, high * 1.012, "👑 TRIPLE 3/3", color=color.new(color.white,0), textcolor=color.black, style=label.style_label_down, size=size.tiny)
+
+// Directional entry labels — always show, not subject to the convergence-event throttle
+if show_labels and confirmed and buy_signal
+    label.new(bar_index, low * 0.994, "▲ BUY " + str.tostring(close, "#.00") + " SL:" + str.tostring(active_stop, "#.00") + " TP:" + str.tostring(active_target, "#.00"), color=color.new(SML_GREEN,10), textcolor=color.black, style=label.style_label_up, size=size.tiny)
+
+if show_labels and confirmed and sell_signal
+    label.new(bar_index, high * 1.006, "▼ SELL " + str.tostring(close, "#.00") + " SL:" + str.tostring(active_stop, "#.00") + " TP:" + str.tostring(active_target, "#.00"), color=color.new(color.red,10), textcolor=color.white, style=label.style_label_down, size=size.tiny)
+
+// ── HUD — 3-column: label | value | detail/tier ───────────────────────────────
+var table hud = table.new(position.top_right, 3, 36, bgcolor=color.new(#050505,5), border_color=SML_ACCENT, border_width=1, frame_color=SML_ACCENT, frame_width=2)
+
+if show_hud and barstate.islast
+    // Row 0 — Title
+    table.cell(hud,0,0, "SML  SOVEREIGN HARMONIC MATRIX", text_color=SML_GREEN, text_size=size.normal, bgcolor=color.new(#050505,0))
+    table.cell(hud,1,0, "", bgcolor=color.new(#050505,0))
+    table.cell(hud,2,0, "", bgcolor=color.new(#050505,0))
+    table.merge_cells(hud,0,0,2,0)
+
+    // Row 1 — Sub
+    table.cell(hud,0,1, pitch_mode ? "PROPRIETARY SIGNAL ENGINE  |  v8.2 INSTITUTIONAL" : "APEX ANCHOR MATRIX  |  v8.2  |  MTF + SQI ENGINE", text_color=SML_ACCENT, text_size=size.tiny)
+    table.cell(hud,1,1, "")
+    table.cell(hud,2,1, "")
+    table.merge_cells(hud,0,1,2,1)
+
+    // Row 2 — sep
+    table.cell(hud,0,2, "─────────────────────────────────────────────────────────────────", text_color=SML_ACCENT, text_size=size.tiny)
+    table.cell(hud,1,2, "")
+    table.cell(hud,2,2, "")
+    table.merge_cells(hud,0,2,2,2)
+
+    // Row 3 — State banner
+    string st_txt = triple_grid_lock ? "    👑  TRIPLE GRID LOCK  👑    " : dual_grid_lock ? "    💎  DUAL GRID LOCK  💎    " : state_full ? "  FULL SPECTRUM CONVERGENCE  " : state_apex ? "     APEX SINGULARITY     " : state_critical ? "      CRITICAL MASS      " : state_convergence ? "       CONVERGENCE       " : "         SCANNING        "
+    color  st_col = triple_grid_lock or state_full or state_apex ? color.black : dual_grid_lock or state_critical ? color.white : state_convergence ? color.black : SML_ACCENT
+    color  st_bg  = triple_grid_lock or state_full ? SML_GOLD : dual_grid_lock ? color.new(SML_GOLD,30) : state_apex ? color.white : state_critical ? SML_PINK : state_convergence ? SML_GREEN : color.new(color.black,30)
+    table.cell(hud,0,3, st_txt, text_color=st_col, text_size=size.large, bgcolor=st_bg)
+    table.cell(hud,1,3, "", bgcolor=st_bg)
+    table.cell(hud,2,3, "", bgcolor=st_bg)
+    table.merge_cells(hud,0,3,2,3)
+
+    // Row 4 — sep
+    table.cell(hud,0,4, "─────────────────────────────────────────────────────────────────", text_color=SML_ACCENT, text_size=size.tiny)
+    table.cell(hud,1,4, "")
+    table.cell(hud,2,4, "")
+    table.merge_cells(hud,0,4,2,4)
+
+    // ── Core Metrics (3-col: label | value | detail) ─────────────────────────
+    color coil_col = state_full ? SML_GOLD : state_apex ? color.white : state_critical ? SML_PINK : state_convergence ? SML_GREEN : SML_ACCENT
+
+    table.cell(hud,0,5, "ACTIVE SETS",        text_color=SML_ACCENT, text_size=size.small)
+    table.cell(hud,1,5, str.tostring(total_coiled) + " / 9", text_color=coil_col, text_size=size.normal)
+    table.cell(hud,2,5, "GOD:" + g_str + "  PRI:" + str.tostring(prime_stacked) + "  WCH:" + str.tostring(watch_stacked), text_color=SML_ACCENT, text_size=size.tiny)
+
+    table.cell(hud,0,6, "COMPRESSION INDEX",  text_color=SML_ACCENT, text_size=size.small)
+    table.cell(hud,1,6, hs_str + " / 100",     text_color=coil_col, text_size=size.normal)
+    table.cell(hud,2,6, score_dir, text_color=score_dir=="TIGHTENING" ? SML_LIME : score_dir=="EXPANDING" ? color.red : SML_ACCENT, text_size=size.tiny)
+
+    table.cell(hud,0,7, "ANCHOR SPREAD INDEX",text_color=SML_ACCENT, text_size=size.small)
+    table.cell(hud,1,7, str.tostring(math.round(kp_score)) + " / 100", text_color=kp_score>75.0?color.red:kp_score>45.0?SML_ORANGE:SML_ACCENT, text_size=size.normal)
+    table.cell(hud,2,7, str.tostring(math.round(avg_spread*100.0)/100.0) + "% avg", text_color=color.white, text_size=size.tiny)
+
+    table.cell(hud,0,8, "COMPRESSION ACCEL",  text_color=SML_ACCENT, text_size=size.small)
+    table.cell(hud,1,8, comp_vector, text_color=comp_vector=="ACCELERATING"?SML_GOLD:comp_vector=="DECELERATING"?color.red:SML_ACCENT, text_size=size.small)
+    table.cell(hud,2,8, str.tostring(bars_in_conv) + " bars conv", text_color=bars_in_conv>15?SML_ORANGE:bars_in_conv>5?SML_GOLD:color.white, text_size=size.tiny)
+
+    table.cell(hud,0,9, "GRID LOCK",     text_color=SML_ACCENT, text_size=size.small)
+    table.cell(hud,1,9, triple_grid_lock ? "👑  TRIPLE" : dual_grid_lock ? "💎  DUAL" : flagship_active ? "★  FLAGSHIP ACTIVE" : "SCANNING", text_color=triple_grid_lock?SML_GOLD:dual_grid_lock?color.white:flagship_active?SML_GREEN:SML_ACCENT, text_size=size.small)
+    table.cell(hud,2,9, "GOD-tier: " + g_str + " / 3  (" + str.tostring(bars_in_dgl) + " bars)", text_color=god_stacked==3?SML_GOLD:god_stacked>0?SML_LIME:SML_ACCENT, text_size=size.tiny)
+
+    // Row 10 — sep
+    table.cell(hud,0,10, "─────────────────────────────────────────────────────────────────", text_color=SML_ACCENT, text_size=size.tiny)
+    table.cell(hud,1,10, "")
+    table.cell(hud,2,10, "")
+    table.merge_cells(hud,0,10,2,10)
+
+    // ── SQI ──────────────────────────────────────────────────────────────────
+    table.cell(hud,0,11, "SQI  SIGNAL QUALITY INDEX", text_color=SML_CYAN, text_size=size.small)
+    table.cell(hud,1,11, "")
+    table.cell(hud,2,11, "")
+    table.merge_cells(hud,0,11,2,11)
+
+    table.cell(hud,0,12, "SQI SCORE", text_color=SML_ACCENT, text_size=size.small)
+    table.cell(hud,1,12, sq_str + " / 100" + (is_prime_setup ? "  ★ PRIME" : ""), text_color=sqi_color, text_size=size.normal)
+    table.cell(hud,2,12, "", text_size=size.tiny)
+
+    table.cell(hud,0,13, "  COMPRESSION  (40pt)", text_color=SML_ACCENT, text_size=size.tiny)
+    table.cell(hud,1,13, str.tostring(math.round(sqi_compression)), text_color=color.white, text_size=size.tiny)
+    table.cell(hud,2,13, "  VOL CONF  (15pt)  " + str.tostring(math.round(sqi_volume_pts)), text_color=vol_spike?SML_LIME:SML_ACCENT, text_size=size.tiny)
+
+    table.cell(hud,0,14, "  MTF ALIGN    (30pt)", text_color=SML_ACCENT, text_size=size.tiny)
+    table.cell(hud,1,14, str.tostring(math.round(sqi_mtf_pts)), text_color=full_mtf_stack?SML_CYAN:SML_ACCENT, text_size=size.tiny)
+    table.cell(hud,2,14, "  REGIME GRD   (15pt)  " + str.tostring(math.round(sqi_regime_pts)), text_color=regime_compressed?SML_GREEN:SML_ACCENT, text_size=size.tiny)
+
+    // Row 15 — sep
+    table.cell(hud,0,15, "─────────────────────────────────────────────────────────────────", text_color=SML_ACCENT, text_size=size.tiny)
+    table.cell(hud,1,15, "")
+    table.cell(hud,2,15, "")
+    table.merge_cells(hud,0,15,2,15)
+
+    // ── MTF ──────────────────────────────────────────────────────────────────
+    table.cell(hud,0,16, "MTF  MULTI-TIMEFRAME ALIGNMENT", text_color=SML_CYAN, text_size=size.small)
+    table.cell(hud,1,16, "")
+    table.cell(hud,2,16, "")
+    table.merge_cells(hud,0,16,2,16)
+
+    string htf1_lbl = htf1_converging ? "CONVERGING  [" + str.tostring(nz(htf1_coiled)) + "/9]" : "SCANNING    [" + str.tostring(nz(htf1_coiled)) + "/9]"
+    string htf2_lbl = htf2_converging ? "CONVERGING  [" + str.tostring(nz(htf2_coiled)) + "/9]" : "SCANNING    [" + str.tostring(nz(htf2_coiled)) + "/9]"
+
+    table.cell(hud,0,17, "HTF 1  [" + tf1 + "]", text_color=SML_ACCENT, text_size=size.small)
+    table.cell(hud,1,17, htf1_lbl, text_color=htf1_converging?SML_GREEN:SML_ACCENT, text_size=size.small)
+    table.cell(hud,2,17, "CI: " + str.tostring(math.round(nz(htf1_score))), text_color=color.white, text_size=size.tiny)
+
+    table.cell(hud,0,18, "HTF 2  [" + tf2 + "]", text_color=SML_ACCENT, text_size=size.small)
+    table.cell(hud,1,18, htf2_lbl, text_color=htf2_converging?SML_GREEN:SML_ACCENT, text_size=size.small)
+    table.cell(hud,2,18, "CI: " + str.tostring(math.round(nz(htf2_score))), text_color=color.white, text_size=size.tiny)
+
+    string stack_txt = full_mtf_stack ? "FULL STACK  ALL TFs ALIGNED" : mtf_aligned==1 ? "PARTIAL  1 OF 2 TFs" : "NO ALIGNMENT"
+    color  stack_col = full_mtf_stack ? SML_CYAN : mtf_aligned==1 ? SML_ORANGE : SML_ACCENT
+    table.cell(hud,0,19, "MTF STACK STATUS", text_color=SML_ACCENT, text_size=size.small)
+    table.cell(hud,1,19, stack_txt, text_color=stack_col, text_size=size.small)
+    table.cell(hud,2,19, "", text_size=size.tiny)
+
+    // Row 20 — sep
+    table.cell(hud,0,20, "─────────────────────────────────────────────────────────────────", text_color=SML_ACCENT, text_size=size.tiny)
+    table.cell(hud,1,20, "")
+    table.cell(hud,2,20, "")
+    table.merge_cells(hud,0,20,2,20)
+
+    // ── Market Context ────────────────────────────────────────────────────────
+    table.cell(hud,0,21, "MARKET CONTEXT", text_color=SML_CYAN, text_size=size.small)
+    table.cell(hud,1,21, "")
+    table.cell(hud,2,21, "")
+    table.merge_cells(hud,0,21,2,21)
+
+    table.cell(hud,0,22, "DIRECTIONAL BIAS",  text_color=SML_ACCENT, text_size=size.small)
+    table.cell(hud,1,22, macro_bias,           text_color=macro_color, text_size=size.small)
+    table.cell(hud,2,22, momentum_state,       text_color=momentum_state=="ADVANCING"?SML_LIME:momentum_state=="RETREATING"?SML_PINK:SML_ACCENT, text_size=size.tiny)
+
+    table.cell(hud,0,23, "VOLATILITY REGIME", text_color=SML_ACCENT, text_size=size.small)
+    table.cell(hud,1,23, vol_regime,           text_color=vol_regime=="COMPRESSED"?SML_GREEN:vol_regime=="EXPANDED"?SML_ORANGE:SML_ACCENT, text_size=size.small)
+    table.cell(hud,2,23, "ATR: " + str.tostring(math.round(atr_pct)) + "%", text_color=color.white, text_size=size.tiny)
+
+    table.cell(hud,0,24, "VOLUME STATUS",     text_color=SML_ACCENT, text_size=size.small)
+    table.cell(hud,1,24, vol_spike ? "ELEVATED" : "BASELINE", text_color=vol_spike?SML_LIME:SML_ACCENT, text_size=size.small)
+    table.cell(hud,2,24, "Cloud: " + comp_vector, text_color=comp_vector=="ACCELERATING"?SML_GOLD:comp_vector=="DECELERATING"?color.red:SML_ACCENT, text_size=size.tiny)
+
+    table.cell(hud,0,25, "THRESHOLD MODE",    text_color=SML_ACCENT, text_size=size.small)
+    table.cell(hud,1,25, use_auto_thresh ? "AUTO-ATR" : "MANUAL", text_color=use_auto_thresh?SML_CYAN:SML_ACCENT, text_size=size.small)
+    table.cell(hud,2,25, str.tostring(math.round(effective_threshold*100.0)/100.0) + "%", text_color=color.white, text_size=size.tiny)
+
+    // Row 26 — sep
+    table.cell(hud,0,26, "─────────────────────────────────────────────────────────────────", text_color=SML_ACCENT, text_size=size.tiny)
+    table.cell(hud,1,26, "")
+    table.cell(hud,2,26, "")
+    table.merge_cells(hud,0,26,2,26)
+
+    // ── Set Matrix — 3×3 grid (one config per column, one tier per row) ───────
+    if not pitch_mode
+        table.cell(hud,0,27, "SET MATRIX", text_color=SML_ACCENT, text_size=size.small)
+        table.cell(hud,1,27, "")
+        table.cell(hud,2,27, "")
+        table.merge_cells(hud,0,27,2,27)
+
+        table.cell(hud,0,28, (coil_s7?"●":"○") + " GOD-A: " + str.tostring(math.round(sc7)), text_color=coil_s7?SML_GOLD:SML_ACCENT, text_size=size.tiny)
+        table.cell(hud,1,28, (coil_s8?"●":"○") + " GOD-B: " + str.tostring(math.round(sc8)), text_color=coil_s8?SML_GOLD:SML_ACCENT, text_size=size.tiny)
+        table.cell(hud,2,28, (coil_s9?"●":"○") + " GOD-C: " + str.tostring(math.round(sc9)), text_color=coil_s9?SML_GOLD:SML_ACCENT, text_size=size.tiny)
+
+        table.cell(hud,0,29, (coil_s4?"●":"○") + " PRI-A: " + str.tostring(math.round(sc4)), text_color=coil_s4?SML_GREEN:SML_ACCENT, text_size=size.tiny)
+        table.cell(hud,1,29, (coil_s5?"●":"○") + " PRI-B: " + str.tostring(math.round(sc5)), text_color=coil_s5?SML_GREEN:SML_ACCENT, text_size=size.tiny)
+        table.cell(hud,2,29, (coil_s6?"●":"○") + " PRI-C: " + str.tostring(math.round(sc6)), text_color=coil_s6?SML_GREEN:SML_ACCENT, text_size=size.tiny)
+
+        table.cell(hud,0,30, (coil_s1?"●":"○") + " WCH-A: " + str.tostring(math.round(sc1)), text_color=coil_s1?SML_ORANGE:SML_ACCENT, text_size=size.tiny)
+        table.cell(hud,1,30, (coil_s2?"●":"○") + " WCH-B: " + str.tostring(math.round(sc2)), text_color=coil_s2?SML_ORANGE:SML_ACCENT, text_size=size.tiny)
+        table.cell(hud,2,30, (coil_s3?"●":"○") + " WCH-C: " + str.tostring(math.round(sc3)), text_color=coil_s3?SML_ORANGE:SML_ACCENT, text_size=size.tiny)
+
+        table.cell(hud,0,31, "CV>=" + str.tostring(min_sets_conv), text_color=SML_ACCENT, text_size=size.tiny)
+        table.cell(hud,1,31, "CR>=" + str.tostring(min_sets_crit) + "  AX>=" + str.tostring(min_sets_apex), text_color=SML_ACCENT, text_size=size.tiny)
+        table.cell(hud,2,31, "FSC=" + str.tostring(min_sets_full), text_color=SML_ACCENT, text_size=size.tiny)
+
+    // Row 32 — sep
+    table.cell(hud,0,32, "─────────────────────────────────────────────────────────────────", text_color=SML_ACCENT, text_size=size.tiny)
+    table.cell(hud,1,32, "")
+    table.cell(hud,2,32, "")
+    table.merge_cells(hud,0,32,2,32)
+
+    // ── Last Signal — trade-desk quick reference ──────────────────────────────
+    string ls_txt = na(last_signal_bar) ? "NONE YET" : last_signal_type + " @ " + str.tostring(last_signal_price, "#.00") + "  SL:" + str.tostring(active_stop, "#.00") + "  TP:" + str.tostring(active_target, "#.00") + "  (" + str.tostring(bars_since_signal) + "b ago)"
+    color  ls_col = last_signal_type == "BUY" ? SML_GREEN : last_signal_type == "SELL" ? color.red : SML_ACCENT
+    table.cell(hud,0,33, "LAST SIGNAL", text_color=SML_ACCENT, text_size=size.small)
+    table.cell(hud,1,33, ls_txt, text_color=ls_col, text_size=size.small)
+    table.cell(hud,2,33, last_signal_tier + "  SQI:" + str.tostring(math.round(last_signal_sqi)), text_color=color.white, text_size=size.tiny)
+
+    // Row 34 — sep
+    table.cell(hud,0,34, "─────────────────────────────────────────────────────────────────", text_color=SML_ACCENT, text_size=size.tiny)
+    table.cell(hud,1,34, "")
+    table.cell(hud,2,34, "")
+    table.merge_cells(hud,0,34,2,34)
+
+    table.cell(hud,0,35, "© ScriptMaster Labs  |  PROPRIETARY  |  DO NOT DISTRIBUTE", text_color=color.new(SML_ACCENT,20), text_size=size.tiny)
+    table.cell(hud,1,35, "")
+    table.cell(hud,2,35, "")
+    table.merge_cells(hud,0,35,2,35)
+
+// ── alertcondition (legacy / individual setup) ────────────────────────────────
+alertcondition(evt_convergence and vol_confirm,                    "SML: Convergence",         "CONVERGENCE — {{ticker}} {{interval}} [SML v8.2]")
+alertcondition(evt_critical    and vol_confirm,                    "SML: Critical Mass",       "CRITICAL MASS — {{ticker}} {{interval}} [SML v8.2]")
+alertcondition(evt_apex        and vol_confirm,                    "SML: Apex Singularity",    "APEX SINGULARITY — {{ticker}} {{interval}} [SML v8.2]")
+alertcondition(evt_full,                                           "SML: Full Spectrum",       "FULL SPECTRUM — ALL 9 — {{ticker}} {{interval}} [SML v8.2]")
+alertcondition(exit_convergence,                                   "SML: Released",            "CONVERGENCE RELEASED — {{ticker}} {{interval}} [SML v8.2]")
+alertcondition(dgl_fire,                                           "SML: Dual Grid Lock",      "DUAL GRID LOCK — 2/3 GOD TIER — {{ticker}} {{interval}} [SML v8.2]")
+alertcondition(tgl_fire,                                           "SML: Triple Grid Lock",    "TRIPLE GRID LOCK — 3/3 GOD TIER — {{ticker}} {{interval}} [SML v8.2]")
+alertcondition(dgl_release,                                        "SML: Grid Lock Released",  "GRID LOCK RELEASED — {{ticker}} {{interval}} [SML v8.2]")
+alertcondition(evt_apex and regime_compressed and vol_confirm,     "SML: Prime Signal",        "PRIME SIGNAL — {{ticker}} {{interval}} [SML v8.2]")
+alertcondition(is_prime_setup  and full_mtf_stack and vol_confirm, "SML: Prime Institutional", "PRIME INSTITUTIONAL — {{ticker}} {{interval}} [SML v8.2]")
+alertcondition(mtf_stack_fired and state_convergence,              "SML: MTF Stack",           "MTF STACK — {{ticker}} {{interval}} [SML v8.2]")
+alertcondition(buy_signal,                                         "SML: Buy Signal",          "BUY SIGNAL — {{ticker}} {{interval}} [SML v8.2]")
+alertcondition(sell_signal,                                        "SML: Sell Signal",         "SELL SIGNAL — {{ticker}} {{interval}} [SML v8.2]")
+
+// ── alert() — Discord JSON webhooks ──────────────────────────────────────────
+string _px  = str.tostring(close, "#.00")
+string _set = str.tostring(total_coiled)
+string _ci  = str.tostring(math.round(harmonic_score))
+string _sq  = str.tostring(math.round(sqi_total))
+string _tf  = timeframe.period
+string _tk  = syminfo.ticker
+string _ftx = ",\"footer\":{\"text\":\"SML v8.2  |  ScriptMaster Labs  |  PROPRIETARY\"}}"
+
+if tgl_fire
+    alert("{\"username\":\"SML SOVEREIGN MATRIX\",\"embeds\":[{\"title\":\"\\ud83d\\udc51  TRIPLE GRID LOCK  \\u2014  " + _tk + "\",\"description\":\"**ALL 3 GOD-TIER CONFIGS COMPRESSED**\\nPrice: **$" + _px + "** | TF: **" + _tf + "** | CI: **" + _ci + "**\",\"color\":16766720" + _ftx + "]}", alert.freq_once_per_bar_close)
+
+else if dgl_fire
+    alert("{\"username\":\"SML SOVEREIGN MATRIX\",\"embeds\":[{\"title\":\"\\ud83d\\udc8e  DUAL GRID LOCK  \\u2014  " + _tk + "\",\"description\":\"**2 OF 3 GOD-TIER CONFIGS COMPRESSED**\\nPrice: **$" + _px + "** | TF: **" + _tf + "** | CI: **" + _ci + "**\",\"color\":15105570" + _ftx + "]}", alert.freq_once_per_bar_close)
+
+else if buy_signal
+    alert("{\"username\":\"SML SOVEREIGN MATRIX\",\"embeds\":[{\"title\":\"\\ud83d\\udfe2  BUY SIGNAL  \\u2014  " + _tk + "\",\"description\":\"**" + signal_tier + "**  |  Bias: " + macro_bias + "\\nEntry: **$" + _px + "**  |  SL: **$" + str.tostring(active_stop, "#.00") + "**  |  TP: **$" + str.tostring(active_target, "#.00") + "**\\nTF: **" + _tf + "** | SQI: **" + _sq + "**\",\"color\":3066993" + _ftx + "]}", alert.freq_once_per_bar_close)
+
+else if sell_signal
+    alert("{\"username\":\"SML SOVEREIGN MATRIX\",\"embeds\":[{\"title\":\"\\ud83d\\udd34  SELL SIGNAL  \\u2014  " + _tk + "\",\"description\":\"**" + signal_tier + "**  |  Bias: " + macro_bias + "\\nEntry: **$" + _px + "**  |  SL: **$" + str.tostring(active_stop, "#.00") + "**  |  TP: **$" + str.tostring(active_target, "#.00") + "**\\nTF: **" + _tf + "** | SQI: **" + _sq + "**\",\"color\":15158332" + _ftx + "]}", alert.freq_once_per_bar_close)
+
+else if evt_full
+    alert("{\"username\":\"SML SOVEREIGN MATRIX\",\"embeds\":[{\"title\":\"\\ud83d\\udfe1  FULL SPECTRUM  \\u2014  " + _tk + "\",\"description\":\"**ALL 9 SETS COMPRESSED**\\nPrice: **$" + _px + "** | TF: **" + _tf + "** | CI: **" + _ci + "** | SQI: **" + _sq + "**\",\"color\":16766720" + _ftx + "]}", alert.freq_once_per_bar_close)
+
+else if evt_apex and vol_confirm
+    alert("{\"username\":\"SML SOVEREIGN MATRIX\",\"embeds\":[{\"title\":\"\\u26aa  APEX SINGULARITY  \\u2014  " + _tk + "\",\"description\":\"Sets: **" + _set + "/9** compressed\\nPrice: **$" + _px + "** | TF: **" + _tf + "** | CI: **" + _ci + "** | SQI: **" + _sq + "**\",\"color\":16777215" + _ftx + "]}", alert.freq_once_per_bar_close)
+
+else if evt_critical and vol_confirm
+    alert("{\"username\":\"SML SOVEREIGN MATRIX\",\"embeds\":[{\"title\":\"\\ud83d\\udfe3  CRITICAL MASS  \\u2014  " + _tk + "\",\"description\":\"Sets: **" + _set + "/9** compressed\\nPrice: **$" + _px + "** | TF: **" + _tf + "** | CI: **" + _ci + "**\",\"color\":16717203" + _ftx + "]}", alert.freq_once_per_bar_close)
+
+else if evt_convergence and vol_confirm
+    alert("{\"username\":\"SML SOVEREIGN MATRIX\",\"embeds\":[{\"title\":\"\\ud83d\\udfe2  CONVERGENCE  \\u2014  " + _tk + "\",\"description\":\"Sets: **" + _set + "/9** compressed\\nPrice: **$" + _px + "** | TF: **" + _tf + "** | CI: **" + _ci + "**\",\"color\":65407" + _ftx + "]}", alert.freq_once_per_bar_close)
+
+else if is_prime_setup and full_mtf_stack and vol_confirm
+    alert("{\"username\":\"SML SOVEREIGN MATRIX\",\"embeds\":[{\"title\":\"\\ud83d\\udd35  PRIME INSTITUTIONAL  \\u2014  " + _tk + "\",\"description\":\"**FULL MTF STACK + PRIME SETUP**\\nPrice: **$" + _px + "** | TF: **" + _tf + "** | SQI: **" + _sq + "**\",\"color\":52479" + _ftx + "]}", alert.freq_once_per_bar_close)
+
+else if exit_convergence
+    alert("{\"username\":\"SML SOVEREIGN MATRIX\",\"embeds\":[{\"title\":\"\\u26aa  RELEASED  \\u2014  " + _tk + "\",\"description\":\"Compression released\\nPrice: **$" + _px + "** | TF: **" + _tf + "**\",\"color\":6710886" + _ftx + "]}", alert.freq_once_per_bar_close)
