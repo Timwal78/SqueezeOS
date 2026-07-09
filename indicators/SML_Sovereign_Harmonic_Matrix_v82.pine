@@ -86,7 +86,10 @@ var string G_RISK = "▶  RISK MANAGEMENT"
 float sl_atr_mult = input.float(1.5, "Stop-Loss (× ATR)",    group=G_RISK, minval=0.25, maxval=10.0, step=0.25)
 float tp_atr_mult = input.float(3.0, "Price Target (× ATR)", group=G_RISK, minval=0.25, maxval=20.0, step=0.25)
 
-// ── SML Licensed Inputs — 9 Sets × 5 Levels ──────────────────────────────────
+// =========================================================================
+// APEX ANCHOR MATRIX ENGINE
+// Tier I  GOD  : anchor A (flagship) | Tier II PRIME | Tier III WATCH
+// =========================================================================
 i_s1_l1 = input.int(1, "L1", group="SML Licensed — Set 1 (WATCH-A)", minval=1)
 i_s1_l2 = input.int(1, "L2", group="SML Licensed — Set 1 (WATCH-A)", minval=1)
 i_s1_l3 = input.int(1, "L3", group="SML Licensed — Set 1 (WATCH-A)", minval=1)
@@ -141,67 +144,18 @@ i_s9_l3 = input.int(1, "L3", group="SML Licensed — Set 9 (GOD-C)", minval=1)
 i_s9_l4 = input.int(1, "L4", group="SML Licensed — Set 9 (GOD-C)", minval=1)
 i_s9_l5 = input.int(1, "L5", group="SML Licensed — Set 9 (GOD-C)", minval=1)
 
-// =========================================================================
-// APEX ANCHOR MATRIX ENGINE — Proprietary Harmonic Grid
-// Tier I  GOD  : anchor A (flagship) | Tier II PRIME | Tier III WATCH
-// =========================================================================
-
 // Tier III — WATCH (3 configs)
-float e1a = ta.ema(close, i_s1_l1)
-float e1b = ta.ema(close, i_s1_l2)
-float e1c = ta.ema(close, i_s1_l3)
-float e1d = ta.ema(close, i_s1_l4)
-float e1e = ta.ema(close, i_s1_l5)
-
-float e2a = ta.ema(close, i_s2_l1)
-float e2b = ta.ema(close, i_s2_l2)
-float e2c = ta.ema(close, i_s2_l3)
-float e2d = ta.ema(close, i_s2_l4)
-float e2e = ta.ema(close, i_s2_l5)
-
-float e3a = ta.ema(close, i_s3_l1)
-float e3b = ta.ema(close, i_s3_l2)
-float e3c = ta.ema(close, i_s3_l3)
-float e3d = ta.ema(close, i_s3_l4)
-float e3e = ta.ema(close, i_s3_l5)
-
+[e1a, e1b, e1c, e1d, e1e] = [ta.ema(close, i_s1_l1), ta.ema(close, i_s1_l2), ta.ema(close, i_s1_l3), ta.ema(close, i_s1_l4), ta.ema(close, i_s1_l5)]
+[e2a, e2b, e2c, e2d, e2e] = [ta.ema(close, i_s2_l1), ta.ema(close, i_s2_l2), ta.ema(close, i_s2_l3), ta.ema(close, i_s2_l4), ta.ema(close, i_s2_l5)]
+[e3a, e3b, e3c, e3d, e3e] = [ta.ema(close, i_s3_l1), ta.ema(close, i_s3_l2), ta.ema(close, i_s3_l3), ta.ema(close, i_s3_l4), ta.ema(close, i_s3_l5)]
 // Tier II — PRIME (3 configs)
-float e4a = ta.ema(close, i_s4_l1)
-float e4b = ta.ema(close, i_s4_l2)
-float e4c = ta.ema(close, i_s4_l3)
-float e4d = ta.ema(close, i_s4_l4)
-float e4e = ta.ema(close, i_s4_l5)
-
-float e5a = ta.ema(close, i_s5_l1)
-float e5b = ta.ema(close, i_s5_l2)
-float e5c = ta.ema(close, i_s5_l3)
-float e5d = ta.ema(close, i_s5_l4)
-float e5e = ta.ema(close, i_s5_l5)
-
-float e6a = ta.ema(close, i_s6_l1)
-float e6b = ta.ema(close, i_s6_l2)
-float e6c = ta.ema(close, i_s6_l3)
-float e6d = ta.ema(close, i_s6_l4)
-float e6e = ta.ema(close, i_s6_l5)
-
-// Tier I — GOD MODE (3 configs)
-float e7a = ta.ema(close, i_s7_l1)
-float e7b = ta.ema(close, i_s7_l2)
-float e7c = ta.ema(close, i_s7_l3)
-float e7d = ta.ema(close, i_s7_l4)
-float e7e = ta.ema(close, i_s7_l5)
-
-float e8a = ta.ema(close, i_s8_l1)
-float e8b = ta.ema(close, i_s8_l2)
-float e8c = ta.ema(close, i_s8_l3)
-float e8d = ta.ema(close, i_s8_l4)
-float e8e = ta.ema(close, i_s8_l5)
-
-float e9a = ta.ema(close, i_s9_l1)
-float e9b = ta.ema(close, i_s9_l2)
-float e9c = ta.ema(close, i_s9_l3)
-float e9d = ta.ema(close, i_s9_l4)
-float e9e = ta.ema(close, i_s9_l5)
+[e4a, e4b, e4c, e4d, e4e] = [ta.ema(close, i_s4_l1), ta.ema(close, i_s4_l2), ta.ema(close, i_s4_l3), ta.ema(close, i_s4_l4), ta.ema(close, i_s4_l5)]
+[e5a, e5b, e5c, e5d, e5e] = [ta.ema(close, i_s5_l1), ta.ema(close, i_s5_l2), ta.ema(close, i_s5_l3), ta.ema(close, i_s5_l4), ta.ema(close, i_s5_l5)]
+[e6a, e6b, e6c, e6d, e6e] = [ta.ema(close, i_s6_l1), ta.ema(close, i_s6_l2), ta.ema(close, i_s6_l3), ta.ema(close, i_s6_l4), ta.ema(close, i_s6_l5)]
+// Tier I — GOD MODE (3 configs) — Set 7 = FLAGSHIP
+[e7a, e7b, e7c, e7d, e7e] = [ta.ema(close, i_s7_l1), ta.ema(close, i_s7_l2), ta.ema(close, i_s7_l3), ta.ema(close, i_s7_l4), ta.ema(close, i_s7_l5)]
+[e8a, e8b, e8c, e8d, e8e] = [ta.ema(close, i_s8_l1), ta.ema(close, i_s8_l2), ta.ema(close, i_s8_l3), ta.ema(close, i_s8_l4), ta.ema(close, i_s8_l5)]
+[e9a, e9b, e9c, e9d, e9e] = [ta.ema(close, i_s9_l1), ta.ema(close, i_s9_l2), ta.ema(close, i_s9_l3), ta.ema(close, i_s9_l4), ta.ema(close, i_s9_l5)]
 // =========================================================================
 
 // ── Volume / ATR ──────────────────────────────────────────────────────────────
@@ -340,8 +294,12 @@ float score_roc = harmonic_score - nz(harmonic_score[3], harmonic_score)
 string score_dir = score_roc > 2.0 ? "TIGHTENING" : score_roc < -2.0 ? "EXPANDING" : "STABLE"
 
 // ── Directional Entry Signals ─────────────────────────────────────────────────
-// v8.2 decouples entries from compression: buy/sell fire on the bias flip itself
-// (price crossing back above/below the anchor EMAs), which is what happens at reversals.
+// v8.1 tied buy/sell to the SAME "coiled EMA" trigger as the tier/lock markers —
+// but compression and strong trends are largely mutually exclusive, so entries
+// only fired during chop and never during the actual trending moves (the exact
+// lows/highs where you'd want one). v8.2 decouples entries from compression
+// entirely: buy/sell now fire on the bias flip itself (price crossing back
+// above/below the anchor EMAs), which is what actually happens at reversals.
 string signal_tier = state_full ? "FULL SPECTRUM" : state_apex ? "APEX" : state_critical ? "CRITICAL" : state_convergence ? "CONVERGENCE" : "TRENDING"
 bool bullish_bias      = bias_count >= 2
 bool bearish_bias      = bias_count <= 1
@@ -359,7 +317,7 @@ float sqi_total       = sqi_compression + sqi_mtf_pts + sqi_volume_pts + sqi_reg
 bool  is_prime_setup  = state_convergence and sqi_total >= sqi_prime_lvl
 color sqi_color       = sqi_total >= 90.0 ? SML_GOLD : sqi_total >= 75.0 ? SML_GREEN : sqi_total >= 50.0 ? SML_ORANGE : SML_ACCENT
 
-// ── Signal Memory + Risk Levels ───────────────────────────────────────────────
+// ── Signal Memory + Risk Levels — persists the last signal and its stop/target ─
 var string last_signal_type  = "NONE"
 var float  last_signal_price = na
 var float  last_signal_sqi   = na
@@ -402,7 +360,12 @@ color pc9a = color.new(col_s9, 40)
 
 int   kp_al    = pitch_mode ? (state_full?0:state_apex?10:state_critical?20:35) : (state_full?15:state_apex?35:70)
 color kp_col   = color.new(color.white, kp_al)
-color fill_col = triple_grid_lock ? color.new(SML_GOLD,  82) : state_full ? color.new(SML_GOLD, 88) : state_apex ? color.new(color.white, 90) : state_critical ? color.new(SML_PINK, 90) : state_convergence ? color.new(SML_GREEN, 90) : color.new(color.gray, 97)
+color fill_col = triple_grid_lock ? color.new(SML_GOLD,  82) :
+                 state_full        ? color.new(SML_GOLD,  88) :
+                 state_apex        ? color.new(color.white, 90) :
+                 state_critical    ? color.new(SML_PINK,  90) :
+                 state_convergence ? color.new(SML_GREEN, 90) :
+                                     color.new(color.gray, 97)
 
 // ── EMA Plots — Macro (structural) lines only ────────────────────────────────
 plot(show_set and show_s1 ? e1e : na, "W-A Macro", pc1a, linewidth=2)
@@ -449,30 +412,40 @@ float lbl_y   = cloud_center - stagger
 
 if show_labels and confirmed and lbl_allowed
     if evt_convergence
-        label.new(bar_index, lbl_y, "CONV " + str.tostring(total_coiled) + "/9" + mtfsuf, color=TRANSP, textcolor=SML_GREEN, style=label.style_label_up, size=size.tiny)
+        label.new(bar_index, lbl_y, "CONV " + str.tostring(total_coiled) + "/9" + mtfsuf,
+                  color=TRANSP, textcolor=SML_GREEN, style=label.style_label_up, size=size.tiny)
     else if evt_critical
-        label.new(bar_index, lbl_y, "CRIT " + str.tostring(total_coiled) + "/9" + mtfsuf, color=TRANSP, textcolor=SML_PINK, style=label.style_label_up, size=size.tiny)
+        label.new(bar_index, lbl_y, "CRIT " + str.tostring(total_coiled) + "/9" + mtfsuf,
+                  color=TRANSP, textcolor=SML_PINK, style=label.style_label_up, size=size.tiny)
     else if evt_apex
-        label.new(bar_index, lbl_y, "APEX " + hs_str + " Q:" + sq_str + mtfsuf, color=TRANSP, textcolor=color.white, style=label.style_label_up, size=size.small)
+        label.new(bar_index, lbl_y, "APEX " + hs_str + " Q:" + sq_str + mtfsuf,
+                  color=TRANSP, textcolor=color.white, style=label.style_label_up, size=size.small)
     else if evt_full
-        label.new(bar_index, lbl_y, "FSC ALL-9  CI:" + hs_str + mtfsuf, color=TRANSP, textcolor=SML_GOLD, style=label.style_label_up, size=size.small)
+        label.new(bar_index, lbl_y, "FSC ALL-9  CI:" + hs_str + mtfsuf,
+                  color=TRANSP, textcolor=SML_GOLD, style=label.style_label_up, size=size.small)
 
 // DUAL / TRIPLE GRID LOCK always show — pinned above high so they never overlap body labels
 if show_labels and confirmed and dgl_fire and not tgl_fire
-    label.new(bar_index, high * 1.008, "💎 DUAL " + g_str + "/3", color=color.new(SML_GOLD,0), textcolor=color.black, style=label.style_label_down, size=size.tiny)
+    label.new(bar_index, high * 1.008, "💎 DUAL " + g_str + "/3",
+              color=color.new(SML_GOLD,0), textcolor=color.black, style=label.style_label_down, size=size.tiny)
 
 if show_labels and confirmed and tgl_fire
-    label.new(bar_index, high * 1.012, "👑 TRIPLE 3/3", color=color.new(color.white,0), textcolor=color.black, style=label.style_label_down, size=size.tiny)
+    label.new(bar_index, high * 1.012, "👑 TRIPLE 3/3",
+              color=color.new(color.white,0), textcolor=color.black, style=label.style_label_down, size=size.tiny)
 
 // Directional entry labels — always show, not subject to the convergence-event throttle
 if show_labels and confirmed and buy_signal
-    label.new(bar_index, low * 0.994, "▲ BUY " + str.tostring(close, "#.00") + " SL:" + str.tostring(active_stop, "#.00") + " TP:" + str.tostring(active_target, "#.00"), color=color.new(SML_GREEN,10), textcolor=color.black, style=label.style_label_up, size=size.tiny)
+    label.new(bar_index, low * 0.994, "▲ BUY " + str.tostring(close, "#.00") + " SL:" + str.tostring(active_stop, "#.00") + " TP:" + str.tostring(active_target, "#.00"),
+              color=color.new(SML_GREEN,10), textcolor=color.black, style=label.style_label_up, size=size.tiny)
 
 if show_labels and confirmed and sell_signal
-    label.new(bar_index, high * 1.006, "▼ SELL " + str.tostring(close, "#.00") + " SL:" + str.tostring(active_stop, "#.00") + " TP:" + str.tostring(active_target, "#.00"), color=color.new(color.red,10), textcolor=color.white, style=label.style_label_down, size=size.tiny)
+    label.new(bar_index, high * 1.006, "▼ SELL " + str.tostring(close, "#.00") + " SL:" + str.tostring(active_stop, "#.00") + " TP:" + str.tostring(active_target, "#.00"),
+              color=color.new(color.red,10), textcolor=color.white, style=label.style_label_down, size=size.tiny)
 
 // ── HUD — 3-column: label | value | detail/tier ───────────────────────────────
-var table hud = table.new(position.top_right, 3, 36, bgcolor=color.new(#050505,5), border_color=SML_ACCENT, border_width=1, frame_color=SML_ACCENT, frame_width=2)
+var table hud = table.new(position.top_right, 3, 36,
+    bgcolor=color.new(#050505,5), border_color=SML_ACCENT, border_width=1,
+    frame_color=SML_ACCENT, frame_width=2)
 
 if show_hud and barstate.islast
     // Row 0 — Title
@@ -680,7 +653,7 @@ alertcondition(mtf_stack_fired and state_convergence,              "SML: MTF Sta
 alertcondition(buy_signal,                                         "SML: Buy Signal",          "BUY SIGNAL — {{ticker}} {{interval}} [SML v8.2]")
 alertcondition(sell_signal,                                        "SML: Sell Signal",         "SELL SIGNAL — {{ticker}} {{interval}} [SML v8.2]")
 
-// ── alert() — Discord JSON webhooks ──────────────────────────────────────────
+// ── alert() — Discord JSON webhooks (use ONE alert set to "alert() function calls") ──
 string _px  = str.tostring(close, "#.00")
 string _set = str.tostring(total_coiled)
 string _ci  = str.tostring(math.round(harmonic_score))
