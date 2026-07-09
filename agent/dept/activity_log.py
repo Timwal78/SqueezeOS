@@ -43,3 +43,25 @@ def post_directory_snapshot(already_listed: list, not_listed: list) -> None:
         )
     except Exception:
         pass
+
+
+def post_federal_snapshot(opportunities_scanned: int, high_relevance: list,
+                           medium_relevance: list, legislative_intel: list) -> None:
+    """Publish the real result of a Federal Scout run so the public dashboard
+    can show actual scored opportunities instead of a guess."""
+    if not _SECRET:
+        return
+    try:
+        requests.post(
+            f"{_SQUEEZEOS}/api/marketing/federal",
+            json={
+                "opportunities_scanned": opportunities_scanned,
+                "high_relevance": high_relevance,
+                "medium_relevance": medium_relevance,
+                "legislative_intel": legislative_intel,
+            },
+            headers={"X-Marketing-Secret": _SECRET},
+            timeout=10,
+        )
+    except Exception:
+        pass

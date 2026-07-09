@@ -35,10 +35,12 @@ _SECRET       = os.environ.get("MARKETING_ACTIVITY_SECRET", "")
 _REDIS_URL    = os.environ.get("REDIS_URL", "")
 _FEED_KEY     = "marketing:activity"
 _LISTINGS_KEY = "marketing:directories:latest"
+_FEDERAL_KEY  = "marketing:federal:latest"
 _MAX_ENTRIES  = 50
 
 _mem_feed = []       # fallback if Redis unavailable — resets on restart, same as other in-memory stores here
 _mem_listings = None
+_mem_federal = None
 
 
 def _get_redis():
@@ -146,3 +148,53 @@ def get_directories():
         return jsonify({"already_listed": [], "not_listed": [], "checked_at": None, "audited": False})
 
     return jsonify({**snapshot, "audited": True})
+
+
+@marketing_activity_bp.route("/federal", methods=["POST"])
+def post_federal():
+    """Store the real result of the most recent Federal Scout run — actual
+    opportunities it scored against SML's own federal data endpoints.
+    Overwrites the previous snapshot; there is no history here, only
+    "the last real scan result"."""
+    if not _SECRET:
+        return jsonify({"error": "MARKETING_ACTIVITY_SECRET not configured"}), 503
+    if request.headers.get("X-Marketing-Secret", "") != _SECRET:
+        return jsonify({"error": "invalid secret"}), 403
+
+    body = request.get_json(silent=True) or {}
+    snapshot = {
+        "opportunities_scanned": body.get("opportunities_scanned", 0),
+        "high_relevance":        body.get("high_relevance", []),
+        "medium_relevance":      body.get("medium_relevance", []),
+        "legislative_intel":     body.get("legislative_intel", []),
+        "scanned_at":            time.time(),
+    }
+
+    r = _get_redis()
+    if r:
+        r.set(_FEDERAL_KEY, json.dumps(snapshot))
+    else:
+        global _mem_federal
+        _mem_federal = snapshot
+
+    return jsonify({"received": True}), 200
+
+
+@marketing_activity_bp.route("/federal", methods=["GET"])
+def get_federal():
+    """Return the last real Federal Scout scan. Empty/null fields mean no
+    real scan has run yet — never backfilled with a guess."""
+    r = _get_redis()
+    if r:
+        raw = r.get(_FEDERAL_KEY)
+        snapshot = json.loads(raw) if raw else None
+    else:
+        snapshot = _mem_federal
+
+    if not snapshot:
+        return jsonify({
+            "opportunities_scanned": 0, "high_relevance": [], "medium_relevance": [],
+            "legislative_intel": [], "scanned_at": None, "scanned": False,
+        })
+
+    return jsonify({**snapshot, "scanned": True})

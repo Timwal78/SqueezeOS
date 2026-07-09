@@ -26,7 +26,7 @@ import requests
 import anthropic
 
 from . import directory_ranger, community_scout, federal_scout
-from .activity_log import post_activity, post_directory_snapshot
+from .activity_log import post_activity, post_directory_snapshot, post_federal_snapshot
 
 ANTH_KEY      = os.environ["ANTHROPIC_API_KEY"]
 MODEL         = os.environ.get("DEPT_MODEL", "claude-sonnet-5")
@@ -137,6 +137,13 @@ def run_all_agents() -> dict:
         federal_scout.run,
         lambda r: f"{len(r.get('high_relevance', []))} high-relevance federal opportunities identified",
     )
+    if not results["federal_scout"].get("error"):
+        post_federal_snapshot(
+            results["federal_scout"].get("opportunities_scanned", 0),
+            results["federal_scout"].get("high_relevance", []),
+            results["federal_scout"].get("medium_relevance", []),
+            results["federal_scout"].get("legislative_intel", []),
+        )
 
     return results
 
