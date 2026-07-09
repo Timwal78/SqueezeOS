@@ -41,6 +41,14 @@
 - `AEO_TREASURY_XRPL_ADDRESS` is unset by default (same "not yet configured" pattern as SML-Vault-Executor below) — until it's set, the ledger still accrues but auto-hire silently no-ops and logs why.
 - Getting a hired agent actually paid still requires the treasury wallet to hold real RLUSD — that's a manual funding step (e.g., periodically converting a slice of Stripe payout revenue and sending it on-chain), not something this code does automatically.
 
+## Trade Desk (Swarm Agents Intelligence) — Live Product
+
+- Dashboard: `swarmagentsintelligence.scriptmasterlabs.com` — 10-agent trading desk UI (Battle Computer, Oracle Journal, Pine Signals, Market Counsel, GEX/ODTE/liquidity/dark-pool analysis, etc.). **Built and hosted externally on Abacus.AI — its frontend source is NOT in this repo or any repo in this account.** This repo only provides the billing backend the dashboard calls.
+- Launch pricing tiers: Free ($0, landing page only, no dashboard access), Trader ($19/mo, full dashboard + all 10 agents + Pine Signals + Oracle Journal + Battle Computer + shareable signal cards + 5-ticker watchlist), Pro ($49/mo, unlimited watchlist + Market Counsel LLM + BYOK Tradier execution panel + priority refresh).
+- Blueprint: `core/api/trade_desk_stripe_bp.py` — registered at `/api/trade-desk/stripe/webhook` and `/api/trade-desk/key/validate`
+- Stripe products: not yet created — see `.env.example` for the exact env vars to fill in (`TRADE_DESK_STRIPE_TRADER_PRICE_ID`, `TRADE_DESK_STRIPE_PRO_PRICE_ID`, `TRADE_DESK_STRIPE_WEBHOOK_SECRET`). Shares `STRIPE_SECRET_KEY` and `REDIS_URL` with CASCADE/AEO.
+- Because the dashboard isn't in this codebase, wiring it up still needs a manual step on the Abacus.AI side: point its checkout buttons at Stripe Checkout Sessions for the two price IDs above, and have it call `POST /api/trade-desk/key/validate` with the issued `td_...` key to gate Trader/Pro-only pages.
+
 ## SML-Vault-Executor — What's Needed When Vault Build Starts
 
 Missing env vars (not yet configured — vault not funded):
