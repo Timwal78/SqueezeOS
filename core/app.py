@@ -64,6 +64,7 @@ from core.api.gap_detector_bp import gap_detector_bp, start_gap_detector
 from core.api.agent_economy_bp import agent_economy_bp
 from core.api.aeo_stripe_bp import aeo_stripe_bp
 from core.api.aeo_treasury_bp import aeo_treasury_bp
+from core.api.trade_desk_stripe_bp import trade_desk_stripe_bp
 from core.api.marketing_activity_bp import marketing_activity_bp
 from core.api.truth_bp import truth_bp
 from core.api.memory_bp import memory_bp
@@ -188,6 +189,7 @@ def create_app():
     app.register_blueprint(agent_economy_bp,   url_prefix='/x402/agent-economy')
     app.register_blueprint(aeo_stripe_bp)
     app.register_blueprint(aeo_treasury_bp,    url_prefix='/api/aeo')
+    app.register_blueprint(trade_desk_stripe_bp)
     app.register_blueprint(marketing_activity_bp, url_prefix='/api/marketing')
     app.register_blueprint(truth_bp,           url_prefix='/api/truth')
     app.register_blueprint(memory_bp,          url_prefix='/api/memory')
