@@ -15,65 +15,83 @@ import time
 import json
 import base64
 import secrets
+import logging
 import requests
 from functools import wraps
-from urllib.parse import urlparse
 from flask import request, jsonify, make_response
+
+logger = logging.getLogger("x402")
 
 X402_VERSION = 2
 
-# ── PRODUCTION FIX (2026-07-10) ──────────────────────────────────────────
-# Was defaulting to base-sepolia (TESTNET) against x402.org/facilitator, a
-# community facilitator whose own discovery catalog is explicitly NOT the
-# Coinbase CDP Bazaar (confirmed in CDP docs: x402.org/facilitator/discovery
-# is a separate testnet-only index). Result: zero possible real revenue on
-# this rail, and zero chance of Bazaar/Agent.market listing, regardless of
-# demand. Now defaults to Base MAINNET routed through CDP's real facilitator,
-# with CDP JWT auth attached so /verify and /settle actually authenticate.
-NETWORK      = os.environ.get("X402_NETWORK", "base")
+# ── CDP facilitator auth (Coinbase Cloud API JWT — same scheme used across
+# CDP/Advanced Trade APIs) ──────────────────────────────────────────────────
+# CDP_API_KEY_ID / CDP_API_KEY_SECRET are set directly in Render, never in code.
+# CDP_API_KEY_SECRET is the base64 form of a 64-byte Ed25519 secret key
+# (32-byte seed + 32-byte public key) as issued by the CDP portal — current
+# CDP Secret API Keys are Ed25519, not the older PEM/EC Cloud API Key format.
+CDP_API_KEY_ID     = os.environ.get("CDP_API_KEY_ID", "")
+CDP_API_KEY_SECRET = os.environ.get("CDP_API_KEY_SECRET", "")
+_CDP_CONFIGURED    = bool(CDP_API_KEY_ID and CDP_API_KEY_SECRET)
+
+NETWORK      = os.environ.get("X402_NETWORK", "base-sepolia")
 PAY_TO       = os.environ.get("X402_PAY_TO", "0x4e14B249D9A4c9c9352D780eCEB508A8eB7a7700")
-FACILITATOR  = os.environ.get("X402_FACILITATOR", "https://api.cdp.coinbase.com/platform/v2/x402").rstrip("/")
+# Defaults to the CDP-hosted mainnet facilitator once CDP creds are present,
+# otherwise the public signup-free testnet facilitator. Explicit
+# X402_FACILITATOR always wins over both.
+FACILITATOR  = os.environ.get(
+    "X402_FACILITATOR",
+    "https://api.cdp.coinbase.com/platform/v2/x402" if _CDP_CONFIGURED else "https://x402.org/facilitator",
+).rstrip("/")
 MAX_TIMEOUT  = int(os.environ.get("X402_MAX_TIMEOUT", "120"))
 
-# ── CDP API key auth (required by api.cdp.coinbase.com; x402.org/facilitator
-#    didn't need this, which is part of why it was easy to leave misconfigured) ──
-CDP_API_KEY_ID     = os.environ.get("CDP_API_KEY_ID", "")
-CDP_API_KEY_SECRET = os.environ.get("CDP_API_KEY_SECRET", "")  # PEM EC private key, \n-escaped
-_CDP_HOST          = urlparse(FACILITATOR).netloc or "api.cdp.coinbase.com"
+
+def _cdp_ed25519_private_key():
+    """Decode CDP_API_KEY_SECRET (64 bytes: 32-byte seed + 32-byte pubkey) into
+    an Ed25519 private key, verifying the pubkey half actually derives from the
+    seed half — the same corruption check CDP's own SDK performs, so a bad key
+    fails loudly here instead of silently at request time."""
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from cryptography.hazmat.primitives import serialization
+
+    raw = base64.b64decode(CDP_API_KEY_SECRET)
+    if len(raw) != 64:
+        raise ValueError(f"CDP_API_KEY_SECRET must decode to 64 bytes, got {len(raw)}")
+    seed, expected_pub = raw[:32], raw[32:]
+    private_key = Ed25519PrivateKey.from_private_bytes(seed)
+    derived_pub = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+    if derived_pub != expected_pub:
+        raise ValueError("CDP_API_KEY_SECRET is corrupted — public-key half does not derive from the seed half")
+    return private_key
 
 
-def _cdp_jwt(method: str, path: str) -> "str | None":
-    """
-    Build a CDP Bearer JWT per Coinbase's documented JWT auth scheme:
-    ES256, 2-minute expiry, kid+nonce headers, sub/iss/nbf/exp/uri claims.
-    Returns None (no auth header) if CDP creds aren't configured yet, so a
-    misconfigured deploy fails loudly via a 401 from CDP instead of silently
-    hitting an unauthenticated testnet facilitator like before.
-    """
-    if not CDP_API_KEY_ID or not CDP_API_KEY_SECRET:
-        return None
-    try:
-        import jwt as _pyjwt
-        from cryptography.hazmat.primitives import serialization
-        private_key = serialization.load_pem_private_key(
-            CDP_API_KEY_SECRET.encode("utf-8"), password=None
-        )
-        now = int(time.time())
-        payload = {
-            "sub": CDP_API_KEY_ID,
-            "iss": "cdp",
-            "nbf": now,
-            "exp": now + 120,
-            "uri": f"{method} {_CDP_HOST}{path}",
-        }
-        return _pyjwt.encode(
-            payload, private_key, algorithm="ES256",
-            headers={"kid": CDP_API_KEY_ID, "nonce": secrets.token_hex()},
-        )
-    except Exception as e:
-        import logging
-        logging.error(f"[x402] CDP JWT build failed, request will be unauthenticated: {e}")
-        return None
+def _cdp_auth_headers(method: str, host: str, path: str) -> dict:
+    """Build the Authorization header for a CDP-authenticated facilitator call.
+    Returns {} if CDP creds aren't configured (falls back to unauthenticated,
+    which only works against the public testnet facilitator)."""
+    if not _CDP_CONFIGURED:
+        return {}
+    import jwt as _pyjwt
+
+    private_key = _cdp_ed25519_private_key()
+    now = int(time.time())
+    payload = {
+        "sub": CDP_API_KEY_ID,
+        "iss": "cdp",
+        "nbf": now,
+        "exp": now + 120,
+        "uri": f"{method} {host}{path}",
+    }
+    token = _pyjwt.encode(
+        payload,
+        private_key,
+        algorithm="EdDSA",
+        headers={"kid": CDP_API_KEY_ID, "nonce": secrets.token_hex(16)},
+    )
+    return {"Authorization": f"Bearer {token}"}
 
 # ── RLUSD on XRPL rail (proprietary 402Proof flow) ──
 RLUSD_ISSUER  = os.environ.get("RLUSD_ISSUER",  "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De")
@@ -94,7 +112,7 @@ def _usdc_atomic(price_usdc: str) -> str:
 
 
 def _payment_requirements(price_usdc: str, description: str, resource: str) -> dict:
-    cfg = USDC.get(NETWORK, USDC["base"])
+    cfg = USDC.get(NETWORK, USDC["base-sepolia"])
     units = _usdc_atomic(price_usdc)
     return {
         "scheme": "exact",
@@ -205,10 +223,12 @@ def _402(requirements: dict, reason: str = ""):
 
 
 def _facilitator(path: str, payment_payload: dict, requirements: dict) -> dict:
-    headers = {}
-    token = _cdp_jwt("POST", f"{urlparse(FACILITATOR).path}{path}")
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
+    host = FACILITATOR.split("://", 1)[-1].split("/", 1)[0]
+    try:
+        headers = _cdp_auth_headers("POST", host, path)
+    except Exception as e:
+        logger.error("[x402] CDP auth header build failed: %s", e)
+        return {"isValid": False, "success": False, "invalidReason": f"cdp_auth_error: {e}"}
 
     body = {"x402Version": X402_VERSION,
             "paymentPayload": payment_payload,
@@ -333,7 +353,7 @@ def x402_guard(price_usdc: str, description: str, discoverable: bool = True):
 def register_x402_discovery(app):
     @app.route("/.well-known/x402")
     def _x402_discovery():
-        cfg = USDC.get(NETWORK, USDC["base"])
+        cfg = USDC.get(NETWORK, USDC["base-sepolia"])
         return jsonify({
             "x402Version": X402_VERSION,
             "operator": "ScriptMasterLabs",
