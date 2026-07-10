@@ -362,18 +362,39 @@ if _libsml_root not in _sys.path:
 try:
     from libsml.rate_guard import PolygonRateGuard
 except ImportError as _e:
-    logger.warning(f"[POLYGON] libsml.rate_guard not found ({_e}). Using no-op rate guard.")
+    # Real fallback limiter — the old stub was a NO-OP, so on any deployment
+    # without libsml (i.e. Render) every engine hammered Polygon at once,
+    # blew the free tier's 5 calls/min, and the 429 killed grouped-daily
+    # discovery (universe collapsed from ~5,600 to the seed list).
+    logger.warning(f"[POLYGON] libsml.rate_guard not found ({_e}). Using built-in 5-calls/min limiter.")
+    import threading as _threading
+
     class PolygonRateGuard:
-        @staticmethod
-        def wait(): pass
-        @staticmethod
-        def emergency_backoff(): import time; time.sleep(60)
+        _lock = _threading.Lock()
+        _next_allowed = 0.0
+        _MIN_INTERVAL = float(os.environ.get('POLYGON_MIN_INTERVAL_S', '12'))  # 5/min
+        _MAX_WAIT     = 20.0   # never stall a caller longer than this
+
+        @classmethod
+        def wait(cls):
+            with cls._lock:
+                now = time.time()
+                delay = cls._next_allowed - now
+                cls._next_allowed = max(now, cls._next_allowed) + cls._MIN_INTERVAL
+            if delay > 0:
+                time.sleep(min(delay, cls._MAX_WAIT))
+
+        @classmethod
+        def emergency_backoff(cls):
+            with cls._lock:
+                cls._next_allowed = max(cls._next_allowed, time.time() + 60)
 
 class PolygonProvider:
     def __init__(self):
         self.api_key = os.environ.get('POLYGON_API_KEY', '').strip()
         self.base = 'https://api.polygon.io'
         self.last_error = None   # last grouped-daily failure, surfaced via /api/truth/providers
+        self._grouped_cache = {}  # {'date': str, 'data': dict} — last good grouped-daily (EOD data, immutable per date)
         if self.available:
             logger.info(f"[POLYGON] Ready ({self.api_key[:6]}...)")
         else:
@@ -431,7 +452,12 @@ class PolygonProvider:
                         }
                 logger.info(f"[POLYGON] Grouped daily {date_str}: {len(results)} tickers")
                 self.last_error = None
+                self._grouped_cache = {'date': date_str, 'data': results}
                 return results
+            elif r.status_code == 429:
+                self.last_error = f"429 rate-limited: {r.text[:200]}"
+                logger.warning(f"[POLYGON] Grouped daily {self.last_error}")
+                PolygonRateGuard.emergency_backoff()
             elif r.status_code == 403:
                 self.last_error = f"403 — may need paid plan or invalid key: {r.text[:200]}"
                 logger.warning(f"[POLYGON] Grouped daily {self.last_error}")
@@ -441,6 +467,12 @@ class PolygonProvider:
         except Exception as e:
             self.last_error = str(e)
             logger.error(f"[POLYGON] Grouped daily error: {e}")
+        # Transient failure (usually a 429) must not collapse discovery to the
+        # seed list — serve the last good full-market snapshot. It's EOD data,
+        # so "stale" is at worst one session old, same as a normal early fetch.
+        if self._grouped_cache.get('data'):
+            logger.warning(f"[POLYGON] Serving cached grouped daily from {self._grouped_cache['date']} ({len(self._grouped_cache['data'])} tickers)")
+            return self._grouped_cache['data']
         return {}
 
     # --- PER-SYMBOL QUOTES ---
