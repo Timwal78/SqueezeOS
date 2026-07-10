@@ -311,9 +311,14 @@ def _fire_robinhood_webhook(symbol: str, action: str, sml: dict, extra: dict) ->
     rh_url = os.environ.get("ROBINHOOD_EXECUTOR_URL", "")
     if not rh_url:
         return
+    secret = os.environ.get("WEBHOOK_SECRET", "")
+    if not secret:
+        # No hardcoded fallback: this repo is public, so a default here would let
+        # anyone forge a signed trade-intent payload to the Robinhood executor.
+        logger.error("[EXEC] WEBHOOK_SECRET not configured — refusing to send unsigned/spoofable Robinhood webhook")
+        return
     try:
         import json, urllib.request as _ul, hmac as _hmac, hashlib as _hl
-        secret  = os.environ.get("WEBHOOK_SECRET", "squeezeos-webhook-default-secret")
         payload = json.dumps({
             "ticker":         symbol,
             "action":         action,

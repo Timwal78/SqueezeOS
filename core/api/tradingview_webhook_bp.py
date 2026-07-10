@@ -8,12 +8,18 @@ Receives alert POSTs from TradingView Pine scripts and routes them to:
 
 Expected payload (Pine alert message):
   {
-    "passphrase": "SQUEEZE_AUTH_992",
+    "passphrase": "<value of TV_WEBHOOK_PASSPHRASE env var — set your own, no default>",
     "system":     "SML_Leviathan" | "SML_FTD_Hunter" | "MMLE-BEAST" | "SML_Sniper" | ...,
     "ticker":     "{{ticker}}",
     "action":     "EXECUTE_LONG" | "EXECUTE_SHORT" | "FIRE_LONG" | "FIRE_SHORT",
     "price":      {{close}}
   }
+
+Required env var:
+  TV_WEBHOOK_PASSPHRASE — no hardcoded default (this repo is public; a default
+  here would be a known credential for a webhook that can place real Tradier
+  orders via iam_executor). Unset it and the endpoint returns 503, not 401 —
+  fails closed, never falls back to a shared/public secret.
 
 Webhook URL for TradingView alert dialog:
   https://squeezeos-api.onrender.com/api/webhooks/tradingview
@@ -33,7 +39,10 @@ logger = logging.getLogger("TV-Webhook")
 tradingview_webhook_bp = Blueprint("tradingview_webhook", __name__)
 
 def _passphrase() -> str:
-    return os.environ.get("TV_WEBHOOK_PASSPHRASE", "SQUEEZE_AUTH_992")
+    # No hardcoded fallback: this repo is public, so a default here would be a
+    # publicly-known credential for a webhook that can place real Tradier orders.
+    # Unset TV_WEBHOOK_PASSPHRASE must fail closed, not fail open to a known string.
+    return os.environ.get("TV_WEBHOOK_PASSPHRASE", "")
 
 _LONG_ACTIONS  = {"EXECUTE_LONG",  "FIRE_LONG",  "BUY",  "LONG"}
 _SHORT_ACTIONS = {"EXECUTE_SHORT", "FIRE_SHORT", "SELL", "SHORT"}
@@ -102,7 +111,12 @@ def catch_tv_webhook():
     try:
         payload = request.get_json(force=True) or {}
 
-        if payload.get("passphrase") != _passphrase():
+        expected = _passphrase()
+        if not expected:
+            logger.error("[TV-Webhook] TV_WEBHOOK_PASSPHRASE not configured — rejecting all requests")
+            return jsonify({"status": "error", "message": "webhook not configured"}), 503
+
+        if payload.get("passphrase") != expected:
             logger.warning(f"[TV-Webhook] Unauthorized attempt from {request.remote_addr}")
             return jsonify({"status": "error", "message": "Unauthorized"}), 401
 
