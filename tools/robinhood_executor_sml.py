@@ -605,20 +605,24 @@ def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
         else:
             try:
                 import robin_stocks.robinhood as rh
-                # Extended hours requires LIMIT orders — market orders are rejected by Robinhood
+                # robin_stocks defaults timeInForce to "gtc" on every order_* helper, but
+                # Robinhood rejects GTC on market orders ("Invalid Good Til Canceled order.")
+                # since a market order fills-or-dies immediately — there's nothing to leave
+                # open. Extended-hours orders are day-only for the same reason (they can't
+                # carry into the next session). Every order below must be explicit "gfd".
                 if _is_extended_hours():
                     if side == "buy":
                         limit_px = round(price * 1.002, 2)  # 0.2% above last price to ensure fill
-                        r = rh.orders.order_buy_limit(symbol, qty, limit_px, extendedHours=True)
+                        r = rh.orders.order_buy_limit(symbol, qty, limit_px, timeInForce="gfd", extendedHours=True)
                         logger.info(f"[RH] Extended hours BUY LIMIT {qty}x {symbol} @ ${limit_px:.2f}")
                     else:
                         limit_px = round(price * 0.998, 2)  # 0.2% below last price to ensure fill
-                        r = rh.orders.order_sell_limit(symbol, qty, limit_px, extendedHours=True)
+                        r = rh.orders.order_sell_limit(symbol, qty, limit_px, timeInForce="gfd", extendedHours=True)
                         logger.info(f"[RH] Extended hours SELL LIMIT {qty}x {symbol} @ ${limit_px:.2f}")
                 elif side == "buy":
-                    r = rh.orders.order_buy_market(symbol, qty)
+                    r = rh.orders.order_buy_market(symbol, qty, timeInForce="gfd")
                 else:
-                    r = rh.orders.order_sell_market(symbol, qty)
+                    r = rh.orders.order_sell_market(symbol, qty, timeInForce="gfd")
                 # Log full raw response so we can see exactly what Robinhood returns
                 logger.info(f"[RH] Raw response for {symbol}: {r}")
                 rh_detail = (r or {}).get("detail", "") if isinstance(r, dict) else ""
