@@ -27,6 +27,14 @@ services:
         value: "true"
       - key: IAM_PAPER_MODE
         value: "false"
+      # GOD_MODE (core/api/convergence_bp.py) — separate execution path from IAM
+      # above. Only fires real orders when this is exactly "true"; caps are
+      # MIN_GOD_STACKED (min SET9 configs, default 5/6), BEAST_MAX_SHARES
+      # (default 5), BEAST_MAX_PRICE (default $500/share), a 5-min per-symbol
+      # cooldown, and a PDT balance shield below $2,100. Kill switch: set this
+      # back to "false" (or unset) and redeploy to halt GOD_MODE execution.
+      - key: LIVE_TRADING_ENABLED
+        value: "true"
       - key: IAM_EXECUTION_MODE
         value: "both"
       - key: IAM_INSTRUMENT
