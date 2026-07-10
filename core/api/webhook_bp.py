@@ -36,8 +36,11 @@ from core.state import sse_queues
 logger = logging.getLogger("SqueezeOS-Webhooks")
 webhook_bp = Blueprint("webhooks", __name__)
 
-_WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "squeezeos-webhook-default-secret")
-_API_KEY        = os.environ.get("SEED_MERCHANT_API_KEY", "sml-402proof-api-key-scriptmasterlabs-2026")
+# No hardcoded fallbacks: this repo is public, so defaults here would be
+# known credentials — one lets anyone forge a signed "SqueezeOS" event to any
+# subscriber, the other lets anyone list every subscriber's webhook URL.
+_WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "")
+_API_KEY        = os.environ.get("SEED_MERCHANT_API_KEY", "")
 _MAX_FAILURES   = 10
 
 # ── Subscription store ────────────────────────────────────────────────────────
@@ -83,6 +86,9 @@ def _matches(sub: dict, event: dict) -> bool:
 
 
 def _deliver_one(sub: dict, event: dict):
+    if not _WEBHOOK_SECRET:
+        logger.error("[WEBHOOK] WEBHOOK_SECRET not configured — refusing to deliver unsigned/spoofable payload")
+        return
     url = sub["url"]
     payload = {**event, "subscription_id": sub["id"], "delivered_at": time.time()}
     body = json.dumps(payload, default=str).encode()
@@ -229,6 +235,8 @@ def unsubscribe(sub_id):
 
 @webhook_bp.route('/subscriptions', methods=['GET'])
 def list_subscriptions():
+    if not _API_KEY:
+        return jsonify({"error": "SEED_MERCHANT_API_KEY not configured"}), 503
     if request.headers.get("X-API-Key", "") != _API_KEY:
         return jsonify({"error": "unauthorized"}), 401
     with _subs_lock:
