@@ -539,16 +539,25 @@ def exec_dry_run():
 def exec_test_alert():
     """
     Fires a SAMPLE GOD MODE manual alert to Discord so you can confirm the
-    alert pipe works + see the format. Uses realistic placeholder data.
-    Trades nothing. Safe anytime.
+    alert pipe works + see the format. Uses fabricated placeholder data,
+    clearly marked as a TEST in the Discord embed. Trades nothing.
+
+    Owner-only: this endpoint was previously public/unauthenticated, meaning
+    anyone (or any bot/scanner) who found the URL could fire a fake AMC
+    signal into the live alert channel indistinguishable from a real one —
+    require X-Owner-Key to prevent that.
     """
     from flask import jsonify
+    owner_key = os.environ.get("OWNER_API_KEY", "")
+    if not owner_key or request.headers.get("X-Owner-Key") != owner_key:
+        return jsonify({"test": "manual_alert", "error": "unauthorized — set X-Owner-Key header"}), 401
     try:
         from core.api.manual_alert import fire_manual_alert
         sample = {
             "symbol": "AMC",
             "signal": "DUAL_GRID_LOCK",
             "price": 3.42,
+            "is_test": True,
             "sml_matrix": {
                 "tier": "GOD_MODE",
                 "execute_gate": True,

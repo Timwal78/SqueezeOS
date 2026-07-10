@@ -89,11 +89,14 @@ def fire_manual_alert(result: dict) -> bool:
 
     fields.append({"name": "✋ MANUAL EXECUTION", "value": "Place this on **Robinhood** yourself. This alert does **not** auto-trade. Verify the contract + price before submitting.", "inline": False})
 
+    is_test = bool(result.get("is_test"))
     embed = {
-        "title": f"🔫 GOD MODE — {symbol} — TRADE NOW (manual)",
-        "color": GOLD,
+        "title": (f"🧪 TEST ALERT — {symbol} — NOT A REAL SIGNAL (sample data)" if is_test
+                  else f"🔫 GOD MODE — {symbol} — TRADE NOW (manual)"),
+        "color": (PINK if is_test else GOLD),
         "fields": fields,
-        "footer": {"text": "SML Manual Alert · You pull the trigger · Not financial advice"},
+        "footer": {"text": ("SML Manual Alert · TEST — fabricated sample data, do not trade on this" if is_test
+                             else "SML Manual Alert · You pull the trigger · Not financial advice")},
     }
     payload = {"embeds": [embed]}
     if os.environ.get("DISCORD_MANUAL_MENTION"):
