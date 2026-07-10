@@ -136,6 +136,12 @@ MAX_PER_SCAN         = int(os.environ.get("MAX_PER_SCAN", "3"))
 STOP_LOSS_PCT        = float(os.environ.get("STOP_LOSS_PCT", "5.0"))    # close position if down this % from avg cost
 TAKE_PROFIT_PCT      = float(os.environ.get("TAKE_PROFIT_PCT", "15.0")) # close position if up this % from avg cost
 POSITION_MONITOR_ENABLED = os.environ.get("POSITION_MONITOR_ENABLED", "true").lower() == "true"
+# Skip a BUY when the bid-ask spread is wider than this % of the midpoint —
+# a market/marketable order into a thin $1-$50 name eats the whole spread as
+# instant slippage. Applies to entries only, NEVER to exits. 0 disables.
+MAX_SPREAD_PCT       = float(os.environ.get("MAX_SPREAD_PCT", "2.0"))
+# Alert when an accepted order is still unfilled after this many minutes.
+FILL_ALERT_MINUTES   = float(os.environ.get("FILL_ALERT_MINUTES", "10.0"))
 
 # Symbols that must NEVER be held overnight — 0DTE options only, no equity route.
 # Mirrors IAM_ODTE_ONLY_SYMBOLS in iam_executor.py (same operator rule: IWM is
@@ -424,6 +430,87 @@ def _is_extended_hours() -> bool:
     return dtime(4, 0) <= t < dtime(9, 30) or dtime(16, 0) <= t < dtime(20, 0)
 
 
+# ── Holiday calendar guard ─────────────────────────────────────────────────────
+# The weekday/hour check above doesn't know about market holidays — on July 4th
+# etc. the executor would poll and fire orders that Robinhood just rejects.
+# Ask Robinhood's own market calendar (cached per day, fails OPEN so a calendar
+# outage can never block trading on a real session day).
+_trading_day_cache = {"date": "", "is_open": True}
+
+def _is_trading_day() -> bool:
+    today = datetime.now(_ET).strftime("%Y-%m-%d")
+    if _trading_day_cache["date"] == today:
+        return _trading_day_cache["is_open"]
+    if PAPER_MODE or not _rh_logged_in:
+        return True   # no session to ask — fail open, don't cache
+    try:
+        import robin_stocks.robinhood as rh
+        hours = rh.markets.get_market_today_hours("XNYS")
+        if isinstance(hours, dict) and hours.get("is_open") is not None:
+            is_open = bool(hours["is_open"])
+            _trading_day_cache["date"]    = today
+            _trading_day_cache["is_open"] = is_open
+            if not is_open:
+                logger.info(f"[CALENDAR] {today} is a market holiday per Robinhood calendar — standing down for the day")
+            return is_open
+    except Exception as e:
+        logger.debug(f"[CALENDAR] market hours fetch failed: {e} — failing open")
+    return True
+
+
+# ── Open-order reconciliation (read-only) ──────────────────────────────────────
+# The executor fires orders and moves on — nothing ever confirmed they FILLED.
+# A GFD limit can sit unfilled all day (position still open, stop-loss thinks
+# it's closing, daily counters already charged). Each cycle: list open stock
+# orders, log them, and alert once per order once it's stale. Observation only —
+# never cancels anything (the operator may have placed orders manually).
+_fill_alerted_ids: set = set()
+
+def _reconcile_open_orders():
+    if PAPER_MODE or not _rh_logged_in:
+        return
+    try:
+        import robin_stocks.robinhood as rh
+        open_orders = rh.orders.get_all_open_stock_orders() or []
+    except Exception as e:
+        logger.warning(f"[ORDERS] open-order fetch failed: {e}")
+        return
+    if not open_orders:
+        return
+    from datetime import timezone as _tz
+    now_utc = datetime.now(_tz.utc)
+    for o in open_orders:
+        try:
+            oid   = str(o.get("id") or "")
+            state = o.get("state", "")
+            side  = o.get("side", "")
+            qty   = float(o.get("quantity") or 0)
+            px    = o.get("price") or o.get("average_price") or "?"
+            symbol = ""
+            try:
+                import robin_stocks.robinhood as rh
+                instr  = rh.stocks.get_instrument_by_url(o.get("instrument", ""))
+                symbol = (instr or {}).get("symbol", "").upper()
+            except Exception:
+                pass
+            age_min = 0.0
+            created = o.get("created_at", "")
+            if created:
+                try:
+                    created_dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
+                    age_min = (now_utc - created_dt).total_seconds() / 60.0
+                except Exception:
+                    pass
+            logger.info(f"[ORDERS] open: {symbol or '?'} {side} x{qty:g} @ {px} state={state} age={age_min:.0f}m")
+            if age_min > FILL_ALERT_MINUTES and oid and oid not in _fill_alerted_ids:
+                _fill_alerted_ids.add(oid)
+                msg = f"⏳ {symbol or 'order'} {side} x{qty:g} unfilled for {age_min:.0f} min (state={state}) — check the Robinhood app"
+                logger.warning(f"[ORDERS] {msg}")
+                _discord_critical(msg)
+        except Exception as e:
+            logger.debug(f"[ORDERS] reconcile entry error: {e}")
+
+
 # ── Discord alert ──────────────────────────────────────────────────────────────
 _DISCORD_URL = os.environ.get("DISCORD_WEBHOOK_BEAST", "") or os.environ.get("DISCORD_WEBHOOK_ALL", "")
 
@@ -586,6 +673,23 @@ def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
     if price <= 0:
         logger.warning(f"[EXEC] {symbol} no live price — abort")
         return
+
+    # Spread guard — entries only. Crossing a wide bid-ask on a thin name is
+    # guaranteed slippage; skipping the entry costs nothing. Exits are exempt:
+    # a wide spread must never keep a stop-loss from getting out. Fails open.
+    if side == "buy" and MAX_SPREAD_PCT > 0:
+        try:
+            import robin_stocks.robinhood as rh
+            q = (rh.stocks.get_quotes(symbol) or [{}])[0] or {}
+            bid = float(q.get("bid_price") or 0)
+            ask = float(q.get("ask_price") or 0)
+            if bid > 0 and ask > bid:
+                spread_pct = (ask - bid) / ((ask + bid) / 2) * 100.0
+                if spread_pct > MAX_SPREAD_PCT:
+                    logger.warning(f"[EXEC] {symbol} BUY skipped — bid-ask spread {spread_pct:.2f}% > {MAX_SPREAD_PCT}% (bid ${bid:.2f} / ask ${ask:.2f})")
+                    return
+        except Exception as e:
+            logger.debug(f"[EXEC] {symbol} spread check failed: {e} — proceeding")
 
     avg_cost = 0.0
     if side == "sell":
@@ -1225,7 +1329,7 @@ def _poll_oracle() -> int:
 def main():
     global _rh_logged_in  # explicitly declare global so Python never creates a local shadow
     logger.info("=" * 60)
-    logger.info("SqueezeOS Robinhood Executor v3.6 — GFD orders (no GTC rejections) + PDT record-on-fill/persist + ungated risk exits")
+    logger.info("SqueezeOS Robinhood Executor v3.7 — spread guard on entries + open-order fill reconciliation + holiday calendar")
     logger.info(f"  API         : {SQUEEZEOS_API_URL}")
     logger.info(f"  Poll every  : {POLL_INTERVAL_S}s")
     logger.info(f"  Hours       : 4:00 AM–8:00 PM ET (pre-market + regular + after-hours)")
@@ -1238,6 +1342,8 @@ def main():
     logger.info(f"  Daily cap   : {MAX_ORDERS_PER_DAY} orders / ${MAX_DAILY_NOTIONAL:.0f} notional / ${MAX_DAILY_LOSS_USD:.0f} loss limit")
     logger.info(f"  Per-scan    : max {MAX_PER_SCAN} orders per poll cycle")
     logger.info(f"  Position mon: stop-loss {STOP_LOSS_PCT}% / take-profit {TAKE_PROFIT_PCT}% (enabled={POSITION_MONITOR_ENABLED})")
+    logger.info(f"  Spread guard: skip BUY if bid-ask > {MAX_SPREAD_PCT}% of mid (exits exempt)")
+    logger.info(f"  Fill monitor: alert if an order sits unfilled > {FILL_ALERT_MINUTES:.0f} min")
     logger.info(f"  Paper mode  : {PAPER_MODE}")
     logger.info(f"  Kill switch : {KILL_SWITCH}")
     logger.info("=" * 60)
@@ -1290,7 +1396,12 @@ def main():
                 logger.info(f"[POLL] Market closed ({now_et.strftime('%a %H:%M ET')}) — standing by, next check in {POLL_INTERVAL_S}s")
                 time.sleep(POLL_INTERVAL_S)
                 continue
+            if not _is_trading_day():
+                logger.info(f"[POLL] Market holiday — standing by, next check in {POLL_INTERVAL_S}s")
+                time.sleep(POLL_INTERVAL_S)
+                continue
             logger.info(f"[POLL] Scanning... (RH: {rh_status} | orders today: {_orders_today}/{MAX_ORDERS_PER_DAY} | notional: ${_daily_notional_usd:.0f}/${MAX_DAILY_NOTIONAL:.0f})")
+            _reconcile_open_orders()
             stop_placed   = _check_stop_losses()
             beast_placed  = _poll_beastmode()
             tv_placed     = _poll_tv_pending()
