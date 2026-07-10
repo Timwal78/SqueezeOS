@@ -162,8 +162,27 @@ def _save_last_execution(d: dict) -> None:
     except Exception as e:
         logger.warning(f"[COOLDOWN] save failed: {e}")
 
+_PDT_FILE = os.path.join(LOG_DIR, "pdt_trades.json")
+
+def _load_pdt_trades() -> list:
+    try:
+        with open(_PDT_FILE, "r") as f:
+            data = json.load(f)
+        return [float(t) for t in data] if isinstance(data, list) else []
+    except Exception:
+        return []
+
+def _save_pdt_trades(trades: list) -> None:
+    try:
+        with open(_PDT_FILE, "w") as f:
+            json.dump(trades, f)
+    except Exception as e:
+        logger.warning(f"[PDT] save failed: {e}")
+
 _last_execution     = _load_last_execution()  # symbol → epoch, persisted across restarts
-_pdt_trades         = []        # epoch timestamps of day trades
+_pdt_trades         = _load_pdt_trades()      # epoch timestamps of day trades — persisted:
+                                              # the 5-day PDT window must survive NSSM restarts,
+                                              # otherwise every crash/reboot silently disarms the shield
 _daily_loss_usd     = 0.0
 _orders_today       = 0
 _daily_notional_usd = 0.0
@@ -332,12 +351,16 @@ def _get_rh_portfolio_value() -> float:
 
 
 # ── PDT shield ─────────────────────────────────────────────────────────────────
+# Check and record are split on purpose: a PDT slot is only consumed by an order
+# Robinhood actually accepted. Recording at check time burned slots on orders
+# that were later rejected (e.g. the GTC market-order rejections) — under the
+# balance limit, 3 failed attempts would lock ALL trading for 5 days.
 def _pdt_allowed() -> bool:
+    balance = _get_rh_portfolio_value()   # network call — keep outside the lock
     now = time.time()
     cutoff = now - PDT_WINDOW_S
     with _lock:
         _pdt_trades[:] = [t for t in _pdt_trades if t > cutoff]
-        balance = _get_rh_portfolio_value()
         if balance < PDT_BALANCE_LIMIT:
             if len(_pdt_trades) >= PDT_MAX_TRADES:
                 logger.warning(
@@ -345,11 +368,20 @@ def _pdt_allowed() -> bool:
                     f"and {len(_pdt_trades)}/{PDT_MAX_TRADES} day trades used"
                 )
                 return False
-            logger.info(f"[PDT] Balance ${balance:.2f} — PDT active: {len(_pdt_trades)+1}/{PDT_MAX_TRADES}")
+            logger.info(f"[PDT] Balance ${balance:.2f} — PDT active: {len(_pdt_trades)}/{PDT_MAX_TRADES} used")
         else:
             logger.info(f"[PDT] Balance ${balance:.2f} — above PDT limit, full trading allowed")
-        _pdt_trades.append(now)
     return True
+
+
+def _pdt_record():
+    """Consume a PDT slot for an order Robinhood confirmed (or a paper fill)."""
+    now = time.time()
+    cutoff = now - PDT_WINDOW_S
+    with _lock:
+        _pdt_trades[:] = [t for t in _pdt_trades if t > cutoff]
+        _pdt_trades.append(now)
+        _save_pdt_trades(_pdt_trades)
 
 
 # ── Circuit breaker ────────────────────────────────────────────────────────────
@@ -511,7 +543,11 @@ def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
         logger.info(f"[EXEC] {symbol} god_stacked={god_count} < {MIN_GOD_STACKED} — skip")
         return
 
-    if not _direction_gates_pass(symbol, side, log_prefix="EXEC"):
+    # Stop-loss/take-profit closes are risk exits, not signal trades — an
+    # entry-quality gate (e.g. dark-pool "accumulation" vetoing a SELL) must
+    # never hold a position past its stop. Only signal-driven trades get gated.
+    is_risk_exit = side == "sell" and sml.get("signal") in ("STOP_LOSS", "TAKE_PROFIT")
+    if not is_risk_exit and not _direction_gates_pass(symbol, side, log_prefix="EXEC"):
         return
 
     # 0DTE-only symbols (IWM) trade options only — never buy shares. The beastmode
@@ -562,8 +598,13 @@ def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
                 try:
                     instr = rh.stocks.get_instrument_by_url(pos["instrument"])
                     if (instr or {}).get("symbol", "").upper() == symbol:
-                        owned_qty = int(float(pos.get("quantity") or 0))
-                        avg_cost = float(pos.get("average_buy_price") or 0)
+                        raw_qty   = float(pos.get("quantity") or 0)
+                        owned_qty = int(raw_qty)
+                        avg_cost  = float(pos.get("average_buy_price") or 0)
+                        if raw_qty - owned_qty > 0.000001:
+                            # Whole-share orders can't touch the fractional tail —
+                            # surface it so it doesn't sit stranded invisibly.
+                            logger.warning(f"[EXEC] {symbol} holds {raw_qty} shares — selling {owned_qty} whole, {raw_qty - owned_qty:.6f} fractional remainder stays (close manually in the app)")
                         break
                 except Exception:
                     pass
@@ -595,6 +636,7 @@ def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
         logger.info(f"[PAPER] Would {side.upper()} {qty}x {symbol} @ ${price:.2f}")
         result = {"paper": True}
         scan_counter[0] += 1
+        _pdt_record()
         with _lock:
             _orders_today += 1
             _daily_notional_usd += qty * price
@@ -634,6 +676,7 @@ def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
                     logger.info(f"[RH] Order confirmed {symbol} {side} x{qty} | id={order_id} state={rh_state}")
                     result = {"placed": True, "raw": r}
                     scan_counter[0] += 1
+                    _pdt_record()
                     with _lock:
                         _orders_today += 1
                         _daily_notional_usd += qty * price
@@ -681,7 +724,6 @@ def _check_stop_losses() -> int:
         return 0
 
     scan_counter = [0]
-    placed = 0
     for pos in (positions or []):
         try:
             qty = float(pos.get("quantity") or 0)
@@ -702,16 +744,17 @@ def _check_stop_losses() -> int:
                 logger.warning(f"[STOP-LOSS] {symbol} down {pct_move:.1f}% (avg ${avg_cost:.2f} -> ${price:.2f}) — closing position")
                 sml_proxy = {"god_stacked": MIN_GOD_STACKED, "tier": "GOD_MODE", "signal": "STOP_LOSS"}
                 _execute(symbol, "sell", sml_proxy, scan_counter)
-                placed += 1
             elif pct_move >= TAKE_PROFIT_PCT:
                 logger.info(f"[TAKE-PROFIT] {symbol} up {pct_move:.1f}% (avg ${avg_cost:.2f} -> ${price:.2f}) — closing position")
                 sml_proxy = {"god_stacked": MIN_GOD_STACKED, "tier": "GOD_MODE", "signal": "TAKE_PROFIT"}
                 _execute(symbol, "sell", sml_proxy, scan_counter)
-                placed += 1
         except Exception as e:
             logger.warning(f"[STOP-LOSS] position check error: {e}")
 
-    return placed
+    # scan_counter only increments on confirmed placement — returning it (instead
+    # of counting attempts) stops the cycle summary claiming rejected orders as
+    # "placed", which is exactly what the GTC-rejection logs showed.
+    return scan_counter[0]
 
 
 ROBINHOOD_OPTION_QTY = int(os.environ.get("ROBINHOOD_OPTION_QTY", "1"))
@@ -819,6 +862,7 @@ def _execute_option(symbol: str, option_type: str, sml: dict, sniper: dict, scan
         logger.info(f"[PAPER] Would BUY {qty}x {symbol} {strike}{option_type[0].upper()} {expiration} @ ${limit_price:.2f}")
         result = {"paper": True}
         scan_counter[0] += 1
+        _pdt_record()
         with _lock:
             _orders_today += 1
             _daily_notional_usd += cost
@@ -837,7 +881,10 @@ def _execute_option(symbol: str, option_type: str, sml: dict, sniper: dict, scan
                     expirationDate=expiration,
                     strike=strike,
                     optionType=option_type,
-                    timeInForce="gtc",
+                    # Day-only: entries are meant to fill immediately at ask+5%.
+                    # A lingering GTC could fill days later at a stale price the
+                    # signal no longer supports.
+                    timeInForce="gfd",
                 )
                 logger.info(f"[RH] Raw option response for {symbol}: {r}")
                 rh_state = (r or {}).get("state", "") if isinstance(r, dict) else ""
@@ -847,6 +894,7 @@ def _execute_option(symbol: str, option_type: str, sml: dict, sniper: dict, scan
                     logger.info(f"[RH] Option order confirmed {symbol} {option_type} x{qty} | id={order_id} state={rh_state}")
                     result = {"placed": True, "raw": r}
                     scan_counter[0] += 1
+                    _pdt_record()
                     with _lock:
                         _orders_today += 1
                         _daily_notional_usd += cost
@@ -911,7 +959,7 @@ def _poll_beastmode() -> int:
                 tier = "DUAL_GRID_LOCK"
             elif "GRID" in signal.upper():
                 tier = "GRID_LOCK"
-        effective_tier = tier if tier in _VALID_TIERS else tier
+        effective_tier = tier
         if effective_tier not in _VALID_TIERS:
             skipped["no_tier"] += 1
             continue
@@ -1030,6 +1078,28 @@ def _poll_tv_pending() -> int:
 # quiet market, or no convergence in the full universe scan).
 ORACLE_MIN_CONFIDENCE = float(os.environ.get("ORACLE_MIN_CONFIDENCE", "60.0"))  # match oracle's own BUY floor
 
+# Server discovery healthy = hundreds of tickers (Polygon full-market scan).
+# ~25 or fewer means the server is running on its Tradier seed list only —
+# Alpaca/Polygon keys missing or their APIs failing. Warn at most once an hour
+# so the operator sees WHY the "100% FETCH" universe looks tiny.
+_UNIVERSE_WARN_FLOOR   = 25
+_universe_last_warn_ts = 0.0
+
+def _warn_if_universe_degraded(universe_size: int):
+    global _universe_last_warn_ts
+    if universe_size <= 0:   # server didn't report — nothing to judge
+        return
+    now = time.time()
+    if universe_size <= _UNIVERSE_WARN_FLOOR and now - _universe_last_warn_ts > 3600:
+        _universe_last_warn_ts = now
+        logger.warning(
+            f"[ORACLE] Server scan universe is only {universe_size} tickers — full-market "
+            f"discovery is DEGRADED (seed list only). Check ALPACA_API_KEY/ALPACA_API_SECRET "
+            f"and POLYGON_API_KEY on the squeezeos-api Render service, and "
+            f"{SQUEEZEOS_API_URL}/api/truth/providers for live provider status."
+        )
+
+
 def _poll_oracle() -> int:
     """
     Poll /api/oracle for BUY/SELL directives.
@@ -1055,6 +1125,7 @@ def _poll_oracle() -> int:
         for sym, info in (data.get("symbols") or {}).items():
             if isinstance(info, dict):
                 symbols_seen[sym.upper()] = info
+        _warn_if_universe_degraded(int(data.get("universe_size") or 0))
     except Exception as e:
         logger.warning(f"[ORACLE] batch fetch failed: {e}")
 
@@ -1154,7 +1225,7 @@ def _poll_oracle() -> int:
 def main():
     global _rh_logged_in  # explicitly declare global so Python never creates a local shadow
     logger.info("=" * 60)
-    logger.info("SqueezeOS Robinhood Executor v3.5 — SELL confidence + price floor (no 0% ghost exits)")
+    logger.info("SqueezeOS Robinhood Executor v3.6 — GFD orders (no GTC rejections) + PDT record-on-fill/persist + ungated risk exits")
     logger.info(f"  API         : {SQUEEZEOS_API_URL}")
     logger.info(f"  Poll every  : {POLL_INTERVAL_S}s")
     logger.info(f"  Hours       : 4:00 AM–8:00 PM ET (pre-market + regular + after-hours)")
