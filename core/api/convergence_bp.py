@@ -539,8 +539,8 @@ def exec_dry_run():
 def exec_test_alert():
     """
     Fires a SAMPLE GOD MODE manual alert to Discord so you can confirm the
-    alert pipe works + see the format. Uses fabricated placeholder data,
-    clearly marked as a TEST in the Discord embed. Trades nothing.
+    alert pipe works + see the format. Uses fabricated sample data, clearly
+    marked as a TEST in the Discord embed. Trades nothing.
 
     Owner-only: this endpoint was previously public/unauthenticated, meaning
     anyone (or any bot/scanner) who found the URL could fire a fake AMC
