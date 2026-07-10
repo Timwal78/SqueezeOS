@@ -12,17 +12,85 @@ Dual-rail 402 body: every payment-required response advertises BOTH rails so tha
 
 import os
 import json
+import time
 import base64
+import secrets
+import logging
 import requests
 from functools import wraps
 from flask import request, jsonify, make_response
 
+logger = logging.getLogger("x402")
+
 X402_VERSION = 2
+
+# ── CDP facilitator auth (Coinbase Cloud API JWT — same scheme used across
+# CDP/Advanced Trade APIs) ──────────────────────────────────────────────────
+# CDP_API_KEY_ID / CDP_API_KEY_SECRET are set directly in Render, never in code.
+# CDP_API_KEY_SECRET is the base64 form of a 64-byte Ed25519 secret key
+# (32-byte seed + 32-byte public key) as issued by the CDP portal.
+CDP_API_KEY_ID     = os.environ.get("CDP_API_KEY_ID", "")
+CDP_API_KEY_SECRET = os.environ.get("CDP_API_KEY_SECRET", "")
+_CDP_CONFIGURED    = bool(CDP_API_KEY_ID and CDP_API_KEY_SECRET)
 
 NETWORK      = os.environ.get("X402_NETWORK", "base-sepolia")
 PAY_TO       = os.environ.get("X402_PAY_TO", "0x4e14B249D9A4c9c9352D780eCEB508A8eB7a7700")
-FACILITATOR  = os.environ.get("X402_FACILITATOR", "https://x402.org/facilitator").rstrip("/")
+# Defaults to the CDP-hosted mainnet facilitator once CDP creds are present,
+# otherwise the public signup-free testnet facilitator. Explicit
+# X402_FACILITATOR always wins over both.
+FACILITATOR  = os.environ.get(
+    "X402_FACILITATOR",
+    "https://api.cdp.coinbase.com/platform/v2/x402" if _CDP_CONFIGURED else "https://x402.org/facilitator",
+).rstrip("/")
 MAX_TIMEOUT  = int(os.environ.get("X402_MAX_TIMEOUT", "120"))
+
+
+def _cdp_ed25519_private_key():
+    """Decode CDP_API_KEY_SECRET (64 bytes: 32-byte seed + 32-byte pubkey) into
+    an Ed25519 private key, verifying the pubkey half actually derives from the
+    seed half — the same corruption check CDP's own SDK performs, so a bad key
+    fails loudly here instead of silently at request time."""
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from cryptography.hazmat.primitives import serialization
+
+    raw = base64.b64decode(CDP_API_KEY_SECRET)
+    if len(raw) != 64:
+        raise ValueError(f"CDP_API_KEY_SECRET must decode to 64 bytes, got {len(raw)}")
+    seed, expected_pub = raw[:32], raw[32:]
+    private_key = Ed25519PrivateKey.from_private_bytes(seed)
+    derived_pub = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+    if derived_pub != expected_pub:
+        raise ValueError("CDP_API_KEY_SECRET is corrupted — public-key half does not derive from the seed half")
+    return private_key
+
+
+def _cdp_auth_headers(method: str, host: str, path: str) -> dict:
+    """Build the Authorization header for a CDP-authenticated facilitator call.
+    Returns {} if CDP creds aren't configured (falls back to unauthenticated,
+    which only works against the public testnet facilitator)."""
+    if not _CDP_CONFIGURED:
+        return {}
+    import jwt as _pyjwt
+
+    private_key = _cdp_ed25519_private_key()
+    now = int(time.time())
+    payload = {
+        "sub": CDP_API_KEY_ID,
+        "iss": "cdp",
+        "nbf": now,
+        "exp": now + 120,
+        "uri": f"{method} {host}{path}",
+    }
+    token = _pyjwt.encode(
+        payload,
+        private_key,
+        algorithm="EdDSA",
+        headers={"kid": CDP_API_KEY_ID, "nonce": secrets.token_hex(16)},
+    )
+    return {"Authorization": f"Bearer {token}"}
 
 # ── RLUSD on XRPL rail (proprietary 402Proof flow) ──
 RLUSD_ISSUER  = os.environ.get("RLUSD_ISSUER",  "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De")
@@ -154,11 +222,19 @@ def _402(requirements: dict, reason: str = ""):
 
 
 def _facilitator(path: str, payment_payload: dict, requirements: dict) -> dict:
+    host = FACILITATOR.split("://", 1)[-1].split("/", 1)[0]
+    try:
+        headers = _cdp_auth_headers("POST", host, path)
+    except Exception as e:
+        logger.error("[x402] CDP auth header build failed: %s", e)
+        return {"isValid": False, "success": False, "invalidReason": f"cdp_auth_error: {e}"}
+
     r = requests.post(
         f"{FACILITATOR}{path}",
         json={"x402Version": X402_VERSION,
               "paymentPayload": payment_payload,
               "paymentRequirements": requirements},
+        headers=headers,
         timeout=30,
     )
     try:
