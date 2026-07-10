@@ -10,6 +10,13 @@ Required env vars:
   TRADE_DESK_STRIPE_WEBHOOK_SECRET  — whsec_... from Stripe dashboard
   STRIPE_SECRET_KEY                 — sk_live_... (shared with CASCADE/AEO)
   REDIS_URL                         — shared Redis instance
+
+Optional:
+  TRADE_DESK_OWNER_KEY — a private static key (not tied to Stripe/Redis at
+  all) that always validates as tier=pro. Set this and use it as the
+  dashboard's stored api_key to guarantee the operator's own account never
+  gets locked out by Stripe/tier-gating bugs on the dashboard side. Unset
+  by default — no bypass exists until this is explicitly configured.
 """
 
 import os
@@ -31,6 +38,7 @@ _TRADER_PRICE_ID = os.environ.get("TRADE_DESK_STRIPE_TRADER_PRICE_ID", "")
 _PRO_PRICE_ID    = os.environ.get("TRADE_DESK_STRIPE_PRO_PRICE_ID", "")
 _WEBHOOK_SECRET  = os.environ.get("TRADE_DESK_STRIPE_WEBHOOK_SECRET", "")
 _REDIS_URL       = os.environ.get("REDIS_URL", "")
+_OWNER_KEY       = os.environ.get("TRADE_DESK_OWNER_KEY", "")
 
 # Redis key prefix for Trade Desk API keys
 _KEY_PREFIX  = "tradedesk:apikey:"
@@ -192,6 +200,12 @@ def trade_desk_key_validate():
     api_key = request.json.get("api_key", "") if request.is_json else ""
     if not api_key:
         return jsonify({"valid": False, "error": "missing api_key"}), 400
+
+    # Owner bypass — independent of Stripe/Redis, so the operator's own account
+    # can never be locked out by a dashboard-side tier-gating bug. No-op unless
+    # TRADE_DESK_OWNER_KEY is explicitly set.
+    if _OWNER_KEY and hmac.compare_digest(api_key, _OWNER_KEY):
+        return jsonify({"valid": True, "tier": "pro", "customer_email": "owner"})
 
     r = _get_redis()
     if not r:

@@ -48,6 +48,7 @@
 - Blueprint: `core/api/trade_desk_stripe_bp.py` — registered at `/api/trade-desk/stripe/webhook` and `/api/trade-desk/key/validate`
 - Stripe products: not yet created — see `.env.example` for the exact env vars to fill in (`TRADE_DESK_STRIPE_TRADER_PRICE_ID`, `TRADE_DESK_STRIPE_PRO_PRICE_ID`, `TRADE_DESK_STRIPE_WEBHOOK_SECRET`). Shares `STRIPE_SECRET_KEY` and `REDIS_URL` with CASCADE/AEO.
 - Because the dashboard isn't in this codebase, wiring it up still needs a manual step on the Abacus.AI side: point its checkout buttons at Stripe Checkout Sessions for the two price IDs above, and have it call `POST /api/trade-desk/key/validate` with the issued `td_...` key to gate Trader/Pro-only pages.
+- Owner bypass: set `TRADE_DESK_OWNER_KEY` (a private static secret, unrelated to Stripe/Redis) and use it as the dashboard's stored `api_key` to guarantee the operator's own account always validates as `tier: "pro"` — insurance against dashboard-side tier-gating bugs locking the owner out of their own product. Unset by default (no-op until configured). As of 2026-07-10 the dashboard's tier-gating (built on Abacus.AI, separately from this repo) is mid-build and has been observed locking the owner out of Pro — this bypass only takes effect once the dashboard is wired to actually call `/api/trade-desk/key/validate`, which it is not yet.
 
 ## SML-Vault-Executor — What's Needed When Vault Build Starts
 
