@@ -584,19 +584,32 @@ def create_app():
             "version": "6.1-CORE"
         })
 
+    _oracle_symbol_cache: dict = {}
+    _ORACLE_SYMBOL_TTL = 20
+
     @app.route('/api/oracle', methods=['GET'])
     @app.route('/api/oracle/<symbol>', methods=['GET'])
     def oracle_signal(symbol=None):
         from core.oracle_engine import OracleEngine, ORACLE_SYMBOLS, get_oracle_batch_cache
         if symbol:
+            sym = symbol.upper().strip()
+            now = time.time()
+            cached = _oracle_symbol_cache.get(sym)
+            if cached and (now - cached['ts']) < _ORACLE_SYMBOL_TTL:
+                return jsonify({"status": "success", "oracle": cached['data'], "cache_age_s": round(now - cached['ts'], 1)})
+
+            # A fresh OracleEngine() is instantiated per request, so its internal
+            # per-field _cached() TTLs (core/oracle_engine.py) never actually persist
+            # across requests — this route-level cache is what makes repeated polls
+            # for the same symbol (dashboards typically poll every 10-15s) cheap.
             services = {
                 "dm":            get_service("dm"),
                 "whale_stalker": get_service("whale_stalker"),
                 "sml":           get_service("sml"),
             }
-            sym = symbol.upper().strip()
             engine = OracleEngine(services)
             result = engine.analyze(sym)
+            _oracle_symbol_cache[sym] = {"ts": now, "data": result}
             return jsonify({"status": "success", "oracle": result})
         else:
             # Cached — see core/oracle_engine.py's background batch scanner. This used
