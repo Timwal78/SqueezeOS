@@ -11,8 +11,8 @@ Dual-rail 402 body: every payment-required response advertises BOTH rails so tha
 """
 
 import os
-import json
 import time
+import json
 import base64
 import secrets
 import logging
@@ -28,7 +28,8 @@ X402_VERSION = 2
 # CDP/Advanced Trade APIs) ──────────────────────────────────────────────────
 # CDP_API_KEY_ID / CDP_API_KEY_SECRET are set directly in Render, never in code.
 # CDP_API_KEY_SECRET is the base64 form of a 64-byte Ed25519 secret key
-# (32-byte seed + 32-byte public key) as issued by the CDP portal.
+# (32-byte seed + 32-byte public key) as issued by the CDP portal — current
+# CDP Secret API Keys are Ed25519, not the older PEM/EC Cloud API Key format.
 CDP_API_KEY_ID     = os.environ.get("CDP_API_KEY_ID", "")
 CDP_API_KEY_SECRET = os.environ.get("CDP_API_KEY_SECRET", "")
 _CDP_CONFIGURED    = bool(CDP_API_KEY_ID and CDP_API_KEY_SECRET)
@@ -229,18 +230,30 @@ def _facilitator(path: str, payment_payload: dict, requirements: dict) -> dict:
         logger.error("[x402] CDP auth header build failed: %s", e)
         return {"isValid": False, "success": False, "invalidReason": f"cdp_auth_error: {e}"}
 
-    r = requests.post(
-        f"{FACILITATOR}{path}",
-        json={"x402Version": X402_VERSION,
-              "paymentPayload": payment_payload,
-              "paymentRequirements": requirements},
-        headers=headers,
-        timeout=30,
-    )
+    body = {"x402Version": X402_VERSION,
+            "paymentPayload": payment_payload,
+            "paymentRequirements": requirements}
+
+    # Bazaar discovery extension: CDP indexes a route the first time /settle
+    # succeeds for it AND the settle call carries this metadata blob. Omitting
+    # it means real mainnet payments could clear fine while the route stays
+    # invisible to Agent.market forever — a second, quieter way to look "paid
+    # up" but never get discovered.
+    if path == "/settle":
+        body["extensions"] = {
+            "bazaar": {
+                "discoverable": True,
+                "resource": requirements["resource"],
+                "description": requirements["description"],
+                "outputSchema": {"type": "object", "properties": {}},
+            }
+        }
+
+    r = requests.post(f"{FACILITATOR}{path}", json=body, headers=headers, timeout=30)
     try:
         return r.json()
     except Exception:
-        return {"isValid": False, "success": False, "invalidReason": f"facilitator {r.status_code}"}
+        return {"isValid": False, "success": False, "invalidReason": f"facilitator {r.status_code}: {r.text[:200]}"}
 
 
 def x402_guard(price_usdc: str, description: str, discoverable: bool = True):
