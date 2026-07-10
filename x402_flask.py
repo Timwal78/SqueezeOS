@@ -11,18 +11,69 @@ Dual-rail 402 body: every payment-required response advertises BOTH rails so tha
 """
 
 import os
+import time
 import json
 import base64
+import secrets
 import requests
 from functools import wraps
+from urllib.parse import urlparse
 from flask import request, jsonify, make_response
 
 X402_VERSION = 2
 
-NETWORK      = os.environ.get("X402_NETWORK", "base-sepolia")
+# ── PRODUCTION FIX (2026-07-10) ──────────────────────────────────────────
+# Was defaulting to base-sepolia (TESTNET) against x402.org/facilitator, a
+# community facilitator whose own discovery catalog is explicitly NOT the
+# Coinbase CDP Bazaar (confirmed in CDP docs: x402.org/facilitator/discovery
+# is a separate testnet-only index). Result: zero possible real revenue on
+# this rail, and zero chance of Bazaar/Agent.market listing, regardless of
+# demand. Now defaults to Base MAINNET routed through CDP's real facilitator,
+# with CDP JWT auth attached so /verify and /settle actually authenticate.
+NETWORK      = os.environ.get("X402_NETWORK", "base")
 PAY_TO       = os.environ.get("X402_PAY_TO", "0x4e14B249D9A4c9c9352D780eCEB508A8eB7a7700")
-FACILITATOR  = os.environ.get("X402_FACILITATOR", "https://x402.org/facilitator").rstrip("/")
+FACILITATOR  = os.environ.get("X402_FACILITATOR", "https://api.cdp.coinbase.com/platform/v2/x402").rstrip("/")
 MAX_TIMEOUT  = int(os.environ.get("X402_MAX_TIMEOUT", "120"))
+
+# ── CDP API key auth (required by api.cdp.coinbase.com; x402.org/facilitator
+#    didn't need this, which is part of why it was easy to leave misconfigured) ──
+CDP_API_KEY_ID     = os.environ.get("CDP_API_KEY_ID", "")
+CDP_API_KEY_SECRET = os.environ.get("CDP_API_KEY_SECRET", "")  # PEM EC private key, \n-escaped
+_CDP_HOST          = urlparse(FACILITATOR).netloc or "api.cdp.coinbase.com"
+
+
+def _cdp_jwt(method: str, path: str) -> "str | None":
+    """
+    Build a CDP Bearer JWT per Coinbase's documented JWT auth scheme:
+    ES256, 2-minute expiry, kid+nonce headers, sub/iss/nbf/exp/uri claims.
+    Returns None (no auth header) if CDP creds aren't configured yet, so a
+    misconfigured deploy fails loudly via a 401 from CDP instead of silently
+    hitting an unauthenticated testnet facilitator like before.
+    """
+    if not CDP_API_KEY_ID or not CDP_API_KEY_SECRET:
+        return None
+    try:
+        import jwt as _pyjwt
+        from cryptography.hazmat.primitives import serialization
+        private_key = serialization.load_pem_private_key(
+            CDP_API_KEY_SECRET.encode("utf-8"), password=None
+        )
+        now = int(time.time())
+        payload = {
+            "sub": CDP_API_KEY_ID,
+            "iss": "cdp",
+            "nbf": now,
+            "exp": now + 120,
+            "uri": f"{method} {_CDP_HOST}{path}",
+        }
+        return _pyjwt.encode(
+            payload, private_key, algorithm="ES256",
+            headers={"kid": CDP_API_KEY_ID, "nonce": secrets.token_hex()},
+        )
+    except Exception as e:
+        import logging
+        logging.error(f"[x402] CDP JWT build failed, request will be unauthenticated: {e}")
+        return None
 
 # ── RLUSD on XRPL rail (proprietary 402Proof flow) ──
 RLUSD_ISSUER  = os.environ.get("RLUSD_ISSUER",  "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De")
@@ -43,7 +94,7 @@ def _usdc_atomic(price_usdc: str) -> str:
 
 
 def _payment_requirements(price_usdc: str, description: str, resource: str) -> dict:
-    cfg = USDC.get(NETWORK, USDC["base-sepolia"])
+    cfg = USDC.get(NETWORK, USDC["base"])
     units = _usdc_atomic(price_usdc)
     return {
         "scheme": "exact",
@@ -154,17 +205,35 @@ def _402(requirements: dict, reason: str = ""):
 
 
 def _facilitator(path: str, payment_payload: dict, requirements: dict) -> dict:
-    r = requests.post(
-        f"{FACILITATOR}{path}",
-        json={"x402Version": X402_VERSION,
-              "paymentPayload": payment_payload,
-              "paymentRequirements": requirements},
-        timeout=30,
-    )
+    headers = {}
+    token = _cdp_jwt("POST", f"{urlparse(FACILITATOR).path}{path}")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    body = {"x402Version": X402_VERSION,
+            "paymentPayload": payment_payload,
+            "paymentRequirements": requirements}
+
+    # Bazaar discovery extension: CDP indexes a route the first time /settle
+    # succeeds for it AND the settle call carries this metadata blob. Omitting
+    # it means real mainnet payments could clear fine while the route stays
+    # invisible to Agent.market forever — a second, quieter way to look "paid
+    # up" but never get discovered.
+    if path == "/settle":
+        body["extensions"] = {
+            "bazaar": {
+                "discoverable": True,
+                "resource": requirements["resource"],
+                "description": requirements["description"],
+                "outputSchema": {"type": "object", "properties": {}},
+            }
+        }
+
+    r = requests.post(f"{FACILITATOR}{path}", json=body, headers=headers, timeout=30)
     try:
         return r.json()
     except Exception:
-        return {"isValid": False, "success": False, "invalidReason": f"facilitator {r.status_code}"}
+        return {"isValid": False, "success": False, "invalidReason": f"facilitator {r.status_code}: {r.text[:200]}"}
 
 
 def x402_guard(price_usdc: str, description: str, discoverable: bool = True):
@@ -264,7 +333,7 @@ def x402_guard(price_usdc: str, description: str, discoverable: bool = True):
 def register_x402_discovery(app):
     @app.route("/.well-known/x402")
     def _x402_discovery():
-        cfg = USDC.get(NETWORK, USDC["base-sepolia"])
+        cfg = USDC.get(NETWORK, USDC["base"])
         return jsonify({
             "x402Version": X402_VERSION,
             "operator": "ScriptMasterLabs",
