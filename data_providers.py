@@ -62,8 +62,12 @@ load_env_file()
 class AlpacaProvider:
     def __init__(self):
         # Environment-only — see options_service.py for the rotation note.
-        self.api_key = os.environ.get('ALPACA_API_KEY', '')
-        self.api_secret = os.environ.get('ALPACA_API_SECRET', '')
+        # .strip() everywhere a key is read: a key pasted into Render with a
+        # trailing newline puts '\n' in the HTTP header and EVERY call fails
+        # with "Invalid ... return character(s) in header value" (seen live).
+        self.api_key = os.environ.get('ALPACA_API_KEY', '').strip()
+        self.api_secret = os.environ.get('ALPACA_API_SECRET', '').strip()
+        self.last_error = None   # last movers/actives failure, surfaced via /api/truth/providers
         # Respect ALPACA_PAPER flag for data and API endpoints
         is_paper = os.environ.get('ALPACA_PAPER', 'false').lower() == 'true'
         if is_paper:
@@ -113,10 +117,13 @@ class AlpacaProvider:
                 actives = data.get('most_actives', [])
                 # Law 2: 100% FETCH — Using full results from the API
                 logger.info(f"[ALPACA] Most actives: {len(actives)} tickers")
+                self.last_error = None
                 return actives
             else:
+                self.last_error = f"most-actives {r.status_code}: {r.text[:200]}"
                 logger.warning(f"[ALPACA] Most actives {r.status_code}: {r.text[:200]}")
         except Exception as e:
+            self.last_error = f"most-actives: {e}"
             logger.error(f"[ALPACA] Most actives error: {e}")
         return []
 
@@ -137,10 +144,13 @@ class AlpacaProvider:
                 gainers = data.get('gainers', [])
                 losers = data.get('losers', [])
                 logger.info(f"[ALPACA] Movers: {len(gainers)} gainers, {len(losers)} losers")
+                self.last_error = None
                 return {'gainers': gainers, 'losers': losers}
             else:
+                self.last_error = f"movers {r.status_code}: {r.text[:200]}"
                 logger.warning(f"[ALPACA] Movers {r.status_code}: {r.text[:200]}")
         except Exception as e:
+            self.last_error = f"movers: {e}"
             logger.error(f"[ALPACA] Movers error: {e}")
         return {'gainers': [], 'losers': []}
 
@@ -361,8 +371,9 @@ except ImportError as _e:
 
 class PolygonProvider:
     def __init__(self):
-        self.api_key = os.environ.get('POLYGON_API_KEY', '')
+        self.api_key = os.environ.get('POLYGON_API_KEY', '').strip()
         self.base = 'https://api.polygon.io'
+        self.last_error = None   # last grouped-daily failure, surfaced via /api/truth/providers
         if self.available:
             logger.info(f"[POLYGON] Ready ({self.api_key[:6]}...)")
         else:
@@ -419,12 +430,16 @@ class PolygonProvider:
                             'source': 'polygon_grouped',
                         }
                 logger.info(f"[POLYGON] Grouped daily {date_str}: {len(results)} tickers")
+                self.last_error = None
                 return results
             elif r.status_code == 403:
-                logger.warning(f"[POLYGON] Grouped daily 403 — may need paid plan: {r.text[:200]}")
+                self.last_error = f"403 — may need paid plan or invalid key: {r.text[:200]}"
+                logger.warning(f"[POLYGON] Grouped daily {self.last_error}")
             else:
-                logger.warning(f"[POLYGON] Grouped daily {r.status_code}: {r.text[:200]}")
+                self.last_error = f"{r.status_code}: {r.text[:200]}"
+                logger.warning(f"[POLYGON] Grouped daily {self.last_error}")
         except Exception as e:
+            self.last_error = str(e)
             logger.error(f"[POLYGON] Grouped daily error: {e}")
         return {}
 
@@ -552,7 +567,7 @@ class PolygonProvider:
 # ============================================================
 class AlphaVantageProvider:
     def __init__(self):
-        self.api_key = os.environ.get('ALPHA_VANTAGE_API_KEY', '')
+        self.api_key = os.environ.get('ALPHA_VANTAGE_API_KEY', '').strip()
         self.base = 'https://www.alphavantage.co/query'
         self.last_call = 0
         self.min_interval = 5.0  # RELAXED: 5s (was 13s) — Alpha Vantage free: 5 calls/min = 12s, but we have 25/day hard limit anyway
@@ -626,7 +641,7 @@ class FredProvider:
     missing, callers get an explicit error, not a placeholder number."""
 
     def __init__(self):
-        self.api_key = os.environ.get('FRED_API_KEY', '')
+        self.api_key = os.environ.get('FRED_API_KEY', '').strip()
         self.base = 'https://api.stlouisfed.org/fred'
         self.last_call = 0
         self.min_interval = 0.5
@@ -727,15 +742,15 @@ class TradierProvider:
             self.api_key = (
                 os.environ.get('TRADIER_PRODUCTION_API_KEY') or
                 os.environ.get('TRADIER_API_KEY', '')
-            )
-            self.account_id = os.environ.get('TRADIER_PRODUCTION_ACCOUNT', '')
+            ).strip()
+            self.account_id = os.environ.get('TRADIER_PRODUCTION_ACCOUNT', '').strip()
             self.base_url = 'https://api.tradier.com/v1'
         else:
             self.api_key = (
                 os.environ.get('TRADIER_SANDBOX_API_KEY') or
                 os.environ.get('TRADIER_API_KEY', '')
-            )
-            self.account_id = os.environ.get('TRADIER_SANDBOX_ACCOUNT', '')
+            ).strip()
+            self.account_id = os.environ.get('TRADIER_SANDBOX_ACCOUNT', '').strip()
             self.base_url = 'https://sandbox.tradier.com/v1'
 
         self.last_call = 0
@@ -764,6 +779,19 @@ class TradierProvider:
     def get_quotes(self, symbols: List[str]) -> Dict[str, dict]:
         if not self.available or not symbols:
             return {}
+        # Chunked: all symbols in one GET worked only while the universe was
+        # tiny — a full-market discovery list (thousands of tickers) makes the
+        # URL exceed server limits, the whole request fails, and the scan
+        # silently collapses to nothing. 100% FETCH still: every chunk is sent.
+        results = {}
+        _CHUNK = 200
+        for i in range(0, len(symbols), _CHUNK):
+            chunk = symbols[i:i + _CHUNK]
+            batch = self._get_quotes_chunk(chunk)
+            results.update(batch)
+        return results
+
+    def _get_quotes_chunk(self, symbols: List[str]) -> Dict[str, dict]:
         self._rate_limit()
         try:
             url = f"{self.base_url}/markets/quotes"
@@ -773,7 +801,7 @@ class TradierProvider:
                 data = r.json()
                 quotes = data.get('quotes', {}).get('quote', [])
                 if isinstance(quotes, dict): quotes = [quotes]
-                
+
                 results = {}
                 for q in quotes:
                     sym = q.get('symbol')
@@ -800,8 +828,10 @@ class TradierProvider:
                             'source': 'tradier',
                         }
                 return results
+            else:
+                logger.warning(f"[TRADIER] Quotes {r.status_code} for {len(symbols)}-symbol chunk: {r.text[:150]}")
         except Exception as e:
-            logger.error(f"[TRADIER] Quotes error: {e}")
+            logger.error(f"[TRADIER] Quotes error ({len(symbols)}-symbol chunk): {e}")
         return {}
 
     def place_order(self, symbol: str, qty: int, side: str, order_type: str = 'market') -> Dict:
@@ -937,6 +967,7 @@ class DataManager:
         self.alphav = AlphaVantageProvider()
         self.tradier = TradierProvider()
         self.fred = FredProvider()
+        self.last_discovery = None   # per-tier breakdown of the most recent discover_universe() run
         logger.info("[DATA] Ready")
 
     def provider_status(self) -> dict:
@@ -975,6 +1006,7 @@ class DataManager:
                 if sym and not is_junk(sym):
                     universe[sym] = {**q, 'symbol': sym, 'discovery': 'tradier_seed'}
             logger.info(f"[DISCOVERY] Tradier seed: {len(universe)} tickers")
+        seed_count = len(universe)
 
         # ════════════════════════════════════════════════════════════
         # TIER 2: ALPACA MOVERS — Supplemental gainers/losers
@@ -1000,10 +1032,12 @@ class DataManager:
                 if sym and not is_junk(sym) and sym not in universe:
                     universe[sym] = {'symbol': sym, 'discovery': 'alpaca_active', 'volume': item.get('volume', 0)}
             logger.info(f"[DISCOVERY] Alpaca: {len(universe)} total after movers")
+        alpaca_added = len(universe) - seed_count
 
         # ════════════════════════════════════════════════════════════
         # TIER 2: POLYGON GROUPED DAILY — Full market scan
         # ════════════════════════════════════════════════════════════
+        poly_added = 0
         if self.polygon.available:
             if progress_cb: progress_cb('Discovering: Polygon full market scan...')
             grouped = self.polygon.get_grouped_daily()
@@ -1015,7 +1049,6 @@ class DataManager:
                     return bar.get('volume', 0) * chg
 
                 sorted_bars = sorted(grouped.items(), key=get_heat, reverse=True)
-                poly_added = 0
                 for sym, bar in sorted_bars:
                     if limit > 0 and poly_added >= limit:
                         break
@@ -1059,6 +1092,20 @@ class DataManager:
                 "[DISCOVERY] Alpaca unavailable — no live movers/most-actives. "
                 "Set ALPACA_API_KEY/ALPACA_API_SECRET to restore gainer/loser discovery."
             )
+        # Per-tier breakdown, surfaced via /api/truth/providers so a degraded
+        # universe (e.g. Polygon key set but the call failing) is diagnosable
+        # from a browser instead of only from Render logs.
+        self.last_discovery = {
+            'ts': time.time(),
+            'tradier_seed': seed_count,
+            'alpaca_added': alpaca_added,
+            'polygon_added': poly_added,
+            'total': len(universe),
+            'polygon_configured': self.polygon.available,
+            'alpaca_configured': self.alpaca.available,
+            'polygon_error': self.polygon.last_error,
+            'alpaca_error': self.alpaca.last_error,
+        }
         return universe
 
     # --- QUOTES ---

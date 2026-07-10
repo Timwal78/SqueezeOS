@@ -155,8 +155,15 @@ def verify(symbol: str):
 
 @truth_bp.route('/providers', methods=['GET'])
 def providers():
-    """Free, unpaid — which live sources are actually configured right now."""
+    """
+    Free, unpaid — which live sources are actually configured right now, plus
+    the per-tier breakdown of the most recent universe discovery run. A key can
+    be configured (true below) while its API calls still fail — last_discovery
+    shows what each tier actually contributed and the last error if it didn't.
+    """
     dm = get_service('dm')
     if dm is None:
         return jsonify({'error': 'ERR_SERVICE_UNAVAILABLE'}), 503
-    return jsonify(dm.provider_status())
+    status = dm.provider_status()
+    status['last_discovery'] = getattr(dm, 'last_discovery', None)
+    return jsonify(status)
