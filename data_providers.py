@@ -1038,6 +1038,27 @@ class DataManager:
 
         if progress_cb: progress_cb(f'Discovered {len(universe)} tickers')
         logger.info(f"[DISCOVERY] Total universe: {len(universe)} tickers")
+        # Full-market discovery lives in Alpaca (movers/actives) and Polygon
+        # (grouped daily). Without them the universe silently collapses to the
+        # ~24-name Tradier seed (~12 after the scanner's $1-$50 filter) while
+        # every consumer still claims "100% FETCH" — make that failure loud.
+        if not self.alpaca.available and not self.polygon.available:
+            logger.warning(
+                "[DISCOVERY] DEGRADED — Alpaca and Polygon are both unconfigured/unavailable. "
+                "Universe is the Tradier seed list ONLY (no full-market scan). "
+                "Set ALPACA_API_KEY/ALPACA_API_SECRET and/or POLYGON_API_KEY to restore dynamic discovery. "
+                "Check GET /api/truth/providers for live provider status."
+            )
+        elif not self.polygon.available:
+            logger.warning(
+                "[DISCOVERY] Polygon unavailable — no full-market grouped-daily scan. "
+                "Universe limited to Tradier seed + Alpaca movers. Set POLYGON_API_KEY for the full market."
+            )
+        elif not self.alpaca.available:
+            logger.warning(
+                "[DISCOVERY] Alpaca unavailable — no live movers/most-actives. "
+                "Set ALPACA_API_KEY/ALPACA_API_SECRET to restore gainer/loser discovery."
+            )
         return universe
 
     # --- QUOTES ---
