@@ -25,7 +25,15 @@ jobs:
             local url="$2"
             local expected="${3:-200}"
 
-            status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 --retry 1 "$url" 2>/dev/null)
+            # `|| true` is required here: this script runs under `bash -e`, and
+            # without it a hard curl failure (not just an unexpected HTTP
+            # status — a suspended Render service, DNS failure, connection
+            # refused, etc.) aborts the entire job right here, before the
+            # TIMEOUT-handling branch below ever runs. That's exactly what was
+            # silently happening to every check queued after the first one
+            # to hit a truly-down service — zero log output for it, job just
+            # died with whatever raw exit code curl happened to return.
+            status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 --retry 1 "$url" 2>/dev/null) || true
 
             if [ -z "$status" ] || [ "$status" = "000" ]; then
               FAILURES+=("$name|TIMEOUT|$url")
@@ -67,8 +75,13 @@ jobs:
           check_service "SML Launchpad" \
             "https://sml-launchpad.onrender.com/health" "200 404"
 
-          check_service "TipMaster" \
-            "https://tipmaster.onrender.com/health" "200 404"
+          # TipMaster is deliberately suspended on Render (owner action,
+          # 2026-07-04 — see SqueezeOS/CLAUDE.md) and not expected to respond
+          # at all. Alerting on a service that's intentionally offline is
+          # noise, not signal. Restore this check when TipMaster is
+          # un-suspended and configured again.
+          # check_service "TipMaster" \
+          #   "https://tipmaster.onrender.com/health" "200 404"
 
           # ── Build Discord alert payload ────────────────────────────────
           if [ "${#FAILURES[@]}" -gt 0 ] || [ "${#WARNINGS[@]}" -gt 0 ]; then
@@ -108,7 +121,7 @@ jobs:
               HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
                 -X POST "$DISCORD_WEBHOOK" \
                 -H "Content-Type: application/json" \
-                -d "$PAYLOAD")
+                -d "$PAYLOAD") || true
               if [[ "$HTTP_CODE" =~ ^2 ]]; then
                 echo "Discord alert sent: $HTTP_CODE"
               else
