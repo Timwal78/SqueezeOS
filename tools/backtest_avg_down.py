@@ -32,9 +32,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
+
+# avg_down_engine.py and tradier_api.py live at the repo root, not under
+# tools/ — when this script is invoked as `python tools/backtest_avg_down.py`,
+# Python only puts tools/ on sys.path, not the repo root, so the plain
+# `import avg_down_engine` below fails with ModuleNotFoundError unless the
+# repo root is added explicitly here.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import avg_down_engine as engine
 import tradier_api as ta
