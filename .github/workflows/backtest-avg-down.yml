@@ -25,9 +25,11 @@ jobs:
       - name: Run backtest
         env:
           TRADIER_API_KEY: ${{ secrets.TRADIER_API_KEY }}
-          # Left unset — defaults to sandbox in tradier_api.py. Historical
-          # daily bars work fine on sandbox; don't assume this key has
-          # production/brokerage access.
+          # The real TRADIER_API_KEY here is a production brokerage key (the
+          # same one squeezeos-api uses live) — Tradier's sandbox host
+          # rejects production keys with a 401, which is exactly what
+          # happened when this was left unset (defaults to sandbox).
+          TRADIER_ENV: production
         run: |
           python tools/backtest_avg_down.py \
             --symbols "${{ github.event.inputs.symbols }}" \
