@@ -1,0 +1,40 @@
+name: Backtest CASCADE ACCUMULATOR (avg_down_engine) vs. baselines
+
+on:
+  workflow_dispatch:
+    inputs:
+      symbols:
+        description: "Comma-separated equity symbols to test"
+        required: true
+        default: "SPY,QQQ,AAPL,MSFT,NVDA,TSLA,AMD,META"
+      days:
+        description: "Lookback window in calendar days"
+        required: true
+        default: "1095"
+
+jobs:
+  backtest:
+    name: Run real backtest against Tradier historical data
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Run backtest
+        env:
+          TRADIER_API_KEY: ${{ secrets.TRADIER_API_KEY }}
+          # Left unset — defaults to sandbox in tradier_api.py. Historical
+          # daily bars work fine on sandbox; don't assume this key has
+          # production/brokerage access.
+        run: |
+          python tools/backtest_avg_down.py \
+            --symbols "${{ github.event.inputs.symbols }}" \
+            --days "${{ github.event.inputs.days }}" \
+            --out backtest_results.json
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: avg-down-backtest-results
+          path: backtest_results.json

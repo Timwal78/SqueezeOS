@@ -92,7 +92,7 @@ def cascade_status():
     status["product"]    = "CASCADE ACCUMULATOR"
     status["version"]    = "1.0.0"
     status["tier"]       = "execution"
-    status["asset_class"] = "crypto"
+    status["asset_class"] = "equities"
     status["payment"]    = {"x402": "0.25 RLUSD/call", "stripe": "$149/mo"}
     return jsonify(clean_data(status))
 
@@ -109,7 +109,7 @@ def cascade_info():
             "Generates ENTER, ADD, EXIT, and STOP directives based on a "
             "proprietary multi-layer EMA ribbon. Operates in both ACCUMULATE "
             "(downside averaging) and PYRAMID (upside scaling) modes. "
-            "Crypto-native. AI-agent compatible via x402 micropayment."
+            "Equities-native (real-time via Tradier). AI-agent compatible via x402 micropayment."
         ),
         "modes": {
             "ACCUMULATE": "Price drops through EMA layers — average down with controlled tranches",
@@ -117,7 +117,7 @@ def cascade_info():
             "EXIT":       "Recovery target hit — close position, realize gains",
             "STOP":       "Anchor layer broken — hard stop, protect capital",
         },
-        "asset_class":     "crypto (equities + options tiers launching soon)",
+        "asset_class":     "equities (options + crypto tiers launching soon)",
         "pricing": {
             "ai_agents":      "0.25 RLUSD per call via x402 on XRP Ledger",
             "humans_monthly": "$149/mo via Stripe — unlimited calls",
@@ -177,7 +177,7 @@ def cascade_signal():
         "position":       position or {},
         "signal_data":    sig_data,
         "recent_signals": all_signals[:5],
-        "asset_class":    "crypto",
+        "asset_class":    "equities",
         "timestamp":      time.time(),
         "powered_by":     "ScriptMaster Labs — CASCADE ACCUMULATOR v1.0",
     }))
