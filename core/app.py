@@ -3,6 +3,7 @@ import json
 import queue
 import logging
 import time
+import threading
 from datetime import datetime
 from flask import Flask, Response, jsonify, redirect, url_for, send_from_directory, request
 from flask_cors import CORS
@@ -69,6 +70,7 @@ from core.api.marketing_activity_bp import marketing_activity_bp
 from core.api.truth_bp import truth_bp
 from core.api.memory_bp import memory_bp
 from core.api.fred_bp import fred_bp
+from core.api.aws_marketplace_bp import aws_marketplace_bp, run_entitlements_self_check
 import core.signal_history as signal_history
 from core.legacy import start_whale_stalker, init_services, get_service, clean_data
 from core.market_graph import get_graph
@@ -194,6 +196,7 @@ def create_app():
     app.register_blueprint(truth_bp,           url_prefix='/api/truth')
     app.register_blueprint(memory_bp,          url_prefix='/api/memory')
     app.register_blueprint(fred_bp,            url_prefix='/api/fred')
+    app.register_blueprint(aws_marketplace_bp, url_prefix='/api/aws-marketplace')
 
     # Stellar Forge growth engine — feature-flagged, dormant unless enabled.
     # Registers the affiliate/loyalty/payout surface only when explicitly turned
@@ -209,6 +212,14 @@ def create_app():
     for kr in key_routes:
         hit = any(r.startswith(kr) for r in registered)
         logger.info("[routes] %s → %s", kr, "REGISTERED" if hit else "MISSING ⚠")
+
+    # One-shot AWS Marketplace Entitlements self-check — fires a real
+    # GetEntitlements call at boot (once credentials are configured) so the
+    # first deploy after adding them produces the CloudTrail-visible
+    # successful call AWS's listing audit requires. No-ops (with a logged
+    # reason) until AWS_MARKETPLACE_* env vars are set. Runs in a background
+    # thread so a slow/unreachable AWS call never blocks startup.
+    threading.Thread(target=run_entitlements_self_check, daemon=True).start()
 
     if not _IS_SERVERLESS:
         # Start background market scanner

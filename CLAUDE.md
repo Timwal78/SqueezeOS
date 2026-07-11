@@ -50,6 +50,18 @@
 - Because the dashboard isn't in this codebase, wiring it up still needs a manual step on the Abacus.AI side: point its checkout buttons at Stripe Checkout Sessions for the two price IDs above, and have it call `POST /api/trade-desk/key/validate` with the issued `td_...` key to gate Trader/Pro-only pages.
 - Owner bypass: set `TRADE_DESK_OWNER_KEY` (a private static secret, unrelated to Stripe/Redis) and use it as the dashboard's stored `api_key` to guarantee the operator's own account always validates as `tier: "pro"` — insurance against dashboard-side tier-gating bugs locking the owner out of their own product. Unset by default (no-op until configured). As of 2026-07-10 the dashboard's tier-gating (built on Abacus.AI, separately from this repo) is mid-build and has been observed locking the owner out of Pro — this bypass only takes effect once the dashboard is wired to actually call `/api/trade-desk/key/validate`, which it is not yet.
 
+## AWS Marketplace Entitlements — Fixing the AUDIT_ERROR (blocks visibility)
+
+- The "Script Master Labs Federal, Medical & Finance MCP (x402)" AWS Marketplace listing (product ID `prod-lop2m2yjjcs76`, contract pricing model) has failed "Update product visibility" twice with `AUDIT_ERROR`: AWS requires a successful `GetEntitlements` call (verified via CloudTrail) before visibility can go public, and no code anywhere in this account ever called it.
+- Fixed 2026-07-11: `core/api/aws_marketplace_bp.py`, registered at `/api/aws-marketplace` — real `boto3` integration (`meteringmarketplace` client for `ResolveCustomer`/`BatchMeterUsage`, `marketplace-entitlement` client for `GetEntitlements`). A background self-check fires once at every app boot (`run_entitlements_self_check()` in `core/app.py`) and makes one real `GetEntitlements` call the moment credentials are configured — that's what produces the CloudTrail record the audit checks for. A prior agent (Google Antigravity) apparently attempted this and failed; nothing from that attempt was ever pushed to GitHub, so this was built from scratch.
+- **Still blocked on the owner providing real AWS resources** — until these are set on the `squeezeos-api` Render service, the self-check no-ops (logs why) and the audit keeps failing:
+  - `AWS_MARKETPLACE_PRODUCT_CODE` — from the Product summary tab (same page as `prod-lop2m2yjjcs76`)
+  - `AWS_MARKETPLACE_ACCESS_KEY_ID` / `AWS_MARKETPLACE_SECRET_ACCESS_KEY` — a **dedicated** IAM user (do not reuse other AWS creds) with only `aws-marketplace:GetEntitlements`, `aws-marketplace:ResolveCustomer`, `aws-marketplace:BatchMeterUsage` (see `.env.example` for the exact IAM policy JSON)
+  - `AWS_MARKETPLACE_REGION` — optional, defaults to `us-east-1` (Marketplace Metering/Entitlement APIs only exist there)
+- Also required in the AWS Marketplace Management Portal (not an env var): under **Fulfillment options**, set the Fulfillment URL to `https://squeezeos-api.onrender.com/api/aws-marketplace/resolve` so AWS redirects subscribing customers there for `ResolveCustomer` + `GetEntitlements`.
+- Once those three env vars are set and the service redeploys, check `GET /api/aws-marketplace/status` — `last_self_check.ok: true` confirms the real call succeeded and you can resubmit the "Update product visibility" request.
+- In-memory resolved-customer store (`_customers` in the blueprint) resets on restart — same MVP pattern as `_futures`/`_contracts`/`_listings`. Do not add persistence without discussion.
+
 ## SML-Vault-Executor — What's Needed When Vault Build Starts
 
 Missing env vars (not yet configured — vault not funded):
