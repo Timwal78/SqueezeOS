@@ -26,6 +26,12 @@ Real AWS calls only happen when AWS_MARKETPLACE_PRODUCT_CODE and IAM
 credentials are configured (see .env.example). Until then every route
 returns 503 "not_configured" — never fake entitlement data.
 
+Credentials accept either naming convention set on Render:
+AWS_MARKETPLACE_ACCESS_KEY_ID / AWS_MARKETPLACE_SECRET_ACCESS_KEY /
+AWS_MARKETPLACE_REGION (preferred, dedicated-credential naming), or the
+plain AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_DEFAULT_REGION (the
+names boto3 itself recognizes by default) — whichever is actually set.
+
 AWS Marketplace Metering/Entitlement APIs are us-east-1 only, regardless of
 where the SaaS product itself is hosted.
 """
@@ -41,7 +47,6 @@ logger = logging.getLogger("AWSMarketplaceBP")
 
 aws_marketplace_bp = Blueprint("aws_marketplace", __name__)
 
-_REGION = os.environ.get("AWS_MARKETPLACE_REGION", "us-east-1")
 _PRODUCT_CODE = os.environ.get("AWS_MARKETPLACE_PRODUCT_CODE", "").strip()
 
 # In-memory MVP store — resolved customers + their entitlements. Resets on
@@ -54,12 +59,24 @@ _ENTITLEMENT_CACHE_TTL = 300  # seconds
 _last_self_check: dict = {"ran": False, "ok": None, "ts": None, "error": None}
 
 
-def _configured() -> bool:
-    return bool(
-        _PRODUCT_CODE
-        and os.environ.get("AWS_MARKETPLACE_ACCESS_KEY_ID")
-        and os.environ.get("AWS_MARKETPLACE_SECRET_ACCESS_KEY")
+def _access_key_id() -> str:
+    return os.environ.get("AWS_MARKETPLACE_ACCESS_KEY_ID") or os.environ.get("AWS_ACCESS_KEY_ID", "")
+
+
+def _secret_access_key() -> str:
+    return os.environ.get("AWS_MARKETPLACE_SECRET_ACCESS_KEY") or os.environ.get("AWS_SECRET_ACCESS_KEY", "")
+
+
+def _region() -> str:
+    return (
+        os.environ.get("AWS_MARKETPLACE_REGION")
+        or os.environ.get("AWS_DEFAULT_REGION")
+        or "us-east-1"
     )
+
+
+def _configured() -> bool:
+    return bool(_PRODUCT_CODE and _access_key_id() and _secret_access_key())
 
 
 def _not_configured_response():
@@ -67,21 +84,22 @@ def _not_configured_response():
         "error": "not_configured",
         "message": (
             "AWS Marketplace integration is not configured. Set "
-            "AWS_MARKETPLACE_PRODUCT_CODE, AWS_MARKETPLACE_ACCESS_KEY_ID, "
-            "AWS_MARKETPLACE_SECRET_ACCESS_KEY (see .env.example) on the "
-            "squeezeos-api Render service, then redeploy."
+            "AWS_MARKETPLACE_PRODUCT_CODE and either "
+            "AWS_MARKETPLACE_ACCESS_KEY_ID/AWS_MARKETPLACE_SECRET_ACCESS_KEY "
+            "or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY (see .env.example) "
+            "on the squeezeos-api Render service, then redeploy."
         ),
     }), 503
 
 
 def _clients():
-    """Lazily build boto3 clients scoped to a dedicated IAM user.
+    """Lazily build boto3 clients scoped to the configured IAM credentials.
     Returns (metering_client, entitlement_client)."""
     import boto3
     session = boto3.session.Session(
-        aws_access_key_id=os.environ["AWS_MARKETPLACE_ACCESS_KEY_ID"],
-        aws_secret_access_key=os.environ["AWS_MARKETPLACE_SECRET_ACCESS_KEY"],
-        region_name=_REGION,
+        aws_access_key_id=_access_key_id(),
+        aws_secret_access_key=_secret_access_key(),
+        region_name=_region(),
     )
     return (
         session.client("meteringmarketplace"),
@@ -142,7 +160,7 @@ def status():
     return jsonify(clean_data({
         "configured": _configured(),
         "product_code": _PRODUCT_CODE or None,
-        "region": _REGION,
+        "region": _region(),
         "resolved_customers": len(_customers),
         "last_self_check": _last_self_check,
     }))
