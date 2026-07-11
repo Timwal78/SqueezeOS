@@ -1,0 +1,38 @@
+name: Backtest 2-EMA Stack Crossover (55/365 vs 30/741) vs real data
+
+on:
+  workflow_dispatch:
+    inputs:
+      symbols:
+        description: "Comma-separated equity symbols to test"
+        required: true
+        default: "SPY,QQQ,AAPL,MSFT,NVDA,TSLA,AMD,META,AMC,GME"
+      days:
+        description: "Lookback window in calendar days"
+        required: true
+        default: "1095"
+
+jobs:
+  backtest:
+    name: Run real backtest against Tradier historical data
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Run backtest
+        env:
+          TRADIER_API_KEY: ${{ secrets.TRADIER_API_KEY }}
+          TRADIER_ENV: production
+        run: |
+          python tools/backtest_stack_crossover.py \
+            --symbols "${{ github.event.inputs.symbols }}" \
+            --days "${{ github.event.inputs.days }}" \
+            --out stack_crossover_results.json
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: stack-crossover-backtest-results
+          path: stack_crossover_results.json
