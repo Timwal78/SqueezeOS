@@ -68,3 +68,12 @@ jobs:
           retry "/api/demo/council"  check_demo   || exit 1
 
           echo "All post-deploy health checks passed."
+
+      - name: AWS Marketplace entitlements self-check (diagnostic only, never fails the job)
+        continue-on-error: true
+        run: |
+          echo "── GET /api/aws-marketplace/status ──"
+          curl -s --max-time 30 "$BASE_URL/api/aws-marketplace/status" | tee /tmp/aws-mp-status.json
+          echo
+          echo "── last_self_check.ok ──"
+          grep -o '"ok"[[:space:]]*:[[:space:]]*[a-z]*' /tmp/aws-mp-status.json || echo "(field not found — see raw JSON above)"
