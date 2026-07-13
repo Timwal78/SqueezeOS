@@ -11,6 +11,9 @@ Specialists supervised (each does one job only):
   - Directory Ranger  — checks 24 real directories, generates listing packages
   - Community Scout   — finds real Reddit/HN developer conversations
   - Federal Scout      — finds real federal contract opportunities
+  - Grant Scout        — finds/scores/drafts grant proposals, queues them for
+                          Timothy's manual approval (zero custody, never
+                          submits or signs anything on its own)
 
 Schedule: Daily (see .github/workflows/marketing-daily.yml)
 
@@ -25,7 +28,7 @@ import os, sys, json, datetime, glob, re
 import requests
 import anthropic
 
-from . import directory_ranger, community_scout, federal_scout
+from . import directory_ranger, community_scout, federal_scout, grant_scout
 from .activity_log import post_activity, post_directory_snapshot, post_federal_snapshot
 
 ANTH_KEY      = os.environ["ANTHROPIC_API_KEY"]
@@ -145,6 +148,15 @@ def run_all_agents() -> dict:
             results["federal_scout"].get("legislative_intel", []),
         )
 
+    results["grant_scout"] = _dispatch(
+        "grant_scout", "Grant Scout",
+        "discover and qualify grant opportunities, queue drafted proposals for manual approval",
+        grant_scout.run,
+        lambda r: f"{len(r.get('queued', []))} opportunities queued for review "
+                  f"(pending Timothy's approval — none submitted), "
+                  f"{len(r.get('archived_low_score', []))} auto-archived below threshold",
+    )
+
     return results
 
 
@@ -157,6 +169,7 @@ def synthesize_report(agent_results: dict, api_status: dict) -> dict:
     hist_scout     = load_recent_output("scout")
     hist_federal   = load_recent_output("federal")
     hist_content   = load_recent_output("content")
+    hist_grants    = load_recent_output("grants")
 
     context = {
         "date":           today,
@@ -167,6 +180,7 @@ def synthesize_report(agent_results: dict, api_status: dict) -> dict:
             "scout_runs":    len(hist_scout),
             "federal_runs":  len(hist_federal),
             "content_pages": len(hist_content),
+            "grant_runs":    len(hist_grants),
         },
     }
 
@@ -187,7 +201,8 @@ Produce a JSON campaign report:
     "high_priority_opportunities": <count>,
     "federal_opportunities": <count>,
     "content_pages_generated": <count>,
-    "api_engines_live": <from status>
+    "api_engines_live": <from status>,
+    "grants_pending_review": <count from grant_scout.queued>
   }},
   "wins_this_week": ["<concrete achievement>", ...],
   "top_actions_next_week": [
@@ -196,6 +211,7 @@ Produce a JSON campaign report:
   "listings_to_submit": ["<platform>", ...],
   "top_community_threads": ["<url>", ...],
   "federal_opportunities": ["<title + agency>", ...],
+  "grants_awaiting_approval": ["<title + funder>", ...],
   "health": "GREEN|YELLOW|RED"
 }}"""
 
@@ -232,6 +248,7 @@ def format_slack_report(report: dict) -> str:
         f"  📂 Directories listed: {kpis.get('directories_listed_in','?')} / {int(kpis.get('directories_listed_in',0)) + int(kpis.get('directories_not_listed',0)) or '?'} checked\n"
         f"  🎯 Community opps: {kpis.get('community_opportunities','?')} ({kpis.get('high_priority_opportunities','?')} HIGH)\n"
         f"  🏛️ Federal opps: {kpis.get('federal_opportunities','?')}\n"
+        f"  💰 Grants awaiting your approval: {kpis.get('grants_pending_review','?')}\n"
         f"  📄 Content pages: {kpis.get('content_pages_generated','?')}\n"
         f"  ⚡ API engines live: {kpis.get('api_engines_live','?')}\n\n"
         f"*This week's wins:*\n{wins or '  None recorded'}\n\n"
