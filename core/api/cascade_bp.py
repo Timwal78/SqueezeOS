@@ -232,6 +232,17 @@ def cascade_stripe_webhook():
 
     if event["type"] == "checkout.session.completed":
         session  = event["data"]["object"]
+        # This webhook receives every checkout.session.completed event on the
+        # whole Stripe account, not just CASCADE's -- e.g. an AEO Suite or
+        # Trade Desk signup fires the same event type. Only issue a CASCADE
+        # key for sessions this blueprint actually created (cascade_stripe_checkout
+        # always stamps metadata.product); anything else is ignored so it
+        # doesn't hand out free CASCADE access to a customer of another product.
+        product = (session.get("metadata") or {}).get("product")
+        if product != "CASCADE_ACCUMULATOR":
+            logger.info("CASCADE webhook: ignoring checkout session %s -- not a CASCADE purchase (product=%r)", session.get("id"), product)
+            return jsonify({"received": True})
+
         customer = session.get("customer_email") or session.get("customer", "unknown")
         sub_id   = session.get("subscription", "")
         api_key  = f"sml_live_cascade_{uuid.uuid4().hex[:24]}"
