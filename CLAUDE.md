@@ -62,6 +62,23 @@
 - Once those three env vars are set and the service redeploys, check `GET /api/aws-marketplace/status` — `last_self_check.ok: true` confirms the real call succeeded and you can resubmit the "Update product visibility" request.
 - In-memory resolved-customer store (`_customers` in the blueprint) resets on restart — same MVP pattern as `_futures`/`_contracts`/`_listings`. Do not add persistence without discussion.
 
+## Autonomous Grant Agent — Discovery → Qualify → Draft → Human Approval
+
+Built 2026-07-13. **Zero custody, zero autonomous submission** — this was an explicit operator decision (Timothy chose "full human approval, zero custody" over letting the agent auto-submit low-tier applications). No code anywhere in this feature signs a transaction, holds a wallet seed, or files an application on Timothy's behalf.
+
+- `agent/dept/grant_scout.py` — new specialist under the CEO (`campaign_director.py`), runs every 4h with the rest of the marketing department (`.github/workflows/marketing-daily.yml`). Reuses `federal_scout.py`'s SBIR/NIH x402 data and `SML_CAPABILITIES` profile. Scores each opportunity 0-100 against SML's stack; only opportunities scoring ≥85 get a drafted proposal (capability statement + milestones + USD/RLUSD budget outline) via Claude, which is then POSTed to the review queue. Its only side effect is that one HTTP POST — nothing is submitted to a funder.
+- `core/api/grants_bp.py`, registered at `/api/grants` — the review queue itself. `GET /api/grants` and `/api/grants/queue` are public/read-only. `POST /submit`, `/<id>/approve`, `/<id>/reject` require `X-Grants-Secret` matching `GRANTS_QUEUE_SECRET`. Approving an item only flips its status — it does **not** submit anything anywhere. In-memory (`_queue`), resets on restart — same MVP pattern as `_futures`/`_contracts`/`_listings`/`_jobs`.
+- Auto-archive: anything scoring below `GRANTS_QUALIFY_THRESHOLD` (default 85) is queued as `archived` instead of `pending_review`, so low-confidence matches never cost Timothy a review cycle.
+- Required env vars: `GRANTS_QUEUE_SECRET` (shared between the Render service and the `marketing-daily.yml` GitHub Actions secret — same pattern as `MARKETING_ACTIVITY_SECRET`). Optional: `GRANTS_QUALIFY_THRESHOLD`.
+- **Not wired yet — do not assume these exist:** Gitcoin Grants Stack / Allo Protocol, XRPL Grants Program, Virtuals Protocol launchpad grants, AWS Activate / Google Cloud for Startups credit pools. `grant_scout.py`'s docstring explicitly says not to fabricate a source for these without first confirming a real, current public API. Wiring any of them is future work, not done.
+- **On-chain milestone escrow (XRPL `EscrowCreate`) was explicitly NOT built.** It was part of the original proposal but the operator decided against any agent-held signing key. If this is revisited later, it would need its own explicit decision (and likely its own dedicated wallet + spending-limit guardrails) — do not casually add XRPL signing to this feature.
+- To review/approve from the CLI:
+  ```bash
+  curl https://squeezeos-api.onrender.com/api/grants/queue           # see what's pending
+  curl -X POST https://squeezeos-api.onrender.com/api/grants/<id>/approve \
+    -H "X-Grants-Secret: $GRANTS_QUEUE_SECRET"
+  ```
+
 ## SML-Vault-Executor — What's Needed When Vault Build Starts
 
 Missing env vars (not yet configured — vault not funded):
@@ -253,6 +270,7 @@ SqueezeOS/
 │       ├── futures_bp.py    # /api/futures — signal prediction market
 │       ├── settlement_bp.py # /api/settlement — conditional agent escrow contracts
 │       ├── hiring_bp.py     # /api/hiring — agent job board
+│       ├── grants_bp.py     # /api/grants — Autonomous Grant Agent review queue (zero custody)
 │       ├── relay_bp.py      # /api/relay — relay node discounts
 │       ├── webhook_bp.py    # /api/webhooks — webhook subscriptions + delivery
 │       ├── battle.py        # /api/battle — Battle Computer consensus
@@ -425,6 +443,7 @@ Mounted at `/mcp`. Implements JSON-RPC 2.0. **52 tools** total.
 | `GET /api/futures` | Browse signal futures |
 | `GET /api/futures/leaderboard` | Top predictors |
 | `GET /api/settlement` | Browse conditional contracts |
+| `GET /api/grants` or `/api/grants/queue` | Browse Autonomous Grant Agent's discovered/queued opportunities |
 
 ### Premium Endpoints (require `X-Payment-Token` header)
 | Route | Cost | Description |
@@ -587,10 +606,11 @@ Real, Claude-powered agents. No agent in this department fabricates a result —
 
 | Role | Module | Real job |
 |------|--------|----------|
-| **CEO** | `campaign_director.py` | Dispatches work to the 3 specialists below, verifies each one actually produced usable output (not just "didn't crash"), reports every real result to the live activity feed, then synthesizes an executive report and posts it to Slack |
+| **CEO** | `campaign_director.py` | Dispatches work to the 4 specialists below, verifies each one actually produced usable output (not just "didn't crash"), reports every real result to the live activity feed, then synthesizes an executive report and posts it to Slack |
 | Directory Ranger | `directory_ranger.py` | Live HTTP checks against 25 real AI/MCP/dev directories; generates ready-to-submit listing copy for unlisted ones. Does **not** auto-submit — a human still has to paste the generated package in |
 | Community Scout | `community_scout.py` | Reads real Reddit (12 subreddits) + HackerNews for developer conversations relevant to SML's products |
 | Federal Scout | `federal_scout.py` | Uses SML's own x402 federal data endpoints to find real government AI/tech contract opportunities (SAM UEI `G24VZA4RLMK3`) |
+| Grant Scout | `grant_scout.py` | Discovers/scores/drafts grant proposals (SBIR/NIH today), queues them at `/api/grants` for manual approval — zero custody, never submits or signs anything. See "Autonomous Grant Agent" section above |
 
 **Content Factory** (`SML_Portfolio/agent/content_factory.py`) is a separate daily agent (`content-factory.yml`, 06:00 UTC) that generates and commits real SEO pages — it isn't orchestrated by the CEO since it lives in a different repo, but it reports to the same activity feed.
 
@@ -672,7 +692,7 @@ Real, Claude-powered agents. No agent in this department fabricates a result —
 - **GraphiFY graceful degradation**: `get_graph()` returns `None` when Neo4j env vars are missing or connection fails. Every caller checks `if not graph: return 503`. Never assume the graph is available.
 - **OpenMythos (RDT) degraded mode**: `RecurrentDepthTransformer` accepts `graph=None` and falls back to price/vpin-only scoring — it will not crash without Neo4j.
 - **Superpower (Beastmode) protocols** run async in daemon threads — `POST /api/scriptmaster/run_protocol` returns immediately. Results appear in the mission log ring buffer (50 entries), not the response body.
-- **In-memory stores reset on restart**: `_futures`, `_contracts`, `_listings`, `_scan_cache`, `_preview_cache`, `_demo_cache`, `_MISSION_LOG`, `signal_history` — all lost on redeploy. This is intentional for MVP; do not add disk persistence without discussion.
+- **In-memory stores reset on restart**: `_futures`, `_contracts`, `_listings`, `_jobs`, `_queue` (grants), `_scan_cache`, `_preview_cache`, `_demo_cache`, `_MISSION_LOG`, `signal_history` — all lost on redeploy. This is intentional for MVP; do not add disk persistence without discussion.
 - **MCP tool count**: the `_TOOLS` list in `mcp_bp.py` is the source of truth (currently 52 tools). The `_SERVER_INFO` version string is `"5.0.0"`. When adding tools, also sync: (1) the tools array in `.well-known/mcp.json`, (2) `tool_count` in `.well-known/catalog.json`, (3) the `"X MCP tools"` text in `.well-known/server.json` and `llms.txt`. Names must match exactly — historical drift between `signal_preview` (source) and `get_signal_preview` (manifest) caused every agent free-trial to fail with "method not found".
 - **Blueprint registration order matters**: honeypot first, then analytics middleware, then all domain blueprints. Changing this order can cause trap routes to be shadowed or analytics to miss requests.
 

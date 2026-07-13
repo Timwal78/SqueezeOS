@@ -1,10 +1,13 @@
 name: SML Marketing Department — Campaign Loop
 
 # Runs the real CEO (campaign_director.run_all_agents) every 4 hours. The CEO
-# dispatches work to Directory Ranger, Community Scout, and Federal Scout
-# in-process, verifies each one actually produced real output, reports every
-# real result (success or failure) to the public activity feed as it happens,
-# then synthesizes an executive report and delivers it to Slack.
+# dispatches work to Directory Ranger, Community Scout, Federal Scout, and
+# Grant Scout in-process, verifies each one actually produced real output,
+# reports every real result (success or failure) to the public activity feed
+# as it happens, then synthesizes an executive report and delivers it to Slack.
+#
+# Grant Scout queues drafted proposals to /api/grants for Timothy's manual
+# approval — it never submits or signs anything on its own.
 #
 # Previously this ran weekly across 4 separate parallel jobs with a duplicate
 # inline synthesis script that didn't call the real orchestrator code at all.
@@ -50,6 +53,7 @@ jobs:
           SEO_OUTPUT_DIR:            agent/outputs
           DEPT_MODEL:                claude-opus-4-8
           MARKETING_ACTIVITY_SECRET: ${{ secrets.MARKETING_ACTIVITY_SECRET }}
+          GRANTS_QUEUE_SECRET:       ${{ secrets.GRANTS_QUEUE_SECRET }}
         run: python -c "from agent.dept import campaign_director; campaign_director.run()"
 
       - uses: actions/upload-artifact@v4

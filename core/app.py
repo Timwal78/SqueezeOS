@@ -71,6 +71,7 @@ from core.api.truth_bp import truth_bp
 from core.api.memory_bp import memory_bp
 from core.api.fred_bp import fred_bp
 from core.api.aws_marketplace_bp import aws_marketplace_bp, run_entitlements_self_check
+from core.api.grants_bp import grants_bp
 import core.signal_history as signal_history
 from core.legacy import start_whale_stalker, init_services, get_service, clean_data
 from core.market_graph import get_graph
@@ -197,6 +198,7 @@ def create_app():
     app.register_blueprint(memory_bp,          url_prefix='/api/memory')
     app.register_blueprint(fred_bp,            url_prefix='/api/fred')
     app.register_blueprint(aws_marketplace_bp, url_prefix='/api/aws-marketplace')
+    app.register_blueprint(grants_bp,          url_prefix='/api/grants')
 
     # Stellar Forge growth engine — feature-flagged, dormant unless enabled.
     # Registers the affiliate/loyalty/payout surface only when explicitly turned
