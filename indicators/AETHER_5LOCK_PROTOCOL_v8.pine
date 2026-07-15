@@ -1,0 +1,171 @@
+//@version=6
+// AETHER 5-LOCK PROTOCOL v8 — hardened for real trading
+//
+// v8 changes vs v7 (v7 was visual-only: no persistence filter, no repaint
+// guard, no volume confirmation, no risk management, no webhook — this pass
+// brings it in line with the other live-tradeable scripts in this account):
+//   - Lock-count persistence: numL must hold at/above each threshold for
+//     `confirmBars` consecutive closes before firing, not just the current
+//     bar — the same whipsaw fix already applied server-side
+//     (core/harmonic_matrix_engine.py, core/grid369_engine.py) and to
+//     SML_Sniper_DayTrader_v1_3.pine / SML_Triple_Lock_Engine_Beastmode_Plus_v2.pine.
+//   - Bar-close-only trigger (barstate.isconfirmed) so signals no longer
+//     flicker/repaint intrabar.
+//   - Volume confirmation gate — a lock count forming on thin volume is a
+//     weaker signal than one backed by real participation.
+//   - Real ATR-based stop-loss/take-profit lines (this script had none).
+//   - SqueezeOS webhook payload (passphrase/system/ticker/action/price —
+//     same contract as SML_Sniper_DayTrader), gated by a minimum-tier input
+//     so you choose how much confirmation is required before it reaches
+//     live execution; the 2-lock/3-lock/godmode markers still all show on
+//     the chart regardless of that floor.
+//   - Exits (numL dropping below 2) stay immediate/undelayed — an exit
+//     should never wait for confirmation the way an entry does.
+//   - No short/naked-put wiring added: a SELL sent to this account's
+//     executors always closes an existing long, never opens a new short
+//     (matches the "no shorts" policy already enforced in execution_engine.py
+//     and tools/robinhood_executor_sml.py) — so this stays a long-only tool,
+//     same as v7, just hardened.
+indicator(title="AETHER 5-LOCK PROTOCOL v8", shorttitle="AETHER5L-v8", overlay=true, max_lines_count=500, max_labels_count=500)
+
+var string G_VIS = "▶  DISPLAY"
+showSignals = input.bool(true, "Show Buy/Sell Signals", group=G_VIS)
+showTable = input.bool(true, "Show Status Table", group=G_VIS)
+bgTrans = input.int(0, "Background Transparency", minval=0, maxval=100, group=G_VIS)
+
+var string G_CORE = "▶  CORE EMAs"
+fastP = input.int(5, "Fast EMA", group=G_CORE)
+shortP = input.int(30, "Short Slow EMA", group=G_CORE)
+medP = input.int(80, "Medium Slow EMA", group=G_CORE)
+longP = input.int(200, "Long Slow EMA", group=G_CORE)
+useSlope = input.bool(true, "Require Rising EMA (Godmode)", group=G_CORE)
+slopeLen = input.int(3, "Slope Bars", group=G_CORE)
+minSep = input.float(1.0, "Min Separation % (Godmode)", group=G_CORE)
+
+var string G_VOL = "▶  VOLUME FILTER"
+useVolFilter = input.bool(true, "Require Volume Confirmation", group=G_VOL, tooltip="A lock count forming on below-average volume is weaker evidence than one backed by real participation.")
+volMult = input.float(1.3, "Volume Surge Multiplier", minval=1.0, step=0.1, group=G_VOL)
+volLen  = input.int(20, "Volume MA Length", minval=5, group=G_VOL)
+
+var string G_CONFIRM = "▶  SIGNAL QUALITY (v8, research-backed)"
+confirmBars = input.int(2, "Lock Confirmation Bars", minval=1, maxval=10, group=G_CONFIRM, tooltip="numL (and Godmode) must hold at/above its threshold for this many consecutive closes before firing, not just the current bar. 1 restores the old instant-fire behavior.")
+
+var string G_RISK = "▶  ATR RISK MANAGEMENT"
+showAtrTargets = input.bool(true, "Draw ATR Stop/Targets", group=G_RISK)
+atrLen    = input.int(14, "ATR Length", minval=1, group=G_RISK)
+atrMultSL = input.float(1.5, "SL (×ATR)", minval=0.25, step=0.25, group=G_RISK)
+atrR1     = input.float(1.0, "TP1 (R)", minval=0.5, step=0.5, group=G_RISK)
+atrR2     = input.float(2.0, "TP2 (R)", minval=0.5, step=0.5, group=G_RISK)
+atrR3     = input.float(3.0, "TP3 (R)", minval=0.5, step=0.5, group=G_RISK)
+atrExt    = input.int(20, "Line Length (bars)", minval=5, maxval=200, group=G_RISK)
+
+var string G_WH = "▶  SQUEEZEOS WEBHOOK"
+minTierOpt = input.string("3", "Minimum Tier to Send Live Signal", options=["2", "3", "GODMODE"], group=G_WH, tooltip="2 = any 2-of-3 lock, 3 = full 3-lock, GODMODE = full lock + rising slope + min separation. Weaker tiers still plot on the chart but won't reach the live webhook below this floor.")
+wh_pass   = input.string("SQUEEZE_AUTH_992", "Webhook Passphrase", group=G_WH)
+wh_system = input.string("AETHER_5LOCK", "System Name", group=G_WH)
+
+ema5 = ta.ema(close, fastP)
+ema30 = ta.ema(close, shortP)
+ema80 = ta.ema(close, medP)
+ema200 = ta.ema(close, longP)
+
+lockS = ema5 > ema30 ? 1 : 0
+lockM = ema5 > ema80 ? 1 : 0
+lockL = ema5 > ema200 ? 1 : 0
+numL = lockS + lockM + lockL
+
+slopeOK = useSlope ? ta.rising(ema5, slopeLen) : true
+sepOK = (ema5 - ema200) / ema200 * 100 > minSep
+godRaw = numL == 3 and slopeOK and sepOK
+
+// ─── Volume gate ────────────────────────────────────────────────────────────
+volMA   = ta.sma(volume, volLen)
+volPass = not useVolFilter or volume > volMA * volMult
+
+// ─── Persistence: numL/godRaw must hold for confirmBars consecutive bars ───
+bool numL2Raw = numL >= 2
+bool numL3Raw = numL == 3
+bool numL2Persist = numL2Raw
+bool numL3Persist = numL3Raw
+bool godPersist    = godRaw
+for i = 1 to confirmBars - 1
+    numL2Persist := numL2Persist and numL2Raw[i]
+    numL3Persist := numL3Persist and numL3Raw[i]
+    godPersist    := godPersist and godRaw[i]
+
+// Fire once — only on the bar the persistence window just completed (the bar
+// right before the window started was NOT yet qualifying), not every bar
+// while it continues to hold.
+enter2 = numL2Persist and not numL2Raw[confirmBars] and volPass and barstate.isconfirmed
+enter3 = numL3Persist and not numL3Raw[confirmBars] and volPass and barstate.isconfirmed
+enterG = godPersist    and not godRaw[confirmBars]    and volPass and barstate.isconfirmed
+
+// Exits stay immediate/undelayed — an exit should never wait for
+// confirmation the way an entry does.
+exitL = numL[1] >= 2 and numL < 2 and barstate.isconfirmed
+
+plot(ema5, title="EMA 5", color=color.new(#00FFFF, 0), linewidth=2)
+plot(ema30, title="EMA 30", color=color.new(#FF9900, 0), linewidth=2)
+plot(ema80, title="EMA 80", color=color.new(#FFFF00, 0), linewidth=2)
+plot(ema200, title="EMA 200", color=color.new(#FF0000, 0), linewidth=2)
+plotshape(showSignals and enter2, title="2-Lock Buy", location=location.belowbar, color=color.new(#00FF00, 0), style=shape.triangleup, size=size.tiny, text="2")
+plotshape(showSignals and enter3, title="3-Lock Buy", location=location.belowbar, color=color.new(#00FF00, 0), style=shape.triangleup, size=size.tiny, text="3")
+plotshape(showSignals and enterG, title="Godmode", location=location.belowbar, color=color.new(#00FFFF, 0), style=shape.triangleup, size=size.tiny, text="GM")
+plotshape(showSignals and exitL, title="Exit", location=location.abovebar, color=color.new(#FF0000, 0), style=shape.triangledown, size=size.tiny, text="EXIT")
+
+// ─── ATR risk management ────────────────────────────────────────────────────
+atrVal = ta.atr(atrLen)
+if showAtrTargets and (enter2 or enter3 or enterG)
+    int x2 = bar_index + atrExt
+    line.new(bar_index, close - atrVal * atrMultSL, x2, close - atrVal * atrMultSL, color=color.new(color.red, 20),   width=1, style=line.style_solid)
+    line.new(bar_index, close + atrVal * atrR1,      x2, close + atrVal * atrR1,      color=color.new(color.lime, 60), width=1, style=line.style_solid)
+    line.new(bar_index, close + atrVal * atrR2,      x2, close + atrVal * atrR2,      color=color.new(color.lime, 30), width=1, style=line.style_solid)
+    line.new(bar_index, close + atrVal * atrR3,      x2, close + atrVal * atrR3,      color=color.lime,                width=2, style=line.style_solid)
+
+var table tbl = table.new(position.top_right, 2, 10, bgcolor=color.new(#000000, 0), border_width=1, border_color=color.new(#333333, 0))
+if showTable and barstate.islast
+    table.cell(tbl, 0, 0, "AETHER 5-LOCK v8", text_color=color.new(#FFFFFF, 0))
+    table.cell(tbl, 1, 0, str.tostring(numL) + "/3", text_color=color.new(#FFFFFF, 0))
+    table.cell(tbl, 0, 1, "Short (5/" + str.tostring(shortP) + ")", text_color=color.new(#FFFFFF, 0))
+    table.cell(tbl, 1, 1, lockS == 1 ? "ON" : "OFF", text_color=lockS == 1 ? color.new(#00FF00, 0) : color.new(#FF0000, 0))
+    table.cell(tbl, 0, 2, "Medium (5/" + str.tostring(medP) + ")", text_color=color.new(#FFFFFF, 0))
+    table.cell(tbl, 1, 2, lockM == 1 ? "ON" : "OFF", text_color=lockM == 1 ? color.new(#00FF00, 0) : color.new(#FF0000, 0))
+    table.cell(tbl, 0, 3, "Long (5/" + str.tostring(longP) + ")", text_color=color.new(#FFFFFF, 0))
+    table.cell(tbl, 1, 3, lockL == 1 ? "ON" : "OFF", text_color=lockL == 1 ? color.new(#00FF00, 0) : color.new(#FF0000, 0))
+    table.cell(tbl, 0, 4, "GODMODE", text_color=color.new(#FFFFFF, 0))
+    table.cell(tbl, 1, 4, godRaw ? "ACTIVE" : "OFF", text_color=godRaw ? color.new(#00FFFF, 0) : color.new(#FF0000, 0))
+    table.cell(tbl, 0, 5, "VOLUME", text_color=color.new(#FFFFFF, 0))
+    table.cell(tbl, 1, 5, volPass ? "OK" : "TOO THIN (gated)", text_color=volPass ? color.new(#00FF00, 0) : color.new(#FF0000, 0))
+    table.cell(tbl, 0, 6, "ATR-" + str.tostring(atrLen), text_color=color.new(#FFFFFF, 0))
+    table.cell(tbl, 1, 6, str.tostring(atrVal, "#.####"), text_color=color.new(#BF5FFF, 0))
+    table.cell(tbl, 0, 7, "Close", text_color=color.new(#FFFFFF, 0))
+    table.cell(tbl, 1, 7, str.tostring(close, "#.##"), text_color=color.new(#FFFFFF, 0))
+    st = godRaw ? "GODMODE" : numL == 3 ? "HIGH" : numL >= 2 ? "BULLISH" : "NEUTRAL"
+    table.cell(tbl, 0, 8, "STATUS", text_color=color.new(#FFFFFF, 0))
+    table.cell(tbl, 1, 8, st, text_color=godRaw ? color.new(#00FFFF, 0) : numL >= 2 ? color.new(#00FF00, 0) : color.new(#666666, 0))
+    table.cell(tbl, 0, 9, "Live Floor", text_color=color.new(#FFFFFF, 0))
+    table.cell(tbl, 1, 9, minTierOpt, text_color=color.new(#FFD700, 0))
+
+alertcondition(enter2, title="AETHER 2-Lock Buy", message="AETHER 2-LOCK BUY")
+alertcondition(enter3, title="AETHER 3-Lock Buy", message="AETHER 3-LOCK BUY")
+alertcondition(enterG, title="AETHER Godmode Buy", message="AETHER GODMODE BUY")
+alertcondition(exitL, title="AETHER Exit", message="AETHER LOCK EXIT")
+
+// ─── SqueezeOS webhook — passphrase/system/ticker/action/price, same
+// contract as SML_Sniper_DayTrader (core/api/tradingview_webhook_bp.py's
+// _LONG_ACTIONS/_SHORT_ACTIONS reads these specific keys and ignores any
+// extra field, so the added "tier" field here is safe). Gated by
+// minTierOpt so weaker (2-lock) signals can stay chart-only if you want.
+tierRank    = enterG ? 3 : enter3 ? 2 : enter2 ? 1 : 0
+minTierRank = minTierOpt == "GODMODE" ? 3 : minTierOpt == "3" ? 2 : 1
+tierLabel   = enterG ? "GODMODE" : enter3 ? "3" : enter2 ? "2" : ""
+
+bool fireLiveBuy = (enter2 or enter3 or enterG) and tierRank >= minTierRank
+
+if fireLiveBuy
+    string _pxBuy = str.tostring(close, "#.00")
+    alert("{\"passphrase\":\"" + wh_pass + "\",\"system\":\"" + wh_system + "\",\"ticker\":\"" + syminfo.ticker + "\",\"action\":\"BUY\",\"price\":" + _pxBuy + ",\"tier\":\"" + tierLabel + "\"}", alert.freq_once_per_bar_close)
+
+if exitL
+    string _pxExit = str.tostring(close, "#.00")
+    alert("{\"passphrase\":\"" + wh_pass + "\",\"system\":\"" + wh_system + "\",\"ticker\":\"" + syminfo.ticker + "\",\"action\":\"SELL\",\"price\":" + _pxExit + "}", alert.freq_once_per_bar_close)
