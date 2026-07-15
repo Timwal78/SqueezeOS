@@ -1,0 +1,598 @@
+//@version=6
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║   SCRIPTMASTER LABS — MICROSTRUCTURE LIQUIDITY DELTA SCANNER [v4.0]        ║
+// ║   © ScriptMaster Labs. All Rights Reserved. DO NOT DISTRIBUTE.             ║
+// ║   Patent Pending. Unauthorized use subject to civil & criminal penalties.   ║
+// ╠══════════════════════════════════════════════════════════════════════════════╣
+// ║   INSTITUTIONAL-GRADE MARKET DEPENDENCY INTELLIGENCE                       ║
+// ║                                                                             ║
+// ║   ARCHITECTURE (v4 additions marked ★):                                    ║
+// ║     • Multi-Factor Liquidity Friction Oscillator (RSI-Smoothed)            ║
+// ║     ★ Adaptive Percentile Zone Engine — self-calibrating buy/sell zones    ║
+// ║       instead of static 30/70, so thresholds stay meaningful across        ║
+// ║       symbols, timeframes and changing volatility regimes                  ║
+// ║     • Cross-Asset Benchmark Volume (SPY/QQQ/IWM/DIA + VIX Regime)         ║
+// ║     ★ True Intrabar Order Flow — reconstructs real buy/sell volume from    ║
+// ║       lower-timeframe bars instead of an OHLC wick/body approximation      ║
+// ║     • Spread Anomaly Detection (True Range / ATR Deviation)                ║
+// ║     • Volatility Regime Classification (Low / Normal / Elevated / Extreme) ║
+// ║     • Multi-Timeframe Confluence Engine                                    ║
+// ║     • Divergence Detection (Price vs Friction)                             ║
+// ║     ★ Trend-Alignment Structure Filter — gates High-Conviction signals so  ║
+// ║       friction can't fire "buy" while price is in structural free-fall     ║
+// ║     ★ Volatility-Adjusted Signal Strength — discounts confidence during    ║
+// ║       abnormal-volatility tails instead of treating all regimes equally    ║
+// ║     ★ Alert Deduplication — fires on state transitions, not every bar      ║
+// ║     • Signal Strength Scoring (0–10 Composite)                             ║
+// ║     ★ Smart Table v5 — Horizontal 11×8 Institutional Dashboard             ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+
+indicator("SML — Microstructure Liquidity Delta Scanner [v4 INSTITUTIONAL]", shorttitle="MLD-SCANv4", overlay=false, precision=4, max_bars_back=500)
+
+// ============================================================================
+//  SML BRAND PALETTE
+// ============================================================================
+color C_BG        = color.new(#0A0A0F, 5)
+color C_BG_DARK   = color.new(#000000, 100)
+color C_BULL      = color.new(#00FF7F, 0)
+color C_BEAR      = color.new(#ff1414, 0)
+color C_BULL_DIM  = color.new(#00FF7F, 65)
+color C_BEAR_DIM  = color.new(#FF1493, 65)
+color C_LIME      = color.new(#39FF14, 0)
+color C_GOLD      = color.new(#FFD700, 0)
+color C_GOLD_DIM  = color.new(#FFD700, 60)
+color C_ORANGE    = color.new(#FF6B00, 0)
+color C_CYAN      = color.new(#00E5FF, 0)
+color C_CYAN_DIM  = color.new(#00E5FF, 60)
+color C_WHITE     = color.new(#FFFFFF, 0)
+color C_WHITE_DIM = color.new(#ffffff, 0)
+color C_GRAY      = color.new(#ffffff, 0)
+color C_RED       = color.new(#FF0044, 0)
+color C_PANEL_BG  = color.new(#0D0D14, 0)
+color C_BORDER    = color.new(#FFD700, 50)
+color C_FRAME     = color.new(#FFD700, 30)
+
+// ============================================================================
+//  SECTION 1: INPUTS
+// ============================================================================
+var string G_CORE = "▶  CORE ENGINE"
+int    rsiLength     = input.int(14,   "RSI Filter Length",            minval=2, maxval=50,  group=G_CORE)
+float  spreadMult    = input.float(1.5, "Spread Anomaly Multiplier",  minval=0.5, maxval=5.0, step=0.1, group=G_CORE, tooltip="Bars where True Range exceeds this × ATR(20) are flagged as spread anomalies.")
+int    frictionLen   = input.int(8,    "Friction EMA Smoothing",      minval=2, maxval=30,  group=G_CORE)
+int    lookback      = input.int(20,   "Volume Lookback (SMA)",       minval=5, maxval=100, group=G_CORE)
+
+var string G_SIGNAL = "▶  SIGNAL ENGINE"
+float  buyThresh     = input.float(30,  "Buy Zone Threshold (manual/fallback)",  minval=5,  maxval=45, group=G_SIGNAL)
+float  sellThresh    = input.float(70,  "Sell Zone Threshold (manual/fallback)", minval=55, maxval=95, group=G_SIGNAL)
+int    confirmBars   = input.int(2,     "Confirmation Bars Required", minval=1,  maxval=5,  group=G_SIGNAL, tooltip="Number of consecutive bars friction must remain in the zone to confirm.")
+float  minStrength   = input.float(5.0, "Min Signal Strength to Fire",minval=1,  maxval=10, step=0.5, group=G_SIGNAL)
+
+var string G_ADAPT = "▶  ADAPTIVE ZONE ENGINE ★"
+bool   useAdaptiveZones = input.bool(true, "Use Adaptive Percentile Zones", group=G_ADAPT, tooltip="Buy/Sell thresholds are derived from the oscillator's own recent distribution (percentile rank) instead of fixed 30/70. This keeps the zones meaningful across different symbols, timeframes, and volatility regimes. Manual thresholds above act as safety bounds and as the fallback when this is off.")
+int    adaptiveLookback = input.int(100, "Adaptive Lookback (bars)", minval=20, maxval=500, group=G_ADAPT)
+float  adaptivePctLow   = input.float(20, "Adaptive Buy Percentile",  minval=5,  maxval=45, group=G_ADAPT)
+float  adaptivePctHigh  = input.float(80, "Adaptive Sell Percentile", minval=55, maxval=95, group=G_ADAPT)
+
+var string G_FLOW = "▶  ORDER FLOW ENGINE ★"
+bool   useLTFDelta   = input.bool(true, "Use True Intrabar Delta (Lower-TF)", group=G_FLOW, tooltip="Reconstructs real buy/sell volume from lower-timeframe intrabar candles instead of approximating delta from the current bar's OHLC wick/body shape. Materially more accurate, especially on higher timeframes. Falls back to the OHLC proxy automatically if intrabar data is unavailable.")
+string ltfRes        = input.timeframe("1", "Intrabar Resolution", group=G_FLOW, tooltip="Lower timeframe used to reconstruct intrabar buy/sell volume. Must be lower than the chart timeframe — Pine will fall back automatically if it isn't.")
+
+var string G_STRUCT = "▶  STRUCTURE FILTER ★"
+bool   useStructureFilter = input.bool(true, "Require Trend Alignment for HC Tier", group=G_STRUCT, tooltip="Gates Tier-3 High-Conviction signals behind a trend-alignment check: price must be above/below its own short EMA in the signal direction. Stops the classic false positive where friction says 'buy' while price is in structural free-fall.")
+int    structEmaLen = input.int(21, "Structure EMA Length", minval=5, maxval=100, group=G_STRUCT)
+
+var string G_DIV = "▶  DIVERGENCE"
+int    divLookback   = input.int(5,    "Divergence Pivot Lookback",   minval=2, maxval=20,  group=G_DIV)
+bool   showDiv       = input.bool(true, "Show Divergence Markers",    group=G_DIV)
+
+var string G_VIS = "▶  VISUAL CONTROLS"
+bool   showTable     = input.bool(true,  "Show Smart Table v5",       group=G_VIS)
+bool   showBG        = input.bool(true,  "Highlight Spread Anomalies",group=G_VIS)
+bool   showMTF       = input.bool(true,  "Show MTF Confluence Row",   group=G_VIS)
+
+// ============================================================================
+//  SECTION 2: CROSS-ASSET BENCHMARK VOLUME
+//  SPY + QQQ + IWM + DIA — Composite Relative Volume Index
+// ============================================================================
+[spy_v, spy_sma] = request.security("AMEX:SPY",    timeframe.period, [volume, ta.sma(volume, lookback)])
+[qqq_v, qqq_sma] = request.security("NASDAQ:QQQ",  timeframe.period, [volume, ta.sma(volume, lookback)])
+[iwm_v, iwm_sma] = request.security("AMEX:IWM",    timeframe.period, [volume, ta.sma(volume, lookback)])
+[dia_v, dia_sma] = request.security("AMEX:DIA",    timeframe.period, [volume, ta.sma(volume, lookback)])
+
+float spy_rat = spy_sma > 0 ? spy_v / spy_sma : 1.0
+float qqq_rat = qqq_sma > 0 ? qqq_v / qqq_sma : 1.0
+float iwm_rat = iwm_sma > 0 ? iwm_v / iwm_sma : 1.0
+float dia_rat = dia_sma > 0 ? dia_v / dia_sma : 1.0
+
+float benchmarkRelVol = (spy_rat + qqq_rat + iwm_rat + dia_rat) / 4.0
+
+// VIX Regime — Volatility Environment Classification
+float vixClose = request.security("CBOE:VIX", timeframe.period, close)
+
+string volRegime = "NORMAL"
+color  volRegimeClr = C_CYAN
+if vixClose > 35
+    volRegime    := "EXTREME"
+    volRegimeClr := C_RED
+else if vixClose > 25
+    volRegime    := "ELEVATED"
+    volRegimeClr := C_ORANGE
+else if vixClose > 16
+    volRegime    := "NORMAL"
+    volRegimeClr := C_CYAN
+else
+    volRegime    := "LOW VOL"
+    volRegimeClr := C_BULL_DIM
+
+// ============================================================================
+//  SECTION 3: SPREAD PROXY & ANOMALY DETECTION
+// ============================================================================
+float currentSpread   = ta.tr
+float avgSpread       = ta.sma(currentSpread, lookback)
+float spreadStdev     = ta.stdev(currentSpread, lookback)
+float spreadZScore    = avgSpread > 0 ? (currentSpread - avgSpread) / spreadStdev : 0.0
+bool  highSpreadAnomaly = currentSpread > (avgSpread * spreadMult)
+
+// ============================================================================
+//  SECTION 4: ORDER FLOW IMBALANCE (Delta Proxy)
+//  Baseline: approximates buy/sell pressure using same-bar OHLC structure.
+//  ★ v4: optionally replaced by real intrabar buy/sell volume reconstructed
+//  from lower-timeframe candles — the OHLC proxy is a well-known approximation;
+//  actual sub-bar volume is a meaningfully more accurate read of order flow.
+// ============================================================================
+float bodySize   = math.abs(close - open)
+float upperWick  = high - math.max(close, open)
+float lowerWick  = math.min(close, open) - low
+float totalRange = high - low
+
+float buyPressure  = totalRange > 0 ? (bodySize * (close >= open ? 1 : 0) + lowerWick) / totalRange : 0.5
+float sellPressure = totalRange > 0 ? (bodySize * (close < open  ? 1 : 0) + upperWick) / totalRange : 0.5
+
+float deltaProxy = buyPressure - sellPressure
+
+// True intrabar delta via lower-timeframe reconstruction
+ltfBar() =>
+    up = close >= open ? volume : 0.0
+    dn = close <  open ? volume : 0.0
+    [up, dn]
+
+[ltfUpArr, ltfDnArr] = request.security_lower_tf(syminfo.tickerid, ltfRes, ltfBar())
+
+float ltfSumUp    = array.size(ltfUpArr) > 0 ? array.sum(ltfUpArr) : na
+float ltfSumDn    = array.size(ltfDnArr) > 0 ? array.sum(ltfDnArr) : na
+float ltfTotalVol = (na(ltfSumUp) or na(ltfSumDn)) ? na : ltfSumUp + ltfSumDn
+float ltfDeltaProxy = not na(ltfTotalVol) and ltfTotalVol > 0 ? (ltfSumUp - ltfSumDn) / ltfTotalVol : na
+
+float effDeltaProxy = useLTFDelta and not na(ltfDeltaProxy) ? ltfDeltaProxy : deltaProxy
+bool  usingTrueDelta = useLTFDelta and not na(ltfDeltaProxy)
+
+float smoothDelta    = ta.ema(effDeltaProxy, frictionLen)
+float cumulDelta     = ta.cum(effDeltaProxy * volume)
+float cumulDeltaFast = ta.ema(cumulDelta, frictionLen)
+float cumulDeltaSlow = ta.ema(cumulDelta, frictionLen * 3)
+bool  deltaExpanding = cumulDeltaFast > cumulDeltaSlow
+
+// ============================================================================
+//  SECTION 5: CORE OSCILLATOR — Liquidity Friction RSI
+// ============================================================================
+float volSma    = ta.sma(volume, lookback)
+float relVol    = volSma > 0 ? volume / volSma : 1.0
+float friction  = benchmarkRelVol > 0 and avgSpread > 0 ? (relVol / benchmarkRelVol) * (currentSpread / avgSpread) : 0.0
+float smoothFr  = ta.ema(friction, frictionLen)
+float rsiFriction = ta.rsi(smoothFr, rsiLength)
+
+// Momentum of friction (rate of change)
+float frictionMom = ta.change(rsiFriction, 3)
+
+// ============================================================================
+//  SECTION 5.5: ★ ADAPTIVE PERCENTILE ZONE ENGINE
+//  Buy/Sell zones self-calibrate to the oscillator's own recent distribution
+//  instead of assuming every symbol/timeframe behaves like a textbook RSI.
+//  Manual thresholds still bound the adaptive result so it can't drift wild.
+// ============================================================================
+float rawBuyPct  = ta.percentile_linear_interpolation(rsiFriction, adaptiveLookback, adaptivePctLow)
+float rawSellPct = ta.percentile_linear_interpolation(rsiFriction, adaptiveLookback, adaptivePctHigh)
+
+float effBuyThresh  = useAdaptiveZones ? math.min(math.max(rawBuyPct, 5.0),  buyThresh + 15)  : buyThresh
+float effSellThresh = useAdaptiveZones ? math.max(math.min(rawSellPct, 95.0), sellThresh - 15) : sellThresh
+
+// ============================================================================
+//  SECTION 6: MULTI-TIMEFRAME CONFLUENCE
+// ============================================================================
+// Pre-compute SMA values outside ternaries so they run on every bar (CW10004)
+float _volSma20  = ta.sma(volume, 20)
+float _trSma20   = ta.sma(ta.tr, 20)
+float _mtfRelVol = _volSma20 > 0 ? volume / _volSma20 : 1.0
+float _mtfRelTr  = _trSma20  > 0 ? ta.tr  / _trSma20  : 1.0
+float _mtfFric   = ta.rsi(ta.ema(_mtfRelVol * _mtfRelTr, 8), 14)
+
+float htfFriction1 = request.security(syminfo.tickerid, "60",  _mtfFric)
+float htfFriction2 = request.security(syminfo.tickerid, "240", _mtfFric)
+float htfFriction3 = request.security(syminfo.tickerid, "D",   _mtfFric)
+
+int mtfBullCount = 0
+if rsiFriction    < effBuyThresh
+    mtfBullCount += 1
+if htfFriction1   < effBuyThresh
+    mtfBullCount += 1
+if htfFriction2   < effBuyThresh
+    mtfBullCount += 1
+if htfFriction3   < effBuyThresh
+    mtfBullCount += 1
+
+int mtfBearCount = 0
+if rsiFriction    > effSellThresh
+    mtfBearCount += 1
+if htfFriction1   > effSellThresh
+    mtfBearCount += 1
+if htfFriction2   > effSellThresh
+    mtfBearCount += 1
+if htfFriction3   > effSellThresh
+    mtfBearCount += 1
+
+string mtfBias  = mtfBullCount >= 3 ? "BULLISH" : mtfBearCount >= 3 ? "BEARISH" : mtfBullCount >= 2 ? "LEAN BULL" : mtfBearCount >= 2 ? "LEAN BEAR" : "MIXED"
+color  mtfColor = mtfBullCount >= 3 ? C_BULL : mtfBearCount >= 3 ? C_BEAR : mtfBullCount >= 2 ? C_BULL_DIM : mtfBearCount >= 2 ? C_BEAR_DIM : C_GRAY
+
+// ============================================================================
+//  SECTION 7: DIVERGENCE DETECTION (Price vs Friction)
+// ============================================================================
+float pricePivLo  = ta.pivotlow(close, divLookback, divLookback)
+float pricePivHi  = ta.pivothigh(close, divLookback, divLookback)
+float fricPivLo   = ta.pivotlow(rsiFriction, divLookback, divLookback)
+float fricPivHi   = ta.pivothigh(rsiFriction, divLookback, divLookback)
+
+var float prevPriceLo  = na
+var float prevFricLo   = na
+var float prevPriceHi  = na
+var float prevFricHi   = na
+
+bool bullDiv = false
+bool bearDiv = false
+
+if not na(pricePivLo) and not na(fricPivLo)
+    if not na(prevPriceLo) and not na(prevFricLo)
+        if pricePivLo < prevPriceLo and fricPivLo > prevFricLo
+            bullDiv := true
+    prevPriceLo := pricePivLo
+    prevFricLo  := fricPivLo
+
+if not na(pricePivHi) and not na(fricPivHi)
+    if not na(prevPriceHi) and not na(prevFricHi)
+        if pricePivHi > prevPriceHi and fricPivHi < prevFricHi
+            bearDiv := true
+    prevPriceHi := pricePivHi
+    prevFricHi  := fricPivHi
+
+// ============================================================================
+//  SECTION 7.5: ★ STRUCTURE FILTER
+//  Requires price to be trend-aligned with the signal direction before a
+//  Tier-3 High-Conviction signal can fire — friction alone can't override
+//  a price tape that is structurally moving the other way.
+// ============================================================================
+float structEma    = ta.ema(close, structEmaLen)
+bool  structBullOK  = not useStructureFilter or close > structEma
+bool  structBearOK  = not useStructureFilter or close < structEma
+
+// ============================================================================
+//  SECTION 8: SIGNAL STRENGTH SCORING (0–10 COMPOSITE)
+// ============================================================================
+float signalStrength = 0.0
+
+// Factor 1: Friction zone depth (0–2.5)
+float zoneDepthBull = rsiFriction < effBuyThresh  ? (effBuyThresh  - rsiFriction) / effBuyThresh  * 2.5 : 0.0
+float zoneDepthBear = rsiFriction > effSellThresh ? (rsiFriction - effSellThresh) / (100 - effSellThresh) * 2.5 : 0.0
+
+// Factor 2: MTF Confluence (0–2.5)
+float mtfScoreBull = mtfBullCount / 4.0 * 2.5
+float mtfScoreBear = mtfBearCount / 4.0 * 2.5
+
+// Factor 3: Delta alignment (0–2.0)
+float deltaScoreBull = smoothDelta > 0 ? math.min(smoothDelta * 10, 1.0) * 2.0 : 0.0
+float deltaScoreBear = smoothDelta < 0 ? math.min(math.abs(smoothDelta) * 10, 1.0) * 2.0 : 0.0
+
+// Factor 4: Spread normality for buys, anomaly for sells (0–1.5)
+float spreadScoreBull = not highSpreadAnomaly ? 1.5 : 0.0
+float spreadScoreBear = highSpreadAnomaly     ? 1.5 : 0.0
+
+// Factor 5: Divergence bonus (0–1.5)
+float divScoreBull = bullDiv ? 1.5 : 0.0
+float divScoreBear = bearDiv ? 1.5 : 0.0
+
+float bullStrength = zoneDepthBull + mtfScoreBull + deltaScoreBull + spreadScoreBull + divScoreBull
+float bearStrength = zoneDepthBear + mtfScoreBear + deltaScoreBear + spreadScoreBear + divScoreBear
+
+bool isBullSide = rsiFriction <= 50
+
+// ★ Volatility-adjusted confidence: discount strength in abnormal-volatility
+// tails instead of treating a chaotic tape the same as a calm one.
+float atrPctRank = ta.percentrank(ta.atr(14), 100)
+float volPenalty = atrPctRank > 90 ? 0.85 : 1.0
+
+signalStrength := (isBullSide ? math.min(bullStrength, 10) : math.min(bearStrength, 10)) * volPenalty
+
+string strengthGrade = signalStrength >= 8 ? "A+" : signalStrength >= 6.5 ? "A" : signalStrength >= 5 ? "B" : signalStrength >= 3.5 ? "C" : "D"
+color  strengthClr   = signalStrength >= 8 ? C_BULL : signalStrength >= 6.5 ? C_LIME : signalStrength >= 5 ? C_GOLD : signalStrength >= 3.5 ? C_ORANGE : C_GRAY
+
+// ============================================================================
+//  SECTION 9: TRADE DECISION ENGINE — Multi-Factor Confirmation
+// ============================================================================
+// Consecutive bars in zone tracking
+var int barsInBuyZone  = 0
+var int barsInSellZone = 0
+
+if rsiFriction < effBuyThresh
+    barsInBuyZone += 1
+else
+    barsInBuyZone := 0
+
+if rsiFriction > effSellThresh
+    barsInSellZone += 1
+else
+    barsInSellZone := 0
+
+// Crossover/Crossunder triggers
+bool buyCross  = ta.crossunder(rsiFriction, effBuyThresh)
+bool sellCross = ta.crossover(rsiFriction, effSellThresh)
+
+// Full decision hierarchy
+string decision     = "WAIT"
+color  decision_clr = C_GRAY
+string decision_ico = "◯"
+string phase        = "NEUTRAL"
+color  phase_clr    = C_GRAY
+string trigger_str  = "No actionable setup"
+int    tier         = 0   // 0=no signal, 1=setup, 2=confirmed, 3=high-conviction
+
+// Tier 3: HIGH CONVICTION — Zone depth + MTF alignment + Delta + Strength ≥ threshold + Structure alignment
+bool hcBuy  = barsInBuyZone  >= confirmBars and not highSpreadAnomaly and mtfBullCount >= 2 and smoothDelta > 0 and bullStrength >= minStrength and structBullOK
+bool hcSell = barsInSellZone >= confirmBars and highSpreadAnomaly     and mtfBearCount >= 2 and smoothDelta < 0 and bearStrength >= minStrength and structBearOK
+
+// Tier 2: CONFIRMED — Zone persistence + spread alignment
+bool confBuy  = barsInBuyZone  >= confirmBars and not highSpreadAnomaly
+bool confSell = barsInSellZone >= confirmBars and highSpreadAnomaly
+
+// Build decision
+if hcBuy
+    decision     := "◆ BUY — HIGH CONVICTION"
+    decision_clr := C_BULL
+    decision_ico := "▲▲▲"
+    phase        := "ACCUMULATION"
+    phase_clr    := C_BULL
+    trigger_str  := "Zone+" + str.tostring(barsInBuyZone) + " MTF+" + str.tostring(mtfBullCount) + " Δ▲ Str:" + str.tostring(bullStrength, "#.#")
+    tier         := 3
+else if hcSell
+    decision     := "◆ SELL — HIGH CONVICTION"
+    decision_clr := C_BEAR
+    decision_ico := "▼▼▼"
+    phase        := "DISTRIBUTION"
+    phase_clr    := C_BEAR
+    trigger_str  := "Zone+" + str.tostring(barsInSellZone) + " MTF+" + str.tostring(mtfBearCount) + " Δ▼ Str:" + str.tostring(bearStrength, "#.#")
+    tier         := 3
+else if confBuy
+    decision     := "BUY CONFIRMED"
+    decision_clr := C_BULL
+    decision_ico := "▲▲"
+    phase        := "ACCUMULATION"
+    phase_clr    := C_BULL
+    trigger_str  := "Low Friction +" + str.tostring(barsInBuyZone) + " bars • Normal Spread"
+    tier         := 2
+else if confSell
+    decision     := "SELL CONFIRMED"
+    decision_clr := C_BEAR
+    decision_ico := "▼▼"
+    phase        := "DISTRIBUTION"
+    phase_clr    := C_BEAR
+    trigger_str  := "High Friction +" + str.tostring(barsInSellZone) + " bars • Spread Anomaly"
+    tier         := 2
+else if buyCross
+    decision     := "BUY SETUP"
+    decision_clr := C_LIME
+    decision_ico := "▲"
+    phase        := "EARLY ENTRY"
+    phase_clr    := C_GOLD
+    trigger_str  := "Friction crossed into Oversold Zone"
+    tier         := 1
+else if sellCross
+    decision     := "SELL SETUP"
+    decision_clr := C_ORANGE
+    decision_ico := "▼"
+    phase        := "EARLY EXIT"
+    phase_clr    := C_GOLD
+    trigger_str  := "Friction crossed into Overbought Zone"
+    tier         := 1
+else if rsiFriction < effBuyThresh
+    decision     := "BUY ZONE — BUILDING"
+    decision_clr := C_BULL_DIM
+    decision_ico := "═▲"
+    phase        := "ACTIVE ZONE"
+    phase_clr    := C_BULL_DIM
+    trigger_str  := "In zone " + str.tostring(barsInBuyZone) + "/" + str.tostring(confirmBars) + " bars to confirm"
+else if rsiFriction > effSellThresh
+    decision     := "SELL ZONE — BUILDING"
+    decision_clr := C_BEAR_DIM
+    decision_ico := "═▼"
+    phase        := "ACTIVE ZONE"
+    phase_clr    := C_BEAR_DIM
+    trigger_str  := "In zone " + str.tostring(barsInSellZone) + "/" + str.tostring(confirmBars) + " bars to confirm"
+else if rsiFriction < 45
+    decision     := "HOLD LONG BIAS"
+    decision_clr := C_BULL_DIM
+    decision_ico := "═▲"
+    phase        := "DRIFT"
+    phase_clr    := C_CYAN_DIM
+    trigger_str  := "Friction below median — passive bullish"
+else if rsiFriction > 55
+    decision     := "HOLD SHORT BIAS"
+    decision_clr := C_BEAR_DIM
+    decision_ico := "═▼"
+    phase        := "DRIFT"
+    phase_clr    := C_CYAN_DIM
+    trigger_str  := "Friction above median — passive bearish"
+else
+    decision     := "NEUTRAL — NO EDGE"
+    decision_clr := C_GRAY
+    decision_ico := "◯"
+    phase        := "DEAD ZONE"
+    phase_clr    := C_GRAY
+    trigger_str  := "Friction in no-man's-land (45–55)"
+
+// ============================================================================
+//  SECTION 10: PLOTS
+// ============================================================================
+// Main oscillator
+color mainCol = rsiFriction > effSellThresh ? C_BEAR : rsiFriction < effBuyThresh ? C_BULL : C_WHITE_DIM
+plot(rsiFriction, "Liquidity Friction Oscillator", mainCol, 2)
+
+// Zero-lag momentum ribbon behind main line
+float frictionUpper = ta.ema(rsiFriction, 3)
+float frictionLower = ta.ema(rsiFriction, 8)
+p1 = plot(frictionUpper, "Momentum Fast", color.new(chart.bg_color, 100))
+p2 = plot(frictionLower, "Momentum Slow", color.new(chart.bg_color, 100))
+fill(p1, p2, frictionUpper > frictionLower ? color.new(#00FF7F, 85) : color.new(#FF1493, 85), title="Momentum Ribbon")
+
+// Zones — plotted as series (not hline) so the adaptive thresholds can move with the data
+p_sell = plot(effSellThresh, "Overbought Zone", color.new(#FF1493, 60), style=plot.style_line)
+p_buy  = plot(effBuyThresh,  "Oversold Zone",   color.new(#00FF7F, 60), style=plot.style_line)
+hline(50, "Median", color.new(#888888, 70), hline.style_dotted)
+fill(p_sell, p_buy, color.new(#2196F3, 93), title="Neutral Zone Fill")
+
+// Spread anomaly background
+bgcolor(showBG and highSpreadAnomaly ? color.new(C_ORANGE, 92) : na, title="Spread Anomaly BG")
+
+// Signal markers
+plotshape(tier >= 2 and isBullSide,  "Buy Signal",  shape.triangleup,   location.bottom, C_BULL, size=size.small)
+plotshape(tier >= 2 and not isBullSide, "Sell Signal", shape.triangledown, location.top,    C_BEAR, size=size.small)
+plotshape(tier == 3 and isBullSide,  "HC Buy",      shape.diamond,      location.bottom, C_GOLD, size=size.tiny)
+plotshape(tier == 3 and not isBullSide, "HC Sell",   shape.diamond,      location.top,    C_GOLD, size=size.tiny)
+
+// Divergence markers
+plotshape(showDiv and bullDiv, "Bullish Divergence", shape.labelup,   location.bottom, C_CYAN, text="DIV", textcolor=C_CYAN, size=size.tiny, offset=-divLookback)
+plotshape(showDiv and bearDiv, "Bearish Divergence", shape.labeldown, location.top,    C_ORANGE, text="DIV", textcolor=C_ORANGE, size=size.tiny, offset=-divLookback)
+
+// ============================================================================
+//  SECTION 11: ALERTS — Institutional JSON Payload
+//  ★ v4: deduplicated — fires only on a genuine decision/tier transition
+//  instead of every bar the conditions happen to remain true.
+// ============================================================================
+var string lastAlertKey = ""
+string alertKey = decision + "|" + str.tostring(tier)
+bool signalFired = tier >= 2 and barstate.isconfirmed and alertKey != lastAlertKey
+if signalFired
+    string alertSide = isBullSide ? "BUY" : "SELL"
+    string msg = '{"source":"SML-MLD-v4"'
+     + ',"event":"LiquiditySignal"'
+     + ',"side":"' + alertSide + '"'
+     + ',"tier":' + str.tostring(tier)
+     + ',"decision":"' + decision + '"'
+     + ',"strength":' + str.tostring(signalStrength, "#.#")
+     + ',"grade":"' + strengthGrade + '"'
+     + ',"rsi_friction":' + str.tostring(rsiFriction, "#.##")
+     + ',"buy_thresh":' + str.tostring(effBuyThresh, "#.##")
+     + ',"sell_thresh":' + str.tostring(effSellThresh, "#.##")
+     + ',"symbol":"' + syminfo.ticker + '"'
+     + ',"timeframe":"' + timeframe.period + '"'
+     + ',"spread_anomaly":' + str.tostring(highSpreadAnomaly)
+     + ',"spread_zscore":' + str.tostring(spreadZScore, "#.##")
+     + ',"benchmark_rel_vol":' + str.tostring(benchmarkRelVol, "#.##")
+     + ',"delta_proxy":' + str.tostring(smoothDelta, "#.####")
+     + ',"true_delta":' + str.tostring(usingTrueDelta)
+     + ',"vix":' + str.tostring(vixClose, "#.##")
+     + ',"vol_regime":"' + volRegime + '"'
+     + ',"mtf_bias":"' + mtfBias + '"'
+     + ',"mtf_bull_count":' + str.tostring(mtfBullCount)
+     + ',"mtf_bear_count":' + str.tostring(mtfBearCount)
+     + ',"bull_div":' + str.tostring(bullDiv)
+     + ',"bear_div":' + str.tostring(bearDiv)
+     + ',"timestamp":"' + str.tostring(year) + '-' + str.tostring(month, "00") + '-' + str.tostring(dayofmonth, "00") + 'T' + str.tostring(hour, "00") + ':' + str.tostring(minute, "00") + '"'
+     + '}'
+    alert(msg, alert.freq_once_per_bar_close)
+    lastAlertKey := alertKey
+
+// ============================================================================
+//  SECTION 12: SMART TABLE v5 — HORIZONTAL 11×8 INSTITUTIONAL DASHBOARD
+//  ★ v4: redesigned from a 5-col × 17-row vertical stack into an 11-col ×
+//  8-row horizontal layout — same information, roughly a quarter of the
+//  vertical footprint, panels sit side-by-side instead of stacked.
+// ============================================================================
+string szT = size.small
+string szS = size.normal
+
+// Pine functions must live at global scope, so this label/value cell pair
+// helper is declared here (not inside the `if` block below) and takes the
+// table id as a parameter.
+lv(table tbl, int col, int row, string lbl, string val, color valClr) =>
+    table.cell(tbl, col, row, lbl, text_color=C_WHITE_DIM, text_size=szT, bgcolor=C_PANEL_BG)
+    table.cell(tbl, col + 1, row, val, text_color=valClr, text_size=szT, bgcolor=C_PANEL_BG)
+
+if showTable and barstate.islast
+    var table t = table.new(position.top_right, 11, 8, bgcolor=C_PANEL_BG, border_color=C_BORDER, border_width=1, frame_color=C_FRAME, frame_width=2)
+
+    // ─── Row 0: Header ───
+    table.cell(t, 0, 0, "SML", text_color=C_GOLD, text_size=szS, bgcolor=color.new(#0D0D14, 0))
+    table.cell(t, 1, 0, "MICROSTRUCTURE LIQUIDITY DELTA SCANNER v4" + (usingTrueDelta ? "  •  TRUE Δ" : ""), text_color=C_GOLD, text_size=szT, bgcolor=color.new(#0D0D14, 0), text_halign=text.align_left)
+    table.merge_cells(t, 1, 0, 10, 0)
+
+    // ─── Row 1: Decision headline + Phase/Tier/Grade ───
+    table.cell(t, 0, 1, decision_ico + "  " + decision, text_color=decision_clr, text_size=szS, bgcolor=C_PANEL_BG, text_halign=text.align_left)
+    table.merge_cells(t, 0, 1, 4, 1)
+    lv(t, 5, 1, "PHASE", phase, phase_clr)
+    string tierShort = tier == 3 ? "3-HC" : tier == 2 ? "2-CONF" : tier == 1 ? "1-SETUP" : "0-NONE"
+    color  tierClr   = tier == 3 ? C_GOLD : tier == 2 ? C_BULL : tier == 1 ? C_ORANGE : C_GRAY
+    lv(t, 7, 1, "TIER", tierShort, tierClr)
+    lv(t, 9, 1, "GRADE", strengthGrade, strengthClr)
+
+    // ─── Row 2: Trigger (full width) ───
+    table.cell(t, 0, 2, "TRIGGER", text_color=C_WHITE_DIM, text_size=szT, bgcolor=C_PANEL_BG)
+    table.cell(t, 1, 2, trigger_str, text_color=decision_clr, text_size=szT, bgcolor=C_PANEL_BG, text_halign=text.align_left)
+    table.merge_cells(t, 1, 2, 10, 2)
+
+    // ─── Row 3: Strength bar + RSI + Zones ───
+    string strBar = ""
+    int filled = math.round(signalStrength)
+    for i = 1 to 10
+        strBar += i <= filled ? "█" : "░"
+    table.cell(t, 0, 3, "STRENGTH", text_color=C_WHITE_DIM, text_size=szT, bgcolor=C_PANEL_BG)
+    table.cell(t, 1, 3, strBar + "  " + str.tostring(signalStrength, "#.#") + "/10", text_color=strengthClr, text_size=szT, bgcolor=C_PANEL_BG)
+    table.merge_cells(t, 1, 3, 5, 3)
+    lv(t, 6, 3, "FRICTION RSI", str.tostring(rsiFriction, "#.##"), mainCol)
+    lv(t, 8, 3, "ZONES", str.tostring(effBuyThresh, "#") + " / " + str.tostring(effSellThresh, "#"), C_WHITE)
+    table.merge_cells(t, 9, 3, 10, 3)
+
+    // ─── Row 4: Momentum, Spread, Z-Score, Delta, Flow ───
+    color momClr = frictionMom > 0 ? C_BEAR_DIM : frictionMom < 0 ? C_BULL_DIM : C_GRAY
+    lv(t, 0, 4, "MOM", str.tostring(frictionMom, "#.##") + (frictionMom > 0 ? " ▲" : frictionMom < 0 ? " ▼" : " ═"), momClr)
+    lv(t, 2, 4, "SPREAD", str.tostring(currentSpread, "#.###"), highSpreadAnomaly ? C_ORANGE : C_WHITE)
+    color zClr = spreadZScore > 2 ? C_RED : spreadZScore > 1 ? C_ORANGE : C_WHITE
+    lv(t, 4, 4, "Z-SCORE", str.tostring(spreadZScore, "#.##") + "σ" + (highSpreadAnomaly ? " ⚠" : " ✓"), zClr)
+    color dClr = smoothDelta > 0 ? C_BULL : smoothDelta < 0 ? C_BEAR : C_GRAY
+    lv(t, 6, 4, "DELTA", str.tostring(smoothDelta, "#.###"), dClr)
+    table.cell(t, 8, 4, "FLOW", text_color=C_WHITE_DIM, text_size=szT, bgcolor=C_PANEL_BG)
+    table.cell(t, 9, 4, deltaExpanding ? "EXPANDING" : "CONTRACTING", text_color=deltaExpanding ? C_BULL : C_BEAR_DIM, text_size=szT, bgcolor=C_PANEL_BG)
+    table.merge_cells(t, 9, 4, 10, 4)
+
+    // ─── Row 5: Benchmark, VIX, Regime, MTF, Divergence ───
+    color bvClr = benchmarkRelVol > 1.5 ? C_BULL : benchmarkRelVol < 0.7 ? C_BEAR_DIM : C_WHITE
+    lv(t, 0, 5, "BENCH VOL", str.tostring(benchmarkRelVol, "#.##") + "x", bvClr)
+    lv(t, 2, 5, "VIX", str.tostring(vixClose, "#.#"), volRegimeClr)
+    lv(t, 4, 5, "REGIME", volRegime, volRegimeClr)
+    lv(t, 6, 5, "MTF", mtfBias, mtfColor)
+    string divStr = bullDiv ? "BULL ▲" : bearDiv ? "BEAR ▼" : "NONE"
+    color  divClr = bullDiv ? C_CYAN : bearDiv ? C_ORANGE : C_GRAY
+    table.cell(t, 8, 5, "DIVERGENCE", text_color=C_WHITE_DIM, text_size=szT, bgcolor=C_PANEL_BG)
+    table.cell(t, 9, 5, divStr, text_color=divClr, text_size=szT, bgcolor=C_PANEL_BG)
+    table.merge_cells(t, 9, 5, 10, 5)
+
+    // ─── Row 6: MTF per-timeframe readout ───
+    if showMTF
+        string tfReadout = "1H:" + str.tostring(htfFriction1, "#") + "   4H:" + str.tostring(htfFriction2, "#") + "   D:" + str.tostring(htfFriction3, "#")
+        table.cell(t, 0, 6, "TF READOUT", text_color=C_WHITE_DIM, text_size=szT, bgcolor=C_PANEL_BG)
+        table.cell(t, 1, 6, tfReadout, text_color=mtfColor, text_size=szT, bgcolor=C_PANEL_BG, text_halign=text.align_left)
+        table.merge_cells(t, 1, 6, 6, 6)
+        table.cell(t, 7, 6, mtfBullCount >= 2 or mtfBearCount >= 2 ? "CONFLUENT" : "DIVIDED", text_color=mtfColor, text_size=szT, bgcolor=C_PANEL_BG, text_halign=text.align_center)
+        table.merge_cells(t, 7, 6, 10, 6)
+
+    // ─── Row 7: Footer ───
+    table.cell(t, 0, 7, "INSTITUTIONAL • RULES-BASED • NOT PREDICTIVE • NFA", text_color=color.new(#FFFFFF, 65), text_size=size.tiny, bgcolor=color.new(#0D0D14, 0), text_halign=text.align_center)
+    table.merge_cells(t, 0, 7, 10, 7)
+
+// ═══ END ═══
