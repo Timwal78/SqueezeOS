@@ -274,7 +274,7 @@ class ConvergenceEngine:
 
         # ── SML Harmonic Matrix — Proprietary Ranked Engine (Grid 1) ────────────
         try:
-            sml_data = _harmonic.analyze(closes)
+            sml_data = _harmonic.analyze(closes, bars=bars_with_dates)
         except Exception as e:
             import traceback
             logger.error(f"[SML] {symbol} harmonic matrix error: {e}\n{traceback.format_exc()}")

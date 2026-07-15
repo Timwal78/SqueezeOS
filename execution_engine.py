@@ -221,17 +221,45 @@ class ExecutionEngine:
             return self.execute_live_trade(symbol, side, quantity, price, reason)
         return self.execute_shadow_trade(symbol, side, quantity, price, reason)
 
+    def _atr_stop_targets(self, symbol: str, side: str, price: float,
+                           fallback_sl_pct: float = 0.04, fallback_tp_pct: float = 0.12) -> Dict[str, float]:
+        """
+        ATR-based stop-loss/take-profit anchored to `price`, using the
+        already-wired atr_multiplier (meme_atr_multiplier for MANDATORY_TICKERS
+        — GME/AMC/IWM) via calculate_atr(). These fields existed but were never
+        used; SL/TP was hardcoded at fixed percentages regardless of a symbol's
+        actual volatility. Falls back to the caller's fixed-percentage bands
+        when ATR is unavailable (e.g. no Polygon key configured — calculate_atr
+        returns 0.0), so behavior degrades gracefully instead of landing at a
+        nonsensical distance.
+        """
+        try:
+            from core.api.market_scanner import MANDATORY_TICKERS  # lazy: avoids a
+            # module-load cycle (market_scanner -> core.legacy -> execution_engine)
+            is_meme = symbol.upper() in MANDATORY_TICKERS
+        except Exception:
+            is_meme = False
+        mult = self.meme_atr_multiplier if is_meme else self.atr_multiplier
+        atr = self.calculate_atr(symbol)
+        if atr and atr > 0:
+            if side == 'BUY':
+                return {"sl": round(price - atr * mult, 4), "tp": round(price + atr * mult * 2.5, 4)}
+            return {"sl": round(price + atr * mult, 4), "tp": round(price - atr * mult * 2.5, 4)}
+        if side == 'BUY':
+            return {"sl": round(price * (1 - fallback_sl_pct), 4), "tp": round(price * (1 + fallback_tp_pct), 4)}
+        return {"sl": round(price * (1 + fallback_sl_pct), 4), "tp": round(price * (1 - fallback_tp_pct), 4)}
+
     def execute_shadow_trade(self, symbol: str, side: str, quantity: int, price: float = 0.0, reason: str = "Signal"):
         validation = self.should_execute(symbol, side)
         if not validation['allow']:
             return {"status": "FILTERED", "reason": validation['reason']}
 
         trade_id = f"SHADOW_{symbol}_{int(time.time())}"
+        levels = self._atr_stop_targets(symbol, side, price, fallback_sl_pct=0.05, fallback_tp_pct=0.15)
         trade = {
             'id': trade_id, 'symbol': symbol, 'side': side, 'qty': quantity,
             'entry_price': price, 'current_price': price,
-            'sl': price * 0.95 if side == 'BUY' else price * 1.05,
-            'tp': price * 1.15 if side == 'BUY' else price * 0.85,
+            'sl': levels['sl'], 'tp': levels['tp'],
             'status': 'OPEN', 'opened_at': time.time(), 'mode': 'SHADOW', 'reason': reason
         }
         with self.lock:
@@ -262,6 +290,24 @@ class ExecutionEngine:
             return {"status": "FILTERED", "reason": validation['reason']}
 
         if side == 'BUY':
+            # Spread guard — entries only, never exits. A market/marketable buy
+            # into a wide bid-ask spread on a thin name eats the whole spread as
+            # instant slippage; checked before claim_entry() below so a
+            # spread-rejected order doesn't waste the cross-engine claim on a
+            # trade we're not actually going to place. Fails open (no check) if
+            # a quote isn't available — this only ever blocks on data we
+            # actually have, never on missing data.
+            max_spread_pct = float(os.environ.get('TRADIER_MAX_SPREAD_PCT', '2.0'))
+            if max_spread_pct > 0:
+                try:
+                    from tradier_api import get_spread_pct
+                    spread_pct = get_spread_pct(symbol)
+                except Exception:
+                    spread_pct = None
+                if spread_pct is not None and spread_pct > max_spread_pct:
+                    logger.warning(f"[EXEC] {symbol} BUY skipped — spread {spread_pct:.2f}% > {max_spread_pct:.2f}% cap")
+                    return {"status": "REJECTED", "reason": f"spread {spread_pct:.2f}% exceeds {max_spread_pct:.2f}% cap"}
+
             # Cross-engine claim — this Tradier account is also traded by
             # core/api/convergence_bp.py's GOD MODE execution and
             # iam_executor.py's IAM execution, each with their own independent
@@ -314,11 +360,38 @@ class ExecutionEngine:
         if res.get('status') == 'success':
             oid = res.get('order_id', str(int(time.time())))
             trade_id = f"LIVE_{symbol}_{oid}"
+
+            # ── Fill verification ── the broker only confirmed the order was
+            # ACCEPTED, not that it filled or at what price. Polling here closes
+            # that gap: entry_price (and therefore SL/TP) is anchored to the
+            # real average fill price when we can confirm one, instead of the
+            # pre-trade signal price — which can drift from reality on the thin
+            # $1-$50 names this system targets. fill_verified=False downstream
+            # means "treat entry_price as an estimate, not a confirmed fill."
+            fill_verified = False
+            fill_price = price
+            try:
+                from tradier_api import poll_order_fill
+                fill = poll_order_fill(oid)
+                if fill.get("filled"):
+                    fill_verified = True
+                    if fill.get("avg_fill_price"):
+                        fill_price = fill["avg_fill_price"]
+                else:
+                    logger.warning(
+                        f"[EXEC] {symbol} order {oid} not confirmed filled after poll "
+                        f"(status={fill.get('status')}) — entry_price is the pre-trade signal "
+                        f"price, not a verified fill; check the account manually."
+                    )
+            except Exception as e:
+                logger.warning(f"[EXEC] {symbol} fill poll failed: {e} — entry_price unverified")
+
+            levels = self._atr_stop_targets(symbol, side, fill_price, fallback_sl_pct=0.04, fallback_tp_pct=0.12)
             trade = {
                 'id': trade_id, 'symbol': symbol, 'side': side, 'qty': quantity,
-                'entry_price': price, 'current_price': price,
-                'sl': price * 0.96 if side == 'BUY' else price * 1.04,
-                'tp': price * 1.12 if side == 'BUY' else price * 0.88,
+                'entry_price': fill_price, 'current_price': fill_price,
+                'signal_price': price, 'fill_verified': fill_verified,
+                'sl': levels['sl'], 'tp': levels['tp'],
                 'status': 'OPEN', 'opened_at': time.time(), 'mode': 'LIVE',
                 'order_id': oid, 'reason': reason
             }

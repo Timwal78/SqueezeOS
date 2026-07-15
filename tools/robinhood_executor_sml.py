@@ -133,8 +133,17 @@ MAX_DAILY_LOSS_USD   = float(os.environ.get("MAX_DAILY_LOSS_USD", "100.0"))
 MAX_ORDERS_PER_DAY   = int(os.environ.get("MAX_ORDERS_PER_DAY", "25"))
 MAX_DAILY_NOTIONAL   = float(os.environ.get("MAX_DAILY_NOTIONAL_USD", "1500.0"))
 MAX_PER_SCAN         = int(os.environ.get("MAX_PER_SCAN", "3"))
-STOP_LOSS_PCT        = float(os.environ.get("STOP_LOSS_PCT", "5.0"))    # close position if down this % from avg cost
-TAKE_PROFIT_PCT      = float(os.environ.get("TAKE_PROFIT_PCT", "15.0")) # close position if up this % from avg cost
+STOP_LOSS_PCT        = float(os.environ.get("STOP_LOSS_PCT", "5.0"))    # fallback if no cached ATR: close if down this % from avg cost
+TAKE_PROFIT_PCT      = float(os.environ.get("TAKE_PROFIT_PCT", "15.0")) # fallback if no cached ATR: close if up this % from avg cost
+# ATR-based stop/take-profit — same multiplier convention as execution_engine.py's
+# atr_multiplier (1.5x ATR stop, 2.5x that for target = same ~1:2.5 risk:reward).
+# ATR comes from the harmonic matrix engine's sml_matrix.atr on the signal that
+# opened the position (see _symbol_atr below) — used in place of the fixed
+# STOP_LOSS_PCT/TAKE_PROFIT_PCT whenever a real ATR reading is cached for that
+# symbol, since a fixed percentage is either too tight or too loose depending on
+# how volatile a given $1-$50 name actually is.
+ATR_STOP_MULTIPLIER  = float(os.environ.get("ATR_STOP_MULTIPLIER", "1.5"))
+ATR_TP_MULTIPLIER    = float(os.environ.get("ATR_TP_MULTIPLIER", "3.75"))
 POSITION_MONITOR_ENABLED = os.environ.get("POSITION_MONITOR_ENABLED", "true").lower() == "true"
 # Skip a BUY when the bid-ask spread is wider than this % of the midpoint —
 # a market/marketable order into a thin $1-$50 name eats the whole spread as
@@ -185,10 +194,30 @@ def _save_pdt_trades(trades: list) -> None:
     except Exception as e:
         logger.warning(f"[PDT] save failed: {e}")
 
+_ATR_FILE = os.path.join(LOG_DIR, "symbol_atr.json")
+
+def _load_symbol_atr() -> dict:
+    try:
+        with open(_ATR_FILE, "r") as f:
+            data = json.load(f)
+        return {k: float(v) for k, v in data.items()} if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+def _save_symbol_atr(d: dict) -> None:
+    try:
+        with open(_ATR_FILE, "w") as f:
+            json.dump(d, f)
+    except Exception as e:
+        logger.warning(f"[ATR] save failed: {e}")
+
 _last_execution     = _load_last_execution()  # symbol → epoch, persisted across restarts
 _pdt_trades         = _load_pdt_trades()      # epoch timestamps of day trades — persisted:
                                               # the 5-day PDT window must survive NSSM restarts,
                                               # otherwise every crash/reboot silently disarms the shield
+_symbol_atr         = _load_symbol_atr()      # symbol → last known real ATR (from sml_matrix.atr
+                                              # on the signal that triggered a BUY), persisted so
+                                              # the position monitor still has it after a restart
 _daily_loss_usd     = 0.0
 _orders_today       = 0
 _daily_notional_usd = 0.0
@@ -630,6 +659,19 @@ def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
         logger.info(f"[EXEC] {symbol} god_stacked={god_count} < {MIN_GOD_STACKED} — skip")
         return
 
+    # Cache the real ATR this BUY signal was scored on — the position monitor
+    # (_check_stop_losses) uses it for volatility-adaptive stops instead of a
+    # fixed percentage. Only real signals carry an ATR; the STOP_LOSS/TAKE_PROFIT
+    # proxy sml built by _check_stop_losses itself never overwrites this.
+    if side == "buy":
+        try:
+            atr_val = float(sml.get("atr") or 0)
+        except (TypeError, ValueError):
+            atr_val = 0.0
+        if atr_val > 0:
+            _symbol_atr[symbol] = atr_val
+            _save_symbol_atr(_symbol_atr)
+
     # Stop-loss/take-profit closes are risk exits, not signal trades — an
     # entry-quality gate (e.g. dark-pool "accumulation" vetoing a SELL) must
     # never hold a position past its stop. Only signal-driven trades get gated.
@@ -844,12 +886,23 @@ def _check_stop_losses() -> int:
                 continue
             pct_move = (price - avg_cost) / avg_cost * 100.0
 
-            if pct_move <= -STOP_LOSS_PCT:
-                logger.warning(f"[STOP-LOSS] {symbol} down {pct_move:.1f}% (avg ${avg_cost:.2f} -> ${price:.2f}) — closing position")
+            # ATR-based stop/target when this symbol has a cached real ATR from
+            # the signal that opened it; otherwise fall back to the fixed
+            # STOP_LOSS_PCT/TAKE_PROFIT_PCT (unchanged previous behavior).
+            atr = _symbol_atr.get(symbol, 0.0)
+            if atr > 0:
+                stop_pct = (atr * ATR_STOP_MULTIPLIER / avg_cost) * 100.0
+                tp_pct   = (atr * ATR_TP_MULTIPLIER   / avg_cost) * 100.0
+            else:
+                stop_pct = STOP_LOSS_PCT
+                tp_pct   = TAKE_PROFIT_PCT
+
+            if pct_move <= -stop_pct:
+                logger.warning(f"[STOP-LOSS] {symbol} down {pct_move:.1f}% (avg ${avg_cost:.2f} -> ${price:.2f}, stop {stop_pct:.1f}%{' ATR-based' if atr > 0 else ''}) — closing position")
                 sml_proxy = {"god_stacked": MIN_GOD_STACKED, "tier": "GOD_MODE", "signal": "STOP_LOSS"}
                 _execute(symbol, "sell", sml_proxy, scan_counter)
-            elif pct_move >= TAKE_PROFIT_PCT:
-                logger.info(f"[TAKE-PROFIT] {symbol} up {pct_move:.1f}% (avg ${avg_cost:.2f} -> ${price:.2f}) — closing position")
+            elif pct_move >= tp_pct:
+                logger.info(f"[TAKE-PROFIT] {symbol} up {pct_move:.1f}% (avg ${avg_cost:.2f} -> ${price:.2f}, target {tp_pct:.1f}%{' ATR-based' if atr > 0 else ''}) — closing position")
                 sml_proxy = {"god_stacked": MIN_GOD_STACKED, "tier": "GOD_MODE", "signal": "TAKE_PROFIT"}
                 _execute(symbol, "sell", sml_proxy, scan_counter)
         except Exception as e:
