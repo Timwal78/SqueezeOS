@@ -479,6 +479,76 @@ def place_option_order(option_symbol: str, quantity: int, side: str,
     return {"status": "error", "message": str(err)}
 
 
+def get_order_status(order_id) -> Optional[Dict[str, Any]]:
+    """
+    Fetch the current status of a previously placed order.
+    Returns Tradier's raw order dict — notable fields: status
+    ("open"/"partially_filled"/"filled"/"rejected"/"canceled"/"expired"/"error"),
+    avg_fill_price, exec_quantity. Returns None if unavailable.
+    """
+    acct = _account_id()
+    if not acct:
+        logger.error("[TRADIER] TRADIER_ACCOUNT_ID not set — cannot fetch order status")
+        return None
+    data = _get(f"/accounts/{acct}/orders/{order_id}", {"includeTags": "false"})
+    if not data:
+        return None
+    order = data.get("order")
+    return order if isinstance(order, dict) else None
+
+
+def poll_order_fill(order_id, timeout_s: float = 8.0, interval_s: float = 1.0) -> Dict[str, Any]:
+    """
+    Poll Tradier for fill confirmation on a just-placed order.
+    Returns {"filled": bool, "status": str, "avg_fill_price": float|None}.
+    Fails safe: on timeout or an error/rejected/canceled/expired terminal status,
+    "filled" is False and callers must not assume the entry_price they already
+    have is accurate — they placed an order whose true fill (if any) is unverified.
+    """
+    deadline = time.time() + max(0.0, timeout_s)
+    last_status = "unknown"
+    terminal_bad = {"rejected", "canceled", "expired", "error"}
+    while True:
+        order = get_order_status(order_id)
+        if order:
+            last_status = str(order.get("status", "unknown")).lower()
+            if last_status == "filled":
+                try:
+                    avg_price = float(order.get("avg_fill_price") or 0) or None
+                except (TypeError, ValueError):
+                    avg_price = None
+                return {"filled": True, "status": last_status, "avg_fill_price": avg_price}
+            if last_status in terminal_bad:
+                return {"filled": False, "status": last_status, "avg_fill_price": None}
+        if time.time() >= deadline:
+            break
+        time.sleep(interval_s)
+    return {"filled": False, "status": last_status, "avg_fill_price": None}
+
+
+def get_spread_pct(symbol: str) -> Optional[float]:
+    """
+    Return the current bid-ask spread as a percentage of the midpoint, or None
+    if a quote/valid bid+ask isn't available. Used to guard market-order entries
+    against thin, wide-spread names where a marketable order eats the whole
+    spread as instant slippage.
+    """
+    quote = get_quote(symbol)
+    if not quote:
+        return None
+    try:
+        bid = float(quote.get("bid") or 0)
+        ask = float(quote.get("ask") or 0)
+    except (TypeError, ValueError):
+        return None
+    if bid <= 0 or ask <= 0 or ask < bid:
+        return None
+    mid = (bid + ask) / 2.0
+    if mid <= 0:
+        return None
+    return round((ask - bid) / mid * 100.0, 4)
+
+
 class TradierBroker:
     """
     Thin broker wrapper so ExecutionEngine can call self.broker.place_order()
@@ -573,6 +643,9 @@ __all__ = [
     "get_chain",
     "get_quote",
     "get_quotes_batch",
+    "get_order_status",
+    "poll_order_fill",
+    "get_spread_pct",
     "get_history_df",
     "get_history_batch",
     "get_option_chain_schwab_format",

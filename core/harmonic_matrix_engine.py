@@ -15,7 +15,7 @@ APEX Committee Engine — patent-pending. Internal parameters redacted from API 
 """
 
 import logging
-from typing import List
+from typing import List, Optional
 
 logger = logging.getLogger("SML.HarmonicMatrix")
 
@@ -48,17 +48,67 @@ HARMONIC_CONFIGS = [
 _MIN_BARS = 20  # Minimum bars for meaningful EMA computation on Polygon free tier
 
 
-def _ema_value(closes: list, span: int) -> float:
-    """Compute the most recent EMA value using pandas-style ewm."""
+def _ema_series(closes: list, span: int, tail: int = 1) -> list:
+    """Compute EMA over the full (properly warmed-up) series, returning the last
+    `tail` values in chronological order. tail=1 matches the old _ema_value()."""
     import pandas as pd
     s = pd.Series([float(c) for c in closes])
-    return float(s.ewm(span=span, adjust=False).mean().iloc[-1])
+    ema = s.ewm(span=span, adjust=False).mean()
+    return [float(v) for v in ema.tail(tail)]
 
 
-def analyze(closes: List[float]) -> dict:
+def _true_atr(bars: Optional[List[dict]], closes: List[float], period: int = 14):
+    """
+    True ATR (max of High-Low, |High-PrevClose|, |Low-PrevClose|) when aligned
+    OHLC bars are supplied; falls back to the previous close-to-close range proxy
+    otherwise (e.g. a caller that only has a close series). `bars` is trusted to
+    be aligned 1:1 with `closes` (same order) — if the lengths don't match, that
+    alignment can't be assumed, so this falls back to the proxy rather than risk
+    pairing the wrong bar's high/low with a given close.
+    Returns (atr_value, is_true_atr).
+    """
+    last_price = float(closes[-1])
+    if bars and len(bars) == len(closes) and len(bars) >= period + 1:
+        recent = bars[-(period + 1):]
+        trs = []
+        prev_close = None
+        for b in recent:
+            try:
+                h = float(b.get("h") if b.get("h") is not None else b.get("high", 0) or 0)
+                l = float(b.get("l") if b.get("l") is not None else b.get("low", 0) or 0)
+                c = float(b.get("c") if b.get("c") is not None else b.get("close", 0) or 0)
+            except (TypeError, ValueError):
+                prev_close = None
+                continue
+            if prev_close is not None and h and l:
+                trs.append(max(h - l, abs(h - prev_close), abs(l - prev_close)))
+            prev_close = c
+        if trs:
+            return round(sum(trs) / len(trs), 4), True
+
+    # Fallback: close-to-close range proxy (previous behavior) — understates true
+    # range since it ignores gaps and intrabar highs/lows, but never crashes.
+    if len(closes) >= period + 1:
+        seq = [float(closes[i]) for i in range(-(period + 1), 0)]
+        ranges = [abs(seq[i] - seq[i - 1]) for i in range(1, len(seq))]
+        return (round(sum(ranges) / len(ranges), 4) if ranges else last_price * 0.015), False
+    return last_price * 0.015, False
+
+
+def analyze(closes: List[float], bars: Optional[List[dict]] = None, confirm_bars: int = 2) -> dict:
     """
     Run all 18 proprietary ranked configurations against the given close series.
     Returns ranked results with tier labels, stacked status, and composite signal.
+
+    bars: optional OHLC dicts (keys h/l/c or high/low/close) aligned 1:1 with
+    `closes`, used for a true ATR instead of the close-to-close proxy.
+
+    confirm_bars: the bullish/bearish EMA-stack condition must hold for this many
+    consecutive bars (not just the current one) before it counts toward
+    god_stacked/prime_stacked/watch_stacked. A single-bar stack is a common
+    whipsaw source when this gates live order execution downstream, so the
+    default requires 2-bar persistence. Pass 1 to restore the old single-bar
+    behavior.
 
     The result is safe to serialize to JSON — no internal parameters exposed.
     """
@@ -82,14 +132,10 @@ def analyze(closes: List[float]) -> dict:
         }
 
     last_price = float(closes[-1])
+    confirm_bars = max(1, int(confirm_bars))
+    window = min(confirm_bars, n)
 
-    # Real ATR from last 14 bars — no hardcoded fallback
-    if n >= 15:
-        seq = [float(closes[i]) for i in range(-15, 0)]
-        ranges = [abs(seq[i] - seq[i-1]) for i in range(1, len(seq))]
-        atr = round(sum(ranges) / len(ranges), 4) if ranges else last_price * 0.015
-    else:
-        atr = last_price * 0.015
+    atr, atr_is_true = _true_atr(bars, closes)
 
     matrix = {}
     god_stacked = 0
@@ -103,24 +149,31 @@ def analyze(closes: List[float]) -> dict:
     for cfg in HARMONIC_CONFIGS:
         seq = cfg["sequence"]
         try:
-            emas = [_ema_value(closes, span) for span in seq]
+            ema_tails = [_ema_series(closes, span, tail=window) for span in seq]
         except Exception as e:
             logger.warning(f"[Harmonic] EMA compute error for {cfg['id']}: {e}")
             continue
+        emas = [tail[-1] for tail in ema_tails]  # current values, for display/back-compat
 
-        # Bullish stack: price > EMA1 > EMA2 > ... > EMAn (fastest to slowest)
-        is_stacked = (
-            last_price > emas[0]
-            and all(emas[i] > emas[i+1] for i in range(len(emas) - 1))
-        )
-        # Bearish stack: mirror image — price < EMA1 < EMA2 < ... < EMAn.
-        # Same proprietary period configurations (HARMONIC_CONFIGS) run in the
-        # opposite direction — this is not a new proprietary parameter set,
-        # just the symmetric test of the same ranked EMA sequences.
-        is_stacked_bear = (
-            last_price < emas[0]
-            and all(emas[i] < emas[i+1] for i in range(len(emas) - 1))
-        )
+        # Persistence check: the bullish/bearish stack condition (price > EMA1 >
+        # EMA2 > ... fastest-to-slowest, or the mirrored bearish order) must hold
+        # on EVERY one of the last `window` bars, not just the current one — a
+        # single-bar spike above/below a stack is a common whipsaw source when
+        # this gates live order execution downstream (god_stacked >= N).
+        is_stacked = True
+        is_stacked_bear = True
+        for k in range(window):
+            offset = window - k  # 1-indexed from the end of the window
+            if any(len(t) < offset for t in ema_tails):
+                is_stacked = False
+                is_stacked_bear = False
+                break
+            price_k = float(closes[-offset])
+            emas_k = [t[-offset] for t in ema_tails]
+            bull_k = price_k > emas_k[0] and all(emas_k[i] > emas_k[i+1] for i in range(len(emas_k) - 1))
+            bear_k = price_k < emas_k[0] and all(emas_k[i] < emas_k[i+1] for i in range(len(emas_k) - 1))
+            is_stacked = is_stacked and bull_k
+            is_stacked_bear = is_stacked_bear and bear_k
 
         if is_stacked:
             if cfg["tier"] == "GOD_MODE":
@@ -282,7 +335,9 @@ def analyze(closes: List[float]) -> dict:
         "bear_execute_gate":        bear_execute_gate,
         "bear_decision":            bear_decision,
         "bars_used":           n,
+        "confirm_bars":        window,
         "atr":                 atr,
+        "atr_true":            atr_is_true,  # True (real OHLC True Range) vs False (close-to-close proxy — OHLC bars weren't supplied/aligned)
         "levels": {
             "invalidation": round(last_price - atr * 1.5, 4),
             "tp1":          round(last_price + atr * 2.0, 4),
