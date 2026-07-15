@@ -1,0 +1,277 @@
+//@version=6
+// ScriptMaster Triple Lock Engine [Beastmode+] v2
+//
+// v2 changes vs v1 (audited — v1 fires on the exact bar a 3-matrix stack forms,
+// with no confirmation, no repaint guard, and no awareness of how extended
+// price already is or how abnormal current volatility is):
+//   - Bar-close-only trigger (barstate.isconfirmed) so labels/alerts no longer
+//     flicker or repaint intrabar.
+//   - Persistence filter: all three matrices (Geo/Ari/Mac) must hold their
+//     stack for `confirmBars` consecutive closes, not just the current one —
+//     the same whipsaw fix already applied to core/harmonic_matrix_engine.py
+//     and core/grid369_engine.py server-side.
+//   - Extension/chase guard: skips firing if price is already more than
+//     Max Extension x ATR beyond the fastest Geo EMA — a well-documented
+//     trend-following pitfall is buying/selling a move that's already run too
+//     far, right before it mean-reverts.
+//   - Volatility regime filter: skips firing when ATR is in an abnormal
+//     percentile-rank tail versus its own recent history (news-spike chop),
+//     rather than a fixed threshold, so it adapts per symbol/timeframe.
+//   - Webhook payload unchanged from v1 (v1 never had one — alertcondition()
+//     only, human-configured). No live-execution wiring added here; this is
+//     a signal-quality pass, not a decision to put this on the auto-trade path.
+indicator("ScriptMaster Triple Lock Engine [Beastmode+] v2", shorttitle="SML-TL-6B-v2",
+          overlay=true, explicit_plot_zorder=true, max_lines_count=50)
+
+// ─── PALETTE ──────────────────────────────────────────────────────────────────
+color NEON_GREEN  = #39FF14
+color NEON_RED    = #FF003C
+color NEON_CYAN   = #00FFFF
+color NEON_GOLD   = #FFD700
+color NEON_PURPLE = #BF5FFF
+color HUD_BG      = color.new(#000000, 15)
+color HUD_BORDER  = color.new(#000000, 0)
+
+// ─── INPUTS ───────────────────────────────────────────────────────────────────
+i_vol_en  = input.bool(true,  "Enable Volume Filter",  group="Volume Filter")
+i_vol_mul = input.float(1.5,  "Surge Multiplier",      group="Volume Filter", minval=1.0, step=0.1)
+i_vol_len = input.int(20,     "Volume MA Length",      group="Volume Filter", minval=5)
+
+i_atr_en  = input.bool(true,  "Draw ATR Targets",      group="ATR Targets")
+i_atr_len = input.int(14,     "ATR Length",            group="ATR Targets", minval=1)
+i_atr_r1  = input.float(1.0,  "TP1 (R)",              group="ATR Targets", minval=0.5, step=0.5)
+i_atr_r2  = input.float(2.0,  "TP2 (R)",              group="ATR Targets", minval=0.5, step=0.5)
+i_atr_r3  = input.float(3.0,  "TP3 (R)",              group="ATR Targets", minval=0.5, step=0.5)
+i_atr_sl  = input.float(1.0,  "SL  (R)",              group="ATR Targets", minval=0.5, step=0.5)
+i_atr_ext = input.int(20,     "Line Length (bars)",    group="ATR Targets", minval=5, maxval=200)
+
+i_sqz_en  = input.bool(true,  "Show Squeeze Dots",     group="Squeeze")
+i_bb_len  = input.int(20,     "BB Length",             group="Squeeze", minval=5)
+i_bb_mul  = input.float(2.0,  "BB Mult",               group="Squeeze", minval=0.5, step=0.1)
+i_kc_len  = input.int(20,     "KC Length",             group="Squeeze", minval=5)
+i_kc_mul  = input.float(1.5,  "KC Mult",               group="Squeeze", minval=0.5, step=0.1)
+
+var string G_ADV = "▶  SIGNAL QUALITY (v2, research-backed)"
+int   confirmBars   = input.int(2, "Stack Confirmation Bars", minval=1, maxval=10, group=G_ADV, tooltip="All three matrices (Geo/Ari/Mac) must hold their stacked order for this many consecutive closes before firing, not just the current bar.")
+bool  useExtGuard    = input.bool(true, "Extension Guard (skip if overextended)", group=G_ADV, tooltip="Skips firing if price is already more than Max Extension x ATR beyond the fast Geo EMA at the moment of the lock — chasing an already-extended move raises immediate mean-reversion risk.")
+float maxExtAtr      = input.float(2.5, "Max Extension (×ATR)", minval=0.5, step=0.25, group=G_ADV)
+bool  useVolRegime   = input.bool(true, "Volatility Regime Filter", group=G_ADV, tooltip="Skips firing when ATR is in an abnormal-volatility percentile tail (news-spike whipsaw) versus its own recent history.")
+float volRegimeMaxPct = input.float(90.0, "Max ATR Percentile", minval=50, maxval=100, group=G_ADV)
+
+// ─── UDT ──────────────────────────────────────────────────────────────────────
+type MatrixState
+    bool isBull
+    bool isBear
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+method evaluateMatrix(float e1, float e2, float e3, float e4, float e5) =>
+    bool bullStack = (e1 > e2) and (e2 > e3) and (e3 > e4) and (e4 > e5)
+    bool bearStack = (e1 < e2) and (e2 < e3) and (e3 < e4) and (e4 < e5)
+    MatrixState.new(bullStack, bearStack)
+
+matLabel(MatrixState m) =>
+    m.isBull ? "BULL" : m.isBear ? "BEAR" : "MIX"
+
+matColor(MatrixState m) =>
+    m.isBull ? NEON_GREEN : m.isBear ? NEON_RED : color.rgb(255, 255, 255)
+
+scoreLabel(int s) =>
+    if s >= 10
+        "MAX BULL"
+    else if s >= 7
+        "HI BULL"
+    else if s >= 4
+        "MED BULL"
+    else if s <= -10
+        "MAX BEAR"
+    else if s <= -7
+        "HI BEAR"
+    else if s <= -4
+        "MED BEAR"
+    else
+        "NEUTRAL"
+
+scoreColor(int s) =>
+    if s >= 10
+        NEON_GREEN
+    else if s >= 4
+        color.new(NEON_GREEN, 40)
+    else if s <= -10
+        NEON_RED
+    else if s <= -4
+        color.new(NEON_RED, 40)
+    else
+        color.rgb(255, 255, 255)
+
+// ─── EMA STACKS ───────────────────────────────────────────────────────────────
+float g1 = ta.ema(close, 3)
+float g2 = ta.ema(close, 9)
+float g3 = ta.ema(close, 18)
+float g4 = ta.ema(close, 36)
+float g5 = ta.ema(close, 72)
+
+float a1 = ta.ema(close, 13)
+float a2 = ta.ema(close, 26)
+float a3 = ta.ema(close, 39)
+float a4 = ta.ema(close, 52)
+float a5 = ta.ema(close, 65)
+
+float macroAnchor = ta.ema(close, 741)
+float m1 = ta.ema(close, 30)
+float m2 = ta.ema(close, 60)
+float m3 = ta.ema(close, 90)
+float m4 = ta.ema(close, 120)
+
+MatrixState geo = evaluateMatrix(g1, g2, g3, g4, g5)
+MatrixState ari = evaluateMatrix(a1, a2, a3, a4, a5)
+MatrixState mac = evaluateMatrix(m1, m2, m3, m4, macroAnchor)
+
+// ─── CONFLUENCE SCORE (-12 to +12) ────────────────────────────────────────────
+int gBull = (g1>g2?1:0)+(g2>g3?1:0)+(g3>g4?1:0)+(g4>g5?1:0)
+int aBull = (a1>a2?1:0)+(a2>a3?1:0)+(a3>a4?1:0)+(a4>a5?1:0)
+int mBull = (m1>m2?1:0)+(m2>m3?1:0)+(m3>m4?1:0)+(m4>macroAnchor?1:0)
+int gBear = (g1<g2?1:0)+(g2<g3?1:0)+(g3<g4?1:0)+(g4<g5?1:0)
+int aBear = (a1<a2?1:0)+(a2<a3?1:0)+(a3<a4?1:0)+(a4<a5?1:0)
+int mBear = (m1<m2?1:0)+(m2<m3?1:0)+(m3<m4?1:0)+(m4<macroAnchor?1:0)
+
+int netScore = (gBull + aBull + mBull) - (gBear + aBear + mBear)
+
+// ─── PERSISTENCE: all 3 matrices must hold their stack for confirmBars bars ───
+bool geoBullPersist = geo.isBull
+bool geoBearPersist = geo.isBear
+bool ariBullPersist = ari.isBull
+bool ariBearPersist = ari.isBear
+bool macBullPersist = mac.isBull
+bool macBearPersist = mac.isBear
+for i = 1 to confirmBars - 1
+    geoBullPersist := geoBullPersist and (g1[i] > g2[i] and g2[i] > g3[i] and g3[i] > g4[i] and g4[i] > g5[i])
+    geoBearPersist := geoBearPersist and (g1[i] < g2[i] and g2[i] < g3[i] and g3[i] < g4[i] and g4[i] < g5[i])
+    ariBullPersist := ariBullPersist and (a1[i] > a2[i] and a2[i] > a3[i] and a3[i] > a4[i] and a4[i] > a5[i])
+    ariBearPersist := ariBearPersist and (a1[i] < a2[i] and a2[i] < a3[i] and a3[i] < a4[i] and a4[i] < a5[i])
+    macBullPersist := macBullPersist and (m1[i] > m2[i] and m2[i] > m3[i] and m3[i] > m4[i] and m4[i] > macroAnchor[i])
+    macBearPersist := macBearPersist and (m1[i] < m2[i] and m2[i] < m3[i] and m3[i] < m4[i] and m4[i] < macroAnchor[i])
+
+// ─── SIGNALS (persistence-confirmed) ──────────────────────────────────────────
+bool tripleCall = geoBullPersist and ariBullPersist and macBullPersist
+bool triplePut  = geoBearPersist and ariBearPersist and macBearPersist
+
+// ─── VOLUME GATE ──────────────────────────────────────────────────────────────
+float volMA    = ta.sma(volume, i_vol_len)
+bool  volSurge = volume > volMA * i_vol_mul
+bool  volPass  = not i_vol_en or volSurge
+
+// ─── ATR + EXTENSION + VOLATILITY REGIME ──────────────────────────────────────
+float atrVal      = ta.atr(i_atr_len)
+float atrPctRank  = ta.percentrank(atrVal, 100)
+bool  volRegimeOk = not useVolRegime or atrPctRank <= volRegimeMaxPct
+
+float extDistBull = (close - g1) / atrVal
+float extDistBear = (g1 - close) / atrVal
+bool  overExtBull = useExtGuard and extDistBull > maxExtAtr
+bool  overExtBear = useExtGuard and extDistBear > maxExtAtr
+
+bool  callGate = tripleCall and volPass and volRegimeOk and not overExtBull and barstate.isconfirmed
+bool  putGate  = triplePut  and volPass and volRegimeOk and not overExtBear and barstate.isconfirmed
+bool  newCall  = callGate and not callGate[1]
+bool  newPut   = putGate  and not putGate[1]
+
+// ─── SQUEEZE (BB inside KC) ───────────────────────────────────────────────────
+float bbBasis   = ta.sma(close, i_bb_len)
+float bbUpper   = bbBasis + i_bb_mul * ta.stdev(close, i_bb_len)
+float bbLower   = bbBasis - i_bb_mul * ta.stdev(close, i_bb_len)
+float kcBasis   = ta.ema(close, i_kc_len)
+float kcRange   = ta.ema(ta.tr(true), i_kc_len) * i_kc_mul
+bool  inSqueeze = (bbUpper < kcBasis + kcRange) and (bbLower > kcBasis - kcRange)
+
+// ─── DEGRADATION ───────────────────────────────────────────────────────────────
+bool  lockDegraded = (tripleCall[1] and not geo.isBull) or (triplePut[1] and not geo.isBear)
+
+// ─── PLOTS ────────────────────────────────────────────────────────────────────
+p_fast = plot(g1, "EMA3",       color=color.new(NEON_GREEN, 20), linewidth=1)
+p_geo5 = plot(g5, "EMA72",      color=color.new(NEON_GREEN, 60), linewidth=1)
+plot(macroAnchor, "741 Anchor", color=NEON_CYAN, linewidth=3)
+
+fill(p_fast, p_geo5,
+     tripleCall ? color.new(NEON_GREEN, 75) :
+     triplePut  ? color.new(NEON_RED,   75) : color.new(color.gray, 90),
+     title="Geo Matrix Fill")
+
+bgcolor(tripleCall ? color.new(NEON_GREEN, 90) :
+        triplePut  ? color.new(NEON_RED,   90) : na,
+        title="Lock Flash")
+
+barcolor(netScore >= 10 ? NEON_GREEN :
+         netScore >=  6 ? color.new(NEON_GREEN, 50) :
+         netScore >=  2 ? color.new(NEON_GREEN, 75) :
+         netScore <= -10 ? NEON_RED :
+         netScore <=  -6 ? color.new(NEON_RED, 50) :
+         netScore <=  -2 ? color.new(NEON_RED, 75) : na,
+         title="Confluence Barcolor")
+
+plotshape(newCall,                "Call Gateway",  location=location.belowbar, color=NEON_GREEN, style=shape.triangleup,   size=size.tiny, text="LOCK_CALL", textcolor=color.white)
+plotshape(newPut,                 "Put Gateway",   location=location.abovebar, color=NEON_RED,   style=shape.triangledown, size=size.tiny, text="LOCK_PUT", textcolor=color.white)
+plotshape(i_sqz_en and inSqueeze, "Squeeze",       location=location.bottom,   color=NEON_GOLD,  style=shape.circle,       size=size.tiny)
+plotshape(lockDegraded,           "Lock Degraded", location=location.abovebar, color=NEON_GOLD,  style=shape.xcross,       size=size.tiny, text="Degrad")
+
+// ─── ATR TARGET LINES ─────────────────────────────────────────────────────────
+if i_atr_en
+    if newCall
+        int x2 = bar_index + i_atr_ext
+        line.new(bar_index, close - atrVal * i_atr_sl, x2, close - atrVal * i_atr_sl, color=color.new(NEON_RED, 20),   width=1, style=line.style_solid)
+        line.new(bar_index, close + atrVal * i_atr_r1, x2, close + atrVal * i_atr_r1, color=color.new(NEON_GREEN, 60), width=1, style=line.style_solid)
+        line.new(bar_index, close + atrVal * i_atr_r2, x2, close + atrVal * i_atr_r2, color=color.new(NEON_GREEN, 30), width=1, style=line.style_solid)
+        line.new(bar_index, close + atrVal * i_atr_r3, x2, close + atrVal * i_atr_r3, color=NEON_GREEN,               width=2, style=line.style_solid)
+    if newPut
+        int x2 = bar_index + i_atr_ext
+        line.new(bar_index, close + atrVal * i_atr_sl, x2, close + atrVal * i_atr_sl, color=color.new(NEON_GREEN, 20), width=1, style=line.style_solid)
+        line.new(bar_index, close - atrVal * i_atr_r1, x2, close - atrVal * i_atr_r1, color=color.new(NEON_RED, 60),   width=1, style=line.style_solid)
+        line.new(bar_index, close - atrVal * i_atr_r2, x2, close - atrVal * i_atr_r2, color=color.new(NEON_RED, 30),   width=1, style=line.style_solid)
+        line.new(bar_index, close - atrVal * i_atr_r3, x2, close - atrVal * i_atr_r3, color=NEON_RED,                 width=2, style=line.style_solid)
+
+// ─── HUD TABLE ────────────────────────────────────────────────────────────────
+var table hud = table.new(position.bottom_right, 2, 11,
+     bgcolor=HUD_BG, border_color=HUD_BORDER, border_width=1,
+     frame_color=HUD_BORDER, frame_width=1)
+
+if barstate.islast
+    table.cell(hud, 0, 0, "SML TRIPLE LOCK v2",
+               bgcolor=color.new(#0a0a0a, 0), text_color=NEON_CYAN, text_size=size.small)
+    table.cell(hud, 1, 0, tripleCall ? "CALL LOCKED" : triplePut ? "PUT LOCKED" : "STANDBY",
+               bgcolor=color.new(#0a0a0a, 0),
+               text_color=tripleCall ? NEON_GREEN : triplePut ? NEON_RED : color.rgb(255, 255, 255),
+               text_size=size.small)
+    table.cell(hud, 0, 1, "GEO [3-72]",   bgcolor=HUD_BG, text_color=color.rgb(255, 255, 255), text_size=size.normal)
+    table.cell(hud, 1, 1, matLabel(geo),   bgcolor=HUD_BG, text_color=matColor(geo), text_size=size.normal)
+    table.cell(hud, 0, 2, "ARI [13-65]",  bgcolor=HUD_BG, text_color=color.rgb(255, 255, 255), text_size=size.normal)
+    table.cell(hud, 1, 2, matLabel(ari),   bgcolor=HUD_BG, text_color=matColor(ari), text_size=size.normal)
+    table.cell(hud, 0, 3, "MAC [30-741]", bgcolor=HUD_BG, text_color=color.rgb(255, 255, 255), text_size=size.normal)
+    table.cell(hud, 1, 3, matLabel(mac),   bgcolor=HUD_BG, text_color=matColor(mac), text_size=size.normal)
+    table.cell(hud, 0, 4, "CONFLUENCE",   bgcolor=HUD_BG, text_color=color.rgb(255, 255, 255), text_size=size.normal)
+    table.cell(hud, 1, 4, str.tostring(netScore) + "/12  " + scoreLabel(netScore),
+               bgcolor=HUD_BG, text_color=scoreColor(netScore), text_size=size.normal)
+    table.cell(hud, 0, 5, "VOLUME",       bgcolor=HUD_BG, text_color=color.rgb(255, 255, 255), text_size=size.normal)
+    table.cell(hud, 1, 5, volSurge ? "SURGE" : "NORMAL",
+               bgcolor=HUD_BG, text_color=volSurge ? NEON_GOLD : color.rgb(255, 255, 255), text_size=size.normal)
+    table.cell(hud, 0, 6, "ATR-" + str.tostring(i_atr_len),
+               bgcolor=HUD_BG, text_color=color.silver, text_size=size.normal)
+    table.cell(hud, 1, 6, str.tostring(atrVal, "#.####"),
+               bgcolor=HUD_BG, text_color=NEON_PURPLE, text_size=size.normal)
+    table.cell(hud, 0, 7, "SQUEEZE",      bgcolor=HUD_BG, text_color=color.rgb(255, 255, 255), text_size=size.normal)
+    table.cell(hud, 1, 7, inSqueeze ? "ACTIVE" : "NONE",
+               bgcolor=HUD_BG, text_color=inSqueeze ? NEON_GOLD : color.rgb(255, 255, 255), text_size=size.normal)
+    table.cell(hud, 0, 8, "741 ANCHOR",   bgcolor=HUD_BG, text_color=color.rgb(255, 255, 255), text_size=size.normal)
+    table.cell(hud, 1, 8, str.tostring(macroAnchor, "#.##"),
+               bgcolor=HUD_BG, text_color=NEON_CYAN, text_size=size.normal)
+    table.cell(hud, 0, 9, "VOL REGIME",   bgcolor=HUD_BG, text_color=color.rgb(255, 255, 255), text_size=size.normal)
+    table.cell(hud, 1, 9, volRegimeOk ? "OK" : "EXTREME (skip)",
+               bgcolor=HUD_BG, text_color=volRegimeOk ? NEON_GOLD : NEON_RED, text_size=size.normal)
+    table.cell(hud, 0, 10, "EXTENSION",   bgcolor=HUD_BG, text_color=color.rgb(255, 255, 255), text_size=size.normal)
+    table.cell(hud, 1, 10, (overExtBull or overExtBear) ? "OVEREXTENDED (skip)" : "OK",
+               bgcolor=HUD_BG, text_color=(overExtBull or overExtBear) ? NEON_RED : NEON_GOLD, text_size=size.normal)
+
+// ─── ALERTS ───────────────────────────────────────────────────────────────────
+alertcondition(newCall,               title="CALL Gateway",      message="SML Triple Lock v2 CALL — all 3 matrices bull (confirmed {{interval}}), volume+regime+extension checked. Price: {{close}}")
+alertcondition(newPut,                title="PUT Gateway",       message="SML Triple Lock v2 PUT — all 3 matrices bear (confirmed {{interval}}), volume+regime+extension checked. Price: {{close}}")
+alertcondition(lockDegraded,          title="Lock Degraded",     message="SML Geo matrix flipped — triple lock breaking, reduce or hedge. Price: {{close}}")
+alertcondition(newCall and inSqueeze, title="Squeeze CALL Lock", message="SML CALL fired inside squeeze — extreme conviction. Price: {{close}}")
+alertcondition(newPut  and inSqueeze, title="Squeeze PUT Lock",  message="SML PUT fired inside squeeze — extreme conviction. Price: {{close}}")

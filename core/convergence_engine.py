@@ -306,18 +306,27 @@ class ConvergenceEngine:
 
         # ── Grid 369 — Proprietary 3×3 Anchor Matrix (Grid 2) ────────────────
         try:
-            god_stacked_g1 = sml_data.get("god_stacked", 0)
-            grid369_data   = _grid369.analyze(closes, grid1_god_stacked=god_stacked_g1)
+            god_stacked_g1      = sml_data.get("god_stacked", 0)
+            bear_god_stacked_g1 = sml_data.get("bear_god_stacked", 0)
+            grid369_data   = _grid369.analyze(closes, grid1_god_stacked=god_stacked_g1,
+                                               grid1_bear_god_stacked=bear_god_stacked_g1)
         except Exception as e:
             import traceback
             logger.error(f"[Grid369] {symbol} error: {e}\n{traceback.format_exc()}")
             grid369_data = {"error": str(e), "grid": {}}
 
-        # Elevate signal to DUAL_GRID_LOCK when both grids confirm
+        # Elevate signal to DUAL_GRID_LOCK when both grids confirm — either
+        # direction. Previously bull-only, so a bearish GOD_MODE setup could
+        # never reach the highest-confidence dual-confirmation tier even when
+        # Grid 2 independently agreed.
         if grid369_data.get("dual_grid_lock"):
             signal    = "DUAL_GRID_LOCK"
             beastmode = True
-            logger.info(f"[DUAL_GRID_LOCK] {symbol} — Grid 1 GOD_MODE + Grid 2 Base-9 all stacked")
+            logger.info(f"[DUAL_GRID_LOCK] {symbol} — Grid 1 GOD_MODE + Grid 2 independent majority confirm (bull)")
+        elif grid369_data.get("dual_grid_lock_bear"):
+            signal    = "DUAL_GRID_LOCK_BEAR"
+            beastmode = True
+            logger.info(f"[DUAL_GRID_LOCK_BEAR] {symbol} — Grid 1 GOD_MODE_BEAR + Grid 2 independent majority confirm (bear)")
 
         result = {
             "symbol":            symbol,

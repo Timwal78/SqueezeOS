@@ -17,6 +17,8 @@ APEX Committee Engine — patent-pending. Internal parameters redacted from API 
 import logging
 from typing import List, Optional
 
+from core.ema_stack_utils import stack_persistence
+
 logger = logging.getLogger("SML.HarmonicMatrix")
 
 # ── Proprietary Ranked Configurations ────────────────────────────────────────
@@ -46,15 +48,6 @@ HARMONIC_CONFIGS = [
 ]
 
 _MIN_BARS = 20  # Minimum bars for meaningful EMA computation on Polygon free tier
-
-
-def _ema_series(closes: list, span: int, tail: int = 1) -> list:
-    """Compute EMA over the full (properly warmed-up) series, returning the last
-    `tail` values in chronological order. tail=1 matches the old _ema_value()."""
-    import pandas as pd
-    s = pd.Series([float(c) for c in closes])
-    ema = s.ewm(span=span, adjust=False).mean()
-    return [float(v) for v in ema.tail(tail)]
 
 
 def _true_atr(bars: Optional[List[dict]], closes: List[float], period: int = 14):
@@ -95,7 +88,8 @@ def _true_atr(bars: Optional[List[dict]], closes: List[float], period: int = 14)
     return last_price * 0.015, False
 
 
-def analyze(closes: List[float], bars: Optional[List[dict]] = None, confirm_bars: int = 2) -> dict:
+def analyze(closes: List[float], bars: Optional[List[dict]] = None, confirm_bars: int = 2,
+            min_separation_atr: float = 0.1) -> dict:
     """
     Run all 18 proprietary ranked configurations against the given close series.
     Returns ranked results with tier labels, stacked status, and composite signal.
@@ -109,6 +103,13 @@ def analyze(closes: List[float], bars: Optional[List[dict]] = None, confirm_bars
     whipsaw source when this gates live order execution downstream, so the
     default requires 2-bar persistence. Pass 1 to restore the old single-bar
     behavior.
+
+    min_separation_atr: a config only counts as stacked if its fastest and
+    slowest EMA are at least this many ATRs apart. Five EMAs happening to
+    land in the "right" order while all bunched within noise-level distance
+    of each other isn't a meaningful trend — it's a stack that can flip on
+    the next tick. 0 disables this filter (restores the old behavior of
+    counting any technically-ordered stack regardless of spread).
 
     The result is safe to serialize to JSON — no internal parameters exposed.
     """
@@ -149,31 +150,24 @@ def analyze(closes: List[float], bars: Optional[List[dict]] = None, confirm_bars
     for cfg in HARMONIC_CONFIGS:
         seq = cfg["sequence"]
         try:
-            ema_tails = [_ema_series(closes, span, tail=window) for span in seq]
+            # Persistence check (shared with Grid 369 / core/grid369_engine.py):
+            # the bullish/bearish stack condition (price > EMA1 > EMA2 > ... or
+            # the mirrored bearish order) must hold on EVERY one of the last
+            # `window` bars, not just the current one — a single-bar spike above/
+            # below a stack is a common whipsaw source when this gates live order
+            # execution downstream (god_stacked >= N).
+            is_stacked, is_stacked_bear, emas = stack_persistence(closes, seq, window)
         except Exception as e:
             logger.warning(f"[Harmonic] EMA compute error for {cfg['id']}: {e}")
             continue
-        emas = [tail[-1] for tail in ema_tails]  # current values, for display/back-compat
 
-        # Persistence check: the bullish/bearish stack condition (price > EMA1 >
-        # EMA2 > ... fastest-to-slowest, or the mirrored bearish order) must hold
-        # on EVERY one of the last `window` bars, not just the current one — a
-        # single-bar spike above/below a stack is a common whipsaw source when
-        # this gates live order execution downstream (god_stacked >= N).
-        is_stacked = True
-        is_stacked_bear = True
-        for k in range(window):
-            offset = window - k  # 1-indexed from the end of the window
-            if any(len(t) < offset for t in ema_tails):
+        # Minimum-separation filter: an EMA stack whose fastest and slowest
+        # EMA are only a noise-level distance apart isn't a meaningful trend,
+        # even if technically ordered correctly — it can flip on the next tick.
+        if min_separation_atr > 0 and atr > 0 and (is_stacked or is_stacked_bear):
+            if abs(emas[0] - emas[-1]) < min_separation_atr * atr:
                 is_stacked = False
                 is_stacked_bear = False
-                break
-            price_k = float(closes[-offset])
-            emas_k = [t[-offset] for t in ema_tails]
-            bull_k = price_k > emas_k[0] and all(emas_k[i] > emas_k[i+1] for i in range(len(emas_k) - 1))
-            bear_k = price_k < emas_k[0] and all(emas_k[i] < emas_k[i+1] for i in range(len(emas_k) - 1))
-            is_stacked = is_stacked and bull_k
-            is_stacked_bear = is_stacked_bear and bear_k
 
         if is_stacked:
             if cfg["tier"] == "GOD_MODE":
@@ -336,6 +330,7 @@ def analyze(closes: List[float], bars: Optional[List[dict]] = None, confirm_bars
         "bear_decision":            bear_decision,
         "bars_used":           n,
         "confirm_bars":        window,
+        "min_separation_atr":  min_separation_atr,
         "atr":                 atr,
         "atr_true":            atr_is_true,  # True (real OHLC True Range) vs False (close-to-close proxy — OHLC bars weren't supplied/aligned)
         "levels": {
