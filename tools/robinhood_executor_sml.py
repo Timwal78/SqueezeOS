@@ -654,7 +654,19 @@ def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
         logger.info(f"[EXEC] {symbol} BUY cooldown — {int(COOLDOWN_S-(now-last))}s left")
         return
 
-    god_count = sml.get("god_stacked", 0)
+    # Bearish signals from the real beastmode poll carry their stack count in
+    # bear_god_stacked, not god_stacked (which stays 0 on a genuine bear
+    # setup) — reading god_stacked unconditionally here meant a real, fully
+    # confirmed bearish GOD_MODE signal (side="sell") was silently skipped as
+    # "0 < MIN_GOD_STACKED" every time, since its bull count is naturally ~0.
+    # The STOP_LOSS/TAKE_PROFIT and TV-webhook sml_proxy dicts don't carry a
+    # bear_god_stacked key at all (they set god_stacked directly to bypass
+    # this gate for risk exits / already-scored external signals), so the
+    # "in sml" check keeps their existing behavior unchanged.
+    if side == "sell" and "bear_god_stacked" in sml:
+        god_count = sml.get("bear_god_stacked", 0)
+    else:
+        god_count = sml.get("god_stacked", 0)
     if god_count < MIN_GOD_STACKED:
         logger.info(f"[EXEC] {symbol} god_stacked={god_count} < {MIN_GOD_STACKED} — skip")
         return
@@ -1069,6 +1081,22 @@ def _execute_option(symbol: str, option_type: str, sml: dict, sniper: dict, scan
     _discord_option(symbol, option_type, sniper, qty, limit_price, sml, result)
 
 
+def _classify_tier(tier_val: str, dual_val: bool, sig_val: str) -> str:
+    """
+    Returns the executor-facing tier label ('GOD_MODE'/'DUAL_GRID_LOCK'/
+    'GRID_LOCK') for one side (bull or bear) of a symbol's harmonic result, or
+    "" if that side doesn't qualify at all. Module-level (not a poll-local
+    closure) so it's independently testable.
+    """
+    if dual_val:
+        return "DUAL_GRID_LOCK"
+    if tier_val == "GOD_MODE":
+        return "GOD_MODE"
+    if "GRID" in (sig_val or "").upper():
+        return "GRID_LOCK"
+    return ""
+
+
 # ── Beastmode poll (server-side SET9 convergence scanner) ─────────────────────
 def _poll_beastmode() -> int:
     """Returns number of orders placed this poll. 0 = no signals or all filtered."""
@@ -1106,24 +1134,41 @@ def _poll_beastmode() -> int:
     for hit in signals:
         symbol  = (hit.get("symbol") or "").upper().strip()
         sml     = hit.get("sml_matrix") or {}
+        grid369 = hit.get("grid369") or {}
         sniper  = hit.get("options_sniper") or {}
-        tier    = sml.get("tier", "")
-        stacked = sml.get("god_stacked", 0)
-        signal  = sml.get("signal", "")
-        # Infer tier from signal name when tier field is absent/unknown
-        if tier not in _VALID_TIERS:
-            if "DUAL" in signal.upper():
-                tier = "DUAL_GRID_LOCK"
-            elif "GRID" in signal.upper():
-                tier = "GRID_LOCK"
-        effective_tier = tier
+
+        # sml_matrix.signal/tier only ever reflect the BULL ladder, and
+        # bear_signal/bear_tier the BEAR ladder — two separate fields, not one
+        # field that flips to a "_BEAR"-suffixed value on a bearish setup.
+        # Checking "BEAR" in sml.get("signal") (the bull-only field) could
+        # never match anything real, which meant every plain bearish signal
+        # (bear_tier=GOD_MODE but tier=NONE since god_stacked=0) was silently
+        # dropped as "no_tier" before ever reaching _execute() — this poll
+        # loop could effectively never detect a real bearish opportunity.
+        # Classify both sides independently instead and pick whichever
+        # actually qualifies (or the stronger one if, rarely, both do).
+        bull_stacked = sml.get("god_stacked", 0)
+        bear_stacked = sml.get("bear_god_stacked", 0)
+        bull_class = _classify_tier(sml.get("tier", ""),
+                                     grid369.get("dual_grid_lock", False), sml.get("signal", ""))
+        bear_class = _classify_tier(sml.get("bear_tier", ""),
+                                     grid369.get("dual_grid_lock_bear", False), sml.get("bear_signal", ""))
+
+        if bull_class and bear_class:
+            is_bear = bear_stacked > bull_stacked
+        else:
+            is_bear = bool(bear_class) and not bull_class
+
+        effective_tier = bear_class if is_bear else bull_class
+        stacked        = bear_stacked if is_bear else bull_stacked
+
         if effective_tier not in _VALID_TIERS:
             skipped["no_tier"] += 1
             continue
         min_stack = _TIER_MIN_STACK.get(effective_tier, MIN_GOD_STACKED)
         if stacked < min_stack:
             skipped["low_stack"] += 1
-            logger.debug(f"[POLL] {symbol} {tier} stacked={stacked} < {min_stack} — skip")
+            logger.debug(f"[POLL] {symbol} {effective_tier} stacked={stacked} < {min_stack} — skip")
             continue
         if symbol in _BLOCKLIST:
             skipped["blocklist"] += 1
@@ -1133,7 +1178,7 @@ def _poll_beastmode() -> int:
             skipped["cooldown"] += 1
             logger.info(f"[POLL] {symbol} {effective_tier} {stacked}/6 — cooldown {int(cooldown_remaining)}s left")
             continue
-        god_hits.append((symbol, sml, effective_tier, sniper))
+        god_hits.append((symbol, sml, effective_tier, sniper, is_bear))
 
     logger.info(
         f"[POLL] beastmode: {len(signals)} raw | {len(god_hits)} ready | "
@@ -1147,19 +1192,13 @@ def _poll_beastmode() -> int:
 
     scan_counter = [0]
     deferred     = 0
-    for symbol, sml, tier_label, sniper in god_hits:
-        signal = sml.get("signal", "")
-        # Explicit bear check rather than an incomplete bull allowlist: the
-        # harmonic engine's 3-stack bull label ("INSTITUTIONAL_CONVERGENCE")
-        # has no "_BULL" suffix unlike the 4/6-stack labels, so checking for
-        # "BULL in signal or signal in (...)" silently misread it as bearish.
-        # Every bear label is consistently suffixed "_BEAR" — check that instead.
-        is_bear = "BEAR" in signal
-        side    = "sell" if is_bear else "buy"
+    for symbol, sml, tier_label, sniper, is_bear in god_hits:
+        side = "sell" if is_bear else "buy"
         if scan_counter[0] >= MAX_PER_SCAN:
             deferred += 1
             continue
-        logger.info(f"[POLL] {tier_label}: {symbol} {side.upper()} stacked={sml.get('god_stacked',0)}/6")
+        side_stacked = sml.get('bear_god_stacked', 0) if is_bear else sml.get('god_stacked', 0)
+        logger.info(f"[POLL] {tier_label}: {symbol} {side.upper()} stacked={side_stacked}/6")
 
         if symbol in ODTE_ONLY_SYMBOLS:
             # 0DTE-only symbols (IWM) never get an equity order — the sniper

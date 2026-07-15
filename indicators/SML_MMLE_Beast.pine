@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // SML MMLE — Beast Mode
 // Author: ScriptMasterLabs™  /  SqueezeOS Pro
-// Version: 6  (PineScript v6)
+// Version: 6.1  (PineScript v6)
 // ─────────────────────────────────────────────────────────────────────────
 // Key signals:
 //   VPIN proxy     — Volume-synchronized Probability of Informed Trading
@@ -9,6 +9,10 @@
 //   TNT State      — NEUTRAL / COMPRESSED / TNT_LONG / TNT_SHORT
 //   VCCW Window    — 09:45–15:30 ET fire gate
 //   Python bridge  — Override state/walls/composite from server_v5.py
+// 6.1 fix: fireLong/fireShort alerts were re-firing every bar a TNT regime
+// persisted (a multi-bar TNT_LONG sent a fresh webhook/Discord alert on every
+// bar close, not just once) — now dedup'd to fire only on the transition into
+// a new state, same pattern as the v4 Liquidity Delta Scanner's alert fix.
 // ═══════════════════════════════════════════════════════════════════════════
 //@version=6
 indicator(title="SML MMLE — Beast Mode", shorttitle="SML MMLE-BEAST", overlay=true, max_lines_count=200, max_labels_count=200)
@@ -245,11 +249,23 @@ mkGenericJson(_action) =>
 buildPayload(_action, _color, _emoji) =>
     alert_mode == "DISCORD_EMBED" ? mkDiscordEmbed(_action, _color, _emoji) : alert_mode == "DISCORD_TEXT" ? mkDiscordText(_action, _emoji) : alert_mode == "BEAST_WEBHOOK" ? mkBeastWebhook(_action) : mkGenericJson(_action)
 
-if fireLong
+// Alert dedup: fireLong/fireShort stay true for as long as the underlying TNT
+// state persists (can be many bars), and alert.freq_once_per_bar_close still
+// fires once EVERY one of those bars — so a single multi-bar TNT_LONG regime
+// used to send a fresh webhook/Discord alert on every bar close, not just once
+// when it started. Only alert on the transition into a new fire state (same
+// pattern as the v4 Liquidity Delta Scanner's lastAlertKey dedup).
+var string _lastFireState = "NONE"
+string _fireState = fireLong ? "LONG" : fireShort ? "SHORT" : "NONE"
+bool _newFire = _fireState != "NONE" and _fireState != _lastFireState
+
+if fireLong and _newFire
     alert(buildPayload("FIRE_LONG",  TNT_GREEN, "🟢"), alert.freq_once_per_bar_close)
 
-if fireShort
+if fireShort and _newFire
     alert(buildPayload("FIRE_SHORT", TNT_RED,   "🔴"), alert.freq_once_per_bar_close)
+
+_lastFireState := _fireState
 
 alertcondition(fireLong,  title="MMLE FIRE LONG  (template)",  message='{"engine":"MMLE-BEAST","action":"FIRE_LONG","symbol":"{{ticker}}","price":{{close}},"tf":"{{interval}}"}')
 alertcondition(fireShort, title="MMLE FIRE SHORT (template)", message='{"engine":"MMLE-BEAST","action":"FIRE_SHORT","symbol":"{{ticker}}","price":{{close}},"tf":"{{interval}}"}')
