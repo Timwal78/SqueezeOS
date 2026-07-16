@@ -1,5 +1,5 @@
 //@version=6
-indicator("Delta Sniper — Overlay [v6]", shorttitle="ΔSNIPER·Overlay", overlay=true, max_lines_count=500, max_labels_count=500, max_boxes_count=500)
+indicator("Delta Sniper — Overlay [v6]", shorttitle="ΔSNPR-OV", overlay=true, max_lines_count=500, max_labels_count=500, max_boxes_count=500)
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //                    DELTA SNIPER — OVERLAY EDITION
@@ -264,8 +264,14 @@ shortScore += bearishDivergence ? 10 : 0
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ─── Squeeze Background ───
-if showSqueezeBg and isSqueezed
-    bgcolor(color.new(colorSqueeze, 92), title="Delta Squeeze Zone")
+// FIX: bgcolor() is in Pine's fixed list of functions that can NEVER be
+// called from inside an if block (plot/plotshape/plotchar/plotarrow/
+// plotcandle/plotbar/hline/fill/bgcolor/barcolor/alertcondition/indicator/
+// strategy/library) — "Cannot use bgcolor in local scope" is not a style
+// nit, it's a hard compiler rule. The call must always happen unconditionally;
+// only the *value* passed to it can be conditional (na = draw nothing).
+color squeezeBgColor = showSqueezeBg and isSqueezed ? color.new(colorSqueeze, 92) : na
+bgcolor(squeezeBgColor, title="Delta Squeeze Zone")
 
 // ─── Signal Arrows on Price ───
 if showSignals
@@ -296,10 +302,13 @@ if showSignals
 // The original passed `line.style_dotted` — the wrong enum from the `line.*`
 // namespace — into plot()'s 6th positional slot, which is `trackprice`
 // (a bool), a real type-mismatch compile error.
-if showPOCLines and useRealDelta and not na(fp)
-    plot(pocPrice, title="POC", color=color.new(color.orange, 30), linewidth=2, style=plot.style_stepline)
-    plot(vahPrice, title="VAH", color=color.new(color.blue, 50), linewidth=1, style=plot.style_stepline, linestyle=plot.linestyle_dotted)
-    plot(valPrice, title="VAL", color=color.new(color.blue, 50), linewidth=1, style=plot.style_stepline, linestyle=plot.linestyle_dotted)
+// FIX: same hard rule as bgcolor() above — plot() cannot be called from
+// inside an if block. Compute one gate bool, feed na into plot() when it's
+// false, call plot() unconditionally.
+bool showPOC = showPOCLines and useRealDelta and not na(fp)
+plot(showPOC ? pocPrice : na, title="POC", color=color.new(color.orange, 30), linewidth=2, style=plot.style_stepline)
+plot(showPOC ? vahPrice : na, title="VAH", color=color.new(color.blue, 50), linewidth=1, style=plot.style_stepline, linestyle=plot.linestyle_dotted)
+plot(showPOC ? valPrice : na, title="VAL", color=color.new(color.blue, 50), linewidth=1, style=plot.style_stepline, linestyle=plot.linestyle_dotted)
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //                      FOOTER DASHBOARD — structured table, not a text blob
