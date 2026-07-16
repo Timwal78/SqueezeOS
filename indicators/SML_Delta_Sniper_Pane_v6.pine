@@ -1,0 +1,352 @@
+//@version=6
+indicator("Delta Sniper — Lower Pane [v6]", shorttitle="ΔSNIPER·Pane", overlay=false, max_lines_count=500, max_labels_count=500, max_boxes_count=500)
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//                    DELTA SNIPER — LOWER PANE EDITION
+//              Order Flow Delta Squeeze + Explosion Detection
+//                    (Separate-Pane Delta Visualization)
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Same signal engine as "Delta Sniper — Overlay [v6]", published as its own
+// script because Pine's `overlay` argument to indicator() must be a
+// compile-time literal (true or false) — it cannot be an input.bool() toggle,
+// so there is no way to ship a single script the user flips between overlay
+// and pane mode from Settings. Two sibling scripts sharing this engine is the
+// actual TradingView-supported way to offer both.
+//
+// This edition plots the delta itself (histogram, CVD, squeeze bands,
+// zero-lag EMA cross) in its own pane below the chart — that's the visual
+// content that doesn't make sense crammed onto the price scale in the
+// Overlay edition. POC/VAH/VAL are price levels, so they're used here only
+// as an internal signal filter (still real footprint data), not plotted —
+// they belong on the Overlay edition's price scale, not this pane's delta
+// scale.
+//
+// REQUIREMENTS:
+// - TradingView Premium or Ultimate for request.footprint() [real delta]
+// - Falls back to approximated delta for lower tiers
+//
+// AUTHOR: ScriptMasterLabs
+// VERSION: 1.0.0
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//                              INPUTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── Footprint Settings ───
+group_footprint = "🔬 Footprint Delta Engine"
+int    ticksPerRow     = input.int(100, "Ticks Per Row", minval=1, group=group_footprint, tooltip="Smaller = finer granularity. Scale with timeframe.")
+int    vaPercent       = input.int(70, "Value Area %", minval=1, maxval=100, group=group_footprint)
+float  imbPercent      = input.float(300, "Imbalance Threshold %", minval=100, step=50, group=group_footprint)
+bool   useRealDelta    = input.bool(true, "Use Real Footprint Delta (Premium/Ultimate)", group=group_footprint, tooltip="If false, uses approximated delta from close/open/volume")
+
+// ─── Delta Squeeze Settings ───
+group_squeeze = "🎯 Delta Squeeze Detection"
+int    bbLength        = input.int(20, "BB Length", minval=5, group=group_squeeze)
+float  bbMult          = input.float(2.0, "BB Multiplier", minval=0.5, step=0.1, group=group_squeeze)
+int    kcLength        = input.int(20, "KC Length", minval=5, group=group_squeeze)
+float  kcMult          = input.float(1.5, "KC Multiplier", minval=0.5, step=0.1, group=group_squeeze)
+float  squeezeThresh   = input.float(0.5, "Squeeze Threshold", minval=0.1, step=0.1, group=group_squeeze, tooltip="BB width / KC width below this = squeeze active")
+
+// ─── Delta Momentum Settings ───
+group_momentum = "⚡ Delta Momentum / Explosion"
+int    fastDeltaLen    = input.int(9, "Fast Delta Smoothing Length", minval=2, group=group_momentum, tooltip="Zero-lag EMA, not a plain EMA — reacts to delta shifts with materially less lag than a standard retail moving average.")
+int    slowDeltaLen    = input.int(21, "Slow Delta Smoothing Length", minval=5, group=group_momentum)
+int    rocLength       = input.int(3, "Delta ROC Length", minval=1, group=group_momentum)
+float  rocThreshold    = input.float(1.5, "ROC Trigger Multiplier", minval=0.5, step=0.1, group=group_momentum, tooltip="ROC > avg * multiplier = explosion")
+
+// ─── Signal Filter Settings ───
+group_signals = "🔫 Sniper Signal Filters"
+bool   requirePOC      = input.bool(true, "Require POC Confirmation", group=group_signals, tooltip="POC must be below price for long, above for short")
+bool   requireCVD      = input.bool(true, "Require CVD Direction", group=group_signals, tooltip="Cumulative Delta must align with signal direction")
+bool   requireDivergence = input.bool(false, "Require Delta Divergence", group=group_signals, tooltip="Price/delta divergence must exist for entry")
+int    cooldownBars    = input.int(5, "Signal Cooldown (bars)", minval=1, group=group_signals)
+
+// ─── Exhaustion Settings ───
+group_exhaustion = "💀 Exhaustion Detection"
+float  exhaustionSigma = input.float(2.5, "Exhaustion Sigma", minval=1.0, step=0.1, group=group_exhaustion, tooltip="Delta > avg + sigma*std = exhaustion zone")
+
+// ─── Visual Settings ───
+group_visual = "🎨 Visual Settings"
+color  colorLong       = input.color(color.new(#00E676, 0), "Long Signal Color", group=group_visual)
+color  colorShort      = input.color(color.new(#FF1744, 0), "Short Signal Color", group=group_visual)
+color  colorSqueeze    = input.color(color.new(#FFD700, 0), "Squeeze Zone Color", group=group_visual)
+color  colorExhaust    = input.color(color.new(#9C27B0, 0), "Exhaustion Color", group=group_visual)
+bool   showSqueezeBg   = input.bool(true, "Show Squeeze Background", group=group_visual)
+bool   showSignals     = input.bool(true, "Show Signal Markers", group=group_visual)
+bool   showBands       = input.bool(true, "Show BB/KC Squeeze Bands", group=group_visual)
+bool   showCVD         = input.bool(true, "Show Cumulative Delta Line", group=group_visual)
+bool   showDashboard   = input.bool(true, "Show Footer Dashboard", group=group_visual)
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//                         DELTA ENGINE  (identical to Overlay edition)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── Real Delta via Footprint (Premium/Ultimate) ───
+footprint fp = request.footprint(ticksPerRow, vaPercent, imbPercent)
+
+float realDelta = na
+float realBuyVol = na
+float realSellVol = na
+float pocPrice = na
+float vahPrice = na
+float valPrice = na
+
+if useRealDelta and not na(fp)
+    realDelta   := fp.delta()
+    realBuyVol  := fp.buy_volume()
+    realSellVol := fp.sell_volume()
+    pocPrice    := fp.poc().up_price()
+    vahPrice    := fp.vah().up_price()
+    valPrice    := fp.val().down_price()
+
+// ─── Approximated Delta (Fallback for lower tiers) ───
+float candleBody = close - open
+float candleRange = high - low
+float bodyRatio = candleRange > 0 ? math.abs(candleBody) / candleRange : 0
+float approxDelta = candleBody >= 0 ? volume * bodyRatio : -volume * bodyRatio
+
+// ─── Unified Delta ───
+float barDelta = useRealDelta and not na(realDelta) ? realDelta : approxDelta
+float buyVol   = useRealDelta and not na(realBuyVol) ? realBuyVol : (barDelta > 0 ? barDelta : 0)
+float sellVol  = useRealDelta and not na(realSellVol) ? realSellVol : (barDelta < 0 ? -barDelta : 0)
+
+// ─── Cumulative Delta (Session-based, resets at new session) ───
+bool newSession = ta.change(time("D")) != 0
+var float cumDelta = 0.0
+cumDelta := newSession ? barDelta : cumDelta + barDelta
+
+// ─── Delta Smoothing (zero-lag EMA, not a plain retail EMA) ───
+f_zlema(float src, int len) =>
+    float ema1 = ta.ema(src, len)
+    float ema2 = ta.ema(ema1, len)
+    ta.ema(src + (ema1 - ema2), len)
+
+float deltaSMA = ta.sma(barDelta, bbLength)
+float deltaZL = f_zlema(barDelta, fastDeltaLen)
+float deltaZLSlow = f_zlema(barDelta, slowDeltaLen)
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//                      DELTA SQUEEZE DETECTION
+// ═══════════════════════════════════════════════════════════════════════════════
+
+[deltaBBBasis, deltaBBUpper, deltaBBLower] = ta.bb(deltaSMA, bbLength, bbMult)
+float bbWidth = deltaBBUpper - deltaBBLower
+
+float deltaATR = ta.rma(math.abs(barDelta - barDelta[1]), kcLength)
+float deltaKCUpper = deltaSMA + kcMult * deltaATR
+float deltaKCLower = deltaSMA - kcMult * deltaATR
+float kcWidth = deltaKCUpper - deltaKCLower
+
+float squeezeRatio = kcWidth > 0 ? bbWidth / kcWidth : 1
+bool isSqueezed = squeezeRatio < squeezeThresh
+
+var int squeezeCount = 0
+squeezeCount := isSqueezed ? squeezeCount + 1 : 0
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//                      DELTA MOMENTUM / EXPLOSION
+// ═══════════════════════════════════════════════════════════════════════════════
+
+float deltaROC = barDelta - barDelta[rocLength]
+float avgROC = ta.sma(math.abs(deltaROC), 20)
+
+bool rocExplosionUp = deltaROC > avgROC * rocThreshold
+bool rocExplosionDown = deltaROC < -avgROC * rocThreshold
+
+bool deltaBullCross = ta.crossover(deltaZL, deltaZLSlow)
+bool deltaBearCross = ta.crossunder(deltaZL, deltaZLSlow)
+
+bool priceHigherHigh = close > close[1] and close[1] > close[2]
+bool deltaLowerHigh  = barDelta < barDelta[1] and barDelta[1] > barDelta[2]
+bool bearishDivergence = priceHigherHigh and deltaLowerHigh
+
+bool priceLowerLow = close < close[1] and close[1] < close[2]
+bool deltaHigherLow = barDelta > barDelta[1] and barDelta[1] < barDelta[2]
+bool bullishDivergence = priceLowerLow and deltaHigherLow
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//                      EXHAUSTION DETECTION
+// ═══════════════════════════════════════════════════════════════════════════════
+
+float deltaAbs = math.abs(barDelta)
+float avgDeltaAbs = ta.sma(deltaAbs, 20)
+float stdDeltaAbs = ta.stdev(deltaAbs, 20)
+
+bool deltaExhaustionUp = barDelta > avgDeltaAbs + exhaustionSigma * stdDeltaAbs and bearishDivergence
+bool deltaExhaustionDown = barDelta < -(avgDeltaAbs + exhaustionSigma * stdDeltaAbs) and bullishDivergence
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//                      SNIPER SIGNAL MATRIX
+// ═══════════════════════════════════════════════════════════════════════════════
+
+var int lastSignalBar = -999
+bool cooldownPassed = bar_index - lastSignalBar >= cooldownBars
+
+bool pocBelowPrice = not na(pocPrice) ? pocPrice < close : true
+bool pocAbovePrice = not na(pocPrice) ? pocPrice > close : true
+
+bool cvdRising = cumDelta > cumDelta[1]
+bool cvdFalling = cumDelta < cumDelta[1]
+
+bool longSqueezeSetup = isSqueezed and squeezeCount >= 2
+bool longMomentum = rocExplosionUp or deltaBullCross
+bool longPOC = not requirePOC or pocBelowPrice
+bool longCVD = not requireCVD or cvdRising
+bool longDiv = not requireDivergence or bullishDivergence
+
+bool longSignal = longSqueezeSetup and longMomentum and longPOC and longCVD and longDiv and cooldownPassed
+
+bool shortSqueezeSetup = isSqueezed and squeezeCount >= 2
+bool shortMomentum = rocExplosionDown or deltaBearCross
+bool shortPOC = not requirePOC or pocAbovePrice
+bool shortCVD = not requireCVD or cvdFalling
+bool shortDiv = not requireDivergence or bearishDivergence
+
+bool shortSignal = shortSqueezeSetup and shortMomentum and shortPOC and shortCVD and shortDiv and cooldownPassed
+
+bool longExhaustion = deltaExhaustionUp
+bool shortExhaustion = deltaExhaustionDown
+
+if longSignal or shortSignal
+    lastSignalBar := bar_index
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//                      SIGNAL CONFIDENCE SCORE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+float longScore = 0
+longScore += isSqueezed ? 25 : 0
+longScore += rocExplosionUp ? 20 : 0
+longScore += deltaBullCross ? 15 : 0
+longScore += longPOC ? 15 : 0
+longScore += longCVD ? 15 : 0
+longScore += bullishDivergence ? 10 : 0
+
+float shortScore = 0
+shortScore += isSqueezed ? 25 : 0
+shortScore += rocExplosionDown ? 20 : 0
+shortScore += deltaBearCross ? 15 : 0
+shortScore += shortPOC ? 15 : 0
+shortScore += shortCVD ? 15 : 0
+shortScore += bearishDivergence ? 10 : 0
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//                      PANE VISUALIZATION
+// ═══════════════════════════════════════════════════════════════════════════════
+
+hline(0, "Zero", color=color.new(color.gray, 60), linestyle=hline.style_solid)
+
+color histCol = barDelta > 0 ? color.new(colorLong, 20) : color.new(colorShort, 20)
+plot(barDelta, "Bar Delta", color=histCol, style=plot.style_columns)
+
+plot(showCVD ? cumDelta : na, "Cumulative Delta", color=color.new(color.aqua, 30), linewidth=2, style=plot.style_line)
+
+// Squeeze bands plotted on the delta scale itself.
+p_bbUp = plot(showBands ? deltaBBUpper : na, "BB Upper", color=color.new(color.purple, 60), display=display.none)
+p_bbLo = plot(showBands ? deltaBBLower : na, "BB Lower", color=color.new(color.purple, 60), display=display.none)
+fill(p_bbUp, p_bbLo, color=color.new(color.purple, 90), title="BB Band")
+plot(showBands ? deltaKCUpper : na, "KC Upper", color=color.new(color.teal, 40), style=plot.style_line)
+plot(showBands ? deltaKCLower : na, "KC Lower", color=color.new(color.teal, 40), style=plot.style_line)
+
+plot(deltaZL, "Delta Zero-Lag EMA (fast)", color=color.new(color.yellow, 10), linewidth=2)
+plot(deltaZLSlow, "Delta Zero-Lag EMA (slow)", color=color.new(color.orange, 30))
+
+if showSqueezeBg and isSqueezed
+    bgcolor(color.new(colorSqueeze, 92), title="Delta Squeeze Zone")
+
+if showSignals
+    if longSignal
+        label.new(bar_index, barDelta, "▲ LONG " + str.tostring(longScore, "#.0") + "%",
+            color=colorLong, textcolor=color.white, style=label.style_label_up,
+            size=size.small, yloc=yloc.belowbar)
+    if shortSignal
+        label.new(bar_index, barDelta, "▼ SHORT " + str.tostring(shortScore, "#.0") + "%",
+            color=colorShort, textcolor=color.white, style=label.style_label_down,
+            size=size.small, yloc=yloc.abovebar)
+    if longExhaustion
+        label.new(bar_index, barDelta, "⚠", color=colorExhaust, textcolor=color.white,
+            style=label.style_label_down, size=size.tiny, yloc=yloc.abovebar)
+    if shortExhaustion
+        label.new(bar_index, barDelta, "⚠", color=colorExhaust, textcolor=color.white,
+            style=label.style_label_up, size=size.tiny, yloc=yloc.belowbar)
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//                      FOOTER DASHBOARD — structured table, not a text blob
+// ═══════════════════════════════════════════════════════════════════════════════
+
+var table dash = table.new(position.bottom_right, 4, 9, bgcolor=color.new(color.black, 10), border_width=1, border_color=color.new(color.gray, 60), frame_width=2, frame_color=color.new(color.gray, 40))
+
+if showDashboard and barstate.islast
+    string deltaStatus = useRealDelta and not na(realDelta) ? "🟢 REAL" : "🟡 APPROX"
+    color deltaCol = useRealDelta and not na(realDelta) ? color.new(#00E676, 0) : color.new(#FFA726, 0)
+    string squeezeStatus = isSqueezed ? "🔴 " + str.tostring(squeezeCount) + " bars" : "🟢 OFF"
+    color squeezeCol = isSqueezed ? color.new(#FF1744, 0) : color.new(#00E676, 0)
+    color barDeltaCol = barDelta > 0 ? color.new(#00E676, 0) : barDelta < 0 ? color.new(#FF1744, 0) : color.gray
+    string cvdText = (cumDelta > 0 ? "+" : "") + str.tostring(cumDelta, "#.#")
+    color cvdCol = cvdRising ? color.new(#00E676, 0) : cvdFalling ? color.new(#FF1744, 0) : color.gray
+    string buyVolText = str.tostring(buyVol, "#.#")
+    string sellVolText = str.tostring(sellVol, "#.#")
+    string explosionText = rocExplosionUp ? "🟢 UP" : rocExplosionDown ? "🔴 DOWN" : "⚪ NONE"
+    color explosionCol = rocExplosionUp ? color.new(#00E676, 0) : rocExplosionDown ? color.new(#FF1744, 0) : color.gray
+    string divergenceText = bullishDivergence ? "🟢 BULL" : bearishDivergence ? "🔴 BEAR" : "⚪ NONE"
+    color divergenceCol = bullishDivergence ? color.new(#00E676, 0) : bearishDivergence ? color.new(#FF1744, 0) : color.gray
+    int barsSinceSignal = bar_index - lastSignalBar
+    string lastSignalText = barsSinceSignal <= 20 ? str.tostring(barsSinceSignal) + " bars ago" : "—"
+
+    table.clear(dash, 0, 0, 3, 8)
+    table.cell(dash, 0, 0, "🎯 Δ SNIPER — PANE", text_color=color.white, bgcolor=color.new(color.gray, 70), text_size=size.small, text_halign=text.align_center)
+    table.merge_cells(dash, 0, 0, 3, 0)
+
+    table.cell(dash, 0, 1, "Delta", text_color=color.gray, text_size=size.tiny)
+    table.cell(dash, 1, 1, deltaStatus, text_color=deltaCol, text_size=size.small)
+    table.cell(dash, 2, 1, "Squeeze", text_color=color.gray, text_size=size.tiny)
+    table.cell(dash, 3, 1, squeezeStatus, text_color=squeezeCol, text_size=size.small)
+
+    table.cell(dash, 0, 2, "Bar Δ", text_color=color.gray, text_size=size.tiny)
+    table.cell(dash, 1, 2, str.tostring(barDelta, "#.#"), text_color=barDeltaCol, text_size=size.small)
+    table.cell(dash, 2, 2, "Ratio", text_color=color.gray, text_size=size.tiny)
+    table.cell(dash, 3, 2, str.tostring(squeezeRatio, "#.##"), text_color=color.white, text_size=size.small)
+
+    table.cell(dash, 0, 3, "Buy Vol", text_color=color.gray, text_size=size.tiny)
+    table.cell(dash, 1, 3, buyVolText, text_color=color.new(#00E676, 0), text_size=size.small)
+    table.cell(dash, 2, 3, "Sell Vol", text_color=color.gray, text_size=size.tiny)
+    table.cell(dash, 3, 3, sellVolText, text_color=color.new(#FF1744, 0), text_size=size.small)
+
+    table.cell(dash, 0, 4, "CVD", text_color=color.gray, text_size=size.tiny)
+    table.cell(dash, 1, 4, cvdText, text_color=cvdCol, text_size=size.small)
+    table.cell(dash, 2, 4, "ROC", text_color=color.gray, text_size=size.tiny)
+    table.cell(dash, 3, 4, str.tostring(deltaROC, "#.#"), text_color=color.white, text_size=size.small)
+
+    table.cell(dash, 0, 5, "Explosion", text_color=color.gray, text_size=size.tiny)
+    table.cell(dash, 1, 5, explosionText, text_color=explosionCol, text_size=size.small)
+    table.cell(dash, 2, 5, "Divergence", text_color=color.gray, text_size=size.tiny)
+    table.cell(dash, 3, 5, divergenceText, text_color=divergenceCol, text_size=size.small)
+
+    table.cell(dash, 0, 6, "POC", text_color=color.gray, text_size=size.tiny)
+    table.cell(dash, 1, 6, not na(pocPrice) ? str.tostring(pocPrice, format.mintick) : "—", text_color=color.new(color.orange, 20), text_size=size.small)
+    table.cell(dash, 2, 6, "Source", text_color=color.gray, text_size=size.tiny)
+    table.cell(dash, 3, 6, useRealDelta and not na(fp) ? "🔬 Footprint" : "📊 OHLCV", text_color=color.white, text_size=size.tiny)
+
+    table.cell(dash, 0, 7, "VAH", text_color=color.gray, text_size=size.tiny)
+    table.cell(dash, 1, 7, not na(vahPrice) ? str.tostring(vahPrice, format.mintick) : "—", text_color=color.new(color.blue, 20), text_size=size.small)
+    table.cell(dash, 2, 7, "VAL", text_color=color.gray, text_size=size.tiny)
+    table.cell(dash, 3, 7, not na(valPrice) ? str.tostring(valPrice, format.mintick) : "—", text_color=color.new(color.blue, 20), text_size=size.small)
+
+    table.cell(dash, 0, 8, "Last Signal", text_color=color.gray, bgcolor=color.new(color.gray, 85), text_size=size.tiny)
+    table.cell(dash, 1, 8, lastSignalText, text_color=color.white, bgcolor=color.new(color.gray, 85), text_size=size.small)
+    table.merge_cells(dash, 1, 8, 3, 8)
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//                      ALERTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+alertcondition(longSignal, "🟢 Delta Sniper — LONG", message='Delta Squeeze + Explosion UP detected. Confidence: {{plot("Long Confidence")}}')
+alertcondition(shortSignal, "🔴 Delta Sniper — SHORT", message='Delta Squeeze + Explosion DOWN detected. Confidence: {{plot("Short Confidence")}}')
+alertcondition(longExhaustion, "⚠️ Long Exhaustion", "Buyer exhaustion detected — consider taking profits on longs.")
+alertcondition(shortExhaustion, "⚠️ Short Exhaustion", "Seller exhaustion detected — consider taking profits on shorts.")
+alertcondition(isSqueezed and not isSqueezed[1], "🎯 Delta Squeeze ON", "Delta squeeze just started — watch for breakout.")
+
+plot(longScore, "Long Confidence", display=display.none)
+plot(shortScore, "Short Confidence", display=display.none)
