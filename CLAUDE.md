@@ -79,6 +79,18 @@ Built 2026-07-13. **Zero custody, zero autonomous submission** — this was an e
     -H "X-Grants-Secret: $GRANTS_QUEUE_SECRET"
   ```
 
+## x402 Settlement Router — multi-agent Base/USDC payment-graph netting
+
+Built 2026-07-16, in response to the "x402 Settlement Router" product spec (non-custodial payment netting layer for multi-agent AI economies, 0.5% protocol fee, Base/USDC). **Not deployed to any network yet** — this is real, tested code with no live contract address, same "not yet configured" status as SML-Vault-Executor and the AWS Marketplace integration below.
+
+- **Where the actual money logic lives:** `mcp-x402-xrpl/asc-contracts/contracts/settlement-router/` — five Solidity contracts (`FeeRegistry`, `IReputationOracle`/`ReputationOracle`, `TaskEscrow`, `SettlementRouter`, `SettlementRouterFactory`) on Base. Non-custodial, no admin keys on `TaskEscrow` beyond a 7-day-timelocked emergency withdraw, fee hard-capped at 5% on-chain. `ReputationOracle`'s bond tiers mirror the *real* ARGUS/402Proof credit score scale already live in `mcp-x402-xrpl` (300-850 FICO-style — PROTOSTAR/NEUTRON/PULSAR/QUASAR), not the 0-1000 scale the original spec assumed.
+- **Off-chain netting engine:** `mcp-x402-xrpl/src/settlement-router/netting.ts` — pure function, sums a payment graph's inflows/outflows per agent, validates the netted result against the task's real on-chain budget + fee before anything gets signed. `mcp-x402-xrpl/src/settlement-router/client.ts` wraps the actual contract calls.
+- **HTTP surface:** `mcp-x402-xrpl/src/vending-router-server.ts`'s `/settlement-router/tasks*` routes (secret-gated via `X-Orchestrator-Secret`, not x402-metered — the real revenue event is the on-chain protocol fee, metering the HTTP trigger too would double-charge).
+- **This repo's hook (`core/api/settlement_router_bp.py`, `/api/settlement-router`):** off-chain bookkeeping for a task's agent list + accumulated payment-graph edges, then forwards to the mcp-x402-xrpl HTTP surface above to actually create/settle on-chain. Deliberately a **new** blueprint, not an extension of `hiring_bp.py` or `settlement_bp.py` — both of those are single poster/executor pairs settling XRPL wallet-to-wallet by design; a multi-agent Base/USDC payment graph is a different shape of problem.
+- Required env vars (all unset by default): `SETTLEMENT_ROUTER_API_BASE`, `SETTLEMENT_ROUTER_ORCHESTRATOR_SECRET` (this repo, calls out); `SETTLEMENT_ROUTER_RPC_URL`, `SETTLEMENT_ROUTER_ADDRESS`, `SETTLEMENT_ROUTER_ORCHESTRATOR_PRIVATE_KEY`, `SETTLEMENT_ROUTER_ORCHESTRATOR_SECRET` (mcp-x402-xrpl, holds the signing key) — see `mcp-x402-xrpl/render.yaml`.
+- **Still needed before this is real money:** deploy `SettlementRouterFactory` to Base (`asc-contracts/scripts/deploy-settlement-router.ts`, needs a Gnosis Safe treasury — see PRD non-negotiable #6), create a router for this orchestrator (`create-router.ts`), and wire an agentDid-to-Base-address mapping for `update-reputation-oracle.ts` (ARGUS scores are keyed by DID; `TaskEscrow` bonds are keyed by address — nothing in either codebase maps one to the other yet, documented directly in that script rather than papered over).
+- Solidity compiler note for future agents in this sandbox: `npx hardhat compile` needs `binaries.soliditylang.org`, which this session's egress policy blocks entirely (list.json fetch fails for every platform, including wasm). `asc-contracts/scripts/local-compile.cjs` compiles the same sources via the official `solc` npm package (real compiler, permitted registry) and writes Hardhat-format artifacts directly so `npx hardhat test --no-compile` still runs. Once run somewhere with normal network access, plain `npx hardhat compile` works unchanged.
+
 ## SML-Vault-Executor — What's Needed When Vault Build Starts
 
 Missing env vars (not yet configured — vault not funded):
@@ -271,6 +283,7 @@ SqueezeOS/
 │       ├── settlement_bp.py # /api/settlement — conditional agent escrow contracts
 │       ├── hiring_bp.py     # /api/hiring — agent job board
 │       ├── grants_bp.py     # /api/grants — Autonomous Grant Agent review queue (zero custody)
+│       ├── settlement_router_bp.py # /api/settlement-router — multi-agent Base/USDC payment-graph netting hook (zero custody, see below)
 │       ├── relay_bp.py      # /api/relay — relay node discounts
 │       ├── webhook_bp.py    # /api/webhooks — webhook subscriptions + delivery
 │       ├── battle.py        # /api/battle — Battle Computer consensus
@@ -444,6 +457,7 @@ Mounted at `/mcp`. Implements JSON-RPC 2.0. **52 tools** total.
 | `GET /api/futures/leaderboard` | Top predictors |
 | `GET /api/settlement` | Browse conditional contracts |
 | `GET /api/grants` or `/api/grants/queue` | Browse Autonomous Grant Agent's discovered/queued opportunities |
+| `GET /api/settlement-router/tasks` or `/tasks/<id>` | Browse x402 Settlement Router tasks (multi-agent Base payment netting) |
 
 ### Premium Endpoints (require `X-Payment-Token` header)
 | Route | Cost | Description |
@@ -692,7 +706,7 @@ Real, Claude-powered agents. No agent in this department fabricates a result —
 - **GraphiFY graceful degradation**: `get_graph()` returns `None` when Neo4j env vars are missing or connection fails. Every caller checks `if not graph: return 503`. Never assume the graph is available.
 - **OpenMythos (RDT) degraded mode**: `RecurrentDepthTransformer` accepts `graph=None` and falls back to price/vpin-only scoring — it will not crash without Neo4j.
 - **Superpower (Beastmode) protocols** run async in daemon threads — `POST /api/scriptmaster/run_protocol` returns immediately. Results appear in the mission log ring buffer (50 entries), not the response body.
-- **In-memory stores reset on restart**: `_futures`, `_contracts`, `_listings`, `_jobs`, `_queue` (grants), `_scan_cache`, `_preview_cache`, `_demo_cache`, `_MISSION_LOG`, `signal_history` — all lost on redeploy. This is intentional for MVP; do not add disk persistence without discussion.
+- **In-memory stores reset on restart**: `_futures`, `_contracts`, `_listings`, `_jobs`, `_queue` (grants), `_tasks` (settlement router), `_scan_cache`, `_preview_cache`, `_demo_cache`, `_MISSION_LOG`, `signal_history` — all lost on redeploy. This is intentional for MVP; do not add disk persistence without discussion.
 - **MCP tool count**: the `_TOOLS` list in `mcp_bp.py` is the source of truth (currently 52 tools). The `_SERVER_INFO` version string is `"5.0.0"`. When adding tools, also sync: (1) the tools array in `.well-known/mcp.json`, (2) `tool_count` in `.well-known/catalog.json`, (3) the `"X MCP tools"` text in `.well-known/server.json` and `llms.txt`. Names must match exactly — historical drift between `signal_preview` (source) and `get_signal_preview` (manifest) caused every agent free-trial to fail with "method not found".
 - **Blueprint registration order matters**: honeypot first, then analytics middleware, then all domain blueprints. Changing this order can cause trap routes to be shadowed or analytics to miss requests.
 
