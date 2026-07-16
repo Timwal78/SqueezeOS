@@ -1,5 +1,5 @@
 //@version=6
-indicator("Delta Sniper — Lower Pane [v6]", shorttitle="ΔSNIPER·Pane", overlay=false, max_lines_count=500, max_labels_count=500, max_boxes_count=500)
+indicator("Delta Sniper — Lower Pane [v6]", shorttitle="ΔSNPR-PN", overlay=false, max_lines_count=500, max_labels_count=500, max_boxes_count=500)
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //                    DELTA SNIPER — LOWER PANE EDITION
@@ -253,8 +253,11 @@ plot(showBands ? deltaKCLower : na, "KC Lower", color=color.new(color.teal, 40),
 plot(deltaZL, "Delta Zero-Lag EMA (fast)", color=color.new(color.yellow, 10), linewidth=2)
 plot(deltaZLSlow, "Delta Zero-Lag EMA (slow)", color=color.new(color.orange, 30))
 
-if showSqueezeBg and isSqueezed
-    bgcolor(color.new(colorSqueeze, 92), title="Delta Squeeze Zone")
+// FIX: bgcolor() is in Pine's fixed list of functions that can NEVER be
+// called from inside an if block. The call must always happen
+// unconditionally; only the value passed to it can be conditional.
+color squeezeBgColor = showSqueezeBg and isSqueezed ? color.new(colorSqueeze, 92) : na
+bgcolor(squeezeBgColor, title="Delta Squeeze Zone")
 
 if showSignals
     if longSignal
