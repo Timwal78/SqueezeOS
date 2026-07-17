@@ -489,6 +489,12 @@ def main() -> int:
         else:
             logger.error(f"Missing env var: {e}")
         return 1
+    except anthropic.APIError as e:
+        # Claude unavailable (low credit balance, rate limit, etc) — not a code
+        # bug, nothing to fix by re-running. Skip cleanly instead of failing
+        # the workflow every 30 minutes until credits are topped up.
+        logger.warning(f"Claude API unavailable — skipping this run cleanly: {e}")
+        return 0
     except Exception as e:
         logger.error(f"Orchestrator failed: {e}", exc_info=True)
         return 1

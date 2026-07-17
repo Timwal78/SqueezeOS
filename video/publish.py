@@ -239,4 +239,8 @@ def main(script_text: str = ""):
 
 
 if __name__ == "__main__":
-    main()
+    if not os.path.exists(VIDEO_PATH):
+        print(f"[PUBLISH] No video at {VIDEO_PATH} — generation step skipped this run "
+              "(likely Claude API unavailable). Nothing to publish, exiting cleanly.")
+    else:
+        main()

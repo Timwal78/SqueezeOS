@@ -70,6 +70,12 @@ def _extract_verdict(council: dict) -> str:
 
 # ── Script generation via Claude ──────────────────────────────────────────────
 
+class ClaudeUnavailable(Exception):
+    """Claude API is unreachable for reasons unrelated to this script (low
+    credit balance, rate limit, etc) — caller should skip the run cleanly
+    rather than fail the whole video-publish workflow."""
+
+
 def generate_script(context: dict) -> str:
     if not ANTHROPIC_KEY:
         raise RuntimeError("ANTHROPIC_API_KEY not set")
@@ -112,8 +118,12 @@ Return ONLY the spoken script. No stage directions, no headers."""
         "anthropic-version": "2023-06-01",
         "content-type":      "application/json",
     }
-    resp = fetch_json("https://api.anthropic.com/v1/messages",
-                      headers=headers, body=body, method="POST")
+    try:
+        resp = fetch_json("https://api.anthropic.com/v1/messages",
+                          headers=headers, body=body, method="POST")
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode(errors="replace")[:300]
+        raise ClaudeUnavailable(f"Claude API error {e.code}: {detail}") from e
     return resp["content"][0]["text"].strip()
 
 
@@ -295,7 +305,11 @@ def main():
 
     # 2. Generate script
     print("[SCRIPT] generating via Claude...")
-    script = generate_script(context)
+    try:
+        script = generate_script(context)
+    except ClaudeUnavailable as e:
+        print(f"[SCRIPT] Claude unavailable — skipping this run cleanly: {e}")
+        return None
     print(f"[SCRIPT]\n{script}\n")
 
     with tempfile.TemporaryDirectory() as tmp:
