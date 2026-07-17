@@ -71,6 +71,15 @@ int    erLen       = input.int(20, "Efficiency Ratio Length", minval=5, group=gr
 float  erThresh    = input.float(0.30, "Trend Threshold", minval=0.05, maxval=0.95, step=0.05, group=group_regime, tooltip="Kaufman Efficiency Ratio above this = structural trend (green/red neon, zero-cross ignition signals). Below = mean-reverting bracket (cyan/amber, band-fade signals).")
 bool   showRegimeBg = input.bool(false, "Shade Trend Regime Background", group=group_regime)
 
+// ─── Early Signals + Dashboard ───
+group_sig = "🎯 Early BUY/SELL Signals"
+bool   showEarly   = input.bool(true, "Show Early BUY/SELL Hooks", group=group_sig, tooltip="Anticipatory signals: fire on the oscillator's slope HOOK while still beyond the inner variance band — one phase earlier than zero-cross or band re-entry.")
+bool   earlyVolOk  = input.bool(true, "Require Volume Confirmation on Early BUY", group=group_sig, tooltip="Early BUY additionally requires the fast relative-volume track to be rising (participation arriving). Early SELL fires without it — exits protect capital, don't wait for volume.")
+group_dash = "📊 Smart Dashboard"
+bool   showDash    = input.bool(true, "Show Dashboard", group=group_dash)
+string dashPos     = input.string("Top Right", "Position", options=["Top Right", "Bottom Right", "Top Left", "Bottom Left"], group=group_dash)
+string dashSize    = input.string("Small", "Text Size", options=["Tiny", "Small", "Normal"], group=group_dash)
+
 // ═══════════════════════════════════════════════════════════════════════════════
 //                        ZERO-LAG FILTER LIBRARY
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -198,6 +207,19 @@ bool ignitionShort = trending and ta.crossunder(osc, 0.0)
 bool fadeLong  = bandsReady and not trending and ta.crossover(osc, dnOuter)
 bool fadeShort = bandsReady and not trending and ta.crossunder(osc, upOuter)
 
+// EARLY hooks — one phase ahead of both signal families above. A "hook" is the
+// oscillator's first slope reversal while still stretched beyond the INNER
+// variance band: the turn itself, before any line/band cross confirms it.
+// Early = more signals, earlier fills, more noise — that's the trade-off.
+float oscPrev1 = nz(osc[1], osc)
+float oscPrev2 = nz(osc[2], osc)
+bool hookUp   = osc > oscPrev1 and oscPrev1 <= oscPrev2
+bool hookDown = osc < oscPrev1 and oscPrev1 >= oscPrev2
+bool volArriving = nz(relFast) >= nz(relFast[1])
+
+bool earlyBuy  = showEarly and bandsReady and osc < dnInner and hookUp and (not earlyVolOk or volArriving)
+bool earlySell = showEarly and bandsReady and osc > upInner and hookDown
+
 // ═══════════════════════════════════════════════════════════════════════════════
 //                    VISUAL ARCHITECTURE (JET-BLACK OPTIMIZED)
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -233,14 +255,81 @@ pDnO = plot(dnOuter, "Lower Outer Band", color=color.new(#00FF88, 55), linewidth
 fill(pUpI, pUpO, color=color.new(#FF2D6F, 88), title="Upper Extreme Zone")
 fill(pDnI, pDnO, color=color.new(#00FF88, 88), title="Lower Extreme Zone")
 
-// Signal markers — dots only, no bloated shapes
+// Signal markers — dots for confirmed signals, labeled triangles for early hooks
 plot(ignitionLong  ? 0.0 : na, "Trend Ignition Long",  style=plot.style_circles, color=NEON_BULL, linewidth=3)
 plot(ignitionShort ? 0.0 : na, "Trend Ignition Short", style=plot.style_circles, color=NEON_BEAR, linewidth=3)
 plot(fadeLong  ? dnOuter : na, "Bracket Fade Long",  style=plot.style_circles, color=REV_BULL, linewidth=3)
 plot(fadeShort ? upOuter : na, "Bracket Fade Short", style=plot.style_circles, color=REV_BEAR, linewidth=3)
 
+plotshape(earlyBuy,  "Early BUY",  style=shape.triangleup,   location=location.bottom, color=NEON_BULL, size=size.tiny, text="BUY",  textcolor=NEON_BULL)
+plotshape(earlySell, "Early SELL", style=shape.triangledown, location=location.top,    color=NEON_BEAR, size=size.tiny, text="SELL", textcolor=NEON_BEAR)
+
 // Optional whisper-subtle trend-regime shading
 bgcolor(showRegimeBg and trending ? color.new(#2A2E39, 88) : na, title="Trend Regime Shade")
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//                          SMART DASHBOARD (LIVE STATE)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Last-signal memory — early hooks take display priority (they fire first)
+var string lastSig    = "—"
+var int    lastSigBar = na
+if earlyBuy
+    lastSig    := "EARLY BUY"
+    lastSigBar := bar_index
+else if earlySell
+    lastSig    := "EARLY SELL"
+    lastSigBar := bar_index
+else if ignitionLong
+    lastSig    := "IGNITION LONG"
+    lastSigBar := bar_index
+else if ignitionShort
+    lastSig    := "IGNITION SHORT"
+    lastSigBar := bar_index
+else if fadeLong
+    lastSig    := "FADE LONG"
+    lastSigBar := bar_index
+else if fadeShort
+    lastSig    := "FADE SHORT"
+    lastSigBar := bar_index
+
+// Oscillator z-score within its own rolling distribution
+float oscZ = oscDev > 0 ? (osc - oscMean) / oscDev : 0.0
+
+color DASH_BG   = color.new(#0B0E14, 15)
+color DASH_HEAD = color.new(#1C2230, 0)
+color DASH_TXT  = #D5DBE5
+
+f_dashPos(_p) =>
+    _p == "Bottom Right" ? position.bottom_right : _p == "Top Left" ? position.top_left : _p == "Bottom Left" ? position.bottom_left : position.top_right
+
+f_dashSize(_s) =>
+    _s == "Tiny" ? size.tiny : _s == "Normal" ? size.normal : size.small
+
+var table dash = table.new(f_dashPos(dashPos), 2, 7, bgcolor=DASH_BG, border_width=1, border_color=color.new(#2A2E39, 40))
+
+if showDash and barstate.islast
+    string _sz = f_dashSize(dashSize)
+    color regimeCol = trending ? (osc >= 0 ? NEON_BULL : NEON_BEAR) : REV_BULL
+    color oscCol    = osc >= 0 ? NEON_BULL : NEON_BEAR
+    color zCol      = oscZ >= bandOuter ? NEON_BEAR : oscZ <= -bandOuter ? NEON_BULL : DASH_TXT
+    color volCol    = relVol >= 1.5 ? NEON_BULL : relVol < 0.7 ? color.new(DASH_TXT, 45) : DASH_TXT
+    color accCol    = volAccel > 0 ? NEON_BULL : color.new(DASH_TXT, 45)
+    color sigCol    = str.contains(lastSig, "BUY") or str.contains(lastSig, "LONG") ? NEON_BULL : str.contains(lastSig, "SELL") or str.contains(lastSig, "SHORT") ? NEON_BEAR : DASH_TXT
+    table.cell(dash, 0, 0, "⚡ SML-IMO", text_color=#00D9FF, text_size=_sz, bgcolor=DASH_HEAD)
+    table.cell(dash, 1, 0, trending ? "TREND" : "BRACKET", text_color=regimeCol, text_size=_sz, bgcolor=DASH_HEAD)
+    table.cell(dash, 0, 1, "Oscillator", text_color=DASH_TXT, text_size=_sz)
+    table.cell(dash, 1, 1, str.tostring(osc, "#.##"), text_color=oscCol, text_size=_sz)
+    table.cell(dash, 0, 2, "Z-Score", text_color=DASH_TXT, text_size=_sz)
+    table.cell(dash, 1, 2, str.tostring(oscZ, "#.##") + "σ", text_color=zCol, text_size=_sz)
+    table.cell(dash, 0, 3, "Efficiency", text_color=DASH_TXT, text_size=_sz)
+    table.cell(dash, 1, 3, str.tostring(erS, "#.##") + " / " + str.tostring(erThresh, "#.##"), text_color=regimeCol, text_size=_sz)
+    table.cell(dash, 0, 4, "Rel Volume", text_color=DASH_TXT, text_size=_sz)
+    table.cell(dash, 1, 4, str.tostring(relVol, "#.##") + "×", text_color=volCol, text_size=_sz)
+    table.cell(dash, 0, 5, "Vol Accel", text_color=DASH_TXT, text_size=_sz)
+    table.cell(dash, 1, 5, volAccel > 0 ? "▲ ARRIVING" : "▽ FADING", text_color=accCol, text_size=_sz)
+    table.cell(dash, 0, 6, "Last Signal", text_color=DASH_TXT, text_size=_sz)
+    table.cell(dash, 1, 6, lastSig + (na(lastSigBar) ? "" : " · " + str.tostring(bar_index - lastSigBar) + " bars"), text_color=sigCol, text_size=_sz)
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //                                  ALERTS
@@ -250,3 +339,5 @@ alertcondition(ignitionLong,  "IMO Trend Ignition LONG",  "SML-IMO: zero-line ig
 alertcondition(ignitionShort, "IMO Trend Ignition SHORT", "SML-IMO: zero-line ignition SHORT in trend regime on {{ticker}} ({{interval}})")
 alertcondition(fadeLong,  "IMO Bracket Fade LONG",  "SML-IMO: oscillator re-entered from lower variance extreme — bracket fade LONG on {{ticker}} ({{interval}})")
 alertcondition(fadeShort, "IMO Bracket Fade SHORT", "SML-IMO: oscillator re-entered from upper variance extreme — bracket fade SHORT on {{ticker}} ({{interval}})")
+alertcondition(earlyBuy,  "IMO Early BUY",  "SML-IMO EARLY BUY: oscillator hooked up below inner variance band on {{ticker}} ({{interval}}) — anticipatory entry")
+alertcondition(earlySell, "IMO Early SELL", "SML-IMO EARLY SELL: oscillator hooked down above inner variance band on {{ticker}} ({{interval}}) — anticipatory exit")
