@@ -84,6 +84,7 @@ MAX_ORDER_USD      = lambda: _env_float("IAM_MAX_ORDER_USD", 500.0)
 MAX_ORDERS_PER_DAY = lambda: _env_int("IAM_MAX_ORDERS_PER_DAY", 5)
 MAX_NOTIONAL_PER_DAY = lambda: _env_float("IAM_MAX_NOTIONAL_PER_DAY", 2000.0)
 DAILY_LOSS_LIMIT   = lambda: _env_float("IAM_DAILY_LOSS_LIMIT", 150.0)  # 7% of ~$2k account
+STOP_LOSS_PCT      = lambda: _env_float("IAM_STOP_LOSS_PCT", 3.0)  # hard protective stop below entry; 0 disables
 COOLDOWN_SECONDS   = lambda: _env_int("IAM_COOLDOWN_SECONDS", 600)   # 10 min default — AMC moves in waves
 OPTION_EXPIRY_DAYS = lambda: _env_int("IAM_OPTION_EXPIRY_DAYS", 1)
 OPTION_QTY         = lambda: _env_int("IAM_OPTION_CONTRACT_QTY", 1)
@@ -103,6 +104,41 @@ _state = {
     "breaker_tripped": False,
     "last_order":      None,
 }
+
+# In-process position ledger: symbol → {"qty": int, "avg": float}.
+# P&L basis is the SIGNAL price at order time, not the broker fill price —
+# an approximation, but it is what makes the daily-loss breaker actually
+# fire: before this ledger existed, nothing ever called record_fill(), so
+# the breaker could never trip in either paper or live mode.
+_positions: dict = {}
+
+
+def _ledger_buy(sym: str, qty: int, price: float):
+    if qty <= 0 or price <= 0:
+        return
+    with _lock:
+        pos = _positions.get(sym, {"qty": 0, "avg": 0.0})
+        total_cost = pos["avg"] * pos["qty"] + price * qty
+        pos["qty"] += qty
+        pos["avg"] = total_cost / pos["qty"]
+        _positions[sym] = pos
+
+
+def _ledger_sell(sym: str, qty: int, price: float):
+    """Reduce/close the tracked position and feed realized P&L to the breaker."""
+    if qty <= 0 or price <= 0:
+        return
+    with _lock:
+        pos = _positions.get(sym)
+        if not pos or pos["qty"] <= 0:
+            return
+        closed = min(qty, pos["qty"])
+        realized = (price - pos["avg"]) * closed
+        pos["qty"] -= closed
+        if pos["qty"] <= 0:
+            _positions.pop(sym, None)
+    record_fill(realized)
+    logger.info(f"[IAM-EXEC] Ledger: closed {closed}x {sym} @ ${price:.2f} → realized {realized:+.2f} (basis=signal price)")
 
 
 def _roll_day():
@@ -148,6 +184,9 @@ def status() -> dict:
         "breaker_tripped":     _state["breaker_tripped"],
         "cooldown_seconds":    COOLDOWN_SECONDS(),
         "last_order":          _state["last_order"],
+        "stop_loss_pct":       STOP_LOSS_PCT(),
+        "open_positions":      {s: dict(p) for s, p in _positions.items()},
+        "pnl_basis":           "signal_price_approx",
     }
 
 
@@ -313,6 +352,7 @@ def _close_equity_position(sym: str, price: float) -> Optional[dict]:
 
         if PAPER_MODE():
             logger.info(f"[IAM-EXEC][PAPER] Would close long: SELL {qty}x {sym} @ ${price:.2f} (protect gains)")
+            _ledger_sell(sym, qty, price)
             return {"mode": "paper", "side": "sell", "qty": qty, "price": price, "placed": False}
 
         if _is_extended_hours():
@@ -329,6 +369,8 @@ def _close_equity_position(sym: str, price: float) -> Optional[dict]:
         result["qty"]   = qty
         result["price"] = price
         result["side"]  = "sell"
+        if result.get("status") == "success":
+            _ledger_sell(sym, qty, price)
         logger.info(f"[IAM-EXEC] 🔻 Closed long to protect gains — SELL {qty}x {sym} @ ${price:.2f}")
         return result
     except Exception as e:
@@ -342,10 +384,19 @@ def _execute_tradier_equity(sym: str, action: str, price: float) -> dict:
         side = "buy" if action == "BUY" else "sell"
         qty  = max(1, min(MAX_SHARES(), int(MAX_ORDER_USD() / price))) if price > 0 else 1
 
+        # Hard protective stop level for entries (0 disables)
+        stop_px = round(price * (1.0 - STOP_LOSS_PCT() / 100.0), 2) if (side == "buy" and price > 0 and STOP_LOSS_PCT() > 0) else None
+
         if PAPER_MODE():
             mode_label = f"EXT-HOURS limit" if _is_extended_hours() else "market"
-            logger.info(f"[IAM-EXEC][PAPER] Would {side.upper()} {qty}x {sym} @ ${price:.2f} ({mode_label})")
-            return {"mode": "paper", "side": side, "qty": qty, "price": price, "placed": False}
+            stop_note  = f" | hard stop ${stop_px:.2f}" if stop_px else ""
+            logger.info(f"[IAM-EXEC][PAPER] Would {side.upper()} {qty}x {sym} @ ${price:.2f} ({mode_label}){stop_note}")
+            if side == "buy":
+                _ledger_buy(sym, qty, price)
+            else:
+                _ledger_sell(sym, qty, price)
+            return {"mode": "paper", "side": side, "qty": qty, "price": price,
+                    "stop_loss": stop_px, "placed": False}
 
         if _is_extended_hours():
             limit_px = round(price * 1.002, 2) if side == "buy" else round(price * 0.998, 2)
@@ -357,6 +408,26 @@ def _execute_tradier_equity(sym: str, action: str, price: float) -> dict:
         result["qty"]   = qty
         result["price"] = price
         result["side"]  = side
+
+        if result.get("status") == "success":
+            if side == "buy":
+                _ledger_buy(sym, qty, price)
+                # Attach the hard stop as a real GTC stop order — this is the
+                # "sell before it loses big" wire. Regular-hours only: Tradier
+                # rejects stop orders with pre/post durations.
+                if stop_px and not _is_extended_hours():
+                    stop_result = place_equity_order(sym, qty, "sell", order_type="stop",
+                                                     duration="gtc", stop_price=stop_px)
+                    result["stop_loss"] = stop_px
+                    result["stop_order"] = stop_result
+                    if stop_result.get("status") != "success":
+                        logger.error(f"[IAM-EXEC] ⚠️ {sym} entry filled but protective stop FAILED: {stop_result}")
+                elif stop_px:
+                    result["stop_loss"] = stop_px
+                    result["stop_order"] = {"status": "skipped", "message": "extended hours — place stop at next open"}
+                    logger.warning(f"[IAM-EXEC] {sym} extended-hours entry — protective stop ${stop_px:.2f} NOT placed (Tradier restriction)")
+            else:
+                _ledger_sell(sym, qty, price)
         return result
     except Exception as e:
         logger.error(f"[IAM-EXEC] Tradier equity error for {sym}: {e}")

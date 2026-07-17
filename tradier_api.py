@@ -408,11 +408,13 @@ def get_position(symbol: str) -> Optional[Dict[str, Any]]:
 
 def place_equity_order(symbol: str, quantity: int, side: str,
                        order_type: str = "market", duration: str = "day",
-                       limit_price: Optional[float] = None) -> Dict[str, Any]:
+                       limit_price: Optional[float] = None,
+                       stop_price: Optional[float] = None) -> Dict[str, Any]:
     """
     Place a live equity order via Tradier.
     side: 'buy' | 'sell'
     limit_price: required when order_type='limit' (extended-hours orders)
+    stop_price:  required when order_type='stop' or 'stop_limit' (protective stops)
     Returns {'status': 'success', 'order_id': ...} or {'status': 'error', 'message': ...}
     """
     acct = _account_id()
@@ -420,6 +422,8 @@ def place_equity_order(symbol: str, quantity: int, side: str,
         return {"status": "error", "message": "TRADIER_ACCOUNT_ID not set"}
     if not _api_key():
         return {"status": "error", "message": "TRADIER_API_KEY not set"}
+    if order_type in ("stop", "stop_limit") and not stop_price:
+        return {"status": "error", "message": f"stop_price required for order_type={order_type}"}
 
     payload = {
         "class":    "equity",
@@ -429,8 +433,10 @@ def place_equity_order(symbol: str, quantity: int, side: str,
         "type":     order_type,
         "duration": duration,
     }
-    if limit_price and order_type == "limit":
+    if limit_price and order_type in ("limit", "stop_limit"):
         payload["price"] = f"{limit_price:.2f}"
+    if stop_price and order_type in ("stop", "stop_limit"):
+        payload["stop"] = f"{stop_price:.2f}"
     logger.info(f"[TRADIER] Placing equity order: {side.upper()} {quantity}x {symbol} ({order_type})")
     resp = _post(f"/accounts/{acct}/orders", payload)
     if resp and resp.get("order", {}).get("id"):

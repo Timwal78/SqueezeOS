@@ -80,6 +80,11 @@ bool   showDash    = input.bool(true, "Show Dashboard", group=group_dash)
 string dashPos     = input.string("Top Right", "Position", options=["Top Right", "Bottom Right", "Top Left", "Bottom Left"], group=group_dash)
 string dashSize    = input.string("Small", "Text Size", options=["Tiny", "Small", "Normal"], group=group_dash)
 
+// ─── SqueezeOS Execution Bridge ───
+group_wh = "🔌 SqueezeOS Webhook Bridge"
+string whPass      = input.string("", "Webhook Passphrase", group=group_wh, tooltip="Your TV_WEBHOOK_PASSPHRASE from the squeezeos-api Render service. Leave empty to disable webhook JSON alerts. To wire execution: create ONE alert on this indicator with condition 'Any alert() function call', paste https://squeezeos-api.onrender.com/api/webhooks/tradingview as the Webhook URL, and leave the message box alone — this script builds the JSON itself.")
+string whSignals   = input.string("Early + Confirmed", "Fire Webhook On", options=["Confirmed Only", "Early + Confirmed"], group=group_wh, tooltip="Confirmed = ignition/fade signals. Early adds the anticipatory hook signals (earlier fills, more noise — the executor's stops and daily caps are the safety net).")
+
 // ═══════════════════════════════════════════════════════════════════════════════
 //                        ZERO-LAG FILTER LIBRARY
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -341,3 +346,17 @@ alertcondition(fadeLong,  "IMO Bracket Fade LONG",  "SML-IMO: oscillator re-ente
 alertcondition(fadeShort, "IMO Bracket Fade SHORT", "SML-IMO: oscillator re-entered from upper variance extreme — bracket fade SHORT on {{ticker}} ({{interval}})")
 alertcondition(earlyBuy,  "IMO Early BUY",  "SML-IMO EARLY BUY: oscillator hooked up below inner variance band on {{ticker}} ({{interval}}) — anticipatory entry")
 alertcondition(earlySell, "IMO Early SELL", "SML-IMO EARLY SELL: oscillator hooked down above inner variance band on {{ticker}} ({{interval}}) — anticipatory exit")
+
+// ── SqueezeOS webhook bridge — emits the exact JSON /api/webhooks/tradingview
+// expects, so IMO signals flow into the IAM executor (paper-first, hard stops,
+// daily caps). Fires only when a passphrase is configured. Bar-close only:
+// early hooks use osc[1]/osc[2] and would flicker intrabar.
+f_whJson(_act) =>
+    '{"passphrase":"' + whPass + '","system":"SML_IMO","ticker":"' + syminfo.ticker + '","action":"' + _act + '","price":' + str.tostring(close, "#.####") + '}'
+
+if barstate.isconfirmed and whPass != ""
+    bool fireEarly = whSignals == "Early + Confirmed"
+    if ignitionLong or fadeLong or (fireEarly and earlyBuy)
+        alert(f_whJson("EXECUTE_LONG"), alert.freq_once_per_bar_close)
+    else if ignitionShort or fadeShort or (fireEarly and earlySell)
+        alert(f_whJson("EXECUTE_SHORT"), alert.freq_once_per_bar_close)

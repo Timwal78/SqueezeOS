@@ -102,6 +102,19 @@ The Virtuals Protocol ACP marketplace listing for the LEVIATHAN seller agent ("s
   - The **live** LEVIATHAN agent runs from **`SML_Portfolio/mcp-x402`** (`src/server/acp/leviathan.ts`, 54 offerings, Title-Case job names e.g. `"SqueezeOS Council (7-Agent AI)"`), deployed as the Render service `mcp-x402`, with `ACP_WALLET_ADDRESS=0x0f035c36c4ce65a6f1bf4370f779bac722d59004` set directly in `SML_Portfolio/mcp-x402/render.yaml`. This is the wallet/agent from the visibility report above.
   - **`mcp-x402-xrpl/src/acp/leviathan.ts`** (12 offerings, snake_case job names, hardcoded wallet default `0x4e14B249D9A4c9c9352D780eCEB508A8eB7a7700` — actually the *payment-receiver* address, not an ACP wallet) is **not part of the deployed service**. `mcp-x402-xrpl`'s Render service (`scriptmaster-vending-router`, `render.yaml`) runs `start:vending-router` → `src/vending-router-server.ts`, which never imports or starts LEVIATHAN. The only place that repo's `leviathan.ts` gets wired up is `src/squeezeos-server.ts` (`npm start`), which is not the script Render actually runs. Treat `mcp-x402-xrpl/src/acp/leviathan.ts` as stale/orphaned — do not use its job names, wallet default, or offering count as a reference; `SML_Portfolio/mcp-x402/src/server/acp/leviathan.ts` is the one real agents talk to.
 
+## SML-IMO Oscillator + Executor Hard Stops (built 2026-07-17)
+
+**Operator decision (Timothy, 2026-07-17): paper-first auto-trading approved** — IMO/CASCADE signals → existing executor with hard stop-losses, fixed small sizing, daily loss cutoff. Explicitly NOT "a bot that always wins" (impossible; do not let anyone re-promise that). Live arming is a separate future decision.
+
+- `indicators/SML_Institutional_Momentum_Oscillator_v6.pine` (SML-IMO) — zero-lag volume-force momentum oscillator (Jurik/Gaussian-4-pole/ZLEMA core, dynamic ±σ variance bands, Kaufman-ER regime filter, smart dashboard, early hook BUY/SELL signals). Built on PR #347.
+- **Wire to execution:** the script's webhook bridge inputs (passphrase + signal mode) emit the exact JSON `/api/webhooks/tradingview` expects (`system: "SML_IMO"`, `EXECUTE_LONG`/`EXECUTE_SHORT`). One TradingView alert with condition "Any alert() function call" + webhook URL `https://squeezeos-api.onrender.com/api/webhooks/tradingview`. Requires `TV_WEBHOOK_PASSPHRASE` set on Render (fails closed without it).
+- **Executor upgrades (`iam_executor.py`):**
+  - `IAM_STOP_LOSS_PCT` (default 3.0) — on live BUY fills, a real GTC stop sell order is placed at entry−N% (`tradier_api.place_equity_order` now supports `order_type="stop"` + `stop_price`). Extended-hours entries can't carry a stop (Tradier restriction) — logged loudly instead.
+  - **Fixed dead daily-loss breaker:** nothing ever called `record_fill()` before, so `IAM_DAILY_LOSS_LIMIT` could never trip. New in-process `_positions` ledger records entries/exits (paper AND live) and feeds realized P&L to the breaker. P&L basis is signal price, not broker fill — approximate by design, disclosed in `status()` as `pnl_basis`.
+  - `iam_executor.status()` now reports `stop_loss_pct` + `open_positions`.
+- **Paper mode is the default** (`IAM_PAPER_MODE=true`). Going live requires flipping `IAM_PAPER_MODE=false` + `IAM_AUTO_TRADING=true` + `IAM_EXECUTION_MODE=tradier|both` — do not flip these for Timothy without an explicit fresh decision from him, and only after paper results have been reviewed.
+- **"Delete what doesn't win" directive:** measured evidence first — `tests/backtest_imo.py` is the harness. No engine deletions were made on 2026-07-17; do not delete engines without backtest evidence + explicit operator sign-off per engine.
+
 ## SML-Vault-Executor — What's Needed When Vault Build Starts
 
 Missing env vars (not yet configured — vault not funded):
