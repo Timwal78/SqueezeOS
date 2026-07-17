@@ -1,0 +1,362 @@
+//@version=6
+indicator("SML Institutional Momentum Oscillator [v6]", shorttitle="SML-IMO", overlay=false)
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//              SML INSTITUTIONAL MOMENTUM OSCILLATOR (IMO)
+//        Zero-Lag Volume-Force Momentum + Adaptive Regime Intelligence
+//                      (Single-Pane Oscillator)
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// NOT another RSI/MACD/Stochastic. Four engines in mathematical series:
+//
+//   1. ZERO-LAG SMOOTHING CORE — selectable Jurik-style adaptive filter,
+//      Ehlers 4-pole Gaussian, or ZLEMA. Price is denoised BEFORE momentum
+//      is measured, so velocity is computed on structure, not noise, with
+//      minimal phase shift.
+//
+//   2. VOLUME-FORCE MOMENTUM — ATR-normalized price velocity multiplied by
+//      relative-volume force (relVol^gamma) and a volume-acceleration
+//      expander. Effort (volume) scales result (velocity): high volume +
+//      sharp velocity = explosive expansion; drift on thin tape is damped.
+//
+//   3. DYNAMIC VARIANCE BANDS — extreme thresholds are ±k·stdev of the
+//      oscillator's OWN rolling distribution, never fixed 70/30. Bands
+//      breathe with the regime: quiet tape pulls them in, volatile tape
+//      pushes them out.
+//
+//   4. FRACTAL EFFICIENCY REGIME FILTER — Kaufman Efficiency Ratio splits
+//      the tape into structural TREND vs mean-reverting BRACKET. The
+//      oscillator changes color AND signal logic per regime: zero-line
+//      ignitions in trend, extreme-band fades in bracket.
+//
+// All thresholds derive from live series statistics — no hardcoded market
+// levels, no demo data (Prime Directive compliant). If volume is
+// unavailable on the symbol, volume force degrades to neutral 1.0 (pure
+// zero-lag velocity) rather than inventing numbers.
+//
+// AUTHOR: ScriptMasterLabs
+// VERSION: 1.0.0
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//                              INPUTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── Zero-Lag Smoothing Core ───
+group_filter = "🧬 Zero-Lag Smoothing Core"
+string smoothMode  = input.string("Jurik (Adaptive)", "Filter Type", options=["Jurik (Adaptive)", "Gaussian 4-Pole", "ZLEMA"], group=group_filter, tooltip="Jurik: adaptive double-smoothed with phase-shifted overshoot correction — best noise/lag ratio. Gaussian 4-Pole: maximum smoothness, near-zero ripple. ZLEMA: lightest, fastest.")
+int    smoothLen   = input.int(14, "Filter Length", minval=2, group=group_filter)
+float  jurikPhase  = input.float(0, "Jurik Phase", minval=-100, maxval=100, step=25, group=group_filter, tooltip="Negative = smoother/later, positive = earlier with slight overshoot. 0 is balanced.")
+float  jurikPower  = input.float(2, "Jurik Power", minval=1, maxval=4, step=0.5, group=group_filter)
+
+// ─── Volume-Force Momentum Engine ───
+group_mom = "⚡ Volume-Force Momentum Engine"
+int    momLen      = input.int(8, "Velocity Window (bars)", minval=1, group=group_mom, tooltip="Bars over which zero-lag price velocity is measured. Shorter = twitchier pivots.")
+int    atrLen      = input.int(14, "ATR Normalization Length", minval=1, group=group_mom)
+int    volBaseLen  = input.int(55, "Relative Volume Baseline", minval=5, group=group_mom, tooltip="Baseline average for relative volume. Volume above this baseline amplifies the oscillator; below damps it.")
+float  volGamma    = input.float(0.6, "Volume Force Gamma", minval=0.1, maxval=2.0, step=0.1, group=group_mom, tooltip="Exponent on relative volume. 1.0 = linear effort weighting; <1 tames outlier prints; >1 makes volume dominant.")
+float  accelGain   = input.float(0.5, "Volume Acceleration Gain", minval=0.0, maxval=3.0, step=0.1, group=group_mom, tooltip="Extra expansion when relative volume is ACCELERATING (fast baseline crossing above slow) — the institutional-participation kicker.")
+int    sigLen      = input.int(4, "Oscillator Signal Smoothing", minval=1, group=group_mom, tooltip="Short Jurik pass over the raw oscillator. Keep small — this is polish, not lag.")
+
+// ─── Dynamic Variance Bands ───
+group_bands = "📐 Dynamic Variance Bands"
+int    bandLook    = input.int(100, "Distribution Lookback", minval=20, group=group_bands, tooltip="Window over which the oscillator's own mean and standard deviation are measured.")
+float  bandInner   = input.float(1.5, "Inner Band (σ)", minval=0.5, step=0.25, group=group_bands)
+float  bandOuter   = input.float(2.5, "Outer Band (σ)", minval=1.0, step=0.25, group=group_bands)
+bool   centerMean  = input.bool(true, "Center Bands on Oscillator Mean", group=group_bands, tooltip="On: bands track the oscillator's rolling mean (captures drift bias). Off: bands are symmetric around zero.")
+
+// ─── Regime Filter ───
+group_regime = "🧭 Fractal Efficiency Regime Filter"
+int    erLen       = input.int(20, "Efficiency Ratio Length", minval=5, group=group_regime)
+float  erThresh    = input.float(0.30, "Trend Threshold", minval=0.05, maxval=0.95, step=0.05, group=group_regime, tooltip="Kaufman Efficiency Ratio above this = structural trend (green/red neon, zero-cross ignition signals). Below = mean-reverting bracket (cyan/amber, band-fade signals).")
+bool   showRegimeBg = input.bool(false, "Shade Trend Regime Background", group=group_regime)
+
+// ─── Early Signals + Dashboard ───
+group_sig = "🎯 Early BUY/SELL Signals"
+bool   showEarly   = input.bool(true, "Show Early BUY/SELL Hooks", group=group_sig, tooltip="Anticipatory signals: fire on the oscillator's slope HOOK while still beyond the inner variance band — one phase earlier than zero-cross or band re-entry.")
+bool   earlyVolOk  = input.bool(true, "Require Volume Confirmation on Early BUY", group=group_sig, tooltip="Early BUY additionally requires the fast relative-volume track to be rising (participation arriving). Early SELL fires without it — exits protect capital, don't wait for volume.")
+group_dash = "📊 Smart Dashboard"
+bool   showDash    = input.bool(true, "Show Dashboard", group=group_dash)
+string dashPos     = input.string("Top Right", "Position", options=["Top Right", "Bottom Right", "Top Left", "Bottom Left"], group=group_dash)
+string dashSize    = input.string("Small", "Text Size", options=["Tiny", "Small", "Normal"], group=group_dash)
+
+// ─── SqueezeOS Execution Bridge ───
+group_wh = "🔌 SqueezeOS Webhook Bridge"
+string whPass      = input.string("", "Webhook Passphrase", group=group_wh, tooltip="Your TV_WEBHOOK_PASSPHRASE from the squeezeos-api Render service. Leave empty to disable webhook JSON alerts. To wire execution: create ONE alert on this indicator with condition 'Any alert() function call', paste https://squeezeos-api.onrender.com/api/webhooks/tradingview as the Webhook URL, and leave the message box alone — this script builds the JSON itself.")
+string whSignals   = input.string("Early + Confirmed", "Fire Webhook On", options=["Confirmed Only", "Early + Confirmed"], group=group_wh, tooltip="Confirmed = ignition/fade signals. Early adds the anticipatory hook signals (earlier fills, more noise — the executor's stops and daily caps are the safety net).")
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//                        ZERO-LAG FILTER LIBRARY
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Jurik-style adaptive moving average (double-smoothed with phase-shifted
+// momentum correction term — near-zero lag, heavy noise rejection).
+f_jurik(_src, _len, _phase, _power) =>
+    float _pr    = _phase < -100 ? 0.5 : _phase > 100 ? 2.5 : _phase / 100.0 + 1.5
+    float _beta  = 0.45 * (_len - 1) / (0.45 * (_len - 1) + 2.0)
+    float _alpha = math.pow(_beta, _power)
+    var float _e0  = na
+    var float _e1  = na
+    var float _e2  = na
+    var float _jma = na
+    _e0  := (1.0 - _alpha) * _src + _alpha * nz(_e0, _src)
+    _e1  := (_src - _e0) * (1.0 - _beta) + _beta * nz(_e1)
+    _e2  := (_e0 + _pr * _e1 - nz(_jma, _src)) * math.pow(1.0 - _alpha, 2) + math.pow(_alpha, 2) * nz(_e2)
+    _jma := nz(_jma, _src) + _e2
+    _jma
+
+// Ehlers 4-pole Gaussian low-pass: maximum flatness in the passband,
+// -24 dB/octave rolloff, minimal ripple-induced whipsaw.
+f_gauss4(_src, _len) =>
+    float _w     = 2.0 * math.pi / _len
+    float _beta  = (1.0 - math.cos(_w)) / (math.pow(2.0, 0.25) - 1.0)
+    float _alpha = -_beta + math.sqrt(_beta * _beta + 2.0 * _beta)
+    float _a1    = 1.0 - _alpha
+    var float _f1 = na
+    var float _f2 = na
+    var float _f3 = na
+    var float _f4 = na
+    float _f = math.pow(_alpha, 4) * _src
+             + 4.0 * _a1 * nz(_f1, _src)
+             - 6.0 * math.pow(_a1, 2) * nz(_f2, _src)
+             + 4.0 * math.pow(_a1, 3) * nz(_f3, _src)
+             - math.pow(_a1, 4) * nz(_f4, _src)
+    _f4 := nz(_f3, _src)
+    _f3 := nz(_f2, _src)
+    _f2 := nz(_f1, _src)
+    _f1 := _f
+    _f
+
+// Zero-lag EMA: EMA of lag-projected price (2·src − src[lag]).
+f_zlema(_src, _len) =>
+    int _lag = math.max(1, (_len - 1) / 2)
+    ta.ema(2.0 * _src - nz(_src[_lag], _src), _len)
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//                    STAGE 1 — DENOISED PRICE STRUCTURE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+float rawSrc = hlc3
+
+// All three filters run unconditionally (Pine requires consistent ta.* calls);
+// the selector only chooses which output feeds the engine.
+float srcJurik = f_jurik(rawSrc, smoothLen, jurikPhase, jurikPower)
+float srcGauss = f_gauss4(rawSrc, smoothLen)
+float srcZlema = f_zlema(rawSrc, smoothLen)
+
+float srcS = smoothMode == "Gaussian 4-Pole" ? srcGauss : smoothMode == "ZLEMA" ? srcZlema : srcJurik
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//                STAGE 2 — VOLUME-FORCE MOMENTUM CORE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ATR-normalized velocity of the DENOISED series: dimensionless, cross-symbol
+// comparable, scaled by sqrt(time) so the velocity window doesn't change units.
+float atrN = nz(ta.atr(atrLen))
+float velocity = atrN > 0 ? (srcS - nz(srcS[momLen], srcS)) / (atrN * math.sqrt(momLen)) : 0.0
+
+// Relative volume force. Symbols with no volume feed degrade to neutral 1.0
+// (pure zero-lag velocity) — never invented numbers.
+float vol     = nz(volume, 0.0)
+float volBase = nz(ta.sma(vol, volBaseLen))
+float relVol  = volBase > 0 ? vol / volBase : 1.0
+float volForce = math.pow(math.max(relVol, 0.05), volGamma)
+
+// Volume ACCELERATION expander: when the fast relative-volume track crosses
+// above the slow track, participation is arriving — expand the oscillator.
+float relFast    = ta.ema(relVol, 3)
+float relSlow    = ta.ema(relVol, 12)
+float volAccel   = nz(relFast - relSlow)
+float accelBoost = math.min(1.0 + accelGain * math.max(volAccel, 0.0), 3.0)
+
+// Effort × Result, polished with one short Jurik pass (polish, not lag).
+float oscRaw = 100.0 * velocity * volForce * accelBoost
+float osc    = f_jurik(oscRaw, sigLen, 0.0, 2.0)
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//              STAGE 3 — DYNAMIC VARIANCE BANDS (SELF-REFERENTIAL)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+float oscMean = ta.sma(osc, bandLook)
+float oscDev  = ta.stdev(osc, bandLook)
+float bandCtr = centerMean ? oscMean : 0.0
+
+float upInner = bandCtr + bandInner * oscDev
+float upOuter = bandCtr + bandOuter * oscDev
+float dnInner = bandCtr - bandInner * oscDev
+float dnOuter = bandCtr - bandOuter * oscDev
+
+bool bandsReady = not na(oscDev)
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//              STAGE 4 — FRACTAL EFFICIENCY REGIME FILTER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+float erNum = math.abs(close - nz(close[erLen], close))
+float erDen = nz(math.sum(math.abs(nz(ta.change(close))), erLen))
+float er    = erDen > 0 ? erNum / erDen : 0.0
+float erS   = nz(ta.ema(er, 4))
+
+bool trending = erS > erThresh
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//                          SIGNAL LOGIC (REGIME-GATED)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// TREND regime: momentum ignition on zero-line cross (with-trend entries).
+bool ignitionLong  = trending and ta.crossover(osc, 0.0)
+bool ignitionShort = trending and ta.crossunder(osc, 0.0)
+
+// BRACKET regime: fade extremes — signal fires when the oscillator RE-ENTERS
+// from beyond the outer variance band (exhaustion confirmed, not anticipated).
+bool fadeLong  = bandsReady and not trending and ta.crossover(osc, dnOuter)
+bool fadeShort = bandsReady and not trending and ta.crossunder(osc, upOuter)
+
+// EARLY hooks — one phase ahead of both signal families above. A "hook" is the
+// oscillator's first slope reversal while still stretched beyond the INNER
+// variance band: the turn itself, before any line/band cross confirms it.
+// Early = more signals, earlier fills, more noise — that's the trade-off.
+float oscPrev1 = nz(osc[1], osc)
+float oscPrev2 = nz(osc[2], osc)
+bool hookUp   = osc > oscPrev1 and oscPrev1 <= oscPrev2
+bool hookDown = osc < oscPrev1 and oscPrev1 >= oscPrev2
+bool volArriving = nz(relFast) >= nz(relFast[1])
+
+bool earlyBuy  = showEarly and bandsReady and osc < dnInner and hookUp and (not earlyVolOk or volArriving)
+bool earlySell = showEarly and bandsReady and osc > upInner and hookDown
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//                    VISUAL ARCHITECTURE (JET-BLACK OPTIMIZED)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Neon palette — trend regime
+color NEON_BULL = #00FF88
+color DIM_BULL  = color.new(#00FF88, 62)
+color NEON_BEAR = #FF2D6F
+color DIM_BEAR  = color.new(#FF2D6F, 62)
+// Cool palette — bracket (mean-reverting) regime
+color REV_BULL  = #00D9FF
+color DIM_RBULL = color.new(#00D9FF, 65)
+color REV_BEAR  = #FFB300
+color DIM_RBEAR = color.new(#FFB300, 65)
+
+bool oscRising = osc > nz(osc[1], osc)
+
+color histCol = trending ?
+     (osc >= 0 ? (oscRising ? NEON_BULL : DIM_BULL) : (oscRising ? DIM_BEAR : NEON_BEAR)) :
+     (osc >= 0 ? (oscRising ? REV_BULL : DIM_RBULL) : (oscRising ? DIM_RBEAR : REV_BEAR))
+
+// Core histogram
+plot(osc, "IMO", style=plot.style_columns, color=histCol)
+
+// Zero line
+hline(0, "Zero Line", color=color.new(#787B86, 40), linestyle=hline.style_solid)
+
+// Dynamic variance bands + translucent extreme zones
+pUpO = plot(upOuter, "Upper Outer Band", color=color.new(#FF2D6F, 55), linewidth=1)
+pUpI = plot(upInner, "Upper Inner Band", color=color.new(#787B86, 70), linewidth=1)
+pDnI = plot(dnInner, "Lower Inner Band", color=color.new(#787B86, 70), linewidth=1)
+pDnO = plot(dnOuter, "Lower Outer Band", color=color.new(#00FF88, 55), linewidth=1)
+fill(pUpI, pUpO, color=color.new(#FF2D6F, 88), title="Upper Extreme Zone")
+fill(pDnI, pDnO, color=color.new(#00FF88, 88), title="Lower Extreme Zone")
+
+// Signal markers — dots for confirmed signals, labeled triangles for early hooks
+plot(ignitionLong  ? 0.0 : na, "Trend Ignition Long",  style=plot.style_circles, color=NEON_BULL, linewidth=3)
+plot(ignitionShort ? 0.0 : na, "Trend Ignition Short", style=plot.style_circles, color=NEON_BEAR, linewidth=3)
+plot(fadeLong  ? dnOuter : na, "Bracket Fade Long",  style=plot.style_circles, color=REV_BULL, linewidth=3)
+plot(fadeShort ? upOuter : na, "Bracket Fade Short", style=plot.style_circles, color=REV_BEAR, linewidth=3)
+
+plotshape(earlyBuy,  "Early BUY",  style=shape.triangleup,   location=location.bottom, color=NEON_BULL, size=size.tiny, text="BUY",  textcolor=NEON_BULL)
+plotshape(earlySell, "Early SELL", style=shape.triangledown, location=location.top,    color=NEON_BEAR, size=size.tiny, text="SELL", textcolor=NEON_BEAR)
+
+// Optional whisper-subtle trend-regime shading
+bgcolor(showRegimeBg and trending ? color.new(#2A2E39, 88) : na, title="Trend Regime Shade")
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//                          SMART DASHBOARD (LIVE STATE)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Last-signal memory — early hooks take display priority (they fire first)
+var string lastSig    = "—"
+var int    lastSigBar = na
+if earlyBuy
+    lastSig    := "EARLY BUY"
+    lastSigBar := bar_index
+else if earlySell
+    lastSig    := "EARLY SELL"
+    lastSigBar := bar_index
+else if ignitionLong
+    lastSig    := "IGNITION LONG"
+    lastSigBar := bar_index
+else if ignitionShort
+    lastSig    := "IGNITION SHORT"
+    lastSigBar := bar_index
+else if fadeLong
+    lastSig    := "FADE LONG"
+    lastSigBar := bar_index
+else if fadeShort
+    lastSig    := "FADE SHORT"
+    lastSigBar := bar_index
+
+// Oscillator z-score within its own rolling distribution
+float oscZ = oscDev > 0 ? (osc - oscMean) / oscDev : 0.0
+
+color DASH_BG   = color.new(#0B0E14, 15)
+color DASH_HEAD = color.new(#1C2230, 0)
+color DASH_TXT  = #D5DBE5
+
+f_dashPos(_p) =>
+    _p == "Bottom Right" ? position.bottom_right : _p == "Top Left" ? position.top_left : _p == "Bottom Left" ? position.bottom_left : position.top_right
+
+f_dashSize(_s) =>
+    _s == "Tiny" ? size.tiny : _s == "Normal" ? size.normal : size.small
+
+var table dash = table.new(f_dashPos(dashPos), 2, 7, bgcolor=DASH_BG, border_width=1, border_color=color.new(#2A2E39, 40))
+
+if showDash and barstate.islast
+    string _sz = f_dashSize(dashSize)
+    color regimeCol = trending ? (osc >= 0 ? NEON_BULL : NEON_BEAR) : REV_BULL
+    color oscCol    = osc >= 0 ? NEON_BULL : NEON_BEAR
+    color zCol      = oscZ >= bandOuter ? NEON_BEAR : oscZ <= -bandOuter ? NEON_BULL : DASH_TXT
+    color volCol    = relVol >= 1.5 ? NEON_BULL : relVol < 0.7 ? color.new(DASH_TXT, 45) : DASH_TXT
+    color accCol    = volAccel > 0 ? NEON_BULL : color.new(DASH_TXT, 45)
+    color sigCol    = str.contains(lastSig, "BUY") or str.contains(lastSig, "LONG") ? NEON_BULL : str.contains(lastSig, "SELL") or str.contains(lastSig, "SHORT") ? NEON_BEAR : DASH_TXT
+    table.cell(dash, 0, 0, "⚡ SML-IMO", text_color=#00D9FF, text_size=_sz, bgcolor=DASH_HEAD)
+    table.cell(dash, 1, 0, trending ? "TREND" : "BRACKET", text_color=regimeCol, text_size=_sz, bgcolor=DASH_HEAD)
+    table.cell(dash, 0, 1, "Oscillator", text_color=DASH_TXT, text_size=_sz)
+    table.cell(dash, 1, 1, str.tostring(osc, "#.##"), text_color=oscCol, text_size=_sz)
+    table.cell(dash, 0, 2, "Z-Score", text_color=DASH_TXT, text_size=_sz)
+    table.cell(dash, 1, 2, str.tostring(oscZ, "#.##") + "σ", text_color=zCol, text_size=_sz)
+    table.cell(dash, 0, 3, "Efficiency", text_color=DASH_TXT, text_size=_sz)
+    table.cell(dash, 1, 3, str.tostring(erS, "#.##") + " / " + str.tostring(erThresh, "#.##"), text_color=regimeCol, text_size=_sz)
+    table.cell(dash, 0, 4, "Rel Volume", text_color=DASH_TXT, text_size=_sz)
+    table.cell(dash, 1, 4, str.tostring(relVol, "#.##") + "×", text_color=volCol, text_size=_sz)
+    table.cell(dash, 0, 5, "Vol Accel", text_color=DASH_TXT, text_size=_sz)
+    table.cell(dash, 1, 5, volAccel > 0 ? "▲ ARRIVING" : "▽ FADING", text_color=accCol, text_size=_sz)
+    table.cell(dash, 0, 6, "Last Signal", text_color=DASH_TXT, text_size=_sz)
+    table.cell(dash, 1, 6, lastSig + (na(lastSigBar) ? "" : " · " + str.tostring(bar_index - lastSigBar) + " bars"), text_color=sigCol, text_size=_sz)
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//                                  ALERTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+alertcondition(ignitionLong,  "IMO Trend Ignition LONG",  "SML-IMO: zero-line ignition LONG in trend regime on {{ticker}} ({{interval}})")
+alertcondition(ignitionShort, "IMO Trend Ignition SHORT", "SML-IMO: zero-line ignition SHORT in trend regime on {{ticker}} ({{interval}})")
+alertcondition(fadeLong,  "IMO Bracket Fade LONG",  "SML-IMO: oscillator re-entered from lower variance extreme — bracket fade LONG on {{ticker}} ({{interval}})")
+alertcondition(fadeShort, "IMO Bracket Fade SHORT", "SML-IMO: oscillator re-entered from upper variance extreme — bracket fade SHORT on {{ticker}} ({{interval}})")
+alertcondition(earlyBuy,  "IMO Early BUY",  "SML-IMO EARLY BUY: oscillator hooked up below inner variance band on {{ticker}} ({{interval}}) — anticipatory entry")
+alertcondition(earlySell, "IMO Early SELL", "SML-IMO EARLY SELL: oscillator hooked down above inner variance band on {{ticker}} ({{interval}}) — anticipatory exit")
+
+// ── SqueezeOS webhook bridge — emits the exact JSON /api/webhooks/tradingview
+// expects, so IMO signals flow into the IAM executor (paper-first, hard stops,
+// daily caps). Fires only when a passphrase is configured. Bar-close only:
+// early hooks use osc[1]/osc[2] and would flicker intrabar.
+f_whJson(_act) =>
+    '{"passphrase":"' + whPass + '","system":"SML_IMO","ticker":"' + syminfo.ticker + '","action":"' + _act + '","price":' + str.tostring(close, "#.####") + '}'
+
+if barstate.isconfirmed and whPass != ""
+    bool fireEarly = whSignals == "Early + Confirmed"
+    if ignitionLong or fadeLong or (fireEarly and earlyBuy)
+        alert(f_whJson("EXECUTE_LONG"), alert.freq_once_per_bar_close)
+    else if ignitionShort or fadeShort or (fireEarly and earlySell)
+        alert(f_whJson("EXECUTE_SHORT"), alert.freq_once_per_bar_close)
