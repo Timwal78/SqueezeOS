@@ -215,13 +215,26 @@ Produce a JSON campaign report:
   "health": "GREEN|YELLOW|RED"
 }}"""
 
-    resp = client.messages.create(
-        model=MODEL,
-        max_tokens=4096,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    final_text = resp.content[0].text if resp.content else ""
+    try:
+        resp = client.messages.create(
+            model=MODEL,
+            max_tokens=4096,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        final_text = resp.content[0].text if resp.content else ""
+    except anthropic.APIError as e:
+        # Claude unavailable (low credit balance, rate limit, etc). Per-specialist
+        # results above are still real and already reported — only the executive
+        # summary is unavailable. Skip cleanly rather than crashing the whole run.
+        print(f"[CEO] Report synthesis unavailable — Claude API error: {e}")
+        final_text = ""
+
     report = {"date": today, "raw": final_text}
+    if not final_text:
+        report["health"] = "UNKNOWN"
+        report["week_summary"] = "Executive summary unavailable this run — Claude API error (see agent results below for real per-agent status)."
+        return report
+
     m = re.search(r'\{[\s\S]*\}', final_text)
     if m:
         try:

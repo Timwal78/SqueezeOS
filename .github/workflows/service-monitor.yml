@@ -67,7 +67,7 @@ jobs:
             "https://four02proof.onrender.com/v1/stats" "200"
 
           check_service "SML Rails (RLUSD)" \
-            "https://sml-rails.onrender.com/health" "200 404"
+            "https://sml-rails.onrender.com/api/health" "200 404"
 
           check_service "SML Copy-Trader" \
             "https://sml-copytrader.onrender.com/health" "200 404"

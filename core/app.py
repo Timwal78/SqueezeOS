@@ -733,14 +733,24 @@ def create_app():
 
     _demo_cache: dict = {}
     _DEMO_TTL = 300
+    _DEMO_RETRY_TTL = 20   # short cache for the timeout-fallback path, so we retry soon instead of waiting a full 5 min
+    _DEMO_BUDGET_SEC = 15  # OracleEngine.analyze() shares a single rate-limited Tradier
+                            # client with the background market scanner (up to ~160 calls
+                            # per scan cycle, ~0.5s apart) — under contention analyze() can
+                            # block 60-120s+. The free demo endpoint must stay responsive
+                            # regardless, so it never waits past this budget.
+    import concurrent.futures
+    _demo_executor = concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix="demo-council")
 
     @app.route('/api/demo', methods=['GET'])
     @app.route('/api/demo/council', methods=['GET'])
     def demo_council():
         now = time.time()
         cached = _demo_cache.get('council')
-        if cached and (now - cached.get('_cached_at', 0)) < _DEMO_TTL:
-            return jsonify(cached)
+        if cached:
+            cache_ttl = cached.get('_cache_ttl_override', _DEMO_TTL)
+            if (now - cached.get('_cached_at', 0)) < cache_ttl:
+                return jsonify(cached)
         try:
             from core.oracle_engine import OracleEngine
             services = {
@@ -749,7 +759,43 @@ def create_app():
                 "sml":           get_service("sml"),
             }
             engine = OracleEngine(services)
-            data   = engine.analyze('IWM')
+            try:
+                data = _demo_executor.submit(engine.analyze, 'IWM').result(timeout=_DEMO_BUDGET_SEC)
+            except concurrent.futures.TimeoutError:
+                logger.warning(
+                    f"[DEMO] OracleEngine.analyze('IWM') exceeded {_DEMO_BUDGET_SEC}s budget "
+                    "(likely queued behind the background scanner's Tradier calls) — "
+                    "returning AWAITING_DATA instead of blocking the demo endpoint"
+                )
+                result = {
+                    "demo":       True,
+                    "status":     "AWAITING_DATA",
+                    "symbol":     "IWM",
+                    "verdict": {
+                        "symbol":     "IWM",
+                        "bias":       "NEUTRAL",
+                        "regime":     "UNKNOWN",
+                        "confidence": 0,
+                        "thesis":     ("Live engines are busy refreshing full-universe market data right now. "
+                                       "This is a transient state, not an outage — retry in ~20 seconds. The paid "
+                                       "/api/council endpoint returns AWAITING_DATA in the same shape — no charge "
+                                       "applies if data is not yet ready."),
+                        "timestamp":  now,
+                    },
+                    "engines": {},
+                    "note":       "Demo data — fixed symbol IWM, refreshed every 5 min. Real paid calls accept any symbol.",
+                    "next_refresh_seconds": _DEMO_RETRY_TTL,
+                    "upgrade": {
+                        "any_symbol":  "/api/council",
+                        "price_rlusd": "0.10",
+                        "gateway":     "https://four02proof.onrender.com",
+                        "includes":    ["any symbol", "live data", "full engine breakdown", "battle computer consensus"],
+                    },
+                    "_cached_at": now,
+                    "_cache_ttl_override": _DEMO_RETRY_TTL,
+                }
+                _demo_cache['council'] = result
+                return jsonify(result)
             trend  = data.get('trend_score', 0) or 0
             regime = data.get('regime', 'UNKNOWN')
             bias   = 'BULLISH' if trend > 0.2 else 'BEARISH' if trend < -0.2 else 'NEUTRAL'
