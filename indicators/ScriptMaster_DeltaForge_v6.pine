@@ -1,0 +1,128 @@
+//@version=6
+strategy("ScriptMaster DeltaForge v1.2", shorttitle="SM-DF", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=8, commission_type=strategy.commission.percent, commission_value=0.1)
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//                    SCRIPTMASTER DELTAFORGE — v1.2 (strict Pine v6)
+//          Behavioral Distortion + Explosive Delta-Gamma Breakout Strategy
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// CORE CONCEPT:
+// Detects behavioral distortion (price position in the 20-bar channel), waits
+// for a volatility spike + momentum shift, and enters on an explosive breakout
+// of the PRIOR 20-bar channel, sized by a volume-weighted convexity score.
+//
+// v1.2 FIXES OVER v1.1 (all confirmed defects, not style changes):
+// - `ta.volume` does not exist in Pine v6 — replaced with the built-in `volume`
+//   (v1.1 did not compile).
+// - Breakout compared close against a channel that INCLUDED the current bar;
+//   close can never exceed its own bar's high, so v1.1 could never fire a
+//   single entry. Channel is now the prior 20 bars (`[1]`).
+// - The momentum-shift gate was bullish (mom5>0 and mom10<0) for BOTH sides,
+//   so shorts required positive short-term momentum. Bear side now mirrored.
+// - Stop-loss re-anchored to `close` every bar, drifting away from the entry
+//   as price moved against the position. Now anchored to
+//   strategy.position_avg_price = true max-risk-per-trade stop.
+// - Division by zero in distortion when the 20-bar range is flat.
+//
+// AUTHOR: ScriptMasterLabs
+// VERSION: 1.2
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ──────────────────────────────────────────────
+// INPUTS
+// ──────────────────────────────────────────────
+aggressionLevel  = input.float(0.85, "Aggression Level", minval=0.0, maxval=1.0, step=0.05)
+useExplosiveMode = input.bool(true, "Explosive Delta-Gamma Mode")
+riskPerTrade     = input.float(1.5, "Max Risk Per Trade (%)", minval=0.5, maxval=5.0)
+longThreshold    = input.float(0.6, "Long Delta Score Threshold", minval=0.0, step=0.05)
+shortThreshold   = input.float(-0.5, "Short Delta Score Threshold", maxval=0.0, step=0.05)
+useTakeProfit    = input.bool(false, "Use Take Profit (R-multiple)")
+rewardMultiple   = input.float(2.0, "Reward Multiple (R)", minval=0.5, step=0.5)
+showSignals      = input.bool(true, "Show Signals")
+
+// ──────────────────────────────────────────────
+// BEHAVIORAL DISTORTION INDICATORS
+// ──────────────────────────────────────────────
+// Prior 20-bar channel — excludes the current bar so a breakout is possible.
+refHigh = ta.highest(high, 20)[1]
+refLow  = ta.lowest(low, 20)[1]
+chRange = refHigh - refLow
+distortion = chRange > 0 ? (close - refLow) / chRange : 0.5
+
+// Volatility Spike
+volSpike = ta.sma(ta.stdev(close, 10), 5) > ta.sma(ta.stdev(close, 20), 20)
+
+// Momentum Shift — short-term momentum turning against the 10-bar trend
+mom5  = ta.mom(close, 5)
+mom10 = ta.mom(close, 10)
+bullMomentumShift = mom5 > 0 and mom10 < 0
+bearMomentumShift = mom5 < 0 and mom10 > 0
+
+// Tail / Skew Signal
+rsi = ta.rsi(close, 14)
+skewSignal = (rsi > 70 or rsi < 30) and volSpike
+
+// ──────────────────────────────────────────────
+// EXPLOSIVE MOVE DETECTION
+// ──────────────────────────────────────────────
+explosiveBull = volSpike and bullMomentumShift and close > refHigh * 1.001 and distortion > 0.65
+explosiveBear = volSpike and bearMomentumShift and close < refLow * 0.999 and distortion < 0.35
+
+// Convexity Score
+roc5     = ta.roc(close, 5)
+volRatio = volume / ta.sma(volume, 20)
+convexityScore = roc5 * volRatio
+deltaScore = ta.ema(convexityScore, 5) * aggressionLevel
+
+// ──────────────────────────────────────────────
+// SIGNALS
+// ──────────────────────────────────────────────
+longCondition  = explosiveBull and deltaScore > longThreshold and useExplosiveMode
+shortCondition = explosiveBear and deltaScore < shortThreshold and useExplosiveMode
+
+// ──────────────────────────────────────────────
+// EXECUTION
+// ──────────────────────────────────────────────
+if longCondition
+    strategy.entry("DF Long", strategy.long)
+
+if shortCondition
+    strategy.entry("DF Short", strategy.short)
+
+// Exits anchored to the actual fill price, not the moving close.
+riskFrac = riskPerTrade / 100.0
+if strategy.position_size > 0
+    longStop   = strategy.position_avg_price * (1 - riskFrac)
+    longTarget = strategy.position_avg_price * (1 + riskFrac * rewardMultiple)
+    strategy.exit("Exit Long", "DF Long", stop=longStop, limit=useTakeProfit ? longTarget : na)
+
+if strategy.position_size < 0
+    shortStop   = strategy.position_avg_price * (1 + riskFrac)
+    shortTarget = strategy.position_avg_price * (1 - riskFrac * rewardMultiple)
+    strategy.exit("Exit Short", "DF Short", stop=shortStop, limit=useTakeProfit ? shortTarget : na)
+
+// ──────────────────────────────────────────────
+// VISUALS
+// ──────────────────────────────────────────────
+plotshape(longCondition and showSignals, title="Explosive Long", location=location.belowbar,
+     color=color.new(color.green, 0), style=shape.triangleup, size=size.large, text="DF LONG")
+
+plotshape(shortCondition and showSignals, title="Explosive Short", location=location.abovebar,
+     color=color.new(color.red, 0), style=shape.triangledown, size=size.large, text="DF SHORT")
+
+// Background
+bgcolor(distortion > 0.7 ? color.new(color.green, 90) : distortion < 0.3 ? color.new(color.red, 90) : na)
+
+// Alerts
+alertcondition(longCondition, title="DeltaForge Long", message="ScriptMaster DeltaForge: Explosive LONG on {{ticker}} @ {{close}}")
+alertcondition(shortCondition, title="DeltaForge Short", message="ScriptMaster DeltaForge: Explosive SHORT on {{ticker}} @ {{close}}")
+
+// Info Table
+var table info = table.new(position.top_right, 1, 4, bgcolor=color.new(color.white, 80), border_width=1)
+if barstate.islast
+    table.cell(info, 0, 0, "DeltaForge v1.2", text_color=color.black, text_size=size.small)
+    table.cell(info, 0, 1, "Aggression: " + str.tostring(aggressionLevel), text_color=color.black)
+    table.cell(info, 0, 2, "Distortion: " + str.tostring(math.round(distortion * 100)) + "%",
+               text_color=distortion > 0.6 ? color.green : color.red)
+    table.cell(info, 0, 3, "ΔScore: " + str.tostring(math.round(deltaScore * 100) / 100),
+               text_color=deltaScore > 0 ? color.green : color.red)

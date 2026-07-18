@@ -1,0 +1,224 @@
+//@version=6
+strategy("ScriptMaster DeltaForge FLAGSHIP v2.0", shorttitle="SM-DF-FLAG", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=8, commission_type=strategy.commission.percent, commission_value=0.1, calc_on_every_tick=false)
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//               SCRIPTMASTER DELTAFORGE — FLAGSHIP EDITION v2.0
+//        Behavioral Distortion + Explosive Delta-Gamma Breakout Strategy
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// FLAGSHIP UPGRADES OVER v1.2 (ScriptMaster_DeltaForge_v6.pine — kept as the
+// lightweight sibling; this file is the full desk-grade build):
+// - Kaufman Efficiency Ratio regime filter — blocks entries in chop, the #1
+//   killer of breakout systems.
+// - Higher-timeframe trend filter (non-repainting confirmed-bar EMA) — longs
+//   only above HTF trend, shorts only below.
+// - Zero-lag delta score smoothing (EMA / ZLEMA / HMA selectable).
+// - ATR risk engine: ATR-multiple or percent stops (anchored at entry, never
+//   drifting), R-multiple take profit, optional breakeven at +N·R.
+// - Entry cooldown to stop signal clustering in the same burst.
+// - SqueezeOS webhook bridge — emits the exact JSON /api/webhooks/tradingview
+//   expects (system SML_DELTAFORGE), so signals can flow into the IAM executor
+//   (paper-first, hard stops, daily loss caps). Disabled until a passphrase
+//   is entered.
+// - Desk dashboard: regime, distortion, ΔScore, vol spike, HTF bias, webhook
+//   arm state, live position.
+//
+// Carries all v1.2 correctness fixes: prior-bar breakout channel, per-side
+// momentum gates, `volume` built-in, entry-anchored stops, flat-range guard.
+//
+// AUTHOR: ScriptMasterLabs
+// VERSION: 2.0
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ──────────────────────────────────────────────
+// INPUTS
+// ──────────────────────────────────────────────
+group_core = "⚡ Core Engine"
+aggressionLevel  = input.float(0.85, "Aggression Level", minval=0.0, maxval=1.0, step=0.05, group=group_core)
+useExplosiveMode = input.bool(true, "Explosive Delta-Gamma Mode", group=group_core)
+smoothMode       = input.string("ZLEMA", "Delta Score Smoothing", options=["EMA", "ZLEMA", "HMA"], group=group_core)
+longThreshold    = input.float(0.6, "Long Delta Score Threshold", minval=0.0, step=0.05, group=group_core)
+shortThreshold   = input.float(-0.5, "Short Delta Score Threshold", maxval=0.0, step=0.05, group=group_core)
+cooldownBars     = input.int(5, "Entry Cooldown (bars)", minval=0, group=group_core)
+
+group_regime = "🧭 Regime & Trend Filters"
+useRegimeFilter = input.bool(true, "Kaufman ER Regime Filter", group=group_regime, tooltip="Blocks entries when the market is choppy (low efficiency). Breakouts fail disproportionately in chop.")
+erLen           = input.int(10, "Efficiency Ratio Length", minval=2, group=group_regime)
+erThreshold     = input.float(0.30, "Min Efficiency Ratio", minval=0.0, maxval=1.0, step=0.05, group=group_regime)
+useHtfFilter    = input.bool(true, "Higher-Timeframe Trend Filter", group=group_regime)
+htfTf           = input.timeframe("60", "HTF Timeframe", group=group_regime)
+htfLen          = input.int(50, "HTF EMA Length", minval=1, group=group_regime)
+
+group_risk = "🛡️ Risk Engine"
+useAtrStops    = input.bool(true, "ATR-Based Stops", group=group_risk, tooltip="Off = fixed percent stop (Max Risk Per Trade %). ATR adapts the stop to current volatility.")
+atrLen         = input.int(14, "ATR Length", minval=1, group=group_risk)
+atrStopMult    = input.float(2.0, "ATR Stop Multiple", minval=0.5, step=0.25, group=group_risk)
+riskPerTrade   = input.float(1.5, "Max Risk Per Trade (%) [percent mode]", minval=0.5, maxval=5.0, group=group_risk)
+useTakeProfit  = input.bool(true, "Take Profit (R-multiple)", group=group_risk)
+rewardMultiple = input.float(2.0, "Reward Multiple (R)", minval=0.5, step=0.5, group=group_risk)
+useBreakeven   = input.bool(true, "Move Stop to Breakeven", group=group_risk)
+beTriggerR     = input.float(1.0, "Breakeven Trigger (R)", minval=0.25, step=0.25, group=group_risk)
+
+group_wh = "📡 SqueezeOS Webhook Bridge"
+whPass = input.string("", "Webhook Passphrase", group=group_wh, tooltip="Your TV_WEBHOOK_PASSPHRASE from the squeezeos-api Render service. Leave empty to disable webhook JSON alerts. To wire execution: create ONE alert on this strategy with condition 'Any alert() function call', paste https://squeezeos-api.onrender.com/api/webhooks/tradingview as the Webhook URL, and leave the message box alone — this script builds the JSON itself.")
+
+group_vis = "🎨 Visuals"
+showSignals   = input.bool(true, "Show Signals", group=group_vis)
+showDashboard = input.bool(true, "Show Dashboard", group=group_vis)
+
+// ──────────────────────────────────────────────
+// BEHAVIORAL DISTORTION INDICATORS
+// ──────────────────────────────────────────────
+// Prior 20-bar channel — excludes the current bar so a breakout is possible.
+refHigh = ta.highest(high, 20)[1]
+refLow  = ta.lowest(low, 20)[1]
+chRange = refHigh - refLow
+distortion = chRange > 0 ? (close - refLow) / chRange : 0.5
+
+// Volatility Spike
+volSpike = ta.sma(ta.stdev(close, 10), 5) > ta.sma(ta.stdev(close, 20), 20)
+
+// Momentum Shift — short-term momentum turning against the 10-bar trend
+mom5  = ta.mom(close, 5)
+mom10 = ta.mom(close, 10)
+bullMomentumShift = mom5 > 0 and mom10 < 0
+bearMomentumShift = mom5 < 0 and mom10 > 0
+
+// Tail / Skew Signal
+rsi = ta.rsi(close, 14)
+skewSignal = (rsi > 70 or rsi < 30) and volSpike
+
+// ──────────────────────────────────────────────
+// CONVEXITY / DELTA SCORE (zero-lag smoothing)
+// ──────────────────────────────────────────────
+roc5     = ta.roc(close, 5)
+volRatio = volume / ta.sma(volume, 20)
+convexityScore = roc5 * volRatio
+
+// All three smoothers computed every bar (strict v6: no ta.* inside branches).
+csEma   = ta.ema(convexityScore, 5)
+csZlema = ta.ema(convexityScore + (convexityScore - convexityScore[2]), 5)
+csHma   = ta.hma(convexityScore, 5)
+smoothed = smoothMode == "ZLEMA" ? csZlema : smoothMode == "HMA" ? csHma : csEma
+deltaScore = smoothed * aggressionLevel
+
+// ──────────────────────────────────────────────
+// REGIME + HTF TREND FILTERS
+// ──────────────────────────────────────────────
+// Kaufman Efficiency Ratio: |net move| / sum of bar-to-bar moves. 1 = pure
+// trend, 0 = pure chop.
+absChg = math.abs(ta.change(close))
+erNet  = math.abs(close - close[erLen])
+erDen  = math.sum(absChg, erLen)
+er     = erDen > 0 ? erNet / erDen : 0.0
+regimeOK = not useRegimeFilter or er >= erThreshold
+
+// Confirmed-bar HTF EMA: [1] + lookahead_on is the standard non-repainting
+// idiom — always returns the last CLOSED higher-timeframe value.
+htfEma = request.security(syminfo.tickerid, htfTf, ta.ema(close, htfLen)[1], lookahead=barmerge.lookahead_on)
+htfLongOK  = not useHtfFilter or (not na(htfEma) and close > htfEma)
+htfShortOK = not useHtfFilter or (not na(htfEma) and close < htfEma)
+
+// ──────────────────────────────────────────────
+// EXPLOSIVE MOVE DETECTION + SIGNALS
+// ──────────────────────────────────────────────
+explosiveBull = volSpike and bullMomentumShift and close > refHigh * 1.001 and distortion > 0.65
+explosiveBear = volSpike and bearMomentumShift and close < refLow * 0.999 and distortion < 0.35
+
+var int lastEntryBar = na
+cooldownOK = na(lastEntryBar) or bar_index - lastEntryBar >= cooldownBars
+
+longCondition  = explosiveBull and deltaScore > longThreshold and useExplosiveMode and regimeOK and htfLongOK and cooldownOK
+shortCondition = explosiveBear and deltaScore < shortThreshold and useExplosiveMode and regimeOK and htfShortOK and cooldownOK
+
+// ──────────────────────────────────────────────
+// EXECUTION + RISK ENGINE
+// ──────────────────────────────────────────────
+atrVal = ta.atr(atrLen)
+
+if longCondition
+    strategy.entry("DF Long", strategy.long)
+
+if shortCondition
+    strategy.entry("DF Short", strategy.short)
+
+// Stop distance is captured ONCE at entry (or flip) so it never drifts with
+// post-entry volatility; breakeven arms after price travels beTriggerR stops.
+posChanged = strategy.position_size != strategy.position_size[1]
+justOpened = posChanged and strategy.position_size != 0
+var float stopDist = na
+var bool  beArmed  = false
+if justOpened
+    stopDist := useAtrStops ? atrVal * atrStopMult : strategy.position_avg_price * (riskPerTrade / 100.0)
+    beArmed  := false
+    lastEntryBar := bar_index
+if strategy.position_size == 0
+    beArmed := false
+
+if strategy.position_size > 0
+    avgL = strategy.position_avg_price
+    if useBreakeven and high >= avgL + stopDist * beTriggerR
+        beArmed := true
+    longStop   = beArmed ? avgL : avgL - stopDist
+    longTarget = avgL + stopDist * rewardMultiple
+    strategy.exit("Exit Long", "DF Long", stop=longStop, limit=useTakeProfit ? longTarget : na)
+
+if strategy.position_size < 0
+    avgS = strategy.position_avg_price
+    if useBreakeven and low <= avgS - stopDist * beTriggerR
+        beArmed := true
+    shortStop   = beArmed ? avgS : avgS + stopDist
+    shortTarget = avgS - stopDist * rewardMultiple
+    strategy.exit("Exit Short", "DF Short", stop=shortStop, limit=useTakeProfit ? shortTarget : na)
+
+// ──────────────────────────────────────────────
+// SQUEEZEOS WEBHOOK BRIDGE
+// ──────────────────────────────────────────────
+// Emits the exact JSON core/api/tradingview_webhook_bp.py expects, so signals
+// flow into the IAM executor (paper-first, hard stops, daily caps). Fires only
+// when a passphrase is configured; bar-close only to avoid intrabar flicker.
+f_whJson(_act) =>
+    '{"passphrase":"' + whPass + '","system":"SML_DELTAFORGE","ticker":"' + syminfo.ticker + '","action":"' + _act + '","price":' + str.tostring(close, "#.####") + '}'
+
+if whPass != ""
+    if longCondition
+        alert(f_whJson("EXECUTE_LONG"), alert.freq_once_per_bar_close)
+    if shortCondition
+        alert(f_whJson("EXECUTE_SHORT"), alert.freq_once_per_bar_close)
+
+// ──────────────────────────────────────────────
+// VISUALS
+// ──────────────────────────────────────────────
+plotshape(longCondition and showSignals, title="Explosive Long", location=location.belowbar,
+     color=color.new(color.green, 0), style=shape.triangleup, size=size.large, text="DF LONG")
+
+plotshape(shortCondition and showSignals, title="Explosive Short", location=location.abovebar,
+     color=color.new(color.red, 0), style=shape.triangledown, size=size.large, text="DF SHORT")
+
+bgcolor(distortion > 0.7 ? color.new(color.green, 90) : distortion < 0.3 ? color.new(color.red, 90) : na)
+
+// Alerts (chart alerts; the webhook bridge above is separate)
+alertcondition(longCondition, title="DeltaForge Long", message="ScriptMaster DeltaForge: Explosive LONG on {{ticker}} @ {{close}}")
+alertcondition(shortCondition, title="DeltaForge Short", message="ScriptMaster DeltaForge: Explosive SHORT on {{ticker}} @ {{close}}")
+
+// ──────────────────────────────────────────────
+// DESK DASHBOARD
+// ──────────────────────────────────────────────
+var table info = table.new(position.top_right, 1, 8, bgcolor=color.new(color.white, 80), border_width=1)
+if barstate.islast and showDashboard
+    posTxt = strategy.position_size > 0 ? "LONG" : strategy.position_size < 0 ? "SHORT" : "FLAT"
+    posCol = strategy.position_size > 0 ? color.green : strategy.position_size < 0 ? color.red : color.gray
+    htfTxt = not useHtfFilter ? "OFF" : na(htfEma) ? "…" : close > htfEma ? "BULL" : "BEAR"
+    htfCol = not useHtfFilter or na(htfEma) ? color.gray : close > htfEma ? color.green : color.red
+    regTxt = not useRegimeFilter ? "OFF" : er >= erThreshold ? "TRENDING" : "CHOP"
+    regCol = not useRegimeFilter ? color.gray : er >= erThreshold ? color.green : color.orange
+    table.cell(info, 0, 0, "DeltaForge FLAGSHIP v2.0", text_color=color.black, text_size=size.small)
+    table.cell(info, 0, 1, "Regime: " + regTxt + " (ER " + str.tostring(math.round(er * 100) / 100) + ")", text_color=regCol)
+    table.cell(info, 0, 2, "HTF " + htfTf + ": " + htfTxt, text_color=htfCol)
+    table.cell(info, 0, 3, "Distortion: " + str.tostring(math.round(distortion * 100)) + "%",
+               text_color=distortion > 0.6 ? color.green : color.red)
+    table.cell(info, 0, 4, "ΔScore: " + str.tostring(math.round(deltaScore * 100) / 100),
+               text_color=deltaScore > 0 ? color.green : color.red)
+    table.cell(info, 0, 5, "Vol Spike: " + (volSpike ? "✔" : "✘"), text_color=volSpike ? color.green : color.gray)
+    table.cell(info, 0, 6, "Position: " + posTxt, text_color=posCol)
+    table.cell(info, 0, 7, "Webhook: " + (whPass != "" ? "ARMED" : "off"), text_color=whPass != "" ? color.green : color.gray)
