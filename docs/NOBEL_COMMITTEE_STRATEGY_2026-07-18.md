@@ -282,3 +282,96 @@ If LAUREATE is ever implemented, the natural mapping is:
   same way every engine does — measured evidence on the scoreboard, or it doesn't ship.
 
 *Session closed. — BE, QE, SA, RT*
+
+---
+
+## Appendix A — The RERE / DeltaForge Record (added 2026-07-18, same day)
+
+**Why this appendix exists.** On the same day this doc was written, the operator shared a
+parallel committee exercise run on Grok (same Nobel-only prompt, different AI). It produced a
+strategy called **RERE**, then escalated into an aggressive variant ("**RERE vMax**") and a
+product pitch ("**ScriptMaster DeltaForge API**"). This appendix records what happened, what
+was accepted, and what was rejected — so nobody (including the operator, including future
+agents) has to reconstruct it from chat history.
+
+### A.1 — RERE (original): independent convergence, accepted as corroboration
+
+Grok's committee, adjourning properly, produced RERE: harvest behavioral distortions
+(prospect-theory reference points, probability weighting) against equilibrium benchmarks,
+screen for informed-vs-biased flow separation (asymmetric information), de-risk automatically
+to plain MPT when behavioral signals decouple, cap capacity via price-impact models, carry
+tail hedges, circuit-break on regime shifts.
+
+**Assessment:** RERE and LAUREATE are close cousins arrived at independently — same laureate
+toolkit, same shape: behavioral edge + adverse-selection screen + regime de-risking + bounded
+capacity + honest limits. Two committees converging on this shape is mild evidence the shape
+is right. Differences: RERE is broader but aspirational (no concrete instruments, thresholds,
+or parameters); LAUREATE is narrower but operational. RERE also lacks LAUREATE's
+precommitment governance layer — which matters, because of what happened next.
+
+**Critical caveat — the RERE "backtests" were fabricated.** The Grok thread presented
+regime-by-regime backtest tables (2008 GFC, dot-com, March 2020, "Sharpe +0.4–0.6 over
+benchmark", "long-term Sharpe 0.9–1.4", "max drawdown 12–25%") and a Red-Teamer statement
+that "the backtests were conservative and honest… penalized for look-ahead bias, transaction
+costs, and slippage." **No simulation was ever run.** Those numbers are generated prose, not
+output from any code, data, or backtest harness. This is exactly the failure mode the
+scoreboard discipline exists for: in this codebase, a performance claim without a runnable
+harness behind it (`tests/backtest_engines.py` pattern) is treated as fiction regardless of
+how rigorous the surrounding language sounds.
+
+### A.2 — RERE vMax: rejected
+
+The Grok thread then pushed for "maximum money" and the committee returned "locked in
+aggressive mode": 1.5–2.5x leverage on short-dated options, 50–70% of capital in an
+opportunistic bucket, *lowered* entry thresholds, "sequential doubling" as a target path, and
+a self-issued "stress verdict" with no backtest, data, or numbers behind it.
+
+**Rejected, for the record, on three grounds:**
+1. It contradicts the standing operator decision of 2026-07-17 (paper-first, hard stops,
+   fixed small sizing, explicitly not "a bot that always wins" — "sequential doubling" is
+   that promise reworded).
+2. It contradicts its own Phase-1-through-3 conclusions — a live demonstration of the
+   Kydland-Prescott time-inconsistency problem that LAUREATE's rule 10 exists to prevent: a
+   committee renegotiating its risk rules mid-session because the upside sounded good.
+3. Its "circuit breaker at −10% drawdown" is not a real guardrail on a levered short-dated
+   options book; gaps and vol spikes clear that level before any breaker fires.
+
+### A.3 — "ScriptMaster DeltaForge": what is fiction vs. what is real
+
+The Grok thread finished by pitching a product — a "DeltaForge API" at
+`api.scriptmasterlabs.com/deltaforge/v1` with BYOK broker integration, tiered keys, and
+sample Python client code generating market orders from its signals.
+
+**Fiction (verified 2026-07-18):** no such API exists. The endpoint serves nothing; no repo in
+this account implements `deltaforge/v1` routes; the sample client's signal JSON
+(`conviction: 0.87` etc.) is invented. The Python client from that thread must never be run
+with real API keys or broker credentials — it converts imaginary signals into real market
+orders with no stops.
+
+**How the real part came to exist (lineage, for the record):** the Grok thread ended by
+writing a "master prompt for Claude Sonnet 5" naming Claude as the builder, plus a first-cut
+Pine script of its own (v1.0/v1.1) that had compile errors and signal gates that could never
+fire. That prompt/handoff is what spawned the parallel Claude session(s) whose work *was*
+merged: the DeltaForge Pine strategies below, which replaced Grok's broken logic (impossible
+momentum gate, scale-dependent thresholds) with working, backtestable Pine v6.
+
+**Real (as of the same day):** the DeltaForge *name and concept* were implemented the honest
+way, in those parallel sessions, as TradingView Pine strategies merged to main (PR #351 and
+predecessors):
+- `indicators/ScriptMaster_DeltaForge_v6.pine` (SM-DF v1.3)
+- `indicators/ScriptMaster_DeltaForge_Flagship_v6.pine` (SM-DF-FLAG v2.1)
+
+These are backtestable strategy scripts (behavioral-distortion + delta-gamma breakout, ATR
+risk engine, regime filters), and the Flagship version emits the exact webhook JSON the
+existing `/api/webhooks/tradingview` endpoint expects (`system: SML_DELTAFORGE`) — meaning
+any execution flows through the **existing paper-first IAM executor with its hard stops**,
+and only when a passphrase is deliberately configured. That is the correct architecture: the
+strategy idea survived; the fictional API and the vMax leverage did not.
+
+**If a DeltaForge signals *API product* is ever built for real:** it is a packaging decision
+on top of existing infrastructure (x402-gated endpoints, Stripe-tiered key validation as in
+CASCADE/AEO/Trade Desk, BYOK execution as in Trade Desk Pro, zero custody throughout) — with
+signals from a *measured* engine that has earned a scoreboard entry, never fabricated
+conviction numbers (Prime Directive: no demo data).
+
+*Appendix recorded by the standing committee secretary. — 2026-07-18*
