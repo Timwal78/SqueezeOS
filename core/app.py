@@ -74,6 +74,7 @@ from core.api.aws_marketplace_bp import aws_marketplace_bp, run_entitlements_sel
 from core.api.grants_bp import grants_bp
 from core.api.settlement_router_bp import settlement_router_bp
 from core.api.delta_explosion_bp import delta_explosion_bp
+from core.api.deltaforge_bp import deltaforge_bp
 import core.signal_history as signal_history
 from core.legacy import start_whale_stalker, init_services, get_service, clean_data
 from core.market_graph import get_graph
@@ -203,6 +204,7 @@ def create_app():
     app.register_blueprint(grants_bp,          url_prefix='/api/grants')
     app.register_blueprint(settlement_router_bp, url_prefix='/api/settlement-router')
     app.register_blueprint(delta_explosion_bp, url_prefix='/api/delta-explosion')
+    app.register_blueprint(deltaforge_bp, url_prefix='/api/deltaforge')
 
     # Stellar Forge growth engine — feature-flagged, dormant unless enabled.
     # Registers the affiliate/loyalty/payout surface only when explicitly turned
