@@ -116,6 +116,14 @@ The Virtuals Protocol ACP marketplace listing for the LEVIATHAN seller agent ("s
 - **"Delete what doesn't win" directive:** measured evidence first — `tests/backtest_imo.py` is the harness. No engine deletions were made on 2026-07-17; do not delete engines without backtest evidence + explicit operator sign-off per engine.
 - **Engine scoreboard (2026-07-17): measurement DONE** — `tests/backtest_engines.py` ran IMO/CASCADE/IAM on 10 symbols × 5y real daily data; full results + findings in `docs/ENGINE_SCOREBOARD_2026-07-17.md`. Verdict: no engine deleted (each wins somewhere; engines are also paid API products), but engine×symbol pairs differ wildly — nobody earned GME/AMC/MSTR. Execution-side cut mechanism: `IAM_SYMBOL_ALLOWLIST` (entries only, exits never blocked, empty default = unchanged). Recommended value `SPY,IWM,QQQ,NVDA,HOOD` — **awaiting Timothy's sign-off, not applied**. Options-flow engines (gamma/MMLE/0DTE/whale) are unmeasurable without recorded flow history — start recording via `performance_tracker.py` and re-score in 60–90 days.
 
+## Delta Explosion Scanner (built 2026-07-18)
+
+Operator directive (Timothy, 2026-07-18): delta .32–.40 contracts are his sweet spot for explosive plays. `core/api/delta_explosion_bp.py`, registered at `/api/delta-explosion` — free endpoint, real Tradier greeks only (fails 503 without `TRADIER_API_KEY`, never estimates a delta).
+
+- `GET /api/delta-explosion/<symbol>?direction=long|short` → contracts with |delta| in 0.32–0.40 (band and 5–45 DTE window overridable via query params), ranked by `explosion_score = (gamma/mid) / (1 + 10*spread_pct)` — convexity per premium dollar, penalized for wide spreads. Dead contracts (no bid, no OI+volume) are excluded. 120s in-memory cache (`_cache`, resets on restart like the rest).
+- Companion to the DeltaForge Pine strategies (`indicators/ScriptMaster_DeltaForge_Flagship_v6.pine` v2.1 + `ScriptMaster_DeltaForge_v6.pine` v1.3, PRs #349/#351): DeltaForge fires the underlying signal on TradingView; this endpoint picks the option contract. Pine cannot see option chains, so contract selection deliberately lives server-side. History: v1.1/v1.2/v2.0 of DeltaForge had a mathematically impossible entry gate (breakout + negative 10-bar momentum) — fixed in PR #351; don't resurrect old copies from chat logs.
+- Not registered as an MCP tool (would require the 4-manifest sync per Key Conventions) — future work if wanted.
+
 ## SML-Vault-Executor — What's Needed When Vault Build Starts
 
 Missing env vars (not yet configured — vault not funded):
