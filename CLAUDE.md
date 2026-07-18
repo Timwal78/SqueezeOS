@@ -114,6 +114,7 @@ The Virtuals Protocol ACP marketplace listing for the LEVIATHAN seller agent ("s
   - `iam_executor.status()` now reports `stop_loss_pct` + `open_positions`.
 - **Paper mode is the default** (`IAM_PAPER_MODE=true`). Going live requires flipping `IAM_PAPER_MODE=false` + `IAM_AUTO_TRADING=true` + `IAM_EXECUTION_MODE=tradier|both` — do not flip these for Timothy without an explicit fresh decision from him, and only after paper results have been reviewed.
 - **"Delete what doesn't win" directive:** measured evidence first — `tests/backtest_imo.py` is the harness. No engine deletions were made on 2026-07-17; do not delete engines without backtest evidence + explicit operator sign-off per engine.
+- **Engine scoreboard (2026-07-17): measurement DONE** — `tests/backtest_engines.py` ran IMO/CASCADE/IAM on 10 symbols × 5y real daily data; full results + findings in `docs/ENGINE_SCOREBOARD_2026-07-17.md`. Verdict: no engine deleted (each wins somewhere; engines are also paid API products), but engine×symbol pairs differ wildly — nobody earned GME/AMC/MSTR. Execution-side cut mechanism: `IAM_SYMBOL_ALLOWLIST` (entries only, exits never blocked, empty default = unchanged). Recommended value `SPY,IWM,QQQ,NVDA,HOOD` — **awaiting Timothy's sign-off, not applied**. Options-flow engines (gamma/MMLE/0DTE/whale) are unmeasurable without recorded flow history — start recording via `performance_tracker.py` and re-score in 60–90 days.
 
 ## SML-Vault-Executor — What's Needed When Vault Build Starts
 

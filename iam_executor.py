@@ -85,6 +85,15 @@ MAX_ORDERS_PER_DAY = lambda: _env_int("IAM_MAX_ORDERS_PER_DAY", 5)
 MAX_NOTIONAL_PER_DAY = lambda: _env_float("IAM_MAX_NOTIONAL_PER_DAY", 2000.0)
 DAILY_LOSS_LIMIT   = lambda: _env_float("IAM_DAILY_LOSS_LIMIT", 150.0)  # 7% of ~$2k account
 STOP_LOSS_PCT      = lambda: _env_float("IAM_STOP_LOSS_PCT", 3.0)  # hard protective stop below entry; 0 disables
+
+# Execution symbol allowlist — the evidence-based "trade only where we win" gate.
+# Empty (default) = all symbols allowed (unchanged behavior). Set to a comma-
+# separated list (e.g. "SPY,IWM,QQQ,NVDA") to restrict ENTRIES to symbols where
+# backtests showed an edge (tests/backtest_engines.py). Exits/closes are never
+# blocked — capital protection always runs.
+SYMBOL_ALLOWLIST   = lambda: {
+    s.strip().upper() for s in os.environ.get("IAM_SYMBOL_ALLOWLIST", "").split(",") if s.strip()
+}
 COOLDOWN_SECONDS   = lambda: _env_int("IAM_COOLDOWN_SECONDS", 600)   # 10 min default — AMC moves in waves
 OPTION_EXPIRY_DAYS = lambda: _env_int("IAM_OPTION_EXPIRY_DAYS", 1)
 OPTION_QTY         = lambda: _env_int("IAM_OPTION_CONTRACT_QTY", 1)
@@ -236,6 +245,12 @@ def _gate_check(sym: str, resolution: dict, time_window: str,
 
     if not _is_market_hours() and mode != "alert":
         return "outside market hours"
+
+    # Allowlist blocks ENTRIES only — a SELL on an open position must always
+    # be free to protect capital, even if the symbol was later delisted here.
+    allow = SYMBOL_ALLOWLIST()
+    if allow and sym.upper() not in allow and resolution.get("action") == "BUY":
+        return f"{sym} not in IAM_SYMBOL_ALLOWLIST — no backtested edge, entry blocked"
 
     if _state["orders_today"] >= MAX_ORDERS_PER_DAY():
         return f"daily order cap reached ({_state['orders_today']}/{MAX_ORDERS_PER_DAY()})"
