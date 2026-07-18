@@ -1,31 +1,32 @@
 //@version=6
-strategy("ScriptMaster DeltaForge v1.2", shorttitle="SM-DF", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=8, commission_type=strategy.commission.percent, commission_value=0.1)
+strategy("ScriptMaster DeltaForge v1.3", shorttitle="SM-DF", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=8, commission_type=strategy.commission.percent, commission_value=0.1)
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//                    SCRIPTMASTER DELTAFORGE — v1.2 (strict Pine v6)
+//                    SCRIPTMASTER DELTAFORGE — v1.3 (strict Pine v6)
 //          Behavioral Distortion + Explosive Delta-Gamma Breakout Strategy
 // ═══════════════════════════════════════════════════════════════════════════════
 //
 // CORE CONCEPT:
 // Detects behavioral distortion (price position in the 20-bar channel), waits
-// for a volatility spike + momentum shift, and enters on an explosive breakout
-// of the PRIOR 20-bar channel, sized by a volume-weighted convexity score.
+// for a volatility spike + momentum thrust, and enters on an explosive breakout
+// of the PRIOR 20-bar channel, gated by a volume-weighted convexity score.
 //
-// v1.2 FIXES OVER v1.1 (all confirmed defects, not style changes):
-// - `ta.volume` does not exist in Pine v6 — replaced with the built-in `volume`
-//   (v1.1 did not compile).
-// - Breakout compared close against a channel that INCLUDED the current bar;
-//   close can never exceed its own bar's high, so v1.1 could never fire a
-//   single entry. Channel is now the prior 20 bars (`[1]`).
-// - The momentum-shift gate was bullish (mom5>0 and mom10<0) for BOTH sides,
-//   so shorts required positive short-term momentum. Bear side now mirrored.
-// - Stop-loss re-anchored to `close` every bar, drifting away from the entry
-//   as price moved against the position. Now anchored to
-//   strategy.position_avg_price = true max-risk-per-trade stop.
-// - Division by zero in distortion when the 20-bar range is flat.
+// v1.3 HOTFIX — v1.2 still could never fire:
+// - The "momentum shift" gate (mom5>0 and mom10<0) is IMPOSSIBLE at a 20-bar
+//   breakout: a close above the prior 20-bar high is above every close in that
+//   window, so 10-bar momentum is always positive there. Replaced with a
+//   momentum THRUST gate (short-term momentum leading the 10-bar move).
+// - Delta score is now a z-score vs its own 100-bar history so the thresholds
+//   work on any symbol/timeframe (raw ROC×volume made them unreachable
+//   intraday). Thresholds are now in σ units.
+// - Breakout channel is plotted so the chart always shows the engine working.
+//
+// v1.2 FIXES (kept): `volume` built-in (ta.volume doesn't exist), prior-bar
+// breakout channel, per-side momentum gates, entry-anchored stops, flat-range
+// division guard.
 //
 // AUTHOR: ScriptMasterLabs
-// VERSION: 1.2
+// VERSION: 1.3
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ──────────────────────────────────────────────
@@ -34,11 +35,12 @@ strategy("ScriptMaster DeltaForge v1.2", shorttitle="SM-DF", overlay=true, defau
 aggressionLevel  = input.float(0.85, "Aggression Level", minval=0.0, maxval=1.0, step=0.05)
 useExplosiveMode = input.bool(true, "Explosive Delta-Gamma Mode")
 riskPerTrade     = input.float(1.5, "Max Risk Per Trade (%)", minval=0.5, maxval=5.0)
-longThreshold    = input.float(0.6, "Long Delta Score Threshold", minval=0.0, step=0.05)
-shortThreshold   = input.float(-0.5, "Short Delta Score Threshold", maxval=0.0, step=0.05)
+longThreshold    = input.float(0.5, "Long Delta Score Threshold (σ)", minval=0.0, step=0.25)
+shortThreshold   = input.float(-0.5, "Short Delta Score Threshold (σ)", maxval=0.0, step=0.25)
 useTakeProfit    = input.bool(false, "Use Take Profit (R-multiple)")
 rewardMultiple   = input.float(2.0, "Reward Multiple (R)", minval=0.5, step=0.5)
 showSignals      = input.bool(true, "Show Signals")
+showChannel      = input.bool(true, "Show Breakout Channel")
 
 // ──────────────────────────────────────────────
 // BEHAVIORAL DISTORTION INDICATORS
@@ -52,11 +54,13 @@ distortion = chRange > 0 ? (close - refLow) / chRange : 0.5
 // Volatility Spike
 volSpike = ta.sma(ta.stdev(close, 10), 5) > ta.sma(ta.stdev(close, 20), 20)
 
-// Momentum Shift — short-term momentum turning against the 10-bar trend
+// Momentum Thrust — short-term momentum leading the 10-bar move (acceleration
+// into the break). NOT "mom10 < 0": at a fresh 20-bar high the 10-bar momentum
+// is always positive, so that old gate could never be true.
 mom5  = ta.mom(close, 5)
 mom10 = ta.mom(close, 10)
-bullMomentumShift = mom5 > 0 and mom10 < 0
-bearMomentumShift = mom5 < 0 and mom10 > 0
+bullThrust = mom5 > 0 and mom5 > mom10
+bearThrust = mom5 < 0 and mom5 < mom10
 
 // Tail / Skew Signal
 rsi = ta.rsi(close, 14)
@@ -65,14 +69,18 @@ skewSignal = (rsi > 70 or rsi < 30) and volSpike
 // ──────────────────────────────────────────────
 // EXPLOSIVE MOVE DETECTION
 // ──────────────────────────────────────────────
-explosiveBull = volSpike and bullMomentumShift and close > refHigh * 1.001 and distortion > 0.65
-explosiveBear = volSpike and bearMomentumShift and close < refLow * 0.999 and distortion < 0.35
+explosiveBull = volSpike and bullThrust and close > refHigh * 1.001 and distortion > 0.65
+explosiveBear = volSpike and bearThrust and close < refLow * 0.999 and distortion < 0.35
 
-// Convexity Score
+// Convexity Score → z-score vs its own 100-bar history (symbol/timeframe
+// independent; raw ROC×volume shrinks with the timeframe).
 roc5     = ta.roc(close, 5)
 volRatio = volume / ta.sma(volume, 20)
 convexityScore = roc5 * volRatio
-deltaScore = ta.ema(convexityScore, 5) * aggressionLevel
+smoothed = ta.ema(convexityScore, 5)
+csMean = ta.sma(smoothed, 100)
+csStd  = ta.stdev(smoothed, 100)
+deltaScore = csStd > 0 ? (smoothed - csMean) / csStd * aggressionLevel : 0.0
 
 // ──────────────────────────────────────────────
 // SIGNALS
@@ -104,6 +112,9 @@ if strategy.position_size < 0
 // ──────────────────────────────────────────────
 // VISUALS
 // ──────────────────────────────────────────────
+plot(showChannel ? refHigh : na, "Breakout Channel High", color=color.new(color.green, 55), linewidth=1, style=plot.style_line)
+plot(showChannel ? refLow : na, "Breakout Channel Low", color=color.new(color.red, 55), linewidth=1, style=plot.style_line)
+
 plotshape(longCondition and showSignals, title="Explosive Long", location=location.belowbar,
      color=color.new(color.green, 0), style=shape.triangleup, size=size.large, text="DF LONG")
 
@@ -120,9 +131,9 @@ alertcondition(shortCondition, title="DeltaForge Short", message="ScriptMaster D
 // Info Table
 var table info = table.new(position.top_right, 1, 4, bgcolor=color.new(color.white, 80), border_width=1)
 if barstate.islast
-    table.cell(info, 0, 0, "DeltaForge v1.2", text_color=color.black, text_size=size.small)
+    table.cell(info, 0, 0, "DeltaForge v1.3", text_color=color.black, text_size=size.small)
     table.cell(info, 0, 1, "Aggression: " + str.tostring(aggressionLevel), text_color=color.black)
     table.cell(info, 0, 2, "Distortion: " + str.tostring(math.round(distortion * 100)) + "%",
                text_color=distortion > 0.6 ? color.green : color.red)
-    table.cell(info, 0, 3, "ΔScore: " + str.tostring(math.round(deltaScore * 100) / 100),
+    table.cell(info, 0, 3, "ΔScore: " + str.tostring(math.round(deltaScore * 100) / 100) + "σ",
                text_color=deltaScore > 0 ? color.green : color.red)
