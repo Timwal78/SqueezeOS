@@ -1,33 +1,38 @@
 //@version=6
-strategy("ScriptMaster DeltaForge FLAGSHIP v2.0", shorttitle="SM-DF-FLAG", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=8, commission_type=strategy.commission.percent, commission_value=0.1, calc_on_every_tick=false)
+strategy("ScriptMaster DeltaForge FLAGSHIP v2.1", shorttitle="SM-DF-FLAG", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=8, commission_type=strategy.commission.percent, commission_value=0.1, calc_on_every_tick=false)
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//               SCRIPTMASTER DELTAFORGE — FLAGSHIP EDITION v2.0
+//               SCRIPTMASTER DELTAFORGE — FLAGSHIP EDITION v2.1
 //        Behavioral Distortion + Explosive Delta-Gamma Breakout Strategy
 // ═══════════════════════════════════════════════════════════════════════════════
 //
-// FLAGSHIP UPGRADES OVER v1.2 (ScriptMaster_DeltaForge_v6.pine — kept as the
-// lightweight sibling; this file is the full desk-grade build):
-// - Kaufman Efficiency Ratio regime filter — blocks entries in chop, the #1
-//   killer of breakout systems.
-// - Higher-timeframe trend filter (non-repainting confirmed-bar EMA) — longs
-//   only above HTF trend, shorts only below.
+// v2.1 HOTFIX — v2.0 could never fire a signal:
+// - The "momentum shift" gate (mom5>0 and mom10<0) is IMPOSSIBLE at a 20-bar
+//   breakout: a close above the prior 20-bar high is above every close in that
+//   window, so 10-bar momentum is always positive there. Replaced with a
+//   momentum THRUST gate: short-term momentum positive AND outpacing 10-bar
+//   momentum (front-loaded acceleration into the break). Mirrored for shorts.
+// - Delta score is now a z-score vs its own 100-bar history, so thresholds
+//   mean the same thing on any symbol and timeframe (raw ROC×volume made the
+//   0.6 threshold unreachable intraday).
+// - HTF trend filter auto-bypasses when its timeframe is not ABOVE the chart
+//   timeframe (a 60-min filter on a Daily chart was blocking nonsense).
+// - Breakout channel is now plotted, so the chart always shows the engine.
+//
+// FLAGSHIP FEATURES:
+// - Kaufman Efficiency Ratio regime filter — blocks entries in chop.
+// - Higher-timeframe trend filter (non-repainting confirmed-bar EMA).
 // - Zero-lag delta score smoothing (EMA / ZLEMA / HMA selectable).
-// - ATR risk engine: ATR-multiple or percent stops (anchored at entry, never
-//   drifting), R-multiple take profit, optional breakeven at +N·R.
-// - Entry cooldown to stop signal clustering in the same burst.
+// - ATR risk engine: ATR-multiple or percent stops anchored at entry,
+//   R-multiple take profit, optional breakeven at +N·R, entry cooldown.
 // - SqueezeOS webhook bridge — emits the exact JSON /api/webhooks/tradingview
-//   expects (system SML_DELTAFORGE), so signals can flow into the IAM executor
-//   (paper-first, hard stops, daily loss caps). Disabled until a passphrase
-//   is entered.
+//   expects (system SML_DELTAFORGE) for the paper-first IAM executor.
+//   Disabled until a passphrase is entered.
 // - Desk dashboard: regime, distortion, ΔScore, vol spike, HTF bias, webhook
 //   arm state, live position.
 //
-// Carries all v1.2 correctness fixes: prior-bar breakout channel, per-side
-// momentum gates, `volume` built-in, entry-anchored stops, flat-range guard.
-//
 // AUTHOR: ScriptMasterLabs
-// VERSION: 2.0
+// VERSION: 2.1
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ──────────────────────────────────────────────
@@ -37,16 +42,16 @@ group_core = "⚡ Core Engine"
 aggressionLevel  = input.float(0.85, "Aggression Level", minval=0.0, maxval=1.0, step=0.05, group=group_core)
 useExplosiveMode = input.bool(true, "Explosive Delta-Gamma Mode", group=group_core)
 smoothMode       = input.string("ZLEMA", "Delta Score Smoothing", options=["EMA", "ZLEMA", "HMA"], group=group_core)
-longThreshold    = input.float(0.6, "Long Delta Score Threshold", minval=0.0, step=0.05, group=group_core)
-shortThreshold   = input.float(-0.5, "Short Delta Score Threshold", maxval=0.0, step=0.05, group=group_core)
+longThreshold    = input.float(0.5, "Long Delta Score Threshold (σ)", minval=0.0, step=0.25, group=group_core, tooltip="Delta score is a z-score of volume-weighted convexity vs its 100-bar history. 0.5 = half a standard deviation above normal.")
+shortThreshold   = input.float(-0.5, "Short Delta Score Threshold (σ)", maxval=0.0, step=0.25, group=group_core)
 cooldownBars     = input.int(5, "Entry Cooldown (bars)", minval=0, group=group_core)
 
 group_regime = "🧭 Regime & Trend Filters"
 useRegimeFilter = input.bool(true, "Kaufman ER Regime Filter", group=group_regime, tooltip="Blocks entries when the market is choppy (low efficiency). Breakouts fail disproportionately in chop.")
 erLen           = input.int(10, "Efficiency Ratio Length", minval=2, group=group_regime)
 erThreshold     = input.float(0.30, "Min Efficiency Ratio", minval=0.0, maxval=1.0, step=0.05, group=group_regime)
-useHtfFilter    = input.bool(true, "Higher-Timeframe Trend Filter", group=group_regime)
-htfTf           = input.timeframe("60", "HTF Timeframe", group=group_regime)
+useHtfFilter    = input.bool(true, "Higher-Timeframe Trend Filter", group=group_regime, tooltip="Auto-skipped when this timeframe is not above the chart timeframe.")
+htfTf           = input.timeframe("240", "HTF Timeframe", group=group_regime)
 htfLen          = input.int(50, "HTF EMA Length", minval=1, group=group_regime)
 
 group_risk = "🛡️ Risk Engine"
@@ -64,6 +69,7 @@ whPass = input.string("", "Webhook Passphrase", group=group_wh, tooltip="Your TV
 
 group_vis = "🎨 Visuals"
 showSignals   = input.bool(true, "Show Signals", group=group_vis)
+showChannel   = input.bool(true, "Show Breakout Channel", group=group_vis)
 showDashboard = input.bool(true, "Show Dashboard", group=group_vis)
 
 // ──────────────────────────────────────────────
@@ -78,18 +84,20 @@ distortion = chRange > 0 ? (close - refLow) / chRange : 0.5
 // Volatility Spike
 volSpike = ta.sma(ta.stdev(close, 10), 5) > ta.sma(ta.stdev(close, 20), 20)
 
-// Momentum Shift — short-term momentum turning against the 10-bar trend
+// Momentum Thrust — short-term momentum leading the 10-bar move (acceleration
+// into the break). NOT "mom10 < 0": at a fresh 20-bar high the 10-bar momentum
+// is always positive, so that old gate could never be true.
 mom5  = ta.mom(close, 5)
 mom10 = ta.mom(close, 10)
-bullMomentumShift = mom5 > 0 and mom10 < 0
-bearMomentumShift = mom5 < 0 and mom10 > 0
+bullThrust = mom5 > 0 and mom5 > mom10
+bearThrust = mom5 < 0 and mom5 < mom10
 
 // Tail / Skew Signal
 rsi = ta.rsi(close, 14)
 skewSignal = (rsi > 70 or rsi < 30) and volSpike
 
 // ──────────────────────────────────────────────
-// CONVEXITY / DELTA SCORE (zero-lag smoothing)
+// CONVEXITY / DELTA SCORE (zero-lag smoothing + z-score normalization)
 // ──────────────────────────────────────────────
 roc5     = ta.roc(close, 5)
 volRatio = volume / ta.sma(volume, 20)
@@ -100,7 +108,12 @@ csEma   = ta.ema(convexityScore, 5)
 csZlema = ta.ema(convexityScore + (convexityScore - convexityScore[2]), 5)
 csHma   = ta.hma(convexityScore, 5)
 smoothed = smoothMode == "ZLEMA" ? csZlema : smoothMode == "HMA" ? csHma : csEma
-deltaScore = smoothed * aggressionLevel
+
+// Z-score vs the score's own 100-bar history — makes the thresholds symbol-
+// and timeframe-independent (raw ROC×volume shrinks with the timeframe).
+csMean = ta.sma(smoothed, 100)
+csStd  = ta.stdev(smoothed, 100)
+deltaScore = csStd > 0 ? (smoothed - csMean) / csStd * aggressionLevel : 0.0
 
 // ──────────────────────────────────────────────
 // REGIME + HTF TREND FILTERS
@@ -113,17 +126,19 @@ erDen  = math.sum(absChg, erLen)
 er     = erDen > 0 ? erNet / erDen : 0.0
 regimeOK = not useRegimeFilter or er >= erThreshold
 
-// Confirmed-bar HTF EMA: [1] + lookahead_on is the standard non-repainting
-// idiom — always returns the last CLOSED higher-timeframe value.
-htfEma = request.security(syminfo.tickerid, htfTf, ta.ema(close, htfLen)[1], lookahead=barmerge.lookahead_on)
-htfLongOK  = not useHtfFilter or (not na(htfEma) and close > htfEma)
-htfShortOK = not useHtfFilter or (not na(htfEma) and close < htfEma)
+// HTF filter only makes sense when its timeframe is ABOVE the chart's.
+htfValid = timeframe.in_seconds(htfTf) > timeframe.in_seconds(timeframe.period)
+// Canonical non-repainting request: last confirmed bar in realtime, the
+// bar's own closed value on historical bars.
+htfEma = request.security(syminfo.tickerid, htfTf, ta.ema(close, htfLen)[barstate.isrealtime ? 1 : 0])
+htfLongOK  = not useHtfFilter or not htfValid or (not na(htfEma) and close > htfEma)
+htfShortOK = not useHtfFilter or not htfValid or (not na(htfEma) and close < htfEma)
 
 // ──────────────────────────────────────────────
 // EXPLOSIVE MOVE DETECTION + SIGNALS
 // ──────────────────────────────────────────────
-explosiveBull = volSpike and bullMomentumShift and close > refHigh * 1.001 and distortion > 0.65
-explosiveBear = volSpike and bearMomentumShift and close < refLow * 0.999 and distortion < 0.35
+explosiveBull = volSpike and bullThrust and close > refHigh * 1.001 and distortion > 0.65
+explosiveBear = volSpike and bearThrust and close < refLow * 0.999 and distortion < 0.35
 
 var int lastEntryBar = na
 cooldownOK = na(lastEntryBar) or bar_index - lastEntryBar >= cooldownBars
@@ -189,6 +204,10 @@ if whPass != ""
 // ──────────────────────────────────────────────
 // VISUALS
 // ──────────────────────────────────────────────
+plot(showChannel ? refHigh : na, "Breakout Channel High", color=color.new(color.green, 55), linewidth=1, style=plot.style_line)
+plot(showChannel ? refLow : na, "Breakout Channel Low", color=color.new(color.red, 55), linewidth=1, style=plot.style_line)
+plot(useHtfFilter and htfValid ? htfEma : na, "HTF Trend EMA", color=color.new(color.blue, 40), linewidth=2)
+
 plotshape(longCondition and showSignals, title="Explosive Long", location=location.belowbar,
      color=color.new(color.green, 0), style=shape.triangleup, size=size.large, text="DF LONG")
 
@@ -208,16 +227,16 @@ var table info = table.new(position.top_right, 1, 8, bgcolor=color.new(color.whi
 if barstate.islast and showDashboard
     posTxt = strategy.position_size > 0 ? "LONG" : strategy.position_size < 0 ? "SHORT" : "FLAT"
     posCol = strategy.position_size > 0 ? color.green : strategy.position_size < 0 ? color.red : color.gray
-    htfTxt = not useHtfFilter ? "OFF" : na(htfEma) ? "…" : close > htfEma ? "BULL" : "BEAR"
-    htfCol = not useHtfFilter or na(htfEma) ? color.gray : close > htfEma ? color.green : color.red
+    htfTxt = not useHtfFilter ? "OFF" : not htfValid ? "SKIP (TF ≤ chart)" : na(htfEma) ? "…" : close > htfEma ? "BULL" : "BEAR"
+    htfCol = not useHtfFilter or not htfValid or na(htfEma) ? color.gray : close > htfEma ? color.green : color.red
     regTxt = not useRegimeFilter ? "OFF" : er >= erThreshold ? "TRENDING" : "CHOP"
     regCol = not useRegimeFilter ? color.gray : er >= erThreshold ? color.green : color.orange
-    table.cell(info, 0, 0, "DeltaForge FLAGSHIP v2.0", text_color=color.black, text_size=size.small)
+    table.cell(info, 0, 0, "DeltaForge FLAGSHIP v2.1", text_color=color.black, text_size=size.small)
     table.cell(info, 0, 1, "Regime: " + regTxt + " (ER " + str.tostring(math.round(er * 100) / 100) + ")", text_color=regCol)
     table.cell(info, 0, 2, "HTF " + htfTf + ": " + htfTxt, text_color=htfCol)
     table.cell(info, 0, 3, "Distortion: " + str.tostring(math.round(distortion * 100)) + "%",
                text_color=distortion > 0.6 ? color.green : color.red)
-    table.cell(info, 0, 4, "ΔScore: " + str.tostring(math.round(deltaScore * 100) / 100),
+    table.cell(info, 0, 4, "ΔScore: " + str.tostring(math.round(deltaScore * 100) / 100) + "σ",
                text_color=deltaScore > 0 ? color.green : color.red)
     table.cell(info, 0, 5, "Vol Spike: " + (volSpike ? "✔" : "✘"), text_color=volSpike ? color.green : color.gray)
     table.cell(info, 0, 6, "Position: " + posTxt, text_color=posCol)
