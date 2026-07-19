@@ -79,6 +79,23 @@ Built 2026-07-13. **Zero custody, zero autonomous submission** — this was an e
     -H "X-Grants-Secret: $GRANTS_QUEUE_SECRET"
   ```
 
+## Gap Synthesist — Semantic Gap Detector → Build Proposal → Human Approval
+
+Built 2026-07-19. Closes the loop on the **Semantic Gap Detector** (`core/api/gap_detector_bp.py`, live since before this date, `GET /api/graph/gaps`): that engine already finds real unmet developer demand from Reddit/HN and clusters it by topic, but nothing previously acted on what it found. **Zero custody, zero auto-deploy** — same operator-approval pattern as the Autonomous Grant Agent above. No code anywhere in this feature writes application code, opens a pull request, or merges anything.
+
+- `agent/dept/gap_synthesist.py` — new specialist under the CEO (`campaign_director.py`), runs every 4h with the rest of the marketing department (`.github/workflows/marketing-daily.yml`). Reads the real, live gap leaderboard from `GET /api/graph/gaps`, scores each uncovered gap's build-worthiness 0-100 against SML's actual capability surface, and for anything scoring ≥60 drafts a concrete technical spec (proposed route, what existing module it extends, effort estimate, open questions for Timothy) via Claude, which is then POSTed to the review queue. Its only side effect is that one HTTP POST — nothing is written, opened, or deployed.
+- `core/api/gap_proposals_bp.py`, registered at `/api/gap-proposals` — the review queue itself. `GET /api/gap-proposals` and `/api/gap-proposals/queue` are public/read-only. `POST /submit`, `/<id>/approve`, `/<id>/reject` require `X-Gap-Proposals-Secret` matching `GAP_PROPOSALS_QUEUE_SECRET`. Approving an item only flips its status to `approved_to_build` — it does **not** write or deploy any code; building it out remains a separate, ordinary dev task. In-memory (`_queue`), resets on restart — same MVP pattern as `_futures`/`_contracts`/`_listings`/`_jobs`/`_queue` (grants).
+- Each queued proposal carries an `evidence_hash` — a SHA-256 digest over its gap topic, source evidence, and spec, computed at submit time. This is an honest integrity checksum anyone can recompute to confirm the record wasn't altered after logging. It is **not** a zero-knowledge proof, and nothing in this codebase claims otherwise — if a future agent is asked to add real ZK proofs here, that needs its own explicit decision (circuit choice, proving library) rather than a placeholder string.
+- Auto-archive: anything scoring below `GAP_PROPOSALS_QUALIFY_THRESHOLD` (default 60) is queued as `archived` instead of `pending_review`, so low-confidence gaps never cost Timothy a review cycle.
+- Required env vars: `GAP_PROPOSALS_QUEUE_SECRET` (shared between the Render service and the `marketing-daily.yml` GitHub Actions secret — same pattern as `GRANTS_QUEUE_SECRET`). Optional: `GAP_PROPOSALS_QUALIFY_THRESHOLD`.
+- **Deliberately NOT built as part of this feature — do not assume these exist:** an SEO/AEO technical-issue scanner (Ahrefs-style 404/meta/indexability auto-fix). SqueezeOS already ships a live AEO/GEO Intelligence Suite (`aeo_stripe_bp.py`, `citation_scout_bp.py`) — a gap-fixer for that same surface would duplicate a live product without an explicit decision from Timothy. Also not built: any "malicious agent skill" security guardrail — this codebase doesn't host a third-party agent-skill marketplace, so that attack model (mutable payloads swapped in after review) has no real target here to guard. Either would need its own fresh, explicit ask before being built.
+- To review/approve from the CLI:
+  ```bash
+  curl https://squeezeos-api.onrender.com/api/gap-proposals/queue           # see what's pending
+  curl -X POST https://squeezeos-api.onrender.com/api/gap-proposals/<id>/approve \
+    -H "X-Gap-Proposals-Secret: $GAP_PROPOSALS_QUEUE_SECRET"
+  ```
+
 ## x402 Settlement Router — multi-agent Base/USDC payment-graph netting
 
 Built 2026-07-16, in response to the "x402 Settlement Router" product spec (non-custodial payment netting layer for multi-agent AI economies, 0.5% protocol fee, Base/USDC). **Not deployed to any network yet** — this is real, tested code with no live contract address, same "not yet configured" status as SML-Vault-Executor and the AWS Marketplace integration below.
@@ -308,6 +325,7 @@ SqueezeOS/
 │       ├── settlement_bp.py # /api/settlement — conditional agent escrow contracts
 │       ├── hiring_bp.py     # /api/hiring — agent job board
 │       ├── grants_bp.py     # /api/grants — Autonomous Grant Agent review queue (zero custody)
+│       ├── gap_proposals_bp.py # /api/gap-proposals — Gap Synthesist build-proposal review queue (zero custody, zero auto-deploy)
 │       ├── settlement_router_bp.py # /api/settlement-router — multi-agent Base/USDC payment-graph netting hook (zero custody, see below)
 │       ├── relay_bp.py      # /api/relay — relay node discounts
 │       ├── webhook_bp.py    # /api/webhooks — webhook subscriptions + delivery
@@ -482,6 +500,7 @@ Mounted at `/mcp`. Implements JSON-RPC 2.0. **52 tools** total.
 | `GET /api/futures/leaderboard` | Top predictors |
 | `GET /api/settlement` | Browse conditional contracts |
 | `GET /api/grants` or `/api/grants/queue` | Browse Autonomous Grant Agent's discovered/queued opportunities |
+| `GET /api/gap-proposals` or `/api/gap-proposals/queue` | Browse Gap Synthesist's drafted build proposals |
 | `GET /api/settlement-router/tasks` or `/tasks/<id>` | Browse x402 Settlement Router tasks (multi-agent Base payment netting) |
 
 ### Premium Endpoints (require `X-Payment-Token` header)
@@ -650,6 +669,7 @@ Real, Claude-powered agents. No agent in this department fabricates a result —
 | Community Scout | `community_scout.py` | Reads real Reddit (12 subreddits) + HackerNews for developer conversations relevant to SML's products |
 | Federal Scout | `federal_scout.py` | Uses SML's own x402 federal data endpoints to find real government AI/tech contract opportunities (SAM UEI `G24VZA4RLMK3`) |
 | Grant Scout | `grant_scout.py` | Discovers/scores/drafts grant proposals (SBIR/NIH today), queues them at `/api/grants` for manual approval — zero custody, never submits or signs anything. See "Autonomous Grant Agent" section above |
+| Gap Synthesist | `gap_synthesist.py` | Reads real gap clusters from the live Semantic Gap Detector (`/api/graph/gaps`), scores build-worthiness, drafts technical specs, queues them at `/api/gap-proposals` for manual approval — zero custody, never writes or deploys code. See "Gap Synthesist" section above |
 
 **Content Factory** (`SML_Portfolio/agent/content_factory.py`) is a separate daily agent (`content-factory.yml`, 06:00 UTC) that generates and commits real SEO pages — it isn't orchestrated by the CEO since it lives in a different repo, but it reports to the same activity feed.
 
@@ -731,7 +751,7 @@ Real, Claude-powered agents. No agent in this department fabricates a result —
 - **GraphiFY graceful degradation**: `get_graph()` returns `None` when Neo4j env vars are missing or connection fails. Every caller checks `if not graph: return 503`. Never assume the graph is available.
 - **OpenMythos (RDT) degraded mode**: `RecurrentDepthTransformer` accepts `graph=None` and falls back to price/vpin-only scoring — it will not crash without Neo4j.
 - **Superpower (Beastmode) protocols** run async in daemon threads — `POST /api/scriptmaster/run_protocol` returns immediately. Results appear in the mission log ring buffer (50 entries), not the response body.
-- **In-memory stores reset on restart**: `_futures`, `_contracts`, `_listings`, `_jobs`, `_queue` (grants), `_tasks` (settlement router), `_scan_cache`, `_preview_cache`, `_demo_cache`, `_MISSION_LOG`, `signal_history` — all lost on redeploy. This is intentional for MVP; do not add disk persistence without discussion.
+- **In-memory stores reset on restart**: `_futures`, `_contracts`, `_listings`, `_jobs`, `_queue` (grants), `_queue` (gap proposals), `_tasks` (settlement router), `_scan_cache`, `_preview_cache`, `_demo_cache`, `_MISSION_LOG`, `signal_history` — all lost on redeploy. This is intentional for MVP; do not add disk persistence without discussion.
 - **MCP tool count**: the `_TOOLS` list in `mcp_bp.py` is the source of truth (currently 52 tools). The `_SERVER_INFO` version string is `"5.0.0"`. When adding tools, also sync: (1) the tools array in `.well-known/mcp.json`, (2) `tool_count` in `.well-known/catalog.json`, (3) the `"X MCP tools"` text in `.well-known/server.json` and `llms.txt`. Names must match exactly — historical drift between `signal_preview` (source) and `get_signal_preview` (manifest) caused every agent free-trial to fail with "method not found".
 - **Blueprint registration order matters**: honeypot first, then analytics middleware, then all domain blueprints. Changing this order can cause trap routes to be shadowed or analytics to miss requests.
 
