@@ -14,6 +14,10 @@ Specialists supervised (each does one job only):
   - Grant Scout        — finds/scores/drafts grant proposals, queues them for
                           Timothy's manual approval (zero custody, never
                           submits or signs anything on its own)
+  - Gap Synthesist      — reads the live Semantic Gap Detector's real demand
+                          gaps and drafts build specs, queues them for
+                          Timothy's manual approval (zero custody, never
+                          writes or deploys code on its own)
 
 Schedule: Daily (see .github/workflows/marketing-daily.yml)
 
@@ -28,7 +32,7 @@ import os, sys, json, datetime, glob, re
 import requests
 import anthropic
 
-from . import directory_ranger, community_scout, federal_scout, grant_scout
+from . import directory_ranger, community_scout, federal_scout, grant_scout, gap_synthesist
 from .activity_log import post_activity, post_directory_snapshot, post_federal_snapshot
 
 ANTH_KEY      = os.environ["ANTHROPIC_API_KEY"]
@@ -157,6 +161,15 @@ def run_all_agents() -> dict:
                   f"{len(r.get('archived_low_score', []))} auto-archived below threshold",
     )
 
+    results["gap_synthesist"] = _dispatch(
+        "gap_synthesist", "Gap Synthesist",
+        "review the live Semantic Gap Detector's real demand gaps and draft build specs for the strongest ones",
+        gap_synthesist.run,
+        lambda r: f"{len(r.get('queued', []))} build proposals queued for review "
+                  f"(pending Timothy's approval — nothing built or deployed), "
+                  f"{len(r.get('archived_low_score', []))} auto-archived below threshold",
+    )
+
     return results
 
 
@@ -170,6 +183,7 @@ def synthesize_report(agent_results: dict, api_status: dict) -> dict:
     hist_federal   = load_recent_output("federal")
     hist_content   = load_recent_output("content")
     hist_grants    = load_recent_output("grants")
+    hist_gaps      = load_recent_output("gap_proposals")
 
     context = {
         "date":           today,
@@ -181,6 +195,7 @@ def synthesize_report(agent_results: dict, api_status: dict) -> dict:
             "federal_runs":  len(hist_federal),
             "content_pages": len(hist_content),
             "grant_runs":    len(hist_grants),
+            "gap_proposal_runs": len(hist_gaps),
         },
     }
 
@@ -202,7 +217,8 @@ Produce a JSON campaign report:
     "federal_opportunities": <count>,
     "content_pages_generated": <count>,
     "api_engines_live": <from status>,
-    "grants_pending_review": <count from grant_scout.queued>
+    "grants_pending_review": <count from grant_scout.queued>,
+    "gap_proposals_pending_review": <count from gap_synthesist.queued>
   }},
   "wins_this_week": ["<concrete achievement>", ...],
   "top_actions_next_week": [
@@ -212,6 +228,7 @@ Produce a JSON campaign report:
   "top_community_threads": ["<url>", ...],
   "federal_opportunities": ["<title + agency>", ...],
   "grants_awaiting_approval": ["<title + funder>", ...],
+  "gap_proposals_awaiting_approval": ["<gap topic>", ...],
   "health": "GREEN|YELLOW|RED"
 }}"""
 
@@ -262,6 +279,7 @@ def format_slack_report(report: dict) -> str:
         f"  🎯 Community opps: {kpis.get('community_opportunities','?')} ({kpis.get('high_priority_opportunities','?')} HIGH)\n"
         f"  🏛️ Federal opps: {kpis.get('federal_opportunities','?')}\n"
         f"  💰 Grants awaiting your approval: {kpis.get('grants_pending_review','?')}\n"
+        f"  🧩 Gap-to-build proposals awaiting your approval: {kpis.get('gap_proposals_pending_review','?')}\n"
         f"  📄 Content pages: {kpis.get('content_pages_generated','?')}\n"
         f"  ⚡ API engines live: {kpis.get('api_engines_live','?')}\n\n"
         f"*This week's wins:*\n{wins or '  None recorded'}\n\n"
