@@ -257,15 +257,27 @@ def _fire_execution(symbol: str, result: dict, dm=None) -> None:
         if contract.get("error"):
             logger.warning(f"[EXEC] {symbol} PUT scan failed — {contract['error']}")
         else:
-            option_symbol = contract.get("description") or contract.get("symbol")
+            # Must be the OCC-formatted contract symbol scan_options() returns
+            # (e.g. "IWM250720P00293000") — never the human-readable
+            # "description" (e.g. "IWM Jul 20 2026 $293.00 Put"). Tradier's
+            # order endpoint rejects anything else with HTTP 400 "Invalid
+            # parameter, symbol: is not valid.", which was silently eating
+            # every live PUT hedge on a bearish GOD MODE signal.
+            option_symbol = contract.get("symbol")
+            option_desc   = contract.get("description") or option_symbol
             ask = contract.get("ask") or contract.get("premium") or 0
             try:
                 ask = float(ask or 0)
             except (TypeError, ValueError):
                 ask = 0.0
-            if option_symbol and ask > 0:
+            # OCC symbols are root(>=1 char) + YYMMDD(6) + C/P(1) + strike(8) —
+            # the C/P marker sits at a fixed offset from the end regardless of
+            # root length, so this check works for any real ticker. Reject
+            # anything that isn't at least that shape before it ever reaches Tradier.
+            valid_symbol = bool(option_symbol) and len(option_symbol) >= 16 and option_symbol[-9] in ("C", "P")
+            if valid_symbol and ask > 0:
                 logger.info(
-                    f"[EXEC] 🚀 GOD MODE BEAR — buying PUT {option_symbol} "
+                    f"[EXEC] 🚀 GOD MODE BEAR — buying PUT {option_desc} ({option_symbol}) "
                     f"strike={contract.get('strike')} delta={contract.get('delta')} @ ${ask:.2f}"
                 )
                 try:
@@ -273,8 +285,10 @@ def _fire_execution(symbol: str, result: dict, dm=None) -> None:
                     logger.info(f"[EXEC] Tradier PUT → {opt_result.get('status')} order_id={opt_result.get('order_id','')}")
                 except Exception as e:
                     logger.error(f"[EXEC] Tradier PUT error: {e}")
+            elif not valid_symbol:
+                logger.warning(f"[EXEC] {symbol} PUT contract symbol missing/malformed ({option_symbol!r}) — skipping rather than sending a doomed order")
             else:
-                logger.warning(f"[EXEC] {symbol} PUT contract missing symbol/ask — skipping")
+                logger.warning(f"[EXEC] {symbol} PUT contract missing ask — skipping")
 
         _fire_robinhood_webhook(symbol, "SELL", sml, {"mode": "protect_and_put"})
         return
