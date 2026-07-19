@@ -16,6 +16,15 @@
 // v6.2: Higher-Timeframe default changed from Daily to 2H (120min) to match faster
 // 9/20 EMA setups on 15-min charts hunting .30-.40 delta explosive moves — Daily was too
 // slow to confirm those entries. Still an input, override on the chart as needed.
+//
+// v6.3: SqueezeOS Webhook Bridge added (system tag "SML_DRUCK") — same JSON contract
+// as SML-IMO/SML-ORB_MM. One TradingView alert ("Any alert() function call" condition)
+// pointed at https://squeezeos-api.onrender.com/api/webhooks/tradingview routes entries
+// to the IAM executor for Tradier (paper mode by default — IAM_PAPER_MODE=true, going
+// live requires an explicit operator decision) and to the Robinhood signal router's
+// tv_pending queue (decision-only; a live session still has to place the order). No
+// exit signal is emitted — stop/target management lives in the executor, same as
+// every other engine on this bridge.
 
 //@version=6
 indicator("Druckenmiller Liquidity Breakout", shorttitle="DRUCK-LB", overlay=true,
@@ -62,6 +71,11 @@ grpVis       = "Visualization"
 showBg       = input.bool(true, "Show Regime Background", group=grpVis)
 showLevels   = input.bool(true, "Show Breakout Levels", group=grpVis)
 showStops    = input.bool(true, "Show Stop/Target Lines While In Signal", group=grpVis)
+
+// ─── SqueezeOS Execution Bridge ───
+grpWebhook   = "🔌 SqueezeOS Webhook Bridge"
+whPass       = input.string("", "Webhook Passphrase", group=grpWebhook, tooltip="Your TV_WEBHOOK_PASSPHRASE from the squeezeos-api Render service. Leave empty to disable webhook JSON alerts. To wire execution: create ONE alert on this indicator with condition 'Any alert() function call', paste https://squeezeos-api.onrender.com/api/webhooks/tradingview as the Webhook URL, and leave the message box alone — this script builds the JSON itself.")
+whSignals    = input.string("Trend + Jugular Only", "Fire Webhook On", options=["Trend + Jugular Only", "All Entries (incl. Mean-Reversion)"], group=grpWebhook, tooltip="Trend + Jugular = breakout/JUGULAR entries only. All Entries also fires on mean-reversion entries in range regime — more signals, more noise; the executor's stops and daily caps are the safety net.")
 
 // =========================================================================
 // REGIME DETECTION
@@ -285,6 +299,22 @@ alertcondition(evShortJug, "JUGULAR Short", "DRUCK-LB: JUGULAR SHORT — high co
 alertcondition(evPyramid, "Pyramid", "DRUCK-LB: Pyramid signal — add to position")
 alertcondition(evStopHit, "Stop Hit", "DRUCK-LB: Stop hit — exit position")
 alertcondition(evTargetHit, "Target Hit", "DRUCK-LB: Target hit — take profit")
+
+// ── SqueezeOS webhook bridge — emits the exact JSON /api/webhooks/tradingview
+// expects, so DRUCK-LB entries flow into the IAM executor (Tradier — paper by
+// default, hard stops, daily caps) and the Robinhood signal router's tv_pending
+// queue (proposal-only; still needs a live session to actually place an order).
+// Fires only when a passphrase is configured. Entry events above are already
+// gated to barstate.isconfirmed and a single crossover, so this doesn't repeat.
+f_whJson(_act) =>
+    '{"passphrase":"' + whPass + '","system":"SML_DRUCK","ticker":"' + syminfo.ticker + '","action":"' + _act + '","price":' + str.tostring(close, "#.####") + '}'
+
+if barstate.isconfirmed and whPass != ""
+    bool fireMR = whSignals == "All Entries (incl. Mean-Reversion)"
+    if evLongJug or evLongBrk or (fireMR and evLongMR)
+        alert(f_whJson("EXECUTE_LONG"), alert.freq_once_per_bar_close)
+    else if evShortJug or evShortBrk or (fireMR and evShortMR)
+        alert(f_whJson("EXECUTE_SHORT"), alert.freq_once_per_bar_close)
 
 // =========================================================================
 // INFO PANEL
