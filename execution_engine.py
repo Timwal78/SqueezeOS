@@ -386,25 +386,78 @@ class ExecutionEngine:
             except Exception as e:
                 logger.warning(f"[EXEC] {symbol} fill poll failed: {e} — entry_price unverified")
 
-            levels = self._atr_stop_targets(symbol, side, fill_price, fallback_sl_pct=0.04, fallback_tp_pct=0.12)
-            trade = {
-                'id': trade_id, 'symbol': symbol, 'side': side, 'qty': quantity,
-                'entry_price': fill_price, 'current_price': fill_price,
-                'signal_price': price, 'fill_verified': fill_verified,
-                'sl': levels['sl'], 'tp': levels['tp'],
-                'status': 'OPEN', 'opened_at': time.time(), 'mode': 'LIVE',
-                'order_id': oid, 'reason': reason
-            }
+            if side == 'BUY':
+                levels = self._atr_stop_targets(symbol, side, fill_price, fallback_sl_pct=0.04, fallback_tp_pct=0.12)
+                trade = {
+                    'id': trade_id, 'symbol': symbol, 'side': side, 'qty': quantity,
+                    'entry_price': fill_price, 'current_price': fill_price,
+                    'signal_price': price, 'fill_verified': fill_verified,
+                    'sl': levels['sl'], 'tp': levels['tp'],
+                    'status': 'OPEN', 'opened_at': time.time(), 'mode': 'LIVE',
+                    'order_id': oid, 'reason': reason
+                }
+                with self.lock:
+                    self.active_trades[trade_id] = trade
+                self.save_trades()
+                if self.discord:
+                    try:
+                        self.discord.fire_beast_trade_alert_full(trade, is_live=True)
+                    except Exception:
+                        pass
+                logger.info(f"✅ LIVE TRADE RECORDED: {trade_id}")
+                return trade
+
+            # ── Closing SELL ──────────────────────────────────────────────
+            # This order reduced/closed an existing long — it never opened a
+            # new short (naked shorts are refused above). Close the matching
+            # tracked BUY entry/entries at the real fill price instead of
+            # recording this as a brand-new "OPEN" position with a synthetic
+            # SL/TP. The old behavior left a fictional short sitting in
+            # active_trades with stop/target levels for a position the
+            # account never actually held — it could later "close" on its
+            # own and feed made-up P&L into performance_tracker, while the
+            # real BUY entry's tracking was orphaned forever (both Engine 7's
+            # liquidation lookup and this file's own bookkeeping depend on
+            # active_trades reflecting real positions, not phantom ones).
+            # Treats the sell as a full close of every tracked open BUY entry
+            # for this symbol — consistent with this method's existing SELL
+            # semantics above (cap to `held`, never a partial scale-out).
+            closed_trades = []
             with self.lock:
-                self.active_trades[trade_id] = trade
-            self.save_trades()
-            if self.discord:
-                try:
-                    self.discord.fire_beast_trade_alert_full(trade, is_live=True)
-                except Exception:
-                    pass
-            logger.info(f"✅ LIVE TRADE RECORDED: {trade_id}")
-            return trade
+                matching_ids = [
+                    tid for tid, t in self.active_trades.items()
+                    if t.get('symbol') == symbol and t.get('side') == 'BUY' and t.get('status') == 'OPEN'
+                ]
+                for tid in matching_ids:
+                    self.active_trades[tid]['current_price'] = fill_price
+                    closed = self._close_trade_unsafe(tid)
+                    if closed:
+                        closed_trades.append(closed)
+
+            if not closed_trades:
+                # No tracked BUY entry to close (position was opened outside
+                # this engine's bookkeeping — e.g. manually, or by another
+                # engine). Still record that a real sell happened, as a
+                # standalone closed entry, so trade_log.json stays a true
+                # record of every live order this engine placed.
+                trade = {
+                    'id': trade_id, 'symbol': symbol, 'side': side, 'qty': quantity,
+                    'entry_price': fill_price, 'current_price': fill_price,
+                    'signal_price': price, 'fill_verified': fill_verified,
+                    'sl': None, 'tp': None, 'pnl': 0.0,
+                    'status': 'CLOSED', 'opened_at': time.time(), 'closed_at': time.time(),
+                    'mode': 'LIVE', 'order_id': oid, 'reason': reason,
+                }
+                with self.lock:
+                    self._trade_history.insert(0, trade)
+                self.save_trades()
+                closed_trades = [trade]
+                logger.info(f"[EXEC] {symbol} SELL {quantity}x @ ${fill_price:.2f} closed a position not tracked in active_trades — logged standalone record")
+            else:
+                self.save_trades()
+
+            logger.info(f"✅ LIVE SELL RECORDED: {trade_id} — closed {len(closed_trades)} tracked position(s) @ ${fill_price:.2f}")
+            return closed_trades[-1]
 
         logger.error(f"🛑 LIVE ORDER FAILED: {res}")
         return res
