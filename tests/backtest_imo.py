@@ -34,64 +34,14 @@ from dataclasses import dataclass, field
 
 
 # ──────────────────────────────────────────────────────────────────
-# IMO math (mirrors the Pine implementation)
+# IMO math — the single implementation lives in imo_engine.py (shared
+# with imo_scanner.py and /api/imo). This harness only converts bars
+# and simulates execution.
 # ──────────────────────────────────────────────────────────────────
 
-class Jurik:
-    """Stateful Jurik-style adaptive filter — same recursion as the Pine f_jurik()."""
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-    def __init__(self, length: int, phase: float = 0.0, power: float = 2.0):
-        pr = 0.5 if phase < -100 else 2.5 if phase > 100 else phase / 100.0 + 1.5
-        beta = 0.45 * (length - 1) / (0.45 * (length - 1) + 2.0)
-        self.pr, self.beta, self.alpha = pr, beta, beta ** power
-        self.e0 = self.e1 = self.e2 = self.jma = None
-
-    def update(self, src: float) -> float:
-        if self.jma is None:
-            self.e0, self.e1, self.e2, self.jma = src, 0.0, 0.0, src
-            return src
-        self.e0 = (1 - self.alpha) * src + self.alpha * self.e0
-        self.e1 = (src - self.e0) * (1 - self.beta) + self.beta * self.e1
-        self.e2 = (self.e0 + self.pr * self.e1 - self.jma) * (1 - self.alpha) ** 2 + self.alpha ** 2 * self.e2
-        self.jma = self.jma + self.e2
-        return self.jma
-
-
-class Ema:
-    def __init__(self, length: int):
-        self.k = 2.0 / (length + 1)
-        self.v = None
-
-    def update(self, x: float) -> float:
-        self.v = x if self.v is None else self.v + self.k * (x - self.v)
-        return self.v
-
-
-def rolling_mean_std(values: list, look: int):
-    if len(values) < look:
-        return None, None
-    window = values[-look:]
-    m = sum(window) / look
-    var = sum((v - m) ** 2 for v in window) / (look - 1)
-    return m, math.sqrt(var)
-
-
-@dataclass
-class ImoParams:
-    smooth_len: int = 14
-    mom_len: int = 8
-    atr_len: int = 14
-    vol_base_len: int = 55
-    vol_gamma: float = 0.6
-    accel_gain: float = 0.5
-    sig_len: int = 4
-    band_look: int = 100
-    band_inner: float = 1.5
-    band_outer: float = 2.5
-    er_len: int = 20
-    er_thresh: float = 0.30
-    stop_pct: float = 3.0
-    use_early: bool = True
+from imo_engine import ImoParams, compute_series  # noqa: E402
 
 
 @dataclass
@@ -106,84 +56,9 @@ class Bar:
 
 def compute_signals(bars: list, p: ImoParams) -> list:
     """Returns a list (len == len(bars)) of None | 'BUY' | 'SELL' per bar."""
-    price_f = Jurik(p.smooth_len)
-    osc_f = Jurik(p.sig_len)
-    rel_fast, rel_slow, er_ema = Ema(3), Ema(12), Ema(4)
-
-    src_hist: list = []
-    atr_prev = None
-    vol_hist: list = []
-    osc_hist: list = []
-    close_hist: list = []
-    signals: list = [None] * len(bars)
-
-    for i, b in enumerate(bars):
-        src = (b.high + b.low + b.close) / 3.0
-        s = price_f.update(src)
-        src_hist.append(s)
-
-        # Wilder ATR
-        if i == 0:
-            tr = b.high - b.low
-            atr_prev = tr
-        else:
-            pc = bars[i - 1].close
-            tr = max(b.high - b.low, abs(b.high - pc), abs(b.low - pc))
-            atr_prev = (atr_prev * (p.atr_len - 1) + tr) / p.atr_len
-        atr = atr_prev
-
-        # velocity
-        if len(src_hist) > p.mom_len and atr > 0:
-            velocity = (s - src_hist[-1 - p.mom_len]) / (atr * math.sqrt(p.mom_len))
-        else:
-            velocity = 0.0
-
-        # relative volume force
-        vol_hist.append(b.volume)
-        base_w = vol_hist[-p.vol_base_len:]
-        vol_base = sum(base_w) / len(base_w)
-        rel_vol = b.volume / vol_base if vol_base > 0 else 1.0
-        vol_force = max(rel_vol, 0.05) ** p.vol_gamma
-        accel = rel_fast.update(rel_vol) - rel_slow.update(rel_vol)
-        accel_boost = min(1.0 + p.accel_gain * max(accel, 0.0), 3.0)
-
-        osc = osc_f.update(100.0 * velocity * vol_force * accel_boost)
-        osc_hist.append(osc)
-
-        # bands
-        mean, dev = rolling_mean_std(osc_hist, p.band_look)
-        bands_ready = dev is not None
-
-        # efficiency ratio
-        close_hist.append(b.close)
-        if len(close_hist) > p.er_len:
-            num = abs(b.close - close_hist[-1 - p.er_len])
-            den = sum(abs(close_hist[j] - close_hist[j - 1]) for j in range(len(close_hist) - p.er_len, len(close_hist)))
-            er = num / den if den > 0 else 0.0
-        else:
-            er = 0.0
-        trending = er_ema.update(er) > p.er_thresh
-
-        if i < 2 or not bands_ready:
-            continue
-        o0, o1, o2 = osc_hist[-1], osc_hist[-2], osc_hist[-3]
-        up_in, up_out = mean + p.band_inner * dev, mean + p.band_outer * dev
-        dn_in, dn_out = mean - p.band_inner * dev, mean - p.band_outer * dev
-
-        ignition_long = trending and o1 <= 0 < o0
-        ignition_short = trending and o1 >= 0 > o0
-        fade_long = (not trending) and o1 <= dn_out < o0
-        fade_short = (not trending) and o1 >= up_out > o0
-        hook_up = o0 > o1 <= o2
-        hook_down = o0 < o1 >= o2
-        early_buy = p.use_early and o0 < dn_in and hook_up
-        early_sell = p.use_early and o0 > up_in and hook_down
-
-        if ignition_long or fade_long or early_buy:
-            signals[i] = "BUY"
-        elif ignition_short or fade_short or early_sell:
-            signals[i] = "SELL"
-    return signals
+    dict_bars = [{"date": b.date, "open": b.open, "high": b.high,
+                  "low": b.low, "close": b.close, "volume": b.volume} for b in bars]
+    return compute_series(dict_bars, p)["signals"]
 
 
 # ──────────────────────────────────────────────────────────────────
