@@ -140,6 +140,7 @@ def catch_tv_webhook():
 
         resolution = {
             "action":                direction,
+            "system":                system,
             "rationale":             f"{system} TradingView signal: {action}",
             "vehicle":               ticker,
             "resolution_confidence": 80.0,

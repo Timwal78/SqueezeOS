@@ -1,0 +1,171 @@
+//@version=6
+indicator("ORB v6 BEASTMODE + MM Intelligence", overlay = true, max_labels_count = 500, max_lines_count = 500, max_boxes_count = 500)
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//                    ORB v6 BEASTMODE + MM INTELLIGENCE
+//     Opening Range Breakout gated by Kalman-filtered MM inventory z-score
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Thesis: an OR breakout is only tradeable when market makers are caught on
+// the WRONG side of it. Kalman-filtered signed volume flow estimates dealer
+// inventory; a breakout above the OR high while dealers are net short
+// (z ≤ −threshold) forces their delta-hedge buying to fuel the move.
+//
+// Server twin: orb_engine.py runs this same math in Python on SqueezeOS
+// (orb_scanner.py) — this chart script is the visual + optional TradingView
+// alert path. Both feed the same executor; make it the PRIMARY trader by
+// setting IAM_PRIMARY_SYSTEM=SML_ORB_MM on the squeezeos-api Render service.
+//
+// AUTHOR: ScriptMasterLabs (operator draft, hardened)
+// VERSION: 1.0.0
+// Changes vs operator draft: OR window measured in America/New_York
+// explicitly (exchange-timezone bug on futures/crypto charts), plus the
+// SqueezeOS webhook bridge + alertconditions. Signal math unchanged.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ═══ SECTION 1: SYSTEM INPUTS ═══
+grp_orb  = "═══ Opening Range Options (0.32-0.40 Delta Squeeze) ═══"
+orMinutes   = input.int(15, "Opening Range Minutes", minval = 5, group = grp_orb)
+showOR      = input.bool(true, "Show OR Levels on Chart", group = grp_orb)
+minPrice    = input.float(1.0, "Minimum Asset Price Tier", group = grp_orb)
+
+grp_mm   = "═══ Market Maker Kalman & HJB Constraints ═══"
+lambda        = input.float(0.15, "MM Mean Reversion Speed", minval=0.01, maxval=1.0, step=0.01, group=grp_mm)
+q_process     = input.float(0.5, "Process Noise (Q)", minval=0.05, maxval=5.0, step=0.05, group=grp_mm)
+r_measurement = input.float(1.0, "Measurement Noise (R)", minval=0.1, maxval=5.0, step=0.1, group=grp_mm)
+inv_lookback  = input.int(75, "Inventory Memory Lookback", minval=20, maxval=500, group=grp_mm)
+z_critical    = input.float(1.4, "Forced Delta-Hedge Z-Threshold", minval=0.5, maxval=3.0, step=0.1, group=grp_mm)
+
+showTable   = input.bool(true, "Show Combined Dashboard", group = "Visuals")
+
+grp_wh = "🔌 SqueezeOS Webhook Bridge"
+string whPass = input.string("", "Webhook Passphrase", group = grp_wh, tooltip = "TV_WEBHOOK_PASSPHRASE from the squeezeos-api Render service. Leave empty to disable. One alert: condition 'Any alert() function call', webhook URL https://squeezeos-api.onrender.com/api/webhooks/tradingview")
+
+// ═══ SECTION 2: OPENING RANGE MECHANICS ═══
+float dayChange = ta.change(time("D"))
+bool newDay = na(dayChange) ? false : (dayChange != 0)
+
+// Explicit NY session clock — `hour`/`minute` alone use the chart symbol's
+// exchange timezone, which silently breaks the 9:30 anchor on futures/crypto.
+int curTimeMin = hour(time, "America/New_York") * 60 + minute(time, "America/New_York")
+bool inOR = curTimeMin >= 570 and curTimeMin < (570 + orMinutes)  // 9:30 AM ET = 570 mins
+
+var float orH = na
+var float orL = na
+var bool longTriggered = false
+var bool shortTriggered = false
+
+if newDay
+    orH := na
+    orL := na
+    longTriggered := false
+    shortTriggered := false
+
+if inOR
+    orH := na(orH) ? high : math.max(orH, high)
+    orL := na(orL) ? low  : math.min(orL, low)
+
+float orMid = (orH + orL) / 2
+
+// ═══ SECTION 3: KALMAN-FILTERED INSTITUTIONAL INVENTORY ═══
+range_val = high - low + 0.001
+buy_flow = close > open ? volume * (close - open) / range_val : 0.0
+sell_flow = close < open ? volume * (open - close) / range_val : 0.0
+net_flow = buy_flow - sell_flow
+mm_position = -net_flow
+
+var float inventory_estimate = 0.0
+var float inventory_variance = 1.0
+
+pred_inv = inventory_estimate * (1.0 - lambda)
+pred_var = inventory_variance + q_process * q_process
+kalman_gain = pred_var / (pred_var + r_measurement * r_measurement)
+inventory_estimate := pred_inv + kalman_gain * (mm_position - pred_inv)
+inventory_variance := (1.0 - kalman_gain) * pred_var
+
+inv_mean = ta.sma(inventory_estimate, inv_lookback)
+inv_std = ta.stdev(inventory_estimate, inv_lookback)
+inv_z = inv_std > 0 ? (inventory_estimate - inv_mean) / inv_std : 0.0
+
+// ═══ SECTION 4: CONFLUENCE TRIGGER LOGIC ═══
+bool isPriceValid = na(close) ? false : (close >= minPrice)
+
+bool globalCrossUp   = ta.crossover(close, orH)
+bool globalCrossDown = ta.crossunder(close, orL)
+
+bool longSig  = not na(orH) and globalCrossUp and not longTriggered and isPriceValid and (inv_z <= -z_critical)
+bool shortSig = not na(orL) and globalCrossDown and not shortTriggered and isPriceValid and (inv_z >= z_critical)
+
+if longSig
+    longTriggered := true
+if shortSig
+    shortTriggered := true
+
+var int longsToday = 0
+var int shortsToday = 0
+if newDay
+    longsToday := 0
+    shortsToday := 0
+if longSig
+    longsToday += 1
+if shortSig
+    shortsToday += 1
+
+// ═══ SECTION 5: CHART RENDER ENGINE ═══
+plot(series = showOR ? orH : na, title = "ORB Gamma Ceiling", color = color.green, linewidth = 2, style = plot.style_linebr)
+plot(series = showOR ? orL : na, title = "ORB Gamma Floor",  color = color.red, linewidth = 2, style = plot.style_linebr)
+plot(series = showOR ? orMid : na, title = "ORB Pivot Mid", color = color.orange, linewidth = 1, style = plot.style_linebr)
+
+var int lastSignalBar = 0
+bool canSignal = bar_index != lastSignalBar
+
+if longSig and canSignal
+    label.new(x = bar_index, y = low, text = "⚡ GAMMA OPTION BUY\n(Delta Squeeze)", color = color.lime, textcolor = color.black, style = label.style_label_up, size = size.normal)
+    lastSignalBar := bar_index
+
+if shortSig and canSignal
+    label.new(x = bar_index, y = high, text = "⚡ GAMMA OPTION SELL\n(Delta Collapse)", color = color.red, textcolor = color.white, style = label.style_label_down, size = size.normal)
+    lastSignalBar := bar_index
+
+bgcolor(color = (longSig and canSignal) ? color.new(color.green, 80) : (shortSig and canSignal) ? color.new(color.red, 80) : na)
+
+// ═══ SECTION 6: UNIFIED PERFORMANCE DASHBOARD ═══
+if showTable and barstate.islast
+    var table tb = table.new(position = position.top_right, columns = 2, rows = 7, bgcolor = color.new(#0b0c10, 95), border_width = 1, border_color = color.gray)
+
+    table.cell(table_id = tb, column = 0, row = 0, text = "SML DELTA-SQUEEZE v6", bgcolor = #2962ff, text_color = color.white, width = 14, text_halign = text.align_center)
+    table.merge_cells(table_id = tb, start_column = 0, start_row = 0, end_column = 1, end_row = 0)
+
+    string mmStatus = inv_z > 0.5 ? "SHORT CORES" : inv_z < -0.5 ? "LONG CORES" : "BALANCED"
+    color mmColor = inv_z > z_critical ? color.red : inv_z < -z_critical ? color.green : color.white
+
+    table.cell(table_id = tb, column = 0, row = 1, text = "MM Position:", text_color = color.white, width = 14, text_halign = text.align_left)
+    table.cell(table_id = tb, column = 1, row = 1, text = mmStatus, text_color = mmColor, width = 8, text_halign = text.align_right)
+
+    table.cell(table_id = tb, column = 0, row = 2, text = "Inventory Z-Score:", text_color = color.white, text_halign = text.align_left)
+    table.cell(table_id = tb, column = 1, row = 2, text = str.tostring(inv_z, "#.##") + " σ", text_color = mmColor, text_halign = text.align_right)
+
+    table.cell(table_id = tb, column = 0, row = 3, text = "OR High Boundary:", text_color = color.white, text_halign = text.align_left)
+    table.cell(table_id = tb, column = 1, row = 3, text = str.tostring(orH, "#.##"), text_color = color.green, text_halign = text.align_right)
+
+    table.cell(table_id = tb, column = 0, row = 4, text = "OR Low Boundary:", text_color = color.white, text_halign = text.align_left)
+    table.cell(table_id = tb, column = 1, row = 4, text = str.tostring(orL, "#.##"), text_color = color.red, text_halign = text.align_right)
+
+    table.cell(table_id = tb, column = 0, row = 5, text = "Squeeze Longs:", text_color = color.white, text_halign = text.align_left)
+    table.cell(table_id = tb, column = 1, row = 5, text = str.tostring(longsToday), text_color = color.green, text_halign = text.align_right)
+
+    table.cell(table_id = tb, column = 0, row = 6, text = "Squeeze Shorts:", text_color = color.white, text_halign = text.align_left)
+    table.cell(table_id = tb, column = 1, row = 6, text = str.tostring(shortsToday), text_color = color.red, text_halign = text.align_right)
+
+// ═══ SECTION 7: ALERTS + SQUEEZEOS EXECUTION BRIDGE ═══
+alertcondition(longSig,  "ORB-MM Gamma BUY",  "ORB BEASTMODE: OR breakout UP with MM short inventory (forced hedge fuel) on {{ticker}} ({{interval}})")
+alertcondition(shortSig, "ORB-MM Gamma SELL", "ORB BEASTMODE: OR breakdown with MM long inventory on {{ticker}} ({{interval}})")
+
+f_whJson(_act) =>
+    '{"passphrase":"' + whPass + '","system":"SML_ORB_MM","ticker":"' + syminfo.ticker + '","action":"' + _act + '","price":' + str.tostring(close, "#.####") + '}'
+
+if barstate.isconfirmed and whPass != ""
+    if longSig
+        alert(f_whJson("EXECUTE_LONG"), alert.freq_once_per_bar_close)
+    else if shortSig
+        alert(f_whJson("EXECUTE_SHORT"), alert.freq_once_per_bar_close)

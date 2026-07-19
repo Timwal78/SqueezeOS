@@ -49,6 +49,7 @@ from core.api.smithery_bp import smithery_bp
 from core.api.oracle_engine_bp import oracle_engine_bp
 from core.api.iam_bp import iam_bp
 from core.api.imo_bp import imo_bp
+from core.api.orb_bp import orb_bp
 from core.api.vapl_bp import vapl_bp
 from core.vapl.middleware import install_vapl_middleware
 from core.api.macro741_bp import macro741_bp
@@ -180,6 +181,7 @@ def create_app():
     app.register_blueprint(oracle_engine_bp, url_prefix='/api/engine')
     app.register_blueprint(iam_bp,           url_prefix='/api/iam')
     app.register_blueprint(imo_bp,           url_prefix='/api/imo')
+    app.register_blueprint(orb_bp,           url_prefix='/api/orb')
     app.register_blueprint(vapl_bp)
     app.register_blueprint(macro741_bp,        url_prefix='/api')
     app.register_blueprint(macro_bp,           url_prefix='/api')
@@ -249,6 +251,11 @@ def create_app():
         # Start SML-IMO pure-Python signal scanner (no TradingView required)
         from imo_scanner import start_imo_scanner
         start_imo_scanner()
+
+        # Start ORB v6 BEASTMODE intraday scanner (pure Python; needs
+        # Polygon/Alpaca for intraday bars — logs and idles without them)
+        from orb_scanner import start_orb_scanner
+        start_orb_scanner()
 
         # Start webhook delivery engine (SSE tap + delivery workers)
         start_webhook_engine()

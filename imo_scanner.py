@@ -119,6 +119,7 @@ def scan_once() -> int:
             conf = _confidence(result)
             resolution = {
                 "action":                action,
+                "system":                "SML_IMO",
                 "rationale":             f"SML-IMO {result.get('signal_detail')} | osc={result['oscillator']} "
                                          f"z={result['z_score']} regime={result['regime']} relVol={result['rel_volume']}x",
                 "vehicle":               sym,
