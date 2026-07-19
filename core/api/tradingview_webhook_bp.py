@@ -27,6 +27,11 @@ Webhook URL for TradingView alert dialog:
 Robinhood executor polls:
   GET https://squeezeos-api.onrender.com/api/webhooks/tv_pending
   Returns and clears all signals queued in the last 10 minutes.
+
+Optional per-system Discord routing:
+  DISCORD_WEBHOOK_DRUCK — dedicated channel for system="SML_DRUCK"
+  (Druckenmiller Liquidity Breakout) alerts. Falls back to the shared
+  beast/all channel (discord_alerts.DiscordAlerts) if unset.
 """
 import os
 import time
@@ -78,11 +83,14 @@ def _queue_pop_all() -> list:
 
 
 def _fire_discord(sym: str, direction: str, system: str, price: float, result: dict):
-    """Post trade alert to beast channel — fire-and-forget."""
+    """Post trade alert — fire-and-forget. SML_DRUCK routes to its own channel
+    (DISCORD_WEBHOOK_DRUCK) when configured, else falls back to beast/all
+    like every other system on this bridge."""
     try:
         from discord_alerts import DiscordAlerts
         d = DiscordAlerts()
-        url = d.webhook_beast or d.webhook_all
+        dedicated = os.environ.get("DISCORD_WEBHOOK_DRUCK", "") if system == "SML_DRUCK" else ""
+        url = dedicated or d.webhook_beast or d.webhook_all
         if not url:
             return
         color  = _ACTION_COLORS.get(direction, 0xAAAAAA)
