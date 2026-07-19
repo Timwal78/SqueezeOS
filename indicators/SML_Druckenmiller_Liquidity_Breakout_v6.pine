@@ -12,6 +12,10 @@
 //  - Conviction is direction-aware (DXY filter no longer adds +1 for ANY dollar state)
 //  - DXY default ticker fixed ("FX_IDC" was not a valid symbol)
 //  - Signals confirm on bar close (barstate.isconfirmed) — no intrabar flicker/repaint
+//
+// v6.2: Higher-Timeframe default changed from Daily to 2H (120min) to match faster
+// 9/20 EMA setups on 15-min charts hunting .30-.40 delta explosive moves — Daily was too
+// slow to confirm those entries. Still an input, override on the chart as needed.
 
 //@version=6
 indicator("Druckenmiller Liquidity Breakout", shorttitle="DRUCK-LB", overlay=true,
@@ -52,7 +56,7 @@ useDXY       = input.bool(false, "Use DXY as macro filter", group=grpFilter)
 dxyTicker    = input.symbol("TVC:DXY", "DXY Ticker", group=grpFilter)
 dxySmaLen    = input.int(50, "DXY SMA Length", group=grpFilter, tooltip="Dollar above its SMA = risk-off (bearish risk assets)")
 useHigherTrend = input.bool(true, "Higher-Timeframe Trend Filter", group=grpFilter)
-htfTimeframe = input.timeframe("D", "Higher Timeframe", group=grpFilter)
+htfTimeframe = input.timeframe("120", "Higher Timeframe", group=grpFilter)
 
 grpVis       = "Visualization"
 showBg       = input.bool(true, "Show Regime Background", group=grpVis)
