@@ -141,7 +141,17 @@ def scan_options(symbol: str, trade_type: str = "call", current_price: float = 0
 
         greeks = best.get("greeks") or {}
         return {
-            "symbol":        symbol,
+            # "symbol" is the OCC-formatted, order-ready contract symbol Tradier's
+            # own chain response provides (e.g. "IWM250720P00293000") — NOT the
+            # underlying ticker. It used to be hardcoded to the underlying here,
+            # which meant every caller that placed an order using this field
+            # (core/api/convergence_bp.py's PUT-buy leg) sent Tradier either the
+            # bare ticker or the human-readable "description" string, both of
+            # which Tradier's /accounts/{id}/orders rejects with HTTP 400
+            # "Invalid parameter, symbol: is not valid." — so live PUT hedges on
+            # bearish GOD MODE signals were silently failing to execute.
+            "symbol":        best.get("symbol"),
+            "underlying":    symbol,
             "type":          trade_type.upper(),
             "strike":        best.get("strike"),
             "expiration":    best.get("expiration_date"),
