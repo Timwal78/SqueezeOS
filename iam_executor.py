@@ -86,6 +86,12 @@ MAX_NOTIONAL_PER_DAY = lambda: _env_float("IAM_MAX_NOTIONAL_PER_DAY", 2000.0)
 DAILY_LOSS_LIMIT   = lambda: _env_float("IAM_DAILY_LOSS_LIMIT", 150.0)  # 7% of ~$2k account
 STOP_LOSS_PCT      = lambda: _env_float("IAM_STOP_LOSS_PCT", 3.0)  # hard protective stop below entry; 0 disables
 
+# Primary signal system — when set, ONLY resolutions tagged with this system
+# (resolution["system"]) place broker orders; every other system is downgraded
+# to alert-only. Untagged resolutions default to "IAM" (the IAM engine is the
+# producer that predates tagging). Example: IAM_PRIMARY_SYSTEM=SML_ORB_MM
+PRIMARY_SYSTEM     = lambda: os.environ.get("IAM_PRIMARY_SYSTEM", "").strip().upper()
+
 # Execution symbol allowlist — the evidence-based "trade only where we win" gate.
 # Empty (default) = all symbols allowed (unchanged behavior). Set to a comma-
 # separated list (e.g. "SPY,IWM,QQQ,NVDA") to restrict ENTRIES to symbols where
@@ -651,8 +657,17 @@ def execute_from_resolution(sym: str, resolution: dict,
 
         broker_result = None
 
+        # Primary-system gate: when IAM_PRIMARY_SYSTEM is set, only that
+        # system's signals reach the broker — everything else is alert-only.
+        signal_system = (resolution.get("system") or "IAM").strip().upper()
+        primary = PRIMARY_SYSTEM()
+        broker_allowed = not primary or signal_system == primary
+        if not broker_allowed:
+            logger.info(f"[IAM-EXEC] {sym} {action} from {signal_system} — "
+                        f"broker execution reserved for primary system {primary}; alert-only")
+
         # ── Tradier execution ──
-        if mode in ("tradier", "both"):
+        if mode in ("tradier", "both") and broker_allowed:
             if not _is_market_hours():
                 logger.warning(f"[IAM-EXEC] {sym} Tradier skipped — outside market hours")
             else:
