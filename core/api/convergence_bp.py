@@ -9,6 +9,7 @@ import logging
 import os
 import threading
 import time
+from datetime import datetime, timezone
 from flask import Blueprint, jsonify, request
 from core.legacy import get_service, clean_data
 from core.convergence_engine import ConvergenceEngine, scan_beastmode_universe
@@ -109,6 +110,65 @@ _BEAST_MAX_PRICE     = float(os.environ.get("BEAST_MAX_PRICE", "500.0"))
 # autonomous execution instantly on next deploy, without touching data feeds.
 def _live_trading_armed() -> bool:
     return (os.environ.get("LIVE_TRADING_ENABLED", "false").strip().lower() == "true")
+
+
+# ── DAILY-LOSS CIRCUIT BREAKER ────────────────────────────────────────────────
+# GOD MODE previously had the master arm switch, PDT shield, per-symbol
+# cooldown, and cross-engine claim — but nothing capped cumulative daily
+# realized loss, unlike iam_executor.py's IAM_DAILY_LOSS_LIMIT/record_fill/
+# breaker_tripped. On a small live account that meant GOD MODE could keep
+# re-entering and losing, trade after trade, all day with no circuit breaker
+# at all. Mirrors IAM's already-proven pattern: track realized P&L from real
+# closes, trip once the daily loss limit is hit, refuse new entries for the
+# rest of the day (existing-position protection — the bear-close leg — is
+# never blocked, same "exits always proceed" policy as IAM).
+#
+# Scope: only equity closes in the bear-protect leg below have both a known
+# entry cost basis (Tradier's own cost_basis) and a known exit price, so
+# that's what this breaker tracks. PUT P&L isn't fed in — this file has no
+# visibility into when/how those get closed, same measurement gap already
+# documented for options-flow engines in docs/ENGINE_SCOREBOARD_2026-07-17.md.
+_GOD_MODE_DAILY_LOSS_LIMIT = float(os.environ.get("GOD_MODE_DAILY_LOSS_LIMIT", "200"))
+_breaker_lock  = threading.Lock()
+_breaker_state = {"date": None, "realized_pnl": 0.0, "tripped": False}
+
+
+def _breaker_roll_day() -> None:
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    if _breaker_state["date"] != today:
+        with _breaker_lock:
+            _breaker_state.update(date=today, realized_pnl=0.0, tripped=False)
+        logger.info(f"[GOD-MODE-BREAKER] New trading day {today} — realized P&L reset.")
+
+
+def _breaker_tripped() -> bool:
+    _breaker_roll_day()
+    return _breaker_state["tripped"]
+
+
+def _record_realized_pnl(pnl_delta: float) -> None:
+    _breaker_roll_day()
+    with _breaker_lock:
+        _breaker_state["realized_pnl"] += pnl_delta
+        tripped_now = (not _breaker_state["tripped"]) and _breaker_state["realized_pnl"] <= -abs(_GOD_MODE_DAILY_LOSS_LIMIT)
+        if tripped_now:
+            _breaker_state["tripped"] = True
+    if tripped_now:
+        logger.error(
+            f"[GOD-MODE-BREAKER] 🛑 DAILY-LOSS BREAKER — realized {_breaker_state['realized_pnl']:.2f} "
+            f"≤ -{_GOD_MODE_DAILY_LOSS_LIMIT:.2f}. GOD MODE new entries halted for the rest of {_breaker_state['date']}."
+        )
+
+
+def breaker_status() -> dict:
+    _breaker_roll_day()
+    return {
+        "daily_loss_limit": _GOD_MODE_DAILY_LOSS_LIMIT,
+        "realized_pnl_today": round(_breaker_state["realized_pnl"], 2),
+        "tripped": _breaker_state["tripped"],
+        "date": _breaker_state["date"],
+        "pnl_basis": "quote_price_x_qty_minus_tradier_cost_basis (equity closes only; PUT P&L not tracked)",
+    }
 
 
 def _pdt_check_and_record() -> bool:
@@ -232,10 +292,27 @@ def _fire_execution(symbol: str, result: dict, dm=None) -> None:
             try:
                 tradier_result = _t.place_equity_order(symbol, close_qty, "sell")
                 logger.info(f"[EXEC] Tradier close → {tradier_result.get('status')} order_id={tradier_result.get('order_id','')}")
+                if tradier_result.get("status") == "success":
+                    # Realized P&L feeds the daily-loss breaker — proceeds use the
+                    # live quote price fetched above (not a confirmed fill), same
+                    # approximation basis IAM's own ledger uses; Tradier's
+                    # cost_basis is the real total cost of the position being closed.
+                    cost_basis = float(position.get("cost_basis", 0) or 0)
+                    realized   = (price * close_qty) - cost_basis
+                    _record_realized_pnl(realized)
+                    logger.info(f"[GOD-MODE-BREAKER] {symbol} close realized ≈{realized:+.2f} (quote-price basis)")
             except Exception as e:
                 logger.error(f"[EXEC] Tradier close error: {e}")
         else:
             logger.info(f"[EXEC] {symbol} GOD MODE BEAR fired but no existing long to close — skipping close leg")
+
+        # ── Daily-loss breaker: exits above always proceed regardless (same
+        # "protect capital first" policy as IAM's allowlist) — only the fresh
+        # PUT entry below is gated.
+        if _breaker_tripped():
+            logger.warning(f"[EXEC] {symbol} PUT entry blocked — daily-loss breaker tripped (realized={_breaker_state['realized_pnl']:.2f})")
+            _fire_robinhood_webhook(symbol, "SELL", sml, {"mode": "protect_only"})
+            return
 
         # ── Opportunistic PUT buy on the bearish signal ──────────────────────
         # Cross-engine claim: unlike the equity close above (self-correcting —
@@ -294,6 +371,11 @@ def _fire_execution(symbol: str, result: dict, dm=None) -> None:
         return
 
     # ── bull_fired: open/add long equity position ────────────────────────────
+    # Daily-loss breaker gates fresh entries only — see definition above.
+    if _breaker_tripped():
+        logger.warning(f"[EXEC] {symbol} LONG entry blocked — daily-loss breaker tripped (realized={_breaker_state['realized_pnl']:.2f})")
+        return
+
     # Cross-engine claim: a fresh equity buy has no natural cap the way a
     # sell-to-close does, so this is the leg that actually needs coordination
     # with iam_executor.py (same Tradier account, independent GOD_MODE gate).
@@ -519,6 +601,7 @@ def exec_status():
                 "max_price_per_share": _BEAST_MAX_PRICE,
                 "cooldown_secs": _EXECUTION_COOLDOWN,
                 "pdt_shield_below": _PDT_BALANCE_LIMIT,
+                "daily_loss_breaker": breaker_status(),
             },
             "kill_switch": "Set LIVE_TRADING_ENABLED=false (or unset) and redeploy to halt all execution.",
         })

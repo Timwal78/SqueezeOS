@@ -18,6 +18,21 @@ from core.proprietary_ema_engine import _ema, _tail
 
 logger = logging.getLogger("SML.Engine7")
 
+def _find_open_long(active_trades: List[Dict], symbol: str) -> Dict | None:
+    """
+    Find the tracked open long position for `symbol` in an active_trades list
+    (as returned by execution_engine.ExecutionEngine.get_active_trades()).
+    Only ever matches a real, currently-open BUY entry — never a phantom or
+    short-side entry — so emergency liquidation can't act on stale bookkeeping.
+    """
+    return next(
+        (t for t in active_trades
+         if t.get("symbol") == symbol and t.get("side") == "BUY"
+         and t.get("status") == "OPEN" and t.get("qty", 0) > 0),
+        None,
+    )
+
+
 def _stdev(values: List[float], period: int) -> float:
     if len(values) < 2: return 0.0
     slice_vals = values[-period:]
@@ -79,9 +94,13 @@ class Engine7_Parabolic:
                     if sig == "PARABOLIC_EXHAUSTION_EXIT":
                         exec_eng = get_service("exec")
                         if exec_eng:
-                            active_trades = exec_eng.get_active_trades()
-                            if symbol in active_trades:
-                                trade = active_trades[symbol]
+                            # get_active_trades() returns a List[Dict], not a
+                            # dict keyed by symbol — `if symbol in active_trades`
+                            # compared a string against dicts and was always
+                            # False, silently disabling this liquidation for
+                            # every parabolic-exhaustion signal ever detected.
+                            trade = _find_open_long(exec_eng.get_active_trades(), symbol)
+                            if trade:
                                 qty = trade.get("qty", 0)
                                 # Marketable Limit Order dynamically pegged using the Golden Ratio multiplier of active volatility
                                 current_price = closes[-1]
