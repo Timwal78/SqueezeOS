@@ -25,6 +25,14 @@
 // tv_pending queue (decision-only; a live session still has to place the order). No
 // exit signal is emitted — stop/target management lives in the executor, same as
 // every other engine on this bridge.
+//
+// v6.4: Fast/Slow EMA defaults changed 21/55 → 9/20 to match the operator's real
+// 15-min .30-.40 delta explosion setup (previously a manual chart override — now
+// the actual default, so re-adding the indicator doesn't silently revert it).
+// EMA plot colors and info panel now match the operator's chosen look (white/red
+// EMAs, solid black panel, normal-size text). Webhook Passphrase tooltip rewritten
+// as an explicit numbered two-step (password here + Render env var, then create
+// the TradingView alert) after confusion about where the password field was.
 
 //@version=6
 indicator("Druckenmiller Liquidity Breakout", shorttitle="DRUCK-LB", overlay=true,
@@ -42,8 +50,8 @@ atrVolPct    = input.float(85.0, "ATR Volatile Percentile", group=grpRegime, too
 
 grpEntry     = "Entry Logic"
 breakoutLen  = input.int(20, "Breakout Channel Length", group=grpEntry)
-emaFast      = input.int(21, "Fast EMA", group=grpEntry)
-emaSlow      = input.int(55, "Slow EMA", group=grpEntry)
+emaFast      = input.int(9, "Fast EMA", group=grpEntry)
+emaSlow      = input.int(20, "Slow EMA", group=grpEntry)
 volumeFilt   = input.bool(true, "Require Volume Expansion on Breakout", group=grpEntry)
 volMult      = input.float(1.5, "Volume Expansion Multiplier", group=grpEntry)
 rangeZScore  = input.float(2.0, "Range Z-Score Entry (mean-revert)", group=grpEntry)
@@ -74,7 +82,7 @@ showStops    = input.bool(true, "Show Stop/Target Lines While In Signal", group=
 
 // ─── SqueezeOS Execution Bridge ───
 grpWebhook   = "🔌 SqueezeOS Webhook Bridge"
-whPass       = input.string("", "Webhook Passphrase", group=grpWebhook, tooltip="Your TV_WEBHOOK_PASSPHRASE from the squeezeos-api Render service. Leave empty to disable webhook JSON alerts. To wire execution: create ONE alert on this indicator with condition 'Any alert() function call', paste https://squeezeos-api.onrender.com/api/webhooks/tradingview as the Webhook URL, and leave the message box alone — this script builds the JSON itself.")
+whPass       = input.string("", "Webhook Passphrase", group=grpWebhook, tooltip="STEP 1 of 2: type any password here (make one up, e.g. MyPass123) — this box is empty by default, so no signals are sent until you fill it in. STEP 2: copy that exact same password into the TV_WEBHOOK_PASSPHRASE environment variable on the squeezeos-api Render service, then create ONE TradingView alert on this indicator (clock icon, top toolbar) with Condition = 'Any alert() function call', paste https://squeezeos-api.onrender.com/api/webhooks/tradingview into the Webhook URL field under Notifications, and leave the alert's Message box untouched — this script builds the JSON itself, you don't type anything there.")
 whSignals    = input.string("Trend + Jugular Only", "Fire Webhook On", options=["Trend + Jugular Only", "All Entries (incl. Mean-Reversion)"], group=grpWebhook, tooltip="Trend + Jugular = breakout/JUGULAR entries only. All Entries also fires on mean-reversion entries in range regime — more signals, more noise; the executor's stops and daily caps are the safety net.")
 
 // =========================================================================
@@ -268,8 +276,8 @@ plot(showLevels ? ll : na, "Donchian Low", color=color.new(color.red, 50), style
 plot(showLevels ? channelMid : na, "Channel Mid", color=color.new(color.gray, 70))
 
 // EMAs
-plot(emaF, "EMA Fast", color=color.new(color.blue, 30), linewidth=1)
-plot(emaS, "EMA Slow", color=color.new(color.orange, 30), linewidth=1)
+plot(emaF, "EMA Fast", color=color.new(#ffffff, 0), linewidth=1)
+plot(emaS, "EMA Slow", color=color.new(#ff0000, 0), linewidth=1)
 
 // Stop/Target reference lines (only while a signal is active — cleared on exit)
 plot(showStops and sigDir != 0 ? stopPx : na, "Stop Loss", color=color.red, style=plot.style_linebr, linewidth=2)
@@ -319,36 +327,36 @@ if barstate.isconfirmed and whPass != ""
 // =========================================================================
 // INFO PANEL
 // =========================================================================
-var table infoPanel = table.new(position.top_right, 2, 8, bgcolor=color.new(color.black, 20), border_width=1)
+var table infoPanel = table.new(position.top_right, 2, 8, bgcolor=color.new(#000000, 0), border_width=1)
 
 if barstate.islast
     regimeText = regime == 0 ? "VOLATILE — FLAT" : regime == 1 ? "RANGE — Mean Revert" : "TREND — Breakout"
     regimeCol  = regime == 0 ? color.red : regime == 1 ? color.yellow : color.green
 
-    table.cell(infoPanel, 0, 0, "REGIME", text_color=color.white, text_size=size.small)
-    table.cell(infoPanel, 1, 0, regimeText, text_color=regimeCol, text_size=size.small)
+    table.cell(infoPanel, 0, 0, "REGIME", text_color=color.white, text_size=size.normal)
+    table.cell(infoPanel, 1, 0, regimeText, text_color=regimeCol, text_size=size.normal)
 
-    table.cell(infoPanel, 0, 1, "ADX", text_color=color.white, text_size=size.small)
-    table.cell(infoPanel, 1, 1, str.tostring(adx, "#.0"), text_color=color.white, text_size=size.small)
+    table.cell(infoPanel, 0, 1, "ADX", text_color=color.white, text_size=size.normal)
+    table.cell(infoPanel, 1, 1, str.tostring(adx, "#.0"), text_color=color.white, text_size=size.normal)
 
-    table.cell(infoPanel, 0, 2, "ATR %ile", text_color=color.white, text_size=size.small)
-    table.cell(infoPanel, 1, 2, str.tostring(atrPctile, "#0"), text_color=color.white, text_size=size.small)
+    table.cell(infoPanel, 0, 2, "ATR %ile", text_color=color.white, text_size=size.normal)
+    table.cell(infoPanel, 1, 2, str.tostring(atrPctile, "#0"), text_color=color.white, text_size=size.normal)
 
     convDisp = math.max(convLong, convShort)
     isJugularNow = jugularLong or jugularShort
-    table.cell(infoPanel, 0, 3, "Conviction", text_color=color.white, text_size=size.small)
-    table.cell(infoPanel, 1, 3, str.tostring(convDisp) + (isJugularNow ? " ★" : ""), text_color=isJugularNow ? color.yellow : color.white, text_size=size.small)
+    table.cell(infoPanel, 0, 3, "Conviction", text_color=color.white, text_size=size.normal)
+    table.cell(infoPanel, 1, 3, str.tostring(convDisp) + (isJugularNow ? " ★" : ""), text_color=isJugularNow ? color.yellow : color.white, text_size=size.normal)
 
-    table.cell(infoPanel, 0, 4, "Risk/Trade", text_color=color.white, text_size=size.small)
-    table.cell(infoPanel, 1, 4, str.tostring(currentRisk, "#.0") + "%", text_color=color.white, text_size=size.small)
+    table.cell(infoPanel, 0, 4, "Risk/Trade", text_color=color.white, text_size=size.normal)
+    table.cell(infoPanel, 1, 4, str.tostring(currentRisk, "#.0") + "%", text_color=color.white, text_size=size.normal)
 
     posText = sigDir == 1 ? "LONG" + (entryIsJugular ? " ★" : "") : sigDir == -1 ? "SHORT" + (entryIsJugular ? " ★" : "") : "FLAT"
     posCol = sigDir == 1 ? color.green : sigDir == -1 ? color.red : color.gray
-    table.cell(infoPanel, 0, 5, "Signal", text_color=color.white, text_size=size.small)
-    table.cell(infoPanel, 1, 5, posText + (sigDir != 0 and pyramidCount > 0 ? " +" + str.tostring(pyramidCount) : ""), text_color=posCol, text_size=size.small)
+    table.cell(infoPanel, 0, 5, "Signal", text_color=color.white, text_size=size.normal)
+    table.cell(infoPanel, 1, 5, posText + (sigDir != 0 and pyramidCount > 0 ? " +" + str.tostring(pyramidCount) : ""), text_color=posCol, text_size=size.normal)
 
-    table.cell(infoPanel, 0, 6, "Stop", text_color=color.white, text_size=size.small)
-    table.cell(infoPanel, 1, 6, sigDir == 0 or na(stopPx) ? "—" : "$" + str.tostring(stopPx, "#.00"), text_color=color.red, text_size=size.small)
+    table.cell(infoPanel, 0, 6, "Stop", text_color=color.white, text_size=size.normal)
+    table.cell(infoPanel, 1, 6, sigDir == 0 or na(stopPx) ? "—" : "$" + str.tostring(stopPx, "#.00"), text_color=color.red, text_size=size.normal)
 
-    table.cell(infoPanel, 0, 7, "Target", text_color=color.white, text_size=size.small)
-    table.cell(infoPanel, 1, 7, sigDir == 0 or na(targetPx) ? "—" : "$" + str.tostring(targetPx, "#.00"), text_color=color.green, text_size=size.small)
+    table.cell(infoPanel, 0, 7, "Target", text_color=color.white, text_size=size.normal)
+    table.cell(infoPanel, 1, 7, sigDir == 0 or na(targetPx) ? "—" : "$" + str.tostring(targetPx, "#.00"), text_color=color.green, text_size=size.normal)
