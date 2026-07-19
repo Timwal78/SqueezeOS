@@ -16,7 +16,10 @@ path in the Pine twin works regardless.
 Env vars:
   ORB_SCAN_ENABLED   = true      — master switch
   ORB_SCAN_INTERVAL  = 120       — seconds between passes
-  ORB_SCAN_SYMBOLS   = ""        — empty → IAM_SYMBOL_ALLOWLIST else SPY,IWM,QQQ,NVDA,HOOD
+  ORB_SCAN_SYMBOLS   = ""        — comma override; empty → dynamic universe
+                                   (IAM_SYMBOL_ALLOWLIST → market-scanner
+                                   candidates → quoted universe; never hardcoded)
+  ORB_SCAN_TOP_N     = 10        — dynamic-universe size cap
   ORB_TIMEFRAME      = 5MIN      — intraday bar size fed to dm.get_bars
   ORB_BARS_LIMIT     = 400       — bars requested per symbol
 """
@@ -34,7 +37,7 @@ _INTERVAL   = int(float(os.environ.get("ORB_SCAN_INTERVAL", "120")))
 _TIMEFRAME  = os.environ.get("ORB_TIMEFRAME", "5MIN").strip()
 _BARS_LIMIT = int(os.environ.get("ORB_BARS_LIMIT", "400"))
 
-_DEFAULT_SYMBOLS = "SPY,IWM,QQQ,NVDA,HOOD"
+_SCAN_TOP_N = int(os.environ.get("ORB_SCAN_TOP_N", "10"))
 
 _started = False
 _lock = threading.Lock()
@@ -50,10 +53,28 @@ _status = {
 
 
 def _symbols() -> list:
-    raw = os.environ.get("ORB_SCAN_SYMBOLS", "").strip()
-    if not raw:
-        raw = os.environ.get("IAM_SYMBOL_ALLOWLIST", "").strip() or _DEFAULT_SYMBOLS
-    return [s.strip().upper() for s in raw.split(",") if s.strip()]
+    """
+    Universe resolution — DYNAMIC by default, never a hardcoded list
+    (operator directive 2026-07-19 + Prime Directive #1):
+      1. ORB_SCAN_SYMBOLS env (explicit operator override)
+      2. IAM_SYMBOL_ALLOWLIST env (if the operator restricted execution)
+      3. Live market-scanner candidates (state.scan_results, top N)
+      4. Live quoted universe (state.quotes)
+    Empty when no live universe exists yet — the pass skips honestly.
+    """
+    raw = os.environ.get("ORB_SCAN_SYMBOLS", "").strip() or os.environ.get("IAM_SYMBOL_ALLOWLIST", "").strip()
+    if raw and raw != "*":
+        return [s.strip().upper() for s in raw.split(",") if s.strip()]
+    try:
+        from core.state import state
+        with state.lock:
+            candidates = list(state.scan_results)
+            quotes = list(state.quotes.keys())
+        if candidates:
+            return [r.get("symbol") for r in candidates[:_SCAN_TOP_N] if r.get("symbol")]
+        return [s for s in quotes[:_SCAN_TOP_N]]
+    except Exception:
+        return []
 
 
 def scan_once() -> int:
@@ -68,7 +89,10 @@ def scan_once() -> int:
     p = OrbParams.from_env()
     fired = 0
     got_data = False
-    for sym in _symbols():
+    syms = _symbols()
+    if not syms:
+        logger.info("[ORB-SCANNER] no live universe yet (market scanner warming up) — pass skipped")
+    for sym in syms:
         try:
             bars = dm.get_bars(sym, _TIMEFRAME, _BARS_LIMIT) or []
             if not bars:
