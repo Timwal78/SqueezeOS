@@ -11,10 +11,11 @@ stops, daily-loss breaker). This module makes no orders itself.
 Env vars:
   IMO_SCAN_ENABLED   = true    — master switch for this loop
   IMO_SCAN_INTERVAL  = 300     — seconds between passes
-  IMO_SCAN_SYMBOLS   = ""      — comma list; empty → IAM_SYMBOL_ALLOWLIST if
-                                 set, else SPY,IWM,QQQ,NVDA,HOOD (the symbols
-                                 that earned an edge in
-                                 docs/ENGINE_SCOREBOARD_2026-07-17.md)
+  IMO_SCAN_SYMBOLS   = ""      — comma list override; empty → dynamic
+                                 universe (IAM_SYMBOL_ALLOWLIST if set, else
+                                 live market-scanner candidates / quoted
+                                 universe — never a hardcoded list)
+  IMO_SCAN_TOP_N     = 10      — dynamic-universe size cap
   IMO_MIN_BARS       = 160     — refuse to signal on thinner history
   IMO_BARS_LIMIT     = 420     — daily bars requested per symbol
 
@@ -36,7 +37,7 @@ _INTERVAL  = int(float(os.environ.get("IMO_SCAN_INTERVAL", "300")))
 _MIN_BARS  = int(os.environ.get("IMO_MIN_BARS", "160"))
 _BARS_LIMIT = int(os.environ.get("IMO_BARS_LIMIT", "420"))
 
-_DEFAULT_SYMBOLS = "SPY,IWM,QQQ,NVDA,HOOD"  # scoreboard-backed default
+_SCAN_TOP_N = int(os.environ.get("IMO_SCAN_TOP_N", "10"))
 
 _started = False
 _lock = threading.Lock()
@@ -52,10 +53,28 @@ _status = {
 
 
 def _symbols() -> list:
-    raw = os.environ.get("IMO_SCAN_SYMBOLS", "").strip()
-    if not raw:
-        raw = os.environ.get("IAM_SYMBOL_ALLOWLIST", "").strip() or _DEFAULT_SYMBOLS
-    return [s.strip().upper() for s in raw.split(",") if s.strip()]
+    """
+    Universe resolution — DYNAMIC by default, never a hardcoded list
+    (operator directive 2026-07-19 + Prime Directive #1):
+      1. IMO_SCAN_SYMBOLS env (explicit operator override)
+      2. IAM_SYMBOL_ALLOWLIST env (if the operator restricted execution)
+      3. Live market-scanner candidates (state.scan_results, top N)
+      4. Live quoted universe (state.quotes)
+    Empty when no live universe exists yet — the pass skips honestly.
+    """
+    raw = os.environ.get("IMO_SCAN_SYMBOLS", "").strip() or os.environ.get("IAM_SYMBOL_ALLOWLIST", "").strip()
+    if raw and raw != "*":
+        return [s.strip().upper() for s in raw.split(",") if s.strip()]
+    try:
+        from core.state import state
+        with state.lock:
+            candidates = list(state.scan_results)
+            quotes = list(state.quotes.keys())
+        if candidates:
+            return [r.get("symbol") for r in candidates[:_SCAN_TOP_N] if r.get("symbol")]
+        return [s for s in quotes[:_SCAN_TOP_N]]
+    except Exception:
+        return []
 
 
 def _confidence(state: dict) -> float:
@@ -84,6 +103,8 @@ def scan_once() -> int:
     p = ImoParams.from_env()
     fired = 0
     syms = _symbols()
+    if not syms:
+        logger.info("[IMO-SCANNER] no live universe yet (market scanner warming up) — pass skipped")
     for sym in syms:
         try:
             bars = dm.get_bars(sym, "1D", _BARS_LIMIT) or []

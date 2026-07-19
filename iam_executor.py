@@ -74,11 +74,20 @@ def _env_int(key: str, default: int) -> int:
     try:    return int(os.environ.get(key, default))
     except: return default
 
-ARMED              = lambda: _env_bool("IAM_AUTO_TRADING", False)
-EXECUTION_MODE     = lambda: os.environ.get("IAM_EXECUTION_MODE", "alert").strip().lower()
+PAPER_MODE         = lambda: _env_bool("IAM_PAPER_MODE", True)
+
+# Operator decision (Timothy, 2026-07-19: "ok put it on paper mode"): the
+# PAPER desk runs out of the box — while PAPER_MODE is true, the arm switch
+# defaults ON so paper signals flow with zero Render configuration. The
+# moment IAM_PAPER_MODE=false (live money), the default flips back to
+# DISARMED and going live requires BOTH explicit flags:
+#   IAM_PAPER_MODE=false + IAM_AUTO_TRADING=true
+ARMED              = lambda: _env_bool("IAM_AUTO_TRADING", PAPER_MODE())
+# "both" default = Discord alerts + (paper) broker path, so the position
+# ledger and daily-loss breaker exercise during the burn-in.
+EXECUTION_MODE     = lambda: os.environ.get("IAM_EXECUTION_MODE", "both").strip().lower()
 INSTRUMENT         = lambda: os.environ.get("IAM_INSTRUMENT",  "equity").strip().lower()
 MIN_CONFIDENCE     = lambda: _env_float("IAM_MIN_CONFIDENCE", 70.0)
-PAPER_MODE         = lambda: _env_bool("IAM_PAPER_MODE", True)
 MAX_SHARES         = lambda: _env_int("IAM_MAX_SHARES", 5)
 MAX_ORDER_USD      = lambda: _env_float("IAM_MAX_ORDER_USD", 500.0)
 MAX_ORDERS_PER_DAY = lambda: _env_int("IAM_MAX_ORDERS_PER_DAY", 5)
@@ -92,12 +101,13 @@ STOP_LOSS_PCT      = lambda: _env_float("IAM_STOP_LOSS_PCT", 3.0)  # hard protec
 # producer that predates tagging). Example: IAM_PRIMARY_SYSTEM=SML_ORB_MM
 PRIMARY_SYSTEM     = lambda: os.environ.get("IAM_PRIMARY_SYSTEM", "").strip().upper()
 
-# Execution symbol allowlist — the evidence-based "trade only where we win" gate.
-# Empty (default) = all symbols allowed (unchanged behavior). Set to a comma-
-# separated list (e.g. "SPY,IWM,QQQ,NVDA") to restrict ENTRIES to symbols where
-# backtests showed an edge (tests/backtest_engines.py). Exits/closes are never
-# blocked — capital protection always runs.
-SYMBOL_ALLOWLIST   = lambda: {
+# Execution symbol allowlist — OPT-IN gate, empty by default (all symbols
+# allowed). Operator directive 2026-07-19: universes are DYNAMIC, never
+# hardcoded (Prime Directive #1) — so no default ticker list here. Setting a
+# comma list restricts ENTRIES only; exits/closes are never blocked. The
+# 2026-07-17 scoreboard (docs/ENGINE_SCOREBOARD_2026-07-17.md) documents
+# which engine×symbol pairs measured an edge if a restriction is ever wanted.
+SYMBOL_ALLOWLIST   = lambda: set() if os.environ.get("IAM_SYMBOL_ALLOWLIST", "").strip() == "*" else {
     s.strip().upper() for s in os.environ.get("IAM_SYMBOL_ALLOWLIST", "").split(",") if s.strip()
 }
 COOLDOWN_SECONDS   = lambda: _env_int("IAM_COOLDOWN_SECONDS", 600)   # 10 min default — AMC moves in waves
