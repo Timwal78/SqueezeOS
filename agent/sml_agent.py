@@ -90,10 +90,21 @@ class PnL:
         with self._lock:
             self.spent = round(self.spent + amount, 6)
 
-    def record_earn(self, amount: float):
+    def record_listing(self):
+        """A brief was listed on the marketplace — real, unfakeable (the
+        listing POST succeeded). Does NOT touch `earned`: listing is free
+        (core/api/marketplace_bp.py's /list route isn't payment-gated),
+        only a later /read by some other agent actually pays the seller."""
         with self._lock:
-            self.earned = round(self.earned + amount, 6)
             self.listings += 1
+
+    def refresh_earned(self, real_total_rlusd: float):
+        """Overwrites `earned` with the real, server-tracked lifetime seller
+        balance (GET /api/marketplace/balance/<wallet>'s revenue_rlusd — 90%
+        of each real 0.02 RLUSD /read sale). This is a SET, not an
+        increment, since the server already reports a cumulative total."""
+        with self._lock:
+            self.earned = round(real_total_rlusd, 6)
 
     def summary(self) -> dict:
         with self._lock:
@@ -467,9 +478,28 @@ def list_brief(brief: dict) -> Optional[str]:
     resp.raise_for_status()
     result     = resp.json()
     listing_id = result.get("listing_id")
-    pnl.record_earn(BRIEF_PRICE)
+    pnl.record_listing()
     logger.info(f"[AGENT] Listed on marketplace: {listing_id} — {symbol} {brief.get('master_bias')}")
     return listing_id
+
+
+def refresh_earnings():
+    """
+    Pulls this agent's REAL accrued seller balance from the marketplace
+    server (90% of each actual 0.02 RLUSD /read sale — see
+    core/api/marketplace_bp.py's balance()) and syncs it into local pnl
+    bookkeeping. Listing a brief is free and never itself earns anything;
+    only a later paid /read by some other agent does.
+    """
+    if not AGENT_ADDR:
+        return
+    try:
+        resp = requests.get(f"{SQUEEZEOS}/api/marketplace/balance/{AGENT_ADDR}", timeout=15)
+        resp.raise_for_status()
+        real_total = float(resp.json().get("revenue_rlusd", 0.0) or 0.0)
+        pnl.refresh_earned(real_total)
+    except Exception as e:
+        logger.warning(f"[AGENT] Could not refresh real marketplace earnings: {e}")
 
 # ── Post to Slack ────────────────────────────────────────────────────────────────────────────
 
@@ -599,11 +629,13 @@ def run_cycle():
         push_to_webhooks(brief, listing_id)
         post_to_slack(brief)
         log_passport()
+        refresh_earnings()
 
         summary = pnl.summary()
         logger.info(
             f"[AGENT] ═══ Cycle {pnl.runs} complete ═══ "
             f"spent={summary['spent_rlusd']} RLUSD | "
+            f"earned={summary['earned_rlusd']} RLUSD | "
             f"listings={summary['listings']} | "
             f"net={summary['net_rlusd']} RLUSD"
         )
