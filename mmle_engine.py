@@ -107,7 +107,10 @@ VCCW_CLOSE_MIN    = int(os.getenv("MMLE_VCCW_CLOSE_MIN", "930"))  # 15:30 ET
 FIRE_VPIN_Z_MIN   = float(os.getenv("MMLE_FIRE_VPIN_Z_MIN", "1.0"))
 VANNA_SMA_LEN     = int(os.getenv("MMLE_VANNA_SMA_LEN", "50"))
 RET20_BARS        = int(os.getenv("MMLE_RET20_BARS", "20"))
-ACTIVE_AXES_FIRE  = int(os.getenv("MMLE_ACTIVE_AXES_FIRE", "3"))
+# Only 2 axes are implemented (vanna_proxy, charm_proxy) — active_axes can
+# never exceed 2 (see axes_score's /2.0 normalization below), so a default
+# of 3 made this alternate ignition path permanently unreachable.
+ACTIVE_AXES_FIRE  = int(os.getenv("MMLE_ACTIVE_AXES_FIRE", "2"))
 
 
 # ═══════════════════════════════════════════════════════════════
