@@ -443,3 +443,32 @@ def compute_series(bars: list, p: DruckParams = None) -> dict:
         })
 
     return {"signals": signals, "jugular": jugular, "state": state}
+
+
+def analyze(symbol: str, bars: list, p: DruckParams = None) -> dict:
+    """
+    On-demand analysis of the LATEST bar. Real bars only — same convention as
+    orb_engine.analyze() / imo_engine's on-demand path.
+
+    min_bars is a buffer past the largest internal lookback window
+    (atr_pctile_len defaults to 100 — the biggest of the bunch) so the
+    percentrank/regime/HTF math has real history to work with, not a cold start.
+    """
+    p = p or DruckParams.from_env()
+    min_bars = max(p.atr_pctile_len, p.breakout_len, p.ema_slow, p.adx_len) + 10
+    if not bars or len(bars) < min_bars:
+        return {"symbol": symbol.upper(), "status": "insufficient_data",
+                "bars": len(bars or []), "min_bars": min_bars}
+    out = compute_series(bars, p)
+    if not out["state"]:
+        return {"symbol": symbol.upper(), "status": "insufficient_data",
+                "bars": len(bars), "detail": "no parseable timestamps"}
+    # Internal-only keys (prefixed "_") are carry-over state for compute_series's
+    # own next-bar math (e.g. "_prev_z") — not part of the public response shape.
+    public_state = {k: v for k, v in out["state"].items() if not k.startswith("_")}
+    return {
+        "symbol": symbol.upper(), "status": "success",
+        "signal": out["signals"][-1], "jugular": bool(out["jugular"][-1]),
+        "price": _bar_val(bars[-1], "close", "c"),
+        **public_state,
+    }

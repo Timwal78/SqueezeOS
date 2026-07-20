@@ -50,6 +50,7 @@ from core.api.oracle_engine_bp import oracle_engine_bp
 from core.api.iam_bp import iam_bp
 from core.api.imo_bp import imo_bp
 from core.api.orb_bp import orb_bp
+from core.api.druck_bp import druck_bp
 from core.api.vapl_bp import vapl_bp
 from core.vapl.middleware import install_vapl_middleware
 from core.api.macro741_bp import macro741_bp
@@ -183,6 +184,7 @@ def create_app():
     app.register_blueprint(iam_bp,           url_prefix='/api/iam')
     app.register_blueprint(imo_bp,           url_prefix='/api/imo')
     app.register_blueprint(orb_bp,           url_prefix='/api/orb')
+    app.register_blueprint(druck_bp,         url_prefix='/api/druck')
     app.register_blueprint(vapl_bp)
     app.register_blueprint(macro741_bp,        url_prefix='/api')
     app.register_blueprint(macro_bp,           url_prefix='/api')
@@ -258,6 +260,13 @@ def create_app():
         # Polygon/Alpaca for intraday bars — logs and idles without them)
         from orb_scanner import start_orb_scanner
         start_orb_scanner()
+
+        # Start SML-DRUCK (Druckenmiller Liquidity Breakout) pure-Python
+        # scanner (needs Polygon/Alpaca for intraday bars — logs and idles
+        # without them). Feeds iam_executor under the same paper-first
+        # safety stack as ORB/IMO — no live-arming decision made here.
+        from druck_scanner import start_druck_scanner
+        start_druck_scanner()
 
         # Start webhook delivery engine (SSE tap + delivery workers)
         start_webhook_engine()
