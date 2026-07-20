@@ -337,30 +337,48 @@ class GammaFlowEngine:
                     logger.error(f"[GAMMA] Error {ticker}: {e}")
             await asyncio.sleep(20)  # RELAXED: 20 seconds (was 60s) for faster gamma scanning
 
-    async def process_ticker(self, ticker: str):
+    async def process_ticker(self, ticker: str) -> Optional[Dict]:
+        """
+        Returns {"gamma_flip": bool, "regime": str, "score": float 0-100} built
+        from this call's real, freshly-computed GEXProfile — or None on any
+        early-out (no spot, no chain, no profile). core/oracle_engine.py's
+        _get_gamma_flow() is the only consumer and always got None before this
+        fix (no path here ever returned anything), which meant gamma_score/
+        gamma_flip silently contributed nothing to every Oracle directive.
+
+        "score" is deliberately derived only from the GEXProfile fields this
+        method already computes for its own alert-dispatch logic below (zero-
+        gamma-line proximity + long/short-gamma dealer positioning) — not from
+        FlowSignal.urgency_score, since dispatch_signal() below has its own
+        5-minute per-signal-type cooldown and may legitimately skip dispatching
+        an alert on a call where the underlying gamma condition is still real
+        and unchanged; tying the score to whether an alert happened to fire
+        would make it flicker for reasons unrelated to actual gamma pressure.
+        """
         # 1. Get spot price
         spot_data = self.polygon.get_last_trade(ticker)
         spot = float(spot_data.get('price', 0))
         if spot <= 0:
-            return
+            return None
 
         # 2. Get GEX Profile via Tradier adapter (Schwab-shape format)
         if not self._get_chain:
-            return
+            return None
         raw_chain = self._get_chain(ticker)
         if not raw_chain or 'error' in raw_chain:
-            return
+            return None
 
         profile = calculate_gex_profile(raw_chain, spot, ticker)
         if not profile:
-            return
+            return None
 
         # 3. MM Intel v3 Core: Kalman + HJB
         self._update_mm_intel(ticker, raw_chain, spot)
 
         # 4. Check for gamma flip
         old_profile = self.gex_cache.get(ticker)
-        if old_profile and old_profile.profile_shape != profile.profile_shape:
+        gamma_flip = bool(old_profile and old_profile.profile_shape != profile.profile_shape)
+        if gamma_flip:
             await self._signal_gamma_flip(ticker, spot, profile, old_profile)
 
         self.gex_cache[ticker] = profile
@@ -373,6 +391,27 @@ class GammaFlowEngine:
 
         # 6. Check pin risk
         await self._check_pin_risk(ticker, spot, profile, raw_chain)
+
+        # 7. Score for Oracle — a real GEX-structure read.
+        # Dealers in a short-gamma regime must chase price (buy rises, sell
+        # dips), amplifying moves; long-gamma dealers dampen them. Realized
+        # vol also tends to expand near the zero-gamma line (the pivot where
+        # dealer hedging flips sign) — so proximity to it, weighted by the
+        # current regime, is a defensible 0-100 "gamma pressure" read using
+        # only fields this method already computed above.
+        zgl = profile.zero_gamma_line
+        if zgl and zgl > 0 and spot > 0:
+            zgl_proximity = max(0.0, 1.0 - (abs(spot - zgl) / spot) / 0.03)  # 1.0 at ZGL, 0 by 3% away
+        else:
+            zgl_proximity = 0.0
+        regime_mult = 1.0 if profile.profile_shape == 'short_gamma' else 0.5
+        score = round(min(100.0, zgl_proximity * 100.0 * regime_mult), 1)
+
+        return {
+            "gamma_flip": gamma_flip,
+            "regime": profile.profile_shape.upper(),
+            "score": score,
+        }
 
     def _update_mm_intel(self, ticker: str, raw_chain: Dict, spot: float):
         """Implement MM Intel v3 institutional logic."""

@@ -536,6 +536,44 @@ class PolygonProvider:
             logger.warning(f"[POLYGON] Last trade {symbol}: {e}")
         return {}
 
+    def get_recent_trades(self, symbol: str, limit: int = 50) -> List[dict]:
+        """
+        Real individual trade prints (time & sales) via Polygon's v3 trades
+        endpoint — needed for order-flow-imbalance / block-trade analysis,
+        which cannot be derived from OHLCV bars. Requires a Stocks Advanced
+        plan; a free/Starter key gets a 403 here, handled the same honest
+        way as get_grouped_daily's 403 case (no fallback fabrication).
+        """
+        if not self.available:
+            return []
+        self._rate_limit()
+        try:
+            r = requests.get(f"{self.base}/v3/trades/{symbol}", params={
+                'apiKey': self.api_key,
+                'limit': limit,
+                'sort': 'timestamp',
+                'order': 'desc',
+            }, timeout=10)
+            if r.status_code == 200:
+                results = r.json().get('results', [])
+                trades = [{
+                    'price': t.get('price', 0),
+                    'size': t.get('size', 0),
+                    'timestamp': t.get('participant_timestamp') or t.get('sip_timestamp', 0),
+                } for t in results]
+                # tick-rule classification (see calculate_ofi) needs chronological order
+                trades.sort(key=lambda t: t['timestamp'])
+                return trades
+            elif r.status_code == 429:
+                PolygonRateGuard.emergency_backoff()
+            elif r.status_code == 403:
+                logger.warning(f"[POLYGON] Recent trades {symbol}: 403 — plan likely doesn't include tick data")
+            else:
+                logger.warning(f"[POLYGON] Recent trades {symbol}: {r.status_code}: {r.text[:200]}")
+        except Exception as e:
+            logger.warning(f"[POLYGON] Recent trades {symbol}: {e}")
+        return []
+
     def get_aggregates(self, symbol: str, multiplier: int = 1, timespan: str = 'minute', limit: int = 30, days_back: int = 2) -> List[dict]:
         """Get aggregate bars for a symbol."""
         if not self.available:

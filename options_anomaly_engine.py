@@ -264,7 +264,10 @@ def _build_snapshot(symbol: str, chain: dict, scan_result: dict) -> Optional[Bas
                 else:
                     total_put_vol += sweep.get("volume", 0) or 0
 
-        cp_ratio = (total_call_vol / total_put_vol) if total_put_vol > 0 else (pc_ratio if pc_ratio else 1.0)
+        # pc_ratio from flow_summary is PUT/CALL, so the fallback must invert it to
+        # match call_put_vol_ratio's CALL/PUT convention — this used to fall through
+        # un-inverted, which is the root cause of BUY/SELL direction labels flipping.
+        cp_ratio = (total_call_vol / total_put_vol) if total_put_vol > 0 else (1.0 / pc_ratio if pc_ratio > 0 else 1.0)
 
         return BaselineSnapshot(
             ts=time.time(),
