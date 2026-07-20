@@ -49,6 +49,8 @@ ALLOWLIST=(
   "data_providers.py:callers get an explicit error, not a placeholder number"
   "core/api/mcp_bp.py:Returns a real error \\(not a placeholder\\) if"
   "core/api/fred_bp.py:placeholder\\."
+  "druck_engine.py:that's simulated by"
+  "tests/test_druck_engine_smoke.py:simulated round-trip"
 )
 
 is_allowlisted() {
