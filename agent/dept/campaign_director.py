@@ -301,6 +301,11 @@ def run() -> dict:
     print(f"\n[CEO] Campaign report saved: {path}")
 
     failures = [k for k, v in agent_results.items() if isinstance(v, dict) and v.get("error")]
+    # Real, deterministic failure signal for __main__'s exit code — the
+    # LLM-synthesized "health" field above is a judgment call, not a
+    # reliable pass/fail signal (can be missing/UNKNOWN even when every
+    # specialist actually succeeded, or vice versa).
+    report["failed_agents"] = failures
     if failures:
         post_activity(CEO_LABEL, f"Run complete with issues — failed: {', '.join(failures)}", status="error")
     else:
@@ -316,4 +321,8 @@ def run() -> dict:
 
 
 if __name__ == "__main__":
-    sys.exit(0 if run() else 1)
+    _report = run()
+    # `run()` always returns a truthy dict (it contains at least "date"),
+    # even when every specialist failed — the real signal is the
+    # deterministic failed_agents list, not the dict's own truthiness.
+    sys.exit(1 if _report.get("failed_agents") else 0)
