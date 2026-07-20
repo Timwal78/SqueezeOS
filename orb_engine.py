@@ -180,7 +180,11 @@ def compute_series(bars: list, p: OrbParams = None) -> dict:
                 "or_high": round(or_h, 4) if or_h is not None else None,
                 "or_low": round(or_l, 4) if or_l is not None else None,
                 "inventory_z": round(inv_z, 3),
-                "mm_position": "SHORT" if inv_z > 0.5 else "LONG" if inv_z < -0.5 else "BALANCED",
+                # inv_z carries the same sign convention as mm_position above
+                # (negative = dealers net short, positive = dealers net long) —
+                # this label reports the dealers' own inventory, not a trade
+                # recommendation, so it must match, not invert, that sign.
+                "mm_position": "LONG" if inv_z > 0.5 else "SHORT" if inv_z < -0.5 else "BALANCED",
                 "long_fired_today": long_done,
                 "short_fired_today": short_done,
                 "signal": sig,

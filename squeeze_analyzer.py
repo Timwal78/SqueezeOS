@@ -332,14 +332,7 @@ class SqueezeAnalyzer:
 
         # ── Run all 8 modules ──
         s1 = self._volume_score(vol_ratio)
-        
-        # Module 2 returns (intensity, momentum_osc, raw_slope)
-        res2 = self._compression_score(price, high, low, avg_volume, volume, history)
-        if isinstance(res2, tuple):
-            s2, m_osc, slope = res2
-        else:
-            s2, m_osc, slope = res2, 5.0, 0.0
-
+        s2 = self._compression_score(price, high, low, avg_volume, volume, history)
         s3 = self._momentum_score(change_pct)
         s4, z_val = self._z_score_math(price, history)
         s5 = self._rsi_proxy_score(price, high, low, change_pct)
@@ -361,13 +354,7 @@ class SqueezeAnalyzer:
             except: pass
 
         # ── Raw total (max 100) ──
-        # Adjust weights to favor the new Momentum Oscillator and Hurst Regime
         raw_total = s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8
-        
-        # Beast Boost: If in Squeeze + Momentum is accelerating + Persistent trend
-        if s2 >= 12 and abs(slope) > 0.1 and hurst_val > 0.55:
-            raw_total += 10.0
-            
         raw_total = clamp(raw_total, 0.0, 100.0)
 
         # ── Apply tier weight ──
@@ -427,7 +414,7 @@ class SqueezeAnalyzer:
             'symbol': symbol, 'price': price,
             'squeeze_score': round(total, 1), 'raw_score': round(raw_total, 1), 'squeeze_level': level,
             'direction': direction, 'z_score': round(z_val, 2),
-            'hurst': round(hurst_val, 2), 'momentum_slope': round(slope, 4),
+            'hurst': round(hurst_val, 2),
             'recommendation': rec, 'risk_level': risk,
             'volume': volume, 'changePct': change_pct, 'volRatio': vol_ratio,
             'tier': 'PENNY' if price < 2 else 'SWEET' if price <= 50 else 'LARGE' if price <= 150 else 'MEGA',
@@ -440,7 +427,6 @@ class SqueezeAnalyzer:
                 'money_flow': round(s6, 1),
                 'price_structure': round(s7, 1),
                 'trend_alignment': round(s8, 1),
-                'momentum_osc': round(m_osc, 1)
             },
             'source': quote_data.get('source', ''),
         }
