@@ -31,6 +31,11 @@ from core.ceo_trader import CEOTrader
 
 logger = logging.getLogger("SqueezeOS-Legacy")
 
+# Cap on how many symbols' real trade tape gets pulled from Polygon per Whale
+# Stalker scan pass — protects the shared PolygonRateGuard budget (5 calls/min
+# across the whole app) from being monopolized by one background worker.
+WHALE_STALKER_MAX_TRADE_LOOKUPS = int(os.environ.get("WHALE_STALKER_MAX_TRADE_LOOKUPS", "3"))
+
 # ── Institutional Environment Setup ──
 # Ensure root directory is in PYTHONPATH for cross-module reliability.
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -93,6 +98,32 @@ except ImportError:
 
 # ── 4. Resilient Worker Bridges ──
 
+def _collect_whale_stalker_trades(quotes: Dict[str, dict], dm: Any) -> Dict[str, list]:
+    """
+    Real trade-tape lookup (OFI + block detection) for the subset of symbols
+    already showing unusual volume this pass — pulling the full tape for the
+    whole universe every scan cycle would blow through Polygon's shared rate
+    budget for no benefit (illiquid names with no footprint have nothing
+    worth tick-classifying). Capped and gated on Polygon actually being
+    configured — returns {} (idles honestly, same as before this fix)
+    otherwise.
+    """
+    polygon = getattr(dm, "polygon", None) if dm else None
+    if not polygon or not getattr(polygon, "available", False):
+        return {}
+
+    footprint_candidates = [
+        sym for sym, q in quotes.items()
+        if q.get("volume", 0) > q.get("avg_volume", 1000000) * 1.5
+    ]
+    recent_trades = {}
+    for sym in footprint_candidates[:WHALE_STALKER_MAX_TRADE_LOOKUPS]:
+        trades = polygon.get_recent_trades(sym, limit=50)
+        if trades:
+            recent_trades[sym] = trades
+    return recent_trades
+
+
 def start_whale_stalker() -> threading.Thread:
     """
     Initializes the Whale Stalker background surveillance loop.
@@ -115,9 +146,11 @@ def start_whale_stalker() -> threading.Thread:
                     # Waiting for DataManager initialization
                     time.sleep(5)
                     continue
-                
+
+                recent_trades = _collect_whale_stalker_trades(quotes, get_service("dm"))
+
                 # Execute full-market scan (100% FETCH compliance)
-                results = ws.run_scan(quotes)
+                results = ws.run_scan(quotes, recent_trades)
                 if results:
                     with state.lock:
                         # Append new findings to the strategic record

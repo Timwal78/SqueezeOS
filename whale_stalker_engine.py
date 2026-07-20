@@ -40,17 +40,38 @@ class WhaleStalkerEngine:
         Calculates Order Flow Imbalance (OFI) for a batch of trades.
         OFI = Sum(Buy Volume) - Sum(Sell Volume)
         A high positive OFI indicates institutional aggression on the ask.
+
+        Consolidated-tape trade prints (Polygon /v3/trades, Tradier, etc.)
+        carry no aggressor-side flag, so classification uses the standard
+        Lee-Ready tick rule: an uptick from the prior trade is buy-initiated,
+        a downtick is sell-initiated, and a zero-tick inherits the prior
+        trade's side. `trades` must be in chronological (oldest-first) order.
+        An explicit `side` field (if a caller already has one) always wins.
         """
         if not trades: return 0.0
-        
+
         ofi = 0.0
+        last_price = None
+        last_is_buy = True  # only used for the zero-tick case on the very first trade
         for t in trades:
             size = t.get('size', 0)
-            # Simplistic classification: trade at or above mid is a buy
-            # In production, this uses Tape/L2 data.
-            is_buy = t.get('side') == 'buy' or t.get('price') >= t.get('mid', 0)
+            price = t.get('price', 0)
+            side = t.get('side')
+            if side == 'buy':
+                is_buy = True
+            elif side == 'sell':
+                is_buy = False
+            elif last_price is None or price > last_price:
+                is_buy = True
+            elif price < last_price:
+                is_buy = False
+            else:
+                is_buy = last_is_buy  # zero-tick: inherit prior classification
+
             ofi += size if is_buy else -size
-            
+            last_price = price
+            last_is_buy = is_buy
+
         return ofi
 
     def detect_absorption(self, symbol: str, quote: dict, candles: list) -> Optional[dict]:

@@ -802,6 +802,8 @@ class OptionsIntelligence:
                 {
                     "put_call_vol_ratio": round(put_call_vol_ratio, 2),
                     "put_call_oi_ratio": round(put_call_oi_ratio, 2),
+                    "total_call_vol": call_vol,
+                    "total_put_vol": put_vol,
                     "total_call_premium": round(call_premium, 2),
                     "total_put_premium": round(put_premium, 2),
                     "net_premium": round(net_premium, 2),
