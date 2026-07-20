@@ -1594,11 +1594,11 @@ def _dispatch(name: str, args: dict, req_headers: dict) -> dict:
         view  = args.get("view", "summary")
         hours = args.get("hours", 24)
         if view == "report":
-            if not token:
+            if not payment_token:
                 return _need_token("agent_economy")
-            hdrs = {"X-Payment-Token": token}
-            if wallet:
-                hdrs["X-Agent-Wallet"] = wallet
+            hdrs = {"X-Payment-Token": payment_token}
+            if agent_wallet:
+                hdrs["X-Agent-Wallet"] = agent_wallet
             return _text(_proxy("GET", f"{sq}/x402/agent-economy/report", headers=hdrs))
         if view == "leaderboard":
             return _text(_proxy("GET", f"{sq}/x402/agent-economy/leaderboard", params={"hours": hours}))
