@@ -168,8 +168,21 @@ class OracleEngine:
                         pass
                         
             result = sml.compute_all(symbol, market_history=market_history)
-            score = result.get("fractal_score", 0) if isinstance(result, dict) else 0
+            # compute_all() never returns a "fractal_score" key — this used to
+            # always read 0 here, permanently zeroing this term's 30% weight
+            # in analyze()'s composite score. "confidence" is compute_all()'s
+            # real 0-100 composite (dep-alignment/HTF/separation/confirmation/
+            # regime blend, sml_engine.py:793) — the correct stand-in.
+            score = result.get("confidence", 0) if isinstance(result, dict) else 0
             lifecycle = result.get("lifecycle_text", "DORMANT") if isinstance(result, dict) else "DORMANT"
+            # The real Harmonic Convergence flag (stacked-EMA + compression +
+            # MTF-alignment + net-pressure, sml_engine.py:903) — NOT the same
+            # thing as `lifecycle`, which is only ever one of SMLLifecycle's
+            # enum values (Dormant/Early/.../Invalid) and can never equal the
+            # literal string "HARMONIC_CONVERGENCE".
+            harmonic_convergence = bool(
+                result.get("kinetic_matrix", {}).get("harmonic_convergence", False)
+            ) if isinstance(result, dict) else False
             anchors = FRACTAL_ANCHORS.get(symbol, [])
             best = max(anchors, key=lambda a: a["multiplier"] * score, default=None)
             return {
@@ -177,6 +190,7 @@ class OracleEngine:
                 "fractal_match": best["name"] if best else "None",
                 "target_pct": best["target_pct"] if best else 0,
                 "lifecycle": lifecycle,
+                "harmonic_convergence": harmonic_convergence,
             }
         except Exception as e:
             logger.warning(f"[Oracle] Fractal signal unavailable for {symbol}: {e}")
@@ -383,7 +397,7 @@ class OracleEngine:
         directive = self._score_to_directive(score, regime, gamma_flip, vpin)
         
         # [!!!] HARMONIC CONVERGENCE OVERRIDE [!!!]
-        if fractal.get("lifecycle") == "HARMONIC_CONVERGENCE":
+        if fractal.get("harmonic_convergence"):
             directive = "BUY"
             score = 100.0
             regime = "ALPHA_EXPANSION"  # Force through CEO regime gates
@@ -412,7 +426,7 @@ class OracleEngine:
             prop_consensus=prop_ema.get("consensus", "NEUTRAL"),
         )
         
-        if fractal.get("lifecycle") == "HARMONIC_CONVERGENCE":
+        if fractal.get("harmonic_convergence"):
             reason = f"[!!!] HARMONIC CONVERGENCE DETECTED [!!!] {reason}"
 
         payload = {
