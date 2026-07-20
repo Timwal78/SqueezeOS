@@ -338,9 +338,22 @@ class OracleEngine:
         prop_ema = self._cached(f"prop_ema_{symbol}", lambda: self._get_proprietary_ema(symbol))
 
         # 3. Composite scoring
+        # VPIN (Volume-Synchronized Probability of Informed Trading) is a pure
+        # order-flow *imbalance magnitude* — confirmed direction-agnostic by
+        # its own implementation (mmle_engine.py's VPINEngine measures
+        # |buy_volume - sell_volume| / total, with no sign). It used to add
+        # up to 40 points here — the single largest weighted term in this
+        # composite — toward a BUY directive regardless of which side the
+        # imbalance was actually on, so heavy informed *selling* pressure
+        # inflated the BUY score exactly when it shouldn't have. This
+        # contradicted both _score_to_directive() below (which already
+        # treats vpin > 0.75 as bearish evidence under MACRO_COLLAPSE) and
+        # the sibling core/rdt_engine.py, which treats vpin > 0.75 as an
+        # immediate SHIELD ahead of every other check. VPIN now only
+        # participates through those existing risk gates, not as a BUY
+        # booster — operator-confirmed 2026-07-20.
         score = 0
         score += fractal.get("fractal_score", 0) * 0.30
-        score += mmle.get("vpin", 0) * 40  # VPIN 0–1 → 0–40 pts
         score += gflow.get("gamma_score", 0) * 0.30
         if gflow.get("gamma_flip"):
             score += 15
