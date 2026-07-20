@@ -511,6 +511,14 @@ class ExecutionEngine:
             pnl *= -1
         trade['pnl'] = pnl
 
+        # Feed CEOTrader's daily-loss circuit breaker (bolted onto this
+        # instance via hasattr in core/ceo_trader.py's __init__, not native
+        # to ExecutionEngine) — without this, daily_pnl never moves and
+        # _check_circuit_breaker() can never trip no matter how much real
+        # money is lost in a session.
+        if hasattr(self, 'daily_pnl'):
+            self.daily_pnl += pnl
+
         self._trade_history.insert(0, trade)
         # Institutional retention: cap at 10000 entries, no arbitrary truncation during session.
         if len(self._trade_history) > 10000:
