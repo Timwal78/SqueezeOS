@@ -375,6 +375,7 @@ def webhook():
         session = event['data']['object']
         api_key = session.get('client_reference_id')
         customer_email = session.get('customer_details', {}).get('email', 'unknown')
+        customer_id = session.get('customer')
         plan_type = session.get('mode') # payment or subscription
 
         if api_key and r:
@@ -386,6 +387,11 @@ def webhook():
             }
             # Store in Redis
             r.set(f"apikey:{api_key}", json.dumps(data))
+            # Reverse index by Stripe customer ID so a later subscription.deleted
+            # event (which only carries the customer ID, not client_reference_id)
+            # can find and revoke this key.
+            if customer_id:
+                r.set(f"customer:{customer_id}", api_key)
             logger.info(f"Provisioned new API key for {customer_email}")
 
             # Send Discord Alert for Stripe Payment
@@ -406,9 +412,18 @@ def webhook():
                     logger.error(f"Failed to post Stripe payment to Discord: {e}")
 
     elif event['type'] in ['customer.subscription.deleted', 'customer.subscription.canceled']:
-        # Note: In a full system, you would look up the API key by customer ID and disable it.
-        # For MVP, we can handle deletions manually or query Redis.
-        pass
+        subscription = event['data']['object']
+        customer_id = subscription.get('customer')
+        if customer_id and r:
+            api_key = r.get(f"customer:{customer_id}")
+            if api_key:
+                r.delete(f"apikey:{api_key}")
+                r.delete(f"customer:{customer_id}")
+                logger.info(f"Revoked API key for cancelled customer {customer_id}")
+            else:
+                logger.warning(f"No API key found to revoke for cancelled customer {customer_id}")
+        else:
+            logger.warning("subscription cancellation event missing customer id or Redis unavailable")
 
     return jsonify(success=True)
 
