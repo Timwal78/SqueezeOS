@@ -21,6 +21,22 @@
 - Stripe subscription: $149/mo — `price_1TmbGJQL50L4TFzsUsure8N0` (product `prod_Um9XO3d5Yi7TFd`)
 - Stripe webhook: `POST /api/cascade/stripe/webhook` → issues Redis API keys on subscription
 - Required Render env vars: `CASCADE_STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_SECRET_KEY`, `REDIS_URL`
+- Checkout landing page: `https://www.scriptmasterlabs.com/cascade` (SML_Portfolio repo, `cascade.html`) — real 5-year backtest table + working Stripe subscribe button. Added 2026-07-21; previously there was no public page pointing at the POST-only checkout endpoint.
+
+### Operator decision (Timothy, 2026-07-21): CASCADE approved for live trading — ORB/DRUCK restricted, not deleted
+
+Based on CASCADE's real 5-year backtest (NVDA +138.6%, PLTR +140.6%, SPY 86.6% win rate — independently re-verified twice against fresh Robinhood-MCP-sourced data the same day) versus ORB's and DRUCK's both-measured-both-not-profitable verdicts (see their sections below), the operator decided: **CASCADE goes live for real trading; ORB and DRUCK are restricted from the broker but kept running as paper-mode signals and paid API products** (`/api/orb`, `/api/druck` stay live — not deleted, they just can't place real orders).
+
+- **Bug found and fixed en route:** `avg_down_engine.py`'s `_route_iam()` never tagged its resolution dict with a `"system"` key — unlike `imo_scanner.py`/`orb_scanner.py`/`druck_scanner.py`, which all correctly tag `"SML_IMO"`/`"SML_ORB_MM"`/`"SML_DRUCK"`. `iam_executor.py`'s primary-system gate does `signal_system = resolution.get("system") or "IAM"`, so CASCADE signals were defaulting to `system="IAM"`. Setting `IAM_PRIMARY_SYSTEM=SML_CASCADE` without this fix would have silently blocked CASCADE's own signals from the broker too — the opposite of the intended effect, with no visible error. Fixed: `resolution["system"] = "SML_CASCADE"` added. Regression test: `tests/test_cascade_system_tag.py` (confirmed failing pre-fix, passing post-fix).
+- **Required Render env vars to actually go live** (not yet applied by any agent — operator must set these on the `squeezeos-api` service; no sandbox in this project has ever had Render dashboard access):
+  ```
+  IAM_PAPER_MODE=false
+  IAM_AUTO_TRADING=true
+  IAM_EXECUTION_MODE=tradier
+  IAM_PRIMARY_SYSTEM=SML_CASCADE
+  ```
+  `IAM_PRIMARY_SYSTEM=SML_CASCADE` is what actually restricts real execution to CASCADE only — IMO also gets excluded from the broker as a side effect (it was never explicitly evaluated as "approved for live" the way CASCADE now has been; it stays alert-only/paper until its own explicit decision).
+- **Robinhood is a real, currently-unbuilt gap.** `iam_executor.py` only has Tradier wired for actual order placement. There is no Robinhood order-execution code anywhere in this codebase — the only Robinhood connection that has ever existed in this project is the Robinhood MCP tool available directly to the coding agent in a chat session (tied to the operator's real account), which is a completely different thing from an unattended production system. Robinhood has no official trading API; automating it server-side means the unofficial `robin_stocks` library, logging in with the operator's real username/password (+ handling MFA/device verification) stored as Render secrets — meaningfully more sensitive than an API key, and carries real account-suspension risk since automated trading isn't how Robinhood's retail ToS expects the app to be used. Operator was informed of this tradeoff on 2026-07-21 and asked to confirm before any Robinhood execution code is written — not yet built.
 
 ## AEO/GEO Intelligence Suite — Live Product
 
