@@ -59,6 +59,7 @@ from tradier_api import _to_float
 from core.legacy import clean_data
 from core.state import state
 from core.api.delta_explosion_bp import _scan as delta_explosion_scan
+from core.stripe_idempotency import already_processed
 
 log = logging.getLogger("DELTAFORGE")
 
@@ -450,6 +451,9 @@ def deltaforge_stripe_webhook():
         event = json.loads(payload)
     except Exception:
         return jsonify({"error": "invalid JSON"}), 400
+
+    if already_processed(_get_redis(), event.get("id")):
+        return jsonify({"received": True}), 200
 
     event_type = event.get("type", "")
     obj = event.get("data", {}).get("object", {})

@@ -38,8 +38,13 @@ _REGIME_LABEL = {
 # ─── Signature Verification ──────────────────────────────────────────────────
 
 def _verify(req) -> bool:
+    # Fail CLOSED when unconfigured — every sibling secret-gated blueprint in
+    # this repo (grants_bp, gap_proposals_bp, marketing_activity_bp, ...)
+    # rejects requests when its shared secret is unset rather than accepting
+    # everything. An HMAC-signature check that returns True with no secret
+    # would let anyone hit every /slack/* slash-command route unsigned.
     if not _SIGNING_SECRET:
-        return True
+        return False
     ts = req.headers.get("X-Slack-Request-Timestamp", "0")
     try:
         if abs(time.time() - int(ts)) > 300:

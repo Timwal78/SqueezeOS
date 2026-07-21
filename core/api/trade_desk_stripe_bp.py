@@ -29,6 +29,8 @@ import logging
 import redis
 from flask import Blueprint, request, jsonify
 
+from core.stripe_idempotency import already_processed
+
 log = logging.getLogger(__name__)
 
 trade_desk_stripe_bp = Blueprint("trade_desk_stripe", __name__)
@@ -133,6 +135,9 @@ def trade_desk_stripe_webhook():
         event = json.loads(payload)
     except Exception:
         return jsonify({"error": "invalid JSON"}), 400
+
+    if already_processed(_get_redis(), event.get("id")):
+        return jsonify({"received": True}), 200
 
     event_type = event.get("type", "")
     data_obj   = event.get("data", {}).get("object", {})
