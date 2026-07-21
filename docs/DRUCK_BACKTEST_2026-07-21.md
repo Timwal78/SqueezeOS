@@ -49,6 +49,54 @@ or flip `IAM_PAPER_MODE=false` for this system based on current evidence.
   proof the strategy can never work under different params or a different
   regime.
 
+## Addendum — parameter search confirms it, doesn't overturn it (2026-07-21)
+
+After this backtest, two AI-generated "second opinions" were checked and
+rejected before this addendum:
+1. A "Grok Optimized Multi-SMA" report that grid-searched hundreds of moving-
+   average pairs and reported the in-sample-optimal result per ticker as if
+   it were a real backtest — classic curve-fitting (proof: the four
+   "optimal" pairs shared no structure, e.g. NVDA 75/100 vs SPY 5/70). It
+   also wasn't a test of DRUCK-LB at all, just an unrelated SMA crossover.
+2. A "DRUCK-LB v7 BeastMode" report claiming portfolio return flipped from
+   negative to +13.7%, again with no code, no trade log, and a materially
+   changed strategy (long-only, mean-reversion branch dropped, six
+   parameters retuned). Its exact described logic was independently
+   reimplemented and run on the same real data used above — actual result:
+   0–3 trades per symbol, +0.20% to +2.10%, nowhere near the claimed
+   numbers. Not reproducible.
+
+To give this a fair, honest shot rather than just rejecting other people's
+unverifiable claims, a real parameter search was run directly against this
+project's own `druck_engine.py`/`backtest_druck.py` — DRUCK-LB's actual
+regime + breakout + mean-reversion logic, not a substitute strategy — with
+a genuine chronological 70/30 train/test split (982 train bars / 422 test
+bars per symbol) and **one shared parameter set across all 5 symbols**
+(matching how it's actually deployed — `druck_scanner.py` runs a single
+global config against a dynamic universe, not per-symbol tuned configs).
+Grid: `adx_trend∈{20,25,30}`, `breakout_len∈{15,20,25}`,
+`atr_stop_mult∈{1.5,2.0,2.5}`, `trail_atr_mult∈{2.0,3.0,4.0}`,
+`rr_ratio∈{2.0,3.0,4.0}` — 243 combinations, selected by summed return% on
+the training window only.
+
+**Result: no configuration in that grid was profitable in aggregate, even
+in-sample.** The best-scoring config on the training window still summed to
+a net loss across the 5 symbols. Evaluated on the held-out test window
+(never touched during the search), the tuned config performed roughly the
+same as defaults — worse on NVDA (-5.31% vs -2.14%), marginally better on
+QQQ/IWM, effectively unchanged on SPY/TSLA. This is a real, disciplined
+tuning attempt that reinforces the original verdict rather than overturning
+it — within a reasonable parameter neighborhood of the shipped defaults,
+this strategy structure does not have an edge on this data/window.
+
+This still isn't proof the strategy can never work (different regime, a
+wider search, or per-symbol configs might do better — the last of those
+trades off against overfitting risk the same way the rejected "v7" report
+did). But two independent honest checks now agree with the original
+backtest, and two unverified/unreproducible "it actually works" claims
+have been checked and rejected. The bar for revisiting this stays the
+same: real code, real trade logs, real out-of-sample discipline.
+
 ## What this does NOT change
 
 - DRUCK's paper-mode wiring (`druck_scanner.py` → `iam_executor`) stays as-is
