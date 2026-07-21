@@ -427,6 +427,7 @@ def _route_iam(symbol: str, sig: dict):
 
         resolution = {
             "action":    "BUY",
+            "system":    "SML_CASCADE",
             "rationale": (
                 f"[AVG-DOWN {sig['action']} L{sig['level']} align={sig['align_score']}/4"
                 f"{ftd_suffix}] "
