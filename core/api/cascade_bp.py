@@ -20,6 +20,7 @@ import logging
 from flask import Blueprint, request, jsonify, redirect
 from core.legacy import clean_data
 from proof402_integration import require_payment
+from core.stripe_idempotency import already_processed
 
 logger = logging.getLogger("CASCADE")
 
@@ -229,6 +230,9 @@ def cascade_stripe_webhook():
     except Exception as exc:
         logger.warning("Stripe webhook validation failed: %s", exc)
         return jsonify({"error": "invalid signature"}), 400
+
+    if already_processed(_get_redis(), event.get("id")):
+        return jsonify({"received": True})
 
     if event["type"] == "checkout.session.completed":
         session  = event["data"]["object"]

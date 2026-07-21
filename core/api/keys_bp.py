@@ -7,6 +7,8 @@ from flask import Blueprint, request, jsonify, redirect, render_template_string
 import stripe
 import redis
 
+from core.stripe_idempotency import already_processed
+
 logger = logging.getLogger("SqueezeOS-Keys")
 keys_bp = Blueprint('keys', __name__)
 
@@ -370,6 +372,9 @@ def webhook():
         return 'Invalid payload', 400
     except stripe.error.SignatureVerificationError as e:
         return 'Invalid signature', 400
+
+    if already_processed(r, event.get('id')):
+        return jsonify(success=True)
 
     if event['type'] == 'checkout.session.completed':
         session = event['data']['object']
