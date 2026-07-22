@@ -23,6 +23,10 @@ Specialists supervised (each does one job only):
                           buying-intent lead gen (Reddit/HN), drafts pitches
                           and queues them for Timothy's manual approval
                           (never auto-posts anywhere)
+  - SEO Gap Scout       — crawls real sites directly over HTTP (no paid
+                          API) for technical SEO/AEO/GEO issues, drafts
+                          fix specs, queues them for Timothy's manual
+                          approval (zero custody, never edits a live site)
 
 Schedule: Daily (see .github/workflows/marketing-daily.yml)
 
@@ -37,7 +41,7 @@ import os, sys, json, datetime, glob, re
 import requests
 import anthropic
 
-from . import directory_ranger, community_scout, federal_scout, grant_scout, gap_synthesist, hermes_sales
+from . import directory_ranger, community_scout, federal_scout, grant_scout, gap_synthesist, hermes_sales, seo_gap_scout
 from .activity_log import post_activity, post_directory_snapshot, post_federal_snapshot
 
 ANTH_KEY      = os.environ["ANTHROPIC_API_KEY"]
@@ -185,6 +189,15 @@ def run_all_agents() -> dict:
                   f"(pending Timothy's approval — nothing auto-posted)",
     )
 
+    results["seo_gap_scout"] = _dispatch(
+        "seo_gap_scout", "SEO Gap Scout",
+        "crawl tracked sites for real technical SEO/AEO/GEO issues and draft fix specs for the worst offenders",
+        seo_gap_scout.run,
+        lambda r: f"{len(r.get('queued', []))} SEO fix proposals queued for review "
+                  f"(pending Timothy's approval — nothing edited or deployed), "
+                  f"{len(r.get('unreachable', []))} sites unreachable this run",
+    )
+
     return results
 
 
@@ -200,6 +213,7 @@ def synthesize_report(agent_results: dict, api_status: dict) -> dict:
     hist_grants    = load_recent_output("grants")
     hist_gaps      = load_recent_output("gap_proposals")
     hist_sales     = load_recent_output("sales")
+    hist_seo       = load_recent_output("seo_gaps")
 
     context = {
         "date":           today,
@@ -213,6 +227,7 @@ def synthesize_report(agent_results: dict, api_status: dict) -> dict:
             "grant_runs":    len(hist_grants),
             "gap_proposal_runs": len(hist_gaps),
             "sales_passes":  len(hist_sales),
+            "seo_scan_runs": len(hist_seo),
         },
     }
 
@@ -238,7 +253,8 @@ Produce a JSON campaign report:
     "gap_proposals_pending_review": <count from gap_synthesist.queued>,
     "sales_leads_found": <count from hermes_sales.leads_found>,
     "sales_pitches_pending_review": <count from hermes_sales.pitches_queued>,
-    "storefront_ok": <true/false from hermes_sales.storefront_ok>
+    "storefront_ok": <true/false from hermes_sales.storefront_ok>,
+    "seo_proposals_pending_review": <count from seo_gap_scout.queued>
   }},
   "wins_this_week": ["<concrete achievement>", ...],
   "top_actions_next_week": [
@@ -302,6 +318,7 @@ def format_slack_report(report: dict) -> str:
         f"  💰 Grants awaiting your approval: {kpis.get('grants_pending_review','?')}\n"
         f"  🧩 Gap-to-build proposals awaiting your approval: {kpis.get('gap_proposals_pending_review','?')}\n"
         f"  🪽 Hermes sales: {kpis.get('sales_leads_found','?')} leads, {kpis.get('sales_pitches_pending_review','?')} pitches awaiting your approval (storefront {'OK' if kpis.get('storefront_ok') else 'CHECK'})\n"
+        f"  🔍 SEO/AEO/GEO fix proposals awaiting your approval: {kpis.get('seo_proposals_pending_review','?')}\n"
         f"  📄 Content pages: {kpis.get('content_pages_generated','?')}\n"
         f"  ⚡ API engines live: {kpis.get('api_engines_live','?')}\n\n"
         f"*This week's wins:*\n{wins or '  None recorded'}\n\n"
