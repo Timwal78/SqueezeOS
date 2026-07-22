@@ -56,12 +56,20 @@ jobs:
           X402_PAYMENT_TOKEN:        ${{ secrets.X402_PAYMENT_TOKEN }}
           SEO_SLACK_WEBHOOK:         ${{ secrets.SEO_SLACK_WEBHOOK }}
           SEO_OUTPUT_DIR:            agent/outputs
-          DEPT_MODEL:                claude-opus-4-8
+          # Haiku, not Opus: the dept does search/score/draft tool loops 6x/day —
+          # Haiku handles that fine at roughly 1/30th the cost (operator decision
+          # 2026-07-22 after a credit-balance outage). Bump to claude-sonnet-5 if
+          # output quality ever looks weak; do not silently restore Opus.
+          DEPT_MODEL:                claude-haiku-4-5
           MARKETING_ACTIVITY_SECRET: ${{ secrets.MARKETING_ACTIVITY_SECRET }}
           GRANTS_QUEUE_SECRET:       ${{ secrets.GRANTS_QUEUE_SECRET }}
           GAP_PROPOSALS_QUEUE_SECRET: ${{ secrets.GAP_PROPOSALS_QUEUE_SECRET }}
           OUTREACH_QUEUE_SECRET:     ${{ secrets.OUTREACH_QUEUE_SECRET }}
-        run: python -c "from agent.dept import campaign_director; campaign_director.run()"
+        # -m (not python -c + run()) so campaign_director's __main__ exit-code
+        # logic applies: the job goes RED when any specialist actually failed.
+        # The old inline call swallowed failures — 2026-07-22's credit-balance
+        # outage showed green runs while every agent was erroring.
+        run: python -m agent.dept.campaign_director
 
       - uses: actions/upload-artifact@v4
         if: always()
