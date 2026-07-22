@@ -18,6 +18,11 @@ Specialists supervised (each does one job only):
                           gaps and drafts build specs, queues them for
                           Timothy's manual approval (zero custody, never
                           writes or deploys code on its own)
+  - Hermes Sales Agent  — sells the Agent Economy OS (mcp-x402 + x402
+                          endpoints) 24/7: live storefront checks, real
+                          buying-intent lead gen (Reddit/HN), drafts pitches
+                          and queues them for Timothy's manual approval
+                          (never auto-posts anywhere)
 
 Schedule: Daily (see .github/workflows/marketing-daily.yml)
 
@@ -32,7 +37,7 @@ import os, sys, json, datetime, glob, re
 import requests
 import anthropic
 
-from . import directory_ranger, community_scout, federal_scout, grant_scout, gap_synthesist
+from . import directory_ranger, community_scout, federal_scout, grant_scout, gap_synthesist, hermes_sales
 from .activity_log import post_activity, post_directory_snapshot, post_federal_snapshot
 
 ANTH_KEY      = os.environ["ANTHROPIC_API_KEY"]
@@ -170,6 +175,16 @@ def run_all_agents() -> dict:
                   f"{len(r.get('archived_low_score', []))} auto-archived below threshold",
     )
 
+    results["hermes_sales"] = _dispatch(
+        "hermes_sales", "Hermes Sales Agent",
+        "run a full Agent Economy OS sales pass: verify the storefront, find buying-intent leads, queue drafted pitches for approval",
+        hermes_sales.run,
+        lambda r: f"storefront {'OK' if r.get('storefront_ok') else 'HAS ISSUES'}, "
+                  f"{r.get('leads_found', 0)} leads found, "
+                  f"{r.get('pitches_queued', 0)} pitches queued for review "
+                  f"(pending Timothy's approval — nothing auto-posted)",
+    )
+
     return results
 
 
@@ -184,6 +199,7 @@ def synthesize_report(agent_results: dict, api_status: dict) -> dict:
     hist_content   = load_recent_output("content")
     hist_grants    = load_recent_output("grants")
     hist_gaps      = load_recent_output("gap_proposals")
+    hist_sales     = load_recent_output("sales")
 
     context = {
         "date":           today,
@@ -196,6 +212,7 @@ def synthesize_report(agent_results: dict, api_status: dict) -> dict:
             "content_pages": len(hist_content),
             "grant_runs":    len(hist_grants),
             "gap_proposal_runs": len(hist_gaps),
+            "sales_passes":  len(hist_sales),
         },
     }
 
@@ -218,7 +235,10 @@ Produce a JSON campaign report:
     "content_pages_generated": <count>,
     "api_engines_live": <from status>,
     "grants_pending_review": <count from grant_scout.queued>,
-    "gap_proposals_pending_review": <count from gap_synthesist.queued>
+    "gap_proposals_pending_review": <count from gap_synthesist.queued>,
+    "sales_leads_found": <count from hermes_sales.leads_found>,
+    "sales_pitches_pending_review": <count from hermes_sales.pitches_queued>,
+    "storefront_ok": <true/false from hermes_sales.storefront_ok>
   }},
   "wins_this_week": ["<concrete achievement>", ...],
   "top_actions_next_week": [
@@ -229,6 +249,7 @@ Produce a JSON campaign report:
   "federal_opportunities": ["<title + agency>", ...],
   "grants_awaiting_approval": ["<title + funder>", ...],
   "gap_proposals_awaiting_approval": ["<gap topic>", ...],
+  "sales_pitches_awaiting_approval": ["<lead title>", ...],
   "health": "GREEN|YELLOW|RED"
 }}"""
 
@@ -280,6 +301,7 @@ def format_slack_report(report: dict) -> str:
         f"  🏛️ Federal opps: {kpis.get('federal_opportunities','?')}\n"
         f"  💰 Grants awaiting your approval: {kpis.get('grants_pending_review','?')}\n"
         f"  🧩 Gap-to-build proposals awaiting your approval: {kpis.get('gap_proposals_pending_review','?')}\n"
+        f"  🪽 Hermes sales: {kpis.get('sales_leads_found','?')} leads, {kpis.get('sales_pitches_pending_review','?')} pitches awaiting your approval (storefront {'OK' if kpis.get('storefront_ok') else 'CHECK'})\n"
         f"  📄 Content pages: {kpis.get('content_pages_generated','?')}\n"
         f"  ⚡ API engines live: {kpis.get('api_engines_live','?')}\n\n"
         f"*This week's wins:*\n{wins or '  None recorded'}\n\n"
