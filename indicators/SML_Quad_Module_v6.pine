@@ -1,0 +1,463 @@
+//@version=6
+// ============================================================================
+// SML QUAD-MODULE v2 — CASCADE + IGNITION + OPTIONS DELTA + FOOTPRINT
+// ScriptMaster Labs — Signal Indicator (NOT a strategy — no simulated fills)
+// ============================================================================
+// FULL AUDIT 2026-07-22 — changes from v1 (all confirmed against the live
+// AMC 4h chart the operator supplied):
+//
+//   [FIXED] M3 OPTIONS Δ — v1 searched a CONTINUOUS strike curve for the
+//           0.35–0.40 delta band, then rounded to the real strike grid and
+//           recomputed. On low-priced underlyings / short DTE the rounding
+//           threw the delta far outside the band (observed live: call Δ 0.043,
+//           put Δ -0.957 vs a 0.35–0.40 target). v2 searches the REAL strike
+//           grid directly and flags honestly when no grid strike lands in
+//           the band ("nearest" tag, orange) instead of pretending.
+//   [FIXED] M4 FOOTPRINT — v1 defaulted to 100 ticks/row. With a $0.01
+//           mintick that is a $1.00-tall row, so on a ~$2 stock the whole
+//           bar fell into ONE bucket: POC range and Value Area both showed
+//           "2.00-3.00" (observed live). Buy/sell/delta totals were fine.
+//           v2 defaults to 5 ticks/row and the table warns when rows are
+//           too coarse to mean anything. Tune per symbol (tooltip).
+//   [FIXED] DTE input allowed 0 → division by zero inside Black-Scholes
+//           (sigma * sqrt(0)). Now minval=1 plus a hard guard.
+//   [FIXED] Smart Table — jet-black (#000000) cells everywhere, no grey
+//           gridlines (v1's white-70% borders rendered as grey), text size
+//           now an input defaulting to Normal, and the table is declared at
+//           its true 28 rows (v1 declared 31, used 28).
+//   [CHANGED] Regime background shade now defaults OFF for a clean jet-black
+//           chart. NOTE: the chart canvas color itself is a TradingView
+//           theme setting (chart settings → canvas) — no script can set it.
+//   [KEPT/DOCUMENTED] HTF gate treats missing HTF data as bullish
+//           (na → true). Unchanged to avoid altering live signals; be aware.
+//
+// FOUR INDEPENDENT MODULES, each doing ONE job, never blended into a single
+// score (blending a slow trend filter with a fast ignition filter makes both
+// worse). Each module has its own markers, table section, and alerts.
+//
+//   MODULE 1 — CASCADE      Slow, regime-confirmed trend continuation
+//   MODULE 2 — IGNITION     Fast squeeze/breakout detector (honest higher
+//                            false-positive rate BY DESIGN — price of early)
+//   MODULE 3 — OPTIONS Δ    Black-Scholes MODEL ESTIMATE of the grid strike
+//                            nearest the 0.35–0.40 delta band. NOT live
+//                            options-chain data — no bid/ask, OI, or live IV
+//                            exists inside Pine. Verify against your
+//                            broker's real chain before trading.
+//   MODULE 4 — FOOTPRINT    request.footprint() (Pine v6, Jan 2026) — real
+//                            per-bar volume-at-price. REQUIRES TradingView
+//                            Premium/Ultimate; other plans return na and the
+//                            table says so honestly. LIMITATION: only ONE
+//                            script per chart may call request.footprint().
+//
+// PROPRIETARY RIBBON — layer lengths tunable, never plotted unless debug
+// toggle is on. Publish as "Protected" or "Invite-only".
+// ============================================================================
+
+indicator("SML QUAD-MODULE — CASCADE/IGNITION/OPTIONS/FOOTPRINT", shorttitle="SML-QUAD", overlay=true, max_labels_count=500, max_lines_count=500)
+
+// ══════════════════════════ MODULE 1 — CASCADE ══════════════════════════
+grpRibbon = "M1 · CASCADE — Ribbon (proprietary)"
+l1Len = input.int(55,  "Layer 1 Period", group=grpRibbon)
+l2Len = input.int(89,  "Layer 2 Period", group=grpRibbon)
+l3Len = input.int(144, "Layer 3 Period", group=grpRibbon)
+l4Len = input.int(233, "Layer 4 Period", group=grpRibbon)
+l5Len = input.int(365, "Layer 5 / Anchor Period", group=grpRibbon)
+
+grpConfirm = "M1 · CASCADE — Confirmation Stack"
+useHTF     = input.bool(true, "Require Higher-TF Bull Regime", group=grpConfirm)
+htfTF      = input.timeframe("W", "Higher Timeframe", group=grpConfirm)
+htfLen     = input.int(30, "HTF Trend EMA Length", group=grpConfirm)
+rsiLen     = input.int(14, "RSI Length", group=grpConfirm)
+useRsiDip  = input.bool(true, "Adds Only on RSI Weakness", group=grpConfirm)
+rsiAddMax  = input.float(45, "Max RSI to Add (dip-buy)", step=1, group=grpConfirm)
+useVol     = input.bool(true, "Require Volume Confirmation on Entry", group=grpConfirm)
+volMult    = input.float(1.0, "Volume > x SMA(20)", step=0.1, group=grpConfirm)
+chaseMult  = input.float(2.0, "Anti-Chase: Max ATRs Above L1", step=0.25, group=grpConfirm)
+minScore   = input.int(60, "Minimum Signal Quality Score (0-100)", minval=0, maxval=100, group=grpConfirm)
+entryMode  = input.string("Relaxed (Loose Bull)", "Entry Strictness", options=["Strict (Full 5-EMA Bull)", "Relaxed (Loose Bull)"], group=grpConfirm)
+allowNeutral = input.bool(true, "Allow Entries in Neutral Regime (skip anchor req.)", group=grpConfirm)
+
+grpAdds = "M1 · CASCADE — Add Spacing (visual reference only)"
+maxLevels    = input.int(3, "Max Add Levels Tracked", minval=0, maxval=4, group=grpAdds)
+addPct       = input.float(4.0, "Add Trigger — % dip per level (floor)", step=0.5, group=grpAdds) / 100
+useAtrSpace  = input.bool(true, "ATR-Adaptive Add Spacing", group=grpAdds)
+atrSpaceMult = input.float(1.5, "ATRs per Add Level", step=0.25, group=grpAdds)
+
+grpExit = "M1 · CASCADE — Exit Signal"
+exitGain    = input.float(7.0, "Trail Arm % (profit before trailing starts)", step=0.5, group=grpExit) / 100
+trailAtrMult= input.float(2.5, "Trail Distance (ATRs off high)", step=0.25, group=grpExit)
+
+grpRisk = "M1 · CASCADE — Risk"
+maxLossPct = input.float(15.0, "Hard Stop Loss % (from tracked entry)", step=0.5, group=grpRisk) / 100
+atrLen     = input.int(14, "ATR Length", group=grpRisk)
+
+grpDisplay = "M1 · CASCADE — Display"
+showRibbon = input.bool(false, "Show ribbon lines (debug only)", group=grpDisplay)
+showCascadeLabels = input.bool(true, "Show graded BUY/SELL labels", group=grpDisplay)
+showRegimeShade   = input.bool(false, "Regime background shade (green tint)", tooltip="OFF by default for a clean jet-black chart. The chart canvas color itself is set in TradingView chart settings, not by any script.", group=grpDisplay)
+
+l1 = ta.ema(close, l1Len)
+l2 = ta.ema(close, l2Len)
+l3 = ta.ema(close, l3Len)
+l4 = ta.ema(close, l4Len)
+l5 = ta.ema(close, l5Len)
+
+atr    = ta.atr(atrLen)
+atrPct = atr / close
+rsiV   = ta.rsi(close, rsiLen)
+volSma = ta.sma(volume, 20)
+momoBreak = ta.crossunder(l1, l2)
+
+// [1] offset + lookahead_on = confirmed HTF bar only — standard non-repaint pattern.
+htfDiff = request.security(syminfo.tickerid, htfTF, (close - ta.ema(close, htfLen))[1], lookahead=barmerge.lookahead_on)
+// AUDIT NOTE: na (not enough HTF history) is treated as BULL so young symbols
+// aren't hard-blocked. Deliberate, unchanged from v1 — documented, not hidden.
+htfBull = na(htfDiff) ? true : htfDiff > 0
+
+fullBull    = l1 > l2 and l2 > l3 and l3 > l4 and l4 > l5
+looseBull   = l1 > l2 and l2 > l3
+aboveAnchor = close > l5
+alignScore  = (l1 > l2 ? 1 : 0) + (l2 > l3 ? 1 : 0) + (l3 > l4 ? 1 : 0) + (l4 > l5 ? 1 : 0)
+
+volOK      = not useVol or volume > volSma * volMult
+notChasing = close - l1 < chaseMult * atr
+
+cascadeScore = alignScore * 10 + (aboveAnchor ? 15 : 0) + (htfBull ? 15 : 0) +
+     (rsiV > 50 ? 10 : 0) + (volume > volSma * volMult ? 10 : 0) + (notChasing ? 10 : 0)
+
+plot(showRibbon ? l1 : na, color=color.new(color.gray, 40), title="L1 (debug)")
+plot(showRibbon ? l2 : na, color=color.new(color.gray, 50), title="L2 (debug)")
+plot(showRibbon ? l3 : na, color=color.new(color.gray, 60), title="L3 (debug)")
+plot(showRibbon ? l4 : na, color=color.new(color.gray, 70), title="L4 (debug)")
+plot(showRibbon ? l5 : na, color=color.new(color.orange, 20), title="Anchor (debug)", linewidth=2)
+
+var bool  inPos       = false
+var int   level       = 0
+var float entryPrice  = na
+var bool  trailArmed  = false
+var float trailHigh   = na
+var int   lastExitBar = -9999
+
+pnl = inPos and not na(entryPrice) ? (close - entryPrice) / entryPrice : 0.0
+cooldownOK = bar_index - lastExitBar >= 3
+
+ribbonOK = entryMode == "Strict (Full 5-EMA Bull)" ? fullBull : looseBull
+anchorOK = allowNeutral ? true : aboveAnchor
+buyCond = not inPos and cooldownOK and ribbonOK and anchorOK and close > l1 and
+     (not useHTF or htfBull) and volOK and notChasing and cascadeScore >= minScore
+
+addThresholdPct = useAtrSpace ? -math.max(addPct * (level + 1), atrSpaceMult * atrPct * (level + 1)) : -addPct * (level + 1)
+rsiAddOK = not useRsiDip or rsiV <= rsiAddMax
+addCond  = inPos and pnl < addThresholdPct and level < maxLevels and looseBull and aboveAnchor and rsiAddOK
+
+hardStopCond = inPos and pnl < -maxLossPct
+stopCond     = inPos and not aboveAnchor and not hardStopCond
+
+if inPos and not trailArmed and pnl >= exitGain
+    trailArmed := true
+    trailHigh  := high
+else if inPos and trailArmed
+    trailHigh := math.max(trailHigh, high)
+
+trailStop = trailArmed ? trailHigh - trailAtrMult * atr : na
+trailCond = inPos and trailArmed and close < trailStop and not hardStopCond and not stopCond
+exitCond  = inPos and not hardStopCond and not stopCond and not trailCond and momoBreak and pnl > 0.005
+sellCond  = hardStopCond or stopCond or trailCond or exitCond
+
+if buyCond
+    inPos := true
+    entryPrice := close
+    level := 0
+    trailArmed := false
+    trailHigh := na
+if addCond
+    level := level + 1
+if sellCond
+    inPos := false
+    lastExitBar := bar_index
+    trailArmed := false
+    trailHigh := na
+    entryPrice := na
+
+nextAddPrice = inPos and level < maxLevels and not na(entryPrice) ?
+     entryPrice * (1 + (useAtrSpace ? -math.max(addPct * (level + 1), atrSpaceMult * atrPct * (level + 1)) : -addPct * (level + 1))) : na
+
+plot(trailArmed ? trailStop : na, title="Trail Stop", style=plot.style_linebr, color=color.new(color.orange, 0), linewidth=2)
+plotshape(buyCond, title="BUY", style=shape.triangleup, location=location.belowbar, color=color.new(color.lime, 0), size=size.tiny)
+plotshape(addCond, title="ADD", style=shape.circle, location=location.belowbar, color=color.new(#00BFFF, 0), size=size.tiny)
+plotshape(exitCond or trailCond, title="SELL", style=shape.triangledown, location=location.abovebar, color=color.new(color.yellow, 0), size=size.tiny)
+plotshape(stopCond or hardStopCond, title="STOP", style=shape.xcross, location=location.abovebar, color=color.new(color.red, 0), size=size.tiny)
+
+if showCascadeLabels and barstate.isconfirmed
+    if buyCond
+        label.new(bar_index, low, "BUY\n" + str.tostring(cascadeScore), style=label.style_label_up, color=color.new(color.green, 20), textcolor=color.white, size=size.tiny)
+    if addCond
+        label.new(bar_index, low, "ADD L" + str.tostring(level), style=label.style_label_up, color=color.new(#00BFFF, 20), textcolor=color.white, size=size.tiny)
+    if trailCond or exitCond
+        label.new(bar_index, high, "SELL\n" + str.tostring(pnl * 100, "#.#") + "%", style=label.style_label_down, color=color.new(color.orange, 20), textcolor=color.white, size=size.tiny)
+    if hardStopCond or stopCond
+        label.new(bar_index, high, "STOP", style=label.style_label_down, color=color.new(color.red, 20), textcolor=color.white, size=size.tiny)
+
+regime = fullBull and aboveAnchor and htfBull ? "BULL CASCADE" : fullBull and aboveAnchor ? "BULL (HTF soft)" : aboveAnchor ? "NEUTRAL" : "BEAR / STAND DOWN"
+bgcolor(showRegimeShade and fullBull and aboveAnchor and htfBull ? color.new(color.green, 90) : showRegimeShade and fullBull and aboveAnchor ? color.new(color.green, 94) : na, title="Regime Shade")
+
+// ══════════════════════════ MODULE 2 — IGNITION ══════════════════════════
+grpIgn = "M2 · IGNITION — Squeeze Detector"
+showIgnition   = input.bool(true, "Show Ignition Signals", group=grpIgn)
+volZLen        = input.int(20, "Volume Z-Score Lookback", group=grpIgn)
+volZThresh     = input.float(2.0, "Volume Z-Score Threshold", step=0.1, group=grpIgn)
+atrFastLen     = input.int(5, "Fast ATR Length", group=grpIgn)
+atrSlowLen     = input.int(20, "Slow ATR Length", group=grpIgn)
+atrExpandThresh= input.float(1.5, "ATR Expansion Ratio Threshold", step=0.1, group=grpIgn)
+accelBars      = input.int(3, "Price Acceleration Lookback (bars)", group=grpIgn)
+accelThreshPct = input.float(5.0, "Min % Move Over Lookback to Flag", step=0.5, group=grpIgn) / 100
+
+volMean = ta.sma(volume, volZLen)
+volStd  = ta.stdev(volume, volZLen)
+volZ    = volStd > 0 ? (volume - volMean) / volStd : 0.0
+atrFast = ta.atr(atrFastLen)
+atrSlow = ta.atr(atrSlowLen)
+atrExpansion = atrSlow > 0 ? atrFast / atrSlow : 1.0
+priceMove = close[accelBars] != 0 ? (close - close[accelBars]) / close[accelBars] : 0.0
+
+ignitionUp   = volZ > volZThresh and atrExpansion > atrExpandThresh and priceMove > accelThreshPct
+ignitionDown = volZ > volZThresh and atrExpansion > atrExpandThresh and priceMove < -accelThreshPct
+ignitionArmed = volZ > volZThresh and atrExpansion > atrExpandThresh
+
+plotshape(showIgnition and ignitionUp, title="IGNITION UP", style=shape.diamond, location=location.belowbar, color=color.new(#7afc00, 0), size=size.tiny)
+plotshape(showIgnition and ignitionDown, title="IGNITION DOWN", style=shape.diamond, location=location.abovebar, color=color.new(#ff0000, 0), size=size.tiny)
+
+if showIgnition and barstate.isconfirmed
+    if ignitionUp
+        label.new(bar_index, low, "IGNITION ▲\nz:" + str.tostring(volZ, "#.#"), style=label.style_label_up, color=color.new(#40fb68, 10), textcolor=color.white, size=size.small)
+    if ignitionDown
+        label.new(bar_index, high, "IGNITION ▼\nz:" + str.tostring(volZ, "#.#"), style=label.style_label_down, color=color.new(#e22b2b, 10), textcolor=color.white, size=size.small)
+
+// ══════════════════════════ MODULE 3 — OPTIONS DELTA (MODEL ESTIMATE) ══════
+grpOpt = "M3 · OPTIONS Δ — Model Inputs (NOT live chain data)"
+showOptions   = input.bool(true, "Show Options Delta Panel", group=grpOpt)
+dteInput      = input.int(30, "Days to Expiration (DTE)", minval=1, group=grpOpt)
+targetDeltaLo = input.float(0.35, "Target Delta — Low", step=0.01, group=grpOpt)
+targetDeltaHi = input.float(0.40, "Target Delta — High", step=0.01, group=grpOpt)
+rfRate        = input.float(0.045, "Risk-Free Rate (annual, decimal)", step=0.005, group=grpOpt)
+hvLen         = input.int(20, "Historical Volatility Lookback (bars)", group=grpOpt)
+ivOverride    = input.float(0.0, "IV Override (0 = use historical vol)", step=0.01, group=grpOpt)
+
+// Abramowitz-Stegun erf approximation → standard normal CDF
+f_erf(x) =>
+    s = x < 0 ? -1.0 : 1.0
+    ax = math.abs(x)
+    t = 1.0 / (1.0 + 0.3275911 * ax)
+    y = 1.0 - (((((1.061405429*t - 1.453152027)*t) + 1.421413741)*t - 0.284496736)*t + 0.254829592) * t * math.exp(-ax*ax)
+    s * y
+
+f_ncdf(x) => 0.5 * (1.0 + f_erf(x / math.sqrt(2.0)))
+
+f_bsDelta(spot, strike, t, r, sigma, isCall) =>
+    d1 = (math.log(spot / strike) + (r + sigma*sigma/2.0) * t) / (sigma * math.sqrt(t))
+    isCall ? f_ncdf(d1) : f_ncdf(d1) - 1.0
+
+f_bsPrice(spot, strike, t, r, sigma, isCall) =>
+    d1 = (math.log(spot / strike) + (r + sigma*sigma/2.0) * t) / (sigma * math.sqrt(t))
+    d2 = d1 - sigma * math.sqrt(t)
+    isCall ? spot * f_ncdf(d1) - strike * math.exp(-r*t) * f_ncdf(d2) : strike * math.exp(-r*t) * f_ncdf(-d2) - spot * f_ncdf(-d1)
+
+// Real-world listed strike increments by price band.
+f_strikeInc(px) =>
+    px >= 200 ? 5.0 : px >= 50 ? 1.0 : 0.5
+
+logRet = math.log(close / close[1])
+hv = ta.stdev(logRet, hvLen) * math.sqrt(252)
+sigma = ivOverride > 0 ? ivOverride : hv
+T = math.max(dteInput, 1) / 365.0
+targetMid = (targetDeltaLo + targetDeltaHi) / 2.0
+
+var float callStrike = na
+var float callDelta  = na
+var float callPrem   = na
+var bool  callInBand = false
+var float putStrike  = na
+var float putDelta   = na
+var float putPrem    = na
+var bool  putInBand  = false
+
+// v2: search the REAL strike grid directly (±80 increments around spot) and
+// take the strike whose model delta is closest to the band midpoint. No
+// post-hoc rounding — what you see is the delta AT the listed strike. If no
+// listed strike falls inside the band (short DTE / cheap stock), the table
+// tags the pick "nearest" in orange instead of pretending it qualifies.
+if showOptions and barstate.islast and not na(sigma) and sigma > 0 and T > 0
+    inc = f_strikeInc(close)
+    baseIdx = math.round(close / inc)
+
+    float bcK = na
+    float bcD = na
+    bcDiff = 1.0e9
+    for i = -80 to 80
+        k = (baseIdx + i) * inc
+        if k > 0
+            d = f_bsDelta(close, k, T, rfRate, sigma, true)
+            diff = math.abs(d - targetMid)
+            if diff < bcDiff
+                bcDiff := diff
+                bcK := k
+                bcD := d
+    callStrike := bcK
+    callDelta  := bcD
+    callPrem   := na(bcK) ? na : f_bsPrice(close, bcK, T, rfRate, sigma, true)
+    callInBand := not na(bcD) and bcD >= targetDeltaLo and bcD <= targetDeltaHi
+
+    float bpK = na
+    float bpD = na
+    bpDiff = 1.0e9
+    for i = -80 to 80
+        k = (baseIdx + i) * inc
+        if k > 0
+            d = f_bsDelta(close, k, T, rfRate, sigma, false)
+            ad = math.abs(d)
+            diff = math.abs(ad - targetMid)
+            if diff < bpDiff
+                bpDiff := diff
+                bpK := k
+                bpD := d
+    putStrike := bpK
+    putDelta  := bpD
+    putPrem   := na(bpK) ? na : f_bsPrice(close, bpK, T, rfRate, sigma, false)
+    putInBand := not na(bpD) and math.abs(bpD) >= targetDeltaLo and math.abs(bpD) <= targetDeltaHi
+
+// ══════════════════════════ MODULE 4 — FOOTPRINT (Pine v6, real order-flow) ══
+// request.footprint() (Pine v6, January 2026) — genuine per-bar
+// volume-at-price, not an approximation. REQUIRES TradingView
+// Premium/Ultimate; other plans get na (table reports that honestly).
+// LIMITATION: only ONE script per chart may call request.footprint().
+//
+// v2 AUDIT FIX: default ticks/row was 100. Row height = ticks × mintick,
+// so 100 ticks on a $0.01-mintick stock = $1.00 rows — on a ~$2 symbol the
+// entire bar lands in ONE bucket and POC/Value Area are meaningless
+// (observed live on AMC: both showed "2.00-3.00"). New default is 5, and
+// the table's status row warns when a row spans >2% of price.
+grpFoot = "M4 · FOOTPRINT — Real Volume-at-Price (Premium/Ultimate required)"
+showFootprint = input.bool(true, "Enable Footprint Module (uses request.footprint)", group=grpFoot)
+footTicks     = input.int(5, "Ticks per Footprint Row", minval=1, tooltip="Row height = ticks × mintick. Sub-$5 symbols: 3–10. $20–$100: 10–25. $100+: 25–50. If the table warns 'rows too coarse', lower this.", group=grpFoot)
+footVaPct     = input.int(70, "Value Area %", minval=1, maxval=99, group=grpFoot)
+
+var float fpBuyVol   = na
+var float fpSellVol  = na
+var float fpDelta    = na
+var float fpPocUpper = na
+var float fpPocLower = na
+var float fpVahPrice = na
+var float fpValPrice = na
+
+if showFootprint
+    footprint reqFootprint = request.footprint(footTicks, footVaPct)
+    if not na(reqFootprint)
+        fpBuyVol  := reqFootprint.buy_volume()
+        fpSellVol := reqFootprint.sell_volume()
+        fpDelta   := reqFootprint.delta()
+        volume_row pocRow = reqFootprint.poc()
+        volume_row vahRow = reqFootprint.vah()
+        volume_row valRow = reqFootprint.val()
+        fpPocUpper := pocRow.up_price()
+        fpPocLower := pocRow.down_price()
+        fpVahPrice := vahRow.up_price()
+        fpValPrice := valRow.down_price()
+    else
+        fpBuyVol := na
+        fpSellVol := na
+        fpDelta := na
+        fpPocUpper := na
+        fpPocLower := na
+        fpVahPrice := na
+        fpValPrice := na
+
+// Row taller than 2% of price ⇒ buckets too coarse to trust POC/VA.
+fpRowSpan = fpPocUpper - fpPocLower
+fpCoarse  = not na(fpRowSpan) and close > 0 and fpRowSpan > close * 0.02
+
+plot(showFootprint ? fpPocUpper : na, title="Footprint POC Upper", style=plot.style_stepline, color=color.new(color.fuchsia, 0), linewidth=2)
+plot(showFootprint ? fpPocLower : na, title="Footprint POC Lower", style=plot.style_stepline, color=color.new(color.purple, 0), linewidth=2)
+plot(showFootprint ? fpVahPrice : na, title="Footprint VAH", style=plot.style_stepline, color=color.new(color.navy, 0), linestyle=plot.linestyle_dotted)
+plot(showFootprint ? fpValPrice : na, title="Footprint VAL", style=plot.style_stepline, color=color.new(color.blue, 0), linestyle=plot.linestyle_dotted)
+
+// ══════════════════════════ UNIFIED SMART TABLE ══════════════════════════
+// v2: jet-black (#000000) cells, no grey gridlines, user-set text size
+// (default Normal). Declared rows = used rows = 28.
+grpTable = "Display — Table"
+showTable = input.bool(true, "Show Smart Table", group=grpTable)
+tblSizeOpt = input.string("Normal", "Table Text Size", options=["Normal", "Small", "Tiny"], group=grpTable)
+
+JET   = #000000
+tSize = tblSizeOpt == "Normal" ? size.normal : tblSizeOpt == "Small" ? size.small : size.tiny
+
+if showTable
+    var table info = table.new(position.top_right, 2, 28, bgcolor=JET, border_width=1, border_color=color.new(#111111, 0), frame_width=1, frame_color=color.new(#111111, 0))
+    if barstate.islast
+        table.cell(info, 0, 0, "SML QUAD-MODULE", text_color=color.white, text_size=tSize, bgcolor=color.new(color.green, 40))
+        table.cell(info, 1, 0, syminfo.ticker, text_color=color.yellow, text_size=tSize, bgcolor=color.new(color.green, 40))
+
+        table.cell(info, 0, 1, "── M1 CASCADE ──", text_color=color.aqua, text_size=tSize, bgcolor=JET)
+        table.cell(info, 1, 1, "", text_color=color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 0, 2, "Regime", text_color=color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 1, 2, regime, text_color=fullBull and aboveAnchor ? color.lime : color.new(#FF4444, 0), text_size=tSize, bgcolor=JET)
+        table.cell(info, 0, 3, "Signal Score", text_color=color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 1, 3, str.tostring(cascadeScore) + "/100", text_color=cascadeScore >= minScore ? color.lime : color.new(#FF4444, 0), text_size=tSize, bgcolor=JET)
+        table.cell(info, 0, 4, "HTF (" + htfTF + ")", text_color=color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 1, 4, htfBull ? "BULL" : "bear", text_color=htfBull ? color.lime : color.new(#FF4444, 0), text_size=tSize, bgcolor=JET)
+        table.cell(info, 0, 5, "RSI", text_color=color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 1, 5, str.tostring(rsiV, "#.#"), text_color=rsiV > 70 ? color.orange : rsiV < 30 ? color.aqua : color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 0, 6, "Tracked Pos", text_color=color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 1, 6, inPos ? ("L" + str.tostring(level) + " @ " + str.tostring(entryPrice, format.mintick)) : "flat", text_color=color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 0, 7, "PnL (tracked)", text_color=color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 1, 7, inPos ? str.tostring(pnl * 100, "#.##") + "%" : "—", text_color=pnl >= 0 ? color.lime : color.new(#FF4444, 0), text_size=tSize, bgcolor=JET)
+        table.cell(info, 0, 8, "Next Add @", text_color=color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 1, 8, na(nextAddPrice) ? "—" : str.tostring(nextAddPrice, format.mintick), text_color=color.aqua, text_size=tSize, bgcolor=JET)
+        table.cell(info, 0, 9, "Trail Stop", text_color=color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 1, 9, trailArmed ? str.tostring(trailStop, format.mintick) : "not armed", text_color=trailArmed ? color.orange : color.white, text_size=tSize, bgcolor=JET)
+
+        table.cell(info, 0, 10, "── M2 IGNITION ──", text_color=color.fuchsia, text_size=tSize, bgcolor=JET)
+        table.cell(info, 1, 10, "", text_color=color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 0, 11, "Vol Z-Score", text_color=color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 1, 11, str.tostring(volZ, "#.##"), text_color=volZ > volZThresh ? color.fuchsia : color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 0, 12, "ATR Expansion", text_color=color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 1, 12, str.tostring(atrExpansion, "#.##") + "x", text_color=atrExpansion > atrExpandThresh ? color.fuchsia : color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 0, 13, "Status", text_color=color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 1, 13, ignitionArmed ? "ARMED" : "quiet", text_color=ignitionArmed ? color.fuchsia : color.white, text_size=tSize, bgcolor=JET)
+
+        table.cell(info, 0, 14, "── M3 OPTIONS Δ ──", text_color=color.orange, text_size=tSize, bgcolor=JET)
+        table.cell(info, 1, 14, "MODEL EST.", text_color=color.new(#FF4444, 0), text_size=tSize, bgcolor=JET)
+        table.cell(info, 0, 15, "IV Proxy Used", text_color=color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 1, 15, na(sigma) ? "—" : str.tostring(sigma * 100, "#.#") + "%" + (ivOverride > 0 ? " (override)" : " (hist.)"), text_color=color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 0, 16, "DTE", text_color=color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 1, 16, str.tostring(dteInput) + "d", text_color=color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 0, 17, "Call Strike (Δ" + str.tostring(targetDeltaLo, "#.##") + "-" + str.tostring(targetDeltaHi, "#.##") + ")", text_color=color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 1, 17, na(callStrike) ? "—" : str.tostring(callStrike, format.mintick) + (callInBand ? "" : " (nearest)"), text_color=callInBand ? color.lime : color.orange, text_size=tSize, bgcolor=JET)
+        table.cell(info, 0, 18, "Call Δ / Est. Prem", text_color=color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 1, 18, na(callDelta) ? "—" : str.tostring(callDelta, "#.###") + " / $" + str.tostring(callPrem, "#.##"), text_color=callInBand ? color.lime : color.orange, text_size=tSize, bgcolor=JET)
+        table.cell(info, 0, 19, "Put Strike (Δ" + str.tostring(targetDeltaLo, "#.##") + "-" + str.tostring(targetDeltaHi, "#.##") + ")", text_color=color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 1, 19, na(putStrike) ? "—" : str.tostring(putStrike, format.mintick) + (putInBand ? "" : " (nearest)"), text_color=putInBand ? color.new(#FF4444, 0) : color.orange, text_size=tSize, bgcolor=JET)
+        table.cell(info, 0, 20, "Put Δ / Est. Prem", text_color=color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 1, 20, na(putDelta) ? "—" : str.tostring(putDelta, "#.###") + " / $" + str.tostring(putPrem, "#.##"), text_color=putInBand ? color.new(#FF4444, 0) : color.orange, text_size=tSize, bgcolor=JET)
+        table.cell(info, 0, 21, "Verify vs.", text_color=color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 1, 21, "broker's live chain", text_color=color.yellow, text_size=tSize, bgcolor=JET)
+
+        table.cell(info, 0, 22, "── M4 FOOTPRINT ──", text_color=color.new(#8A2BE2, 0), text_size=tSize, bgcolor=JET)
+        table.cell(info, 1, 22, showFootprint ? "ON" : "OFF", text_color=showFootprint ? color.lime : color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 0, 23, "Buy / Sell Vol", text_color=color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 1, 23, na(fpBuyVol) ? "—" : str.tostring(fpBuyVol, "#") + " / " + str.tostring(fpSellVol, "#"), text_color=color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 0, 24, "Delta", text_color=color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 1, 24, na(fpDelta) ? "—" : str.tostring(fpDelta, "#"), text_color=na(fpDelta) ? color.white : fpDelta >= 0 ? color.lime : color.new(#FF4444, 0), text_size=tSize, bgcolor=JET)
+        table.cell(info, 0, 25, "POC Range", text_color=color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 1, 25, na(fpPocUpper) ? "—" : str.tostring(fpPocLower, format.mintick) + "-" + str.tostring(fpPocUpper, format.mintick), text_color=fpCoarse ? color.orange : color.fuchsia, text_size=tSize, bgcolor=JET)
+        table.cell(info, 0, 26, "Value Area", text_color=color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 1, 26, na(fpVahPrice) ? "—" : str.tostring(fpValPrice, format.mintick) + "-" + str.tostring(fpVahPrice, format.mintick), text_color=fpCoarse ? color.orange : color.aqua, text_size=tSize, bgcolor=JET)
+        table.cell(info, 0, 27, "M4 Status", text_color=color.white, text_size=tSize, bgcolor=JET)
+        table.cell(info, 1, 27, not showFootprint ? "module off" : na(fpBuyVol) ? "no data — needs Premium/Ultimate" : fpCoarse ? "⚠ rows too coarse (" + str.tostring(fpRowSpan, format.mintick) + "/row) — lower Ticks per Row" : "live ✓", text_color=not showFootprint ? color.white : na(fpBuyVol) ? color.yellow : fpCoarse ? color.orange : color.lime, text_size=tSize, bgcolor=JET)
+
+// ══════════════════════════ ALERTS ══════════════════════════
+alertcondition(buyCond, title="CASCADE BUY", message="SML CASCADE: BUY on {{ticker}} @ {{close}}")
+alertcondition(addCond, title="CASCADE ADD", message="SML CASCADE: ADD on {{ticker}} @ {{close}}")
+alertcondition(sellCond, title="CASCADE SELL", message="SML CASCADE: SELL/exit on {{ticker}} @ {{close}}")
+alertcondition(hardStopCond or stopCond, title="CASCADE STOP", message="SML CASCADE: STOP on {{ticker}} @ {{close}}")
+alertcondition(ignitionUp, title="IGNITION UP", message="SML IGNITION: upside squeeze flag on {{ticker}} @ {{close}}")
+alertcondition(ignitionDown, title="IGNITION DOWN", message="SML IGNITION: downside squeeze flag on {{ticker}} @ {{close}}")
