@@ -112,6 +112,24 @@ Built 2026-07-19. Closes the loop on the **Semantic Gap Detector** (`core/api/ga
     -H "X-Gap-Proposals-Secret: $GAP_PROPOSALS_QUEUE_SECRET"
   ```
 
+## Hermes Sales Agent — 24/7 Agent Economy OS seller → Human Approval (built 2026-07-22)
+
+Built in response to the "Agent Economy OS" monetization push (sell access to the `@scriptmasterlabs/mcp-x402` MCP server + x402 pay-per-call endpoints, "Build Your Own Hermes" narrative). **Zero auto-posting** — same operator-approval pattern as the Grant Scout and Gap Synthesist. No code anywhere in this feature posts to Reddit, HN, X, or any other platform.
+
+- `agent/dept/hermes_sales.py` — new specialist under the CEO (`campaign_director.py`), runs every 4h with the rest of the marketing department (`.github/workflows/marketing-daily.yml`) — that 6x/day cadence IS the "sells it 24/7" implementation. Each pass: (1) **storefront check** — live HTTP against `mcp-x402.onrender.com/health`, the npm registry entry for `@scriptmasterlabs/mcp-x402`, `scriptmasterlabs.com/hermes`, and `/api/status`, reporting real up/down states only; (2) **lead gen** — reuses `community_scout.py`'s tested Reddit/HN search functions with buying-intent queries (monetize MCP server, agent pays for API, x402, etc.); (3) **pitch drafting** — Claude drafts a value-first reply per qualified lead (real tools/prices only, sourced from `SML_Portfolio/mcp-x402/src/server/registry/pricing.ts`, never promises returns, discloses affiliation) and POSTs it to the review queue. Its only side effect is that HTTP POST.
+- `core/api/outreach_bp.py`, registered at `/api/outreach` — the review queue itself. `GET /api/outreach` and `/api/outreach/queue` are public/read-only. `POST /submit`, `/<id>/approve`, `/<id>/reject` require `X-Outreach-Secret` matching `OUTREACH_QUEUE_SECRET`. Approving a pitch only flips its status to `approved_to_send` — it does **not** post anything; Timothy copies `pitch_markdown` and posts it manually. Dedup by `lead_url` so the 4h cadence can't queue the same thread twice. In-memory (`_queue`), resets on restart — same MVP pattern as `_futures`/`_contracts`/`_listings`/`_jobs`/grants/gap-proposals.
+- Auto-archive: leads scoring below `OUTREACH_QUALIFY_THRESHOLD` (default 60) are queued as `archived`, so weak leads never cost Timothy a review cycle.
+- Required env vars: `OUTREACH_QUEUE_SECRET` (shared between the Render service and the `marketing-daily.yml` GitHub Actions secret — same pattern as `GRANTS_QUEUE_SECRET`; **operator must set both or the agent logs "cannot push" and the queue returns 503 on writes**). Optional: `OUTREACH_QUALIFY_THRESHOLD`.
+- Tests: `tests/test_outreach_queue.py` — real blueprint via Flask test client (secret gating, threshold auto-archive, dedup, approve/reject state machine). 7 passing at build time. Unlike most tests in `tests/`, these need no live server.
+- **Why no auto-posting:** platform ToS (Reddit/HN ban undisclosed bot marketing), spam/brand risk, and consistency with Directory Ranger's no-auto-submit rule. If Timothy ever wants true auto-posting, that's its own explicit decision with its own guardrails — do not casually flip this.
+- The sales narrative + landing page + agent prompt template live in **SML_Portfolio** (`hermes.html`, `mcp-x402/docs/HERMES_TEMPLATE.md`, `mcp-x402/docs/AGENT_ECONOMY_OS_PRICING.md`, `mcp-x402/docs/OUTREACH_POSTS.md`) — built the same day, see that repo.
+- To review/approve from the CLI:
+  ```bash
+  curl https://squeezeos-api.onrender.com/api/outreach/queue           # see pitches awaiting review
+  curl -X POST https://squeezeos-api.onrender.com/api/outreach/<id>/approve \
+    -H "X-Outreach-Secret: $OUTREACH_QUEUE_SECRET"                     # then paste pitch_markdown manually
+  ```
+
 ## x402 Settlement Router — multi-agent Base/USDC payment-graph netting
 
 Built 2026-07-16, in response to the "x402 Settlement Router" product spec (non-custodial payment netting layer for multi-agent AI economies, 0.5% protocol fee, Base/USDC). **Not deployed to any network yet** — this is real, tested code with no live contract address, same "not yet configured" status as SML-Vault-Executor and the AWS Marketplace integration below.
@@ -553,6 +571,7 @@ Mounted at `/mcp`. Implements JSON-RPC 2.0. **52 tools** total.
 | `GET /api/settlement` | Browse conditional contracts |
 | `GET /api/grants` or `/api/grants/queue` | Browse Autonomous Grant Agent's discovered/queued opportunities |
 | `GET /api/gap-proposals` or `/api/gap-proposals/queue` | Browse Gap Synthesist's drafted build proposals |
+| `GET /api/outreach` or `/api/outreach/queue` | Browse Hermes Sales Agent's drafted sales pitches awaiting approval |
 | `GET /api/settlement-router/tasks` or `/tasks/<id>` | Browse x402 Settlement Router tasks (multi-agent Base payment netting) |
 
 ### Premium Endpoints (require `X-Payment-Token` header)
@@ -722,6 +741,7 @@ Real, Claude-powered agents. No agent in this department fabricates a result —
 | Federal Scout | `federal_scout.py` | Uses SML's own x402 federal data endpoints to find real government AI/tech contract opportunities (SAM UEI `G24VZA4RLMK3`) |
 | Grant Scout | `grant_scout.py` | Discovers/scores/drafts grant proposals (SBIR/NIH today), queues them at `/api/grants` for manual approval — zero custody, never submits or signs anything. See "Autonomous Grant Agent" section above |
 | Gap Synthesist | `gap_synthesist.py` | Reads real gap clusters from the live Semantic Gap Detector (`/api/graph/gaps`), scores build-worthiness, drafts technical specs, queues them at `/api/gap-proposals` for manual approval — zero custody, never writes or deploys code. See "Gap Synthesist" section above |
+| Hermes Sales Agent | `hermes_sales.py` | Sells the Agent Economy OS 24/7 (6x/day passes): live storefront checks (mcp-x402 gateway, npm package, hermes landing page), real Reddit/HN buying-intent lead gen, drafts pitches and queues them at `/api/outreach` for manual approval — never auto-posts anywhere. See "Hermes Sales Agent" section above |
 
 **Content Factory** (`SML_Portfolio/agent/content_factory.py`) is a separate daily agent (`content-factory.yml`, 06:00 UTC) that generates and commits real SEO pages — it isn't orchestrated by the CEO since it lives in a different repo, but it reports to the same activity feed.
 

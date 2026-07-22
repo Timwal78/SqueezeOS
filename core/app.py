@@ -76,6 +76,7 @@ from core.api.fred_bp import fred_bp
 from core.api.aws_marketplace_bp import aws_marketplace_bp, run_entitlements_self_check
 from core.api.grants_bp import grants_bp
 from core.api.gap_proposals_bp import gap_proposals_bp
+from core.api.outreach_bp import outreach_bp
 from core.api.settlement_router_bp import settlement_router_bp
 from core.api.delta_explosion_bp import delta_explosion_bp
 from core.api.deltaforge_bp import deltaforge_bp
@@ -210,6 +211,7 @@ def create_app():
     app.register_blueprint(aws_marketplace_bp, url_prefix='/api/aws-marketplace')
     app.register_blueprint(grants_bp,          url_prefix='/api/grants')
     app.register_blueprint(gap_proposals_bp,   url_prefix='/api/gap-proposals')
+    app.register_blueprint(outreach_bp,        url_prefix='/api/outreach')
     app.register_blueprint(settlement_router_bp, url_prefix='/api/settlement-router')
     app.register_blueprint(delta_explosion_bp, url_prefix='/api/delta-explosion')
     app.register_blueprint(deltaforge_bp, url_prefix='/api/deltaforge')
