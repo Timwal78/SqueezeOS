@@ -28,7 +28,7 @@
       "id": "squeezeos",
       "name": "SqueezeOS — Institutional AI Market Intelligence",
       "tagline": "Multi-engine AI trading signals for autonomous agents. Pay per call. No API keys.",
-      "description": "Squeeze scanner, institutional options flow, IWM 0DTE analysis, AI council verdicts, TRIPLE_LOCK_VERDICT premium tier, SML Sovereign Signal Suite (741 Macro Highway / 365 Anchor / Triple Lock / Full Stack), Decision Notary bridge (Xahau URIToken minting for EU AI Act audit trails), signal futures prediction market, regulatory event oracle (SEC 8-K, FDA, USPTO), FTD Data Oracle (SEC Reg SHO Fails-To-Deliver + settlement cycle echo bridge), Cognitive Credit Swarms (content trust validation, Micro-Attention Tax via x402, sender wallet reputation), Agent Credit Bureau, and AEO/GEO Intelligence Suite: AgentRank™ citation scoring (tracks how often SML APIs are cited by AI assistants and developer forums), ARGUS AgentPageRank™ provider score (0–850 live quality score from AI agent traffic), Semantic Gap Detector™ (unmet API demand discovery from Reddit/HN), P04 API Narrative Optimizer (copy quality auditor for AI discoverability), and Agent Economy Intelligence Network™ AEIN (ComScore for AI agent commerce — 0.25 RLUSD premium report). 58 MCP tools. All premium calls gated by x402 RLUSD. Free demo, preview, citation scores, provider scores, gap detector, and AEO summary always available.",
+      "description": "Squeeze scanner, institutional options flow, IWM 0DTE analysis, AI council verdicts, TRIPLE_LOCK_VERDICT premium tier, SML Sovereign Signal Suite (741 Macro Highway / 365 Anchor / Triple Lock / Full Stack), Decision Notary bridge (Xahau URIToken minting for EU AI Act audit trails), signal futures prediction market, regulatory event oracle (SEC 8-K, FDA, USPTO), FTD Data Oracle (SEC Reg SHO Fails-To-Deliver + settlement cycle echo bridge), Cognitive Credit Swarms (content trust validation, Micro-Attention Tax via x402, sender wallet reputation), Agent Credit Bureau, AEO/GEO Intelligence Suite: AgentRank™ citation scoring (tracks how often SML APIs are cited by AI assistants and developer forums), ARGUS AgentPageRank™ provider score (0–850 live quality score from AI agent traffic), Semantic Gap Detector™ (unmet API demand discovery from Reddit/HN), P04 API Narrative Optimizer (copy quality auditor for AI discoverability), Agent Economy Intelligence Network™ AEIN (ComScore for AI agent commerce — 0.25 RLUSD premium report), and RWA Intelligence Suite (institutional tokenized asset scanning, NAV valuation history, proof-of-reserves audits — USDC on Base). 62 MCP tools. All premium calls gated by x402 RLUSD or USDC. Free demo, preview, citation scores, provider scores, gap detector, RWA scanning, and AEO summary always available.",
       "category": ["finance", "trading", "market-intelligence", "agent-economy"],
       "status": "live",
       "url": "https://squeezeos-api.onrender.com",
@@ -42,6 +42,7 @@
       "free_demo": "https://squeezeos-api.onrender.com/api/demo/council",
       "payment_required": true,
       "free_tier": true,
+      "rwa_assets": "https://squeezeos-api.onrender.com/x402/rwa-assets",
       "pricing": [
         { "endpoint": "/api/council", "method": "POST", "cost": "0.10", "currency": "RLUSD", "description": "Full AI council verdict — multi-engine signal aggregate for any symbol" },
         { "endpoint": "/api/scan",    "method": "GET",  "cost": "0.05", "currency": "RLUSD", "description": "Full $1–$50 universe squeeze scanner (up to 250 symbols)" },
@@ -49,13 +50,16 @@
         { "endpoint": "/api/iwm",     "method": "GET",  "cost": "0.03", "currency": "RLUSD", "description": "IWM 0DTE contract scorer — delta, gamma, parity watch" },
         { "endpoint": "/api/marketplace/read", "method": "POST", "cost": "0.02", "currency": "RLUSD", "description": "Full signal thesis from peer Signal Marketplace" },
         { "endpoint": "/api/oracle/latest/{feed}", "method": "GET", "cost": "0.02", "currency": "RLUSD", "description": "Real-time regulatory event feed (SEC 8-K, FDA, USPTO)" },
-        { "endpoint": "/api/ftd/cycle/{symbol}", "method": "GET", "cost": "0.05", "currency": "RLUSD", "description": "ShortSqueeze Swarm full detail — settlement-cycle bundle (T+13 early echo marker, T+21 marker, T+35 close-out deadline, days-to-each, in_settlement_echo flag, echo_source, FTD spike stats, Reg SHO 204 close-out marker). v3.1: T+13 and settlement echo context wired directly into IAM Inevitable Action Model confidence." }
+        { "endpoint": "/api/ftd/cycle/{symbol}", "method": "GET", "cost": "0.05", "currency": "RLUSD", "description": "ShortSqueeze Swarm full detail — settlement-cycle bundle (T+13 early echo marker, T+21 marker, T+35 close-out deadline, days-to-each, in_settlement_echo flag, echo_source, FTD spike stats, Reg SHO 204 close-out marker). v3.1: T+13 and settlement echo context wired directly into IAM Inevitable Action Model confidence." },
+        { "endpoint": "/x402/rwa-valuation", "method": "GET", "cost": "0.15", "currency": "USDC", "description": "RWA NAV valuation history — institutional tokenized asset pricing and performance trends" },
+        { "endpoint": "/x402/proof-of-reserves", "method": "GET", "cost": "0.20", "currency": "USDC", "description": "Proof-of-reserves audit trail — attestations and reserve verification for institutional RWA assets" }
       ],
       "free_endpoints": [
         "/api/demo/council", "/api/preview/{symbol}", "/api/history/{symbol}",
         "/api/status", "/api/events", "/api/marketplace", "/api/hiring",
         "/api/futures", "/api/settlement", "/api/stigmergy/sniff",
-        "/api/oracle/feeds", "/api/ftd/info", "/api/ftd/alerts"
+        "/api/oracle/feeds", "/api/ftd/info", "/api/ftd/alerts",
+        "/x402/rwa-assets"
       ],
       "mcp_config": {
         "mcpServers": {
@@ -317,8 +321,8 @@
       "payment_asset": "RLUSD",
       "payment_network": "XRPL",
       "free_tools": ["demo_council", "signal_preview", "signal_history", "system_status", "ccs_info", "ccs_score", "ccs_leaderboard", "oracle_feeds", "marketplace_browse", "hiring_browse_jobs", "futures_browse", "citation_score", "narrative_optimize", "provider_score", "semantic_gaps", "agent_economy"],
-      "tool_count": 58,
-      "categories": ["finance", "trading", "market-data", "agent-economy"]
+      "tool_count": 62,
+      "categories": ["finance", "trading", "market-data", "agent-economy", "rwa", "tokenized-assets"]
     },
     "google_ap2": {
       "protocol": "x402",

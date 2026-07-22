@@ -1075,6 +1075,62 @@ _TOOLS = [
             },
         },
     },
+
+    # ── Real-World Assets (RWA) Intelligence Suite ──────────────────────────────
+    {
+        "name": "rwa_scan",
+        "description": (
+            "Free tier. Scan all tokenized real-world assets by type and risk profile. "
+            "Returns asset list covering treasuries, real estate, private credit, emerging markets, "
+            "commodities, and carbon credits. Filter by asset_class and risk_score range. "
+            "No payment required — basic tier for discovery."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "asset_class": {"type": "string", "description": "Filter: treasuries, real_estate, private_credit, emerging_markets, commodities, carbon_credits"},
+                "min_risk_score": {"type": "integer", "description": "Minimum risk score (0-100)"},
+                "max_risk_score": {"type": "integer", "description": "Maximum risk score (0-100)"},
+                "limit": {"type": "integer", "description": "Max results (default 50)"},
+            },
+        },
+    },
+    {
+        "name": "rwa_valuation",
+        "description": (
+            "Cost: 0.15 USDC (on Base chain, via x402). "
+            "Historical NAV valuation data for a specific RWA asset. "
+            "Returns current NAV, time-series history (up to 90 days), and valuation trend. "
+            "Requires x402 payment token. Pass asset_id to query."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["asset_id"],
+            "properties": {
+                "asset_id": {"type": "string", "description": "RWA asset ID (e.g. TUS-AGG-01, RWA-NYC-COMMERCIAL)"},
+                "days": {"type": "integer", "description": "Lookback window in days (default 90)"},
+                "payment_token": {"type": "string", "description": "x402 JWT from verify_payment (0.15 USDC)"},
+                "agent_wallet": {"type": "string", "description": "Your wallet address"},
+            },
+        },
+    },
+    {
+        "name": "rwa_proof_of_reserves",
+        "description": (
+            "Cost: 0.20 USDC (premium). Proof-of-reserves audit trail and compliance attestations. "
+            "Verify that an RWA asset's claimed reserves are audited and attested. "
+            "Returns aggregate POR hash for all assets or detailed breakdown per asset. "
+            "Premium tier for institutional compliance verification. Pass x402 payment token."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "asset_id": {"type": "string", "description": "Optional — specific asset, or omit for aggregate"},
+                "payment_token": {"type": "string", "description": "x402 JWT from verify_payment (0.20 USDC)"},
+                "agent_wallet": {"type": "string", "description": "Your wallet address"},
+            },
+        },
+    },
 ]
 
 # Endpoint IDs for helpful 402 error messages
@@ -1096,6 +1152,9 @@ _ENDPOINT_IDS = {
     "memory_store":         "21a91f63-9a46-49cd-8590-dec5a7b4668e",
     "memory_recall":        "3377523c-7c8f-40a9-b5ee-bb755a795c67",
     "fred_series":          "57e061f2-04ca-4e2c-943f-41afae56e316",
+    # Real-World Assets (RWA) Intelligence Suite
+    "rwa_valuation":        "a4b5c6d7-e8f9-0a1b-2c3d-4e5f6a7b8c9d",
+    "rwa_proof_of_reserves": "b5c6d7e8-f9a0-1b2c-3d4e-5f6a7b8c9d0e",
 }
 _PRICES = {
     "council_verdict": 0.10, "market_scan": 0.05,
@@ -1110,6 +1169,8 @@ _PRICES = {
     "memory_store": 0.01,
     "memory_recall": 0.01,
     "fred_series": 0.01,
+    "rwa_valuation": 0.15,
+    "rwa_proof_of_reserves": 0.20,
 }
 
 
@@ -1605,6 +1666,36 @@ def _dispatch(name: str, args: dict, req_headers: dict) -> dict:
         if view == "heatmap":
             return _text(_proxy("GET", f"{sq}/x402/agent-economy/heatmap"))
         return _text(_proxy("GET", f"{sq}/x402/agent-economy/", params={"hours": hours}))
+
+    # ── Real-World Assets (RWA) Intelligence Suite ──────────────────────────────
+    rwa_base = os.environ.get("RWA_API_BASE", "https://sml-rwa-api.onrender.com")
+
+    if name == "rwa_scan":
+        params = {}
+        if args.get("asset_class"): params["asset_class"] = args["asset_class"]
+        if args.get("min_risk_score") is not None: params["min_risk_score"] = args["min_risk_score"]
+        if args.get("max_risk_score") is not None: params["max_risk_score"] = args["max_risk_score"]
+        if args.get("limit"): params["limit"] = args["limit"]
+        return _text(_proxy("GET", f"{rwa_base}/x402/rwa-assets", params=params))
+
+    if name == "rwa_valuation":
+        if not payment_token: return _need_token(name)
+        asset_id = args.get("asset_id", "")
+        params = {}
+        if args.get("days"): params["days"] = args["days"]
+        return _compress_mcp_result(
+            _text(_proxy("GET", f"{rwa_base}/x402/rwa-valuation", headers=ph, params={**params, "asset_id": asset_id})),
+            _tier, _seed,
+        )
+
+    if name == "rwa_proof_of_reserves":
+        if not payment_token: return _need_token(name)
+        params = {}
+        if args.get("asset_id"): params["asset_id"] = args["asset_id"]
+        return _compress_mcp_result(
+            _text(_proxy("GET", f"{rwa_base}/x402/proof-of-reserves", headers=ph, params=params)),
+            _tier, _seed,
+        )
 
     return {
         "content": [{"type": "text", "text": json.dumps({"error": "ERR_UNKNOWN_TOOL", "tool": name})}],
