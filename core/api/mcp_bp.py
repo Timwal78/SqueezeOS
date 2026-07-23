@@ -36,11 +36,15 @@ SQUEEZEOS_BASE = os.environ.get(
     "https://squeezeos-api.onrender.com"
 )
 PROOF402_BASE = "https://four02proof.onrender.com"
+SML_RWA_BASE = os.environ.get(
+    "SML_RWA_BASE_URL",
+    "https://sml-rwa-api.onrender.com"
+).rstrip("/")
 
 _SERVER_INFO = {
     "name": "squeezeos",
-    "version": "5.0.0",
-    "description": "SqueezeOS — Institutional AI trading intelligence + Sovereign Autopilot + Real-World Data Oracle for autonomous agents",
+    "version": "5.1.0",
+    "description": "SqueezeOS — Institutional AI trading intelligence + Sovereign Autopilot + Real-World Data Oracle + SML RWA x402 (sml-rwa-api) for autonomous agents",
 }
 
 _TOOLS = [
@@ -1076,58 +1080,71 @@ _TOOLS = [
         },
     },
 
-    # ── Real-World Assets (RWA) Intelligence Suite ──────────────────────────────
+    # ── SML RWA Intelligence (live x402 host) ──────────────────────────────────
     {
         "name": "rwa_scan",
         "description": (
-            "Free tier. Scan all tokenized real-world assets by type and risk profile. "
-            "Returns asset list covering treasuries, real estate, private credit, emerging markets, "
-            "commodities, and carbon credits. Filter by asset_class and risk_score range. "
-            "No payment required — basic tier for discovery."
+            "Free. Scan the ScriptMasterLabs RWA universe via live sml-rwa-api. "
+            "Returns tokenized/RWA asset rows (id, ticker, class, value, risk). "
+            "Lead-gen for rwa_valuation / rwa_proof_of_reserves. "
+            "Upstream: GET https://sml-rwa-api.onrender.com/x402/rwa-assets"
         ),
         "inputSchema": {
             "type": "object",
             "properties": {
-                "asset_class": {"type": "string", "description": "Filter: treasuries, real_estate, private_credit, emerging_markets, commodities, carbon_credits"},
-                "min_risk_score": {"type": "integer", "description": "Minimum risk score (0-100)"},
-                "max_risk_score": {"type": "integer", "description": "Maximum risk score (0-100)"},
-                "limit": {"type": "integer", "description": "Max results (default 50)"},
+                "limit": {"type": "integer", "description": "Max assets (default 10, max 100)"},
+                "asset_class": {"type": "string", "description": "Optional class filter e.g. tokenized_treasuries, fixed_income, real_estate"},
             },
         },
     },
     {
         "name": "rwa_valuation",
         "description": (
-            "Cost: 0.15 USDC (on Base chain, via x402). "
-            "Historical NAV valuation data for a specific RWA asset. "
-            "Returns current NAV, time-series history (up to 90 days), and valuation trend. "
-            "Requires x402 payment token. Pass asset_id to query."
+            "Premium RWA valuation/NAV composite via live sml-rwa-api x402. "
+            "Cost: 0.15 USDC on Base (x402 exact scheme). "
+            "Pass x_payment (base64 X-PAYMENT payload) after settling the 402 challenge. "
+            "Without payment, returns the real x402 PAYMENT-REQUIRED challenge (payTo, amount, network=base). "
+            "Upstream: GET /x402/rwa-valuation?asset_id=..."
         ),
         "inputSchema": {
             "type": "object",
             "required": ["asset_id"],
             "properties": {
-                "asset_id": {"type": "string", "description": "RWA asset ID (e.g. TUS-AGG-01, RWA-NYC-COMMERCIAL)"},
-                "days": {"type": "integer", "description": "Lookback window in days (default 90)"},
-                "payment_token": {"type": "string", "description": "x402 JWT from verify_payment (0.15 USDC)"},
-                "agent_wallet": {"type": "string", "description": "Your wallet address"},
+                "asset_id": {"type": "string", "description": "RWA id or ticker e.g. rwa-000001, BUIDL, SHV"},
+                "days": {"type": "integer", "description": "History window days (default 90)"},
+                "x_payment": {"type": "string", "description": "X-PAYMENT header value (base64 x402 payload) after USDC settle on Base"},
             },
         },
     },
     {
         "name": "rwa_proof_of_reserves",
         "description": (
-            "Cost: 0.20 USDC (premium). Proof-of-reserves audit trail and compliance attestations. "
-            "Verify that an RWA asset's claimed reserves are audited and attested. "
-            "Returns aggregate POR hash for all assets or detailed breakdown per asset. "
-            "Premium tier for institutional compliance verification. Pass x402 payment token."
+            "Premium RWA proof-of-reserves attestation view via live sml-rwa-api x402. "
+            "Cost: 0.20 USDC on Base. Pass x_payment after settling 402 challenge. "
+            "Without payment returns protocol-correct x402 challenge. "
+            "Optional asset_id; omit for aggregate hashes. "
+            "Upstream: GET /x402/proof-of-reserves"
         ),
         "inputSchema": {
             "type": "object",
             "properties": {
-                "asset_id": {"type": "string", "description": "Optional — specific asset, or omit for aggregate"},
-                "payment_token": {"type": "string", "description": "x402 JWT from verify_payment (0.20 USDC)"},
-                "agent_wallet": {"type": "string", "description": "Your wallet address"},
+                "asset_id": {"type": "string", "description": "Optional asset id/ticker"},
+                "x_payment": {"type": "string", "description": "X-PAYMENT header value after USDC settle on Base"},
+            },
+        },
+    },
+    {
+        "name": "rwa_intelligence",
+        "description": (
+            "Premium RWA intelligence bundle via live sml-rwa-api x402 (0.20 USDC Base). "
+            "Optional asset_id. Without x_payment returns x402 challenge. "
+            "ACP micro-wedge alternative: hire scriptmasterlabs rwa_intelligence @ $0.03."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "asset_id": {"type": "string", "description": "Optional asset id/ticker"},
+                "x_payment": {"type": "string", "description": "X-PAYMENT header value after USDC settle on Base"},
             },
         },
     },
@@ -1169,8 +1186,10 @@ _PRICES = {
     "memory_store": 0.01,
     "memory_recall": 0.01,
     "fred_series": 0.01,
+    # SML RWA x402 (USDC Base — not RLUSD); prices informational for clients
     "rwa_valuation": 0.15,
     "rwa_proof_of_reserves": 0.20,
+    "rwa_intelligence": 0.20,
 }
 
 
@@ -1189,6 +1208,65 @@ def _compress_mcp_result(result: dict, tier: int, seed: str) -> dict:
     except Exception:
         pass
     return result
+
+
+
+def _rwa_request(path: str, params: dict | None = None, x_payment: str | None = None) -> dict:
+    """Proxy to live sml-rwa-api. Pass through real x402 402 challenges."""
+    url = f"{SML_RWA_BASE}{path}"
+    headers = {"User-Agent": "SqueezeOS-MCP-RWA/5.1", "Accept": "application/json"}
+    if x_payment:
+        headers["X-PAYMENT"] = x_payment
+    try:
+        resp = requests.get(
+            url,
+            headers=headers,
+            params={k: v for k, v in (params or {}).items() if v is not None and v != ""},
+            timeout=30,
+        )
+    except requests.exceptions.Timeout:
+        return {"error": "ERR_UPSTREAM_TIMEOUT", "upstream": url}
+    except Exception as e:
+        return {"error": str(e), "upstream": url}
+
+    body: dict
+    try:
+        body = resp.json()
+    except Exception:
+        body = {"raw": resp.text[:2000], "status": resp.status_code}
+
+    if resp.status_code == 402:
+        pr = resp.headers.get("PAYMENT-REQUIRED") or resp.headers.get("X-PAYMENT-REQUIRED") or resp.headers.get("payment-required")
+        return {
+            "error": "ERR_X402_PAYMENT_REQUIRED",
+            "http_status": 402,
+            "upstream": url,
+            "x402_challenge": body,
+            "payment_required_header_b64": pr,
+            "payment_header_name": "X-PAYMENT",
+            "network": "base",
+            "asset": "USDC",
+            "remedy": {
+                "step1": "Parse x402_challenge.accepts[0] (scheme=exact, network=base, payTo, amount)",
+                "step2": "Settle USDC on Base per x402 exact requirements (facilitator or X-PAYMENT payload)",
+                "step3": "Retry tool with x_payment set to the X-PAYMENT header value",
+                "free_preview": f"{SML_RWA_BASE}/x402/rwa-assets",
+                "discovery": f"{SML_RWA_BASE}/.well-known/x402",
+                "acp_alt": "hire scriptmasterlabs rwa_intelligence @ $0.03 on ACP",
+            },
+        }
+
+    if resp.status_code >= 400:
+        if isinstance(body, dict):
+            body.setdefault("http_status", resp.status_code)
+            body.setdefault("upstream", url)
+            return body
+        return {"error": "ERR_UPSTREAM", "http_status": resp.status_code, "upstream": url, "body": body}
+
+    if isinstance(body, dict):
+        body.setdefault("_upstream", url)
+        body.setdefault("_host", SML_RWA_BASE)
+    return body
 
 
 def _proxy(method, url, headers=None, json_body=None, params=None, timeout=30):
@@ -1474,6 +1552,33 @@ def _dispatch(name: str, args: dict, req_headers: dict) -> dict:
             _tier, _seed,
         )
 
+    # ── SML RWA Intelligence (sml-rwa-api x402) ───────────────────────────────
+    if name == "rwa_scan":
+        params = {
+            "limit": args.get("limit", 10),
+            "asset_class": args.get("asset_class"),
+        }
+        return _text(_rwa_request("/x402/rwa-assets", params=params))
+
+    if name == "rwa_valuation":
+        xpay = args.pop("x_payment", None) or req_headers.get("X-PAYMENT") or req_headers.get("x-payment")
+        params = {
+            "asset_id": args.get("asset_id") or args.get("assetId") or "",
+            "days": args.get("days"),
+        }
+        return _text(_rwa_request("/x402/rwa-valuation", params=params, x_payment=xpay))
+
+    if name == "rwa_proof_of_reserves":
+        xpay = args.pop("x_payment", None) or req_headers.get("X-PAYMENT") or req_headers.get("x-payment")
+        params = {"asset_id": args.get("asset_id") or args.get("assetId")}
+        return _text(_rwa_request("/x402/proof-of-reserves", params=params, x_payment=xpay))
+
+    if name == "rwa_intelligence":
+        xpay = args.pop("x_payment", None) or req_headers.get("X-PAYMENT") or req_headers.get("x-payment")
+        params = {"asset_id": args.get("asset_id") or args.get("assetId")}
+        return _text(_rwa_request("/x402/rwa-intelligence", params=params, x_payment=xpay))
+
+
     # ── 741 Pure Macro Matrix ─────────────────────────────────────────────────
     if name == "macro_741_scan":
         if not payment_token: return _need_token(name)
@@ -1666,36 +1771,6 @@ def _dispatch(name: str, args: dict, req_headers: dict) -> dict:
         if view == "heatmap":
             return _text(_proxy("GET", f"{sq}/x402/agent-economy/heatmap"))
         return _text(_proxy("GET", f"{sq}/x402/agent-economy/", params={"hours": hours}))
-
-    # ── Real-World Assets (RWA) Intelligence Suite ──────────────────────────────
-    rwa_base = os.environ.get("RWA_API_BASE", "https://sml-rwa-api.onrender.com")
-
-    if name == "rwa_scan":
-        params = {}
-        if args.get("asset_class"): params["asset_class"] = args["asset_class"]
-        if args.get("min_risk_score") is not None: params["min_risk_score"] = args["min_risk_score"]
-        if args.get("max_risk_score") is not None: params["max_risk_score"] = args["max_risk_score"]
-        if args.get("limit"): params["limit"] = args["limit"]
-        return _text(_proxy("GET", f"{rwa_base}/x402/rwa-assets", params=params))
-
-    if name == "rwa_valuation":
-        if not payment_token: return _need_token(name)
-        asset_id = args.get("asset_id", "")
-        params = {}
-        if args.get("days"): params["days"] = args["days"]
-        return _compress_mcp_result(
-            _text(_proxy("GET", f"{rwa_base}/x402/rwa-valuation", headers=ph, params={**params, "asset_id": asset_id})),
-            _tier, _seed,
-        )
-
-    if name == "rwa_proof_of_reserves":
-        if not payment_token: return _need_token(name)
-        params = {}
-        if args.get("asset_id"): params["asset_id"] = args["asset_id"]
-        return _compress_mcp_result(
-            _text(_proxy("GET", f"{rwa_base}/x402/proof-of-reserves", headers=ph, params=params)),
-            _tier, _seed,
-        )
 
     return {
         "content": [{"type": "text", "text": json.dumps({"error": "ERR_UNKNOWN_TOOL", "tool": name})}],

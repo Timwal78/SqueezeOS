@@ -1,0 +1,120 @@
+//@version=6
+// ============================================================================
+// DRUCK-LB v7 BeastMode - Full Portfolio (IWM Added) — operator-supplied strategy
+// AUDIT + independent Python backtest performed 2026-07-22. Full results:
+// docs/DRUCK_LB_V7_BACKTEST_2026-07-22.md. Python port: druck_lb_v7_engine.py,
+// tests/backtest_druck_lb_v7.py.
+//
+// ── FINDING 1 (headline): the HTF filter, as coded, structurally blocks
+//    almost every entry it's supposed to confirm ──────────────────────────
+// `trendUp = fastEMA > slowEMA and (not useHTF or htfEMA > fastEMA)` requires
+// the 2H `htfEMA` (a request.security'd ema(close, fastLen) on "120") to
+// already be ABOVE the chart's own fastEMA for a long, or below it for a
+// short. But `htfEMA` only updates once its own 2H bar has fully closed
+// (lookahead_off), so right after a breakout — the exact moment fastEMA
+// (fast, reactive) has just surged past the slower/staler htfEMA in the
+// breakout's direction — htfEMA is almost always on the WRONG side of
+// fastEMA. Verified across a real independent Python port (same DMI/ADX/EMA
+// math, same breakout logic) on AMC and GME at 1h/2h/4h, real bars: every
+// single long breakout coincided with htfEMA < fastEMA (blocking), and every
+// short breakout coincided with htfEMA > fastEMA (blocking) — 0 for 0. With
+// the HTF gate the combined long/short signal fired ZERO times across all
+// 6 symbol/timeframe combinations tested. Removing only the HTF gate let the
+// rest of the strategy (ADX + breakout + trend) fire normally (2-7 trades
+// per combination). This is very likely NOT the intended behavior — treat
+// any live/backtested profitability claim for this exact script config with
+// real skepticism until the HTF condition is either fixed or deliberately
+// re-verified against a live TradingView run with the SAME symbol/timeframe.
+//
+// ── FINDING 2: strategy.exit()'s stop/limit are recalculated every bar, not
+//    fixed at entry ─────────────────────────────────────────────────────────
+// Both `strategy.exit(...)` calls run unconditionally on every bar, with
+// `stop=close*(1 - atrStopMult*atrVal/close)` and `limit=close*(1 +
+// rrRatio*atrStopMult*atrVal/close)`. TradingView updates a pending order's
+// stop/limit levels in place when strategy.exit() is called again for the
+// same id — so these levels track the CURRENT bar's close and ATR for as
+// long as a position stays open, not the entry price the "ATR Stop Mult" /
+// "Risk:Reward" naming implies. This is very likely an unintended side
+// effect of not gating the call to fire once at entry. The independent
+// Python port above deliberately implements the ECONOMICALLY INTENDED
+// reading (fixed stop/target at entry + ratcheting ATR trail) instead of
+// this behavior — so it is NOT a bit-exact reproduction of whatever a live
+// TradingView Strategy Tester screenshot of this exact script computed.
+//
+// ── Not modified below ─── this is the operator-supplied script verbatim,
+// saved under its own filename so it's tracked in this repo. No logic was
+// changed as part of this audit — see the doc above for what independent
+// testing with the HTF gate removed actually showed on real AMC/GME data.
+// ============================================================================
+strategy("DRUCK-LB v7 BeastMode - Full Portfolio (IWM Added)", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=100, commission_type=strategy.commission.percent, commission_value=0.04)
+
+// Core Parameters (Optimized)
+adxLen      = input.int(22, "ADX Length")
+adxTrend    = input.float(22, "ADX Trend Threshold")
+breakLen    = input.int(15, "Breakout Length")
+fastLen     = input.int(8, "Fast EMA")
+slowLen     = input.int(21, "Slow EMA")
+atrStopMult = input.float(1.5, "ATR Stop Mult")
+trailMult   = input.float(2.5, "Trail ATR Mult")
+rrRatio     = input.float(2.5, "Risk:Reward")
+useHTF      = input.bool(true, "Use 2H HTF")
+volMult     = input.float(1.8, "Volume Mult")
+
+// Indicators
+[diPlus, diMinus, adx] = ta.dmi(adxLen, adxLen)
+atrVal = ta.atr(14)
+fastEMA = ta.ema(close, fastLen)
+slowEMA = ta.ema(close, slowLen)
+htfEMA = request.security(syminfo.tickerid, "120", ta.ema(close, fastLen), lookahead=barmerge.lookahead_off)
+
+volOK = volume > ta.sma(volume, 20) * volMult
+
+longBreak = ta.crossover(close, ta.highest(high, breakLen)[1]) and volOK
+shortBreak = ta.crossunder(close, ta.lowest(low, breakLen)[1]) and volOK
+
+trendUp = fastEMA > slowEMA and (not useHTF or htfEMA > fastEMA)
+trendDn = fastEMA < slowEMA and (not useHTF or htfEMA < fastEMA)
+
+longSignal  = adx > adxTrend and trendUp and longBreak
+shortSignal = adx > adxTrend and trendDn and shortBreak
+
+// Entries
+if longSignal
+    strategy.entry("Beast Long", strategy.long)
+
+if shortSignal
+    strategy.entry("Beast Short", strategy.short)
+
+// Exits
+strategy.exit("Exit Long", "Beast Long", stop=close * (1 - atrStopMult * atrVal / close),
+              limit=close * (1 + rrRatio * atrStopMult * atrVal / close),
+              trail_points = atrVal * trailMult / syminfo.pointvalue)
+
+strategy.exit("Exit Short", "Beast Short", stop=close * (1 + atrStopMult * atrVal / close),
+              limit=close * (1 - rrRatio * atrStopMult * atrVal / close),
+              trail_points = atrVal * trailMult / syminfo.pointvalue)
+
+// Beast Visuals
+plot(fastEMA, color=color.blue, linewidth=2)
+plot(slowEMA, color=color.red, linewidth=2)
+
+bgcolor(longSignal ? color.new(color.green, 85) : shortSignal ? color.new(color.red, 85) : na)
+
+// Tiny Beast Labels
+if longSignal
+    label.new(bar_index, low, "🐂", color=color.green, textcolor=color.white, size=size.tiny, style=label.style_label_up)
+
+if shortSignal
+    label.new(bar_index, high, "🐻", color=color.red, textcolor=color.white, size=size.tiny, style=label.style_label_down)
+
+// Smart Table (Multi-Symbol Ready)
+var table dash = table.new(position.top_right, 3, 8, bgcolor=color.new(#1e222d, 80))
+table.cell(dash, 0, 0, "Symbol", text_color=color.white, text_size=size.small)
+table.cell(dash, 1, 0, "PnL %", text_color=color.white, text_size=size.small)
+table.cell(dash, 2, 0, "Signal", text_color=color.white, text_size=size.small)
+
+table.cell(dash, 0, 1, syminfo.ticker, text_color=color.yellow, text_size=size.small)
+table.cell(dash, 1, 1, str.tostring(strategy.netprofit / strategy.initial_capital * 100, "#.##") + "%",
+           text_color = strategy.netprofit > 0 ? color.lime : color.red, text_size=size.small)
+table.cell(dash, 2, 1, strategy.position_size > 0 ? "LONG" : strategy.position_size < 0 ? "SHORT" : "FLAT",
+           text_color=color.aqua, text_size=size.small)
