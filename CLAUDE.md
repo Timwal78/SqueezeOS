@@ -104,7 +104,7 @@ Built 2026-07-19. Closes the loop on the **Semantic Gap Detector** (`core/api/ga
 - Each queued proposal carries an `evidence_hash` — a SHA-256 digest over its gap topic, source evidence, and spec, computed at submit time. This is an honest integrity checksum anyone can recompute to confirm the record wasn't altered after logging. It is **not** a zero-knowledge proof, and nothing in this codebase claims otherwise — if a future agent is asked to add real ZK proofs here, that needs its own explicit decision (circuit choice, proving library) rather than a placeholder string.
 - Auto-archive: anything scoring below `GAP_PROPOSALS_QUALIFY_THRESHOLD` (default 60) is queued as `archived` instead of `pending_review`, so low-confidence gaps never cost Timothy a review cycle.
 - Required env vars: `GAP_PROPOSALS_QUEUE_SECRET` (shared between the Render service and the `marketing-daily.yml` GitHub Actions secret — same pattern as `GRANTS_QUEUE_SECRET`). Optional: `GAP_PROPOSALS_QUALIFY_THRESHOLD`.
-- **Deliberately NOT built as part of this feature — do not assume these exist:** an SEO/AEO technical-issue scanner (Ahrefs-style 404/meta/indexability auto-fix). SqueezeOS already ships a live AEO/GEO Intelligence Suite (`aeo_stripe_bp.py`, `citation_scout_bp.py`) — a gap-fixer for that same surface would duplicate a live product without an explicit decision from Timothy. Also not built: any "malicious agent skill" security guardrail — this codebase doesn't host a third-party agent-skill marketplace, so that attack model (mutable payloads swapped in after review) has no real target here to guard. Either would need its own fresh, explicit ask before being built.
+- **Still not built:** any "malicious agent skill" security guardrail — this codebase doesn't host a third-party agent-skill marketplace, so that attack model (mutable payloads swapped in after review) has no real target here to guard. Would need its own fresh, explicit ask before being built.
 - To review/approve from the CLI:
   ```bash
   curl https://squeezeos-api.onrender.com/api/gap-proposals/queue           # see what's pending
@@ -129,6 +129,15 @@ Built in response to the "Agent Economy OS" monetization push (sell access to th
   curl -X POST https://squeezeos-api.onrender.com/api/outreach/<id>/approve \
     -H "X-Outreach-Secret: $OUTREACH_QUEUE_SECRET"                     # then paste pitch_markdown manually
   ```
+
+## SEO Gap Scout — free technical SEO/AEO/GEO scanner, built 2026-07-21
+
+Built per Timothy's explicit ask (previously deferred — see git history — specifically to avoid duplicating the AEO Suite's citation-tracking surface without a fresh decision). **Deliberately not built on Ahrefs or any paid crawler** — the connected Ahrefs MCP account returned `Insufficient plan` on both `site-audit-projects` and `management-projects` (confirmed live, not assumed), and Timothy does not want to pay for a subscription. Uses plain HTTP requests instead — zero third-party API cost.
+
+- `agent/dept/seo_gap_scout.py` — new specialist under the CEO, runs every 4h alongside the rest of the marketing department. `crawl_site()` does a real GET on each configured site's homepage plus a sample of its internal links (`SEO_MAX_LINKS_PER_SITE`, default 15), checking for broken links (4xx/unreachable), missing `<title>`, duplicate titles across pages, missing meta description, missing structured data (`application/ld+json`), and missing `robots.txt`/`sitemap.xml`/`llms.txt` at the site root. `score_findings()` computes a deterministic 0-100 severity score from those real counts — no LLM guessing at severity. Sites scoring ≥40 get a drafted fix spec via Claude, POSTed to the **same** `/api/gap-proposals` review queue `gap_synthesist.py` uses (same secret, same zero-auto-deploy safety pattern — approving only flips a status flag, nothing gets edited on the live site).
+- Env vars: `SEO_SCAN_SITES` (comma-separated, default `https://www.scriptmasterlabs.com`), `SEO_MAX_LINKS_PER_SITE` (default 15). Shares `GAP_PROPOSALS_QUEUE_SECRET` with Gap Synthesist — no new secret needed.
+- If a target site is unreachable, that's reported as unreachable and scored 0 — never faked as "no issues found." Confirmed via `tests/test_seo_gap_scout.py`.
+- **If Timothy later gets an Ahrefs plan with Site Audit**, this scanner could be extended or replaced with real Ahrefs data (deeper crawl, more issue types) — that's a natural upgrade path, not required to use what's built now.
 
 ## x402 Settlement Router — multi-agent Base/USDC payment-graph netting
 

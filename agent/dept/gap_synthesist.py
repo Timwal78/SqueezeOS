@@ -21,15 +21,16 @@ Source wired today:
   - core/api/gap_detector_bp.py's live gap leaderboard (GET /api/graph/gaps),
     itself sourced from real Reddit + HN searches. No synthetic gaps.
 
-Deliberately NOT wired: SEO/AEO technical-issue scanning (Ahrefs-style
-404/meta/indexability fixes) and any "malicious agent skill" guardrail.
-SqueezeOS already ships a live AEO/GEO Intelligence Suite (aeo_stripe_bp.py,
-citation_scout_bp.py) — duplicating a gap-fixer for the same surface without
-an explicit decision from Timothy would just be redundant work. And this
-codebase doesn't host a third-party agent-skill marketplace, so the
-"fake skill / mutable payload" attack model from recent research has no
-real target here to guard. Do not build either without a fresh, explicit
-ask.
+SEO/AEO/GEO technical-issue scanning is now built as a separate specialist
+(agent/dept/seo_gap_scout.py, added 2026-07-21 per Timothy's explicit ask)
+— it crawls sites directly over HTTP rather than duplicating the live
+AEO/GEO Intelligence Suite's citation-tracking surface (aeo_stripe_bp.py,
+citation_scout_bp.py), which is a different problem (technical page health
+vs. AI-citation authority). Still NOT built: any "malicious agent skill"
+guardrail — this codebase doesn't host a third-party agent-skill
+marketplace, so the "fake skill / mutable payload" attack model from
+recent research has no real target here to guard. Do not build without a
+fresh, explicit ask.
 
 Env:
   ANTHROPIC_API_KEY            (required)
