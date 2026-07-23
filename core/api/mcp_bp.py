@@ -1148,7 +1148,6 @@ _TOOLS = [
             },
         },
     },
-
 ]
 
 # Endpoint IDs for helpful 402 error messages
@@ -1170,6 +1169,9 @@ _ENDPOINT_IDS = {
     "memory_store":         "21a91f63-9a46-49cd-8590-dec5a7b4668e",
     "memory_recall":        "3377523c-7c8f-40a9-b5ee-bb755a795c67",
     "fred_series":          "57e061f2-04ca-4e2c-943f-41afae56e316",
+    # Real-World Assets (RWA) Intelligence Suite
+    "rwa_valuation":        "a4b5c6d7-e8f9-0a1b-2c3d-4e5f6a7b8c9d",
+    "rwa_proof_of_reserves": "b5c6d7e8-f9a0-1b2c-3d4e-5f6a7b8c9d0e",
 }
 _PRICES = {
     "council_verdict": 0.10, "market_scan": 0.05,
