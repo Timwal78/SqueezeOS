@@ -1,6 +1,6 @@
 {
   "name": "SqueezeOS",
-  "description": "Institutional market intelligence for AI agents — 52 tools including council verdicts, squeeze scanner, options flow, oracle data feeds, futures, agent-to-agent settlement, Cognitive Credit Swarms, IAM resolver, Sovereign signal suite, AEO/GEO intelligence suite, and x402 micropayments via USDC on Base or RLUSD on XRPL.",
+  "description": "Institutional market intelligence for AI agents — 62 tools including council verdicts, squeeze scanner, options flow, oracle data feeds, futures, agent-to-agent settlement, Cognitive Credit Swarms, IAM resolver, Sovereign signal suite, AEO/GEO intelligence suite, Truth Engine, Memory Graph, FRED macro data, and RWA Intelligence Suite, and x402 micropayments via USDC on Base or RLUSD on XRPL.",
   "version": "7.0.0",
   "url": "https://squeezeos-api.onrender.com/mcp",
   "protocol": "MCP JSON-RPC 2.0",
@@ -57,12 +57,22 @@
     {"name": "narrative_optimize",     "description": "P04 API Narrative Optimizer — audits discovery-manifest copy for AI-discoverability weaknesses."},
     {"name": "provider_score",         "description": "ARGUS AgentPageRank™ — provider quality score 0-850 from live AI agent traffic."},
     {"name": "semantic_gaps",          "description": "Semantic Gap Detector™ — unmet API demand signals from Reddit/HN."},
-    {"name": "agent_economy",          "description": "Agent Economy Intelligence Network™ (AEIN) — ComScore for AI agent commerce. Free summary; 0.25 RLUSD full report."}
+    {"name": "agent_economy",          "description": "Agent Economy Intelligence Network™ (AEIN) — ComScore for AI agent commerce. Free summary; 0.25 RLUSD full report."},
+    {"name": "truth_verify",           "description": "Truth Engine — cross-provider (Tradier/Alpaca/Polygon) consensus price with measured variance and an HMAC-SHA256 proof hash. 0.02 RLUSD."},
+    {"name": "memory_store",           "description": "Memory Graph — persists an agent memory in Redis with caller-supplied provenance. 0.01 RLUSD."},
+    {"name": "memory_recall",          "description": "Memory Graph — keyword/tag search over an agent's own stored memories. 0.01 RLUSD."},
+    {"name": "memory_stats",           "description": "Free. Real count of an agent's stored memories by type and active storage backend."},
+    {"name": "fred_preview",           "description": "Free. Latest value + date for a whitelisted set of FRED series (CPIAUCSL, UNRATE, FEDFUNDS, DGS10, GDP)."},
+    {"name": "fred_series",            "description": "Latest observation plus full series metadata for any FRED series. 0.01 RLUSD."},
+    {"name": "rwa_scan",               "description": "Free. Scan the ScriptMasterLabs RWA universe via live sml-rwa-api."},
+    {"name": "rwa_valuation",          "description": "Premium RWA valuation/NAV composite via sml-rwa-api x402. 0.15 USDC on Base."},
+    {"name": "rwa_proof_of_reserves",  "description": "Premium RWA proof-of-reserves attestation via sml-rwa-api x402. 0.20 USDC on Base."},
+    {"name": "rwa_intelligence",       "description": "Premium RWA intelligence bundle via sml-rwa-api x402. 0.20 USDC on Base."}
   ],
   "payment": {
     "protocol": "x402",
     "networks": ["base", "xrpl", "xahau"],
     "asset": "USDC / RLUSD",
-    "free_tools": ["demo_council", "signal_preview", "signal_history", "get_invoice", "verify_payment", "bureau_public_score", "marketplace_browse", "marketplace_list_signal", "hiring_browse_jobs", "hiring_post_job", "system_status", "futures_create", "futures_take", "futures_browse", "futures_leaderboard", "settlement_create", "settlement_browse", "settlement_trigger", "convergence_check", "autopilot_status", "autopilot_trades", "autopilot_start", "autopilot_stop", "circuit_breaker_reset", "beastmode_scan", "proprietary_ema_signal", "oracle_feeds", "iam_truth", "ccs_info", "ccs_score", "ccs_report", "ccs_leaderboard", "ccs_stats", "post_to_slack", "citation_score", "narrative_optimize", "provider_score", "semantic_gaps", "agent_economy"]
+    "free_tools": ["demo_council", "signal_preview", "signal_history", "get_invoice", "verify_payment", "bureau_public_score", "marketplace_browse", "marketplace_list_signal", "hiring_browse_jobs", "hiring_post_job", "system_status", "futures_create", "futures_take", "futures_browse", "futures_leaderboard", "settlement_create", "settlement_browse", "settlement_trigger", "convergence_check", "autopilot_status", "autopilot_trades", "autopilot_start", "autopilot_stop", "circuit_breaker_reset", "beastmode_scan", "proprietary_ema_signal", "oracle_feeds", "iam_truth", "ccs_info", "ccs_score", "ccs_report", "ccs_leaderboard", "ccs_stats", "post_to_slack", "citation_score", "narrative_optimize", "provider_score", "semantic_gaps", "agent_economy", "memory_stats", "fred_preview", "rwa_scan"]
   }
 }

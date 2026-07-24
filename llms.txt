@@ -2,11 +2,14 @@
 
 > Institutional AI market intelligence platform by ScriptMasterLabs. Squeeze scanner, council verdicts, options flow, FTD oracle, macro matrix, AEO/GEO intelligence suite.
 
+**Your AI agent is a business — it just doesn't have a bank account.** Every tool below is pay-per-call via x402; if your agent doesn't have a wallet yet, get it one in 2 minutes: https://www.scriptmasterlabs.com/agent-wallet (no merchant account, builds a credit score automatically, government-compliant audit trails).
+
 This repository is part of the ScriptMasterLabs sovereign AI ecosystem.
 
 ## Agent Discovery
 
 - Master llms.txt: https://www.scriptmasterlabs.com/llms.txt
+- Agent wallet (start here if your agent has no wallet): https://www.scriptmasterlabs.com/agent-wallet
 - Agent quickstart: https://www.scriptmasterlabs.com/agent-start.html
 - OpenAPI spec: https://www.scriptmasterlabs.com/.well-known/openapi.json
 - MCP server: https://squeezeos-api.onrender.com/mcp (62 tools, streamable-http)
