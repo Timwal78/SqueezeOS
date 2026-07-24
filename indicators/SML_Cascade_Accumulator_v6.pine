@@ -1,0 +1,306 @@
+// © ScriptMaster Labs — CASCADE ACCUMULATOR v6
+// =============================================================================
+// Chart visual of the LIVE Cascade Accumulator engine (avg_down_engine.py).
+// Signal math is intentionally mirrored 1:1 from production:
+//   ENTER / ADD / EXIT / HARD_STOP / STOP
+//
+// Defaults match engine env defaults:
+//   EMA layers 55,89,144,233,365
+//   ADD_PCT 4% · EXIT_GAIN 7% · MAX_LOSS 15% · MAX_LEVELS 3
+//   INITIAL_SIZE 0.20 · SCALE_FACTOR 0.55
+//
+// EMA seeding matches engine._ema (first close seed), NOT TradingView ta.ema
+// SMA-seed — required for accuracy vs the live directive engine.
+//
+// Use on DAILY charts for parity with the equities engine / published backtest.
+// State updates on confirmed bars only (no intrabar repaint).
+// =============================================================================
+//@version=6
+indicator("SML CASCADE ACCUMULATOR v6", shorttitle="SML·CascadeAcc",
+     overlay=true, max_labels_count=500, max_lines_count=500, max_bars_back=500)
+
+// ═══ INPUTS ══════════════════════════════════════════════════════════════════
+grpL = "EMA Ribbon (engine layers)"
+len1 = input.int(55,  "L1 fast",   minval=2, group=grpL)
+len2 = input.int(89,  "L2",        minval=2, group=grpL)
+len3 = input.int(144, "L3",        minval=2, group=grpL)
+len4 = input.int(233, "L4",        minval=2, group=grpL)
+len5 = input.int(365, "L5 anchor", minval=2, group=grpL)
+
+grpR = "Engine Rules (avg_down_engine defaults)"
+addPct     = input.float(0.04, "ADD dip per level (ADD_PCT)", minval=0.001, step=0.005, group=grpR)
+exitGain   = input.float(0.07, "EXIT gain above avg (EXIT_GAIN)", minval=0.001, step=0.005, group=grpR)
+maxLoss    = input.float(0.15, "HARD_STOP max loss (MAX_LOSS_PCT)", minval=0.01, step=0.01, group=grpR)
+maxLevels  = input.int(3, "Max add levels (MAX_LEVELS)", minval=0, maxval=10, group=grpR)
+initSize   = input.float(0.20, "Initial size weight", minval=0.01, step=0.01, group=grpR)
+scaleFact  = input.float(0.55, "Add scale factor", minval=0.05, maxval=1.0, step=0.05, group=grpR)
+
+grpD = "Display"
+showRibbon = input.bool(true,  "Show EMA ribbon", group=grpD)
+showFill   = input.bool(true,  "Ribbon fills", group=grpD)
+showAvg    = input.bool(true,  "Avg-cost / targets", group=grpD)
+showShapes = input.bool(true,  "Signal markers", group=grpD)
+showLabels = input.bool(true,  "Signal labels", group=grpD)
+showTable  = input.bool(true,  "HUD table", group=grpD)
+showBg     = input.bool(true,  "Mode background", group=grpD)
+sigSizeIn  = input.string("tiny", "Marker / label size", options=["tiny", "small"], group=grpD)
+tblPosIn   = input.string("top_right", "Table position",
+     options=["top_right", "top_left", "bottom_right", "bottom_left"], group=grpD)
+
+// ═══ BRIGHT PALETTE (no grey) ════════════════════════════════════════════════
+cL1     = #00F5FF      // electric cyan
+cL2     = #39FF14      // neon lime
+cL3     = #FFE600      // pure yellow
+cL4     = #FF2BD6      // hot magenta
+cL5     = #FF1744      // bright crimson anchor
+cEnter  = #00FF66      // neon green
+cAdd    = #00B7FF      // electric blue
+cExit   = #FFD600      // gold
+cStop   = #FF003C      // alarm red
+cHard   = #FF00AA      // hot pink hard-stop
+cAvg    = #FF9100      // bright orange avg cost
+cTgt    = #76FF03      // lime target
+cBgBull = color.new(#00FF66, 92)
+cBgLock = color.new(#FF003C, 92)
+cBgPos  = color.new(#00B7FF, 93)
+cTblBg  = #050510
+cTblBd  = #00F5FF
+cTxt    = #FFFFFF
+cDim    = #7CFFB2      // mint — NOT grey
+
+// ═══ ENGINE EMA (first-close seed = avg_down_engine._ema) ════════════════════
+// Python: e = v if e is None else v*k + e*(1-k)
+cascadeEma(float src, int length) =>
+    float k = 2.0 / (length + 1.0)
+    var float e = na
+    e := na(e) ? src : src * k + e * (1.0 - k)
+    e
+
+float L1 = cascadeEma(close, len1)
+float L2 = cascadeEma(close, len2)
+float L3 = cascadeEma(close, len3)
+float L4 = cascadeEma(close, len4)
+float L5 = cascadeEma(close, len5)
+
+bool ready = not na(L5) and bar_index >= len5
+
+// ═══ RIBBON STATE (engine._ribbon_state) ═════════════════════════════════════
+bool fullBull    = ready and L1 > L2 and L2 > L3 and L3 > L4 and L4 > L5
+bool looseBull   = ready and L1 > L2 and L2 > L3
+bool aboveAnchor = ready and close > L5
+int  alignScore  = ready ? ((L1 > L2 ? 1 : 0) + (L2 > L3 ? 1 : 0) + (L3 > L4 ? 1 : 0) + (L4 > L5 ? 1 : 0)) : 0
+
+// ═══ WALK-FORWARD POSITION STATE (engine / backtest_avg_down) ════════════════
+var bool   inPos    = false
+var float  avgPrice = na
+var int    level    = 0
+var float  posSize  = 0.0
+var int    entryBar = na
+var string lastAct  = "—"
+
+bool sigEnter = false
+bool sigAdd   = false
+bool sigExit  = false
+bool sigStop  = false
+bool sigHard  = false
+float pnlNow  = na
+
+if ready and barstate.isconfirmed
+    if inPos
+        pnlNow := avgPrice > 0 ? (close - avgPrice) / avgPrice : 0.0
+
+        // Priority identical to avg_down_engine._evaluate
+        if pnlNow < -maxLoss
+            sigHard := true
+            lastAct := "HARD_STOP"
+            inPos := false
+            avgPrice := na
+            level := 0
+            posSize := 0.0
+            entryBar := na
+        else if not aboveAnchor
+            sigStop := true
+            lastAct := "STOP"
+            inPos := false
+            avgPrice := na
+            level := 0
+            posSize := 0.0
+            entryBar := na
+        else if pnlNow >= exitGain or (pnlNow > 0.005 and fullBull and aboveAnchor)
+            sigExit := true
+            lastAct := "EXIT"
+            inPos := false
+            avgPrice := na
+            level := 0
+            posSize := 0.0
+            entryBar := na
+        else
+            float threshold = -addPct * (level + 1)
+            if pnlNow < threshold and level < maxLevels and looseBull and aboveAnchor
+                // engine add sizing: add = INITIAL * SCALE^newLevel
+                float oldSize = posSize
+                float addSize = initSize * math.pow(scaleFact, level + 1)
+                avgPrice := (avgPrice * oldSize + close * addSize) / (oldSize + addSize)
+                level += 1
+                posSize := oldSize + addSize
+                sigAdd := true
+                lastAct := "ADD L" + str.tostring(level)
+            else
+                lastAct := "HOLD L" + str.tostring(level)
+    else
+        // ENTER: full ribbon + above anchor + close > L1
+        if fullBull and aboveAnchor and close > L1
+            inPos := true
+            avgPrice := close
+            level := 0
+            posSize := initSize
+            entryBar := bar_index
+            sigEnter := true
+            lastAct := "ENTER"
+            pnlNow := 0.0
+        else
+            lastAct := aboveAnchor ? (fullBull ? "WATCH" : "NEUTRAL") : "LOCKED OUT"
+            pnlNow := na
+
+// Live (unconfirmed) PnL preview while in position
+float pnlLive = inPos and avgPrice > 0 ? (close - avgPrice) / avgPrice : na
+
+// Next ADD threshold (engine formula)
+float nextAddThr = inPos ? -addPct * (level + 1) : na
+float nextAddPx  = inPos and not na(avgPrice) ? avgPrice * (1.0 + nextAddThr) : na
+float exitPx     = inPos and not na(avgPrice) ? avgPrice * (1.0 + exitGain) : na
+float hardPx     = inPos and not na(avgPrice) ? avgPrice * (1.0 - maxLoss) : na
+
+// Mode text for product language
+string modeTxt =
+     sigHard or lastAct == "HARD_STOP" ? "STOP" :
+     sigStop or lastAct == "STOP"      ? "STOP" :
+     sigExit or lastAct == "EXIT"      ? "EXIT" :
+     sigAdd                            ? "ACCUMULATE" :
+     sigEnter                          ? "ACCUMULATE" :
+     inPos and not na(pnlLive) and pnlLive < 0 ? "ACCUMULATE" :
+     inPos                             ? "PYRAMID" :
+     aboveAnchor and fullBull          ? "READY" :
+     aboveAnchor                       ? "DEPLOY" : "LOCKED OUT"
+
+string dirTxt =
+     sigEnter ? "ENTER" :
+     sigAdd   ? "ADD" :
+     sigExit  ? "EXIT" :
+     sigHard  ? "HARD_STOP" :
+     sigStop  ? "STOP" :
+     inPos    ? "HOLD" :
+     aboveAnchor and fullBull and close > L1 ? "ARMED" : "—"
+
+// ═══ PLOTS — bright ribbon ═══════════════════════════════════════════════════
+p1 = plot(showRibbon and ready ? L1 : na, "L1", color=cL1, linewidth=2)
+p2 = plot(showRibbon and ready ? L2 : na, "L2", color=cL2, linewidth=2)
+p3 = plot(showRibbon and ready ? L3 : na, "L3", color=cL3, linewidth=2)
+p4 = plot(showRibbon and ready ? L4 : na, "L4", color=cL4, linewidth=2)
+p5 = plot(showRibbon and ready ? L5 : na, "L5 ANCHOR", color=cL5, linewidth=3)
+
+fill(p1, p2, color=showFill and ready ? color.new(cL1, 85) : na, title="L1-L2")
+fill(p2, p3, color=showFill and ready ? color.new(cL2, 88) : na, title="L2-L3")
+fill(p3, p4, color=showFill and ready ? color.new(cL3, 90) : na, title="L3-L4")
+fill(p4, p5, color=showFill and ready ? color.new(cL4, 90) : na, title="L4-L5")
+
+plot(showAvg and inPos ? avgPrice : na, "Avg Cost", color=cAvg, linewidth=2, style=plot.style_linebr)
+plot(showAvg and inPos ? exitPx   : na, "Exit Target", color=cTgt, linewidth=1, style=plot.style_linebr)
+plot(showAvg and inPos ? hardPx   : na, "Hard Stop", color=cHard, linewidth=1, style=plot.style_linebr)
+plot(showAvg and inPos and level < maxLevels ? nextAddPx : na, "Next ADD", color=cAdd, linewidth=1, style=plot.style_linebr)
+
+// ═══ BACKGROUND ══════════════════════════════════════════════════════════════
+bgcolor(showBg ? (not aboveAnchor ? cBgLock : inPos ? cBgPos : fullBull ? cBgBull : na) : na,
+     title="Cascade mode BG")
+
+// ═══ MARKERS (tiny/small only) ═══════════════════════════════════════════════
+sigSz = sigSizeIn == "small" ? size.small : size.tiny
+
+plotshape(showShapes and sigEnter, title="ENTER", style=shape.triangleup,
+     location=location.belowbar, color=cEnter, size=sigSz, text="ENTER", textcolor=cEnter)
+plotshape(showShapes and sigAdd, title="ADD", style=shape.diamond,
+     location=location.belowbar, color=cAdd, size=sigSz, text="ADD", textcolor=cAdd)
+plotshape(showShapes and sigExit, title="EXIT", style=shape.triangledown,
+     location=location.abovebar, color=cExit, size=sigSz, text="EXIT", textcolor=cExit)
+plotshape(showShapes and sigStop, title="STOP", style=shape.xcross,
+     location=location.abovebar, color=cStop, size=sigSz, text="STOP", textcolor=cStop)
+plotshape(showShapes and sigHard, title="HARD_STOP", style=shape.xcross,
+     location=location.abovebar, color=cHard, size=sigSz, text="HARD", textcolor=cHard)
+
+// Tiny/small labels on signal bars only
+if showLabels and barstate.isconfirmed
+    if sigEnter
+        label.new(bar_index, low, "ENTER\n" + str.tostring(close, format.mintick),
+             style=label.style_label_up, color=cEnter, textcolor=#000000, size=sigSz)
+    if sigAdd
+        label.new(bar_index, low, "ADD L" + str.tostring(level) + "\navg " + str.tostring(avgPrice, format.mintick),
+             style=label.style_label_up, color=cAdd, textcolor=#000000, size=sigSz)
+    if sigExit
+        label.new(bar_index, high, "EXIT\n" + str.tostring(pnlNow * 100, "#.##") + "%",
+             style=label.style_label_down, color=cExit, textcolor=#000000, size=sigSz)
+    if sigStop
+        label.new(bar_index, high, "STOP\nanchor lost",
+             style=label.style_label_down, color=cStop, textcolor=#FFFFFF, size=sigSz)
+    if sigHard
+        label.new(bar_index, high, "HARD STOP\n" + str.tostring(pnlNow * 100, "#.##") + "%",
+             style=label.style_label_down, color=cHard, textcolor=#FFFFFF, size=sigSz)
+
+// ═══ HUD TABLE (normal text, bright only) ════════════════════════════════════
+var table hud = na
+if showTable and barstate.islast
+    tablePos =
+         tblPosIn == "top_left" ? position.top_left :
+         tblPosIn == "bottom_right" ? position.bottom_right :
+         tblPosIn == "bottom_left" ? position.bottom_left : position.top_right
+    if not na(hud)
+        table.delete(hud)
+    hud := table.new(tablePos, 2, 16, bgcolor=cTblBg, border_color=cTblBd, border_width=2,
+         frame_color=cTblBd, frame_width=1)
+
+    f_row(int r, string k, string v, color vc) =>
+        table.cell(hud, 0, r, k, text_color=cDim, text_size=size.normal, bgcolor=cTblBg)
+        table.cell(hud, 1, r, v, text_color=vc, text_size=size.normal, bgcolor=cTblBg)
+
+    table.cell(hud, 0, 0, "CASCADE", text_color=cL1, text_size=size.normal, bgcolor=cTblBg)
+    table.cell(hud, 1, 0, "ACCUMULATOR", text_color=cEnter, text_size=size.normal, bgcolor=cTblBg)
+
+    color modeCol =
+         modeTxt == "LOCKED OUT" ? cStop :
+         modeTxt == "STOP" ? cStop :
+         modeTxt == "EXIT" ? cExit :
+         modeTxt == "ACCUMULATE" ? cAdd :
+         modeTxt == "PYRAMID" ? cEnter :
+         modeTxt == "READY" ? cEnter : cL1
+
+    f_row(1, "MODE", modeTxt, modeCol)
+    f_row(2, "DIRECTIVE", dirTxt,
+         dirTxt == "ENTER" ? cEnter : dirTxt == "ADD" ? cAdd : dirTxt == "EXIT" ? cExit :
+         dirTxt == "STOP" or dirTxt == "HARD_STOP" ? cStop : cL3)
+    f_row(3, "ANCHOR L5", aboveAnchor ? "HELD ✓" : "BROKEN ✗", aboveAnchor ? cEnter : cStop)
+    f_row(4, "RIBBON", fullBull ? "FULL BULL 5/5" : looseBull ? "LOOSE 3/5" : "OFF",
+         fullBull ? cEnter : looseBull ? cL3 : cStop)
+    f_row(5, "ALIGN", str.tostring(alignScore) + " / 4", alignScore == 4 ? cEnter : alignScore >= 2 ? cL3 : cStop)
+    f_row(6, "POSITION", inPos ? "OPEN · L" + str.tostring(level) : "FLAT", inPos ? cAdd : cL3)
+    f_row(7, "AVG COST", inPos ? str.tostring(avgPrice, format.mintick) : "—", cAvg)
+    f_row(8, "PnL", inPos ? str.tostring(pnlLive * 100, "#.##") + "%" : "—",
+         not na(pnlLive) ? (pnlLive >= 0 ? cEnter : cStop) : cL3)
+    f_row(9, "NEXT ADD", inPos and level < maxLevels ? str.tostring(nextAddPx, format.mintick) + " (" + str.tostring(nextAddThr * 100, "#.#") + "%)" : inPos ? "MAX LEVEL" : "—", cAdd)
+    f_row(10, "EXIT TGT", inPos ? str.tostring(exitPx, format.mintick) : "—", cTgt)
+    f_row(11, "HARD STOP", inPos ? str.tostring(hardPx, format.mintick) : "—", cHard)
+    f_row(12, "L1 / close", ready ? str.tostring(L1, format.mintick) : "warming…", close > L1 ? cEnter : cL3)
+    f_row(13, "L5 anchor", ready ? str.tostring(L5, format.mintick) : "warming…", cL5)
+    f_row(14, "LAST", lastAct, cTxt)
+    f_row(15, "TF NOTE", timeframe.isdaily ? "DAILY ✓ engine parity" : "Use DAILY for engine parity", timeframe.isdaily ? cEnter : cExit)
+
+// ═══ ALERTS ══════════════════════════════════════════════════════════════════
+alertcondition(sigEnter, "Cascade ENTER", "{{ticker}} CASCADE ENTER — full ribbon + anchor + close>L1 @ {{close}}")
+alertcondition(sigAdd,   "Cascade ADD",   "{{ticker}} CASCADE ADD — accumulate tranche @ {{close}}")
+alertcondition(sigExit,  "Cascade EXIT",  "{{ticker}} CASCADE EXIT — target / ribbon recovery @ {{close}}")
+alertcondition(sigStop,  "Cascade STOP",  "{{ticker}} CASCADE STOP — anchor L5 lost @ {{close}}")
+alertcondition(sigHard,  "Cascade HARD_STOP", "{{ticker}} CASCADE HARD_STOP — max loss hit @ {{close}}")
+alertcondition(fullBull and aboveAnchor and close > L1 and not inPos, "Cascade ARMED",
+     "{{ticker}} CASCADE ARMED — entry conditions live, flat")
+alertcondition(ta.crossunder(close, L5), "Cascade Anchor Lost",
+     "{{ticker}} CASCADE ANCHOR LOST — price crossed under L5")
+alertcondition(ta.crossover(close, L5), "Cascade Anchor Reclaim",
+     "{{ticker}} CASCADE ANCHOR RECLAIM — deploy zone open")
