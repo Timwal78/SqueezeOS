@@ -260,12 +260,35 @@ def cascade_stripe_webhook():
                 "sub_id":   sub_id,
                 "created":  int(time.time()),
             }))
+            # Reverse index by subscription ID -- customer.subscription.deleted/
+            # paused events below carry the subscription ID but NOT the api_key,
+            # so without this the key issued here can never be found again to
+            # revoke it. (This is the exact bug this fix closes: previously the
+            # webhook only logged on cancellation and never actually revoked the
+            # key, so a single $149 payment granted permanent free access via
+            # require_payment's sml_live_ bypass -- see proof402_integration.py.)
+            if sub_id:
+                r.set(f"cascade:sub:{sub_id}", api_key)
             logger.info("CASCADE key issued for %s", customer)
         else:
             logger.error("Redis unavailable — CASCADE key NOT stored for %s", customer)
 
     elif event["type"] in ("customer.subscription.deleted", "customer.subscription.paused"):
-        logger.info("CASCADE subscription ended: %s", event["data"]["object"].get("id"))
+        sub_id = event["data"]["object"].get("id")
+        r = _get_redis()
+        if sub_id and r:
+            api_key = r.get(f"cascade:sub:{sub_id}")
+            if api_key:
+                r.delete(f"apikey:{api_key}")
+                r.delete(f"cascade:sub:{sub_id}")
+                logger.info("CASCADE key revoked for cancelled/paused subscription %s", sub_id)
+            else:
+                logger.warning(
+                    "CASCADE subscription %s ended but no matching api_key found to revoke "
+                    "(key predates this reverse-index fix, or was already revoked)", sub_id
+                )
+        else:
+            logger.warning("CASCADE subscription-ended event missing subscription id or Redis unavailable")
 
     return jsonify({"received": True})
 
