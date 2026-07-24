@@ -51,6 +51,7 @@ from core.api.iam_bp import iam_bp
 from core.api.imo_bp import imo_bp
 from core.api.orb_bp import orb_bp
 from core.api.druck_bp import druck_bp
+from core.api.cie_bp import cie_bp
 from core.api.vapl_bp import vapl_bp
 from core.vapl.middleware import install_vapl_middleware
 from core.api.macro741_bp import macro741_bp
@@ -186,6 +187,7 @@ def create_app():
     app.register_blueprint(imo_bp,           url_prefix='/api/imo')
     app.register_blueprint(orb_bp,           url_prefix='/api/orb')
     app.register_blueprint(druck_bp,         url_prefix='/api/druck')
+    app.register_blueprint(cie_bp,           url_prefix='/api/cie')
     app.register_blueprint(vapl_bp)
     app.register_blueprint(macro741_bp,        url_prefix='/api')
     app.register_blueprint(macro_bp,           url_prefix='/api')
@@ -269,6 +271,14 @@ def create_app():
         # safety stack as ORB/IMO — no live-arming decision made here.
         from druck_scanner import start_druck_scanner
         start_druck_scanner()
+
+        # Start CIE (Cycle Intelligence Engine) Daily/Weekly scanner — real
+        # SEC FTD/threshold data + self-mined historical fractal matching +
+        # meme-cycle phase. Dark-pool layer stays unfed (no real feed exists
+        # in this codebase). No backtest evidence yet — see docs/ once
+        # tests/backtest_cie.py has run.
+        from cie_scanner import start_cie_scanner
+        start_cie_scanner()
 
         # Start webhook delivery engine (SSE tap + delivery workers)
         start_webhook_engine()
