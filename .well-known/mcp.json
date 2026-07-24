@@ -6,7 +6,7 @@
       "transport": "streamable-http",
       "name": "SqueezeOS — Institutional Market Intelligence",
       "description": "62 MCP tools: institutional equity intelligence (squeeze scanner, options flow, IWM 0DTE, AI council verdicts, IAM resolver, autopilot) + Cognitive Credit Swarms + Sovereign signal suite + AEO/GEO intelligence suite (AgentRank™ citation scoring, API narrative optimizer, ARGUS provider score, semantic gap detector, agent economy intelligence) + RWA Intelligence Suite (rwa_scan, rwa_valuation, rwa_proof_of_reserves). Pay-per-call via x402 (RLUSD on XRPL or USDC on Base). Free tools included.",
-      "version": "5.0.0"
+      "version": "5.1.0"
     }
   },
   "mcp_version": "1.0",

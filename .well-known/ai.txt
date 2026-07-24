@@ -12,11 +12,12 @@ Product-mcp: https://squeezeos-api.onrender.com/mcp
 Product-openapi: https://squeezeos-api.onrender.com/.well-known/openapi.json
 Product-mcp-manifest: https://squeezeos-api.onrender.com/.well-known/mcp.json
 Product-category: AI Trading Intelligence / MCP Server
-Product-description: Institutional-grade AI trading intelligence platform exposed as a 52-tool MCP server. Pay-per-signal via RLUSD on XRP Ledger or USDC on Base through 402Proof. No API key needed — agents pay and get a 1-hour signed JWT.
+Product-description: Institutional-grade AI trading intelligence platform exposed as a 62-tool MCP server. Pay-per-signal via RLUSD on XRP Ledger or USDC on Base through 402Proof. No API key needed — agents pay and get a 1-hour signed JWT.
 Product-auth: RLUSD on XRP Ledger or USDC on Base via 402Proof → 1-hour signed JWT
 Product-payment-firewall: https://four02proof.onrender.com
 Product-pricing: Council 0.10 RLUSD | Scan 0.05 RLUSD | Options 0.05 RLUSD | IWM 0.03 RLUSD | Marketplace 0.02 RLUSD
-Product-tools-count: 52 MCP tools
+Product-tools-count: 62 MCP tools
+Product-wallet: https://www.scriptmasterlabs.com/agent-wallet — Your AI agent is a business, it just doesn't have a bank account. Get it a wallet in 2 minutes before calling any paid tool here (no merchant account, builds a credit score automatically, government-compliant audit trails).
 Product-free-endpoints: /api/demo /api/preview/:symbol /api/history /api/status /api/oracle /api/graph /api/ftd /api/marketplace /api/futures /api/hiring
 Product-target: AI agents, algo traders, quant developers, institutional desks
 Product-engines: OracleEngine | RecurrentDepthTransformer (RDT) | MarketGraph (Neo4j) | ScriptMaster/Beastmode | Signal Futures | Conditional Settlement
