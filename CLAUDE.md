@@ -8,7 +8,7 @@
 
 | Service | Render Name | URL | Status | Purpose |
 |---------|-------------|-----|--------|---------|
-| SqueezeOS API | `squeezeos-api` | `https://squeezeos-api.onrender.com` | ✅ Live | Main Flask monorepo — AI Council, CASCADE ACCUMULATOR, Slack bot, 52 MCP tools |
+| SqueezeOS API | `squeezeos-api` | `https://squeezeos-api.onrender.com` | ✅ Live | Main Flask monorepo — AI Council, CASCADE ACCUMULATOR, Slack bot, 62 MCP tools |
 | SML Vault Executor | `sml-vault-executor` | `https://sml-vault-executor.onrender.com` | 🅿️ Parked | Future vault execution layer (Base mainnet). Currently runs squeezeos-api repo as placeholder. Gets its own codebase when vault is funded. Custom domain: `dash.scriptmasterlabs.com` |
 
 **NEVER confuse these two services.** `squeezeos-api` is production. `sml-vault-executor` is parked/future.
@@ -433,7 +433,7 @@ SqueezeOS/
 │   ├── telemetry_rotator.py # Background telemetry heartbeat
 │   ├── ceo_trader.py        # CEOTrader institutional logic
 │   └── api/                 # Flask Blueprints (one file per domain)
-│       ├── mcp_bp.py        # POST /mcp — JSON-RPC 2.0 MCP server (52 tools)
+│       ├── mcp_bp.py        # POST /mcp — JSON-RPC 2.0 MCP server (62 tools)
 │       ├── premium_bp.py    # /api/council /api/scan /api/options /api/iwm (402-gated)
 │       ├── market_scanner.py# /api/market — background scan loop + cache
 │       ├── marketplace_bp.py# /api/marketplace — peer signal marketplace
@@ -569,7 +569,7 @@ The `@require_payment` decorator gates premium endpoints. Token verification is 
 
 ## MCP Server (`core/api/mcp_bp.py`)
 
-Mounted at `/mcp`. Implements JSON-RPC 2.0. **52 tools** total.
+Mounted at `/mcp`. Implements JSON-RPC 2.0. **62 tools** total.
 
 **Supported RPC methods:**
 - `initialize` — handshake, returns `protocolVersion: "2024-11-05"`
@@ -870,7 +870,7 @@ Real, Claude-powered agents. No agent in this department fabricates a result —
 - **OpenMythos (RDT) degraded mode**: `RecurrentDepthTransformer` accepts `graph=None` and falls back to price/vpin-only scoring — it will not crash without Neo4j.
 - **Superpower (Beastmode) protocols** run async in daemon threads — `POST /api/scriptmaster/run_protocol` returns immediately. Results appear in the mission log ring buffer (50 entries), not the response body.
 - **In-memory stores reset on restart**: `_futures`, `_contracts`, `_listings`, `_jobs`, `_queue` (grants), `_queue` (gap proposals), `_tasks` (settlement router), `_scan_cache`, `_preview_cache`, `_demo_cache`, `_MISSION_LOG`, `signal_history` — all lost on redeploy. This is intentional for MVP; do not add disk persistence without discussion.
-- **MCP tool count**: the `_TOOLS` list in `mcp_bp.py` is the source of truth (currently 52 tools). The `_SERVER_INFO` version string is `"5.0.0"`. When adding tools, also sync: (1) the tools array in `.well-known/mcp.json`, (2) `tool_count` in `.well-known/catalog.json`, (3) the `"X MCP tools"` text in `.well-known/server.json` and `llms.txt`. Names must match exactly — historical drift between `signal_preview` (source) and `get_signal_preview` (manifest) caused every agent free-trial to fail with "method not found".
+- **MCP tool count**: the `_TOOLS` list in `mcp_bp.py` is the source of truth (currently 62 tools). The `_SERVER_INFO` version string is `"5.1.0"`. When adding tools, also sync: (1) the tools array in `.well-known/mcp.json`, (2) `tool_count` in `.well-known/catalog.json`, (3) the `"X MCP tools"` text in `.well-known/server.json` and `llms.txt`. Names must match exactly — historical drift between `signal_preview` (source) and `get_signal_preview` (manifest) caused every agent free-trial to fail with "method not found".
 - **Blueprint registration order matters**: honeypot first, then analytics middleware, then all domain blueprints. Changing this order can cause trap routes to be shadowed or analytics to miss requests.
 
 ---
