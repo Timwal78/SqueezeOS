@@ -23,6 +23,14 @@
 - Required Render env vars: `CASCADE_STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_SECRET_KEY`, `REDIS_URL`
 - Checkout landing page: `https://www.scriptmasterlabs.com/cascade` (SML_Portfolio repo, `cascade.html`) — real 5-year backtest table + working Stripe subscribe button. Added 2026-07-21; previously there was no public page pointing at the POST-only checkout endpoint.
 
+### Retroactive key reconciliation (`POST /api/cascade/admin/reconcile`, built 2026-07-24)
+
+Closes the gap the PR #388 fix (above) explicitly couldn't: that fix only stops *future* cancellations from leaking access, it does nothing for a customer who subscribed, got a key, and cancelled *before* the fix shipped (their key has no `cascade:sub:{sub_id}` entry to look up). This endpoint doesn't guess who to revoke — it reconciles every `apikey:sml_live_cascade_*` key in Redis against Stripe's real, current subscription list. A key survives only if it positively matches an active/trialing subscription, by `sub_id` (post-fix keys) or by customer email (pre-fix keys). Anything unmatched is revoked and listed in the JSON response for manual review.
+
+- Secret-gated: `X-Cascade-Admin-Secret` header must match `CASCADE_ADMIN_SECRET` (unset = 503, same pattern as `GRANTS_QUEUE_SECRET` etc.).
+- Not scheduled anywhere — run it manually (`curl -X POST .../api/cascade/admin/reconcile -H "X-Cascade-Admin-Secret: ..."`) whenever a retroactive sweep is wanted. Safe to re-run any time; it's pure reconciliation against Stripe, not a one-shot migration.
+- Tests: `tests/test_cascade_admin_reconcile.py` — 5 tests against the real, unmodified view (secret gating, sub_id match kept, email-match kept for pre-fix keys, no-match revoked for both key shapes).
+
 ### Operator decision (Timothy, 2026-07-21): CASCADE approved for live trading — ORB/DRUCK restricted, not deleted
 
 Based on CASCADE's real 5-year backtest (NVDA +138.6%, PLTR +140.6%, SPY 86.6% win rate — independently re-verified twice against fresh Robinhood-MCP-sourced data the same day) versus ORB's and DRUCK's both-measured-both-not-profitable verdicts (see their sections below), the operator decided: **CASCADE goes live for real trading; ORB and DRUCK are restricted from the broker but kept running as paper-mode signals and paid API products** (`/api/orb`, `/api/druck` stay live — not deleted, they just can't place real orders).

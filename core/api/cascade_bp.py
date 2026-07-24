@@ -33,6 +33,7 @@ _STRIPE_SECRET_KEY     = os.environ.get("STRIPE_SECRET_KEY", "")
 _STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 _CASCADE_PRICE_ID      = os.environ.get("CASCADE_STRIPE_PRICE_ID", "")
 _REDIS_URL             = os.environ.get("REDIS_URL", "redis://localhost:6379")
+_CASCADE_ADMIN_SECRET  = os.environ.get("CASCADE_ADMIN_SECRET", "")
 
 _SIGNAL_COLORS = {
     "ENTER": "#00CC44",
@@ -291,6 +292,95 @@ def cascade_stripe_webhook():
             logger.warning("CASCADE subscription-ended event missing subscription id or Redis unavailable")
 
     return jsonify({"received": True})
+
+
+# ── Admin: retroactive reconciliation against Stripe ─────────────────────────
+
+@cascade_bp.route("/admin/reconcile", methods=["POST"])
+def cascade_admin_reconcile():
+    """
+    Retroactive fix for keys issued before the cascade:sub:{sub_id} reverse
+    index existed (see checkout.session.completed above, fixed 2026-07-24):
+    those keys can never be found by the cancellation/pause webhook, so a
+    customer who already cancelled before that fix shipped keeps a permanent,
+    free, account-wide require_payment bypass (proof402_integration.py's
+    sml_live_ prefix check) indefinitely.
+
+    This does not guess at who should be revoked -- it reconciles Redis
+    against Stripe's real, current subscription list. A key is kept only if
+    it positively matches a currently active/trialing CASCADE subscription,
+    by sub_id (post-fix keys) or by customer email (pre-fix keys, which have
+    a customer field but no sub_id). Anything that can't be positively
+    matched is revoked and returned in the response for manual review.
+    """
+    if not _CASCADE_ADMIN_SECRET:
+        return jsonify({"error": "CASCADE_ADMIN_SECRET not configured"}), 503
+    if request.headers.get("X-Cascade-Admin-Secret") != _CASCADE_ADMIN_SECRET:
+        return jsonify({"error": "unauthorized"}), 401
+    if not _STRIPE_SECRET_KEY or not _CASCADE_PRICE_ID:
+        return jsonify({"error": "Stripe not configured"}), 503
+
+    r = _get_redis()
+    if not r:
+        return jsonify({"error": "Redis unavailable"}), 503
+
+    import stripe
+    stripe.api_key = _STRIPE_SECRET_KEY
+
+    active_sub_ids = set()
+    active_emails  = set()
+    try:
+        for status in ("active", "trialing"):
+            subs = stripe.Subscription.list(
+                price=_CASCADE_PRICE_ID, status=status, limit=100, expand=["data.customer"]
+            )
+            for sub in subs.auto_paging_iter():
+                active_sub_ids.add(sub["id"])
+                customer = sub.get("customer")
+                email = customer.get("email") if isinstance(customer, dict) else None
+                if email:
+                    active_emails.add(email.lower())
+    except Exception as exc:
+        logger.error("CASCADE reconcile: Stripe subscription list failed: %s", exc)
+        return jsonify({"error": f"Stripe error: {exc}"}), 502
+
+    revoked = []
+    kept = 0
+    checked = 0
+    for key in r.scan_iter(match="apikey:sml_live_cascade_*"):
+        checked += 1
+        raw = r.get(key)
+        if not raw:
+            continue
+        try:
+            data = json.loads(raw)
+        except (TypeError, ValueError):
+            continue
+
+        sub_id   = data.get("sub_id")
+        customer = (data.get("customer") or "").lower()
+        matched  = (sub_id and sub_id in active_sub_ids) or (customer and customer in active_emails)
+        if matched:
+            kept += 1
+            continue
+
+        api_key = key.split(":", 1)[1] if ":" in key else key
+        r.delete(key)
+        if sub_id:
+            r.delete(f"cascade:sub:{sub_id}")
+        revoked.append({"api_key": api_key, "sub_id": sub_id, "customer": data.get("customer")})
+        logger.info(
+            "CASCADE reconcile: revoked %s (sub_id=%s, customer=%s) -- no matching active Stripe subscription",
+            api_key, sub_id, data.get("customer"),
+        )
+
+    return jsonify({
+        "checked":                        checked,
+        "kept":                           kept,
+        "revoked_count":                  len(revoked),
+        "revoked":                        revoked,
+        "active_subscriptions_in_stripe": len(active_sub_ids),
+    })
 
 
 # ── Stripe: success confirmation page ────────────────────────────────────────
