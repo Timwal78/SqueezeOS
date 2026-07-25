@@ -53,6 +53,7 @@ from core.api.orb_bp import orb_bp
 from core.api.druck_bp import druck_bp
 from core.api.cie_bp import cie_bp
 from core.api.breakout_bp import breakout_bp
+from core.api.sr_matrix_bp import sr_matrix_bp
 from core.api.vapl_bp import vapl_bp
 from core.vapl.middleware import install_vapl_middleware
 from core.api.macro741_bp import macro741_bp
@@ -190,6 +191,7 @@ def create_app():
     app.register_blueprint(druck_bp,         url_prefix='/api/druck')
     app.register_blueprint(cie_bp,           url_prefix='/api/cie')
     app.register_blueprint(breakout_bp,      url_prefix='/api/breakout')
+    app.register_blueprint(sr_matrix_bp,     url_prefix='/api/sr-matrix')
     app.register_blueprint(vapl_bp)
     app.register_blueprint(macro741_bp,        url_prefix='/api')
     app.register_blueprint(macro_bp,           url_prefix='/api')
@@ -290,6 +292,16 @@ def create_app():
         # other engine — no live-arming decision made here.
         from breakout_scanner import start_breakout_scanner
         start_breakout_scanner()
+
+        # Start SML Support/Resistance Matrix scanner — pivot cross signals
+        # (buy on confirmed pivot low, sell on confirmed pivot high), real
+        # DAILY bars (Tradier-only friendly, same as Breakout). Best
+        # all-around backtest result of the four new scripts tested
+        # 2026-07-25: positive PF on 3/4 symbols, docs/SR_MATRIX_PIVOT_BACKTEST_2026-07-25.md.
+        # Feeds iam_executor under the same paper-first safety stack as
+        # every other engine — no live-arming decision made here.
+        from sr_matrix_scanner import start_sr_matrix_scanner
+        start_sr_matrix_scanner()
 
         # Start webhook delivery engine (SSE tap + delivery workers)
         start_webhook_engine()
