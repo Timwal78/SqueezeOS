@@ -21,15 +21,24 @@
 //      uses (GAMMA_PIN default). This part is exact, not a proxy.
 //   2. A round-number strike GRID as a visual reference — NOT real open
 //      interest. High-OI strikes in liquid names often cluster near round
-//      numbers, but this is a heuristic, not measured data. The grid
-//      increment (10 above $200, 2.5 above $25, 1 above $5, else 0.5)
-//      reuses the exact same real thresholds gamma_flow_engine.py's
-//      _update_gamma_pressure() already uses server-side — not invented
-//      fresh for this script.
+//      numbers, but this is a heuristic, not measured data. The $200/$25/$5
+//      tiers reuse the exact real thresholds gamma_flow_engine.py's
+//      _update_gamma_pressure() already uses server-side; two coarser tiers
+//      were added above $2,000/$10,000 so the grid stays proportionally
+//      meaningful at crypto-pair price scales (see f_gridIncrement()'s
+//      comment for why — a flat $10 increment made "pin zone" fire on
+//      nearly every BTCUSD bar before this fix).
 //   3. An OPTIONAL manual strike override: type in the real max-OI strike
 //      from GET /api/gamma-pin/<symbol> (or your own broker's chain) and
 //      this script will use THAT real number for the proximity check and
 //      direction lean instead of the round-number grid guess.
+//
+// SCOPE: this is a companion to a Tradier-backed US equity/ETF options
+// scanner. Tradier has no crypto options chain, so on a symbol like
+// BTCUSD the calendar/grid math above still runs (it's just arithmetic),
+// but GET /api/gamma-pin/BTCUSD -- the "real signal" this script keeps
+// pointing to -- would 503. Useful as a reference visual on any symbol,
+// but only actually backed by a real chain for what Tradier covers.
 //
 // NO WEBHOOK BRIDGE. Unlike the IMO/ORB/DRUCK/CIE/Breakout/SR-Matrix v6
 // scripts, this one does NOT emit an EXECUTE_LONG/EXECUTE_SHORT webhook
@@ -122,10 +131,25 @@ nearestDte = int(na(dteWeekly) ? dteMonthly : (na(dteMonthly) ? dteWeekly : math
 bool inDteWindow = not na(nearestDte) and nearestDte >= 0 and nearestDte <= dteWindow
 
 // ═══ STRIKE REFERENCE ════════════════════════════════════════════════════════
-// Auto grid increment -- same real thresholds gamma_flow_engine.py's
-// _update_gamma_pressure() already uses server-side, not invented fresh.
+// Auto grid increment -- the >200/>25/>5 tiers are the same real thresholds
+// gamma_flow_engine.py's _update_gamma_pressure() already uses server-side
+// (tuned for the price range Tradier's real US equity/ETF option chains
+// actually cover). Two tiers were ADDED above that -- not present server-side
+// -- because a flat $10 increment stops being a meaningful proximity
+// reference once price gets large: on BTCUSD (~$64k), $10 is only ~0.016%
+// of price, so the 0.5% proximity band below was satisfied on nearly every
+// bar (confirmed by testing this script on BTCUSD -- dense, near-constant
+// "PIN ZONE" labels, not a real signal, just the grid being too fine for
+// the price scale). These two tiers keep the grid proportionally
+// meaningful at higher prices; they do NOT make the strike itself any more
+// real -- it's still a round-number proxy, and instruments in this price
+// range (crypto pairs, some large indices) usually have no Tradier options
+// chain at all, so GET /api/gamma-pin/<symbol> would just 503 for them.
+// This script's expiry/strike math stays well-defined on any symbol, but is
+// only meaningfully tied to a real options chain for the US equities/ETFs
+// Tradier actually covers.
 f_gridIncrement(spot) =>
-    spot > 200 ? 10.0 : spot > 25 ? 2.5 : spot > 5 ? 1.0 : 0.5
+    spot > 10000 ? 500.0 : spot > 2000 ? 100.0 : spot > 200 ? 10.0 : spot > 25 ? 2.5 : spot > 5 ? 1.0 : 0.5
 
 gridInc = f_gridIncrement(close)
 gridBelow = math.floor(close / gridInc) * gridInc
