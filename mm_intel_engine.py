@@ -319,13 +319,18 @@ def compute_series(bars: list, p: MMIntelParams = None) -> dict:
     active_direction = [0] * n   # 1 long thesis, -1 short thesis, 0 none
     active_invalidation = [None] * n
     live_signal = [None] * n     # BUY / SELL / EXIT_STOP / EXIT_RESOLVED, matching iam_executor action naming
+    exit_direction = [None] * n  # direction (1/-1) that was closing on an EXIT_* bar -- active_direction is
+                                 # already reset to 0 by the time an exit fires, so a consumer (the scanner)
+                                 # needs this to know whether a long or a short thesis just closed.
     direction, invalidation = 0, None
     for i in range(n):
         if direction == 1 and (closes[i] < invalidation or inv_z[i] >= 0):
             live_signal[i] = "EXIT_STOP" if closes[i] < invalidation else "EXIT_RESOLVED"
+            exit_direction[i] = 1
             direction, invalidation = 0, None
         elif direction == -1 and (closes[i] > invalidation or inv_z[i] <= 0):
             live_signal[i] = "EXIT_STOP" if closes[i] > invalidation else "EXIT_RESOLVED"
+            exit_direction[i] = -1
             direction, invalidation = 0, None
 
         if direction == 0 and long_signal[i]:
@@ -372,7 +377,7 @@ def compute_series(bars: list, p: MMIntelParams = None) -> dict:
         "long_signal": long_signal, "short_signal": short_signal,
         "signal_confidence": signal_confidence, "stress_warning": stress_warning,
         "active_direction": active_direction, "active_invalidation": active_invalidation,
-        "live_signal": live_signal,
+        "live_signal": live_signal, "exit_direction": exit_direction,
         "nearest_strike": nearest_strike, "near_strike": near_strike_flags,
         "tactical_target": tactical_target, "structural_target": structural_target,
         "damage_rising": damage_rising, "atr": atr_val,
@@ -402,5 +407,6 @@ def analyze(symbol: str, bars: list, p: MMIntelParams = None) -> dict:
         "nearest_strike": out["nearest_strike"][last],
         "active_direction": out["active_direction"][last],
         "active_invalidation": out["active_invalidation"][last],
+        "exit_direction": out["exit_direction"][last],
         "params": {"z_critical": p.z_critical, "gamma_thresh": p.gamma_thresh, "sensitivity": p.sensitivity},
     }
