@@ -95,11 +95,15 @@ MAX_NOTIONAL_PER_DAY = lambda: _env_float("IAM_MAX_NOTIONAL_PER_DAY", 2000.0)
 DAILY_LOSS_LIMIT   = lambda: _env_float("IAM_DAILY_LOSS_LIMIT", 150.0)  # 7% of ~$2k account
 STOP_LOSS_PCT      = lambda: _env_float("IAM_STOP_LOSS_PCT", 3.0)  # hard protective stop below entry; 0 disables
 
-# Primary signal system — when set, ONLY resolutions tagged with this system
-# (resolution["system"]) place broker orders; every other system is downgraded
-# to alert-only. Untagged resolutions default to "IAM" (the IAM engine is the
-# producer that predates tagging). Example: IAM_PRIMARY_SYSTEM=SML_ORB_MM
-PRIMARY_SYSTEM     = lambda: os.environ.get("IAM_PRIMARY_SYSTEM", "").strip().upper()
+# Primary signal system(s) — when set, ONLY resolutions tagged with one of
+# these systems (resolution["system"]) place broker orders; every other
+# system is downgraded to alert-only. Untagged resolutions default to "IAM"
+# (the IAM engine is the producer that predates tagging). Comma-separated —
+# e.g. IAM_PRIMARY_SYSTEM=SML_CASCADE,SML_BREAKOUT lets both trade live at
+# once; IAM_PRIMARY_SYSTEM=SML_ORB_MM (single value) behaves exactly as
+# before. Empty set means the gate is open (no restriction).
+PRIMARY_SYSTEM     = lambda: {s.strip().upper() for s in
+                               os.environ.get("IAM_PRIMARY_SYSTEM", "").split(",") if s.strip()}
 
 # Execution symbol allowlist — OPT-IN gate, empty by default (all symbols
 # allowed). Operator directive 2026-07-19: universes are DYNAMIC, never
@@ -667,14 +671,15 @@ def execute_from_resolution(sym: str, resolution: dict,
 
         broker_result = None
 
-        # Primary-system gate: when IAM_PRIMARY_SYSTEM is set, only that
-        # system's signals reach the broker — everything else is alert-only.
+        # Primary-system gate: when IAM_PRIMARY_SYSTEM is set, only signals
+        # from a system in that set reach the broker — everything else is
+        # alert-only. Comma-separated, so multiple systems can be live at once.
         signal_system = (resolution.get("system") or "IAM").strip().upper()
         primary = PRIMARY_SYSTEM()
-        broker_allowed = not primary or signal_system == primary
+        broker_allowed = not primary or signal_system in primary
         if not broker_allowed:
             logger.info(f"[IAM-EXEC] {sym} {action} from {signal_system} — "
-                        f"broker execution reserved for primary system {primary}; alert-only")
+                        f"broker execution reserved for primary system(s) {sorted(primary)}; alert-only")
 
         # ── Tradier execution ──
         if mode in ("tradier", "both") and broker_allowed:

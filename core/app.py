@@ -52,6 +52,7 @@ from core.api.imo_bp import imo_bp
 from core.api.orb_bp import orb_bp
 from core.api.druck_bp import druck_bp
 from core.api.cie_bp import cie_bp
+from core.api.breakout_bp import breakout_bp
 from core.api.vapl_bp import vapl_bp
 from core.vapl.middleware import install_vapl_middleware
 from core.api.macro741_bp import macro741_bp
@@ -188,6 +189,7 @@ def create_app():
     app.register_blueprint(orb_bp,           url_prefix='/api/orb')
     app.register_blueprint(druck_bp,         url_prefix='/api/druck')
     app.register_blueprint(cie_bp,           url_prefix='/api/cie')
+    app.register_blueprint(breakout_bp,      url_prefix='/api/breakout')
     app.register_blueprint(vapl_bp)
     app.register_blueprint(macro741_bp,        url_prefix='/api')
     app.register_blueprint(macro_bp,           url_prefix='/api')
@@ -279,6 +281,15 @@ def create_app():
         # tests/backtest_cie.py has run.
         from cie_scanner import start_cie_scanner
         start_cie_scanner()
+
+        # Start SML Breakout Target/Stop scanner — Donchian N-day breakout,
+        # real DAILY bars (works out-of-the-box on Tradier-only, unlike
+        # ORB/DRUCK's intraday feeds). Independently backtested net positive
+        # on all 4 tested symbols, docs/BREAKOUT_BACKTEST_2026-07-25.md.
+        # Feeds iam_executor under the same paper-first safety stack as every
+        # other engine — no live-arming decision made here.
+        from breakout_scanner import start_breakout_scanner
+        start_breakout_scanner()
 
         # Start webhook delivery engine (SSE tap + delivery workers)
         start_webhook_engine()
