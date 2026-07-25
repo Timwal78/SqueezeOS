@@ -292,6 +292,79 @@ def calculate_gex_profile(raw_chain, spot_price, ticker=""):
 
 
 # ═══════════════════════════════════════════════════════════════
+# PIN RISK — synchronous, testable restatement of
+# GammaFlowEngine._check_pin_risk() below, for consumers that need a
+# resolved directional signal (gamma_pin_scanner.py) rather than an
+# async alert dispatch. Same thresholds, not a re-derivation — this
+# must never disagree with the async engine already live in production
+# via core/oracle_engine.py's gamma-flow read.
+# ═══════════════════════════════════════════════════════════════
+
+def find_near_expiry(raw_chain: Dict, max_dte: int = 2) -> Optional[Dict]:
+    """
+    Locate the first expiry within the pin-risk DTE window (0..max_dte days),
+    scanning callExpDateMap then putExpDateMap in dict-iteration order —
+    identical traversal to GammaFlowEngine._check_pin_risk() below. Returns
+    {"expiry": "YYYY-MM-DD", "dte": int} for the first matching expiry, or
+    None if no expiry in either map falls within the window.
+    """
+    today = datetime.now()
+    for m in (raw_chain.get('callExpDateMap', {}), raw_chain.get('putExpDateMap', {})):
+        if not isinstance(m, dict):
+            continue
+        for exp in m:
+            if ':' not in str(exp):
+                continue
+            try:
+                exp_str = str(exp).split(':')[0]
+                dt = datetime.strptime(exp_str, '%Y-%m-%d')
+                dte = (dt - today).days
+                if 0 <= dte <= max_dte:
+                    return {"expiry": exp_str, "dte": dte}
+            except (ValueError, TypeError):
+                continue
+    return None
+
+
+def detect_pin_risk(raw_chain: Dict, profile: GEXProfile) -> Optional[Dict]:
+    """
+    Real, mechanical constraint: within 2 days of expiry, dealers hedging a
+    strike with concentrated open interest must trade against moves away
+    from it, which tends to pin price near that strike into expiry. Fires
+    only when both conditions GammaFlowEngine._check_pin_risk() already
+    requires in production hold: an expiry 0-2 DTE out, AND spot within 0.5%
+    of profile.max_oi_strike.
+
+    Adds a directional resolution the async alert-only engine never needed:
+    sign(max_oi_strike - spot) — a disclosed proxy for "price gravitates
+    toward the OI-concentrated strike," not a backtested edge. See
+    gamma_pin_scanner.py's module docstring for why no historical backtest
+    exists for this constraint (no historical options-chain data source is
+    reachable from this codebase or this sandbox).
+
+    Returns None if there's no expiry in the 0-2 DTE window, the window
+    exists but price isn't within the pin-risk proximity band, or spot <= 0.
+    """
+    near = find_near_expiry(raw_chain)
+    if near is None:
+        return None
+    spot = profile.spot_price
+    if spot <= 0:
+        return None
+    if abs(spot - profile.max_oi_strike) / spot >= 0.005:
+        return None
+    diff = profile.max_oi_strike - spot
+    direction = "BUY" if diff > 0 else ("SELL" if diff < 0 else None)
+    return {
+        "expiry": near["expiry"],
+        "dte": near["dte"],
+        "spot": spot,
+        "max_oi_strike": profile.max_oi_strike,
+        "direction": direction,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════
 # GEX ENGINE
 # ═══════════════════════════════════════════════════════════════
 

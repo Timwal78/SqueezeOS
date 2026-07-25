@@ -54,6 +54,7 @@ from core.api.druck_bp import druck_bp
 from core.api.cie_bp import cie_bp
 from core.api.breakout_bp import breakout_bp
 from core.api.sr_matrix_bp import sr_matrix_bp
+from core.api.gamma_pin_bp import gamma_pin_bp
 from core.api.vapl_bp import vapl_bp
 from core.vapl.middleware import install_vapl_middleware
 from core.api.macro741_bp import macro741_bp
@@ -192,6 +193,7 @@ def create_app():
     app.register_blueprint(cie_bp,           url_prefix='/api/cie')
     app.register_blueprint(breakout_bp,      url_prefix='/api/breakout')
     app.register_blueprint(sr_matrix_bp,     url_prefix='/api/sr-matrix')
+    app.register_blueprint(gamma_pin_bp,     url_prefix='/api/gamma-pin')
     app.register_blueprint(vapl_bp)
     app.register_blueprint(macro741_bp,        url_prefix='/api')
     app.register_blueprint(macro_bp,           url_prefix='/api')
@@ -302,6 +304,19 @@ def create_app():
         # every other engine — no live-arming decision made here.
         from sr_matrix_scanner import start_sr_matrix_scanner
         start_sr_matrix_scanner()
+
+        # Start SML Gamma Pin scanner — real Tradier options-chain constraint
+        # (0-2 DTE + spot within 0.5% of max-OI strike, reusing the same GEX
+        # math already live via oracle_engine's gamma-flow read). Chain-based,
+        # not bar-based — works out-of-the-box on Tradier-only, unlike
+        # ORB/DRUCK. NO BACKTEST EVIDENCE EXISTS for this constraint (no
+        # historical options-chain data source is reachable anywhere in this
+        # codebase or sandbox) — ships disclosed as unmeasured, same as CIE's
+        # dark-pool axis, not claimed profitable. Feeds iam_executor under
+        # the same paper-first safety stack as every other engine — no
+        # live-arming decision made here.
+        from gamma_pin_scanner import start_gamma_pin_scanner
+        start_gamma_pin_scanner()
 
         # Start webhook delivery engine (SSE tap + delivery workers)
         start_webhook_engine()
