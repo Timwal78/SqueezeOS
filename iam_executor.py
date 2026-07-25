@@ -142,7 +142,7 @@ _state = {
 _positions: dict = {}
 
 
-def _ledger_buy(sym: str, qty: int, price: float):
+def _ledger_buy(sym: str, qty: int, price: float, system: str = "IAM"):
     if qty <= 0 or price <= 0:
         return
     with _lock:
@@ -151,9 +151,20 @@ def _ledger_buy(sym: str, qty: int, price: float):
         pos["qty"] += qty
         pos["avg"] = total_cost / pos["qty"]
         _positions[sym] = pos
+    # Persistent, system-tagged record (operator directive 2026-07-25: "all
+    # paper trades should be recorded") -- this in-process _positions dict
+    # above resets daily and on restart with no per-system attribution; that
+    # gap is exactly what paper_trade_ledger.py exists to close. Paper only,
+    # matching what was actually asked for.
+    if PAPER_MODE():
+        try:
+            import paper_trade_ledger
+            paper_trade_ledger.record_open(system, sym, qty, price)
+        except Exception as e:
+            logger.warning(f"[IAM-EXEC] paper_trade_ledger record_open failed (non-fatal): {e}")
 
 
-def _ledger_sell(sym: str, qty: int, price: float):
+def _ledger_sell(sym: str, qty: int, price: float, system: str = "IAM"):
     """Reduce/close the tracked position and feed realized P&L to the breaker."""
     if qty <= 0 or price <= 0:
         return
@@ -167,6 +178,12 @@ def _ledger_sell(sym: str, qty: int, price: float):
         if pos["qty"] <= 0:
             _positions.pop(sym, None)
     record_fill(realized)
+    if PAPER_MODE():
+        try:
+            import paper_trade_ledger
+            paper_trade_ledger.record_close(system, sym, qty, price)
+        except Exception as e:
+            logger.warning(f"[IAM-EXEC] paper_trade_ledger record_close failed (non-fatal): {e}")
     logger.info(f"[IAM-EXEC] Ledger: closed {closed}x {sym} @ ${price:.2f} → realized {realized:+.2f} (basis=signal price)")
 
 
@@ -302,6 +319,10 @@ ODTE_ONLY_SYMBOLS = lambda: {
 def _execute_tradier(sym: str, action: str, resolution: dict, price: float) -> dict:
     instrument = INSTRUMENT()
     is_odte = sym.upper() in ODTE_ONLY_SYMBOLS()
+    # Same system-tag resolution execute_from_resolution() already uses for
+    # the primary-system gate -- threaded down into the equity ledger calls
+    # so paper_trade_ledger.py can attribute fills per engine.
+    system = (resolution.get("system") or "IAM").strip().upper()
 
     if action == "SELL":
         # Bearish resolution: never open a naked equity short. First close any
@@ -311,7 +332,7 @@ def _execute_tradier(sym: str, action: str, resolution: dict, price: float) -> d
         # IAM_INSTRUMENT, since "protect the long, buy the put" applies whether the
         # position was opened as equity or options.
         results: dict = {"mode": "bear_protect_and_put"}
-        close_result = _close_equity_position(sym, price)
+        close_result = _close_equity_position(sym, price, system)
         if close_result is not None:
             results["close"] = close_result
 
@@ -360,16 +381,16 @@ def _execute_tradier(sym: str, action: str, resolution: dict, price: float) -> d
     # Tradier does not support options orders in extended hours — fall back to equity
     if _is_extended_hours():
         logger.info(f"[IAM-EXEC] Extended hours: routing {sym} to equity (options unavailable)")
-        return _execute_tradier_equity(sym, action, price)
+        return _execute_tradier_equity(sym, action, price, system)
     # auto mode: try options on any symbol — chain availability is the natural gate.
     # BUY signal → calls; SELL signal → puts. Falls back gracefully if no chain exists.
     if instrument in ("options", "auto"):
         return _execute_tradier_options(sym, action, resolution, price)
     else:
-        return _execute_tradier_equity(sym, action, price)
+        return _execute_tradier_equity(sym, action, price, system)
 
 
-def _close_equity_position(sym: str, price: float) -> Optional[dict]:
+def _close_equity_position(sym: str, price: float, system: str = "IAM") -> Optional[dict]:
     """
     Position-aware close: looks up any existing equity long via tradier_api.get_position()
     and sells the FULL held quantity to close it — never a fixed/computed size, since the
@@ -387,7 +408,7 @@ def _close_equity_position(sym: str, price: float) -> Optional[dict]:
 
         if PAPER_MODE():
             logger.info(f"[IAM-EXEC][PAPER] Would close long: SELL {qty}x {sym} @ ${price:.2f} (protect gains)")
-            _ledger_sell(sym, qty, price)
+            _ledger_sell(sym, qty, price, system)
             return {"mode": "paper", "side": "sell", "qty": qty, "price": price, "placed": False}
 
         if _is_extended_hours():
@@ -405,7 +426,7 @@ def _close_equity_position(sym: str, price: float) -> Optional[dict]:
         result["price"] = price
         result["side"]  = "sell"
         if result.get("status") == "success":
-            _ledger_sell(sym, qty, price)
+            _ledger_sell(sym, qty, price, system)
         logger.info(f"[IAM-EXEC] 🔻 Closed long to protect gains — SELL {qty}x {sym} @ ${price:.2f}")
         return result
     except Exception as e:
@@ -413,7 +434,7 @@ def _close_equity_position(sym: str, price: float) -> Optional[dict]:
         return {"status": "error", "message": str(e)}
 
 
-def _execute_tradier_equity(sym: str, action: str, price: float) -> dict:
+def _execute_tradier_equity(sym: str, action: str, price: float, system: str = "IAM") -> dict:
     try:
         from tradier_api import place_equity_order
         side = "buy" if action == "BUY" else "sell"
@@ -427,9 +448,9 @@ def _execute_tradier_equity(sym: str, action: str, price: float) -> dict:
             stop_note  = f" | hard stop ${stop_px:.2f}" if stop_px else ""
             logger.info(f"[IAM-EXEC][PAPER] Would {side.upper()} {qty}x {sym} @ ${price:.2f} ({mode_label}){stop_note}")
             if side == "buy":
-                _ledger_buy(sym, qty, price)
+                _ledger_buy(sym, qty, price, system)
             else:
-                _ledger_sell(sym, qty, price)
+                _ledger_sell(sym, qty, price, system)
             return {"mode": "paper", "side": side, "qty": qty, "price": price,
                     "stop_loss": stop_px, "placed": False}
 
@@ -446,7 +467,7 @@ def _execute_tradier_equity(sym: str, action: str, price: float) -> dict:
 
         if result.get("status") == "success":
             if side == "buy":
-                _ledger_buy(sym, qty, price)
+                _ledger_buy(sym, qty, price, system)
                 # Attach the hard stop as a real GTC stop order — this is the
                 # "sell before it loses big" wire. Regular-hours only: Tradier
                 # rejects stop orders with pre/post durations.
@@ -462,7 +483,7 @@ def _execute_tradier_equity(sym: str, action: str, price: float) -> dict:
                     result["stop_order"] = {"status": "skipped", "message": "extended hours — place stop at next open"}
                     logger.warning(f"[IAM-EXEC] {sym} extended-hours entry — protective stop ${stop_px:.2f} NOT placed (Tradier restriction)")
             else:
-                _ledger_sell(sym, qty, price)
+                _ledger_sell(sym, qty, price, system)
         return result
     except Exception as e:
         logger.error(f"[IAM-EXEC] Tradier equity error for {sym}: {e}")
