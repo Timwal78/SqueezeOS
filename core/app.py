@@ -55,6 +55,7 @@ from core.api.cie_bp import cie_bp
 from core.api.breakout_bp import breakout_bp
 from core.api.sr_matrix_bp import sr_matrix_bp
 from core.api.gamma_pin_bp import gamma_pin_bp
+from core.api.mm_intel_bp import mm_intel_bp
 from core.api.vapl_bp import vapl_bp
 from core.vapl.middleware import install_vapl_middleware
 from core.api.macro741_bp import macro741_bp
@@ -194,6 +195,7 @@ def create_app():
     app.register_blueprint(breakout_bp,      url_prefix='/api/breakout')
     app.register_blueprint(sr_matrix_bp,     url_prefix='/api/sr-matrix')
     app.register_blueprint(gamma_pin_bp,     url_prefix='/api/gamma-pin')
+    app.register_blueprint(mm_intel_bp,      url_prefix='/api/mm-intel')
     app.register_blueprint(vapl_bp)
     app.register_blueprint(macro741_bp,        url_prefix='/api')
     app.register_blueprint(macro_bp,           url_prefix='/api')
@@ -317,6 +319,17 @@ def create_app():
         # live-arming decision made here.
         from gamma_pin_scanner import start_gamma_pin_scanner
         start_gamma_pin_scanner()
+
+        # Start SML Market Maker Intelligence v4 scanner — Kalman-filtered
+        # inventory + HJB hedge-rate forced-hedge signal, real 5-min bars
+        # (needs Polygon/Alpaca for intraday — idles honestly on Tradier-only,
+        # same as ORB/DRUCK). Backtest verdict PROMISING (4/5 symbols PF>1.0,
+        # docs/MM_INTEL_BACKTEST_2026-07-25.md) but NOT proven — no options/
+        # theta modeled despite this being a labeled 0DTE tool. Feeds
+        # iam_executor under the same paper-first safety stack as every
+        # other engine — no live-arming decision made here.
+        from mm_intel_scanner import start_mm_intel_scanner
+        start_mm_intel_scanner()
 
         # Start webhook delivery engine (SSE tap + delivery workers)
         start_webhook_engine()
