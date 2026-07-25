@@ -1,0 +1,202 @@
+// © ScriptMaster Labs — BREAKOUT TARGET/STOP v6
+// =============================================================================
+// Chart visual of MNEMOS's breakout+delta-option signal
+// (mnemos/modules/breakout_signal.py detect_breakout, target/stop exit).
+// MNEMOS is a separate, private repo (timwal78/mnemos) — this script does
+// not execute anything and is not part of CASCADE/ORB/DRUCK/CIE or the
+// iam_executor broker path in this repo.
+//
+// Entry: classic Donchian N-day high/low break — close beyond the prior N
+// bars' high = UP (calls), beyond the prior N bars' low = DOWN (puts). Exit
+// is a fixed target-gain / stop-loss on directional %-move (proxy for the
+// underlying's move — NOT modeled option premium/theta/leverage).
+//
+// Defaults (lookback=20, target=10%, stop=5%) were independently backtested
+// 2026-07-25 against real daily bars (AMC, GME, IWM, SPY, 2022-01–2026-07,
+// Robinhood-MCP-sourced) using the real detect_breakout() imported directly
+// from mnemos/modules/breakout_signal.py — net positive on all 4 symbols
+// (154 trades, 43-50% win rate, +32.5% to +192.8% total return, carried by
+// the 2:1 target:stop ratio). Full method + results: docs/BREAKOUT_BACKTEST_2026-07-25.md.
+// This is IN-SAMPLE backtest data on one window, not a live-verified edge —
+// MNEMOS itself won't trade this live until real, VERIFIED trade history
+// (min_support=20) clears its own confidence+support+edge gate. This chart
+// tool doesn't bypass that, it's for visual inspection only.
+//
+// Only one signal-type is modeled here: entry direction + fixed %-move
+// target/stop. There is no ribbon/regime filter (unlike CASCADE) — this is
+// a standalone breakout system, not a component of the CASCADE engine.
+//
+// State updates on confirmed bars only (no intrabar repaint).
+// =============================================================================
+//@version=6
+indicator("SML BREAKOUT TARGET/STOP v6", shorttitle="SMLBrkOut",
+     overlay=true, max_labels_count=500, max_lines_count=500, max_bars_back=500)
+
+// ═══ INPUTS ══════════════════════════════════════════════════════════════════
+grpB = "Breakout (detect_breakout)"
+lookback = input.int(20, "Lookback (N-day high/low)", minval=2, maxval=200, group=grpB)
+
+grpX = "Exit (backtest-derived defaults)"
+targetPct = input.float(0.10, "Target gain (directional %)", minval=0.005, step=0.01, group=grpX)
+stopPct   = input.float(0.05, "Stop loss (directional %)", minval=0.005, step=0.01, group=grpX)
+
+grpD = "Display"
+showShapes = input.bool(true, "Signal markers", group=grpD)
+showLabels = input.bool(true, "Signal labels", group=grpD)
+showTable  = input.bool(true, "HUD table", group=grpD)
+showBg     = input.bool(true, "Position background", group=grpD)
+sigSizeIn  = input.string("tiny", "Signal label size", options=["tiny", "small"], group=grpD)
+tblPosIn   = input.string("top_right", "Table position",
+     options=["top_right", "top_left", "bottom_right", "bottom_left"], group=grpD)
+
+// ═══ BRIGHT PALETTE (no grey) ════════════════════════════════════════════════
+cUp     = #00FF66      // neon green — long / call
+cDown   = #FF1744      // bright crimson — short / put
+cTarget = #76FF03      // lime target
+cStop   = #FF003C      // alarm red
+cBgUp   = color.new(#00FF66, 92)
+cBgDown = color.new(#FF1744, 92)
+cTblBg  = #050510
+cTblBd  = #00F5FF
+cTxt    = #FFFFFF
+cDim    = #7CFFB2      // mint — NOT grey
+
+// ═══ BREAKOUT DETECTION (mirrors detect_breakout exactly) ════════════════════
+// Python: window = bars[-(lookback+1):-1]; prior_high/low from that window,
+// excluding the latest bar itself — a breakout must clear genuinely prior
+// history, not itself. ta.highest/lowest(..., lookback)[1] gives the same
+// "prior N bars, excluding current" window.
+float priorHigh = ta.highest(high, lookback)[1]
+float priorLow  = ta.lowest(low, lookback)[1]
+bool ready = not na(priorHigh) and bar_index >= lookback
+
+bool breakUp   = ready and close > priorHigh
+bool breakDown = ready and close < priorLow
+
+// ═══ WALK-FORWARD POSITION STATE ══════════════════════════════════════════════
+var bool   inPos      = false
+var string direction  = ""     // "up" or "down"
+var float  entryPrice = na
+var string lastAct    = "—"
+
+bool sigEnter = false
+bool sigTarget = false
+bool sigStop   = false
+float pnlNow = na
+
+if ready and barstate.isconfirmed
+    if inPos
+        pnlNow := direction == "up" ? (close - entryPrice) / entryPrice : (entryPrice - close) / entryPrice
+        if pnlNow >= targetPct
+            sigTarget := true
+            lastAct := "EXIT_TARGET"
+            inPos := false
+            entryPrice := na
+            direction := ""
+        else if pnlNow <= -stopPct
+            sigStop := true
+            lastAct := "STOP"
+            inPos := false
+            entryPrice := na
+            direction := ""
+        else
+            lastAct := "HOLD " + direction
+    else
+        // Only one open position at a time — a signal in either direction
+        // while flat opens; overlapping signals while in a position are
+        // ignored until target/stop closes it (matches the backtest).
+        if breakUp
+            inPos := true
+            direction := "up"
+            entryPrice := close
+            sigEnter := true
+            lastAct := "ENTER up"
+            pnlNow := 0.0
+        else if breakDown
+            inPos := true
+            direction := "down"
+            entryPrice := close
+            sigEnter := true
+            lastAct := "ENTER down"
+            pnlNow := 0.0
+        else
+            lastAct := "FLAT"
+            pnlNow := na
+
+// Live (unconfirmed) PnL preview while in position
+float pnlLive = inPos and not na(entryPrice) ? (direction == "up" ? (close - entryPrice) / entryPrice : (entryPrice - close) / entryPrice) : na
+
+float targetPx = inPos and not na(entryPrice) ? (direction == "up" ? entryPrice * (1.0 + targetPct) : entryPrice * (1.0 - targetPct)) : na
+float stopPx   = inPos and not na(entryPrice) ? (direction == "up" ? entryPrice * (1.0 - stopPct) : entryPrice * (1.0 + stopPct)) : na
+
+// ═══ PLOTS ════════════════════════════════════════════════════════════════════
+plot(showShapes and ready ? priorHigh : na, "Prior N-bar high", color=color.new(cUp, 60), linewidth=1)
+plot(showShapes and ready ? priorLow  : na, "Prior N-bar low",  color=color.new(cDown, 60), linewidth=1)
+
+entryLineColor = direction == "up" ? cUp : cDown
+plot(inPos ? entryPrice : na, "Entry", color=entryLineColor, linewidth=2, style=plot.style_linebr)
+plot(inPos ? targetPx   : na, "Target", color=cTarget, linewidth=1, style=plot.style_linebr)
+plot(inPos ? stopPx     : na, "Stop",   color=cStop, linewidth=1, style=plot.style_linebr)
+
+// ═══ BACKGROUND ══════════════════════════════════════════════════════════════
+bgcolor(showBg and inPos ? (direction == "up" ? cBgUp : cBgDown) : na, title="Position BG")
+
+// ═══ MARKERS ══════════════════════════════════════════════════════════════════
+plotshape(showShapes and sigEnter and direction == "up", title="ENTER UP", style=shape.triangleup,
+     location=location.belowbar, color=cUp, size=size.tiny, text="UP", textcolor=cUp)
+plotshape(showShapes and sigEnter and direction == "down", title="ENTER DOWN", style=shape.triangledown,
+     location=location.abovebar, color=cDown, size=size.tiny, text="DN", textcolor=cDown)
+plotshape(showShapes and sigTarget, title="TARGET", style=shape.circle,
+     location=location.abovebar, color=cTarget, size=size.tiny, text="TGT", textcolor=cTarget)
+plotshape(showShapes and sigStop, title="STOP", style=shape.xcross,
+     location=location.abovebar, color=cStop, size=size.tiny, text="STOP", textcolor=cStop)
+
+// Labels — size IS user-configurable here (series string, verified safe)
+sigSz = sigSizeIn == "small" ? size.small : size.tiny
+if showLabels and barstate.isconfirmed
+    if sigEnter
+        label.new(bar_index, direction == "up" ? low : high,
+             (direction == "up" ? "ENTER UP\n" : "ENTER DOWN\n") + str.tostring(close, format.mintick),
+             style=direction == "up" ? label.style_label_up : label.style_label_down,
+             color=direction == "up" ? cUp : cDown, textcolor=#000000, size=sigSz)
+    if sigTarget
+        label.new(bar_index, high, "TARGET\n" + str.tostring(pnlNow * 100, "#.##") + "%",
+             style=label.style_label_down, color=cTarget, textcolor=#000000, size=sigSz)
+    if sigStop
+        label.new(bar_index, high, "STOP\n" + str.tostring(pnlNow * 100, "#.##") + "%",
+             style=label.style_label_down, color=cStop, textcolor=#FFFFFF, size=sigSz)
+
+// ═══ HUD TABLE ════════════════════════════════════════════════════════════════
+f_row(table t, int r, string k, string v, color vc) =>
+    table.cell(t, 0, r, k, text_color=cDim, text_size=size.normal, bgcolor=cTblBg)
+    table.cell(t, 1, r, v, text_color=vc, text_size=size.normal, bgcolor=cTblBg)
+
+var table hud = na
+if showTable and barstate.islast
+    tablePos = tblPosIn == "top_left" ? position.top_left :
+         tblPosIn == "bottom_right" ? position.bottom_right :
+         tblPosIn == "bottom_left" ? position.bottom_left : position.top_right
+    if not na(hud)
+        table.delete(hud)
+    hud := table.new(tablePos, 2, 10, bgcolor=cTblBg, border_color=cTblBd, border_width=2,
+         frame_color=cTblBd, frame_width=1)
+
+    table.cell(hud, 0, 0, "BREAKOUT", text_color=cUp, text_size=size.normal, bgcolor=cTblBg)
+    table.cell(hud, 1, 0, "TARGET/STOP", text_color=cDown, text_size=size.normal, bgcolor=cTblBg)
+
+    f_row(hud, 1, "STATE", inPos ? ("OPEN " + direction) : "FLAT", inPos ? (direction == "up" ? cUp : cDown) : cDim)
+    f_row(hud, 2, "LAST", lastAct, cTxt)
+    f_row(hud, 3, "ENTRY", inPos ? str.tostring(entryPrice, format.mintick) : "—", cTxt)
+    f_row(hud, 4, "PnL", inPos ? str.tostring(pnlLive * 100, "#.##") + "%" : "—",
+         not na(pnlLive) ? (pnlLive >= 0 ? cUp : cDown) : cDim)
+    f_row(hud, 5, "TARGET", inPos ? str.tostring(targetPx, format.mintick) + " (+" + str.tostring(targetPct*100, "#.#") + "%)" : "—", cTarget)
+    f_row(hud, 6, "STOP", inPos ? str.tostring(stopPx, format.mintick) + " (-" + str.tostring(stopPct*100, "#.#") + "%)" : "—", cStop)
+    f_row(hud, 7, "PRIOR HIGH", ready ? str.tostring(priorHigh, format.mintick) : "warming…", cUp)
+    f_row(hud, 8, "PRIOR LOW", ready ? str.tostring(priorLow, format.mintick) : "warming…", cDown)
+    f_row(hud, 9, "TF NOTE", timeframe.isdaily ? "DAILY ✓ backtest parity" : "Backtested on DAILY only", timeframe.isdaily ? cUp : cStop)
+
+// ═══ ALERTS ══════════════════════════════════════════════════════════════════
+alertcondition(sigEnter and direction == "up", "Breakout ENTER UP", "{{ticker}} BREAKOUT UP — N-bar high broken @ {{close}}")
+alertcondition(sigEnter and direction == "down", "Breakout ENTER DOWN", "{{ticker}} BREAKOUT DOWN — N-bar low broken @ {{close}}")
+alertcondition(sigTarget, "Breakout TARGET", "{{ticker}} BREAKOUT TARGET hit @ {{close}}")
+alertcondition(sigStop, "Breakout STOP", "{{ticker}} BREAKOUT STOP hit @ {{close}}")
