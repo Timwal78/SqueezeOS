@@ -53,8 +53,8 @@ NOTARY_FORWARD_TIMEOUT = float(os.environ.get("NOTARY_FORWARD_TIMEOUT_S", "20"))
 # without round-tripping through a 402 challenge.
 _TIERS = {
     "decision.notarize":           {"base_price_rlusd": 0.001, "name": "Standard",  "includes": "URIToken + memo"},
-    "decision.notarize.certified": {"base_price_rlusd": 0.010, "name": "Certified", "includes": "Standard + Ed25519 certificate"},
-    "decision.notarize.sovereign": {"base_price_rlusd": 0.050, "name": "Sovereign", "includes": "Certified + SOVEREIGN grade"},
+    "decision.notarize.certified": {"base_price_rlusd": 0.001, "name": "Certified", "includes": "Standard + Ed25519 certificate"},
+    "decision.notarize.sovereign": {"base_price_rlusd": 0.001, "name": "Sovereign", "includes": "Certified + SOVEREIGN grade"},
 }
 
 

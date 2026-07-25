@@ -84,7 +84,7 @@ def _query_providers(dm, symbol: str) -> list:
 
 @truth_bp.route('/verify/<symbol>', methods=['GET'])
 @dual_payment(
-    price_usdc="0.02",
+    price_usdc="0.001",
     description=(
         "Truth Engine — live multi-provider price consensus with a real "
         "measured variance/confidence score and an HMAC-SHA256 proof hash. "

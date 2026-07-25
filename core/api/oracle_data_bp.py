@@ -48,7 +48,7 @@ FEEDS = {
             "executive changes, bankruptcy filings, material agreements. Moves stocks before "
             "Bloomberg publishes. Polled every 60 s from EDGAR."
         ),
-        "price_rlusd": "0.02",
+        "price_rlusd": "0.001",
         "poll_interval_s": 60,
         "source_url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=8-K&output=atom",
     },
@@ -58,7 +58,7 @@ FEEDS = {
             "IPO registration statements and S-1/A amendments the moment they hit EDGAR. "
             "Early signal on new equity supply — priced weeks before IPO day."
         ),
-        "price_rlusd": "0.02",
+        "price_rlusd": "0.001",
         "poll_interval_s": 300,
         "source_url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=S-1&output=atom",
     },
@@ -69,7 +69,7 @@ FEEDS = {
             "stocks move 50–200% on approval or rejection. Sub-second delivery vs Bloomberg's "
             "5–10 minute lag. Polled every 5 min."
         ),
-        "price_rlusd": "0.02",
+        "price_rlusd": "0.001",
         "poll_interval_s": 300,
         "source_url": "https://api.fda.gov/drug/drugsfda.json",
     },
@@ -80,7 +80,7 @@ FEEDS = {
             "technology moats — granted patents indicate R&D direction and IP defensibility "
             "before analyst coverage."
         ),
-        "price_rlusd": "0.02",
+        "price_rlusd": "0.001",
         "poll_interval_s": 3600,
         "source_url": "https://api.patentsview.org/patents/query",
     },

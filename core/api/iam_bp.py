@@ -124,7 +124,7 @@ def _redact_obligation(block: dict) -> dict:
 
 @iam_bp.route("/<symbol>", methods=["GET"])
 @dual_payment(
-    price_usdc="0.05",
+    price_usdc="0.001",
     description=(
         "IAM Full Resolution — mandatory action the market is forced to take. "
         "Obligation committee (5 independent analysts) + Truth Layer + Action Resolution Oracle. "
@@ -248,7 +248,7 @@ def iam_truth(symbol):
         "iam_truth": result,
         "upgrade": {
             "full_resolution": f"/api/iam/{sym}",
-            "price_rlusd":     "0.05",
+            "price_rlusd":     "0.001",
             "includes":        [
                 "mandatory action (BUY/SELL/HOLD)",
                 "obligation committee breakdown",
@@ -390,7 +390,7 @@ def iam_stress_test():
         "timestamp": time.time(),
         "upgrade": {
             "full_resolution": "/api/iam/<symbol>",
-            "price_rlusd":     "0.05",
+            "price_rlusd":     "0.001",
             "gateway":         "https://four02proof.onrender.com",
         },
     }))

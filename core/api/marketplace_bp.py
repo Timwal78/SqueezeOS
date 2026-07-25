@@ -150,7 +150,7 @@ def _stat(wallet: str) -> dict:
 
 # Alpha Mesh revenue split — seller keeps 90%, platform takes 10%
 SELLER_SHARE = 0.90
-READ_PRICE_RLUSD = 0.02
+READ_PRICE_RLUSD = 0.001
 SELLER_CUT_RLUSD = round(READ_PRICE_RLUSD * SELLER_SHARE, 4)
 
 
@@ -270,7 +270,7 @@ def preview(listing_id):
         "upgrade": {
             "full_signal": "POST /api/marketplace/read",
             "includes":    ["thesis", "entry", "target", "stop", "seller_track_record"],
-            "price_rlusd": "0.02",
+            "price_rlusd": "0.001",
         },
     })
 

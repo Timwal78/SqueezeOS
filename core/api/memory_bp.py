@@ -87,7 +87,7 @@ def _load_agent_memories(agent_id: str) -> list:
 
 @memory_bp.route('/store', methods=['POST'])
 @dual_payment(
-    price_usdc="0.01",
+    price_usdc="0.001",
     description=(
         "Memory Graph — persist an agent memory with the caller's own "
         "provenance (source_type, source_id, confidence) kept exactly as "
@@ -134,7 +134,7 @@ def store():
 
 @memory_bp.route('/recall', methods=['GET'])
 @dual_payment(
-    price_usdc="0.01",
+    price_usdc="0.001",
     description=(
         "Memory Graph — literal keyword/tag search over an agent's own stored "
         "memories, ranked by recency. Not semantic/vector search — no "
