@@ -56,6 +56,7 @@ from core.api.breakout_bp import breakout_bp
 from core.api.sr_matrix_bp import sr_matrix_bp
 from core.api.gamma_pin_bp import gamma_pin_bp
 from core.api.mm_intel_bp import mm_intel_bp
+from core.api.paper_trades_bp import paper_trades_bp
 from core.api.vapl_bp import vapl_bp
 from core.vapl.middleware import install_vapl_middleware
 from core.api.macro741_bp import macro741_bp
@@ -196,6 +197,7 @@ def create_app():
     app.register_blueprint(sr_matrix_bp,     url_prefix='/api/sr-matrix')
     app.register_blueprint(gamma_pin_bp,     url_prefix='/api/gamma-pin')
     app.register_blueprint(mm_intel_bp,      url_prefix='/api/mm-intel')
+    app.register_blueprint(paper_trades_bp,  url_prefix='/api/paper-trades')
     app.register_blueprint(vapl_bp)
     app.register_blueprint(macro741_bp,        url_prefix='/api')
     app.register_blueprint(macro_bp,           url_prefix='/api')
