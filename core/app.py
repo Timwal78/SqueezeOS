@@ -137,7 +137,8 @@ def create_app():
     _cors_origins_env = os.environ.get(
         "CORS_ORIGINS",
         "https://scriptmasterlabs.com,https://www.scriptmasterlabs.com,"
-        "https://signal-auction-loom.vercel.app,https://squeezeos-api.onrender.com",
+        "https://signal-auction-loom.vercel.app,https://squeezeos-api.onrender.com,"
+        "https://swarmagentsintelligence.scriptmasterlabs.com",
     )
     _cors_origins = [o.strip() for o in _cors_origins_env.split(",") if o.strip()]
     CORS(app, origins=_cors_origins, supports_credentials=False)
