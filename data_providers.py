@@ -1238,7 +1238,18 @@ class DataManager:
         if timeframe.upper() in ('1D', '1DAY', 'DAY', 'DAILY'):
             try:
                 from tradier_api import get_history_df
-                df = get_history_df(symbol, days=max(limit + 10, 30), interval="daily")
+                # get_history_df's `days` param is CALENDAR days, but `limit` here
+                # is a TRADING-day count (callers ask for N daily bars). Passing
+                # limit straight through under-fetches by ~30% (weekends + market
+                # holidays) -- e.g. limit=300 only returned ~200-215 actual bars,
+                # silently giving every daily-bar caller (breakout/sr_matrix/cie
+                # scanners, etc.) less history than requested with no error (same
+                # root-cause bug class found in avg_down_engine._fetch_closes,
+                # where an exact-threshold guard turned this into CASCADE's live
+                # scanner never firing at all). Convert with the NYSE trading-day
+                # ratio (~252/365) plus a buffer.
+                calendar_days = max(int((limit + 10) * 365 / 252) + 20, 30)
+                df = get_history_df(symbol, days=calendar_days, interval="daily")
                 if df is not None and not df.empty:
                     bars = [
                         {
