@@ -1,8 +1,9 @@
 name: Service Health Monitor
 
+# DISABLED schedule (2026-07-28): was cron */10 and exit-1 on any dead
+# optional service → GitHub failure email flood 24/7. Manual only.
+# Core checks kept; intentionally offline / unmaintained hosts removed.
 on:
-  schedule:
-    - cron: '*/10 * * * *'   # every 10 min — proactive alerting before user notices
   workflow_dispatch:
 
 jobs:
@@ -26,13 +27,7 @@ jobs:
             local expected="${3:-200}"
 
             # `|| true` is required here: this script runs under `bash -e`, and
-            # without it a hard curl failure (not just an unexpected HTTP
-            # status — a suspended Render service, DNS failure, connection
-            # refused, etc.) aborts the entire job right here, before the
-            # TIMEOUT-handling branch below ever runs. That's exactly what was
-            # silently happening to every check queued after the first one
-            # to hit a truly-down service — zero log output for it, job just
-            # died with whatever raw exit code curl happened to return.
+            # without it a hard curl failure aborts the entire job.
             status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 --retry 1 "$url" 2>/dev/null) || true
 
             if [ -z "$status" ] || [ "$status" = "000" ]; then
@@ -41,7 +36,6 @@ jobs:
             elif echo "$expected" | grep -qw "$status"; then
               echo "  OK  $name → $status"
             elif [ "$status" = "403" ]; then
-              # 403 on Vercel = Deployment Protection gate is enabled — needs dashboard fix
               WARNINGS+=("$name|403 Forbidden (Vercel auth gate — disable Deployment Protection in Vercel dashboard)|$url")
               echo "WARN  $name → 403 (Vercel Deployment Protection active)"
             elif [ "$status" -ge 500 ] 2>/dev/null; then
@@ -53,7 +47,7 @@ jobs:
             fi
           }
 
-          # ── All SML services ────────────────────────────────────────────
+          # ── Core SML services only (money path) ────────────────────────
           check_service "Ghost Layer Sovereign (scriptmasterlabs.com)" \
             "https://scriptmasterlabs.com" "200 301 302"
 
@@ -66,22 +60,11 @@ jobs:
           check_service "402Proof" \
             "https://four02proof.onrender.com/v1/stats" "200"
 
-          check_service "SML Rails (RLUSD)" \
-            "https://sml-rails.onrender.com/api/health" "200 404"
+          check_service "mcp-x402" \
+            "https://mcp-x402.onrender.com/health" "200"
 
-          check_service "SML Copy-Trader" \
-            "https://sml-copytrader.onrender.com/health" "200 404"
-
-          check_service "SML Launchpad" \
-            "https://sml-launchpad.onrender.com/health" "200 404"
-
-          # TipMaster is deliberately suspended on Render (owner action,
-          # 2026-07-04 — see SqueezeOS/CLAUDE.md) and not expected to respond
-          # at all. Alerting on a service that's intentionally offline is
-          # noise, not signal. Restore this check when TipMaster is
-          # un-suspended and configured again.
-          # check_service "TipMaster" \
-          #   "https://tipmaster.onrender.com/health" "200 404"
+          # Intentionally NOT checked (offline / unmaintained — were 24/7 email spam):
+          # sml-rails (503), sml-copytrader (404), sml-launchpad (404), TipMaster (suspended)
 
           # ── Build Discord alert payload ────────────────────────────────
           if [ "${#FAILURES[@]}" -gt 0 ] || [ "${#WARNINGS[@]}" -gt 0 ]; then
@@ -112,9 +95,9 @@ jobs:
               PAYLOAD=$(jq -n \
                 --arg title "$TITLE" \
                 --argjson color "$COLOR" \
-                --arg desc "Proactive monitoring detected an issue. Investigate immediately." \
+                --arg desc "Manual monitor run detected an issue." \
                 --argjson fields "$FIELDS" \
-                --arg footer "service-monitor.yml — every 10 min" \
+                --arg footer "service-monitor.yml — manual only" \
                 --arg ts "$NOW" \
                 '{username: "SML Sentinel", embeds: [{title: $title, color: $color, description: $desc, fields: $fields, footer: {text: $footer}, timestamp: $ts}]}')
 
@@ -129,12 +112,11 @@ jobs:
               fi
             fi
 
-            # Fail job only for hard errors (not warnings like 403 Vercel gate)
             if [ "${#FAILURES[@]}" -gt 0 ]; then
               echo ""
               echo "HARD FAILURES DETECTED — failing job"
               exit 1
             fi
           else
-            echo "All services healthy."
+            echo "All core services healthy."
           fi
