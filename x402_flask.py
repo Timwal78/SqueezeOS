@@ -351,7 +351,15 @@ def x402_guard(price_usdc: str, description: str, discoverable: bool = True):
 
 
 def register_x402_discovery(app):
-    @app.route("/.well-known/x402")
+    """Idempotent — safe if create_app (or hot reload) calls this twice."""
+    if getattr(app, "_sml_x402_discovery_registered", False):
+        return app
+    # Also skip if endpoint already bound (failed half-register / double import)
+    if "_x402_discovery" in app.view_functions:
+        app._sml_x402_discovery_registered = True
+        return app
+
+    @app.route("/.well-known/x402", endpoint="_x402_discovery")
     def _x402_discovery():
         cfg = USDC.get(NETWORK, USDC["base-sepolia"])
         return jsonify({
@@ -392,4 +400,5 @@ def register_x402_discovery(app):
                 for d in DISCOVERY
             ],
         })
+    app._sml_x402_discovery_registered = True
     return app

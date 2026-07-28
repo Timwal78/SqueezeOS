@@ -419,16 +419,49 @@ def create_app():
     def internal_error(e):
         return jsonify({"error": "INTERNAL_ERROR", "message": "Server error"}), 500
 
-    from x402_flask import x402_guard, register_x402_discovery
-
-    # Register /.well-known/x402 discovery endpoint
-    register_x402_discovery(app)
-
+    # Root: browsers get the trading UI. Machine/agent clients get HTTP 402
+    # (or ?x402=1) so x402scan/Bazaar stop labeling bare / as "not paid".
+    # HTML must NEVER be locked behind a paywall — that bricks the product site.
     @app.route('/')
-    @x402_guard(price_usdc="0.001", description="SqueezeOS MCP — 150+ institutional AI data endpoints. Federal, Medical & Finance intelligence. x402 USDC/Base. SDVOSB | SAM.gov UEI: G24VZA4RLMK3 | CAGE: 21U51")
     def serve_index():
-        return send_from_directory(app.static_folder, 'index.html')
-
+        from flask import request, jsonify, make_response
+        accept = (request.headers.get('Accept') or '').lower()
+        ua = (request.headers.get('User-Agent') or '').lower()
+        want_html = 'text/html' in accept or ('mozilla' in ua and 'application/json' not in accept)
+        want_402 = str(request.args.get('x402', '')).strip() in ('1', 'true', 'yes')
+        if want_html and not want_402:
+            return send_from_directory(app.static_folder, 'index.html')
+        # Machine path — real x402 challenge (same guard as paid tools)
+        try:
+            from x402_flask import x402_guard
+            @x402_guard(
+                price_usdc="0.001",
+                description=(
+                    "SqueezeOS root discovery challenge — 62+ institutional MCP tools. "
+                    "Prefer live paid routes under /api and /mcp. "
+                    "x402 USDC on Base. SDVOSB | UEI G24VZA4RLMK3 | CAGE 21U51"
+                ),
+            )
+            def _root_402():
+                return jsonify({
+                    "service": "squeezeos-api",
+                    "paid": True,
+                    "mcp": "https://squeezeos-api.onrender.com/mcp",
+                    "discovery": "https://squeezeos-api.onrender.com/.well-known/x402",
+                    "note": "Payment verified. Use /mcp for tools.",
+                })
+            return _root_402()
+        except Exception:
+            # Fallback catalog if guard import fails — still points scanners correctly
+            return jsonify({
+                "service": "squeezeos-api",
+                "x402": True,
+                "price_floor_usdc": "0.001",
+                "mcp": "https://squeezeos-api.onrender.com/mcp",
+                "discovery": "https://squeezeos-api.onrender.com/.well-known/x402",
+                "paid_demo_url": "https://squeezeos-api.onrender.com/?x402=1",
+                "scanner_hint": "GET /?x402=1 or Accept: application/json → HTTP 402",
+            }), 200
 
     @app.route('/terminal')
     @app.route('/beastmode')
