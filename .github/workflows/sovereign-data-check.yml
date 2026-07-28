@@ -10,7 +10,7 @@ jobs:
   sovereign-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Run Sovereign Data Scanner
         run: |
           chmod +x scripts/check-sovereign-data.sh
