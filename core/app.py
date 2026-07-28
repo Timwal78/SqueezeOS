@@ -419,9 +419,16 @@ def create_app():
     def internal_error(e):
         return jsonify({"error": "INTERNAL_ERROR", "message": "Server error"}), 500
 
+    from x402_flask import x402_guard, register_x402_discovery
+
+    # Register /.well-known/x402 discovery endpoint
+    register_x402_discovery(app)
+
     @app.route('/')
+    @x402_guard(price_usdc="0.001", description="SqueezeOS MCP — 150+ institutional AI data endpoints. Federal, Medical & Finance intelligence. x402 USDC/Base. SDVOSB | SAM.gov UEI: G24VZA4RLMK3 | CAGE: 21U51")
     def serve_index():
         return send_from_directory(app.static_folder, 'index.html')
+
 
     @app.route('/terminal')
     @app.route('/beastmode')
