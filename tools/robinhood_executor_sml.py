@@ -42,9 +42,17 @@ load_dotenv(dotenv_path=os.environ.get("DOTENV_PATH",
             override=True)
 
 # ── Logging ────────────────────────────────────────────────────────────────────
-LOG_DIR  = os.environ.get("LOG_DIR", r"C:\SqueezeOS")
+# Prefer env; else local tools\logs next to this script (never hard-require C:\SqueezeOS —
+# that path triggers "The system cannot find the path specified" on some Windows setups).
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+_DEFAULT_LOG_DIR = os.path.join(_SCRIPT_DIR, "logs")
+LOG_DIR = os.environ.get("LOG_DIR") or _DEFAULT_LOG_DIR
+try:
+    os.makedirs(LOG_DIR, exist_ok=True)
+except OSError:
+    LOG_DIR = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "SqueezeOS", "logs")
+    os.makedirs(LOG_DIR, exist_ok=True)
 LOG_FILE = os.path.join(LOG_DIR, "robinhood_executor.log")
-os.makedirs(LOG_DIR, exist_ok=True)
 
 _handler = RotatingFileHandler(LOG_FILE, maxBytes=5_000_000, backupCount=3, encoding='utf-8')
 _handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s — %(message)s"))
@@ -125,11 +133,15 @@ POLL_INTERVAL_S    = int(os.environ.get("POLL_INTERVAL_S", "45"))      # poll ev
 # Desk standard is 45s continuous harvest. Stale PC executor.env often still
 # has 300 from the old launcher — clamp so a bad env can't re-slow the loop.
 if POLL_INTERVAL_S > 90:
-    import warnings as _w
-    _w.warn(f"POLL_INTERVAL_S={POLL_INTERVAL_S} is too slow for MM harvest; clamping to 45")
     POLL_INTERVAL_S = 45
 
 MIN_GOD_STACKED    = int(os.environ.get("MIN_GOD_STACKED", "3"))       # min SET9 stacked to execute (3/6 = 50% convergence, max signal flow)
+# Stale env sometimes has MIN_GOD_STACKED=4 or 5 from older desk — force desk floor 3
+# so GOD_MODE 3/6+ can fire (user gate: god_stacked >= 3).
+if MIN_GOD_STACKED < 1:
+    MIN_GOD_STACKED = 3
+if MIN_GOD_STACKED > 3 and os.environ.get("MIN_GOD_STACKED_LOCK", "true").lower() == "true":
+    MIN_GOD_STACKED = 3
 PDT_BALANCE_LIMIT  = float(os.environ.get("PDT_BALANCE_LIMIT", "2100.0"))
 PDT_MAX_TRADES     = int(os.environ.get("PDT_MAX_TRADES", "3"))
 PAPER_MODE           = os.environ.get("ROBINHOOD_PAPER_MODE", "false").lower() == "true"
@@ -1439,18 +1451,42 @@ _UNIVERSE_WARN_FLOOR   = 25
 _universe_last_warn_ts = 0.0
 
 def _warn_if_universe_degraded(universe_size: int):
+    """Warn only when BOTH oracle batch AND live market scan look tiny.
+
+    /api/oracle universe_size can stick at 3 (ORACLE_SYMBOLS seed) while
+    /api/market/scan already has 100+ quotes powering beastmode — that is NOT
+    degraded money-path. Prefer market scan size when available.
+    """
     global _universe_last_warn_ts
-    if universe_size <= 0:   # server didn't report — nothing to judge
+    live_mkt = 0
+    try:
+        req = URLRequest(f"{SQUEEZEOS_API_URL}/api/market/scan",
+                         headers={"User-Agent": "SqueezeOS-RH-Executor/2.0"})
+        with urlopen(req, timeout=12) as resp:
+            m = json.loads(resp.read())
+        live_mkt = int(m.get("universe_size") or len(m.get("quotes") or {}) or 0)
+    except Exception:
+        live_mkt = 0
+    effective = max(int(universe_size or 0), live_mkt)
+    if effective <= 0:
         return
     now = time.time()
-    if universe_size <= _UNIVERSE_WARN_FLOOR and now - _universe_last_warn_ts > 3600:
+    if effective <= _UNIVERSE_WARN_FLOOR and now - _universe_last_warn_ts > 3600:
         _universe_last_warn_ts = now
         logger.warning(
-            f"[ORACLE] Server scan universe is only {universe_size} tickers — full-market "
-            f"discovery is DEGRADED (seed list only). Check ALPACA_API_KEY/ALPACA_API_SECRET "
-            f"and POLYGON_API_KEY on the squeezeos-api Render service, and "
-            f"{SQUEEZEOS_API_URL}/api/truth/providers for live provider status."
+            f"[ORACLE] Effective scan universe is only {effective} tickers "
+            f"(oracle_batch={universe_size}, market_scan={live_mkt}) — discovery DEGRADED. "
+            f"Check ALPACA/POLYGON/TRADIER on squeezeos-api and "
+            f"{SQUEEZEOS_API_URL}/api/truth/providers + /api/market/scan."
         )
+    elif live_mkt > _UNIVERSE_WARN_FLOOR and int(universe_size or 0) <= _UNIVERSE_WARN_FLOOR:
+        # Quiet info once/hour — money path is fine via market/beastmode
+        if now - _universe_last_warn_ts > 3600:
+            _universe_last_warn_ts = now
+            logger.info(
+                f"[ORACLE] batch seed={universe_size} but market scan={live_mkt} — "
+                f"beastmode universe healthy (not degraded)"
+            )
 
 
 def _poll_oracle() -> int:

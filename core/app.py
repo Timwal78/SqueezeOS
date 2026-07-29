@@ -723,6 +723,13 @@ def create_app():
             cache = get_oracle_batch_cache()
             results = cache["results"]
             batch_size = cache["universe_size"] or len(ORACLE_SYMBOLS)
+            # Money-path truth: live market quotes size (beastmode feed). Oracle
+            # batch can lag on ORACLE_SYMBOLS=3 while state.quotes is already 100+.
+            try:
+                live_quote_n = len(state.quotes) if state.quotes else 0
+            except Exception:
+                live_quote_n = 0
+            reported_universe = max(batch_size, live_quote_n)
             ranked = sorted(
                 [v for v in results.values() if v.get("directive") != "SHIELD"],
                 key=lambda x: x.get("confidence", 0), reverse=True
@@ -732,7 +739,9 @@ def create_app():
                 "status": "success",
                 "master": master,
                 "symbols": results,
-                "universe_size": batch_size,
+                "universe_size": reported_universe,
+                "oracle_batch_size": batch_size,
+                "market_quote_size": live_quote_n,
                 "cache_age_s": round(time.time() - cache["ts"], 1) if cache["ts"] else None,
                 "stale": cache["stale"],
                 "timestamp": datetime.now().isoformat(),
