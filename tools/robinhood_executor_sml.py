@@ -152,7 +152,7 @@ if os.environ.get("ALLOW_CUSTOM_MIN_GOD", "false").lower() == "true":
         MIN_GOD_STACKED = max(1, min(6, int(os.environ.get("MIN_GOD_STACKED", "3"))))
     except Exception:
         MIN_GOD_STACKED = 3
-PDT_BALANCE_LIMIT  = float(os.environ.get("PDT_BALANCE_LIMIT", "2100.0"))
+PDT_BALANCE_LIMIT  = float(os.environ.get("PDT_BALANCE_LIMIT", "25000.0"))  # real FINRA PDT equity threshold for margin accounts (was 2100.0 -- ~12x too low, operator confirmed 2026-07-29 the account is margin, under $25k)
 PDT_MAX_TRADES     = int(os.environ.get("PDT_MAX_TRADES", "3"))
 PAPER_MODE           = os.environ.get("ROBINHOOD_PAPER_MODE", "false").lower() == "true"
 KILL_SWITCH          = os.environ.get("KILL_SWITCH", "false").lower() == "true"
