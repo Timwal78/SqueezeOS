@@ -823,8 +823,16 @@ class ActionResolutionOracle:
             action, symbol, price, dominant, analyst_results
         )
 
+        # Tag MM-v4-dominated resolutions so IAM_PRIMARY_SYSTEM=SML_MM_V4
+        # can broker-execute them (untagged defaults to "IAM" and gets blocked).
+        sys_tag = "SML_MM_V4" if (
+            getattr(dominant, "name", "") == "market_maker"
+            or "MM_V4" in str(getattr(dominant, "label", "") or "")
+        ) else "IAM"
+
         return {
             "action":          action,
+            "system":          sys_tag,
             "rationale":       rationale,
             "vehicle":         vehicle,
             "invalidation":    invalidation,

@@ -5,7 +5,7 @@ TradingView required. Same pattern as druck_scanner.py.
 Every MM_INTEL_SCAN_INTERVAL seconds (default 300), pulls real intraday bars
 via DataManager and runs mm_intel_engine. A NEW live_signal event on the
 latest bar routes to iam_executor.execute_async() with system tag
-"SML_MM_INTEL" -- the full safety stack applies there (paper mode,
+"SML_MM_V4" -- the full safety stack applies there (paper mode,
 stop-losses, daily-loss breaker, primary-system gate). This module places
 no orders itself.
 
@@ -31,7 +31,7 @@ proven -- 4 of 5 symbols profit factor > 1.0 on real 5-minute bars, but NO
 options/theta modeled despite this being a labeled 0DTE tool. This scanner
 feeds the exact same paper-first safety stack as every other engine --
 IAM_PAPER_MODE=true is still the default, and nobody has added
-SML_MM_INTEL to IAM_PRIMARY_SYSTEM. That is a separate, explicit, future
+SML_MM_V4 to IAM_PRIMARY_SYSTEM. That is a separate, explicit, future
 decision -- not made here.
 
 Data reality (documented, not papered over): DataManager's intraday bars
@@ -164,7 +164,7 @@ def scan_once() -> int:
             conf = float(result.get("confidence") or 0.0)
             resolution = {
                 "action":                action,
-                "system":                "SML_MM_INTEL",
+                "system":                "SML_MM_V4",  # IAM_PRIMARY_SYSTEM name (was SML_MM_INTEL)
                 "rationale":             f"MM Intel v4 {raw_signal}: inv_z={result.get('inv_z'):.2f} "
                                          f"gamma_pressure={result.get('gamma_pressure'):.2f} "
                                          f"conf={conf:.0f}% -- underlying %-move proxy only, "

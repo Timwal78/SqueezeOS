@@ -130,12 +130,12 @@ def scan_once() -> int:
                 "system":                "SML_BREAKOUT",
                 "rationale":             f"BREAKOUT {event}: {p.lookback}-day Donchian break @ {price}",
                 "vehicle":               sym,
-                "resolution_confidence": 75.0,
+                "resolution_confidence": 80.0,
                 "invalidation":          "",
                 "review_trigger":        "",
             }
             from iam_executor import execute_async
-            execute_async(sym, resolution, "IMMEDIATE", 75.0, price)
+            execute_async(sym, resolution, "IMMEDIATE", 80.0, price)
             fired += 1
             _status["signals_fired_total"] += 1
             _status["last_signal"] = {"symbol": sym, "action": action, "event": event, "ts": time.time()}

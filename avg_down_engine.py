@@ -422,7 +422,9 @@ def _route_iam(symbol: str, sig: dict):
         ftd_suffix = f" | FTD ECHO {echo_src}" if ftd_echo else ""
 
         # FTD settlement echo in the deploy zone raises conviction +10
-        base_conf  = 65.0 + sig["align_score"] * 5.0
+        # Floor 76 so CASCADE clears IAM_MIN_CONFIDENCE=75 on thin align;
+        # align_score 0..4 still scales conviction up to 95.
+        base_conf  = 76.0 + sig["align_score"] * 4.0
         confidence = min(95.0, base_conf + (10.0 if ftd_echo else 0.0))
 
         resolution = {

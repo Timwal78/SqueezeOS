@@ -125,12 +125,12 @@ def scan_once() -> int:
                 "system":                "SML_SR_MATRIX",
                 "rationale":             f"S/R MATRIX {action}: confirmed {pivot_label} ({p.bars}-bar) @ {price}",
                 "vehicle":               sym,
-                "resolution_confidence": 70.0,
+                "resolution_confidence": 78.0,  # must clear IAM_MIN_CONFIDENCE (75)
                 "invalidation":          "",
                 "review_trigger":        "",
             }
             from iam_executor import execute_async
-            execute_async(sym, resolution, "IMMEDIATE", 70.0, price)
+            execute_async(sym, resolution, "IMMEDIATE", 78.0, price)
             fired += 1
             _status["signals_fired_total"] += 1
             _status["last_signal"] = {"symbol": sym, "action": action, "ts": time.time()}
