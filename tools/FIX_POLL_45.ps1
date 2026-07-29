@@ -22,12 +22,17 @@ git checkout main 2>$null
 git reset --hard origin/main
 Write-Host "HEAD: $(git rev-parse --short HEAD) $(git log -1 --oneline)"
 
-# Prove lock is in source
+# Prove lock is in source (no # inside -match - PowerShell treats it as comment)
 $py = Get-Content ".\tools\robinhood_executor_sml.py" -Raw
-if ($py -notmatch 'POLL_INTERVAL_S = 45  # LOCKED') {
-  Write-Host "WARNING: desk lock string missing — pull may have failed" -ForegroundColor Red
+if ($py -notlike "*POLL_INTERVAL_S = 45*") {
+  Write-Host "WARNING: desk lock string missing - pull may have failed" -ForegroundColor Red
 } else {
   Write-Host "OK desk lock present in source" -ForegroundColor Green
+}
+if ($py -notlike "*DESK-LOCKED*") {
+  Write-Host "WARNING: DESK-LOCKED banner missing - old source" -ForegroundColor Red
+} else {
+  Write-Host "OK DESK-LOCKED banner present" -ForegroundColor Green
 }
 
 # Force executor.env
@@ -63,5 +68,5 @@ $env:ALLOW_SLOW_POLL = "false"
 $env:DOTENV_PATH = (Resolve-Path $en).Path
 
 Write-Host ""
-Write-Host "Starting executor — banner MUST say: Poll every : 45s [DESK-LOCKED]" -ForegroundColor Green
+Write-Host "Starting executor - banner MUST say: Poll every : 45s [DESK-LOCKED]" -ForegroundColor Green
 python ".\tools\robinhood_executor_sml.py"
