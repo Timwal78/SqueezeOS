@@ -145,6 +145,18 @@ TAKE_PROFIT_PCT      = float(os.environ.get("TAKE_PROFIT_PCT", "15.0")) # fallba
 ATR_STOP_MULTIPLIER  = float(os.environ.get("ATR_STOP_MULTIPLIER", "1.5"))
 ATR_TP_MULTIPLIER    = float(os.environ.get("ATR_TP_MULTIPLIER", "3.75"))
 POSITION_MONITOR_ENABLED = os.environ.get("POSITION_MONITOR_ENABLED", "true").lower() == "true"
+# Options sleeve continuous harvest (MM forced-move 50–500%)
+OPT_HARD_STOP = float(os.environ.get("OPT_HARD_STOP", "-0.20"))
+OPT_SCALE_1 = float(os.environ.get("OPT_SCALE_1", "0.50"))
+OPT_SCALE_2 = float(os.environ.get("OPT_SCALE_2", "1.50"))
+OPT_BANK_300 = float(os.environ.get("OPT_BANK_300", "3.00"))
+OPT_BANK_500 = float(os.environ.get("OPT_BANK_500", "5.00"))
+OPT_GIVEBACK_ARM = float(os.environ.get("OPT_GIVEBACK_ARM", "0.50"))
+OPT_GIVEBACK_FRAC = float(os.environ.get("OPT_GIVEBACK_FRAC", "0.35"))
+OPT_TRAIL = float(os.environ.get("OPT_TRAIL", "0.22"))
+OPT_TRAIL_LATE = float(os.environ.get("OPT_TRAIL_LATE", "0.18"))
+OPT_DELTA_EXIT = float(os.environ.get("OPT_DELTA_EXIT", "0.60"))
+_OPT_BOOK_FILE = os.path.join(LOG_DIR, "option_book.json")
 # Skip a BUY when the bid-ask spread is wider than this % of the midpoint —
 # a market/marketable order into a thin $1-$50 name eats the whole spread as
 # instant slippage. Applies to entries only, NEVER to exits. 0 disables.
@@ -1053,9 +1065,9 @@ def _discord_option(symbol: str, option_type: str, sniper: dict, qty: int, limit
 def _execute_option(symbol: str, option_type: str, sml: dict, sniper: dict, scan_counter: list):
     """
     Buy-to-open a single option contract on Robinhood using the contract already
-    selected server-side (core/convergence_engine.py's scan_options() — same
-    0.35-0.45 delta bracket logic Tradier execution uses). We never re-derive
-    strike/expiration/delta locally: the server picked one specific listed
+    selected server-side / gamma-ramp desk (scan_options + contract_selector —
+    MM forced-move band abs(Δ) ∈ [0.30, 0.40], target 0.35). We never re-derive
+    strike/expiration/delta locally: the upstream picked one specific listed
     contract, and that's the one we place on Robinhood — same underlying,
     same exchange-standardized strike/expiration, different broker.
 
@@ -1088,6 +1100,24 @@ def _execute_option(symbol: str, option_type: str, sml: dict, sniper: dict, scan
         logger.warning(f"[EXEC-OPT] {symbol} {option_type} — incomplete contract from server (strike={strike} exp={expiration} ask={ask}) — skip")
         return
 
+    # MM forced-move delta band (shared with gamma_ramp contract_selector / scan_options)
+    try:
+        _ad = abs(float(sniper.get("delta") or 0))
+    except (TypeError, ValueError):
+        _ad = 0.0
+    _src = str(sniper.get("source") or sml.get("signal") or "")
+    _is_gamma = bool(sml.get("gamma_ramp")) or "gamma" in _src.lower()
+    # Hard reject out-of-band deltas for options sleeve (0.30–0.40). Soft allow
+    # if delta missing (legacy pack) unless gamma_ramp which always stamps Δ.
+    if _ad > 0 and not (0.30 <= _ad <= 0.40):
+        logger.warning(
+            f"[EXEC-OPT] {symbol} {option_type} Δ={_ad:.3f} outside MM band 0.30–0.40 — skip"
+        )
+        return
+    if _is_gamma and _ad <= 0:
+        logger.warning(f"[EXEC-OPT] {symbol} gamma_ramp intent missing delta — skip")
+        return
+
     # Same direction gates as the equity path (741 macro / 365 anchor / 5-EMA /
     # 321 dark-pool volume). A call is a bullish bet same as a share buy, so it
     # goes through the "buy" gates. A put is the bearish/protective side — those
@@ -1104,7 +1134,31 @@ def _execute_option(symbol: str, option_type: str, sml: dict, sniper: dict, scan
     _save_last_execution(_last_execution)
 
     qty         = ROBINHOOD_OPTION_QTY
-    limit_price = round(ask * 1.05, 2)   # 5% above ask, matches Tradier route's slippage buffer
+    # Prefer desk NBBO pin (bid+0.01 / explicit limit_price) for MM sleeve —
+    # ask*1.05 was a legacy slippage buffer that overpays gamma entries.
+    bid = 0.0
+    try:
+        bid = float(sniper.get("bid") or 0)
+    except (TypeError, ValueError):
+        bid = 0.0
+    limit_price = None
+    for cand in (sniper.get("limit_price"), sniper.get("nbbo_buy")):
+        try:
+            if cand is not None and float(cand) > 0:
+                limit_price = round(float(cand), 2)
+                break
+        except (TypeError, ValueError):
+            pass
+    if limit_price is None:
+        if bid > 0 and ask > 0:
+            limit_price = round(min(ask, bid + 0.01), 2)
+        elif ask > 0:
+            # tiny buffer only when no bid — not 5% blowout
+            limit_price = round(ask * 1.01, 2)
+        else:
+            limit_price = 0.0
+    if ask > 0 and limit_price > ask * 1.05:
+        limit_price = round(ask * 1.05, 2)  # hard cap
     cost        = limit_price * 100 * qty
 
     with _lock:
@@ -1127,6 +1181,10 @@ def _execute_option(symbol: str, option_type: str, sml: dict, sniper: dict, scan
         with _lock:
             _orders_today += 1
             _daily_notional_usd += cost
+        try:
+            _track_option_entry(symbol, option_type, sniper, qty, limit_price)
+        except Exception:
+            pass
     else:
         if not _ensure_login():
             result = {"error": "login_failed"}
@@ -1510,6 +1568,245 @@ def _poll_oracle() -> int:
 
 
 
+
+# ── Options continuous harvest book (50–500%, sell before giveback) ───────────
+def _load_option_book() -> dict:
+    try:
+        with open(_OPT_BOOK_FILE, "r") as f:
+            d = json.load(f)
+        return d if isinstance(d, dict) else {"positions": {}}
+    except Exception:
+        return {"positions": {}}
+
+
+def _save_option_book(book: dict) -> None:
+    try:
+        with open(_OPT_BOOK_FILE, "w") as f:
+            json.dump(book, f, indent=2)
+    except Exception as e:
+        logger.warning(f"[OPT-BOOK] save failed: {e}")
+
+
+def _option_book_key(symbol: str, strike, expiration: str, option_type: str) -> str:
+    return f"{symbol.upper()}|{float(strike):.4f}|{str(expiration)[:10]}|{(option_type or 'call').lower()}"
+
+
+def _track_option_entry(symbol: str, option_type: str, sniper: dict, qty: int, limit_price: float):
+    """Record BTO so continuous manage can scale/trail/giveback-lock."""
+    book = _load_option_book()
+    pos = book.setdefault("positions", {})
+    k = _option_book_key(symbol, sniper.get("strike"), sniper.get("expiration"), option_type)
+    prev = pos.get(k) or {}
+    prev_qty = int(prev.get("qty") or 0)
+    prev_entry = float(prev.get("entry") or 0)
+    new_qty = prev_qty + max(1, int(qty))
+    # VWAP entry if adding
+    if prev_qty > 0 and prev_entry > 0:
+        entry = (prev_entry * prev_qty + float(limit_price) * qty) / new_qty
+    else:
+        entry = float(limit_price)
+    pos[k] = {
+        "symbol": symbol.upper(),
+        "option_type": (option_type or "call").lower(),
+        "strike": float(sniper.get("strike") or 0),
+        "expiration": str(sniper.get("expiration") or "")[:10],
+        "occ": sniper.get("symbol") or sniper.get("occ") or "",
+        "qty": new_qty,
+        "entry": entry,
+        "peak": max(float(prev.get("peak") or 0), entry),
+        "scaled": bool(prev.get("scaled") or False),
+        "scale_frac": float(prev.get("scale_frac") or 0),
+        "entry_delta": abs(float(sniper.get("delta") or prev.get("entry_delta") or 0.35)),
+        "entry_ts": prev.get("entry_ts") or time.time(),
+        "source": sniper.get("source") or prev.get("source") or "options_sleeve",
+    }
+    book["positions"] = pos
+    _save_option_book(book)
+    logger.info(f"[OPT-BOOK] track {k} qty={new_qty} entry={entry:.2f} Δ={pos[k]['entry_delta']}")
+
+
+def _execute_option_sell(symbol: str, option_type: str, strike, expiration: str, qty: int, limit_price: float, reason: str) -> dict:
+    """Sell-to-close option contracts on RH — bank gains / stop / trail."""
+    if qty <= 0:
+        return {"error": "qty<=0"}
+    if PAPER_MODE:
+        logger.info(f"[PAPER] Would SELL_TO_CLOSE {qty}x {symbol} {strike}{option_type[0].upper()} {expiration} @ ${limit_price:.2f} ({reason})")
+        return {"paper": True, "placed": True}
+    if not _ensure_login():
+        return {"error": "login_failed"}
+    try:
+        import robin_stocks.robinhood as rh
+        # Prefer bid-side pin for exits (sell); limit_price already computed
+        r = rh.orders.order_sell_option_limit(
+            positionEffect="close",
+            creditOrDebit="credit",
+            price=float(limit_price),
+            symbol=symbol,
+            quantity=int(qty),
+            expirationDate=str(expiration)[:10],
+            strike=float(strike),
+            optionType=(option_type or "call").lower(),
+            timeInForce="gfd",
+        )
+        logger.info(f"[RH] Raw option SELL response {symbol}: {r}")
+        rh_state = (r or {}).get("state", "") if isinstance(r, dict) else ""
+        order_id = str((r or {}).get("id", "") or "") if isinstance(r, dict) else ""
+        good = {"confirmed", "queued", "unconfirmed", "partially_filled", "filled"}
+        if rh_state in good or (isinstance(r, dict) and "id" in r):
+            logger.info(f"[RH] Option SELL ok {symbol} x{qty} {reason} id={order_id} state={rh_state}")
+            return {"placed": True, "raw": r, "reason": reason}
+        err = (r or {}).get("detail", "") if isinstance(r, dict) else str(r)
+        logger.error(f"[RH] Option SELL failed {symbol}: {err}")
+        return {"error": err or "unknown", "raw": r}
+    except Exception as e:
+        err = str(e)
+        logger.error(f"[RH] Option SELL error: {err}")
+        if "logged in" in err.lower():
+            _invalidate_login()
+        return {"error": err}
+
+
+def _option_mark_from_rh(symbol: str, option_type: str, strike, expiration: str) -> dict:
+    """Best-effort mark for open option: last/bid/ask from robin_stocks."""
+    out = {"bid": 0.0, "ask": 0.0, "last": 0.0, "mark": 0.0, "delta": 0.0}
+    try:
+        import robin_stocks.robinhood as rh
+        if not _ensure_login():
+            return out
+        # get_option_market_data_by_id needs id; use find_options / market data helper
+        data = None
+        try:
+            data = rh.options.get_option_market_data(
+                symbol,
+                str(expiration)[:10],
+                str(strike),
+                (option_type or "call").lower(),
+            )
+        except Exception:
+            data = None
+        if isinstance(data, list) and data:
+            data = data[0]
+        if isinstance(data, dict):
+            bid = float(data.get("bid_price") or data.get("bid") or 0) or 0.0
+            ask = float(data.get("ask_price") or data.get("ask") or 0) or 0.0
+            last = float(data.get("last_trade_price") or data.get("mark_price") or 0) or 0.0
+            mark = last if last > 0 else ((bid + ask) / 2.0 if bid and ask else bid or ask)
+            g = data.get("delta") or (data.get("greeks") or {}).get("delta")
+            out = {"bid": bid, "ask": ask, "last": last, "mark": float(mark or 0), "delta": abs(float(g or 0))}
+    except Exception as e:
+        logger.debug(f"[OPT-BOOK] mark fail {symbol}: {e}")
+    return out
+
+
+def _manage_option_book() -> int:
+    """
+    Continuous options harvest loop:
+      hard stop -20% · scale +50% · scale +150% · bank +300/+500 ·
+      giveback lock (sell before loss of gains) · peak trail · Δ≥0.60 exit
+    Returns number of sell orders placed.
+    """
+    if not POSITION_MONITOR_ENABLED:
+        return 0
+    book = _load_option_book()
+    positions = book.get("positions") or {}
+    if not positions:
+        return 0
+    placed = 0
+    keep = {}
+    for k, pos in list(positions.items()):
+        try:
+            symbol = pos["symbol"]
+            otype = pos.get("option_type") or "call"
+            strike = pos.get("strike")
+            exp = pos.get("expiration")
+            qty = int(pos.get("qty") or 0)
+            entry = float(pos.get("entry") or 0)
+            if qty <= 0 or entry <= 0:
+                continue
+            md = _option_mark_from_rh(symbol, otype, strike, exp)
+            mark = float(md.get("mark") or 0)
+            bid = float(md.get("bid") or 0)
+            if mark <= 0:
+                keep[k] = pos
+                continue
+            peak = max(float(pos.get("peak") or entry), mark)
+            pos["peak"] = peak
+            ret = (mark - entry) / entry
+            peak_ret = (peak - entry) / entry if entry > 0 else 0.0
+            scaled = bool(pos.get("scaled"))
+            scale_frac = float(pos.get("scale_frac") or 0)
+            exit_qty = 0
+            reason = ""
+
+            if ret <= OPT_HARD_STOP:
+                exit_qty, reason = qty, "hard_stop"
+            elif ret >= OPT_BANK_500:
+                exit_qty, reason = qty, "bank_500"
+            elif (not scaled) and ret >= OPT_SCALE_1:
+                exit_qty, reason = max(1, qty // 2), "scale_50"
+            elif scaled and scale_frac < 0.75 and ret >= OPT_SCALE_2:
+                exit_qty, reason = max(1, qty // 2), "scale_150"
+            elif scaled and ret >= OPT_BANK_300 and qty > 1:
+                exit_qty, reason = max(1, qty - 1), "bank_300"
+            elif peak_ret >= OPT_GIVEBACK_ARM and peak_ret > 0:
+                giveback = (peak - mark) / entry
+                frac_lost = giveback / peak_ret if peak_ret > 0 else 0.0
+                if frac_lost >= OPT_GIVEBACK_FRAC and ret > 0:
+                    exit_qty, reason = qty, "giveback_lock"
+                elif ret <= 0:
+                    exit_qty, reason = qty, "giveback_to_red"
+            if not reason and scaled:
+                trail = OPT_TRAIL_LATE if scale_frac >= 0.75 else OPT_TRAIL
+                if peak > 0 and (mark - peak) / peak <= -trail:
+                    exit_qty, reason = qty, "trail"
+            dlt = float(md.get("delta") or pos.get("entry_delta") or 0)
+            if not reason and dlt >= OPT_DELTA_EXIT and ret >= 0.50:
+                exit_qty, reason = qty, "delta_expansion"
+
+            if exit_qty > 0:
+                # sell pin: ask-0.01 or bid
+                ask = float(md.get("ask") or 0)
+                if bid > 0 and ask > 0:
+                    px = round(max(bid, ask - 0.01), 2)
+                elif bid > 0:
+                    px = round(bid, 2)
+                else:
+                    px = round(mark * 0.98, 2)
+                logger.info(
+                    f"[OPT-BOOK] EXIT {reason} {symbol} {otype} K={strike} exp={exp} "
+                    f"qty={exit_qty} ret={ret*100:.1f}% peak_ret={peak_ret*100:.1f}% mark={mark:.2f}"
+                )
+                res = _execute_option_sell(symbol, otype, strike, exp, exit_qty, px, reason)
+                if res.get("placed") or res.get("paper"):
+                    placed += 1
+                    qty_left = qty - exit_qty
+                    if reason.startswith("scale") and qty_left > 0:
+                        pos["qty"] = qty_left
+                        pos["scaled"] = True
+                        pos["scale_frac"] = 0.5 if reason == "scale_50" else 0.75
+                        pos["peak"] = mark
+                        keep[k] = pos
+                    elif reason == "bank_300" and qty_left > 0:
+                        pos["qty"] = qty_left
+                        pos["scaled"] = True
+                        pos["scale_frac"] = max(scale_frac, 0.9)
+                        keep[k] = pos
+                    # else fully closed — drop
+                else:
+                    keep[k] = pos  # retry next tick
+            else:
+                keep[k] = pos
+        except Exception as e:
+            logger.warning(f"[OPT-BOOK] manage error {k}: {e}")
+            keep[k] = pos
+    book["positions"] = keep
+    book["last_manage_ts"] = time.time()
+    _save_option_book(book)
+    if placed:
+        logger.info(f"[OPT-BOOK] harvest sells placed={placed} open_left={len(keep)}")
+    return placed
+
+
 # ── Gamma Ramp outbox poll (Tradier data → RH funded exec) ─────────────────────
 # Reads RH-ready option intents written by tools/gamma_ramp/live_engine.py via
 # rh_route.py. Same sniper contract shape as beastmode options path.
@@ -1554,10 +1851,43 @@ def _poll_gamma_ramp() -> int:
             continue
         action = (intent.get("action") or "BUY_TO_OPEN").upper()
         if action != "BUY_TO_OPEN":
-            # exits: prefer position monitor; mark acked for now if SELL_TO_CLOSE without local helper
             if action == "SELL_TO_CLOSE":
-                logger.info(f"[GAMMA-RAMP] exit intent {intent.get('id')} — deferred to position monitor / manual")
-                intent["status"] = "acked_exit_deferred"
+                # Continuous harvest path — actually sell on RH, don't park exits
+                otype = (intent.get("option_type") or ("call" if intent.get("side") == "CALL" else "put")).lower()
+                qty_e = max(1, int(intent.get("qty") or 1))
+                strike_e = intent.get("strike")
+                exp_e = intent.get("expiration")
+                bid_e = float(intent.get("bid") or intent.get("limit_price") or intent.get("mid") or 0)
+                ask_e = float(intent.get("ask") or 0)
+                if bid_e > 0 and ask_e > 0:
+                    px_e = round(max(bid_e, ask_e - 0.01), 2)
+                elif bid_e > 0:
+                    px_e = round(bid_e, 2)
+                else:
+                    px_e = round(float(intent.get("limit_price") or intent.get("mid") or 0.01), 2)
+                reason_e = str(intent.get("reason") or "gamma_exit")
+                logger.info(
+                    f"[GAMMA-RAMP] EXIT {reason_e} {symbol} {otype} K={strike_e} exp={exp_e} qty={qty_e} @ {px_e}"
+                )
+                res_e = _execute_option_sell(symbol, otype, strike_e, exp_e, qty_e, px_e, reason_e)
+                intent["status"] = "acked" if res_e.get("placed") or res_e.get("paper") else "error"
+                intent["sell_result"] = {k2: res_e.get(k2) for k2 in ("placed", "paper", "error", "reason") if k2 in res_e or res_e.get(k2) is not None}
+                intent["acked_ts"] = time.time()
+                if res_e.get("placed") or res_e.get("paper"):
+                    scan_counter[0] += 1
+                    # shrink book if tracked
+                    try:
+                        book = _load_option_book()
+                        kk = _option_book_key(symbol, strike_e, exp_e, otype)
+                        if kk in (book.get("positions") or {}):
+                            left = int(book["positions"][kk].get("qty") or 0) - qty_e
+                            if left > 0:
+                                book["positions"][kk]["qty"] = left
+                            else:
+                                book["positions"].pop(kk, None)
+                            _save_option_book(book)
+                    except Exception:
+                        pass
                 try:
                     fpath.write_text(json.dumps(intent, indent=2))
                     fpath.rename(done_dir / fpath.name)
@@ -1640,6 +1970,9 @@ def main():
     logger.info(f"  Hours       : 4:00 AM–8:00 PM ET (pre-market + regular + after-hours)")
     logger.info(f"  Ext hours   : LIMIT orders (buy +0.2% / sell -0.2% from last price)")
     logger.info(f"  Sources     : beastmode | TV webhook | oracle | gamma_ramp outbox→RH ({GAMMA_RAMP_OUTBOX_DIR})")
+    logger.info(f"  Options Δ   : 0.30–0.40 target 0.35 | MM short-GEX forced-move | C+P")
+    logger.info(f"  Options exit: stop -20% | scale +50%/+150% | bank +300/+500 | giveback lock | trail | Δ-exit 0.60")
+    logger.info(f"  Options loop: CONTINUOUS harvest every poll — sell before loss of gains")
     logger.info(f"  Oracle      : 100% FETCH — uses live scan universe, no hardcoded watchlist")
     logger.info(f"  MIN_GOD     : {MIN_GOD_STACKED}/6 stacked (GRID_LOCK: {max(2,MIN_GOD_STACKED-1)})  |  ORACLE_MIN_CONF: {ORACLE_MIN_CONFIDENCE}%")
     logger.info(f"  PDT limit   : ${PDT_BALANCE_LIMIT}")
@@ -1716,7 +2049,8 @@ def main():
             tv_placed     = _poll_tv_pending()
             oracle_placed = _poll_oracle()
             gamma_placed  = _poll_gamma_ramp()
-            total_placed  = stop_placed + beast_placed + tv_placed + oracle_placed + gamma_placed
+            opt_book_placed = _manage_option_book()
+            total_placed  = stop_placed + beast_placed + tv_placed + oracle_placed + gamma_placed + opt_book_placed
             if total_placed == 0:
                 logger.info("[POLL] No signals this cycle — waiting for next scan")
             else:

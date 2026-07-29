@@ -58,10 +58,66 @@ def _tradier_base():
     return "https://api.tradier.com/v1" if env == "production" else "https://sandbox.tradier.com/v1"
 
 
+
+def _short_gamma_playable(symbol: str) -> dict:
+    """
+    MM forced-move gate: only snipe premium when spot GEX is short/negative.
+    Long-gamma (stabilizer) → kill — dealers fade, not chase.
+    Uses tools/gamma_ramp/gex_engine when importable; else Tradier chain +
+    gamma_flow_engine.calculate_gex_profile. Soft-open if data unavailable
+    so a Tradier blip doesn't block beastmode equity path.
+    """
+    try:
+        import sys
+        from pathlib import Path as _P
+        gr = _P(__file__).resolve().parents[1] / "tools" / "gamma_ramp"
+        if gr.is_dir() and str(gr) not in sys.path:
+            sys.path.insert(0, str(gr))
+        try:
+            from gex_engine import fetch_spot_gex  # type: ignore
+            g = fetch_spot_gex(symbol)
+            total = float(getattr(g, "total_gex", 0) or 0)
+            is_short = bool(getattr(g, "is_short_gamma", False) or getattr(g, "playable", False) or total < 0)
+            regime = str(getattr(g, "regime", "") or ("SHORT_GAMMA" if is_short else "LONG_GAMMA"))
+            note = str(getattr(g, "note", "") or getattr(g, "source", "") or "")
+            if not is_short and total == 0 and "unavailable" in note.lower():
+                return {"ok": True, "soft": True, "reason": f"gex_unavailable:{note}"}
+            if not is_short:
+                return {"ok": False, "soft": False, "reason": f"long_gamma_kill total_gex={total:.0f} regime={regime}"}
+            return {"ok": True, "soft": False, "reason": f"short_gamma total_gex={total:.0f}", "total_gex": total, "shape": regime}
+        except Exception:
+            pass
+        # Fallback: Tradier schwab-shape chain + calculate_gex_profile
+        try:
+            import tradier_api as _ta  # type: ignore
+            from gamma_flow_engine import calculate_gex_profile
+            chain = _ta.get_option_chain_schwab_format(symbol, max_expirations=4) if hasattr(_ta, "get_option_chain_schwab_format") else None
+            if not chain:
+                return {"ok": True, "soft": True, "reason": "gex_chain_unavailable"}
+            spot = float(chain.get("underlyingPrice") or 0) or 0.0
+            if spot <= 0:
+                q = _ta.get_quote(symbol) or {}
+                spot = float(q.get("last") or q.get("close") or 0)
+            prof = calculate_gex_profile(chain, spot, symbol)
+            if not prof:
+                return {"ok": True, "soft": True, "reason": "gex_profile_empty"}
+            total = float(getattr(prof, "total_gex", 0) or 0)
+            shape = str(getattr(prof, "profile_shape", "") or "")
+            is_short = ("short" in shape.lower()) or (total < 0)
+            if not is_short:
+                return {"ok": False, "soft": False, "reason": f"long_gamma_kill total_gex={total:.0f} shape={shape}"}
+            return {"ok": True, "soft": False, "reason": f"short_gamma total_gex={total:.0f}", "total_gex": total, "shape": shape}
+        except Exception as e2:
+            return {"ok": True, "soft": True, "reason": f"gex_err:{e2}"}
+    except Exception as e:
+        return {"ok": True, "soft": True, "reason": f"gex_err:{e}"}
+
+
 def scan_options(symbol: str, trade_type: str = "call", current_price: float = 0.0) -> dict:
     """
-    Snipe the 0-14 DTE option with delta closest to 0.40 center.
-    Returns the exact contract: strike, expiry, delta, premium.
+    Snipe the 0-14 DTE option in the MM forced-move delta band:
+      abs(delta) ∈ [0.30, 0.40], target 0.35 (gamma torque sweet spot).
+    Returns the exact contract: strike, expiry, delta, premium, bid/ask.
     Never returns fake or synthetic data — returns error dict if API unavailable.
     """
     headers = _tradier_headers()
@@ -127,8 +183,23 @@ def scan_options(symbol: str, trade_type: str = "call", current_price: float = 0
                     if delta_raw is None:
                         continue
                     delta = abs(float(delta_raw))
-                    if 0.35 <= delta <= 0.45:
-                        dist = abs(delta - 0.40)
+                    # MM forced-move sleeve: 0.30–0.40Δ, target 0.35
+                    if 0.30 <= delta <= 0.40:
+                        bid = float(opt.get("bid") or 0)
+                        ask = float(opt.get("ask") or 0)
+                        mid = (bid + ask) / 2.0 if bid > 0 and ask > 0 else (ask or bid or 0)
+                        if mid > 0 and ask > 0 and bid > 0:
+                            spr = (ask - bid) / mid
+                            if spr > 0.15:
+                                continue  # reject wide NBBO — no forced-fill tax
+                        oi = int(float(opt.get("open_interest") or 0) or 0)
+                        vol = int(float(opt.get("volume") or 0) or 0)
+                        if oi < 25 and vol < 10:
+                            continue
+                        dist = abs(delta - 0.35)
+                        # prefer tighter spreads + more OI as secondary sort via dist penalty
+                        if mid > 0 and ask > bid:
+                            dist += min(0.05, ((ask - bid) / mid) * 0.1)
                         if dist < best_delta_dist:
                             best_delta_dist = dist
                             best = opt
@@ -137,7 +208,7 @@ def scan_options(symbol: str, trade_type: str = "call", current_price: float = 0
                 continue
 
         if not best:
-            return {"error": "No contract in 0.35-0.45 delta range across 0-14 DTE"}
+            return {"error": "No contract in 0.30-0.40 delta (MM forced-move) band across 0-14 DTE"}
 
         greeks = best.get("greeks") or {}
         return {
@@ -312,7 +383,16 @@ class ConvergenceEngine:
                 trade_type = "call"
             else:
                 trade_type = "call" if not e1.get("bear_stack") else "put"
-            sniper_result = scan_options(symbol, trade_type, current_price=closes[-1])
+            gex_gate = _short_gamma_playable(symbol)
+            if not gex_gate.get("ok"):
+                sniper_result = {"error": gex_gate.get("reason", "long_gamma_kill"), "gex_gate": gex_gate}
+            else:
+                sniper_result = scan_options(symbol, trade_type, current_price=closes[-1])
+                if isinstance(sniper_result, dict) and "error" not in sniper_result:
+                    sniper_result["gex_gate"] = gex_gate
+                    sniper_result["delta_band"] = "0.30-0.40"
+                    sniper_result["delta_target"] = 0.35
+                    sniper_result["sleeve"] = "mm_forced_move"
 
         # ── Grid 369 — Proprietary 3×3 Anchor Matrix (Grid 2) ────────────────
         try:
