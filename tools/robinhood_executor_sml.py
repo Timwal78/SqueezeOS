@@ -1446,6 +1446,63 @@ def _poll_tv_pending() -> int:
     return scan_counter[0]
 
 
+def _poll_iam_primary() -> int:
+    """
+    Poll signals queued by iam_executor.execute_from_resolution() for the IAM
+    primary systems (CASCADE / SR-Matrix / Breakout / MM-V4 -- whatever
+    IAM_PRIMARY_SYSTEM lists on the server). These are the SAME signals that
+    already placed a real Tradier order server-side; this queue exists so
+    Robinhood places the trade too, independently, on its own account.
+    Explicit operator decision (2026-07-29): both brokers execute the same
+    signal -- Robinhood holds the funds and has no PDT rule, doubled exposure
+    across the two accounts is intended, not a bug.
+
+    Same queue/poll shape as _poll_tv_pending() (core/api/iam_pending_bp.py
+    mirrors tradingview_webhook_bp.py's queue exactly), kept as a distinct
+    endpoint so IAM-primary and raw TradingView-Pine fills stay separately
+    attributable in this log, even though they're executed identically once
+    popped here.
+    Returns number of orders placed.
+    """
+    url = f"{SQUEEZEOS_API_URL}/api/webhooks/iam_pending"
+    try:
+        req = URLRequest(url, headers={"User-Agent": "SqueezeOS-RH-Executor/2.0"})
+        with urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read())
+    except Exception as e:
+        logger.warning(f"[IAM-POLL] iam_pending fetch failed: {e}")
+        return 0
+
+    signals = data.get("signals") or []
+    if not signals:
+        return 0
+
+    logger.info(f"[IAM-POLL] {len(signals)} IAM primary-system signal(s) from webhook queue (CASCADE/SR-Matrix/Breakout/MM-V4)")
+    scan_counter = [0]
+    for sig in signals:
+        symbol    = (sig.get("symbol") or "").upper().strip()
+        direction = (sig.get("action") or "").upper().strip()
+        system    = sig.get("system", "IAM")
+        price     = float(sig.get("price") or 0.0)
+
+        if not symbol or direction not in ("BUY", "SELL"):
+            continue
+
+        side = "buy" if direction == "BUY" else "sell"
+        logger.info(f"[IAM-POLL] {system} → {direction} {symbol} @ ${price:.2f} (Robinhood leg, Tradier already placed server-side)")
+
+        sml_proxy = {
+            "god_stacked":   MIN_GOD_STACKED,
+            "tier":          "GOD_MODE",
+            "execute_gate":  True,
+            "signal":        f"{system}_{direction}",
+            "confidence":    sig.get("confidence", 80.0),
+        }
+        _execute(symbol, side, sml_proxy, scan_counter)
+
+    return scan_counter[0]
+
+
 # ── Oracle watchlist poll (direct BUY/SELL from multi-engine oracle) ───────────
 # Polls the free /api/oracle endpoint for any symbol it's actively tracking.
 # Fires on BUY or BUY (IGNITION) with confidence >= ORACLE_MIN_CONFIDENCE.
@@ -2108,17 +2165,18 @@ def main():
             stop_placed   = _check_stop_losses()
             beast_placed  = _poll_beastmode()
             tv_placed     = _poll_tv_pending()
+            iam_placed    = _poll_iam_primary()
             oracle_placed = _poll_oracle()
             gamma_placed  = _poll_gamma_ramp()
             opt_book_placed = _manage_option_book()
-            total_placed  = stop_placed + beast_placed + tv_placed + oracle_placed + gamma_placed + opt_book_placed
+            total_placed  = stop_placed + beast_placed + tv_placed + iam_placed + oracle_placed + gamma_placed + opt_book_placed
             if total_placed == 0:
                 logger.info("[POLL] No signals this cycle — waiting for next scan")
             else:
                 logger.info(
                     f"[POLL] Cycle complete — {total_placed} order(s) placed "
                     f"({stop_placed} stop/tp, {beast_placed} GOD, {tv_placed} Pine, "
-                    f"{oracle_placed} Oracle, {gamma_placed} GammaRamp→RH)"
+                    f"{iam_placed} IAM-Primary, {oracle_placed} Oracle, {gamma_placed} GammaRamp→RH)"
                 )
         except Exception as e:
             logger.error(f"[LOOP] Unexpected error: {e}")
