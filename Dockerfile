@@ -22,9 +22,9 @@ RUN adduser --system --no-create-home --group appuser \
 USER appuser
 
 EXPOSE 8182
-# Starter plan = 1 instance. Never use --max-requests on a single worker:
-# worker recycle = full 502 window → Render healthCheckPath /api/status times
-# out at 5s → server_failed → restart thrash (looks like "cold start").
+# Starter plan = 1 instance. Do not recycle the sole worker via request caps:
+# recycle = full 502 window → Render healthCheckPath /api/status times out at
+# 5s → server_failed → restart thrash (looks like "cold start").
 # More threads absorb beastmode/oracle/IAM scan concurrency on catalyst days
 # (Fed / BOJ / Korea / JPY risk).
 CMD ["gunicorn", \
