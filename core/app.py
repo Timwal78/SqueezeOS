@@ -56,6 +56,7 @@ from core.api.cie_bp import cie_bp
 from core.api.breakout_bp import breakout_bp
 from core.api.sr_matrix_bp import sr_matrix_bp
 from core.api.gamma_pin_bp import gamma_pin_bp
+from core.api.squeeze_fuel_bp import squeeze_fuel_bp
 from core.api.mm_intel_bp import mm_intel_bp
 from core.api.paper_trades_bp import paper_trades_bp
 from core.api.vapl_bp import vapl_bp
@@ -199,6 +200,7 @@ def create_app():
     app.register_blueprint(breakout_bp,      url_prefix='/api/breakout')
     app.register_blueprint(sr_matrix_bp,     url_prefix='/api/sr-matrix')
     app.register_blueprint(gamma_pin_bp,     url_prefix='/api/gamma-pin')
+    app.register_blueprint(squeeze_fuel_bp,  url_prefix='/api/squeeze-fuel')
     app.register_blueprint(mm_intel_bp,      url_prefix='/api/mm-intel')
     app.register_blueprint(paper_trades_bp,  url_prefix='/api/paper-trades')
     app.register_blueprint(vapl_bp)
@@ -297,6 +299,12 @@ def create_app():
 
                 from mm_intel_scanner import start_mm_intel_scanner
                 start_mm_intel_scanner()
+
+                from finra_short_data import start_finra_short_vol_poller
+                start_finra_short_vol_poller()
+
+                from squeeze_fuel_scanner import start_squeeze_fuel_scanner
+                start_squeeze_fuel_scanner()
 
                 start_webhook_engine()
                 start_anomaly_engine()
