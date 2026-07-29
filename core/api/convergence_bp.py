@@ -95,7 +95,7 @@ def start_beastmode_scanner():
 _last_execution: dict = {}        # symbol → epoch of last executed trade
 _pdt_day_trades: list = []        # epoch timestamps of day trades (5-day window)
 _EXECUTION_COOLDOWN  = 300        # 5 min cooldown per symbol between executions
-_PDT_BALANCE_LIMIT   = float(os.environ.get("PDT_BALANCE_LIMIT", "25000.0"))  # real FINRA PDT equity threshold for margin accounts (was hardcoded 2100.0 -- ~12x too low, operator confirmed 2026-07-29 the account is margin, under $25k)
+_PDT_BALANCE_LIMIT   = float(os.environ.get("PDT_BALANCE_LIMIT", "2000.0"))  # SEC/FINRA eliminated the $25,000 PDT minimum + the 4-trade counter entirely, effective 2026-06-04 (SEC approved FINRA's Rule 4210 amendment 2026-04-14; brokers have until 2027-10 to fully implement the replacement "equity proportional to intraday exposure" framework). $25,000 was briefly hardcoded here 2026-07-29 based on stale pre-2026 info -- wrong the same day it was written. $2,000 matches the operator's directly-confirmed current Robinhood account behavior (2026-07-29) -- almost certainly the standard Reg T margin-account minimum now that the PDT-specific threshold is void, not a new universal legal figure. Revisit if Robinhood's actual enforcement changes as its phase-in progresses.
 _PDT_MAX_DAY_TRADES  = 3          # max day trades in 5-day rolling window
 _PDT_WINDOW_SECS     = 5 * 86400  # 5 days in seconds
 _MIN_GOD_STACKED     = int(os.environ.get("MIN_GOD_STACKED", "5"))  # min SET9 configs stacked to execute (5 or 6)
