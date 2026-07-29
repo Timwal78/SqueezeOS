@@ -9,7 +9,12 @@ echo   URL:  https://127.0.0.1:8182
 echo  ================================================
 echo.
 
-cd /d "C:\Users\timot\Downloads\SqueezeOS_Github"
+:: Always run from the folder this .bat lives in (never a hardcoded path --
+:: a hardcoded "C:\Users\timot\Downloads\SqueezeOS_Github" here previously
+:: broke silently the moment the clone moved, printing "The system cannot
+:: find the path specified." and then running pip/python from the wrong
+:: directory. Fixed 2026-07-29, same fix already applied to START_EXECUTOR.bat.
+cd /d "%~dp0"
 
 echo [*] Checking dependencies...
 pip install -r requirements.txt -q
