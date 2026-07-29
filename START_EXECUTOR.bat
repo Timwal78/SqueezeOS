@@ -45,9 +45,10 @@ if not exist "%ENVFILE%" (
 
 :: Python merge: example/defaults overwrite operational keys; never wipe RH secrets
 python -c "from pathlib import Path; import re; env_p=Path(r'tools/executor.env'); ex_p=Path(r'tools/executor.env.example');\
-defaults={'POLL_INTERVAL_S':'45','SQUEEZEOS_API_URL':'https://squeezeos-api.onrender.com','MIN_GOD_STACKED':'3','ORACLE_MIN_CONFIDENCE':'60.0','COOLDOWN_S':'900','MAX_ORDER_USD':'150.0','MAX_EQUITY_SHARES':'25','MAX_ORDERS_PER_DAY':'25','MAX_DAILY_NOTIONAL_USD':'1500.0','MAX_DAILY_LOSS_USD':'100.0','MAX_PER_SCAN':'3','PDT_BALANCE_LIMIT':'2100.0','PDT_MAX_TRADES':'3','STOP_LOSS_PCT':'5.0','TAKE_PROFIT_PCT':'15.0','POSITION_MONITOR_ENABLED':'true','MAX_SPREAD_PCT':'2.0','FILL_ALERT_MINUTES':'10.0','ROBINHOOD_PAPER_MODE':'false','KILL_SWITCH':'false','EXEC_BROKER':'robinhood','ROBINHOOD_OPTION_QTY':'1','OPTIONS_DELTA_MIN':'0.30','OPTIONS_DELTA_MAX':'0.40','OPTIONS_DELTA_TARGET':'0.35','OPT_HARD_STOP':'-0.20','OPT_SCALE_1':'0.50','OPT_SCALE_2':'1.50','OPT_BANK_300':'3.00','OPT_BANK_500':'5.00','OPT_GIVEBACK_ARM':'0.50','OPT_GIVEBACK_FRAC':'0.35','OPT_TRAIL':'0.22','OPT_TRAIL_LATE':'0.18','OPT_DELTA_EXIT':'0.60','GAMMA_RAMP_POLL_ENABLED':'true','GAMMA_RAMP_OUTBOX_DIR':'tools/gamma_ramp/rh_outbox'};\
+defaults={'POLL_INTERVAL_S':'45','SQUEEZEOS_API_URL':'https://squeezeos-api.onrender.com','MIN_GOD_STACKED':'3','ORACLE_MIN_CONFIDENCE':'60.0','COOLDOWN_S':'900','MAX_ORDER_USD':'150.0','MAX_EQUITY_SHARES':'25','MAX_ORDERS_PER_DAY':'25','MAX_DAILY_NOTIONAL_USD':'1500.0','MAX_DAILY_LOSS_USD':'100.0','MAX_PER_SCAN':'3','PDT_BALANCE_LIMIT':'2100.0','PDT_MAX_TRADES':'3','STOP_LOSS_PCT':'5.0','TAKE_PROFIT_PCT':'15.0','POSITION_MONITOR_ENABLED':'true','MAX_SPREAD_PCT':'2.0','FILL_ALERT_MINUTES':'10.0','ROBINHOOD_PAPER_MODE':'false','KILL_SWITCH':'false','EXEC_BROKER':'robinhood','ROBINHOOD_OPTION_QTY':'1','OPTIONS_DELTA_MIN':'0.30','OPTIONS_DELTA_MAX':'0.40','OPTIONS_DELTA_TARGET':'0.35','OPT_HARD_STOP':'-0.20','OPT_SCALE_1':'0.50','OPT_SCALE_2':'1.50','OPT_BANK_300':'3.00','OPT_BANK_500':'5.00','OPT_GIVEBACK_ARM':'0.50','OPT_GIVEBACK_FRAC':'0.35','OPT_TRAIL':'0.22','OPT_TRAIL_LATE':'0.18','OPT_DELTA_EXIT':'0.60','GAMMA_RAMP_POLL_ENABLED':'false','GAMMA_RAMP_OUTBOX_DIR':'tools/gamma_ramp/rh_outbox'};\
 protect={k for k in defaults if any(x in k for x in ('USER','PASS','SECRET','TOKEN','WEBHOOK','KEY'))};\
 protect |= {'ROBINHOOD_USERNAME','ROBINHOOD_PASSWORD','MACRO_GATE_SECRET','DISCORD_WEBHOOK_BEAST','DISCORD_WEBHOOK_ALL','LOG_DIR'};\
+protect |= {'ROBINHOOD_PAPER_MODE','KILL_SWITCH','GAMMA_RAMP_POLL_ENABLED'};\
 if ex_p.exists():\
 \
   for ln in ex_p.read_text(encoding='utf-8',errors='ignore').splitlines():\
@@ -93,15 +94,18 @@ if errorlevel 1 (
 )
 
 set "DOTENV_PATH=%CD%\tools\executor.env"
-:: Process-level force (wins over stale shell; dotenv override=True still loads file first — clamp in py handles 300)
+:: Process-level force for operational (non-safety) knobs only.
+:: ROBINHOOD_PAPER_MODE / KILL_SWITCH / GAMMA_RAMP_POLL_ENABLED are deliberately
+:: NOT forced here -- they are risk-posture switches the operator owns, merged
+:: into tools\executor.env above (now in the "protect" set, so an existing
+:: value is preserved rather than silently overwritten every launch). Forcing
+:: them here previously meant editing the .env file by hand had no effect --
+:: this script always reset live trading + Gamma Ramp back on. Fixed 2026-07-29.
 set POLL_INTERVAL_S=45
-set GAMMA_RAMP_POLL_ENABLED=true
 set GAMMA_RAMP_OUTBOX_DIR=%CD%\tools\gamma_ramp\rh_outbox
 set EXEC_BROKER=robinhood
 set POSITION_MONITOR_ENABLED=true
 set MIN_GOD_STACKED=3
-set ROBINHOOD_PAPER_MODE=false
-set KILL_SWITCH=false
 
 echo.
 echo [*] Repo: %CD%
