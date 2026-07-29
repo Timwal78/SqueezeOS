@@ -121,7 +121,7 @@ def _get_365_anchor(symbol: str) -> str:
 
 ROBINHOOD_USER     = os.environ.get("ROBINHOOD_USERNAME", "")
 ROBINHOOD_PASS     = os.environ.get("ROBINHOOD_PASSWORD", "")
-POLL_INTERVAL_S    = int(os.environ.get("POLL_INTERVAL_S", "180"))     # poll every 3 minutes
+POLL_INTERVAL_S    = int(os.environ.get("POLL_INTERVAL_S", "45"))      # poll every 45s
 MIN_GOD_STACKED    = int(os.environ.get("MIN_GOD_STACKED", "3"))       # min SET9 stacked to execute (3/6 = 50% convergence, max signal flow)
 PDT_BALANCE_LIMIT  = float(os.environ.get("PDT_BALANCE_LIMIT", "2100.0"))
 PDT_MAX_TRADES     = int(os.environ.get("PDT_MAX_TRADES", "3"))
@@ -253,7 +253,18 @@ _BLOCKLIST = {
 
 
 # ── Robinhood login ────────────────────────────────────────────────────────────
-_AUTH_FAILURE_ALERTED = False   # only alert Discord once per process until recovered
+# Anti-loop rules (the "Trying to log in..." spam):
+#  1) NEVER call rh.login() if the existing session still verifies.
+#  2) NEVER wipe the pickle on a soft failure (that forces full MFA loop).
+#  3) On hard failure, cool down for AUTH_COOLDOWN_S — do not hammer RH.
+#  4) Health check only VERIFIES; it does not invalidate a good session.
+_AUTH_FAILURE_ALERTED = False
+_LAST_LOGIN_ATTEMPT_TS = 0.0
+_AUTH_COOLDOWN_S = int(os.environ.get("RH_AUTH_COOLDOWN_S", "900"))  # 15 min default
+_AUTH_HARD_FAIL_UNTIL = 0.0  # epoch — skip all login attempts until this time
+_LOGIN_ATTEMPTS_WINDOW = []  # timestamps of rh.login() calls
+_MAX_LOGINS_PER_HOUR = int(os.environ.get("RH_MAX_LOGINS_PER_HOUR", "4"))
+
 
 def _rh_verify_session() -> bool:
     """Return True only if the active session can actually read account data."""
@@ -265,38 +276,48 @@ def _rh_verify_session() -> bool:
         return False
 
 
-def _rh_force_reauth() -> bool:
-    """
-    Hard re-authentication using the stored device_token to bypass MFA.
-    Works headlessly as long as the device_token pickle exists.
-    Deletes the stale pickle and re-logs in from scratch using device_token.
-    """
-    import pickle, os, requests
-    import robin_stocks.robinhood as rh
+def _pickle_paths():
+    home = os.path.expanduser("~")
+    # robin_stocks pickle_name="rh_session" → various path conventions
+    return [
+        os.path.join(home, ".tokens", "robinhoodrh_session.pickle"),
+        os.path.join(home, ".tokens", "rh_session.pickle"),
+        os.path.join(home, ".tokens", "robinhood.pickle"),
+    ]
 
-    pickle_path = os.path.join(os.path.expanduser("~"), ".tokens", "robinhoodrh_session.pickle")
 
-    device_token = None
-    if os.path.exists(pickle_path):
+def _load_device_token():
+    import pickle
+    for pickle_path in _pickle_paths():
+        if not os.path.exists(pickle_path):
+            continue
         try:
             with open(pickle_path, "rb") as f:
                 stored = pickle.load(f)
-            device_token = stored.get("device_token")
+            if isinstance(stored, dict) and stored.get("device_token"):
+                return stored.get("device_token"), pickle_path
         except Exception:
-            pass
+            continue
+    return None, None
 
+
+def _rh_force_reauth() -> bool:
+    """
+    Hard re-auth using stored device_token. Does NOT delete pickle first
+    (deleting pickle is what restarts the MFA / 'Trying to log in' loop).
+    """
+    import robin_stocks.robinhood as rh
+
+    device_token, pickle_path = _load_device_token()
     if not device_token:
-        logger.error("[RH-AUTH] No device_token in pickle — MFA required. Run executor manually once to complete MFA.")
+        logger.error(
+            "[RH-AUTH] No device_token in pickle — MFA required. "
+            "On the PC: stop executor, delete only if corrupt, run once interactively to complete MFA, then restart."
+        )
         return False
 
-    # Delete stale pickle so robin_stocks does a clean login
     try:
-        os.remove(pickle_path)
-    except Exception:
-        pass
-
-    try:
-        # Pass device_token explicitly so Robinhood skips MFA challenge
+        logger.info("[RH-AUTH] Soft re-auth with existing device_token (pickle kept)")
         rh.login(
             ROBINHOOD_USER,
             ROBINHOOD_PASS,
@@ -305,56 +326,127 @@ def _rh_force_reauth() -> bool:
             device_token=device_token,
         )
         if _rh_verify_session():
-            logger.info("[RH-AUTH] Force re-auth succeeded via device_token")
+            logger.info("[RH-AUTH] Re-auth OK via device_token")
             return True
-        else:
-            logger.error("[RH-AUTH] Force re-auth: login returned no exception but session invalid")
-            return False
-    except Exception as e:
-        logger.error(f"[RH-AUTH] Force re-auth failed: {e}")
+        logger.error("[RH-AUTH] Re-auth returned but session still invalid")
         return False
+    except Exception as e:
+        logger.error(f"[RH-AUTH] Re-auth failed: {e}")
+        return False
+
+
+def _login_rate_limited() -> bool:
+    """True if we already hit rh.login too many times this hour."""
+    global _LOGIN_ATTEMPTS_WINDOW
+    now = time.time()
+    _LOGIN_ATTEMPTS_WINDOW = [t for t in _LOGIN_ATTEMPTS_WINDOW if now - t < 3600]
+    return len(_LOGIN_ATTEMPTS_WINDOW) >= _MAX_LOGINS_PER_HOUR
+
+
+def _note_login_attempt():
+    global _LAST_LOGIN_ATTEMPT_TS, _LOGIN_ATTEMPTS_WINDOW
+    now = time.time()
+    _LAST_LOGIN_ATTEMPT_TS = now
+    _LOGIN_ATTEMPTS_WINDOW.append(now)
 
 
 def _ensure_login() -> bool:
-    global _rh_logged_in, _AUTH_FAILURE_ALERTED
-    if _rh_logged_in:
+    """
+    Idempotent session ensure. Prefer verify-only; call rh.login sparingly.
+    """
+    global _rh_logged_in, _AUTH_FAILURE_ALERTED, _AUTH_HARD_FAIL_UNTIL
+
+    # Already good this process
+    if _rh_logged_in and _rh_verify_session():
         return True
-    if not ROBINHOOD_USER or not ROBINHOOD_PASS:
-        logger.error("[RH] ROBINHOOD_USERNAME / ROBINHOOD_PASSWORD not set in executor.env")
-        return False
 
-    import robin_stocks.robinhood as rh
-
-    # Step 1: try normal login (uses cached pickle / refresh_token)
-    try:
-        rh.login(ROBINHOOD_USER, ROBINHOOD_PASS, store_session=True, pickle_name="rh_session")
-        if _rh_verify_session():
-            _rh_logged_in = True
-            _AUTH_FAILURE_ALERTED = False
-            logger.info("[RH] Session verified — logged in OK")
-            return True
-        logger.warning("[RH] Normal login returned no error but session invalid — forcing re-auth")
-    except Exception as e:
-        logger.warning(f"[RH] Normal login error: {e} — forcing re-auth")
-
-    # Step 2: hard re-auth via stored device_token (no MFA required)
-    if _rh_force_reauth():
+    # Session may still be valid even if flag is false (e.g. after soft invalidate)
+    if _rh_verify_session():
         _rh_logged_in = True
         _AUTH_FAILURE_ALERTED = False
         return True
 
-    # Step 3: complete failure — alert and back off
+    now = time.time()
+    if now < _AUTH_HARD_FAIL_UNTIL:
+        left = int(_AUTH_HARD_FAIL_UNTIL - now)
+        logger.warning(f"[RH] Auth cooldown active — {left}s left (not calling rh.login)")
+        return False
+
+    if not ROBINHOOD_USER or not ROBINHOOD_PASS:
+        logger.error("[RH] ROBINHOOD_USERNAME / ROBINHOOD_PASSWORD not set in executor.env")
+        return False
+
+    if _login_rate_limited():
+        logger.error(
+            f"[RH] Login rate limit ({_MAX_LOGINS_PER_HOUR}/hour) — stopping login spam. "
+            "Fix MFA/device_token on PC, then restart executor."
+        )
+        _AUTH_HARD_FAIL_UNTIL = now + _AUTH_COOLDOWN_S
+        return False
+
+    # Cooldown between attempts
+    if _LAST_LOGIN_ATTEMPT_TS and (now - _LAST_LOGIN_ATTEMPT_TS) < 60:
+        logger.info("[RH] Skipping login — attempted <60s ago")
+        return False
+
+    import robin_stocks.robinhood as rh
+
+    # Step 1: normal login (uses cached pickle / refresh_token) — ONE try
+    _note_login_attempt()
+    try:
+        logger.info("[RH] Attempting session restore (rh.login once)…")
+        rh.login(ROBINHOOD_USER, ROBINHOOD_PASS, store_session=True, pickle_name="rh_session")
+        if _rh_verify_session():
+            _rh_logged_in = True
+            _AUTH_FAILURE_ALERTED = False
+            _AUTH_HARD_FAIL_UNTIL = 0.0
+            logger.info("[RH] Session verified — logged in OK")
+            return True
+        logger.warning("[RH] Login returned but session invalid — trying device_token path once")
+    except Exception as e:
+        logger.warning(f"[RH] Login error: {e} — trying device_token path once")
+
+    # Step 2: device_token path (still keeps pickle)
+    _note_login_attempt()
+    if _rh_force_reauth():
+        _rh_logged_in = True
+        _AUTH_FAILURE_ALERTED = False
+        _AUTH_HARD_FAIL_UNTIL = 0.0
+        return True
+
+    # Step 3: hard fail — long cooldown so we do NOT loop "Trying to log in…"
     _rh_logged_in = False
+    _AUTH_HARD_FAIL_UNTIL = time.time() + _AUTH_COOLDOWN_S
     if not _AUTH_FAILURE_ALERTED:
         _AUTH_FAILURE_ALERTED = True
-        _discord_critical("[RH] ❌ Authentication failed — executor is OFFLINE. Manual MFA re-auth required.")
+        _discord_critical(
+            f"[RH] ❌ Auth failed — cooling down {_AUTH_COOLDOWN_S}s. "
+            "Manual MFA on PC required if device_token expired. Executor will NOT spam login."
+        )
+    logger.error(f"[RH] Auth failed — cooldown {_AUTH_COOLDOWN_S}s (no more login spam)")
     return False
 
 
 def _invalidate_login():
+    """Soft flag only — does NOT delete pickle or call rh.login."""
     global _rh_logged_in
     _rh_logged_in = False
-    logger.warning("[RH] Session invalidated — will re-auth on next cycle")
+    logger.info("[RH] Soft session flag cleared — next cycle will VERIFY before any login")
+
+
+def _healthcheck_session() -> bool:
+    """
+    Periodic health check: verify only. Login only if verify fails.
+    This replaces the old pattern of invalidate+login every 30 min (login loop).
+    """
+    if _rh_verify_session():
+        global _rh_logged_in, _AUTH_FAILURE_ALERTED
+        _rh_logged_in = True
+        _AUTH_FAILURE_ALERTED = False
+        logger.info("[RH] Health check OK — session still valid (no re-login)")
+        return True
+    logger.warning("[RH] Health check failed — will attempt ensure_login once")
+    return _ensure_login()
 
 
 def _discord_critical(message: str):
@@ -1417,6 +1509,127 @@ def _poll_oracle() -> int:
     return scan_counter[0]
 
 
+
+# ── Gamma Ramp outbox poll (Tradier data → RH funded exec) ─────────────────────
+# Reads RH-ready option intents written by tools/gamma_ramp/live_engine.py via
+# rh_route.py. Same sniper contract shape as beastmode options path.
+GAMMA_RAMP_OUTBOX_DIR = os.environ.get(
+    "GAMMA_RAMP_OUTBOX_DIR",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "gamma_ramp", "rh_outbox"),
+)
+GAMMA_RAMP_POLL_ENABLED = os.environ.get("GAMMA_RAMP_POLL_ENABLED", "true").lower() == "true"
+
+
+def _poll_gamma_ramp() -> int:
+    """Consume pending gamma-ramp option intents from the shared outbox."""
+    if not GAMMA_RAMP_POLL_ENABLED:
+        return 0
+    try:
+        from pathlib import Path as _P
+        outbox = _P(GAMMA_RAMP_OUTBOX_DIR)
+    except Exception:
+        return 0
+    if not outbox.is_dir():
+        return 0
+
+    files = sorted(outbox.glob("gr_*.json"), key=lambda f: f.stat().st_mtime)
+    if not files:
+        return 0
+
+    scan_counter = [0]
+    done_dir = outbox / "done"
+    done_dir.mkdir(exist_ok=True)
+
+    for fpath in files:
+        if scan_counter[0] >= MAX_PER_SCAN:
+            break
+        try:
+            intent = json.loads(fpath.read_text())
+        except Exception as e:
+            logger.warning(f"[GAMMA-RAMP] bad intent file {fpath.name}: {e}")
+            continue
+
+        status = (intent.get("status") or "pending").lower()
+        if status in ("acked", "done", "error"):
+            continue
+        action = (intent.get("action") or "BUY_TO_OPEN").upper()
+        if action != "BUY_TO_OPEN":
+            # exits: prefer position monitor; mark acked for now if SELL_TO_CLOSE without local helper
+            if action == "SELL_TO_CLOSE":
+                logger.info(f"[GAMMA-RAMP] exit intent {intent.get('id')} — deferred to position monitor / manual")
+                intent["status"] = "acked_exit_deferred"
+                try:
+                    fpath.write_text(json.dumps(intent, indent=2))
+                    fpath.rename(done_dir / fpath.name)
+                except Exception:
+                    pass
+            continue
+
+        symbol = (intent.get("underlying") or "").upper().strip()
+        option_type = (intent.get("option_type") or ("call" if intent.get("side") == "CALL" else "put")).lower()
+        if option_type not in ("call", "put"):
+            option_type = "call"
+
+        sniper = {
+            "strike": intent.get("strike"),
+            "expiration": intent.get("expiration"),
+            "ask": intent.get("ask") or intent.get("limit_price") or intent.get("mid"),
+            "premium": intent.get("mid") or intent.get("ask") or intent.get("limit_price"),
+            "bid": intent.get("bid"),
+            "delta": intent.get("delta"),
+            "gamma": intent.get("gamma"),
+            "symbol": intent.get("occ"),
+            "dte": intent.get("dte"),
+            "source": "gamma_ramp",
+            "limit_price": intent.get("limit_price"),
+        }
+        sml = intent.get("sml") or {
+            "god_stacked": 6,
+            "tier": "GOD_MODE",
+            "execute_gate": True,
+            "signal": f"GAMMA_RAMP_{intent.get('side')}",
+            "confidence": 90.0,
+            "gamma_ramp": True,
+            "reason": intent.get("reason"),
+        }
+
+        # Optional qty override for this intent
+        prev_qty = None
+        if intent.get("qty"):
+            try:
+                global ROBINHOOD_OPTION_QTY
+                prev_qty = ROBINHOOD_OPTION_QTY
+                ROBINHOOD_OPTION_QTY = max(1, int(intent["qty"]))
+            except Exception:
+                prev_qty = None
+
+        logger.info(
+            f"[GAMMA-RAMP] RH route → {option_type.upper()} {symbol} "
+            f"Δ={sniper.get('delta')} K={sniper.get('strike')} exp={sniper.get('expiration')} "
+            f"id={intent.get('id')}"
+        )
+        before = scan_counter[0]
+        try:
+            _execute_option(symbol, option_type, sml, sniper, scan_counter)
+        finally:
+            if prev_qty is not None:
+                ROBINHOOD_OPTION_QTY = prev_qty
+
+        # Mark consumed so we don't re-fire (whether placed or gated)
+        intent["status"] = "acked" if scan_counter[0] > before else "acked_no_fill"
+        intent["acked_ts"] = time.time()
+        intent["placed"] = scan_counter[0] > before
+        try:
+            fpath.write_text(json.dumps(intent, indent=2))
+            fpath.rename(done_dir / fpath.name)
+        except Exception as e:
+            logger.warning(f"[GAMMA-RAMP] could not archive {fpath.name}: {e}")
+
+    if scan_counter[0]:
+        logger.info(f"[GAMMA-RAMP] placed {scan_counter[0]} option order(s) from outbox")
+    return scan_counter[0]
+
+
 # ── Main loop ──────────────────────────────────────────────────────────────────
 def main():
     global _rh_logged_in  # explicitly declare global so Python never creates a local shadow
@@ -1426,7 +1639,7 @@ def main():
     logger.info(f"  Poll every  : {POLL_INTERVAL_S}s")
     logger.info(f"  Hours       : 4:00 AM–8:00 PM ET (pre-market + regular + after-hours)")
     logger.info(f"  Ext hours   : LIMIT orders (buy +0.2% / sell -0.2% from last price)")
-    logger.info(f"  Sources     : beastmode (GOD_MODE+DUAL_LOCK) | TV webhook (Pine) | oracle+history (live universe)")
+    logger.info(f"  Sources     : beastmode | TV webhook | oracle | gamma_ramp outbox→RH ({GAMMA_RAMP_OUTBOX_DIR})")
     logger.info(f"  Oracle      : 100% FETCH — uses live scan universe, no hardcoded watchlist")
     logger.info(f"  MIN_GOD     : {MIN_GOD_STACKED}/6 stacked (GRID_LOCK: {max(2,MIN_GOD_STACKED-1)})  |  ORACLE_MIN_CONF: {ORACLE_MIN_CONFIDENCE}%")
     logger.info(f"  PDT limit   : ${PDT_BALANCE_LIMIT}")
@@ -1443,43 +1656,47 @@ def main():
     if KILL_SWITCH:
         logger.warning("[STARTUP] KILL_SWITCH=true — executor will log but not trade")
 
-    # Pre-warm login
+    # Pre-warm login ONCE
     if not PAPER_MODE:
         _ensure_login()
 
     _last_login_check  = time.time()
-    _LOGIN_RECHECK_S   = 1800   # verify session every 30 min
+    _LOGIN_RECHECK_S   = int(os.environ.get("RH_LOGIN_RECHECK_S", "1800"))  # verify only every 30 min
     _auth_retry_count  = 0
-    _AUTH_BACKOFF      = [60, 120, 300, 600, 1800]  # escalating retry delays on repeated failure
+    # Longer backoff — never sub-minute hammering that triggers RH "Trying to log in" loop
+    _AUTH_BACKOFF      = [300, 600, 900, 1800, 3600]
 
     while True:
         try:
             _reset_daily_if_new_day()
 
-            # Proactive session health-check every 30 min
+            # Proactive session HEALTH CHECK every 30 min — verify only, no forced re-login
             if not PAPER_MODE and time.time() - _last_login_check > _LOGIN_RECHECK_S:
-                _invalidate_login()
-                ok = _ensure_login()
+                ok = _healthcheck_session()
                 _last_login_check = time.time()
                 if ok:
                     _auth_retry_count = 0
                 else:
                     delay = _AUTH_BACKOFF[min(_auth_retry_count, len(_AUTH_BACKOFF) - 1)]
                     _auth_retry_count += 1
-                    logger.error(f"[AUTH] Re-auth failed (attempt {_auth_retry_count}) — backing off {delay}s")
+                    logger.error(f"[AUTH] Health/re-auth failed (attempt {_auth_retry_count}) — backing off {delay}s (no login spam)")
                     time.sleep(delay)
                     continue
 
-            # If we lost auth mid-cycle, recover before scanning
+            # If flag says logged out, VERIFY first; login only if verify fails
             if not PAPER_MODE and not _rh_logged_in:
-                ok = _ensure_login()
-                if not ok:
-                    delay = _AUTH_BACKOFF[min(_auth_retry_count, len(_AUTH_BACKOFF) - 1)]
-                    _auth_retry_count += 1
-                    logger.error(f"[AUTH] Cannot authenticate (attempt {_auth_retry_count}) — skipping cycle, retry in {delay}s")
-                    time.sleep(delay)
-                    continue
-                _auth_retry_count = 0
+                if _rh_verify_session():
+                    _rh_logged_in = True
+                    _auth_retry_count = 0
+                else:
+                    ok = _ensure_login()
+                    if not ok:
+                        delay = _AUTH_BACKOFF[min(_auth_retry_count, len(_AUTH_BACKOFF) - 1)]
+                        _auth_retry_count += 1
+                        logger.error(f"[AUTH] Cannot authenticate (attempt {_auth_retry_count}) — skip cycle, retry in {delay}s")
+                        time.sleep(delay)
+                        continue
+                    _auth_retry_count = 0
 
             rh_status = "PAPER" if PAPER_MODE else "OK"
             if not _market_open():
@@ -1498,11 +1715,16 @@ def main():
             beast_placed  = _poll_beastmode()
             tv_placed     = _poll_tv_pending()
             oracle_placed = _poll_oracle()
-            total_placed  = stop_placed + beast_placed + tv_placed + oracle_placed
+            gamma_placed  = _poll_gamma_ramp()
+            total_placed  = stop_placed + beast_placed + tv_placed + oracle_placed + gamma_placed
             if total_placed == 0:
                 logger.info("[POLL] No signals this cycle — waiting for next scan")
             else:
-                logger.info(f"[POLL] Cycle complete — {total_placed} order(s) placed ({stop_placed} stop/take-profit, {beast_placed} GOD MODE, {tv_placed} Pine, {oracle_placed} Oracle)")
+                logger.info(
+                    f"[POLL] Cycle complete — {total_placed} order(s) placed "
+                    f"({stop_placed} stop/tp, {beast_placed} GOD, {tv_placed} Pine, "
+                    f"{oracle_placed} Oracle, {gamma_placed} GammaRamp→RH)"
+                )
         except Exception as e:
             logger.error(f"[LOOP] Unexpected error: {e}")
         logger.info(f"[POLL] Next scan in {POLL_INTERVAL_S}s")
