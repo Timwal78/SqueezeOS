@@ -358,10 +358,26 @@ def _fetch_closes(symbol: str) -> List[float]:
         return []
 
 
+def _scan_top_n() -> int:
+    """
+    Max symbols pulled from the market scanner's top-volume universe when
+    AVG_DOWN_SYMBOLS isn't set. 0 or negative = unlimited (every quoted
+    symbol the scanner currently has). Default 40 preserved for anyone who
+    hasn't set this — same "configurable, not hardcoded" pattern as every
+    other scanner's *_SCAN_TOP_N (breakout/cie/druck/gamma_pin/imo/
+    mm_intel/orb/sr_matrix).
+    """
+    try:
+        return int(os.environ.get("AVG_DOWN_SCAN_TOP_N", "40"))
+    except ValueError:
+        return 40
+
+
 def _get_symbols() -> List[str]:
     """
     Symbol universe: AVG_DOWN_SYMBOLS env var (comma-separated) takes priority.
-    Falls back to market scanner's top-volume universe.
+    Falls back to market scanner's top-volume universe, capped by
+    AVG_DOWN_SCAN_TOP_N (default 40, 0/negative = unlimited).
     """
     raw = os.environ.get("AVG_DOWN_SYMBOLS", "").strip()
     if raw:
@@ -371,7 +387,8 @@ def _get_symbols() -> List[str]:
         with _scan_lock:
             quotes = dict(_scan_cache.get("quotes", {}))
         ranked = sorted(quotes.items(), key=lambda kv: kv[1].get("volRatio", 0), reverse=True)
-        return [sym for sym, _ in ranked[:40]]
+        top_n = _scan_top_n()
+        return [sym for sym, _ in (ranked if top_n <= 0 else ranked[:top_n])]
     except Exception:
         return []
 
