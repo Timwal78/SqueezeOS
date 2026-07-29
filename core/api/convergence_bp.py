@@ -95,7 +95,7 @@ def start_beastmode_scanner():
 _last_execution: dict = {}        # symbol → epoch of last executed trade
 _pdt_day_trades: list = []        # epoch timestamps of day trades (5-day window)
 _EXECUTION_COOLDOWN  = 300        # 5 min cooldown per symbol between executions
-_PDT_BALANCE_LIMIT   = 2100.0     # enforce PDT rule when account balance below this
+_PDT_BALANCE_LIMIT   = float(os.environ.get("PDT_BALANCE_LIMIT", "25000.0"))  # real FINRA PDT equity threshold for margin accounts (was hardcoded 2100.0 -- ~12x too low, operator confirmed 2026-07-29 the account is margin, under $25k)
 _PDT_MAX_DAY_TRADES  = 3          # max day trades in 5-day rolling window
 _PDT_WINDOW_SECS     = 5 * 86400  # 5 days in seconds
 _MIN_GOD_STACKED     = int(os.environ.get("MIN_GOD_STACKED", "5"))  # min SET9 configs stacked to execute (5 or 6)
