@@ -129,19 +129,29 @@ def _get_365_anchor(symbol: str) -> str:
 
 ROBINHOOD_USER     = os.environ.get("ROBINHOOD_USERNAME", "")
 ROBINHOOD_PASS     = os.environ.get("ROBINHOOD_PASSWORD", "")
-POLL_INTERVAL_S    = int(os.environ.get("POLL_INTERVAL_S", "45"))      # poll every 45s
-# Desk standard is 45s continuous harvest. Stale PC executor.env often still
-# has 300 from the old launcher — clamp so a bad env can't re-slow the loop.
-if POLL_INTERVAL_S > 90:
-    POLL_INTERVAL_S = 45
+# ═══════════════════════════════════════════════════════════════════════════
+# DESK LOCK — POLL is NOT env-configurable on the money path.
+# Stale PC executor.env (POLL=300) + load_dotenv(override=True) kept beating
+# START_EXECUTOR.bat and put the desk back on a 5-minute loop after every
+# restart. Only ALLOW_SLOW_POLL=true may unlock a custom interval.
+# ═══════════════════════════════════════════════════════════════════════════
+if os.environ.get("ALLOW_SLOW_POLL", "false").lower() == "true":
+    try:
+        POLL_INTERVAL_S = int(str(os.environ.get("POLL_INTERVAL_S", "45")).strip())
+    except Exception:
+        POLL_INTERVAL_S = 45
+    if POLL_INTERVAL_S < 15:
+        POLL_INTERVAL_S = 15
+else:
+    POLL_INTERVAL_S = 45  # LOCKED
 
-MIN_GOD_STACKED    = int(os.environ.get("MIN_GOD_STACKED", "3"))       # min SET9 stacked to execute (3/6 = 50% convergence, max signal flow)
-# Stale env sometimes has MIN_GOD_STACKED=4 or 5 from older desk — force desk floor 3
-# so GOD_MODE 3/6+ can fire (user gate: god_stacked >= 3).
-if MIN_GOD_STACKED < 1:
-    MIN_GOD_STACKED = 3
-if MIN_GOD_STACKED > 3 and os.environ.get("MIN_GOD_STACKED_LOCK", "true").lower() == "true":
-    MIN_GOD_STACKED = 3
+MIN_GOD_STACKED = 3  # LOCKED — gate is god_stacked >= 3; stale env had 4/5
+# Allow explicit unlock only for research
+if os.environ.get("ALLOW_CUSTOM_MIN_GOD", "false").lower() == "true":
+    try:
+        MIN_GOD_STACKED = max(1, min(6, int(os.environ.get("MIN_GOD_STACKED", "3"))))
+    except Exception:
+        MIN_GOD_STACKED = 3
 PDT_BALANCE_LIMIT  = float(os.environ.get("PDT_BALANCE_LIMIT", "2100.0"))
 PDT_MAX_TRADES     = int(os.environ.get("PDT_MAX_TRADES", "3"))
 PAPER_MODE           = os.environ.get("ROBINHOOD_PAPER_MODE", "false").lower() == "true"
@@ -2009,7 +2019,7 @@ def main():
     logger.info("=" * 60)
     logger.info("SqueezeOS Robinhood Executor v3.7 — spread guard on entries + open-order fill reconciliation + holiday calendar")
     logger.info(f"  API         : {SQUEEZEOS_API_URL}")
-    logger.info(f"  Poll every  : {POLL_INTERVAL_S}s")
+    logger.info(f"  Poll every  : {POLL_INTERVAL_S}s  [DESK-LOCKED — env cannot set 300]")
     logger.info(f"  Hours       : 4:00 AM–8:00 PM ET (pre-market + regular + after-hours)")
     logger.info(f"  Ext hours   : LIMIT orders (buy +0.2% / sell -0.2% from last price)")
     logger.info(f"  Sources     : beastmode | TV webhook | oracle | gamma_ramp outbox→RH ({GAMMA_RAMP_OUTBOX_DIR})")
@@ -2017,7 +2027,7 @@ def main():
     logger.info(f"  Options exit: stop -20% | scale +50%/+150% | bank +300/+500 | giveback lock | trail | Δ-exit 0.60")
     logger.info(f"  Options loop: CONTINUOUS harvest every poll — sell before loss of gains")
     logger.info(f"  Oracle      : 100% FETCH — uses live scan universe, no hardcoded watchlist")
-    logger.info(f"  MIN_GOD     : {MIN_GOD_STACKED}/6 stacked (GRID_LOCK: {max(2,MIN_GOD_STACKED-1)})  |  ORACLE_MIN_CONF: {ORACLE_MIN_CONFIDENCE}%")
+    logger.info(f"  MIN_GOD     : {MIN_GOD_STACKED}/6 stacked (GRID_LOCK: {max(2,MIN_GOD_STACKED-1)}) [LOCKED]  |  ORACLE_MIN_CONF: {ORACLE_MIN_CONFIDENCE}%")
     logger.info(f"  PDT limit   : ${PDT_BALANCE_LIMIT}")
     logger.info(f"  Max order   : ${MAX_ORDER_USD} / {MAX_EQUITY_SHARES} shares")
     logger.info(f"  Daily cap   : {MAX_ORDERS_PER_DAY} orders / ${MAX_DAILY_NOTIONAL:.0f} notional / ${MAX_DAILY_LOSS_USD:.0f} loss limit")
@@ -2028,6 +2038,14 @@ def main():
     logger.info(f"  Paper mode  : {PAPER_MODE}")
     logger.info(f"  Kill switch : {KILL_SWITCH}")
     logger.info("=" * 60)
+
+    # Fail loud if somehow still slow (should be impossible without ALLOW_SLOW_POLL)
+    if POLL_INTERVAL_S > 90:
+        logger.error(f"[STARTUP] FATAL: POLL_INTERVAL_S={POLL_INTERVAL_S} — refusing to run slow desk")
+        raise SystemExit(2)
+    if POLL_INTERVAL_S != 45 and os.environ.get("ALLOW_SLOW_POLL", "false").lower() != "true":
+        logger.error(f"[STARTUP] FATAL: poll not locked at 45 (got {POLL_INTERVAL_S})")
+        raise SystemExit(2)
 
     if KILL_SWITCH:
         logger.warning("[STARTUP] KILL_SWITCH=true — executor will log but not trade")
