@@ -159,8 +159,8 @@ KILL_SWITCH          = os.environ.get("KILL_SWITCH", "false").lower() == "true"
 MAX_EQUITY_SHARES    = int(os.environ.get("MAX_EQUITY_SHARES", "500"))  # hard ceiling; real limit is MAX_ORDER_USD
 MAX_ORDER_USD        = float(os.environ.get("MAX_ORDER_USD", "150.0"))
 MAX_DAILY_LOSS_USD   = float(os.environ.get("MAX_DAILY_LOSS_USD", "100.0"))
-MAX_ORDERS_PER_DAY   = int(os.environ.get("MAX_ORDERS_PER_DAY", "25"))
-MAX_DAILY_NOTIONAL   = float(os.environ.get("MAX_DAILY_NOTIONAL_USD", "1500.0"))
+MAX_ORDERS_PER_DAY   = int(os.environ.get("MAX_ORDERS_PER_DAY", "0"))       # 0 = uncapped (operator directive 2026-07-29, semi-day-trading)
+MAX_DAILY_NOTIONAL   = float(os.environ.get("MAX_DAILY_NOTIONAL_USD", "0"))  # 0 = uncapped (operator directive 2026-07-29, semi-day-trading)
 MAX_PER_SCAN         = int(os.environ.get("MAX_PER_SCAN", "3"))
 STOP_LOSS_PCT        = float(os.environ.get("STOP_LOSS_PCT", "5.0"))    # fallback if no cached ATR: close if down this % from avg cost
 TAKE_PROFIT_PCT      = float(os.environ.get("TAKE_PROFIT_PCT", "15.0")) # fallback if no cached ATR: close if up this % from avg cost
@@ -561,10 +561,13 @@ def _circuit_open() -> bool:
         if _daily_loss_usd >= MAX_DAILY_LOSS_USD:
             logger.warning(f"[CIRCUIT] Daily loss ${_daily_loss_usd:.2f} >= limit ${MAX_DAILY_LOSS_USD}")
             return True
-        if _orders_today >= MAX_ORDERS_PER_DAY:
+        # MAX_ORDERS_PER_DAY == 0 means uncapped -- operator directive 2026-07-29
+        # for semi-day-trading throughput. MAX_DAILY_LOSS_USD above stays the
+        # real circuit breaker (loss-based, not count/notional-based).
+        if MAX_ORDERS_PER_DAY > 0 and _orders_today >= MAX_ORDERS_PER_DAY:
             logger.warning(f"[CIRCUIT] Daily order cap reached: {_orders_today}/{MAX_ORDERS_PER_DAY} — no more orders today")
             return True
-        if _daily_notional_usd >= MAX_DAILY_NOTIONAL:
+        if MAX_DAILY_NOTIONAL > 0 and _daily_notional_usd >= MAX_DAILY_NOTIONAL:
             logger.warning(f"[CIRCUIT] Daily notional ${_daily_notional_usd:.2f} >= cap ${MAX_DAILY_NOTIONAL} — halted")
             return True
     return False
@@ -911,11 +914,15 @@ def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
     else:
         qty = max(1, int(MAX_ORDER_USD // price))
         qty = min(qty, MAX_EQUITY_SHARES)
-        # Never exceed what's left of today's notional budget
-        with _lock:
-            remaining_notional = MAX_DAILY_NOTIONAL - _daily_notional_usd
-        budget_qty = max(1, int(remaining_notional // price))
-        qty = min(qty, budget_qty)
+        # Never exceed what's left of today's notional budget.
+        # MAX_DAILY_NOTIONAL == 0 means uncapped (operator directive 2026-07-29
+        # for semi-day-trading) -- skip the budget clamp entirely rather than
+        # let `0 - _daily_notional_usd` go negative and wrongly floor qty to 1.
+        if MAX_DAILY_NOTIONAL > 0:
+            with _lock:
+                remaining_notional = MAX_DAILY_NOTIONAL - _daily_notional_usd
+            budget_qty = max(1, int(remaining_notional // price))
+            qty = min(qty, budget_qty)
         if qty <= 0:
             logger.warning(f"[EXEC] {symbol} BUY — daily notional budget exhausted, skipping")
             return
@@ -1190,11 +1197,13 @@ def _execute_option(symbol: str, option_type: str, sml: dict, sniper: dict, scan
         limit_price = round(ask * 1.05, 2)  # hard cap
     cost        = limit_price * 100 * qty
 
-    with _lock:
-        remaining_notional = MAX_DAILY_NOTIONAL - _daily_notional_usd
-    if cost > remaining_notional:
-        logger.warning(f"[EXEC-OPT] {symbol} {option_type} — ${cost:.2f} would exceed remaining daily notional budget (${remaining_notional:.2f} left), skipping")
-        return
+    # MAX_DAILY_NOTIONAL == 0 means uncapped (operator directive 2026-07-29).
+    if MAX_DAILY_NOTIONAL > 0:
+        with _lock:
+            remaining_notional = MAX_DAILY_NOTIONAL - _daily_notional_usd
+        if cost > remaining_notional:
+            logger.warning(f"[EXEC-OPT] {symbol} {option_type} — ${cost:.2f} would exceed remaining daily notional budget (${remaining_notional:.2f} left), skipping")
+            return
 
     logger.info(
         f"[EXEC-OPT] RH GOD MODE — BUY {qty}x {symbol} {strike}{option_type[0].upper()} "
@@ -2087,7 +2096,9 @@ def main():
     logger.info(f"  MIN_GOD     : {MIN_GOD_STACKED}/6 stacked (GRID_LOCK: {max(2,MIN_GOD_STACKED-1)}) [LOCKED]  |  ORACLE_MIN_CONF: {ORACLE_MIN_CONFIDENCE}%")
     logger.info(f"  PDT limit   : ${PDT_BALANCE_LIMIT}")
     logger.info(f"  Max order   : ${MAX_ORDER_USD} / {MAX_EQUITY_SHARES} shares")
-    logger.info(f"  Daily cap   : {MAX_ORDERS_PER_DAY} orders / ${MAX_DAILY_NOTIONAL:.0f} notional / ${MAX_DAILY_LOSS_USD:.0f} loss limit")
+    _orders_cap_label   = "UNCAPPED" if MAX_ORDERS_PER_DAY <= 0 else f"{MAX_ORDERS_PER_DAY} orders"
+    _notional_cap_label = "UNCAPPED" if MAX_DAILY_NOTIONAL <= 0 else f"${MAX_DAILY_NOTIONAL:.0f} notional"
+    logger.info(f"  Daily cap   : {_orders_cap_label} / {_notional_cap_label} / ${MAX_DAILY_LOSS_USD:.0f} loss limit")
     logger.info(f"  Per-scan    : max {MAX_PER_SCAN} orders per poll cycle")
     logger.info(f"  Position mon: stop-loss {STOP_LOSS_PCT}% / take-profit {TAKE_PROFIT_PCT}% (enabled={POSITION_MONITOR_ENABLED})")
     logger.info(f"  Spread guard: skip BUY if bid-ask > {MAX_SPREAD_PCT}% of mid (exits exempt)")
