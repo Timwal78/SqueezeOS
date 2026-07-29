@@ -9,6 +9,7 @@ Batch quotes = 1 call for 50+ symbols.
 from flask import Blueprint, jsonify, request
 from core.legacy import get_service, clean_data
 from core.state import state, sse_queues
+import os
 import time
 import logging
 import threading
@@ -91,66 +92,118 @@ def _discover_universe(dm):
         return list(MANDATORY_TICKERS)
 
 def _run_scan():
-    """Background scanner: batch quote + options chain fetch (100% Dynamic)."""
+    """Background scanner: batch quote + options chain fetch (100% Dynamic).
+
+    MONEY PATH: publish quotes to state.quotes IMMEDIATELY after the quote
+    fetch. Beastmode/oracle only see MANDATORY_TICKERS until state.quotes is
+    non-empty — previously options-chain grading (40 × 0.5s sleeps + Tradier
+    chain calls) ran BEFORE the publish, so a hung chain left the universe at
+    0 forever and RH executor sat on 0 GOD_MODE ready signals.
+    """
     dm = get_service("dm")
     if not dm:
+        logger.warning("[MARKET] DataManager offline — skip scan")
         return
 
     # 1. Dynamically build universe (Law 2 Compliance)
-    dynamic_universe = _discover_universe(dm)
+    dynamic_universe = _discover_universe(dm) or list(MANDATORY_TICKERS)
 
-    # 2. Batch quotes (1 API call for all symbols via Tradier)
+    # Cap quote fan-out so one scan can't spend minutes chunking thousands of
+    # symbols (Tradier 200/chunk × rate limit). Prefer head of discovery list
+    # (already momentum-sorted by discover_universe) + mandatory anchors.
+    _QUOTE_CAP = int(os.environ.get("MARKET_QUOTE_CAP", "250"))
+    quote_syms = list(dict.fromkeys(
+        list(MANDATORY_TICKERS) + list(dynamic_universe)[:_QUOTE_CAP]
+    ))
+
+    # 2. Batch quotes — Tradier first, Alpaca always merges/fills gaps
     tradier = getattr(dm, 'tradier', None)
     alpaca = getattr(dm, 'alpaca', None)
     quotes = {}
-    
+
     if tradier and tradier.available:
         try:
-            quotes = tradier.get_quotes(dynamic_universe) or {}
+            quotes = tradier.get_quotes(quote_syms) or {}
         except Exception as e:
             logger.warning(f"[MARKET] batch quotes failed: {e}")
             quotes = {}
-    if not quotes and alpaca and alpaca.available:
-        # Fallback to Alpaca
+
+    # Alpaca fill: run when Tradier empty OR thin (don't wait for total failure)
+    if alpaca and alpaca.available and len(quotes) < max(10, len(MANDATORY_TICKERS)):
         try:
-            quotes = alpaca.get_snapshots(dynamic_universe) or {}
+            need = [s for s in quote_syms if s not in quotes][:150]
+            seeded = alpaca.get_snapshots(need or quote_syms[:150]) or {}
+            if seeded:
+                quotes.update(seeded)
+                logger.info(f"[MARKET] alpaca fill +{len(seeded)} quotes (total {len(quotes)})")
         except Exception as e:
             logger.warning(f"[MARKET] alpaca snapshots failed: {e}")
-            quotes = {}
 
-    # Hard seed: never leave oracle on 3-name emergency list when Tradier works.
-    # Batch calls sometimes return {} on cold start; pull MANDATORY one-by-one.
+    # Hard seed mandatory anchors if still missing
     if tradier and tradier.available:
         need = [s for s in MANDATORY_TICKERS if s not in quotes]
-        if len(quotes) < 25 or need:
-            seed_list = list(dict.fromkeys(list(MANDATORY_TICKERS) + list(dynamic_universe)[:80]))
+        if need or len(quotes) < 5:
             try:
-                seeded = tradier.get_quotes(seed_list) or {}
+                seeded = tradier.get_quotes(list(dict.fromkeys(
+                    list(MANDATORY_TICKERS) + list(dynamic_universe)[:40]
+                ))) or {}
                 if seeded:
                     quotes.update(seeded)
             except Exception as e:
                 logger.warning(f"[MARKET] seed quotes failed: {e}")
+    if alpaca and alpaca.available:
+        need = [s for s in MANDATORY_TICKERS if s not in quotes]
+        if need:
+            try:
+                seeded = alpaca.get_snapshots(need) or {}
+                quotes.update(seeded)
+            except Exception:
+                pass
 
-    # Universe for oracle/beastmode: liquid $0.50–$2500 (was $1–$50 which
-    # dropped most discovery names and left oracle stuck on 3 seed tickers).
-    # sweet_spot still marks classic $1–$50 squeeze band for options grading.
+    # Universe for oracle/beastmode: liquid $0.50–$2500
     sweet = {}
     for sym, q in quotes.items():
+        if not isinstance(q, dict):
+            continue
         price = float(q.get('price', 0) or 0)
         if price <= 0:
             continue
         if 0.50 <= price <= 2500.0 or sym in MANDATORY_TICKERS:
+            q = dict(q)
             q['sweet_spot'] = (1.0 <= price <= 50.0)
             sweet[sym] = q
 
-    # 2. Sort by volume ratio (most active first)
+    # ★ PUBLISH QUOTES NOW — before any options work. This unblocks beastmode.
+    now = time.time()
+    with _scan_lock:
+        _scan_cache["quotes"] = sweet
+        _scan_cache["last_update"] = now
+        _scan_cache["scan_count"] = int(_scan_cache.get("scan_count") or 0) + 1
+    with state.lock:
+        # replace keys we have; keep prior symbols briefly if sweet empty
+        if sweet:
+            state.quotes.update(sweet)
+            state.audit["universe_size"] = len(state.quotes)
+        elif not state.quotes:
+            state.audit["universe_size"] = 0
+    logger.info(
+        f"[MARKET] quotes published n={len(sweet)} disc={len(dynamic_universe)} "
+        f"cap={_QUOTE_CAP} sources_tradier={bool(tradier and tradier.available)} "
+        f"alpaca={bool(alpaca and alpaca.available)}"
+    )
+
+    if not sweet:
+        logger.warning("[MARKET] zero quotes after fetch — beastmode stays on seed list")
+        return
+
+    # 3. Sort by volume ratio (most active first)
     sorted_syms = sorted(sweet.keys(),
                          key=lambda s: sweet[s].get('volRatio', 0), reverse=True)
 
-    # 3. Options chain scan for top movers (Law 2 & 4 Compliance)
+    # 4. Options chain scan — capped hard so it can't starve the next quote cycle
     options_picks = []
     chain_count = 0
-    max_chains = 40  # Institutional capacity increased per user request
+    max_chains = int(os.environ.get("MARKET_OPTIONS_CHAIN_CAP", "8"))
 
     for sym in sorted_syms:
         if chain_count >= max_chains:
@@ -160,128 +213,109 @@ def _run_scan():
         if price < 1:
             continue
 
-        # Dynamic Momentum Thresholds: Priority for Squeeze Candidates
         vol_ratio = q.get('volRatio', 0)
         change_pct = abs(q.get('changePct', 0))
         if vol_ratio < 1.1 and change_pct < 1.0 and sym not in MANDATORY_TICKERS:
             continue
 
         if tradier and tradier.available:
-            chain_data = tradier.get_option_chains(sym)
-            if chain_data and chain_data.get('options'):
-                chain_count += 1
-                # Grade the options (Law 3: S3 Standard)
-                picks = _grade_options(sym, price, q, chain_data['options'])
-                options_picks.extend(picks)
-            time.sleep(0.5)  # Institutional rate limit optimization
+            try:
+                chain_data = tradier.get_option_chains(sym)
+                if chain_data and chain_data.get('options'):
+                    chain_count += 1
+                    picks = _grade_options(sym, price, q, chain_data['options'])
+                    options_picks.extend(picks)
+            except Exception as e:
+                logger.warning(f"[MARKET] options chain {sym}: {e}")
+            time.sleep(0.25)
 
     with _scan_lock:
-        _scan_cache["quotes"] = sweet
         _scan_cache["options"] = options_picks
         _scan_cache["last_update"] = time.time()
-        _scan_cache["scan_count"] += 1
 
-    # Update global state
-    with state.lock:
-        state.quotes.update(sweet)
-        state.audit["universe_size"] = len(sweet)
-        
-        # 4. Technical Pattern Analysis (Golden Cross, Double Bottom, Momentum)
-        global _analyzer
-        try:
-            if _analyzer is None:
-                _analyzer = SqueezeAnalyzer()
-            technical_results = _analyzer.analyze_batch(sweet)
-        except Exception as e:
-            logger.error(f"[SCAN] SqueezeAnalyzer failed: {e}")
-            technical_results = []
-        
-        # Combine Technical Squeezes & High-Grade Options into CEO triggers
-        ceo_triggers = []
-        
-        # A) Add Technical Squeezes (Score 80+)
-        squeeze_hits = []
-        for r in technical_results:
-            if r.get('squeeze_score', 0) >= 80:
-                ceo_triggers.append(r)
-                squeeze_hits.append(r)
-                evt = {
-                    'type': 'SQUEEZE_ALERT',
-                    'symbol': r['symbol'],
-                    'score': r['squeeze_score'],
-                    'direction': r.get('direction', 'UNKNOWN'),
-                    'price': r.get('price'),
-                    'ts': time.time(),
-                }
-                _broadcast_sse(evt)
-                signal_history.record(r['symbol'], 'SQUEEZE_ALERT', evt)
+    # Technical analysis OUTSIDE locks — never block quote readers / health.
+    global _analyzer
+    try:
+        if _analyzer is None:
+            _analyzer = SqueezeAnalyzer()
+        technical_results = _analyzer.analyze_batch(sweet)
+    except Exception as e:
+        logger.error(f"[SCAN] SqueezeAnalyzer failed: {e}")
+        technical_results = []
 
-        # NOTE: Discord firing moved OUTSIDE state.lock (see below) —
-        # blocking webhooks while holding the lock starved gunicorn web
-        # threads and caused Render health-check kills.
+    ceo_triggers = []
+    squeeze_hits = []
+    for r in technical_results:
+        if r.get('squeeze_score', 0) >= 80:
+            ceo_triggers.append(r)
+            squeeze_hits.append(r)
+            evt = {
+                'type': 'SQUEEZE_ALERT',
+                'symbol': r['symbol'],
+                'score': r['squeeze_score'],
+                'direction': r.get('direction', 'UNKNOWN'),
+                'price': r.get('price'),
+                'ts': time.time(),
+            }
+            _broadcast_sse(evt)
+            signal_history.record(r['symbol'], 'SQUEEZE_ALERT', evt)
 
-        # B) Add High-Grade Options
-        flow_hits = []
-        for p in options_picks:
-            if p.get('score', 0) >= 80:  # Grade A or high B
-                ceo_triggers.append({
-                    'symbol': p['symbol'],
-                    'squeeze_score': p['score'],
-                    'direction': 'BULLISH' if p['type'] == 'call' else 'BEARISH',
-                    'price': p['stock_price']
-                })
-                sweep = {
-                    'type': 'OPTIONS_SWEEP',
-                    'symbol': p['symbol'],
-                    'strike': p['strike'],
-                    'option_type': p['type'],
-                    'expiration': p['expiration'],
-                    'grade': p['grade'],
-                    'score': p['score'],
-                    'mid': p['mid'],
-                    'ts': time.time(),
-                }
-                _broadcast_sse(sweep)
-                signal_history.record(p['symbol'], 'OPTIONS_SWEEP', sweep)
-                flow_hits.append({
-                    'symbol': p['symbol'],
-                    'unusual_score': p['score'],
-                    'strike': p['strike'],
-                    'type': p['type'].upper(),
-                    'expiry_formatted': p.get('expiration', ''),
-                    'days_to_expiry': p.get('dte', 0),
-                    'price': p.get('mid', 0),
-                    'bid': p.get('bid', 0),
-                    'ask': p.get('ask', 0),
-                    'volume': p.get('volume', 0),
-                    'open_interest': p.get('open_interest', 0),
-                    'implied_volatility': p.get('iv', 0),
-                    'sentiment': 'BULLISH' if p['type'] == 'call' else 'BEARISH',
-                    'is_sweep': p.get('grade') in ('A', 'A+'),
-                    'alert_priority': 'EXTREME' if p.get('score', 0) >= 90 else 'HIGH',
-                    'source': 'Tradier',
-                })
+    flow_hits = []
+    for p in options_picks:
+        if p.get('score', 0) >= 80:  # Grade A or high B
+            ceo_triggers.append({
+                'symbol': p['symbol'],
+                'squeeze_score': p['score'],
+                'direction': 'BULLISH' if p['type'] == 'call' else 'BEARISH',
+                'price': p['stock_price']
+            })
+            sweep = {
+                'type': 'OPTIONS_SWEEP',
+                'symbol': p['symbol'],
+                'strike': p['strike'],
+                'option_type': p['type'],
+                'expiration': p['expiration'],
+                'grade': p['grade'],
+                'score': p['score'],
+                'mid': p['mid'],
+                'ts': time.time(),
+            }
+            _broadcast_sse(sweep)
+            signal_history.record(p['symbol'], 'OPTIONS_SWEEP', sweep)
+            flow_hits.append({
+                'symbol': p['symbol'],
+                'unusual_score': p['score'],
+                'strike': p['strike'],
+                'type': p['type'].upper(),
+                'expiry_formatted': p.get('expiration', ''),
+                'days_to_expiry': p.get('dte', 0),
+                'price': p.get('mid', 0),
+                'bid': p.get('bid', 0),
+                'ask': p.get('ask', 0),
+                'volume': p.get('volume', 0),
+                'open_interest': p.get('open_interest', 0),
+                'implied_volatility': p.get('iv', 0),
+                'sentiment': 'BULLISH' if p['type'] == 'call' else 'BEARISH',
+                'is_sweep': p.get('grade') in ('A', 'A+'),
+                'alert_priority': 'EXTREME' if p.get('score', 0) >= 90 else 'HIGH',
+                'source': 'Tradier',
+            })
 
-        if ceo_triggers:
-            # Sort highest scores first
-            ceo_triggers.sort(key=lambda x: x.get('squeeze_score', 0), reverse=True)
+    if ceo_triggers:
+        ceo_triggers.sort(key=lambda x: x.get('squeeze_score', 0), reverse=True)
+        with state.lock:
             state.scan_results = ceo_triggers + state.scan_results
-            
-            # Deduplicate by symbol while preserving highest score
             seen = set()
             deduped = []
             for item in state.scan_results:
                 if item['symbol'] not in seen:
                     seen.add(item['symbol'])
                     deduped.append(item)
-            
             state.scan_results = deduped
             if len(state.scan_results) > 200:
                 del state.scan_results[200:]
 
-    # ── Discord alerts: fired AFTER state.lock releases, on a detached
-    #    thread so neither web requests nor the scan loop ever wait on
-    #    webhook rate-limit sleeps. (Fix for Render health-check kills.)
+    # Discord alerts: detached thread — never block scan / health.
     if (squeeze_hits or flow_hits) and _discord:
         def _fire_alerts(_squeeze=list(squeeze_hits), _flow=list(flow_hits)):
             try:
@@ -295,11 +329,7 @@ def _run_scan():
 
     logger.info(f"[SCAN] {len(sweet)} symbols | {len(options_picks)} options picks | {len(technical_results)} technical scans | cycle #{_scan_cache['scan_count']}")
 
-    # ── AUTO-EXECUTION HOOK (non-blocking) ───────────────────────────────────
-    # Runs convergence analysis + alerting/execution on a DETACHED thread so it
-    # NEVER blocks the scan loop or starves gunicorn health checks. A single-run
-    # guard ensures only one auto-exec pass runs at a time (skips if the prior
-    # one is still working — prevents pile-up under slow upstream APIs).
+    # AUTO-EXEC detached
     global _autoexec_running
     if not _autoexec_running:
         _autoexec_running = True

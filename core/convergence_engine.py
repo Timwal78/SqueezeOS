@@ -475,22 +475,28 @@ def scan_beastmode_universe(services: dict, tf: str = "1D", on_progress=None) ->
 
     # Dynamically build universe from the live market state
     with state.lock:
-        quotes = state.quotes
-    
-    # Sort ALL discovered symbols by volume ratio — widest possible universe
-    # Mandatory tickers (IWM, GME, AMC) always included regardless of rank
-    active_syms = sorted(quotes.keys(), key=lambda s: quotes[s].get("volRatio", 0), reverse=True)
+        quotes = dict(state.quotes) if state.quotes else {}
 
-    # No artificial cap — scan the full discovered universe sorted by momentum.
-    # Fetch 250 bars per symbol — the harmonic matrix's largest EMA span is 45
-    # (SET9_GAP9_5EMA, rank #3 GOD_MODE config); an EMA needs roughly 3-5x its
-    # span in bars to actually converge. The previous limit=60 left 3 of the 7
-    # GOD_MODE-tier configs (spans 33/36/45) computed on under-warmed EMAs still
-    # biased toward their seed value — noisy votes feeding directly into
-    # god_stacked, the count that gates live execution. 250 bars keeps memory
-    # bounded across a full-universe scan while giving every config ~6-7x its
-    # span, matching the value already proven safe on the single-symbol route.
-    universe = list(set(MANDATORY_TICKERS + active_syms))
+    # Sort discovered symbols by volume ratio — widest possible universe
+    # Mandatory tickers always included. If market scanner hasn't published
+    # quotes yet, STILL scan the mandatory liquid set so RH executor is not
+    # stuck on 0 signals waiting for a cold quote cache.
+    active_syms = sorted(
+        quotes.keys(),
+        key=lambda s: (quotes.get(s) or {}).get("volRatio", 0),
+        reverse=True,
+    )
+
+    # Cap per-pass scan so one beastmode cycle can't run for hours on 5k names.
+    # Momentum head of the list + mandatory anchors. Override via BEASTMODE_SCAN_CAP.
+    _SCAN_CAP = int(os.environ.get("BEASTMODE_SCAN_CAP", "80"))
+    head = active_syms[: max(0, _SCAN_CAP - len(MANDATORY_TICKERS))]
+    universe = list(dict.fromkeys(list(MANDATORY_TICKERS) + head))
+    if not active_syms:
+        logger.warning(
+            "[Convergence] state.quotes empty — scanning mandatory seed only (%s)",
+            ",".join(MANDATORY_TICKERS),
+        )
 
     total = len(universe)
     for idx, symbol in enumerate(universe, 1):
