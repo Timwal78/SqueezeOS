@@ -1,8 +1,7 @@
 name: Payment Flow Smoke Test
 
 on:
-  schedule:
-    - cron: '*/30 * * * *'   # every 30 min — verify full invoice cycle is alive
+  # schedule disabled 2026-07-28 — was failure-email noise; run manually
   workflow_dispatch:
 
 jobs:

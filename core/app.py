@@ -253,131 +253,85 @@ def create_app():
     threading.Thread(target=run_entitlements_self_check, daemon=True).start()
 
     if not _IS_SERVERLESS:
-        # Start background market scanner
-        start_market_scanner()
+        # CRITICAL: do NOT start scanners inline in create_app().
+        # Render healthCheckPath=/api/status times out after 5s. Starting
+        # 15+ scanners + pollers before return app blocks gunicorn bind and
+        # causes server_failed → restart thrash (looks like "cold start" on
+        # starter plan even though the service never sleeps).
+        # Defer all heavy boot into a daemon thread after a short settle so
+        # /api/status answers immediately on catalyst days (Fed/BOJ/JPY/Korea).
+        def _deferred_engine_boot():
+            try:
+                time.sleep(2.0)  # let gunicorn accept health checks first
+                logger.info("[boot] deferred engine start — health path already live")
 
-        # Start background beastmode convergence scanner (cached, non-blocking)
-        start_beastmode_scanner()
+                start_market_scanner()
+                start_beastmode_scanner()
+                start_oracle_batch_scanner()
 
-        # Start background oracle batch scanner (cached, non-blocking — see
-        # core/oracle_engine.py for why /api/oracle needs this same treatment)
-        start_oracle_batch_scanner()
+                from iam_scanner import start_iam_scanner
+                start_iam_scanner()
 
-        # Start IAM background obligation scanner — dynamic top-N from market scanner
-        from iam_scanner import start_iam_scanner
-        start_iam_scanner()
+                from imo_scanner import start_imo_scanner
+                start_imo_scanner()
 
-        # Start SML-IMO pure-Python signal scanner (no TradingView required)
-        from imo_scanner import start_imo_scanner
-        start_imo_scanner()
+                from orb_scanner import start_orb_scanner
+                start_orb_scanner()
 
-        # Start ORB v6 BEASTMODE intraday scanner (pure Python; needs
-        # Polygon/Alpaca for intraday bars — logs and idles without them)
-        from orb_scanner import start_orb_scanner
-        start_orb_scanner()
+                from druck_scanner import start_druck_scanner
+                start_druck_scanner()
 
-        # Start SML-DRUCK (Druckenmiller Liquidity Breakout) pure-Python
-        # scanner (needs Polygon/Alpaca for intraday bars — logs and idles
-        # without them). Feeds iam_executor under the same paper-first
-        # safety stack as ORB/IMO — no live-arming decision made here.
-        from druck_scanner import start_druck_scanner
-        start_druck_scanner()
+                from cie_scanner import start_cie_scanner
+                start_cie_scanner()
 
-        # Start CIE (Cycle Intelligence Engine) Daily/Weekly scanner — real
-        # SEC FTD/threshold data + self-mined historical fractal matching +
-        # meme-cycle phase. Dark-pool layer stays unfed (no real feed exists
-        # in this codebase). No backtest evidence yet — see docs/ once
-        # tests/backtest_cie.py has run.
-        from cie_scanner import start_cie_scanner
-        start_cie_scanner()
+                from breakout_scanner import start_breakout_scanner
+                start_breakout_scanner()
 
-        # Start SML Breakout Target/Stop scanner — Donchian N-day breakout,
-        # real DAILY bars (works out-of-the-box on Tradier-only, unlike
-        # ORB/DRUCK's intraday feeds). Independently backtested net positive
-        # on all 4 tested symbols, docs/BREAKOUT_BACKTEST_2026-07-25.md.
-        # Feeds iam_executor under the same paper-first safety stack as every
-        # other engine — no live-arming decision made here.
-        from breakout_scanner import start_breakout_scanner
-        start_breakout_scanner()
+                from sr_matrix_scanner import start_sr_matrix_scanner
+                start_sr_matrix_scanner()
 
-        # Start SML Support/Resistance Matrix scanner — pivot cross signals
-        # (buy on confirmed pivot low, sell on confirmed pivot high), real
-        # DAILY bars (Tradier-only friendly, same as Breakout). Best
-        # all-around backtest result of the four new scripts tested
-        # 2026-07-25: positive PF on 3/4 symbols, docs/SR_MATRIX_PIVOT_BACKTEST_2026-07-25.md.
-        # Feeds iam_executor under the same paper-first safety stack as
-        # every other engine — no live-arming decision made here.
-        from sr_matrix_scanner import start_sr_matrix_scanner
-        start_sr_matrix_scanner()
+                from gamma_pin_scanner import start_gamma_pin_scanner
+                start_gamma_pin_scanner()
 
-        # Start SML Gamma Pin scanner — real Tradier options-chain constraint
-        # (0-2 DTE + spot within 0.5% of max-OI strike, reusing the same GEX
-        # math already live via oracle_engine's gamma-flow read). Chain-based,
-        # not bar-based — works out-of-the-box on Tradier-only, unlike
-        # ORB/DRUCK. NO BACKTEST EVIDENCE EXISTS for this constraint (no
-        # historical options-chain data source is reachable anywhere in this
-        # codebase or sandbox) — ships disclosed as unmeasured, same as CIE's
-        # dark-pool axis, not claimed profitable. Feeds iam_executor under
-        # the same paper-first safety stack as every other engine — no
-        # live-arming decision made here.
-        from gamma_pin_scanner import start_gamma_pin_scanner
-        start_gamma_pin_scanner()
+                from mm_intel_scanner import start_mm_intel_scanner
+                start_mm_intel_scanner()
 
-        # Start SML Market Maker Intelligence v4 scanner — Kalman-filtered
-        # inventory + HJB hedge-rate forced-hedge signal, real 5-min bars
-        # (needs Polygon/Alpaca for intraday — idles honestly on Tradier-only,
-        # same as ORB/DRUCK). Backtest verdict PROMISING (4/5 symbols PF>1.0,
-        # docs/MM_INTEL_BACKTEST_2026-07-25.md) but NOT proven — no options/
-        # theta modeled despite this being a labeled 0DTE tool. Feeds
-        # iam_executor under the same paper-first safety stack as every
-        # other engine — no live-arming decision made here.
-        from mm_intel_scanner import start_mm_intel_scanner
-        start_mm_intel_scanner()
+                start_webhook_engine()
+                start_anomaly_engine()
+                start_telemetry_rotator()
+                start_citation_scout()
+                start_gap_detector()
+                start_oracle_pollers()
+                start_ftd_pollers()
 
-        # Start webhook delivery engine (SSE tap + delivery workers)
-        start_webhook_engine()
+                from ftd_anomaly_engine import start_ftd_anomaly_engine
+                try:
+                    from discord_alerts import DiscordAlerts
+                    _discord_for_ftd = DiscordAlerts()
+                except Exception:
+                    _discord_for_ftd = None
+                start_ftd_anomaly_engine(_discord_for_ftd)
 
-        # Start 24/7 options anomaly crime solver
-        start_anomaly_engine()
+                from core.sml_tl_scanner import start_tl_scanner
+                start_tl_scanner()
 
-        # Start institutional telemetry rotator (Goal 3)
-        start_telemetry_rotator()
+                from avg_down_engine import start_avg_down_engine
+                start_avg_down_engine()
 
-        # AEO/GEO background engines
-        start_citation_scout()
-        start_gap_detector()
+                from sml_vault_engine import start_vault_engine
+                start_vault_engine()
 
-        # Start Real-World Data Oracle pollers (SEC EDGAR, FDA, USPTO)
-        start_oracle_pollers()
+                _start_self_pinger()
+                logger.info("[boot] deferred engines online")
+            except Exception as e:
+                logger.critical("[boot] deferred engine start failed: %s", e, exc_info=True)
 
-        # Start FTD Data Oracle pollers (SEC Reg SHO FTD + Threshold list)
-        start_ftd_pollers()
-
-        # Start ShortSqueeze Swarm — FTD/Reg SHO anomaly detection + Discord alerts
-        from ftd_anomaly_engine import start_ftd_anomaly_engine
-        try:
-            from discord_alerts import DiscordAlerts
-            _discord_for_ftd = DiscordAlerts()
-        except Exception:
-            _discord_for_ftd = None
-        start_ftd_anomaly_engine(_discord_for_ftd)
-
-        # SML Triple Lock Scanner — market-wide 15-min bar scanner (GEO/ARI/MAC stacks)
-        from core.sml_tl_scanner import start_tl_scanner
-        start_tl_scanner()
-
-        # SML Avg-Down Engine — automated pyramid builder on 5-layer EMA ribbon
-        from avg_down_engine import start_avg_down_engine
-        start_avg_down_engine()
-
-        # SML Vault Engine — same pyramid strategy on crypto via CCXT, zero
-        # custody (operator's own exchange account only). No-ops with a log
-        # line if SML_EMA_PERIODS / SML_VAULT_SYMBOLS aren't configured.
-        from sml_vault_engine import start_vault_engine
-        start_vault_engine()
-
-        # Self-pinger — keeps Render free-tier warm; pings own /api/status every 10 min
-        _start_self_pinger()
+        threading.Thread(
+            target=_deferred_engine_boot,
+            daemon=True,
+            name="deferred-engine-boot",
+        ).start()
+        logger.info("[boot] create_app returning — scanners deferred (health-check safe)")
     
     @app.after_request
     def run_analytics(response):
@@ -419,9 +373,49 @@ def create_app():
     def internal_error(e):
         return jsonify({"error": "INTERNAL_ERROR", "message": "Server error"}), 500
 
+    # Root: browsers get the trading UI. Machine/agent clients get HTTP 402
+    # (or ?x402=1) so x402scan/Bazaar stop labeling bare / as "not paid".
+    # HTML must NEVER be locked behind a paywall — that bricks the product site.
     @app.route('/')
     def serve_index():
-        return send_from_directory(app.static_folder, 'index.html')
+        from flask import request, jsonify, make_response
+        accept = (request.headers.get('Accept') or '').lower()
+        ua = (request.headers.get('User-Agent') or '').lower()
+        want_html = 'text/html' in accept or ('mozilla' in ua and 'application/json' not in accept)
+        want_402 = str(request.args.get('x402', '')).strip() in ('1', 'true', 'yes')
+        if want_html and not want_402:
+            return send_from_directory(app.static_folder, 'index.html')
+        # Machine path — real x402 challenge (same guard as paid tools)
+        try:
+            from x402_flask import x402_guard
+            @x402_guard(
+                price_usdc="0.001",
+                description=(
+                    "SqueezeOS root discovery challenge — 62+ institutional MCP tools. "
+                    "Prefer live paid routes under /api and /mcp. "
+                    "x402 USDC on Base. SDVOSB | UEI G24VZA4RLMK3 | CAGE 21U51"
+                ),
+            )
+            def _root_402():
+                return jsonify({
+                    "service": "squeezeos-api",
+                    "paid": True,
+                    "mcp": "https://squeezeos-api.onrender.com/mcp",
+                    "discovery": "https://squeezeos-api.onrender.com/.well-known/x402",
+                    "note": "Payment verified. Use /mcp for tools.",
+                })
+            return _root_402()
+        except Exception:
+            # Fallback catalog if guard import fails — still points scanners correctly
+            return jsonify({
+                "service": "squeezeos-api",
+                "x402": True,
+                "price_floor_usdc": "0.001",
+                "mcp": "https://squeezeos-api.onrender.com/mcp",
+                "discovery": "https://squeezeos-api.onrender.com/.well-known/x402",
+                "paid_demo_url": "https://squeezeos-api.onrender.com/?x402=1",
+                "scanner_hint": "GET /?x402=1 or Accept: application/json → HTTP 402",
+            }), 200
 
     @app.route('/terminal')
     @app.route('/beastmode')
@@ -729,6 +723,13 @@ def create_app():
             cache = get_oracle_batch_cache()
             results = cache["results"]
             batch_size = cache["universe_size"] or len(ORACLE_SYMBOLS)
+            # Money-path truth: live market quotes size (beastmode feed). Oracle
+            # batch can lag on ORACLE_SYMBOLS=3 while state.quotes is already 100+.
+            try:
+                live_quote_n = len(state.quotes) if state.quotes else 0
+            except Exception:
+                live_quote_n = 0
+            reported_universe = max(batch_size, live_quote_n)
             ranked = sorted(
                 [v for v in results.values() if v.get("directive") != "SHIELD"],
                 key=lambda x: x.get("confidence", 0), reverse=True
@@ -738,7 +739,9 @@ def create_app():
                 "status": "success",
                 "master": master,
                 "symbols": results,
-                "universe_size": batch_size,
+                "universe_size": reported_universe,
+                "oracle_batch_size": batch_size,
+                "market_quote_size": live_quote_n,
                 "cache_age_s": round(time.time() - cache["ts"], 1) if cache["ts"] else None,
                 "stale": cache["stale"],
                 "timestamp": datetime.now().isoformat(),

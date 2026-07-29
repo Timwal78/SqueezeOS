@@ -696,7 +696,28 @@ def execute_from_resolution(sym: str, resolution: dict,
         # from a system in that set reach the broker — everything else is
         # alert-only. Comma-separated, so multiple systems can be live at once.
         signal_system = (resolution.get("system") or "IAM").strip().upper()
+        # Aliases: MM intel scanner historically tagged SML_MM_INTEL; primary list
+        # uses SML_MM_V4. Treat them as the same sleeve.
+        _MM_ALIASES = {"SML_MM_V4", "SML_MM_INTEL", "SML_MM_V4.0", "MM_V4"}
+        if signal_system in _MM_ALIASES:
+            signal_system = "SML_MM_V4"
+        # Untagged IAM resolutions whose dominant label is MM v4 forced hedge
+        # count as SML_MM_V4 so the primary list actually monetizes MM pressure.
+        if signal_system in ("", "IAM"):
+            dom = str(resolution.get("dominant_label") or resolution.get("engine_version") or "")
+            eng = str((resolution.get("detail") or {}).get("engine_version") if isinstance(resolution.get("detail"), dict) else "")
+            blob = f"{dom} {eng} {resolution.get('rationale') or ''}".upper()
+            if "MM_V4" in blob or "SML_MM_V4" in blob or "MARKET MAKER REPOSITION" in blob:
+                signal_system = "SML_MM_V4"
+                resolution = dict(resolution)
+                resolution["system"] = "SML_MM_V4"
         primary = PRIMARY_SYSTEM()
+        # Normalize primary set aliases too
+        if primary:
+            norm = set()
+            for s in primary:
+                norm.add("SML_MM_V4" if s in _MM_ALIASES else s)
+            primary = norm
         broker_allowed = not primary or signal_system in primary
         if not broker_allowed:
             logger.info(f"[IAM-EXEC] {sym} {action} from {signal_system} — "

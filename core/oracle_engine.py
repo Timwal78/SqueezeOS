@@ -516,17 +516,27 @@ def _oracle_batch_refresh_loop():
                 "sml":           get_service("sml"),
             }
             live_universe = list(state.quotes.keys()) if state.quotes else None
-            batch_symbols = live_universe if live_universe else ORACLE_SYMBOLS
+            if live_universe:
+                # Cap batch so refresh finishes; full universe is for beastmode.
+                _OB_CAP = int(os.environ.get("ORACLE_BATCH_CAP", "60"))
+                # Prefer mandatory anchors first
+                anchors = [s for s in ("IWM", "GME", "AMC", "SPY", "QQQ", "NVDA", "TSLA", "AMD", "SOFI", "PLTR") if s in live_universe]
+                rest = [s for s in live_universe if s not in anchors]
+                batch_symbols = list(dict.fromkeys(anchors + rest))[:_OB_CAP]
+            else:
+                batch_symbols = list(ORACLE_SYMBOLS)
             results = run_oracle_batch(batch_symbols, services)
             with _oracle_lock:
+                # Report effective market universe size for clients, not just batch len
+                mkt_n = len(live_universe) if live_universe else len(batch_symbols)
                 _oracle_cache["results"]      = results
-                _oracle_cache["universe_size"] = len(batch_symbols)
+                _oracle_cache["universe_size"] = max(len(batch_symbols), mkt_n)
                 _oracle_cache["ts"]            = time.time()
                 if results:
                     _oracle_last_good["results"]      = results
-                    _oracle_last_good["universe_size"] = len(batch_symbols)
+                    _oracle_last_good["universe_size"] = max(len(batch_symbols), mkt_n)
                     _oracle_last_good["ts"]            = time.time()
-            logger.info(f"[Oracle] batch cache refreshed — {len(results)} symbols")
+            logger.info(f"[Oracle] batch cache refreshed — {len(results)} symbols (mkt={mkt_n})")
         except Exception as e:
             logger.error(f"[Oracle] batch refresh error: {e}")
         time.sleep(_ORACLE_BATCH_REFRESH_S)

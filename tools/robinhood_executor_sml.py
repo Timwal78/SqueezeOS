@@ -42,9 +42,17 @@ load_dotenv(dotenv_path=os.environ.get("DOTENV_PATH",
             override=True)
 
 # ── Logging ────────────────────────────────────────────────────────────────────
-LOG_DIR  = os.environ.get("LOG_DIR", r"C:\SqueezeOS")
+# Prefer env; else local tools\logs next to this script (never hard-require C:\SqueezeOS —
+# that path triggers "The system cannot find the path specified" on some Windows setups).
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+_DEFAULT_LOG_DIR = os.path.join(_SCRIPT_DIR, "logs")
+LOG_DIR = os.environ.get("LOG_DIR") or _DEFAULT_LOG_DIR
+try:
+    os.makedirs(LOG_DIR, exist_ok=True)
+except OSError:
+    LOG_DIR = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "SqueezeOS", "logs")
+    os.makedirs(LOG_DIR, exist_ok=True)
 LOG_FILE = os.path.join(LOG_DIR, "robinhood_executor.log")
-os.makedirs(LOG_DIR, exist_ok=True)
 
 _handler = RotatingFileHandler(LOG_FILE, maxBytes=5_000_000, backupCount=3, encoding='utf-8')
 _handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s — %(message)s"))
@@ -121,8 +129,29 @@ def _get_365_anchor(symbol: str) -> str:
 
 ROBINHOOD_USER     = os.environ.get("ROBINHOOD_USERNAME", "")
 ROBINHOOD_PASS     = os.environ.get("ROBINHOOD_PASSWORD", "")
-POLL_INTERVAL_S    = int(os.environ.get("POLL_INTERVAL_S", "180"))     # poll every 3 minutes
-MIN_GOD_STACKED    = int(os.environ.get("MIN_GOD_STACKED", "3"))       # min SET9 stacked to execute (3/6 = 50% convergence, max signal flow)
+# ═══════════════════════════════════════════════════════════════════════════
+# DESK LOCK — POLL is NOT env-configurable on the money path.
+# Stale PC executor.env (POLL=300) + load_dotenv(override=True) kept beating
+# START_EXECUTOR.bat and put the desk back on a 5-minute loop after every
+# restart. Only ALLOW_SLOW_POLL=true may unlock a custom interval.
+# ═══════════════════════════════════════════════════════════════════════════
+if os.environ.get("ALLOW_SLOW_POLL", "false").lower() == "true":
+    try:
+        POLL_INTERVAL_S = int(str(os.environ.get("POLL_INTERVAL_S", "45")).strip())
+    except Exception:
+        POLL_INTERVAL_S = 45
+    if POLL_INTERVAL_S < 15:
+        POLL_INTERVAL_S = 15
+else:
+    POLL_INTERVAL_S = 45  # LOCKED
+
+MIN_GOD_STACKED = 3  # LOCKED — gate is god_stacked >= 3; stale env had 4/5
+# Allow explicit unlock only for research
+if os.environ.get("ALLOW_CUSTOM_MIN_GOD", "false").lower() == "true":
+    try:
+        MIN_GOD_STACKED = max(1, min(6, int(os.environ.get("MIN_GOD_STACKED", "3"))))
+    except Exception:
+        MIN_GOD_STACKED = 3
 PDT_BALANCE_LIMIT  = float(os.environ.get("PDT_BALANCE_LIMIT", "2100.0"))
 PDT_MAX_TRADES     = int(os.environ.get("PDT_MAX_TRADES", "3"))
 PAPER_MODE           = os.environ.get("ROBINHOOD_PAPER_MODE", "false").lower() == "true"
@@ -145,6 +174,18 @@ TAKE_PROFIT_PCT      = float(os.environ.get("TAKE_PROFIT_PCT", "15.0")) # fallba
 ATR_STOP_MULTIPLIER  = float(os.environ.get("ATR_STOP_MULTIPLIER", "1.5"))
 ATR_TP_MULTIPLIER    = float(os.environ.get("ATR_TP_MULTIPLIER", "3.75"))
 POSITION_MONITOR_ENABLED = os.environ.get("POSITION_MONITOR_ENABLED", "true").lower() == "true"
+# Options sleeve continuous harvest (MM forced-move 50–500%)
+OPT_HARD_STOP = float(os.environ.get("OPT_HARD_STOP", "-0.20"))
+OPT_SCALE_1 = float(os.environ.get("OPT_SCALE_1", "0.50"))
+OPT_SCALE_2 = float(os.environ.get("OPT_SCALE_2", "1.50"))
+OPT_BANK_300 = float(os.environ.get("OPT_BANK_300", "3.00"))
+OPT_BANK_500 = float(os.environ.get("OPT_BANK_500", "5.00"))
+OPT_GIVEBACK_ARM = float(os.environ.get("OPT_GIVEBACK_ARM", "0.50"))
+OPT_GIVEBACK_FRAC = float(os.environ.get("OPT_GIVEBACK_FRAC", "0.35"))
+OPT_TRAIL = float(os.environ.get("OPT_TRAIL", "0.22"))
+OPT_TRAIL_LATE = float(os.environ.get("OPT_TRAIL_LATE", "0.18"))
+OPT_DELTA_EXIT = float(os.environ.get("OPT_DELTA_EXIT", "0.60"))
+_OPT_BOOK_FILE = os.path.join(LOG_DIR, "option_book.json")
 # Skip a BUY when the bid-ask spread is wider than this % of the midpoint —
 # a market/marketable order into a thin $1-$50 name eats the whole spread as
 # instant slippage. Applies to entries only, NEVER to exits. 0 disables.
@@ -253,7 +294,18 @@ _BLOCKLIST = {
 
 
 # ── Robinhood login ────────────────────────────────────────────────────────────
-_AUTH_FAILURE_ALERTED = False   # only alert Discord once per process until recovered
+# Anti-loop rules (the "Trying to log in..." spam):
+#  1) NEVER call rh.login() if the existing session still verifies.
+#  2) NEVER wipe the pickle on a soft failure (that forces full MFA loop).
+#  3) On hard failure, cool down for AUTH_COOLDOWN_S — do not hammer RH.
+#  4) Health check only VERIFIES; it does not invalidate a good session.
+_AUTH_FAILURE_ALERTED = False
+_LAST_LOGIN_ATTEMPT_TS = 0.0
+_AUTH_COOLDOWN_S = int(os.environ.get("RH_AUTH_COOLDOWN_S", "900"))  # 15 min default
+_AUTH_HARD_FAIL_UNTIL = 0.0  # epoch — skip all login attempts until this time
+_LOGIN_ATTEMPTS_WINDOW = []  # timestamps of rh.login() calls
+_MAX_LOGINS_PER_HOUR = int(os.environ.get("RH_MAX_LOGINS_PER_HOUR", "4"))
+
 
 def _rh_verify_session() -> bool:
     """Return True only if the active session can actually read account data."""
@@ -265,38 +317,48 @@ def _rh_verify_session() -> bool:
         return False
 
 
-def _rh_force_reauth() -> bool:
-    """
-    Hard re-authentication using the stored device_token to bypass MFA.
-    Works headlessly as long as the device_token pickle exists.
-    Deletes the stale pickle and re-logs in from scratch using device_token.
-    """
-    import pickle, os, requests
-    import robin_stocks.robinhood as rh
+def _pickle_paths():
+    home = os.path.expanduser("~")
+    # robin_stocks pickle_name="rh_session" → various path conventions
+    return [
+        os.path.join(home, ".tokens", "robinhoodrh_session.pickle"),
+        os.path.join(home, ".tokens", "rh_session.pickle"),
+        os.path.join(home, ".tokens", "robinhood.pickle"),
+    ]
 
-    pickle_path = os.path.join(os.path.expanduser("~"), ".tokens", "robinhoodrh_session.pickle")
 
-    device_token = None
-    if os.path.exists(pickle_path):
+def _load_device_token():
+    import pickle
+    for pickle_path in _pickle_paths():
+        if not os.path.exists(pickle_path):
+            continue
         try:
             with open(pickle_path, "rb") as f:
                 stored = pickle.load(f)
-            device_token = stored.get("device_token")
+            if isinstance(stored, dict) and stored.get("device_token"):
+                return stored.get("device_token"), pickle_path
         except Exception:
-            pass
+            continue
+    return None, None
 
+
+def _rh_force_reauth() -> bool:
+    """
+    Hard re-auth using stored device_token. Does NOT delete pickle first
+    (deleting pickle is what restarts the MFA / 'Trying to log in' loop).
+    """
+    import robin_stocks.robinhood as rh
+
+    device_token, pickle_path = _load_device_token()
     if not device_token:
-        logger.error("[RH-AUTH] No device_token in pickle — MFA required. Run executor manually once to complete MFA.")
+        logger.error(
+            "[RH-AUTH] No device_token in pickle — MFA required. "
+            "On the PC: stop executor, delete only if corrupt, run once interactively to complete MFA, then restart."
+        )
         return False
 
-    # Delete stale pickle so robin_stocks does a clean login
     try:
-        os.remove(pickle_path)
-    except Exception:
-        pass
-
-    try:
-        # Pass device_token explicitly so Robinhood skips MFA challenge
+        logger.info("[RH-AUTH] Soft re-auth with existing device_token (pickle kept)")
         rh.login(
             ROBINHOOD_USER,
             ROBINHOOD_PASS,
@@ -305,56 +367,127 @@ def _rh_force_reauth() -> bool:
             device_token=device_token,
         )
         if _rh_verify_session():
-            logger.info("[RH-AUTH] Force re-auth succeeded via device_token")
+            logger.info("[RH-AUTH] Re-auth OK via device_token")
             return True
-        else:
-            logger.error("[RH-AUTH] Force re-auth: login returned no exception but session invalid")
-            return False
-    except Exception as e:
-        logger.error(f"[RH-AUTH] Force re-auth failed: {e}")
+        logger.error("[RH-AUTH] Re-auth returned but session still invalid")
         return False
+    except Exception as e:
+        logger.error(f"[RH-AUTH] Re-auth failed: {e}")
+        return False
+
+
+def _login_rate_limited() -> bool:
+    """True if we already hit rh.login too many times this hour."""
+    global _LOGIN_ATTEMPTS_WINDOW
+    now = time.time()
+    _LOGIN_ATTEMPTS_WINDOW = [t for t in _LOGIN_ATTEMPTS_WINDOW if now - t < 3600]
+    return len(_LOGIN_ATTEMPTS_WINDOW) >= _MAX_LOGINS_PER_HOUR
+
+
+def _note_login_attempt():
+    global _LAST_LOGIN_ATTEMPT_TS, _LOGIN_ATTEMPTS_WINDOW
+    now = time.time()
+    _LAST_LOGIN_ATTEMPT_TS = now
+    _LOGIN_ATTEMPTS_WINDOW.append(now)
 
 
 def _ensure_login() -> bool:
-    global _rh_logged_in, _AUTH_FAILURE_ALERTED
-    if _rh_logged_in:
+    """
+    Idempotent session ensure. Prefer verify-only; call rh.login sparingly.
+    """
+    global _rh_logged_in, _AUTH_FAILURE_ALERTED, _AUTH_HARD_FAIL_UNTIL
+
+    # Already good this process
+    if _rh_logged_in and _rh_verify_session():
         return True
-    if not ROBINHOOD_USER or not ROBINHOOD_PASS:
-        logger.error("[RH] ROBINHOOD_USERNAME / ROBINHOOD_PASSWORD not set in executor.env")
-        return False
 
-    import robin_stocks.robinhood as rh
-
-    # Step 1: try normal login (uses cached pickle / refresh_token)
-    try:
-        rh.login(ROBINHOOD_USER, ROBINHOOD_PASS, store_session=True, pickle_name="rh_session")
-        if _rh_verify_session():
-            _rh_logged_in = True
-            _AUTH_FAILURE_ALERTED = False
-            logger.info("[RH] Session verified — logged in OK")
-            return True
-        logger.warning("[RH] Normal login returned no error but session invalid — forcing re-auth")
-    except Exception as e:
-        logger.warning(f"[RH] Normal login error: {e} — forcing re-auth")
-
-    # Step 2: hard re-auth via stored device_token (no MFA required)
-    if _rh_force_reauth():
+    # Session may still be valid even if flag is false (e.g. after soft invalidate)
+    if _rh_verify_session():
         _rh_logged_in = True
         _AUTH_FAILURE_ALERTED = False
         return True
 
-    # Step 3: complete failure — alert and back off
+    now = time.time()
+    if now < _AUTH_HARD_FAIL_UNTIL:
+        left = int(_AUTH_HARD_FAIL_UNTIL - now)
+        logger.warning(f"[RH] Auth cooldown active — {left}s left (not calling rh.login)")
+        return False
+
+    if not ROBINHOOD_USER or not ROBINHOOD_PASS:
+        logger.error("[RH] ROBINHOOD_USERNAME / ROBINHOOD_PASSWORD not set in executor.env")
+        return False
+
+    if _login_rate_limited():
+        logger.error(
+            f"[RH] Login rate limit ({_MAX_LOGINS_PER_HOUR}/hour) — stopping login spam. "
+            "Fix MFA/device_token on PC, then restart executor."
+        )
+        _AUTH_HARD_FAIL_UNTIL = now + _AUTH_COOLDOWN_S
+        return False
+
+    # Cooldown between attempts
+    if _LAST_LOGIN_ATTEMPT_TS and (now - _LAST_LOGIN_ATTEMPT_TS) < 60:
+        logger.info("[RH] Skipping login — attempted <60s ago")
+        return False
+
+    import robin_stocks.robinhood as rh
+
+    # Step 1: normal login (uses cached pickle / refresh_token) — ONE try
+    _note_login_attempt()
+    try:
+        logger.info("[RH] Attempting session restore (rh.login once)…")
+        rh.login(ROBINHOOD_USER, ROBINHOOD_PASS, store_session=True, pickle_name="rh_session")
+        if _rh_verify_session():
+            _rh_logged_in = True
+            _AUTH_FAILURE_ALERTED = False
+            _AUTH_HARD_FAIL_UNTIL = 0.0
+            logger.info("[RH] Session verified — logged in OK")
+            return True
+        logger.warning("[RH] Login returned but session invalid — trying device_token path once")
+    except Exception as e:
+        logger.warning(f"[RH] Login error: {e} — trying device_token path once")
+
+    # Step 2: device_token path (still keeps pickle)
+    _note_login_attempt()
+    if _rh_force_reauth():
+        _rh_logged_in = True
+        _AUTH_FAILURE_ALERTED = False
+        _AUTH_HARD_FAIL_UNTIL = 0.0
+        return True
+
+    # Step 3: hard fail — long cooldown so we do NOT loop "Trying to log in…"
     _rh_logged_in = False
+    _AUTH_HARD_FAIL_UNTIL = time.time() + _AUTH_COOLDOWN_S
     if not _AUTH_FAILURE_ALERTED:
         _AUTH_FAILURE_ALERTED = True
-        _discord_critical("[RH] ❌ Authentication failed — executor is OFFLINE. Manual MFA re-auth required.")
+        _discord_critical(
+            f"[RH] ❌ Auth failed — cooling down {_AUTH_COOLDOWN_S}s. "
+            "Manual MFA on PC required if device_token expired. Executor will NOT spam login."
+        )
+    logger.error(f"[RH] Auth failed — cooldown {_AUTH_COOLDOWN_S}s (no more login spam)")
     return False
 
 
 def _invalidate_login():
+    """Soft flag only — does NOT delete pickle or call rh.login."""
     global _rh_logged_in
     _rh_logged_in = False
-    logger.warning("[RH] Session invalidated — will re-auth on next cycle")
+    logger.info("[RH] Soft session flag cleared — next cycle will VERIFY before any login")
+
+
+def _healthcheck_session() -> bool:
+    """
+    Periodic health check: verify only. Login only if verify fails.
+    This replaces the old pattern of invalidate+login every 30 min (login loop).
+    """
+    if _rh_verify_session():
+        global _rh_logged_in, _AUTH_FAILURE_ALERTED
+        _rh_logged_in = True
+        _AUTH_FAILURE_ALERTED = False
+        logger.info("[RH] Health check OK — session still valid (no re-login)")
+        return True
+    logger.warning("[RH] Health check failed — will attempt ensure_login once")
+    return _ensure_login()
 
 
 def _discord_critical(message: str):
@@ -961,9 +1094,9 @@ def _discord_option(symbol: str, option_type: str, sniper: dict, qty: int, limit
 def _execute_option(symbol: str, option_type: str, sml: dict, sniper: dict, scan_counter: list):
     """
     Buy-to-open a single option contract on Robinhood using the contract already
-    selected server-side (core/convergence_engine.py's scan_options() — same
-    0.35-0.45 delta bracket logic Tradier execution uses). We never re-derive
-    strike/expiration/delta locally: the server picked one specific listed
+    selected server-side / gamma-ramp desk (scan_options + contract_selector —
+    MM forced-move band abs(Δ) ∈ [0.30, 0.40], target 0.35). We never re-derive
+    strike/expiration/delta locally: the upstream picked one specific listed
     contract, and that's the one we place on Robinhood — same underlying,
     same exchange-standardized strike/expiration, different broker.
 
@@ -996,6 +1129,24 @@ def _execute_option(symbol: str, option_type: str, sml: dict, sniper: dict, scan
         logger.warning(f"[EXEC-OPT] {symbol} {option_type} — incomplete contract from server (strike={strike} exp={expiration} ask={ask}) — skip")
         return
 
+    # MM forced-move delta band (shared with gamma_ramp contract_selector / scan_options)
+    try:
+        _ad = abs(float(sniper.get("delta") or 0))
+    except (TypeError, ValueError):
+        _ad = 0.0
+    _src = str(sniper.get("source") or sml.get("signal") or "")
+    _is_gamma = bool(sml.get("gamma_ramp")) or "gamma" in _src.lower()
+    # Hard reject out-of-band deltas for options sleeve (0.30–0.40). Soft allow
+    # if delta missing (legacy pack) unless gamma_ramp which always stamps Δ.
+    if _ad > 0 and not (0.30 <= _ad <= 0.40):
+        logger.warning(
+            f"[EXEC-OPT] {symbol} {option_type} Δ={_ad:.3f} outside MM band 0.30–0.40 — skip"
+        )
+        return
+    if _is_gamma and _ad <= 0:
+        logger.warning(f"[EXEC-OPT] {symbol} gamma_ramp intent missing delta — skip")
+        return
+
     # Same direction gates as the equity path (741 macro / 365 anchor / 5-EMA /
     # 321 dark-pool volume). A call is a bullish bet same as a share buy, so it
     # goes through the "buy" gates. A put is the bearish/protective side — those
@@ -1012,7 +1163,31 @@ def _execute_option(symbol: str, option_type: str, sml: dict, sniper: dict, scan
     _save_last_execution(_last_execution)
 
     qty         = ROBINHOOD_OPTION_QTY
-    limit_price = round(ask * 1.05, 2)   # 5% above ask, matches Tradier route's slippage buffer
+    # Prefer desk NBBO pin (bid+0.01 / explicit limit_price) for MM sleeve —
+    # ask*1.05 was a legacy slippage buffer that overpays gamma entries.
+    bid = 0.0
+    try:
+        bid = float(sniper.get("bid") or 0)
+    except (TypeError, ValueError):
+        bid = 0.0
+    limit_price = None
+    for cand in (sniper.get("limit_price"), sniper.get("nbbo_buy")):
+        try:
+            if cand is not None and float(cand) > 0:
+                limit_price = round(float(cand), 2)
+                break
+        except (TypeError, ValueError):
+            pass
+    if limit_price is None:
+        if bid > 0 and ask > 0:
+            limit_price = round(min(ask, bid + 0.01), 2)
+        elif ask > 0:
+            # tiny buffer only when no bid — not 5% blowout
+            limit_price = round(ask * 1.01, 2)
+        else:
+            limit_price = 0.0
+    if ask > 0 and limit_price > ask * 1.05:
+        limit_price = round(ask * 1.05, 2)  # hard cap
     cost        = limit_price * 100 * qty
 
     with _lock:
@@ -1035,6 +1210,10 @@ def _execute_option(symbol: str, option_type: str, sml: dict, sniper: dict, scan
         with _lock:
             _orders_today += 1
             _daily_notional_usd += cost
+        try:
+            _track_option_entry(symbol, option_type, sniper, qty, limit_price)
+        except Exception:
+            pass
     else:
         if not _ensure_login():
             result = {"error": "login_failed"}
@@ -1282,18 +1461,42 @@ _UNIVERSE_WARN_FLOOR   = 25
 _universe_last_warn_ts = 0.0
 
 def _warn_if_universe_degraded(universe_size: int):
+    """Warn only when BOTH oracle batch AND live market scan look tiny.
+
+    /api/oracle universe_size can stick at 3 (ORACLE_SYMBOLS seed) while
+    /api/market/scan already has 100+ quotes powering beastmode — that is NOT
+    degraded money-path. Prefer market scan size when available.
+    """
     global _universe_last_warn_ts
-    if universe_size <= 0:   # server didn't report — nothing to judge
+    live_mkt = 0
+    try:
+        req = URLRequest(f"{SQUEEZEOS_API_URL}/api/market/scan",
+                         headers={"User-Agent": "SqueezeOS-RH-Executor/2.0"})
+        with urlopen(req, timeout=12) as resp:
+            m = json.loads(resp.read())
+        live_mkt = int(m.get("universe_size") or len(m.get("quotes") or {}) or 0)
+    except Exception:
+        live_mkt = 0
+    effective = max(int(universe_size or 0), live_mkt)
+    if effective <= 0:
         return
     now = time.time()
-    if universe_size <= _UNIVERSE_WARN_FLOOR and now - _universe_last_warn_ts > 3600:
+    if effective <= _UNIVERSE_WARN_FLOOR and now - _universe_last_warn_ts > 3600:
         _universe_last_warn_ts = now
         logger.warning(
-            f"[ORACLE] Server scan universe is only {universe_size} tickers — full-market "
-            f"discovery is DEGRADED (seed list only). Check ALPACA_API_KEY/ALPACA_API_SECRET "
-            f"and POLYGON_API_KEY on the squeezeos-api Render service, and "
-            f"{SQUEEZEOS_API_URL}/api/truth/providers for live provider status."
+            f"[ORACLE] Effective scan universe is only {effective} tickers "
+            f"(oracle_batch={universe_size}, market_scan={live_mkt}) — discovery DEGRADED. "
+            f"Check ALPACA/POLYGON/TRADIER on squeezeos-api and "
+            f"{SQUEEZEOS_API_URL}/api/truth/providers + /api/market/scan."
         )
+    elif live_mkt > _UNIVERSE_WARN_FLOOR and int(universe_size or 0) <= _UNIVERSE_WARN_FLOOR:
+        # Quiet info once/hour — money path is fine via market/beastmode
+        if now - _universe_last_warn_ts > 3600:
+            _universe_last_warn_ts = now
+            logger.info(
+                f"[ORACLE] batch seed={universe_size} but market scan={live_mkt} — "
+                f"beastmode universe healthy (not degraded)"
+            )
 
 
 def _poll_oracle() -> int:
@@ -1417,18 +1620,414 @@ def _poll_oracle() -> int:
     return scan_counter[0]
 
 
+
+
+# ── Options continuous harvest book (50–500%, sell before giveback) ───────────
+def _load_option_book() -> dict:
+    try:
+        with open(_OPT_BOOK_FILE, "r") as f:
+            d = json.load(f)
+        return d if isinstance(d, dict) else {"positions": {}}
+    except Exception:
+        return {"positions": {}}
+
+
+def _save_option_book(book: dict) -> None:
+    try:
+        with open(_OPT_BOOK_FILE, "w") as f:
+            json.dump(book, f, indent=2)
+    except Exception as e:
+        logger.warning(f"[OPT-BOOK] save failed: {e}")
+
+
+def _option_book_key(symbol: str, strike, expiration: str, option_type: str) -> str:
+    return f"{symbol.upper()}|{float(strike):.4f}|{str(expiration)[:10]}|{(option_type or 'call').lower()}"
+
+
+def _track_option_entry(symbol: str, option_type: str, sniper: dict, qty: int, limit_price: float):
+    """Record BTO so continuous manage can scale/trail/giveback-lock."""
+    book = _load_option_book()
+    pos = book.setdefault("positions", {})
+    k = _option_book_key(symbol, sniper.get("strike"), sniper.get("expiration"), option_type)
+    prev = pos.get(k) or {}
+    prev_qty = int(prev.get("qty") or 0)
+    prev_entry = float(prev.get("entry") or 0)
+    new_qty = prev_qty + max(1, int(qty))
+    # VWAP entry if adding
+    if prev_qty > 0 and prev_entry > 0:
+        entry = (prev_entry * prev_qty + float(limit_price) * qty) / new_qty
+    else:
+        entry = float(limit_price)
+    pos[k] = {
+        "symbol": symbol.upper(),
+        "option_type": (option_type or "call").lower(),
+        "strike": float(sniper.get("strike") or 0),
+        "expiration": str(sniper.get("expiration") or "")[:10],
+        "occ": sniper.get("symbol") or sniper.get("occ") or "",
+        "qty": new_qty,
+        "entry": entry,
+        "peak": max(float(prev.get("peak") or 0), entry),
+        "scaled": bool(prev.get("scaled") or False),
+        "scale_frac": float(prev.get("scale_frac") or 0),
+        "entry_delta": abs(float(sniper.get("delta") or prev.get("entry_delta") or 0.35)),
+        "entry_ts": prev.get("entry_ts") or time.time(),
+        "source": sniper.get("source") or prev.get("source") or "options_sleeve",
+    }
+    book["positions"] = pos
+    _save_option_book(book)
+    logger.info(f"[OPT-BOOK] track {k} qty={new_qty} entry={entry:.2f} Δ={pos[k]['entry_delta']}")
+
+
+def _execute_option_sell(symbol: str, option_type: str, strike, expiration: str, qty: int, limit_price: float, reason: str) -> dict:
+    """Sell-to-close option contracts on RH — bank gains / stop / trail."""
+    if qty <= 0:
+        return {"error": "qty<=0"}
+    if PAPER_MODE:
+        logger.info(f"[PAPER] Would SELL_TO_CLOSE {qty}x {symbol} {strike}{option_type[0].upper()} {expiration} @ ${limit_price:.2f} ({reason})")
+        return {"paper": True, "placed": True}
+    if not _ensure_login():
+        return {"error": "login_failed"}
+    try:
+        import robin_stocks.robinhood as rh
+        # Prefer bid-side pin for exits (sell); limit_price already computed
+        r = rh.orders.order_sell_option_limit(
+            positionEffect="close",
+            creditOrDebit="credit",
+            price=float(limit_price),
+            symbol=symbol,
+            quantity=int(qty),
+            expirationDate=str(expiration)[:10],
+            strike=float(strike),
+            optionType=(option_type or "call").lower(),
+            timeInForce="gfd",
+        )
+        logger.info(f"[RH] Raw option SELL response {symbol}: {r}")
+        rh_state = (r or {}).get("state", "") if isinstance(r, dict) else ""
+        order_id = str((r or {}).get("id", "") or "") if isinstance(r, dict) else ""
+        good = {"confirmed", "queued", "unconfirmed", "partially_filled", "filled"}
+        if rh_state in good or (isinstance(r, dict) and "id" in r):
+            logger.info(f"[RH] Option SELL ok {symbol} x{qty} {reason} id={order_id} state={rh_state}")
+            return {"placed": True, "raw": r, "reason": reason}
+        err = (r or {}).get("detail", "") if isinstance(r, dict) else str(r)
+        logger.error(f"[RH] Option SELL failed {symbol}: {err}")
+        return {"error": err or "unknown", "raw": r}
+    except Exception as e:
+        err = str(e)
+        logger.error(f"[RH] Option SELL error: {err}")
+        if "logged in" in err.lower():
+            _invalidate_login()
+        return {"error": err}
+
+
+def _option_mark_from_rh(symbol: str, option_type: str, strike, expiration: str) -> dict:
+    """Best-effort mark for open option: last/bid/ask from robin_stocks."""
+    out = {"bid": 0.0, "ask": 0.0, "last": 0.0, "mark": 0.0, "delta": 0.0}
+    try:
+        import robin_stocks.robinhood as rh
+        if not _ensure_login():
+            return out
+        # get_option_market_data_by_id needs id; use find_options / market data helper
+        data = None
+        try:
+            data = rh.options.get_option_market_data(
+                symbol,
+                str(expiration)[:10],
+                str(strike),
+                (option_type or "call").lower(),
+            )
+        except Exception:
+            data = None
+        if isinstance(data, list) and data:
+            data = data[0]
+        if isinstance(data, dict):
+            bid = float(data.get("bid_price") or data.get("bid") or 0) or 0.0
+            ask = float(data.get("ask_price") or data.get("ask") or 0) or 0.0
+            last = float(data.get("last_trade_price") or data.get("mark_price") or 0) or 0.0
+            mark = last if last > 0 else ((bid + ask) / 2.0 if bid and ask else bid or ask)
+            g = data.get("delta") or (data.get("greeks") or {}).get("delta")
+            out = {"bid": bid, "ask": ask, "last": last, "mark": float(mark or 0), "delta": abs(float(g or 0))}
+    except Exception as e:
+        logger.debug(f"[OPT-BOOK] mark fail {symbol}: {e}")
+    return out
+
+
+def _manage_option_book() -> int:
+    """
+    Continuous options harvest loop:
+      hard stop -20% · scale +50% · scale +150% · bank +300/+500 ·
+      giveback lock (sell before loss of gains) · peak trail · Δ≥0.60 exit
+    Returns number of sell orders placed.
+    """
+    if not POSITION_MONITOR_ENABLED:
+        return 0
+    book = _load_option_book()
+    positions = book.get("positions") or {}
+    if not positions:
+        return 0
+    placed = 0
+    keep = {}
+    for k, pos in list(positions.items()):
+        try:
+            symbol = pos["symbol"]
+            otype = pos.get("option_type") or "call"
+            strike = pos.get("strike")
+            exp = pos.get("expiration")
+            qty = int(pos.get("qty") or 0)
+            entry = float(pos.get("entry") or 0)
+            if qty <= 0 or entry <= 0:
+                continue
+            md = _option_mark_from_rh(symbol, otype, strike, exp)
+            mark = float(md.get("mark") or 0)
+            bid = float(md.get("bid") or 0)
+            if mark <= 0:
+                keep[k] = pos
+                continue
+            peak = max(float(pos.get("peak") or entry), mark)
+            pos["peak"] = peak
+            ret = (mark - entry) / entry
+            peak_ret = (peak - entry) / entry if entry > 0 else 0.0
+            scaled = bool(pos.get("scaled"))
+            scale_frac = float(pos.get("scale_frac") or 0)
+            exit_qty = 0
+            reason = ""
+
+            if ret <= OPT_HARD_STOP:
+                exit_qty, reason = qty, "hard_stop"
+            elif ret >= OPT_BANK_500:
+                exit_qty, reason = qty, "bank_500"
+            elif (not scaled) and ret >= OPT_SCALE_1:
+                exit_qty, reason = max(1, qty // 2), "scale_50"
+            elif scaled and scale_frac < 0.75 and ret >= OPT_SCALE_2:
+                exit_qty, reason = max(1, qty // 2), "scale_150"
+            elif scaled and ret >= OPT_BANK_300 and qty > 1:
+                exit_qty, reason = max(1, qty - 1), "bank_300"
+            elif peak_ret >= OPT_GIVEBACK_ARM and peak_ret > 0:
+                giveback = (peak - mark) / entry
+                frac_lost = giveback / peak_ret if peak_ret > 0 else 0.0
+                if frac_lost >= OPT_GIVEBACK_FRAC and ret > 0:
+                    exit_qty, reason = qty, "giveback_lock"
+                elif ret <= 0:
+                    exit_qty, reason = qty, "giveback_to_red"
+            if not reason and scaled:
+                trail = OPT_TRAIL_LATE if scale_frac >= 0.75 else OPT_TRAIL
+                if peak > 0 and (mark - peak) / peak <= -trail:
+                    exit_qty, reason = qty, "trail"
+            dlt = float(md.get("delta") or pos.get("entry_delta") or 0)
+            if not reason and dlt >= OPT_DELTA_EXIT and ret >= 0.50:
+                exit_qty, reason = qty, "delta_expansion"
+
+            if exit_qty > 0:
+                # sell pin: ask-0.01 or bid
+                ask = float(md.get("ask") or 0)
+                if bid > 0 and ask > 0:
+                    px = round(max(bid, ask - 0.01), 2)
+                elif bid > 0:
+                    px = round(bid, 2)
+                else:
+                    px = round(mark * 0.98, 2)
+                logger.info(
+                    f"[OPT-BOOK] EXIT {reason} {symbol} {otype} K={strike} exp={exp} "
+                    f"qty={exit_qty} ret={ret*100:.1f}% peak_ret={peak_ret*100:.1f}% mark={mark:.2f}"
+                )
+                res = _execute_option_sell(symbol, otype, strike, exp, exit_qty, px, reason)
+                if res.get("placed") or res.get("paper"):
+                    placed += 1
+                    qty_left = qty - exit_qty
+                    if reason.startswith("scale") and qty_left > 0:
+                        pos["qty"] = qty_left
+                        pos["scaled"] = True
+                        pos["scale_frac"] = 0.5 if reason == "scale_50" else 0.75
+                        pos["peak"] = mark
+                        keep[k] = pos
+                    elif reason == "bank_300" and qty_left > 0:
+                        pos["qty"] = qty_left
+                        pos["scaled"] = True
+                        pos["scale_frac"] = max(scale_frac, 0.9)
+                        keep[k] = pos
+                    # else fully closed — drop
+                else:
+                    keep[k] = pos  # retry next tick
+            else:
+                keep[k] = pos
+        except Exception as e:
+            logger.warning(f"[OPT-BOOK] manage error {k}: {e}")
+            keep[k] = pos
+    book["positions"] = keep
+    book["last_manage_ts"] = time.time()
+    _save_option_book(book)
+    if placed:
+        logger.info(f"[OPT-BOOK] harvest sells placed={placed} open_left={len(keep)}")
+    return placed
+
+
+# ── Gamma Ramp outbox poll (Tradier data → RH funded exec) ─────────────────────
+# Reads RH-ready option intents written by tools/gamma_ramp/live_engine.py via
+# rh_route.py. Same sniper contract shape as beastmode options path.
+GAMMA_RAMP_OUTBOX_DIR = os.environ.get(
+    "GAMMA_RAMP_OUTBOX_DIR",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "gamma_ramp", "rh_outbox"),
+)
+GAMMA_RAMP_POLL_ENABLED = os.environ.get("GAMMA_RAMP_POLL_ENABLED", "true").lower() == "true"
+
+
+def _poll_gamma_ramp() -> int:
+    """Consume pending gamma-ramp option intents from the shared outbox."""
+    if not GAMMA_RAMP_POLL_ENABLED:
+        return 0
+    try:
+        from pathlib import Path as _P
+        outbox = _P(GAMMA_RAMP_OUTBOX_DIR)
+    except Exception:
+        return 0
+    if not outbox.is_dir():
+        return 0
+
+    files = sorted(outbox.glob("gr_*.json"), key=lambda f: f.stat().st_mtime)
+    if not files:
+        return 0
+
+    scan_counter = [0]
+    done_dir = outbox / "done"
+    done_dir.mkdir(exist_ok=True)
+
+    for fpath in files:
+        if scan_counter[0] >= MAX_PER_SCAN:
+            break
+        try:
+            intent = json.loads(fpath.read_text())
+        except Exception as e:
+            logger.warning(f"[GAMMA-RAMP] bad intent file {fpath.name}: {e}")
+            continue
+
+        status = (intent.get("status") or "pending").lower()
+        if status in ("acked", "done", "error"):
+            continue
+        action = (intent.get("action") or "BUY_TO_OPEN").upper()
+        if action != "BUY_TO_OPEN":
+            if action == "SELL_TO_CLOSE":
+                # Continuous harvest path — actually sell on RH, don't park exits
+                otype = (intent.get("option_type") or ("call" if intent.get("side") == "CALL" else "put")).lower()
+                qty_e = max(1, int(intent.get("qty") or 1))
+                strike_e = intent.get("strike")
+                exp_e = intent.get("expiration")
+                bid_e = float(intent.get("bid") or intent.get("limit_price") or intent.get("mid") or 0)
+                ask_e = float(intent.get("ask") or 0)
+                if bid_e > 0 and ask_e > 0:
+                    px_e = round(max(bid_e, ask_e - 0.01), 2)
+                elif bid_e > 0:
+                    px_e = round(bid_e, 2)
+                else:
+                    px_e = round(float(intent.get("limit_price") or intent.get("mid") or 0.01), 2)
+                reason_e = str(intent.get("reason") or "gamma_exit")
+                logger.info(
+                    f"[GAMMA-RAMP] EXIT {reason_e} {symbol} {otype} K={strike_e} exp={exp_e} qty={qty_e} @ {px_e}"
+                )
+                res_e = _execute_option_sell(symbol, otype, strike_e, exp_e, qty_e, px_e, reason_e)
+                intent["status"] = "acked" if res_e.get("placed") or res_e.get("paper") else "error"
+                intent["sell_result"] = {k2: res_e.get(k2) for k2 in ("placed", "paper", "error", "reason") if k2 in res_e or res_e.get(k2) is not None}
+                intent["acked_ts"] = time.time()
+                if res_e.get("placed") or res_e.get("paper"):
+                    scan_counter[0] += 1
+                    # shrink book if tracked
+                    try:
+                        book = _load_option_book()
+                        kk = _option_book_key(symbol, strike_e, exp_e, otype)
+                        if kk in (book.get("positions") or {}):
+                            left = int(book["positions"][kk].get("qty") or 0) - qty_e
+                            if left > 0:
+                                book["positions"][kk]["qty"] = left
+                            else:
+                                book["positions"].pop(kk, None)
+                            _save_option_book(book)
+                    except Exception:
+                        pass
+                try:
+                    fpath.write_text(json.dumps(intent, indent=2))
+                    fpath.rename(done_dir / fpath.name)
+                except Exception:
+                    pass
+            continue
+
+        symbol = (intent.get("underlying") or "").upper().strip()
+        option_type = (intent.get("option_type") or ("call" if intent.get("side") == "CALL" else "put")).lower()
+        if option_type not in ("call", "put"):
+            option_type = "call"
+
+        sniper = {
+            "strike": intent.get("strike"),
+            "expiration": intent.get("expiration"),
+            "ask": intent.get("ask") or intent.get("limit_price") or intent.get("mid"),
+            "premium": intent.get("mid") or intent.get("ask") or intent.get("limit_price"),
+            "bid": intent.get("bid"),
+            "delta": intent.get("delta"),
+            "gamma": intent.get("gamma"),
+            "symbol": intent.get("occ"),
+            "dte": intent.get("dte"),
+            "source": "gamma_ramp",
+            "limit_price": intent.get("limit_price"),
+        }
+        sml = intent.get("sml") or {
+            "god_stacked": 6,
+            "tier": "GOD_MODE",
+            "execute_gate": True,
+            "signal": f"GAMMA_RAMP_{intent.get('side')}",
+            "confidence": 90.0,
+            "gamma_ramp": True,
+            "reason": intent.get("reason"),
+        }
+
+        # Optional qty override for this intent
+        prev_qty = None
+        if intent.get("qty"):
+            try:
+                global ROBINHOOD_OPTION_QTY
+                prev_qty = ROBINHOOD_OPTION_QTY
+                ROBINHOOD_OPTION_QTY = max(1, int(intent["qty"]))
+            except Exception:
+                prev_qty = None
+
+        logger.info(
+            f"[GAMMA-RAMP] RH route → {option_type.upper()} {symbol} "
+            f"Δ={sniper.get('delta')} K={sniper.get('strike')} exp={sniper.get('expiration')} "
+            f"id={intent.get('id')}"
+        )
+        before = scan_counter[0]
+        try:
+            _execute_option(symbol, option_type, sml, sniper, scan_counter)
+        finally:
+            if prev_qty is not None:
+                ROBINHOOD_OPTION_QTY = prev_qty
+
+        # Mark consumed so we don't re-fire (whether placed or gated)
+        intent["status"] = "acked" if scan_counter[0] > before else "acked_no_fill"
+        intent["acked_ts"] = time.time()
+        intent["placed"] = scan_counter[0] > before
+        try:
+            fpath.write_text(json.dumps(intent, indent=2))
+            fpath.rename(done_dir / fpath.name)
+        except Exception as e:
+            logger.warning(f"[GAMMA-RAMP] could not archive {fpath.name}: {e}")
+
+    if scan_counter[0]:
+        logger.info(f"[GAMMA-RAMP] placed {scan_counter[0]} option order(s) from outbox")
+    return scan_counter[0]
+
+
 # ── Main loop ──────────────────────────────────────────────────────────────────
 def main():
     global _rh_logged_in  # explicitly declare global so Python never creates a local shadow
     logger.info("=" * 60)
     logger.info("SqueezeOS Robinhood Executor v3.7 — spread guard on entries + open-order fill reconciliation + holiday calendar")
     logger.info(f"  API         : {SQUEEZEOS_API_URL}")
-    logger.info(f"  Poll every  : {POLL_INTERVAL_S}s")
+    logger.info(f"  Poll every  : {POLL_INTERVAL_S}s  [DESK-LOCKED — env cannot set 300]")
     logger.info(f"  Hours       : 4:00 AM–8:00 PM ET (pre-market + regular + after-hours)")
     logger.info(f"  Ext hours   : LIMIT orders (buy +0.2% / sell -0.2% from last price)")
-    logger.info(f"  Sources     : beastmode (GOD_MODE+DUAL_LOCK) | TV webhook (Pine) | oracle+history (live universe)")
+    logger.info(f"  Sources     : beastmode | TV webhook | oracle | gamma_ramp outbox→RH ({GAMMA_RAMP_OUTBOX_DIR})")
+    logger.info(f"  Options Δ   : 0.30–0.40 target 0.35 | MM short-GEX forced-move | C+P")
+    logger.info(f"  Options exit: stop -20% | scale +50%/+150% | bank +300/+500 | giveback lock | trail | Δ-exit 0.60")
+    logger.info(f"  Options loop: CONTINUOUS harvest every poll — sell before loss of gains")
     logger.info(f"  Oracle      : 100% FETCH — uses live scan universe, no hardcoded watchlist")
-    logger.info(f"  MIN_GOD     : {MIN_GOD_STACKED}/6 stacked (GRID_LOCK: {max(2,MIN_GOD_STACKED-1)})  |  ORACLE_MIN_CONF: {ORACLE_MIN_CONFIDENCE}%")
+    logger.info(f"  MIN_GOD     : {MIN_GOD_STACKED}/6 stacked (GRID_LOCK: {max(2,MIN_GOD_STACKED-1)}) [LOCKED]  |  ORACLE_MIN_CONF: {ORACLE_MIN_CONFIDENCE}%")
     logger.info(f"  PDT limit   : ${PDT_BALANCE_LIMIT}")
     logger.info(f"  Max order   : ${MAX_ORDER_USD} / {MAX_EQUITY_SHARES} shares")
     logger.info(f"  Daily cap   : {MAX_ORDERS_PER_DAY} orders / ${MAX_DAILY_NOTIONAL:.0f} notional / ${MAX_DAILY_LOSS_USD:.0f} loss limit")
@@ -1440,46 +2039,58 @@ def main():
     logger.info(f"  Kill switch : {KILL_SWITCH}")
     logger.info("=" * 60)
 
+    # Fail loud if somehow still slow (should be impossible without ALLOW_SLOW_POLL)
+    if POLL_INTERVAL_S > 90:
+        logger.error(f"[STARTUP] FATAL: POLL_INTERVAL_S={POLL_INTERVAL_S} — refusing to run slow desk")
+        raise SystemExit(2)
+    if POLL_INTERVAL_S != 45 and os.environ.get("ALLOW_SLOW_POLL", "false").lower() != "true":
+        logger.error(f"[STARTUP] FATAL: poll not locked at 45 (got {POLL_INTERVAL_S})")
+        raise SystemExit(2)
+
     if KILL_SWITCH:
         logger.warning("[STARTUP] KILL_SWITCH=true — executor will log but not trade")
 
-    # Pre-warm login
+    # Pre-warm login ONCE
     if not PAPER_MODE:
         _ensure_login()
 
     _last_login_check  = time.time()
-    _LOGIN_RECHECK_S   = 1800   # verify session every 30 min
+    _LOGIN_RECHECK_S   = int(os.environ.get("RH_LOGIN_RECHECK_S", "1800"))  # verify only every 30 min
     _auth_retry_count  = 0
-    _AUTH_BACKOFF      = [60, 120, 300, 600, 1800]  # escalating retry delays on repeated failure
+    # Longer backoff — never sub-minute hammering that triggers RH "Trying to log in" loop
+    _AUTH_BACKOFF      = [300, 600, 900, 1800, 3600]
 
     while True:
         try:
             _reset_daily_if_new_day()
 
-            # Proactive session health-check every 30 min
+            # Proactive session HEALTH CHECK every 30 min — verify only, no forced re-login
             if not PAPER_MODE and time.time() - _last_login_check > _LOGIN_RECHECK_S:
-                _invalidate_login()
-                ok = _ensure_login()
+                ok = _healthcheck_session()
                 _last_login_check = time.time()
                 if ok:
                     _auth_retry_count = 0
                 else:
                     delay = _AUTH_BACKOFF[min(_auth_retry_count, len(_AUTH_BACKOFF) - 1)]
                     _auth_retry_count += 1
-                    logger.error(f"[AUTH] Re-auth failed (attempt {_auth_retry_count}) — backing off {delay}s")
+                    logger.error(f"[AUTH] Health/re-auth failed (attempt {_auth_retry_count}) — backing off {delay}s (no login spam)")
                     time.sleep(delay)
                     continue
 
-            # If we lost auth mid-cycle, recover before scanning
+            # If flag says logged out, VERIFY first; login only if verify fails
             if not PAPER_MODE and not _rh_logged_in:
-                ok = _ensure_login()
-                if not ok:
-                    delay = _AUTH_BACKOFF[min(_auth_retry_count, len(_AUTH_BACKOFF) - 1)]
-                    _auth_retry_count += 1
-                    logger.error(f"[AUTH] Cannot authenticate (attempt {_auth_retry_count}) — skipping cycle, retry in {delay}s")
-                    time.sleep(delay)
-                    continue
-                _auth_retry_count = 0
+                if _rh_verify_session():
+                    _rh_logged_in = True
+                    _auth_retry_count = 0
+                else:
+                    ok = _ensure_login()
+                    if not ok:
+                        delay = _AUTH_BACKOFF[min(_auth_retry_count, len(_AUTH_BACKOFF) - 1)]
+                        _auth_retry_count += 1
+                        logger.error(f"[AUTH] Cannot authenticate (attempt {_auth_retry_count}) — skip cycle, retry in {delay}s")
+                        time.sleep(delay)
+                        continue
+                    _auth_retry_count = 0
 
             rh_status = "PAPER" if PAPER_MODE else "OK"
             if not _market_open():
@@ -1498,11 +2109,17 @@ def main():
             beast_placed  = _poll_beastmode()
             tv_placed     = _poll_tv_pending()
             oracle_placed = _poll_oracle()
-            total_placed  = stop_placed + beast_placed + tv_placed + oracle_placed
+            gamma_placed  = _poll_gamma_ramp()
+            opt_book_placed = _manage_option_book()
+            total_placed  = stop_placed + beast_placed + tv_placed + oracle_placed + gamma_placed + opt_book_placed
             if total_placed == 0:
                 logger.info("[POLL] No signals this cycle — waiting for next scan")
             else:
-                logger.info(f"[POLL] Cycle complete — {total_placed} order(s) placed ({stop_placed} stop/take-profit, {beast_placed} GOD MODE, {tv_placed} Pine, {oracle_placed} Oracle)")
+                logger.info(
+                    f"[POLL] Cycle complete — {total_placed} order(s) placed "
+                    f"({stop_placed} stop/tp, {beast_placed} GOD, {tv_placed} Pine, "
+                    f"{oracle_placed} Oracle, {gamma_placed} GammaRamp→RH)"
+                )
         except Exception as e:
             logger.error(f"[LOOP] Unexpected error: {e}")
         logger.info(f"[POLL] Next scan in {POLL_INTERVAL_S}s")

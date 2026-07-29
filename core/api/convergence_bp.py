@@ -667,7 +667,7 @@ def exec_test_alert():
                 "type": "CALL",
                 "strike": 3.50,
                 "expiration": "2026-06-12",
-                "delta": 0.42,
+                "delta": 0.35,  # MM forced-move target
                 "gamma": 0.18,
                 "theta": -0.03,
                 "iv": 0.95,
