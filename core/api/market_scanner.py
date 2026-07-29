@@ -55,7 +55,7 @@ _analyzer = None  # singleton — load once, reuse every cycle
 # Post-filter to $1-$50 after fetch. Benchmarks always included.
 # ── INSTITUTIONAL UNIVERSE MANDATE (Law 2) ──
 # Absolutely no hardcoded watchlists. Discovery is 100% dynamic from the live tape.
-MANDATORY_TICKERS = ["IWM", "GME", "AMC"] # Core focus, everything else dynamically fetched
+MANDATORY_TICKERS = ["IWM", "GME", "AMC", "SPY", "QQQ", "SOFI", "PLTR", "NVDA", "TSLA", "AMD"]  # anchors + liquid; rest dynamic
 
 _universe_cache = {"symbols": list(MANDATORY_TICKERS), "ts": 0}
 _UNIVERSE_TTL_S = 300  # full market discovery is heavy — refresh every 5 minutes only
@@ -105,17 +105,41 @@ def _run_scan():
     quotes = {}
     
     if tradier and tradier.available:
-        quotes = tradier.get_quotes(dynamic_universe)
+        try:
+            quotes = tradier.get_quotes(dynamic_universe) or {}
+        except Exception as e:
+            logger.warning(f"[MARKET] batch quotes failed: {e}")
+            quotes = {}
     if not quotes and alpaca and alpaca.available:
         # Fallback to Alpaca
-        quotes = alpaca.get_snapshots(dynamic_universe)
+        try:
+            quotes = alpaca.get_snapshots(dynamic_universe) or {}
+        except Exception as e:
+            logger.warning(f"[MARKET] alpaca snapshots failed: {e}")
+            quotes = {}
 
-    # Filter to Institutional Focus: $1-$50 OR Mandatory Targets (IWM)
+    # Hard seed: never leave oracle on 3-name emergency list when Tradier works.
+    # Batch calls sometimes return {} on cold start; pull MANDATORY one-by-one.
+    if tradier and tradier.available:
+        need = [s for s in MANDATORY_TICKERS if s not in quotes]
+        if len(quotes) < 25 or need:
+            seed_list = list(dict.fromkeys(list(MANDATORY_TICKERS) + list(dynamic_universe)[:80]))
+            try:
+                seeded = tradier.get_quotes(seed_list) or {}
+                if seeded:
+                    quotes.update(seeded)
+            except Exception as e:
+                logger.warning(f"[MARKET] seed quotes failed: {e}")
+
+    # Universe for oracle/beastmode: liquid $0.50–$2500 (was $1–$50 which
+    # dropped most discovery names and left oracle stuck on 3 seed tickers).
+    # sweet_spot still marks classic $1–$50 squeeze band for options grading.
     sweet = {}
     for sym, q in quotes.items():
-        price = q.get('price', 0)
-        if 1.0 <= price <= 50.0 or sym in MANDATORY_TICKERS:
-            # We track the 'sweet_spot' flag for S3 grading
+        price = float(q.get('price', 0) or 0)
+        if price <= 0:
+            continue
+        if 0.50 <= price <= 2500.0 or sym in MANDATORY_TICKERS:
             q['sweet_spot'] = (1.0 <= price <= 50.0)
             sweet[sym] = q
 

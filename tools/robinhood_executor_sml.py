@@ -122,6 +122,13 @@ def _get_365_anchor(symbol: str) -> str:
 ROBINHOOD_USER     = os.environ.get("ROBINHOOD_USERNAME", "")
 ROBINHOOD_PASS     = os.environ.get("ROBINHOOD_PASSWORD", "")
 POLL_INTERVAL_S    = int(os.environ.get("POLL_INTERVAL_S", "45"))      # poll every 45s
+# Desk standard is 45s continuous harvest. Stale PC executor.env often still
+# has 300 from the old launcher — clamp so a bad env can't re-slow the loop.
+if POLL_INTERVAL_S > 90:
+    import warnings as _w
+    _w.warn(f"POLL_INTERVAL_S={POLL_INTERVAL_S} is too slow for MM harvest; clamping to 45")
+    POLL_INTERVAL_S = 45
+
 MIN_GOD_STACKED    = int(os.environ.get("MIN_GOD_STACKED", "3"))       # min SET9 stacked to execute (3/6 = 50% convergence, max signal flow)
 PDT_BALANCE_LIMIT  = float(os.environ.get("PDT_BALANCE_LIMIT", "2100.0"))
 PDT_MAX_TRADES     = int(os.environ.get("PDT_MAX_TRADES", "3"))
