@@ -106,10 +106,17 @@ class OpenPos:
     entry_delta: float = DELTA_TARGET
     contracts_remaining: int = 0
     order_id: str = ""
+    stage_peak: float = 0.0  # peak since the last scale event -- basis for the
+                              # post-scale trailing stop only. `peak` itself
+                              # always stays the true all-time high since entry
+                              # (see manage_open) so giveback-lock still measures
+                              # against the real peak gain, not a reset one.
 
     def __post_init__(self):
         if self.contracts_remaining <= 0:
             self.contracts_remaining = self.qty
+        if self.stage_peak <= 0:
+            self.stage_peak = self.peak
 
 
 @dataclass
@@ -457,7 +464,20 @@ def manage_open(st: EngineState, ready: Dict[str, Any]) -> EngineState:
         if mark <= 0:
             still.append(asdict(pos))
             continue
+        # `peak` is always the TRUE all-time high mark since entry -- never
+        # overwritten -- so giveback-lock (#6) always measures against the
+        # real peak gain that was actually seen, not a value reset by a later
+        # scale event. `stage_peak` is a SEPARATE high-watermark reset at each
+        # scale event, used only by the post-scale trailing stop (#7), which
+        # is meant to trail the runner's own move since it started running,
+        # not chase the original all-time high. Before this fix both used the
+        # same field, so a scale event on a pullback (e.g. peak $1.80, price
+        # back down to the $1.60 that still crosses the +50% scale threshold)
+        # would silently overwrite the true $1.80 peak with $1.60, weakening
+        # giveback-lock's protection on every position that had already
+        # scaled once.
         pos.peak = max(pos.peak, mark)
+        pos.stage_peak = max(pos.stage_peak, mark)
         ret = (mark - pos.entry) / pos.entry if pos.entry > 0 else 0.0
 
         exit_qty = 0
@@ -478,16 +498,21 @@ def manage_open(st: EngineState, ready: Dict[str, Any]) -> EngineState:
             reason = "scale_50"
             pos.scaled = True
             pos.scale_frac = 0.5
-            pos.peak = mark
+            pos.stage_peak = mark
 
         # 4) Scale 2 at +150% — sell half of runner
         elif pos.scaled and pos.scale_frac < 0.75 and ret >= SCALE2_TP:
             exit_qty = max(1, pos.contracts_remaining // 2)
             reason = "scale_150"
             pos.scale_frac = 0.75
-            pos.peak = mark
+            pos.stage_peak = mark
 
-        # 5) Big runner bank at +300% — flatten most remaining
+        # 5) Big runner bank at +300% — flatten most remaining, leave 1
+        #    lottery-ticket contract still open and still tracked (see the
+        #    contracts_remaining check below -- "bank_300" must stay in that
+        #    allowlist or the leftover contract silently stops being managed:
+        #    no stop-loss, no trail, nothing, while still a real open
+        #    position on the broker).
         elif pos.scaled and ret >= BANK_RUNNER_AT and pos.contracts_remaining > 1:
             exit_qty = max(1, pos.contracts_remaining - 1)  # leave 1 lottery
             reason = "bank_300"
@@ -504,10 +529,11 @@ def manage_open(st: EngineState, ready: Dict[str, Any]) -> EngineState:
                 # was green +50%+, now red — dump remainder
                 exit_qty, reason = pos.contracts_remaining, "giveback_to_red"
 
-        # 7) Classic peak trail after scale (price trail %)
+        # 7) Classic peak trail after scale (price trail %) -- trails
+        #    stage_peak (since the last scale event), not the all-time peak.
         if not reason and pos.scaled:
             trail = RUNNER_TRAIL_LATE if pos.scale_frac >= 0.75 else RUNNER_TRAIL
-            if pos.peak > 0 and (mark - pos.peak) / pos.peak <= -trail:
+            if pos.stage_peak > 0 and (mark - pos.stage_peak) / pos.stage_peak <= -trail:
                 exit_qty, reason = pos.contracts_remaining, "trail"
 
         # 8) Delta expansion exit — MM hedge complete, torque done
@@ -531,7 +557,10 @@ def manage_open(st: EngineState, ready: Dict[str, Any]) -> EngineState:
             pnl = (mark - pos.entry) * 100 * exit_qty
             st.pnl_today += pnl
             pos.contracts_remaining -= exit_qty
-            if pos.contracts_remaining > 0 and reason.startswith("scale"):
+            # "bank_300" is a deliberate partial exit (leaves 1 lottery
+            # contract running) same as scale_50/scale_150 -- must keep
+            # tracking it or that leftover real position gets orphaned.
+            if pos.contracts_remaining > 0 and (reason.startswith("scale") or reason == "bank_300"):
                 still.append(asdict(pos))
             else:
                 st.closed_today += 1

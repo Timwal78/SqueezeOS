@@ -1969,6 +1969,17 @@ def _poll_gamma_ramp() -> int:
         if status in ("acked", "done", "error"):
             continue
         action = (intent.get("action") or "BUY_TO_OPEN").upper()
+        # `symbol` is needed by both branches below -- must be extracted
+        # before the action check. It used to only be assigned in the
+        # BUY_TO_OPEN path (further down), so every SELL_TO_CLOSE (i.e.
+        # every exit this desk ever generates -- hard stop, scale, bank,
+        # giveback lock, trail, everything) referenced it before assignment
+        # and crashed with UnboundLocalError. The crash was swallowed by the
+        # run_loop()'s outer try/except, so the process kept running, but no
+        # gamma-ramp option position could ever be automatically closed --
+        # every position sat open with no stop-loss, no profit-taking, until
+        # expiration or manual intervention.
+        symbol = (intent.get("underlying") or "").upper().strip()
         if action != "BUY_TO_OPEN":
             if action == "SELL_TO_CLOSE":
                 # Continuous harvest path — actually sell on RH, don't park exits
@@ -2014,7 +2025,6 @@ def _poll_gamma_ramp() -> int:
                     pass
             continue
 
-        symbol = (intent.get("underlying") or "").upper().strip()
         option_type = (intent.get("option_type") or ("call" if intent.get("side") == "CALL" else "put")).lower()
         if option_type not in ("call", "put"):
             option_type = "call"
