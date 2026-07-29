@@ -340,7 +340,18 @@ def _fetch_closes(symbol: str) -> List[float]:
         df = ta.get_history_df(symbol, days=calendar_days)
         if df is None or df.empty:
             return []
-        col = "close" if "close" in df.columns else df.columns[-1]
+        # tradier_api.get_history_df() renames the raw "close" column to
+        # "Close" (capitalized) before returning. The lowercase check here
+        # never matched, so this silently fell back to df.columns[-1] --
+        # which is "Volume", not price. Every close this engine ever read
+        # was actually a share-volume count (routinely in the millions),
+        # producing garbage EMAs and, once _fetch_closes() started
+        # returning enough bars (see the calendar/trading-day fix above),
+        # real live entries priced at literal millions of dollars per share
+        # (confirmed in production logs 2026-07-29: e.g. "ENTER AMIX @
+        # 69739502.0000"). This bug predates that fix and was dormant only
+        # because _compute_layers() never had enough bars to run before.
+        col = "Close" if "Close" in df.columns else ("close" if "close" in df.columns else df.columns[-1])
         return df[col].dropna().tolist()
     except Exception as e:
         logger.debug(f"[AVG-DOWN] fetch_closes failed {symbol}: {e}")
