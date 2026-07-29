@@ -22,6 +22,7 @@ from core.api.premium_bp import premium_bp
 from core.api.relay_bp import relay_bp
 from core.api.webhook_bp import webhook_bp, start_webhook_engine
 from core.api.tradingview_webhook_bp import tradingview_webhook_bp
+from core.api.iam_pending_bp import iam_pending_bp
 from core.api.marketplace_bp import marketplace_bp
 from core.api.hiring_bp import hiring_bp
 from core.api.mcp_bp import mcp_bp
@@ -167,6 +168,7 @@ def create_app():
     app.register_blueprint(relay_bp, url_prefix='/api/relay')
     app.register_blueprint(webhook_bp,     url_prefix='/api/webhooks')
     app.register_blueprint(tradingview_webhook_bp, url_prefix='/api/webhooks')
+    app.register_blueprint(iam_pending_bp, url_prefix='/api/webhooks')
     app.register_blueprint(marketplace_bp, url_prefix='/api/marketplace')
     app.register_blueprint(hiring_bp,     url_prefix='/api/hiring')
     app.register_blueprint(mcp_bp,        url_prefix='/mcp')

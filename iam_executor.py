@@ -749,6 +749,22 @@ def execute_from_resolution(sym: str, resolution: dict,
                 else:
                     logger.error(f"[IAM-EXEC] ❌ {sym} order failed: {broker_result}")
 
+        # ── Robinhood pending queue (real order, independent of Tradier) ──
+        # Explicit operator decision (2026-07-29): primary-system signals reach
+        # BOTH brokers, each placing the trade independently on its own account
+        # -- Robinhood holds the funds and has no PDT rule. This does NOT
+        # replace the Tradier leg above; both execute. Same mode/broker_allowed
+        # gate as Tradier (mode="alert" stays alert-only on both brokers), plus
+        # a PAPER_MODE() check since this pushes a REAL order for the PC
+        # executor to place -- there is no paper simulation on that end.
+        if mode in ("tradier", "both") and broker_allowed and not PAPER_MODE():
+            try:
+                from core.api.iam_pending_bp import push_iam_primary_signal
+                push_iam_primary_signal(sym, action, signal_system, price or 0.0, confidence)
+                logger.info(f"[IAM-EXEC] {sym} {action} queued for Robinhood pickup (system={signal_system})")
+            except Exception as e:
+                logger.debug(f"[IAM-EXEC] Robinhood queue push failed for {sym}: {e}")
+
         # ── Alert-only path (or mode=alert) ──
         if mode in ("alert", "both"):
             _fire_discord_trade_alert(sym, action, resolution, time_window,

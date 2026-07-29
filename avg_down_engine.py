@@ -324,7 +324,20 @@ def _fetch_closes(symbol: str) -> List[float]:
     """Pull daily closes for this symbol via Tradier. Returns [] on failure."""
     try:
         import tradier_api as ta
-        df = ta.get_history_df(symbol, days=BARS_NEEDED + 20)
+        # tradier_api.get_history_df()'s `days` param is CALENDAR days, not
+        # trading days. BARS_NEEDED is a trading-day count (400, for the
+        # default 365-period L5 EMA) — passing it straight through as `days`
+        # under-fetched by ~30% (weekends + market holidays): a 420-calendar-day
+        # window only returns ~296-307 actual trading closes, which never
+        # satisfies _compute_layers()'s `len(closes) >= layers[-1]` (365) guard.
+        # That meant this engine's live scanner could never produce a single
+        # signal in production — _evaluate() always saw `lv is None` and
+        # returned early. tests/backtest_engines.py never caught this because
+        # it calls _evaluate() directly with real CSV bars, bypassing this
+        # fetch entirely. Convert with the NYSE trading-day ratio (~252/365)
+        # plus a buffer so the requested window reliably contains enough bars.
+        calendar_days = int((BARS_NEEDED + 20) * 365 / 252) + 30
+        df = ta.get_history_df(symbol, days=calendar_days)
         if df is None or df.empty:
             return []
         col = "close" if "close" in df.columns else df.columns[-1]
