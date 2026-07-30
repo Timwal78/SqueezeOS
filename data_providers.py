@@ -342,7 +342,10 @@ class AlpacaProvider:
             r = requests.get(f"{self.data_base}/v2/stocks/{symbol}/bars", headers=self._headers(), params=params, timeout=20)
             if r.status_code == 200:
                 data = r.json()
-                bars = data.get('bars', [])
+                # Alpaca sometimes returns {"bars": null} (explicit JSON null,
+                # not an omitted key or []) for a symbol with no bars in range
+                # -- .get('bars', []) doesn't catch that since the key exists.
+                bars = data.get('bars') or []
                 # Return in chronological order
                 return sorted(bars, key=lambda x: x.get('t', ''))
             else:
