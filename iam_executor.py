@@ -33,10 +33,18 @@ Environment variables (all default to safe/disabled):
                                           # regardless of IAM_INSTRUMENT/IAM_OPTION_EXPIRY_DAYS —
                                           # never held overnight or later. Still fully
                                           # eligible for the dynamic scan universe.
+  IAM_OPTIONS_SYSTEMS       = ""         # comma-separated system tags that always buy
+                                          # calls/puts (via Tradier) regardless of the
+                                          # global IAM_INSTRUMENT setting, e.g.
+                                          # SML_SR_MATRIX,SML_SR_ZONE_PATTERN
+  IAM_MAX_OPEN_CALLS        = 1          # real-money cap on concurrently open Tradier
+  IAM_MAX_OPEN_PUTS         = 1          # call/put positions, account-wide. 0=uncapped.
+                                          # Paper mode ignores this (nothing real to count).
   TRADIER_ACCOUNT_ID        = ...        # required for live Tradier orders
 """
 
 import os
+import re
 import time
 import logging
 import threading
@@ -119,6 +127,23 @@ OPTION_EXPIRY_DAYS = lambda: _env_int("IAM_OPTION_EXPIRY_DAYS", 1)
 OPTION_QTY         = lambda: _env_int("IAM_OPTION_CONTRACT_QTY", 1)
 DELTA_MIN          = lambda: _env_float("IAM_DELTA_MIN", 0.32)
 DELTA_MAX          = lambda: _env_float("IAM_DELTA_MAX", 0.40)
+
+# Per-system options override (2026-07-30 operator directive) — systems listed
+# here always route their BUY entries to calls, regardless of the global
+# IAM_INSTRUMENT setting. SELL entries already always try to buy a put
+# (bear_protect_and_put in _execute_tradier) for every system, unconditional
+# on IAM_INSTRUMENT — so this override only needs to affect the BUY/call side.
+# Comma-separated, same convention as IAM_PRIMARY_SYSTEM. Empty = no override
+# (falls back to the global IAM_INSTRUMENT setting for every system).
+OPTIONS_SYSTEMS    = lambda: {s.strip().upper() for s in
+                               os.environ.get("IAM_OPTIONS_SYSTEMS", "").split(",") if s.strip()}
+
+# Concurrent open-option-position cap, real Tradier account state (not a
+# per-symbol/per-system count — an account-wide comfort limit while the
+# operator gets used to real options execution). 0 or negative = unlimited.
+# Only enforced live (PAPER_MODE has no real Tradier positions to count).
+MAX_OPEN_CALLS     = lambda: _env_int("IAM_MAX_OPEN_CALLS", 1)
+MAX_OPEN_PUTS      = lambda: _env_int("IAM_MAX_OPEN_PUTS", 1)
 
 REQUIRED_WINDOWS   = {"NEAR_TERM", "IMMEDIATE"}
 
@@ -384,7 +409,11 @@ def _execute_tradier(sym: str, action: str, resolution: dict, price: float) -> d
         return _execute_tradier_equity(sym, action, price, system)
     # auto mode: try options on any symbol — chain availability is the natural gate.
     # BUY signal → calls; SELL signal → puts. Falls back gracefully if no chain exists.
-    if instrument in ("options", "auto"):
+    # IAM_OPTIONS_SYSTEMS forces options for specific systems regardless of the
+    # global IAM_INSTRUMENT setting (2026-07-30 operator directive — S/R Matrix
+    # and S/R Zone+Pattern go to options while other systems stay whatever the
+    # global setting already has them on).
+    if instrument in ("options", "auto") or system in OPTIONS_SYSTEMS():
         return _execute_tradier_options(sym, action, resolution, price)
     else:
         return _execute_tradier_equity(sym, action, price, system)
@@ -490,6 +519,30 @@ def _execute_tradier_equity(sym: str, action: str, price: float, system: str = "
         return {"status": "error", "message": str(e)}
 
 
+_OCC_OPTION_RE = re.compile(r'^[A-Z]{1,6}\d{6}([CP])\d{8}$')
+
+
+def _count_open_option_positions(option_type: str) -> int:
+    """Real Tradier account state — counts currently-open (qty > 0) option
+    positions of the given type via OCC symbol format (root + YYMMDD + C/P +
+    strike*1000). Used by the IAM_MAX_OPEN_CALLS/IAM_MAX_OPEN_PUTS comfort cap
+    (2026-07-30 operator directive) — account-wide, not per-symbol/system."""
+    try:
+        from tradier_api import get_positions
+        want = "C" if option_type == "call" else "P"
+        count = 0
+        for p in get_positions():
+            if p.get("quantity", 0) <= 0:
+                continue
+            m = _OCC_OPTION_RE.match((p.get("symbol") or "").upper())
+            if m and m.group(1) == want:
+                count += 1
+        return count
+    except Exception as e:
+        logger.warning(f"[IAM-EXEC] open-option-position count failed ({option_type}): {e} — failing safe (treat as at-cap)")
+        return 10**9  # fail safe: block new entries rather than risk exceeding the cap
+
+
 def _execute_tradier_options(sym: str, action: str, resolution: dict, price: float,
                               expiry_days_override: int | None = None) -> dict:
     """
@@ -506,27 +559,50 @@ def _execute_tradier_options(sym: str, action: str, resolution: dict, price: flo
         from tradier_api import place_option_order
         import tradier_api as tradier
 
-        # Determine expiry: today for 0DTE, or nearest available
-        expiry_days = expiry_days_override if expiry_days_override is not None else OPTION_EXPIRY_DAYS()
-        now   = datetime.now(timezone.utc) - timedelta(hours=4)
-        expiry_dt = now + timedelta(days=expiry_days)
-        # Skip weekends (a no-op for the 0DTE-only path, which only ever runs during
-        # market hours on a trading day — see _is_market_hours in _gate_check)
-        while expiry_dt.weekday() >= 5:
-            expiry_dt += timedelta(days=1)
-        expiry_str = expiry_dt.strftime("%Y-%m-%d")
-
         option_type = "call" if action == "BUY" else "put"
         qty         = OPTION_QTY()
 
-        # Fetch option chain from Tradier
-        chain = tradier.get_option_chain(sym, expiry_str)
-        if not chain:
-            return {"status": "error", "message": f"No option chain for {sym} {expiry_str}"}
+        # Account-wide open-position comfort cap (2026-07-30 operator directive:
+        # "1 call 1 put at a time till i get comfortable"). Real-money only —
+        # paper fills never appear in tradier.get_positions(), so this is a
+        # no-op (and would always read 0) under PAPER_MODE.
+        if not PAPER_MODE():
+            cap = MAX_OPEN_CALLS() if option_type == "call" else MAX_OPEN_PUTS()
+            if cap > 0:
+                open_count = _count_open_option_positions(option_type)
+                if open_count >= cap:
+                    logger.info(f"[IAM-EXEC] {sym} {option_type} BTO skipped — "
+                                f"open {option_type} cap reached ({open_count}/{cap})")
+                    return {"status": "skipped", "message": f"{option_type} cap reached ({open_count}/{cap})"}
 
-        options = chain.get("options", {}).get("option", [])
-        if isinstance(options, dict):
-            options = [options]
+        # Determine expiry: today for 0DTE, or nearest available.
+        # BUG FIX (2026-07-30): this used to call tradier.get_option_chain(),
+        # which does not exist anywhere in tradier_api.py (only
+        # get_option_chain_schwab_format and get_chain do) -- every options
+        # order through this path has been raising AttributeError and
+        # returning {"status": "error"} silently since this code was written.
+        # This is the real root cause behind "0 puts ever purchased" despite
+        # the SELL branch's automatic put-buy already being unconditional on
+        # IAM_INSTRUMENT. Also fixed: the target date was a raw calendar-day
+        # offset with no check that Tradier actually lists an expiration on
+        # that date -- snapped to the nearest REAL listed expiration
+        # on/after the target via get_expirations() instead of guessing.
+        expiry_days = expiry_days_override if expiry_days_override is not None else OPTION_EXPIRY_DAYS()
+        now   = datetime.now(timezone.utc) - timedelta(hours=4)
+        target_dt = now + timedelta(days=expiry_days)
+        target_str = target_dt.strftime("%Y-%m-%d")
+
+        real_expirations = tradier.get_expirations(sym)
+        if not real_expirations:
+            return {"status": "error", "message": f"No listed expirations for {sym}"}
+        on_or_after = [e for e in sorted(real_expirations) if e >= target_str]
+        expiry_str = on_or_after[0] if on_or_after else sorted(real_expirations)[-1]
+
+        # Fetch option chain from Tradier — get_chain() already returns the
+        # flat contract list (no ["options"]["option"] unwrapping needed).
+        options = tradier.get_chain(sym, expiry_str, greeks=True)
+        if not options:
+            return {"status": "error", "message": f"No option chain for {sym} {expiry_str}"}
 
         # Filter by type (call/put)
         filtered = [o for o in options if o.get("option_type") == option_type and price > 0]
