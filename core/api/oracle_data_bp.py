@@ -415,7 +415,21 @@ def _poll_fda():
 
 
 def _poll_patents():
-    """Poll PatentsView for recent USPTO patent grants (last 14 days)."""
+    """Poll PatentsView for recent USPTO patent grants (last 14 days).
+
+    BROKEN as of 2026-07-30, confirmed root cause (not guessed): the legacy
+    open api.patentsview.org/patents/query endpoint this hits was
+    decommissioned 2026-06-05 -- USPTO migrated to the Open Data Portal
+    (data.uspto.gov), which requires a USPTO.gov account + MFA + a
+    self-generated API key ("Manage API Key" in the ODP nav). That account
+    creation is a manual step, not something fixable from code alone. The
+    ODP's API menu (Patent File Wrapper / Bulk Datasets / PTAB / Office
+    Actions) has no obvious 1:1 replacement for "recent grants search" either
+    -- picking one without checking would trade one wrong URL for another.
+    Fails safe already (caught, logged, retried every poll_interval_s); this
+    poller doesn't touch trading. Revisit once someone has an ODP API key and
+    has confirmed which new endpoint actually serves this data.
+    """
     seen: set = set()
     while True:
         try:
