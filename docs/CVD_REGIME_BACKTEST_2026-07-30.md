@@ -1,6 +1,23 @@
 # SML CVD Regime Desk — bug audit + real backtest (2026-07-30)
 
-**Verdict: NO DEMONSTRATED EDGE. Do not arm this for live trading.**
+> ## ⚠️ THIS DOC'S VERDICT IS SUPERSEDED
+> **See `docs/CVD_REGIME_OPTIMIZATION_2026-07-30.md`.**
+>
+> Everything below is a correct measurement of what it measured, and the seven-bug
+> audit in §1 stands unchanged. But the verdict was drawn from **8 trading
+> sessions**, and that window turned out to be unrepresentative. On 109 sessions ×
+> 8 symbols the shipped defaults are **net positive** (PF 1.090, +67.5% summed,
+> 2,222 trades) — the 8-day window used here sits entirely inside a flat June–July
+> stretch.
+>
+> The replacement verdict is still **do not arm live**, but for a different and
+> better-evidenced reason: no configuration survived out-of-sample (0 of 15), the
+> edge decays monotonically Apr→Jul (PF 1.360 → 0.916), and it averages only
+> +0.030% of the underlying's move per trade — thinner than the option spread it
+> would have to pay. Kept intact rather than edited so the original measurement
+> stays auditable.
+
+**Verdict as originally written (superseded — read the box above): NO DEMONSTRATED EDGE. Do not arm this for live trading.**
 Profit factor 0.989 over 102 trades — flat to slightly negative. 4 of 5 symbols
 lost money. This is not the clean negative verdict ORB/DRUCK/AETHER got, and it
 is not a positive one either: the tested window is only **8 trading days in a
