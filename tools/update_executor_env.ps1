@@ -39,10 +39,11 @@ kv['EXEC_BROKER']='robinhood'
 kv['POSITION_MONITOR_ENABLED']='true'
 kv['ROBINHOOD_PAPER_MODE']='false'
 kv['KILL_SWITCH']='false'
+kv['PDT_MAX_TRADES']='0'  # operator directive 2026-07-30: remove the voluntary day-trade shield entirely
 # never point logs at missing C:\SqueezeOS unless user set it
 if not kv.get('LOG_DIR','').strip():
   kv['LOG_DIR']=''  # executor defaults to tools/logs
 env_p.write_text('\n'.join(f'{k}={v}' for k,v in kv.items())+'\n', encoding='utf-8')
-print('OK POLL=', kv.get('POLL_INTERVAL_S'), 'MIN_GOD=', kv.get('MIN_GOD_STACKED'), 'keys=', len(kv))
+print('OK POLL=', kv.get('POLL_INTERVAL_S'), 'MIN_GOD=', kv.get('MIN_GOD_STACKED'), 'PDT_MAX_TRADES=', kv.get('PDT_MAX_TRADES'), 'keys=', len(kv))
 "@
 Write-Host "Done. Restart START_EXECUTOR.bat"
