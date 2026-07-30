@@ -7,7 +7,9 @@ Executes equity orders on Robinhood when GOD_MODE confirmed.
 
 Safety gates:
   - GOD_MODE tier + god_stacked >= MIN_GOD_STACKED (default 5)
-  - PDT shield: checks Robinhood portfolio value; if < $2,100 → max 3 day trades / 5 days
+  - PDT shield: checks Robinhood portfolio value; if < PDT_BALANCE_LIMIT (default $2,000)
+    → max 3 day trades / 5 days. See that constant's comment before changing the number:
+    the $25,000 PDT minimum was eliminated 2026-06-04 and must NOT be reinstated here.
   - 5-min per-symbol cooldown
   - KILL_SWITCH env var halts all execution immediately
   - PAPER_MODE logs orders without sending to Robinhood
