@@ -164,7 +164,7 @@ MAX_DAILY_LOSS_USD   = float(os.environ.get("MAX_DAILY_LOSS_USD", "100.0"))
 MAX_ORDERS_PER_DAY   = int(os.environ.get("MAX_ORDERS_PER_DAY", "0"))       # 0 = uncapped (operator directive 2026-07-29, semi-day-trading)
 MAX_DAILY_NOTIONAL   = float(os.environ.get("MAX_DAILY_NOTIONAL_USD", "0"))  # 0 = uncapped (operator directive 2026-07-29, semi-day-trading)
 MAX_PER_SCAN         = int(os.environ.get("MAX_PER_SCAN", "3"))
-STOP_LOSS_PCT        = float(os.environ.get("STOP_LOSS_PCT", "5.0"))    # fallback if no cached ATR: close if down this % from avg cost
+STOP_LOSS_PCT        = float(os.environ.get("STOP_LOSS_PCT", "3.0"))    # fallback if no cached ATR: close if down this % from avg cost. Lowered from 5.0 -> 3.0 (operator, 2026-07-30) after a real LAD position realized -6.81% before this polling-based check fired and its market-order fill slipped past the trigger -- 3.0 gives that same lag/slippage room to land closer to the 4-5% the operator actually wants, instead of running further past a 5% trigger.
 TAKE_PROFIT_PCT      = float(os.environ.get("TAKE_PROFIT_PCT", "15.0")) # fallback if no cached ATR: close if up this % from avg cost
 # ATR-based stop/take-profit — same multiplier convention as execution_engine.py's
 # atr_multiplier (1.5x ATR stop, 2.5x that for target = same ~1:2.5 risk:reward).
