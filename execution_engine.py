@@ -23,10 +23,8 @@ except ImportError:
 from core.execution_lock import claim_entry
 
 try:
-    from BEAST.gex.sml_gex_engine import GEXEngine
     from BEAST.hedger.autonomous_hedger import AutonomousHedger, HedgerConfig
 except ImportError:
-    GEXEngine = None
     AutonomousHedger = None
     class HedgerConfig:
         def __init__(self, **kw): pass
@@ -553,7 +551,26 @@ class ExecutionEngine:
     # ─────────────────────────────────────────────────────────────
 
     def get_gamma_walls(self, symbol: str) -> Dict:
-        """Returns GEX metrics for a symbol. Uses cached GEXEngine if available."""
+        """
+        Returns GEX metrics for a symbol.
+
+        BUG FIX (2026-07-30): this used to try to instantiate
+        `BEAST.gex.sml_gex_engine.GEXEngine`, a module that does not exist
+        anywhere in this codebase (confirmed by search) -- the import at the
+        top of this file was already wrapped in try/except ImportError and
+        silently set GEXEngine=None, so this method has always returned the
+        hardcoded all-zero dict below, for every symbol, unconditionally.
+        Fixed to call the real, already-live GEX engine
+        (gamma_flow_engine.calculate_gex_profile()) that already powers
+        Oracle/Gamma Pin/Squeeze Fuel today, fetching a real Tradier chain
+        via tradier_api.get_option_chain_schwab_format() -- the exact same
+        pattern gamma_pin_scanner.py/squeeze_fuel_scanner.py already use.
+
+        `inventory_z`/`hjb_hedge_rate` are NOT provided by GEXProfile -- those
+        are a separate Kalman/HJB computation embedded in
+        gamma_flow_engine.py's MM-Intel section, not part of this GEX
+        profile. Left at 0.0, disclosed here rather than silently guessed.
+        """
         now = time.time()
         cached = self.gex_cache.get(symbol)
         if cached and (now - cached.get('ts', 0)) < 300:
@@ -567,23 +584,30 @@ class ExecutionEngine:
             'zero_gamma_line': 0.0,
             'max_oi_strike': 0.0,
             'total_gex': 0.0,
-            'inventory_z': 0.0,
-            'hjb_hedge_rate': 0.0,
+            'inventory_z': 0.0,        # not sourced from GEXProfile -- see docstring
+            'hjb_hedge_rate': 0.0,     # not sourced from GEXProfile -- see docstring
             'ts': now
         }
 
-        # Try live GEXEngine if available
-        if GEXEngine:
-            try:
-                dm = self.tracker.data_manager if self.tracker else None
-                if dm and dm.polygon.available:
-                    gex_eng = GEXEngine(dm.polygon)
-                    data = gex_eng.compute(symbol)
-                    if data:
-                        result.update(data)
-                        result['ts'] = now
-            except Exception as e:
-                logger.debug(f"[GEX] {symbol}: {e}")
+        try:
+            import tradier_api
+            from gamma_flow_engine import calculate_gex_profile
+            raw_chain = tradier_api.get_option_chain_schwab_format(symbol)
+            spot = float((raw_chain or {}).get('underlyingPrice', 0) or 0)
+            if raw_chain and spot > 0:
+                profile = calculate_gex_profile(raw_chain, spot, symbol)
+                if profile:
+                    result.update({
+                        'regime': profile.profile_shape.upper(),
+                        'call_wall': profile.call_wall,
+                        'put_wall': profile.put_wall,
+                        'zero_gamma_line': profile.zero_gamma_line,
+                        'max_oi_strike': profile.max_oi_strike,
+                        'total_gex': profile.total_gex,
+                        'ts': now,
+                    })
+        except Exception as e:
+            logger.debug(f"[GEX] {symbol}: {e}")
 
         self.gex_cache[symbol] = result
         return result

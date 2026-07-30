@@ -13,10 +13,19 @@ no orders itself — the full existing safety stack applies there (paper
 mode, stop-losses, daily-loss breaker, primary-system gate).
 
 NO BACKTEST EVIDENCE EXISTS FOR THIS ENGINE — see squeeze_fuel_engine.py's
-module docstring for why. This build does NOT flip anything live by
-itself: IAM_PAPER_MODE=true is still the default, and nobody has added
-SML_SQUEEZE_FUEL to IAM_PRIMARY_SYSTEM. Do not add it there or represent
-this as a proven signal.
+module docstring for why. This is disclosed, not hidden, at every point
+this engine's signal reaches Discord, the executor, or this scanner's logs.
+
+LIVE-ARMED (2026-07-30, explicit operator directive after the no-evidence
+status was disclosed): unlike the rest of this file's history, this CAN
+now reach real money once the operator adds SML_SQUEEZE_FUEL to
+IAM_PRIMARY_SYSTEM on Render — that step is still theirs alone, no sandbox
+here has Render access. Per the operator's own instruction ("set it to 1
+buy for now"), this scanner enforces a real, self-healing cap
+(SQUEEZE_FUEL_MAX_OPEN_POSITIONS, default 1) on concurrently open
+Squeeze-Fuel-originated equity positions, checked against real Tradier
+account state every pass -- only enforced live (paper mode has no real
+positions to check).
 """
 from __future__ import annotations
 
@@ -32,10 +41,21 @@ _INTERVAL        = int(float(os.environ.get("SQUEEZE_FUEL_SCAN_INTERVAL", "300")
 _SCAN_TOP_N      = int(os.environ.get("SQUEEZE_FUEL_SCAN_TOP_N", "10"))
 _MAX_EXPIRATIONS = int(os.environ.get("SQUEEZE_FUEL_MAX_EXPIRATIONS", "8"))
 _PULL_CHAIN      = os.environ.get("SQUEEZE_FUEL_PULL_CHAIN", "true").strip().lower() == "true"
+# Real daily bars for the RSI-cross-above-50 confirmation gate added
+# 2026-07-30 to squeeze_fuel_engine.py -- previously this scanner never
+# fetched/passed `history` at all, so that gate could never be satisfied.
+_BARS_LIMIT      = int(os.environ.get("SQUEEZE_FUEL_BARS_LIMIT", "60"))
+_MAX_OPEN        = int(os.environ.get("SQUEEZE_FUEL_MAX_OPEN_POSITIONS", "1"))  # 0 = uncapped
 
 _started = False
 _lock = threading.Lock()
 _last_fired: dict = {}
+# Real, self-healing tracking of symbols this engine believes it currently
+# holds a position in -- added on a confirmed live BUY, pruned every pass by
+# checking the REAL Tradier position (not trusted blindly, since a stop-loss
+# order can close a position without this scanner ever being told). In-memory,
+# resets on restart -- same MVP convention as every other store in this codebase.
+_open_symbols: set = set()
 _status = {
     "running": False,
     "last_pass_ts": None,
@@ -43,6 +63,28 @@ _status = {
     "last_signal": None,
     "last_error": None,
 }
+
+
+def _prune_open_symbols():
+    """Drop any tracked symbol that's actually flat now, per the real
+    Tradier account -- self-heals against stop-loss closes this scanner
+    was never told about."""
+    if not _open_symbols:
+        return
+    try:
+        from tradier_api import get_position
+    except Exception:
+        return
+    with _lock:
+        tracked = list(_open_symbols)
+    for sym in tracked:
+        try:
+            pos = get_position(sym)
+            if not pos or pos.get("quantity", 0) <= 0:
+                with _lock:
+                    _open_symbols.discard(sym)
+        except Exception:
+            pass  # leave it tracked if the real check itself failed -- fail closed, not open
 
 
 def _symbols() -> list:
@@ -80,9 +122,25 @@ def _fetch_chain(symbol: str):
         return None
 
 
+def _fetch_history(symbol: str):
+    try:
+        from core.legacy import get_service
+        dm = get_service("dm")
+        if not dm:
+            return None
+        return dm.get_bars(symbol, "1D", _BARS_LIMIT) or None
+    except Exception:
+        return None
+
+
 def scan_once() -> int:
     from squeeze_fuel_engine import analyze
     from core.state import state
+    from iam_executor import PAPER_MODE
+
+    paper = PAPER_MODE()
+    if not paper:
+        _prune_open_symbols()
 
     fired = 0
     syms = _symbols()
@@ -97,7 +155,8 @@ def scan_once() -> int:
                 continue
 
             raw_chain = _fetch_chain(sym)
-            result = analyze(sym, quote_data=quote, raw_chain=raw_chain)
+            history = _fetch_history(sym)
+            result = analyze(sym, quote_data=quote, history=history, raw_chain=raw_chain)
 
             try:
                 import core.signal_history as signal_history
@@ -111,6 +170,14 @@ def scan_once() -> int:
             if result.get("action") != "BUY":
                 continue
 
+            if not paper and _MAX_OPEN > 0:
+                with _lock:
+                    open_count = len(_open_symbols)
+                if open_count >= _MAX_OPEN and sym not in _open_symbols:
+                    logger.info(f"[SQUEEZE-FUEL-SCANNER] {sym} BUY skipped — "
+                                f"open positions cap reached ({open_count}/{_MAX_OPEN})")
+                    continue
+
             score_bucket = int(result["composite_score"] // 5) * 5  # dedup on ~5pt score buckets
             key = f'BUY|{score_bucket}'
             with _lock:
@@ -120,6 +187,17 @@ def scan_once() -> int:
 
             conf = min(result["composite_score"], 99.0)
             spot = float(quote.get("price", 0) or 0)
+            # Optional context from the fail-OPEN refinement gates (2026-07-30)
+            # -- these can only appear here at all when they were AVAILABLE and
+            # already passed (a block would have prevented this BUY from firing).
+            refinements = []
+            si = result.get("short_interest_check", {})
+            if si.get("available"):
+                refinements.append(f"real DTC {si['days_to_cover']}")
+            iv = result.get("iv_rank_check", {})
+            if iv.get("available"):
+                refinements.append(f"IV rank {iv['iv_rank']}")
+            refinement_note = f", {', '.join(refinements)}" if refinements else ""
             resolution = {
                 "action":                "BUY",
                 "system":                "SML_SQUEEZE_FUEL",
@@ -129,7 +207,12 @@ def scan_once() -> int:
                                          f"{' [ON THRESHOLD LIST]' if result['ftd_fuel']['on_reg_sho_threshold_list'] else ''}, "
                                          f"short-vol pressure {result['short_volume_fuel']['score']}/20, "
                                          f"gamma amp {result['gamma_amplifier']['score']}/20 "
-                                         f"[{result['gamma_amplifier']['regime'] or 'no chain'}]) — "
+                                         f"[{result['gamma_amplifier']['regime'] or 'no chain'}]), "
+                                         f"RSI {result['rsi_confirmation']['value']} crossed above "
+                                         f"{result['rsi_confirmation']['cross_level']}, "
+                                         f"flow anomaly {result['flow_confirmation']['anomaly_type']} "
+                                         f"[{result['flow_confirmation']['severity']}]"
+                                         f"{refinement_note} — "
                                          f"NO BACKTEST EVIDENCE, see squeeze_fuel_engine.py docstring",
                 "vehicle":               sym,
                 "resolution_confidence": conf,
@@ -138,6 +221,13 @@ def scan_once() -> int:
             }
             from iam_executor import execute_async
             execute_async(sym, resolution, "IMMEDIATE", conf, spot)
+            if not paper:
+                # Optimistic mark -- execute_async is fire-and-forget, so this
+                # isn't a confirmed fill yet. _prune_open_symbols() at the top
+                # of the NEXT pass checks the real Tradier position and
+                # self-corrects if this order didn't actually go through.
+                with _lock:
+                    _open_symbols.add(sym)
             fired += 1
             _status["signals_fired_total"] += 1
             _status["last_signal"] = {
@@ -167,9 +257,12 @@ def _loop():
 
 def status() -> dict:
     from squeeze_fuel_engine import ENTRY_THRESHOLD
+    with _lock:
+        open_syms = sorted(_open_symbols)
     return {**_status, "enabled": _ENABLED, "running": _started,
             "interval_s": _INTERVAL, "symbols": _symbols(),
-            "entry_threshold": ENTRY_THRESHOLD}
+            "entry_threshold": ENTRY_THRESHOLD,
+            "max_open_positions": _MAX_OPEN, "open_positions": open_syms}
 
 
 def start_squeeze_fuel_scanner():

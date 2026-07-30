@@ -1,0 +1,126 @@
+{
+"CROX": [
+{"symbol":"CROX","year":2024,"quarter":4,"eps":{"estimate":"2.260000","actual":"2.520000"},"report":{"date":"2025-02-13","timing":"am","verified":true}},
+{"symbol":"CROX","year":2025,"quarter":1,"eps":{"estimate":"2.480000","actual":"3.000000"},"report":{"date":"2025-05-08","timing":"am","verified":true}},
+{"symbol":"CROX","year":2025,"quarter":2,"eps":{"estimate":"4.030000","actual":"4.230000"},"report":{"date":"2025-08-07","timing":"am","verified":true}},
+{"symbol":"CROX","year":2025,"quarter":3,"eps":{"estimate":"2.360000","actual":"2.920000"},"report":{"date":"2025-10-30","timing":"am","verified":true}},
+{"symbol":"CROX","year":2025,"quarter":4,"eps":{"estimate":"1.910000","actual":"2.290000"},"report":{"date":"2026-02-12","timing":"am","verified":true}},
+{"symbol":"CROX","year":2026,"quarter":1,"eps":{"estimate":"2.780000","actual":"2.990000"},"report":{"date":"2026-04-30","timing":"am","verified":true}}
+],
+"PLNT": [
+{"symbol":"PLNT","year":2024,"quarter":4,"eps":{"estimate":"0.620000","actual":"0.700000"},"report":{"date":"2025-02-25","timing":"am","verified":true}},
+{"symbol":"PLNT","year":2025,"quarter":1,"eps":{"estimate":"0.620000","actual":"0.590000"},"report":{"date":"2025-05-08","timing":"am","verified":true}},
+{"symbol":"PLNT","year":2025,"quarter":2,"eps":{"estimate":"0.790000","actual":"0.860000"},"report":{"date":"2025-08-06","timing":"am","verified":true}},
+{"symbol":"PLNT","year":2025,"quarter":3,"eps":{"estimate":"0.730000","actual":"0.800000"},"report":{"date":"2025-11-06","timing":"am","verified":true}},
+{"symbol":"PLNT","year":2025,"quarter":4,"eps":{"estimate":"0.790000","actual":"0.830000"},"report":{"date":"2026-02-24","timing":"am","verified":true}},
+{"symbol":"PLNT","year":2026,"quarter":1,"eps":{"estimate":"0.630000","actual":"0.740000"},"report":{"date":"2026-05-07","timing":"am","verified":true}}
+],
+"FIVE": [
+{"symbol":"FIVE","year":2024,"quarter":4,"eps":{"estimate":"3.380000","actual":"3.480000"},"report":{"date":"2025-03-19","timing":"pm","verified":true}},
+{"symbol":"FIVE","year":2025,"quarter":1,"eps":{"estimate":"0.830000","actual":"0.860000"},"report":{"date":"2025-06-04","timing":"pm","verified":true}},
+{"symbol":"FIVE","year":2025,"quarter":2,"eps":{"estimate":"0.620000","actual":"0.810000"},"report":{"date":"2025-08-27","timing":"pm","verified":true}},
+{"symbol":"FIVE","year":2025,"quarter":3,"eps":{"estimate":"0.240000","actual":"0.680000"},"report":{"date":"2025-12-03","timing":"pm","verified":true}},
+{"symbol":"FIVE","year":2025,"quarter":4,"eps":{"estimate":"4.000000","actual":"4.310000"},"report":{"date":"2026-03-18","timing":"pm","verified":true}},
+{"symbol":"FIVE","year":2026,"quarter":1,"eps":{"estimate":"1.680000","actual":"2.220000"},"report":{"date":"2026-06-03","timing":"pm","verified":true}}
+],
+"WING": [
+{"symbol":"WING","year":2024,"quarter":4,"eps":{"estimate":"0.870000","actual":"0.920000"},"report":{"date":"2025-02-19","timing":"am","verified":true}},
+{"symbol":"WING","year":2025,"quarter":1,"eps":{"estimate":"0.870000","actual":"0.990000"},"report":{"date":"2025-04-30","timing":"am","verified":true}},
+{"symbol":"WING","year":2025,"quarter":2,"eps":{"estimate":"0.870000","actual":"1.000000"},"report":{"date":"2025-07-30","timing":"am","verified":true}},
+{"symbol":"WING","year":2025,"quarter":3,"eps":{"estimate":"0.920000","actual":"1.090000"},"report":{"date":"2025-11-04","timing":"am","verified":true}},
+{"symbol":"WING","year":2025,"quarter":4,"eps":{"estimate":"0.840000","actual":"1.000000"},"report":{"date":"2026-02-18","timing":"am","verified":true}},
+{"symbol":"WING","year":2026,"quarter":1,"eps":{"estimate":"1.020000","actual":"1.180000"},"report":{"date":"2026-04-29","timing":"am","verified":true}},
+{"symbol":"WING","year":2026,"quarter":2,"eps":{"estimate":"1.030000","actual":"1.180000"},"report":{"date":"2026-07-29","timing":"am","verified":true}}
+],
+"CAKE": [
+{"symbol":"CAKE","year":2024,"quarter":4,"eps":{"estimate":"0.920000","actual":"1.040000"},"report":{"date":"2025-02-19","timing":"pm","verified":true}},
+{"symbol":"CAKE","year":2025,"quarter":1,"eps":{"estimate":"0.820000","actual":"0.930000"},"report":{"date":"2025-04-30","timing":"pm","verified":true}},
+{"symbol":"CAKE","year":2025,"quarter":2,"eps":{"estimate":"1.060000","actual":"1.160000"},"report":{"date":"2025-07-29","timing":"pm","verified":true}},
+{"symbol":"CAKE","year":2025,"quarter":3,"eps":{"estimate":"0.600000","actual":"0.680000"},"report":{"date":"2025-10-28","timing":"pm","verified":true}},
+{"symbol":"CAKE","year":2025,"quarter":4,"eps":{"estimate":"0.980000","actual":"1.000000"},"report":{"date":"2026-02-18","timing":"pm","verified":true}},
+{"symbol":"CAKE","year":2026,"quarter":1,"eps":{"estimate":"1.010000","actual":"1.050000"},"report":{"date":"2026-04-29","timing":"pm","verified":true}},
+{"symbol":"CAKE","year":2026,"quarter":2,"eps":{"estimate":"1.140000","actual":"1.440000"},"report":{"date":"2026-07-28","timing":"pm","verified":true}}
+],
+"TXRH": [
+{"symbol":"TXRH","year":2024,"quarter":4,"eps":{"estimate":"1.640000","actual":"1.730000"},"report":{"date":"2025-02-20","timing":"pm","verified":true}},
+{"symbol":"TXRH","year":2025,"quarter":1,"eps":{"estimate":"1.760000","actual":"1.700000"},"report":{"date":"2025-05-08","timing":"pm","verified":true}},
+{"symbol":"TXRH","year":2025,"quarter":2,"eps":{"estimate":"1.920000","actual":"1.860000"},"report":{"date":"2025-08-07","timing":"pm","verified":true}},
+{"symbol":"TXRH","year":2025,"quarter":3,"eps":{"estimate":"1.280000","actual":"1.250000"},"report":{"date":"2025-11-06","timing":"pm","verified":true}},
+{"symbol":"TXRH","year":2025,"quarter":4,"eps":{"estimate":"1.510000","actual":"1.280000"},"report":{"date":"2026-02-19","timing":"pm","verified":true}},
+{"symbol":"TXRH","year":2026,"quarter":1,"eps":{"estimate":"1.810000","actual":"1.870000"},"report":{"date":"2026-05-07","timing":"pm","verified":true}}
+],
+"SHAK": [
+{"symbol":"SHAK","year":2024,"quarter":4,"eps":{"estimate":"0.250000","actual":"0.260000"},"report":{"date":"2025-02-20","timing":"am","verified":true}},
+{"symbol":"SHAK","year":2025,"quarter":1,"eps":{"estimate":"0.160000","actual":"0.140000"},"report":{"date":"2025-05-01","timing":"am","verified":true}},
+{"symbol":"SHAK","year":2025,"quarter":2,"eps":{"estimate":"0.370000","actual":"0.440000"},"report":{"date":"2025-07-31","timing":"am","verified":true}},
+{"symbol":"SHAK","year":2025,"quarter":3,"eps":{"estimate":"0.310000","actual":"0.360000"},"report":{"date":"2025-10-30","timing":"am","verified":true}},
+{"symbol":"SHAK","year":2025,"quarter":4,"eps":{"estimate":"0.350000","actual":"0.370000"},"report":{"date":"2026-02-26","timing":"am","verified":true}},
+{"symbol":"SHAK","year":2026,"quarter":1,"eps":{"estimate":"0.120000","actual":"0.000000"},"report":{"date":"2026-05-07","timing":"am","verified":true}}
+],
+"CELH": [
+{"symbol":"CELH","year":2024,"quarter":4,"eps":{"estimate":"0.100000","actual":"0.140000"},"report":{"date":"2025-02-20","timing":"pm","verified":true}},
+{"symbol":"CELH","year":2025,"quarter":1,"eps":{"estimate":"0.190000","actual":"0.180000"},"report":{"date":"2025-05-06","timing":"am","verified":true}},
+{"symbol":"CELH","year":2025,"quarter":2,"eps":{"estimate":"0.240000","actual":"0.470000"},"report":{"date":"2025-08-07","timing":"am","verified":true}},
+{"symbol":"CELH","year":2025,"quarter":3,"eps":{"estimate":"0.280000","actual":"0.420000"},"report":{"date":"2025-11-06","timing":"am","verified":true}},
+{"symbol":"CELH","year":2025,"quarter":4,"eps":{"estimate":"0.190000","actual":"0.260000"},"report":{"date":"2026-02-26","timing":"am","verified":true}},
+{"symbol":"CELH","year":2026,"quarter":1,"eps":{"estimate":"0.290000","actual":"0.410000"},"report":{"date":"2026-05-07","timing":"am","verified":true}}
+],
+"ELF": [
+{"symbol":"ELF","year":2025,"quarter":3,"eps":{"estimate":"0.760000","actual":"0.740000"},"report":{"date":"2025-02-06","timing":"pm","verified":true}},
+{"symbol":"ELF","year":2025,"quarter":4,"eps":{"estimate":"0.720000","actual":"0.780000"},"report":{"date":"2025-05-28","timing":"pm","verified":true}},
+{"symbol":"ELF","year":2026,"quarter":1,"eps":{"estimate":"0.750000","actual":"0.890000"},"report":{"date":"2025-08-06","timing":"pm","verified":true}},
+{"symbol":"ELF","year":2026,"quarter":2,"eps":{"estimate":"0.480000","actual":"0.680000"},"report":{"date":"2025-11-05","timing":"pm","verified":true}},
+{"symbol":"ELF","year":2026,"quarter":3,"eps":{"estimate":"0.610000","actual":"1.240000"},"report":{"date":"2026-02-04","timing":"pm","verified":true}},
+{"symbol":"ELF","year":2026,"quarter":4,"eps":{"estimate":"0.230000","actual":"0.320000"},"report":{"date":"2026-05-20","timing":"pm","verified":true}}
+],
+"DUOL": [
+{"symbol":"DUOL","year":2024,"quarter":4,"eps":{"estimate":"0.480000","actual":"0.280000"},"report":{"date":"2025-02-27","timing":"pm","verified":true}},
+{"symbol":"DUOL","year":2025,"quarter":1,"eps":{"estimate":"0.510000","actual":"0.720000"},"report":{"date":"2025-05-01","timing":"pm","verified":true}},
+{"symbol":"DUOL","year":2025,"quarter":2,"eps":{"estimate":"0.990000","actual":"0.910000"},"report":{"date":"2025-08-06","timing":"pm","verified":true}},
+{"symbol":"DUOL","year":2025,"quarter":3,"eps":{"estimate":"1.240000","actual":"5.950000"},"report":{"date":"2025-11-05","timing":"pm","verified":true}},
+{"symbol":"DUOL","year":2025,"quarter":4,"eps":{"estimate":"1.320000","actual":"0.840000"},"report":{"date":"2026-02-26","timing":"pm","verified":true}},
+{"symbol":"DUOL","year":2026,"quarter":1,"eps":{"estimate":"1.530000","actual":"0.890000"},"report":{"date":"2026-05-04","timing":"pm","verified":true}}
+],
+"AFRM": [
+{"symbol":"AFRM","year":2025,"quarter":2,"eps":{"estimate":"-0.230000","actual":"0.230000"},"report":{"date":"2025-02-06","timing":"pm","verified":true}},
+{"symbol":"AFRM","year":2025,"quarter":3,"eps":{"estimate":"-0.080000","actual":"0.010000"},"report":{"date":"2025-05-08","timing":"pm","verified":true}},
+{"symbol":"AFRM","year":2025,"quarter":4,"eps":{"estimate":"0.090000","actual":"0.200000"},"report":{"date":"2025-08-28","timing":"pm","verified":true}},
+{"symbol":"AFRM","year":2026,"quarter":1,"eps":{"estimate":"0.100000","actual":"0.230000"},"report":{"date":"2025-11-06","timing":"pm","verified":true}},
+{"symbol":"AFRM","year":2026,"quarter":2,"eps":{"estimate":"0.610000","actual":"0.370000"},"report":{"date":"2026-02-05","timing":"pm","verified":true}},
+{"symbol":"AFRM","year":2026,"quarter":3,"eps":{"estimate":"0.620000","actual":"0.300000"},"report":{"date":"2026-05-07","timing":"pm","verified":true}}
+],
+"UPST": [
+{"symbol":"UPST","year":2024,"quarter":4,"eps":{"estimate":"-0.040000","actual":"0.260000"},"report":{"date":"2025-02-11","timing":"pm","verified":true}},
+{"symbol":"UPST","year":2025,"quarter":1,"eps":{"estimate":"0.170000","actual":"0.300000"},"report":{"date":"2025-05-06","timing":"pm","verified":true}},
+{"symbol":"UPST","year":2025,"quarter":2,"eps":{"estimate":"0.120000","actual":"0.360000"},"report":{"date":"2025-08-05","timing":"pm","verified":true}},
+{"symbol":"UPST","year":2025,"quarter":3,"eps":{"estimate":"0.290000","actual":"0.520000"},"report":{"date":"2025-11-04","timing":"pm","verified":true}},
+{"symbol":"UPST","year":2025,"quarter":4,"eps":{"estimate":"0.340000","actual":"0.460000"},"report":{"date":"2026-02-10","timing":"pm","verified":true}},
+{"symbol":"UPST","year":2026,"quarter":1,"eps":{"estimate":"0.380000","actual":"0.300000"},"report":{"date":"2026-05-05","timing":"pm","verified":true}}
+],
+"CVNA": [
+{"symbol":"CVNA","year":2024,"quarter":4,"eps":{"estimate":"0.064000","actual":"0.112000"},"report":{"date":"2025-02-19","timing":"pm","verified":true}},
+{"symbol":"CVNA","year":2025,"quarter":1,"eps":{"estimate":"0.150000","actual":"0.302000"},"report":{"date":"2025-05-07","timing":"pm","verified":true}},
+{"symbol":"CVNA","year":2025,"quarter":2,"eps":{"estimate":"0.224000","actual":"0.256000"},"report":{"date":"2025-07-30","timing":"pm","verified":true}},
+{"symbol":"CVNA","year":2025,"quarter":3,"eps":{"estimate":"0.264000","actual":"0.206000"},"report":{"date":"2025-10-29","timing":"pm","verified":true}},
+{"symbol":"CVNA","year":2025,"quarter":4,"eps":{"estimate":"0.226000","actual":"0.844000"},"report":{"date":"2026-02-18","timing":"pm","verified":true}},
+{"symbol":"CVNA","year":2026,"quarter":1,"eps":{"estimate":"0.298000","actual":"0.338000"},"report":{"date":"2026-04-29","timing":"pm","verified":true}},
+{"symbol":"CVNA","year":2026,"quarter":2,"eps":{"estimate":"0.430000","actual":"0.420000"},"report":{"date":"2026-07-29","timing":"pm","verified":true}}
+],
+"ROOT": [
+{"symbol":"ROOT","year":2024,"quarter":4,"eps":{"estimate":"-0.380000","actual":"1.620000"},"report":{"date":"2025-02-26","timing":"pm","verified":true}},
+{"symbol":"ROOT","year":2025,"quarter":1,"eps":{"estimate":"0.030000","actual":"1.070000"},"report":{"date":"2025-05-07","timing":"pm","verified":true}},
+{"symbol":"ROOT","year":2025,"quarter":2,"eps":{"estimate":"0.550000","actual":"1.290000"},"report":{"date":"2025-08-06","timing":"pm","verified":true}},
+{"symbol":"ROOT","year":2025,"quarter":3,"eps":{"estimate":"-0.450000","actual":"-0.350000"},"report":{"date":"2025-11-05","timing":"pm","verified":true}},
+{"symbol":"ROOT","year":2025,"quarter":4,"eps":{"estimate":"-0.140000","actual":"0.310000"},"report":{"date":"2026-02-25","timing":"pm","verified":true}},
+{"symbol":"ROOT","year":2026,"quarter":1,"eps":{"estimate":"0.670000","actual":"2.090000"},"report":{"date":"2026-05-06","timing":"pm","verified":true}}
+],
+"DECK": [
+{"symbol":"DECK","year":2025,"quarter":3,"eps":{"estimate":"2.610000","actual":"3.000000"},"report":{"date":"2025-01-30","timing":"pm","verified":true}},
+{"symbol":"DECK","year":2025,"quarter":4,"eps":{"estimate":"0.610000","actual":"1.000000"},"report":{"date":"2025-05-22","timing":"pm","verified":true}},
+{"symbol":"DECK","year":2026,"quarter":1,"eps":{"estimate":"0.680000","actual":"0.930000"},"report":{"date":"2025-07-24","timing":"pm","verified":true}},
+{"symbol":"DECK","year":2026,"quarter":2,"eps":{"estimate":"1.580000","actual":"1.820000"},"report":{"date":"2025-10-23","timing":"pm","verified":true}},
+{"symbol":"DECK","year":2026,"quarter":3,"eps":{"estimate":"2.770000","actual":"3.330000"},"report":{"date":"2026-01-29","timing":"pm","verified":true}},
+{"symbol":"DECK","year":2026,"quarter":4,"eps":{"estimate":"0.830000","actual":"0.960000"},"report":{"date":"2026-05-21","timing":"pm","verified":true}},
+{"symbol":"DECK","year":2027,"quarter":1,"eps":{"estimate":"0.880000","actual":"0.940000"},"report":{"date":"2026-07-23","timing":"pm","verified":true}}
+]
+}

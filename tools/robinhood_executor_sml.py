@@ -155,7 +155,7 @@ if os.environ.get("ALLOW_CUSTOM_MIN_GOD", "false").lower() == "true":
     except Exception:
         MIN_GOD_STACKED = 3
 PDT_BALANCE_LIMIT  = float(os.environ.get("PDT_BALANCE_LIMIT", "2000.0"))  # SEC/FINRA eliminated the $25,000 PDT minimum + the 4-trade counter entirely, effective 2026-06-04 -- see core/api/convergence_bp.py's _PDT_BALANCE_LIMIT for the full citation/history. $25,000 was briefly hardcoded here the same day based on stale pre-2026 info. $2,000 matches the operator's directly-confirmed current Robinhood account behavior.
-PDT_MAX_TRADES     = int(os.environ.get("PDT_MAX_TRADES", "3"))
+PDT_MAX_TRADES     = int(os.environ.get("PDT_MAX_TRADES", "3"))  # 0 = uncapped (same 0-means-uncapped convention as MAX_ORDERS_PER_DAY/MAX_DAILY_NOTIONAL below). This is a voluntary internal shield, not the real PDT rule -- see PDT_BALANCE_LIMIT's comment above: the actual SEC/FINRA $25k/4-trade PDT rule was eliminated 2026-06-04. Set PDT_MAX_TRADES=0 in your local executor env to remove this shield entirely (operator directive 2026-07-30).
 PAPER_MODE           = os.environ.get("ROBINHOOD_PAPER_MODE", "false").lower() == "true"
 KILL_SWITCH          = os.environ.get("KILL_SWITCH", "false").lower() == "true"
 MAX_EQUITY_SHARES    = int(os.environ.get("MAX_EQUITY_SHARES", "500"))  # hard ceiling; real limit is MAX_ORDER_USD
@@ -164,7 +164,7 @@ MAX_DAILY_LOSS_USD   = float(os.environ.get("MAX_DAILY_LOSS_USD", "100.0"))
 MAX_ORDERS_PER_DAY   = int(os.environ.get("MAX_ORDERS_PER_DAY", "0"))       # 0 = uncapped (operator directive 2026-07-29, semi-day-trading)
 MAX_DAILY_NOTIONAL   = float(os.environ.get("MAX_DAILY_NOTIONAL_USD", "0"))  # 0 = uncapped (operator directive 2026-07-29, semi-day-trading)
 MAX_PER_SCAN         = int(os.environ.get("MAX_PER_SCAN", "3"))
-STOP_LOSS_PCT        = float(os.environ.get("STOP_LOSS_PCT", "5.0"))    # fallback if no cached ATR: close if down this % from avg cost
+STOP_LOSS_PCT        = float(os.environ.get("STOP_LOSS_PCT", "3.0"))    # fallback if no cached ATR: close if down this % from avg cost. Lowered from 5.0 -> 3.0 (operator, 2026-07-30) after a real LAD position realized -6.81% before this polling-based check fired and its market-order fill slipped past the trigger -- 3.0 gives that same lag/slippage room to land closer to the 4-5% the operator actually wants, instead of running further past a 5% trigger.
 TAKE_PROFIT_PCT      = float(os.environ.get("TAKE_PROFIT_PCT", "15.0")) # fallback if no cached ATR: close if up this % from avg cost
 # ATR-based stop/take-profit — same multiplier convention as execution_engine.py's
 # atr_multiplier (1.5x ATR stop, 2.5x that for target = same ~1:2.5 risk:reward).
@@ -532,13 +532,16 @@ def _pdt_allowed() -> bool:
     with _lock:
         _pdt_trades[:] = [t for t in _pdt_trades if t > cutoff]
         if balance < PDT_BALANCE_LIMIT:
-            if len(_pdt_trades) >= PDT_MAX_TRADES:
+            if PDT_MAX_TRADES > 0 and len(_pdt_trades) >= PDT_MAX_TRADES:
                 logger.warning(
                     f"[PDT] BLOCKED — balance ${balance:.2f} < ${PDT_BALANCE_LIMIT} "
                     f"and {len(_pdt_trades)}/{PDT_MAX_TRADES} day trades used"
                 )
                 return False
-            logger.info(f"[PDT] Balance ${balance:.2f} — PDT active: {len(_pdt_trades)}/{PDT_MAX_TRADES} used")
+            if PDT_MAX_TRADES <= 0:
+                logger.info(f"[PDT] Balance ${balance:.2f} — PDT_MAX_TRADES=0, shield disabled, full trading allowed")
+            else:
+                logger.info(f"[PDT] Balance ${balance:.2f} — PDT active: {len(_pdt_trades)}/{PDT_MAX_TRADES} used")
         else:
             logger.info(f"[PDT] Balance ${balance:.2f} — above PDT limit, full trading allowed")
     return True
@@ -2106,7 +2109,8 @@ def main():
     logger.info(f"  Options loop: CONTINUOUS harvest every poll — sell before loss of gains")
     logger.info(f"  Oracle      : 100% FETCH — uses live scan universe, no hardcoded watchlist")
     logger.info(f"  MIN_GOD     : {MIN_GOD_STACKED}/6 stacked (GRID_LOCK: {max(2,MIN_GOD_STACKED-1)}) [LOCKED]  |  ORACLE_MIN_CONF: {ORACLE_MIN_CONFIDENCE}%")
-    logger.info(f"  PDT limit   : ${PDT_BALANCE_LIMIT}")
+    _pdt_trades_label = "UNCAPPED" if PDT_MAX_TRADES <= 0 else f"{PDT_MAX_TRADES} trades/5-day"
+    logger.info(f"  PDT limit   : ${PDT_BALANCE_LIMIT} balance floor | {_pdt_trades_label}")
     logger.info(f"  Max order   : ${MAX_ORDER_USD} / {MAX_EQUITY_SHARES} shares")
     _orders_cap_label   = "UNCAPPED" if MAX_ORDERS_PER_DAY <= 0 else f"{MAX_ORDERS_PER_DAY} orders"
     _notional_cap_label = "UNCAPPED" if MAX_DAILY_NOTIONAL <= 0 else f"${MAX_DAILY_NOTIONAL:.0f} notional"

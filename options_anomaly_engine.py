@@ -63,7 +63,29 @@ class OptionsAnomaly:
 
 _baselines: dict[str, deque] = defaultdict(lambda: deque(maxlen=BASELINE_WINDOW))
 _last_alert: dict[str, dict[str, float]] = defaultdict(dict)  # symbol → type → ts
+_last_anomaly: dict[str, dict] = {}  # symbol → most recent OptionsAnomaly (as dict), for external queries
 _baseline_lock = threading.Lock()
+
+
+def get_recent_anomaly(symbol: str, max_age_s: int = 1800) -> Optional[dict]:
+    """
+    Real-data query for other engines (e.g. squeeze_fuel_engine.py's flow
+    confirmation gate) -- returns this engine's own most recent detected
+    anomaly for `symbol` if it fired within `max_age_s` seconds, else None.
+
+    Honest limitation: this engine's own scan universe is independently
+    ranked/capped (MAX_SYMBOLS_PER_RUN, by vol_ratio) from whatever universe
+    a caller like squeeze_fuel_scanner.py resolves -- a symbol squeeze_fuel
+    wants to evaluate may simply never have been scanned by this engine
+    recently, in which case this correctly returns None (not a guess).
+    """
+    with _baseline_lock:
+        entry = _last_anomaly.get(symbol.upper())
+    if not entry:
+        return None
+    if (time.time() - entry["ts"]) > max_age_s:
+        return None
+    return entry
 
 
 # ── Thesis generator ──────────────────────────────────────────────────────────
@@ -347,6 +369,8 @@ def _run_anomaly_scan(broadcast_fn, signal_history_module, discord=None):
                         "ts":           a.ts,
                         "supporting":   a.supporting,
                     }
+                    with _baseline_lock:
+                        _last_anomaly[symbol.upper()] = dict(evt)
                     broadcast_fn(evt)
                     try:
                         signal_history_module.record(symbol, "OPTIONS_ANOMALY", evt)

@@ -55,6 +55,7 @@ from core.api.druck_bp import druck_bp
 from core.api.cie_bp import cie_bp
 from core.api.breakout_bp import breakout_bp
 from core.api.sr_matrix_bp import sr_matrix_bp
+from core.api.sr_zone_pattern_bp import sr_zone_pattern_bp
 from core.api.gamma_pin_bp import gamma_pin_bp
 from core.api.squeeze_fuel_bp import squeeze_fuel_bp
 from core.api.mm_intel_bp import mm_intel_bp
@@ -199,6 +200,7 @@ def create_app():
     app.register_blueprint(cie_bp,           url_prefix='/api/cie')
     app.register_blueprint(breakout_bp,      url_prefix='/api/breakout')
     app.register_blueprint(sr_matrix_bp,     url_prefix='/api/sr-matrix')
+    app.register_blueprint(sr_zone_pattern_bp, url_prefix='/api/sr-zone-pattern')
     app.register_blueprint(gamma_pin_bp,     url_prefix='/api/gamma-pin')
     app.register_blueprint(squeeze_fuel_bp,  url_prefix='/api/squeeze-fuel')
     app.register_blueprint(mm_intel_bp,      url_prefix='/api/mm-intel')
@@ -293,6 +295,9 @@ def create_app():
 
                 from sr_matrix_scanner import start_sr_matrix_scanner
                 start_sr_matrix_scanner()
+
+                from sr_zone_pattern_scanner import start_sr_zone_pattern_scanner
+                start_sr_zone_pattern_scanner()
 
                 from gamma_pin_scanner import start_gamma_pin_scanner
                 start_gamma_pin_scanner()
