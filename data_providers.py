@@ -12,6 +12,8 @@ QUOTES (get real-time data for discovered tickers):
   3. Polygon prev-day bars (free 5/min tier)
   4. Alpha Vantage (free 25/day, last-resort fallback)
 """
+import csv
+import io
 import os
 import sys
 import time
@@ -636,6 +638,8 @@ class PolygonProvider:
 # ALPHA VANTAGE — last resort quotes
 # ============================================================
 class AlphaVantageProvider:
+    _EARNINGS_CACHE_TTL_S = 20 * 3600  # a symbol's next earnings date doesn't change intraday
+
     def __init__(self):
         self.api_key = os.environ.get('ALPHA_VANTAGE_API_KEY', '').strip()
         self.base = 'https://www.alphavantage.co/query'
@@ -697,6 +701,44 @@ class AlphaVantageProvider:
             except Exception as e:
                 logger.warning(f"[ALPHAV] {sym}: {e}")
         return results
+
+    def get_earnings_calendar(self, horizon: str = "3month") -> Dict[str, str]:
+        """Real, free EARNINGS_CALENDAR endpoint -- ONE call returns every
+        upcoming earnings date industry-wide (CSV, not JSON -- this is the
+        one Alpha Vantage endpoint that isn't), so building an earnings-
+        blackout gate off this doesn't burn into the strict per-symbol
+        daily_calls budget the way GLOBAL_QUOTE would. Cached in-process for
+        _EARNINGS_CACHE_TTL_S (default 20h) since a symbol's next earnings
+        date doesn't change intraday. Returns {} (never fabricated dates)
+        when unconfigured or the request fails."""
+        now = time.time()
+        cache = getattr(self, "_earnings_cache", None)
+        if cache and now - cache["ts"] < self._EARNINGS_CACHE_TTL_S and cache["horizon"] == horizon:
+            return cache["by_symbol"]
+        if not self.available:
+            return {}
+        self._rate_limit()
+        by_symbol: Dict[str, str] = {}
+        try:
+            r = requests.get(self.base, params={
+                "function": "EARNINGS_CALENDAR", "horizon": horizon, "apikey": self.api_key,
+            }, timeout=15)
+            if r.status_code == 200 and r.text:
+                reader = csv.DictReader(io.StringIO(r.text))
+                for row in reader:
+                    sym = (row.get("symbol") or "").strip().upper()
+                    report_date = (row.get("reportDate") or "").strip()
+                    if not sym or not report_date:
+                        continue
+                    # Keep the SOONEST reportDate per symbol (a symbol can
+                    # appear more than once across horizon windows/updates).
+                    if sym not in by_symbol or report_date < by_symbol[sym]:
+                        by_symbol[sym] = report_date
+        except Exception as e:
+            logger.warning(f"[ALPHAV] earnings calendar fetch failed: {e}")
+            return getattr(self, "_earnings_cache", {}).get("by_symbol", {}) if cache else {}
+        self._earnings_cache = {"ts": now, "horizon": horizon, "by_symbol": by_symbol}
+        return by_symbol
 
 
 # ============================================================

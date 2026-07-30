@@ -227,6 +227,113 @@ def test_no_option_chain_gamma_unavailable_not_guessed():
     print("PASS: missing option chain -> gamma component honestly unavailable, not guessed")
 
 
+# ---------------------------------------------------------------------------
+# 2026-07-30: real fail-OPEN refinement gates (short interest, earnings
+# blackout, IV rank) -- correcting the earlier "no free source" claim.
+# ---------------------------------------------------------------------------
+
+def test_short_interest_check_unit():
+    with patch("finra_short_interest_data.get_short_interest", return_value=None):
+        blocked, dtc, avail = sfe._short_interest_check("X")
+    assert (blocked, dtc, avail) == (False, None, False)
+
+    with patch("finra_short_interest_data.get_short_interest",
+               return_value={"days_to_cover": 0.3}):
+        blocked2, dtc2, avail2 = sfe._short_interest_check("X")
+    assert blocked2 is True and dtc2 == 0.3 and avail2 is True
+
+    with patch("finra_short_interest_data.get_short_interest",
+               return_value={"days_to_cover": 4.0}):
+        blocked3, dtc3, avail3 = sfe._short_interest_check("X")
+    assert blocked3 is False and dtc3 == 4.0 and avail3 is True
+    print("PASS: short-interest check -- unavailable never blocks, weak real DTC blocks, strong real DTC doesn't")
+
+
+def test_earnings_blackout_check_unit():
+    from datetime import date, timedelta
+
+    fake_dm_unconfigured = MagicMock()
+    fake_dm_unconfigured.alphav.available = False
+    with patch("core.legacy.get_service", return_value=fake_dm_unconfigured):
+        blocked, days, avail = sfe._earnings_blackout("X")
+    assert (blocked, days, avail) == (False, None, False)
+
+    fake_dm = MagicMock()
+    fake_dm.alphav.available = True
+    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+    fake_dm.alphav.get_earnings_calendar.return_value = {"X": tomorrow}
+    with patch("core.legacy.get_service", return_value=fake_dm):
+        blocked2, days2, avail2 = sfe._earnings_blackout("X")
+    assert blocked2 is True and avail2 is True
+
+    far_out = (date.today() + timedelta(days=30)).isoformat()
+    fake_dm.alphav.get_earnings_calendar.return_value = {"X": far_out}
+    with patch("core.legacy.get_service", return_value=fake_dm):
+        blocked3, days3, avail3 = sfe._earnings_blackout("X")
+    assert blocked3 is False and avail3 is True
+    print("PASS: earnings blackout -- unconfigured never blocks, real near-term date blocks, real far date doesn't")
+
+
+def test_iv_rank_check_unit():
+    blocked, pct, avail = sfe._iv_rank_check("X", None, 12.0)
+    assert (blocked, pct, avail) == (False, None, False)
+
+    fake_profile = MagicMock()
+    fake_profile.iv_surface_avg = 0.55
+    with patch("gamma_flow_engine.calculate_gex_profile", return_value=fake_profile), \
+         patch("iv_rank_tracker.record_iv") as mock_record, \
+         patch("iv_rank_tracker.get_iv_rank", return_value={"available": False, "reason": "insufficient_history"}):
+        blocked2, pct2, avail2 = sfe._iv_rank_check("X", {"underlyingPrice": 12.0}, 12.0)
+    mock_record.assert_called_once()
+    assert (blocked2, pct2, avail2) == (False, None, False)
+
+    with patch("gamma_flow_engine.calculate_gex_profile", return_value=fake_profile), \
+         patch("iv_rank_tracker.record_iv"), \
+         patch("iv_rank_tracker.get_iv_rank", return_value={"available": True, "iv_rank": 95.0}):
+        blocked3, pct3, avail3 = sfe._iv_rank_check("X", {"underlyingPrice": 12.0}, 12.0)
+    assert blocked3 is True and pct3 == 95.0 and avail3 is True
+
+    with patch("gamma_flow_engine.calculate_gex_profile", return_value=fake_profile), \
+         patch("iv_rank_tracker.record_iv"), \
+         patch("iv_rank_tracker.get_iv_rank", return_value={"available": True, "iv_rank": 55.0}):
+        blocked4, pct4, avail4 = sfe._iv_rank_check("X", {"underlyingPrice": 12.0}, 12.0)
+    assert blocked4 is False and pct4 == 55.0
+    print("PASS: IV-rank check -- no chain/insufficient history never blocks, real extreme rank blocks, mid rank doesn't")
+
+
+def test_full_stack_blocked_by_real_short_interest_refinement():
+    """Same full-stack alignment as the passing BUY test above, but with
+    real short-interest data showing weak days-to-cover -- must block
+    despite composite/RSI/flow all otherwise passing (fail-OPEN gates only
+    block when real data is present and says the setup is weak)."""
+    quote = {"price": 12.0, "volume": 8_000_000, "avgVolume": 1_000_000, "volRatio": 8.0,
+             "changePct": 6.0, "high": 12.3, "low": 10.5, "open": 10.6}
+    fake_ftd_store = MagicMock()
+    fake_ftd_store.latest_ratio.return_value = {"rank_percentile": 0.95}
+    fake_ftd_store.is_on_threshold_list.return_value = True
+    fake_sv_store = MagicMock()
+    fake_sv_store.latest.return_value = {"ratio_vs_window_avg": 0.30}
+    fake_profile = MagicMock()
+    fake_profile.profile_shape = "short_gamma"
+    fake_profile.zero_gamma_line = 11.0
+    fake_anomaly = {"anomaly_type": "WHALE_PRINT", "severity": "SUSPICIOUS", "ts": 0.0}
+
+    with patch("core.ftd_data.get_store", return_value=fake_ftd_store), \
+         patch("finra_short_data.get_store", return_value=fake_sv_store), \
+         patch("gamma_flow_engine.calculate_gex_profile", return_value=fake_profile), \
+         patch("options_anomaly_engine.get_recent_anomaly", return_value=fake_anomaly), \
+         patch("finra_short_interest_data.get_short_interest", return_value={"days_to_cover": 0.2}):
+        out = sfe.analyze("SQZ", quote_data=quote, history=_RSI_CROSS_HISTORY,
+                           raw_chain={"underlyingPrice": 12.0})
+
+    assert out["composite_score"] >= sfe.ENTRY_THRESHOLD, out
+    assert out["rsi_confirmation"]["confirmed"] is True
+    assert out["flow_confirmation"]["confirmed"] is True
+    assert out["short_interest_check"]["blocked"] is True, out["short_interest_check"]
+    assert out["action"] is None, out
+    print("PASS: real weak short-interest data blocks an otherwise-qualifying BUY")
+
+
 if __name__ == "__main__":
     test_all_sources_unavailable_scores_zero_and_fires_nothing()
     test_ignition_only_below_threshold_no_action()
@@ -238,4 +345,8 @@ if __name__ == "__main__":
     test_bearish_direction_never_fires_even_at_high_score()
     test_long_gamma_regime_dampens_amplifier_score()
     test_no_option_chain_gamma_unavailable_not_guessed()
+    test_short_interest_check_unit()
+    test_earnings_blackout_check_unit()
+    test_iv_rank_check_unit()
+    test_full_stack_blocked_by_real_short_interest_refinement()
     print("\nAll tests passed.")

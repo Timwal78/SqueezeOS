@@ -187,6 +187,17 @@ def scan_once() -> int:
 
             conf = min(result["composite_score"], 99.0)
             spot = float(quote.get("price", 0) or 0)
+            # Optional context from the fail-OPEN refinement gates (2026-07-30)
+            # -- these can only appear here at all when they were AVAILABLE and
+            # already passed (a block would have prevented this BUY from firing).
+            refinements = []
+            si = result.get("short_interest_check", {})
+            if si.get("available"):
+                refinements.append(f"real DTC {si['days_to_cover']}")
+            iv = result.get("iv_rank_check", {})
+            if iv.get("available"):
+                refinements.append(f"IV rank {iv['iv_rank']}")
+            refinement_note = f", {', '.join(refinements)}" if refinements else ""
             resolution = {
                 "action":                "BUY",
                 "system":                "SML_SQUEEZE_FUEL",
@@ -200,7 +211,8 @@ def scan_once() -> int:
                                          f"RSI {result['rsi_confirmation']['value']} crossed above "
                                          f"{result['rsi_confirmation']['cross_level']}, "
                                          f"flow anomaly {result['flow_confirmation']['anomaly_type']} "
-                                         f"[{result['flow_confirmation']['severity']}] — "
+                                         f"[{result['flow_confirmation']['severity']}]"
+                                         f"{refinement_note} — "
                                          f"NO BACKTEST EVIDENCE, see squeeze_fuel_engine.py docstring",
                 "vehicle":               sym,
                 "resolution_confidence": conf,

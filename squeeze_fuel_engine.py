@@ -83,11 +83,10 @@ to seeing). Requires the scanner to actually pass real daily `history` bars
 fails CLOSED (no BUY) when history is missing or too short to compute RSI,
 consistent with this being an added selectivity filter, not a soft hint --
 a silent fail-open here would quietly remove the exact protection it was
-added for. Earnings-blackout and IV-rank exclusions from the pasted bot are
-NOT implemented -- no free, live earnings-calendar or IV-rank data source
-exists anywhere in this codebase (the Robinhood MCP earnings tools used
-elsewhere this session are only reachable from an interactive chat session,
-not from the deployed server), and none was fabricated to fill that gap.
+added for. Earnings-blackout and IV-rank exclusions from the pasted bot ARE
+now implemented (see below) -- an earlier version of this docstring said
+they weren't, which was wrong; see the "REAL SHORT INTEREST, EARNINGS
+BLACKOUT, AND IV RANK" section below for the correction and design.
 
 UNUSUAL OPTIONS FLOW CONFIRMATION (added 2026-07-30, correcting an earlier
 error): this was first said to have "no free equivalent" -- wrong.
@@ -103,6 +102,41 @@ is independently ranked/capped, so a symbol Squeeze Fuel evaluates may
 simply never have been scanned by it recently -- this gate then correctly
 reports unavailable/unconfirmed rather than guessing, same fail-closed
 convention as RSI.
+
+REAL SHORT INTEREST, EARNINGS BLACKOUT, AND IV RANK (added 2026-07-30,
+correcting a second earlier error): the module docstring previously said
+none of these had a free source -- also wrong, found on a closer second
+search per the operator's "you should be able to build those api" pushback
+(same lesson as the options-flow correction above: verify before asserting
+a gap is unfillable). All three are now real, wired FAIL-OPEN checks --
+deliberately different from RSI/flow's fail-CLOSED design, because these
+three are risk-avoidance REFINEMENTS layered on an already multi-gated
+signal (composite + direction + RSI + flow), not core confirmations --
+requiring perfect coverage on all three would silently regress this
+already-rare live-armed signal back toward never firing. Each fails open
+(does not block) when its data source is unconfigured/unavailable, and
+only blocks when REAL data is present and says the setup is weak:
+  - SHORT INTEREST (finra_short_interest_data.py): real bi-monthly
+    days-to-cover from FINRA's OAuth2-gated Query API -- NOT zero-config
+    like the short-volume file above, requires the operator to register a
+    free FINRA Individual Account + Public Credential
+    (FINRA_API_CLIENT_ID/SECRET). Blocks only when real data shows
+    days-to-cover below SHORT_INTEREST_MIN_DAYS_TO_COVER -- i.e. the
+    short-volume proxy's implied fuel isn't backed by real covering
+    pressure.
+  - EARNINGS BLACKOUT (data_providers.AlphaVantageProvider.get_earnings_calendar()):
+    real free Alpha Vantage EARNINGS_CALENDAR endpoint (one call covers
+    every symbol, cached ~20h, doesn't burn the 25/day cap). Requires
+    ALPHA_VANTAGE_API_KEY. Blocks when within EARNINGS_BLACKOUT_DAYS of a
+    real known earnings date.
+  - IV RANK (iv_rank_tracker.py): no free historical-options-chain source
+    exists anywhere in this codebase (confirmed again here, same gap as
+    Gamma Pin/Gamma Ramp/CVD Regime) -- so this self-mines a real rolling
+    IV history going forward from gamma_flow_engine's already-computed
+    iv_surface_avg, and only blocks once real accumulated history
+    (IV_RANK_MIN_HISTORY_DAYS, default 20 real days) shows today's IV
+    outside the IV_RANK_EXCLUDE_BELOW/ABOVE band. Reports 'insufficient
+    history' honestly, never a fabricated rank, until then.
 
 LIVE-ARMING (2026-07-30, operator directive): armed for real trading via
 IAM_PRIMARY_SYSTEM despite zero backtest evidence -- an explicit, informed
@@ -132,6 +166,14 @@ RSI_CROSS_LEVEL = 50.0
 
 FLOW_MAX_AGE_S = 1800  # a real options_anomaly_engine.py anomaly counts as "recent" for 30 min
 
+# Fail-OPEN refinement gates (2026-07-30) -- see module docstring's "REAL
+# SHORT INTEREST, EARNINGS BLACKOUT, AND IV RANK" section for the full
+# reasoning on why these three are fail-open, unlike RSI/flow above.
+SHORT_INTEREST_MIN_DAYS_TO_COVER = 1.0  # real DTC below this -> distrust the short-vol proxy's implied fuel
+EARNINGS_BLACKOUT_DAYS = 1              # block within +/- this many days of a real known earnings date
+IV_RANK_EXCLUDE_BELOW = 20.0            # too quiet a vol regime to justify a premium bet
+IV_RANK_EXCLUDE_ABOVE = 90.0            # IV already rich -- poor risk/reward buying into a likely crush
+
 
 def _sigmoid(x: float, center: float, steepness: float) -> float:
     try:
@@ -159,6 +201,15 @@ class FuelComponents:
     flow_confirmed: bool = False
     flow_anomaly_type: Optional[str] = None
     flow_severity: Optional[str] = None
+    short_interest_available: bool = False
+    short_interest_days_to_cover: Optional[float] = None
+    short_interest_blocked: bool = False
+    earnings_available: bool = False
+    earnings_days_away: Optional[int] = None
+    earnings_blocked: bool = False
+    iv_rank_available: bool = False
+    iv_rank_pct: Optional[float] = None
+    iv_rank_blocked: bool = False
 
     @property
     def composite(self) -> float:
@@ -187,6 +238,25 @@ class FuelComponents:
                 "max_age_s": FLOW_MAX_AGE_S,
                 "note": "required gate from options_anomaly_engine.py's real whale-print/volume-surge/IV-spike "
                         "detection -- fails CLOSED (blocks BUY) when that engine hasn't recently scanned this symbol",
+            },
+            "short_interest_check": {
+                "available": self.short_interest_available, "days_to_cover": self.short_interest_days_to_cover,
+                "blocked": self.short_interest_blocked, "min_days_to_cover": SHORT_INTEREST_MIN_DAYS_TO_COVER,
+                "note": "real FINRA short-interest refinement -- fails OPEN (never blocks) when "
+                        "FINRA_API_CLIENT_ID/SECRET aren't configured; only blocks on real data showing weak DTC",
+            },
+            "earnings_blackout_check": {
+                "available": self.earnings_available, "days_away": self.earnings_days_away,
+                "blocked": self.earnings_blocked, "blackout_days": EARNINGS_BLACKOUT_DAYS,
+                "note": "real Alpha Vantage earnings-calendar refinement -- fails OPEN when "
+                        "ALPHA_VANTAGE_API_KEY isn't configured or the symbol isn't in the calendar",
+            },
+            "iv_rank_check": {
+                "available": self.iv_rank_available, "iv_rank": self.iv_rank_pct,
+                "blocked": self.iv_rank_blocked,
+                "exclude_below": IV_RANK_EXCLUDE_BELOW, "exclude_above": IV_RANK_EXCLUDE_ABOVE,
+                "note": "self-mined IV-rank refinement (no free historical-chain source exists) -- fails OPEN "
+                        "until real accumulated history clears IV_RANK_MIN_HISTORY_DAYS, never a fabricated rank",
             },
         }
 
@@ -318,6 +388,79 @@ def _flow_confirmation(symbol: str) -> tuple:
     return True, hit.get("anomaly_type"), hit.get("severity"), True
 
 
+def _short_interest_check(symbol: str) -> tuple:
+    """Returns (blocked, days_to_cover, available). Real FINRA short-
+    interest data requires the operator to have set up free
+    FINRA_API_CLIENT_ID/SECRET -- fails OPEN (never blocks) when
+    unconfigured or the symbol isn't found. Only blocks when real data IS
+    available and shows weak actual covering pressure (days-to-cover below
+    SHORT_INTEREST_MIN_DAYS_TO_COVER) -- a genuine reason to distrust the
+    short-volume proxy's implied fuel, not a fabricated exclusion."""
+    try:
+        from finra_short_interest_data import get_short_interest
+        data = get_short_interest(symbol)
+    except Exception:
+        return False, None, False
+    if not data or data.get("days_to_cover") is None:
+        return False, None, False
+    dtc = data["days_to_cover"]
+    return dtc < SHORT_INTEREST_MIN_DAYS_TO_COVER, dtc, True
+
+
+def _earnings_blackout(symbol: str) -> tuple:
+    """Returns (blocked, days_away, available). Real Alpha Vantage
+    EARNINGS_CALENDAR requires ALPHA_VANTAGE_API_KEY. Fails OPEN when
+    unconfigured or the symbol isn't in the calendar -- a risk-avoidance
+    refinement, not a core confirmation; requiring perfect calendar
+    coverage would silently regress this already multi-gated signal back
+    toward never firing."""
+    try:
+        from core.legacy import get_service
+        dm = get_service("dm")
+        if not dm or not getattr(dm, "alphav", None) or not dm.alphav.available:
+            return False, None, False
+        report_date_raw = dm.alphav.get_earnings_calendar().get(symbol.upper())
+        if not report_date_raw:
+            return False, None, False
+        from datetime import date as _date
+        report_date = _date.fromisoformat(report_date_raw)
+        days_away = (report_date - _date.today()).days
+    except Exception:
+        return False, None, False
+    return abs(days_away) <= EARNINGS_BLACKOUT_DAYS, days_away, True
+
+
+def _iv_rank_check(symbol: str, raw_chain: Optional[dict], spot: float) -> tuple:
+    """Returns (blocked, iv_rank_pct, available). Feeds today's real ATM IV
+    (gamma_flow_engine's already-computed iv_surface_avg -- recomputed here
+    via a second calculate_gex_profile() call since _gamma_amp_score()
+    doesn't expose its profile object; a harmless re-parse of already-
+    in-memory chain data, not a second network call) into
+    iv_rank_tracker's self-mining store, then checks whether today's real
+    rank falls in an exclusion band. Fails OPEN while real history is
+    still accumulating."""
+    if not raw_chain or spot <= 0:
+        return False, None, False
+    try:
+        from gamma_flow_engine import calculate_gex_profile
+        profile = calculate_gex_profile(raw_chain, spot, symbol)
+    except Exception:
+        return False, None, False
+    iv = getattr(profile, "iv_surface_avg", None) if profile else None
+    if not isinstance(iv, (int, float)) or iv <= 0:
+        return False, None, False
+    try:
+        from iv_rank_tracker import record_iv, get_iv_rank
+        record_iv(symbol, iv)
+        rank = get_iv_rank(symbol)
+    except Exception:
+        return False, None, False
+    if not rank.get("available"):
+        return False, None, False
+    pct = rank["iv_rank"]
+    return (pct < IV_RANK_EXCLUDE_BELOW or pct > IV_RANK_EXCLUDE_ABOVE), pct, True
+
+
 def compute_fuel(symbol: str, quote_data: Optional[dict] = None, history: Optional[list] = None,
                   raw_chain: Optional[dict] = None) -> FuelComponents:
     spot = float((quote_data or {}).get("price", 0) or 0)
@@ -327,6 +470,9 @@ def compute_fuel(symbol: str, quote_data: Optional[dict] = None, history: Option
     gamma_amp, gamma_avail, gamma_regime = _gamma_amp_score(symbol, raw_chain, spot)
     rsi_confirmed, rsi_value, rsi_avail = _rsi_confirmation(history)
     flow_confirmed, flow_type, flow_sev, flow_avail = _flow_confirmation(symbol)
+    si_blocked, si_dtc, si_avail = _short_interest_check(symbol)
+    earn_blocked, earn_days, earn_avail = _earnings_blackout(symbol)
+    iv_blocked, iv_pct, iv_avail = _iv_rank_check(symbol, raw_chain, spot)
     comp = FuelComponents(
         ignition=ignition, ignition_available=ign_avail,
         ftd_fuel=ftd_fuel, ftd_available=ftd_avail, on_threshold_list=on_list,
@@ -335,6 +481,9 @@ def compute_fuel(symbol: str, quote_data: Optional[dict] = None, history: Option
         rsi_value=rsi_value, rsi_available=rsi_avail, rsi_confirmed=rsi_confirmed,
         flow_available=flow_avail, flow_confirmed=flow_confirmed,
         flow_anomaly_type=flow_type, flow_severity=flow_sev,
+        short_interest_available=si_avail, short_interest_days_to_cover=si_dtc, short_interest_blocked=si_blocked,
+        earnings_available=earn_avail, earnings_days_away=earn_days, earnings_blocked=earn_blocked,
+        iv_rank_available=iv_avail, iv_rank_pct=iv_pct, iv_rank_blocked=iv_blocked,
     )
     comp._direction = direction  # stashed for analyze(); not part of the public dataclass fields
     return comp
@@ -347,7 +496,10 @@ def analyze(symbol: str, quote_data: Optional[dict] = None, history: Optional[li
     comp = compute_fuel(symbol, quote_data, history, raw_chain)
     direction = getattr(comp, "_direction", "NEUTRAL")
     action = "BUY" if (comp.composite >= ENTRY_THRESHOLD and direction == "BULLISH"
-                        and comp.rsi_confirmed and comp.flow_confirmed) else None
+                        and comp.rsi_confirmed and comp.flow_confirmed
+                        and not comp.short_interest_blocked
+                        and not comp.earnings_blocked
+                        and not comp.iv_rank_blocked) else None
     out = comp.as_dict()
     out["symbol"] = symbol.upper()
     out["direction"] = direction
@@ -357,6 +509,8 @@ def analyze(symbol: str, quote_data: Optional[dict] = None, history: Optional[li
         "No backtest evidence exists for this composite -- see module docstring. "
         "Weights are a transparent starting point, not curve-fit or validated. "
         "RSI-cross-above-50 and real options-flow-anomaly confirmation are both "
-        "required additional gates (each fails closed without real data)."
+        "required gates (fail closed without real data). Short-interest, "
+        "earnings-blackout, and IV-rank are real refinement gates layered on "
+        "top (fail open without real data -- see module docstring)."
     )
     return out
