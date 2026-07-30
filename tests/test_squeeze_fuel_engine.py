@@ -2,12 +2,14 @@
 Regression tests for squeeze_fuel_engine.py -- the new composite that
 combines squeeze_analyzer's real ignition score, core/ftd_data.py's real
 FTD/threshold-list data, finra_short_data.py's new real short-volume-ratio
-proxy, and gamma_flow_engine.py's real dealer-gamma regime into one score.
+proxy, and gamma_flow_engine.py's real dealer-gamma regime into one score,
+plus the RSI-cross and real options-flow-anomaly required gates added
+2026-07-30.
 
 Drives the real, unmodified compute_fuel()/analyze(), mocking only the
-four true I/O/data-store boundaries (SqueezeAnalyzer.analyze_symbol,
+true I/O/data-store boundaries (SqueezeAnalyzer.analyze_symbol,
 core.ftd_data.get_store, finra_short_data.get_store,
-gamma_flow_engine.calculate_gex_profile).
+gamma_flow_engine.calculate_gex_profile, options_anomaly_engine.get_recent_anomaly).
 """
 import os
 import sys
@@ -66,9 +68,12 @@ def test_full_stack_bullish_alignment_fires_buy():
     fake_profile.profile_shape = "short_gamma"
     fake_profile.zero_gamma_line = 11.0
 
+    fake_anomaly = {"anomaly_type": "WHALE_PRINT", "severity": "SUSPICIOUS", "ts": 0.0}
+
     with patch("core.ftd_data.get_store", return_value=fake_ftd_store), \
          patch("finra_short_data.get_store", return_value=fake_sv_store), \
-         patch("gamma_flow_engine.calculate_gex_profile", return_value=fake_profile):
+         patch("gamma_flow_engine.calculate_gex_profile", return_value=fake_profile), \
+         patch("options_anomaly_engine.get_recent_anomaly", return_value=fake_anomaly):
         out = sfe.analyze("SQZ", quote_data=quote, history=_RSI_CROSS_HISTORY,
                            raw_chain={"underlyingPrice": 12.0})
 
@@ -79,9 +84,12 @@ def test_full_stack_bullish_alignment_fires_buy():
     assert out["gamma_amplifier"]["regime"] == "short_gamma"
     assert out["rsi_confirmation"]["available"] is True
     assert out["rsi_confirmation"]["confirmed"] is True, out["rsi_confirmation"]
+    assert out["flow_confirmation"]["available"] is True
+    assert out["flow_confirmation"]["confirmed"] is True, out["flow_confirmation"]
+    assert out["flow_confirmation"]["anomaly_type"] == "WHALE_PRINT"
     assert out["composite_score"] >= sfe.ENTRY_THRESHOLD, out
     assert out["action"] == "BUY", out
-    print(f"PASS: full real-data alignment INCLUDING real RSI cross (composite={out['composite_score']}) fires BUY")
+    print(f"PASS: full real-data alignment INCLUDING real RSI cross + real flow anomaly (composite={out['composite_score']}) fires BUY")
 
 
 def test_full_stack_without_rsi_history_does_not_fire():
@@ -125,6 +133,53 @@ def test_rsi_cross_math_matches_hand_verification():
     assert confirmed2 is False
     assert rsi2 is None
     print(f"PASS: RSI math verified directly (rsi_now={rsi_now:.2f}), insufficient history stays unavailable")
+
+
+def test_full_stack_without_flow_anomaly_does_not_fire():
+    """Same full-stack alignment as the passing test above, but with a real
+    RSI cross AND no recent options-flow anomaly -- must still fail closed."""
+    quote = {"price": 12.0, "volume": 8_000_000, "avgVolume": 1_000_000, "volRatio": 8.0,
+             "changePct": 6.0, "high": 12.3, "low": 10.5, "open": 10.6}
+    fake_ftd_store = MagicMock()
+    fake_ftd_store.latest_ratio.return_value = {"rank_percentile": 0.95}
+    fake_ftd_store.is_on_threshold_list.return_value = True
+    fake_sv_store = MagicMock()
+    fake_sv_store.latest.return_value = {"ratio_vs_window_avg": 0.30}
+    fake_profile = MagicMock()
+    fake_profile.profile_shape = "short_gamma"
+    fake_profile.zero_gamma_line = 11.0
+
+    with patch("core.ftd_data.get_store", return_value=fake_ftd_store), \
+         patch("finra_short_data.get_store", return_value=fake_sv_store), \
+         patch("gamma_flow_engine.calculate_gex_profile", return_value=fake_profile), \
+         patch("options_anomaly_engine.get_recent_anomaly", return_value=None):
+        out = sfe.analyze("SQZ", quote_data=quote, history=_RSI_CROSS_HISTORY,
+                           raw_chain={"underlyingPrice": 12.0})
+
+    assert out["rsi_confirmation"]["confirmed"] is True, out["rsi_confirmation"]
+    assert out["flow_confirmation"]["available"] is False
+    assert out["composite_score"] >= sfe.ENTRY_THRESHOLD, out
+    assert out["action"] is None, out
+    print(f"PASS: RSI confirmed but no real flow anomaly -> still fails closed, no BUY")
+
+
+def test_flow_confirmation_unit():
+    """Direct unit test of _flow_confirmation() -- real function, only the
+    options_anomaly_engine.get_recent_anomaly() I/O boundary mocked."""
+    with patch("options_anomaly_engine.get_recent_anomaly",
+               return_value={"anomaly_type": "VOLUME_SURGE", "severity": "CRITICAL", "ts": 0.0}):
+        confirmed, atype, sev, avail = sfe._flow_confirmation("SPY")
+    assert confirmed is True
+    assert atype == "VOLUME_SURGE"
+    assert sev == "CRITICAL"
+    assert avail is True
+
+    with patch("options_anomaly_engine.get_recent_anomaly", return_value=None):
+        confirmed2, atype2, sev2, avail2 = sfe._flow_confirmation("SPY")
+    assert confirmed2 is False
+    assert atype2 is None
+    assert avail2 is False
+    print("PASS: flow confirmation unit test -- real hit confirms, no hit stays unavailable")
 
 
 def test_bearish_direction_never_fires_even_at_high_score():
@@ -177,6 +232,8 @@ if __name__ == "__main__":
     test_ignition_only_below_threshold_no_action()
     test_full_stack_bullish_alignment_fires_buy()
     test_full_stack_without_rsi_history_does_not_fire()
+    test_full_stack_without_flow_anomaly_does_not_fire()
+    test_flow_confirmation_unit()
     test_rsi_cross_math_matches_hand_verification()
     test_bearish_direction_never_fires_even_at_high_score()
     test_long_gamma_regime_dampens_amplifier_score()

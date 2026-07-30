@@ -88,6 +88,30 @@ NOT implemented -- no free, live earnings-calendar or IV-rank data source
 exists anywhere in this codebase (the Robinhood MCP earnings tools used
 elsewhere this session are only reachable from an interactive chat session,
 not from the deployed server), and none was fabricated to fill that gap.
+
+UNUSUAL OPTIONS FLOW CONFIRMATION (added 2026-07-30, correcting an earlier
+error): this was first said to have "no free equivalent" -- wrong.
+`options_anomaly_engine.py` is a real, already-live, auto-started engine
+(confirmed by the operator posting its Discord alerts) that scans real
+Tradier chains every 5 minutes and flags real whale prints (>=$100K
+premium), volume/OI surges, IV spikes, and skew breaks via rolling
+z-score baselines -- a genuine, free substitute for the pasted bot's
+"unusual options flow" trigger. Wired here as a second required gate
+(alongside RSI-cross) via `options_anomaly_engine.get_recent_anomaly()`.
+Honest limitation, disclosed not hidden: that engine's own scan universe
+is independently ranked/capped, so a symbol Squeeze Fuel evaluates may
+simply never have been scanned by it recently -- this gate then correctly
+reports unavailable/unconfirmed rather than guessing, same fail-closed
+convention as RSI.
+
+LIVE-ARMING (2026-07-30, operator directive): armed for real trading via
+IAM_PRIMARY_SYSTEM despite zero backtest evidence -- an explicit, informed
+decision after the no-evidence status was disclosed plainly (same pattern
+as the S/R Zone+Pattern engine's arming). Per operator directive
+("set it to 1 buy for now"), squeeze_fuel_scanner.py enforces a real,
+self-healing cap on concurrently open Squeeze-Fuel-originated equity
+positions (SQUEEZE_FUEL_MAX_OPEN_POSITIONS, default 1) before this engine
+will fire a new BUY.
 """
 from __future__ import annotations
 
@@ -105,6 +129,8 @@ ENTRY_THRESHOLD = 70.0  # composite score (0-100) required to fire a BUY
 
 RSI_PERIOD = 14
 RSI_CROSS_LEVEL = 50.0
+
+FLOW_MAX_AGE_S = 1800  # a real options_anomaly_engine.py anomaly counts as "recent" for 30 min
 
 
 def _sigmoid(x: float, center: float, steepness: float) -> float:
@@ -129,6 +155,10 @@ class FuelComponents:
     rsi_value: Optional[float] = None
     rsi_available: bool = False
     rsi_confirmed: bool = False
+    flow_available: bool = False
+    flow_confirmed: bool = False
+    flow_anomaly_type: Optional[str] = None
+    flow_severity: Optional[str] = None
 
     @property
     def composite(self) -> float:
@@ -150,6 +180,13 @@ class FuelComponents:
                 "available": self.rsi_available, "confirmed": self.rsi_confirmed,
                 "period": RSI_PERIOD, "cross_level": RSI_CROSS_LEVEL,
                 "note": "required gate, not a score component -- fails CLOSED (blocks BUY) when unavailable",
+            },
+            "flow_confirmation": {
+                "available": self.flow_available, "confirmed": self.flow_confirmed,
+                "anomaly_type": self.flow_anomaly_type, "severity": self.flow_severity,
+                "max_age_s": FLOW_MAX_AGE_S,
+                "note": "required gate from options_anomaly_engine.py's real whale-print/volume-surge/IV-spike "
+                        "detection -- fails CLOSED (blocks BUY) when that engine hasn't recently scanned this symbol",
             },
         }
 
@@ -264,6 +301,23 @@ def _rsi_confirmation(history: Optional[list]) -> tuple:
     return confirmed, rsi_now, True
 
 
+def _flow_confirmation(symbol: str) -> tuple:
+    """Returns (confirmed, anomaly_type, severity, available). Queries
+    options_anomaly_engine.py's real, already-running whale-print/volume-
+    surge/IV-spike/skew-break detector for a recent hit on this symbol.
+    Direction-agnostic by design (matches the pasted reference bot's own
+    "unusual flow" trigger, which also doesn't itself claim direction --
+    bullish confirmation comes separately from the ignition score)."""
+    try:
+        from options_anomaly_engine import get_recent_anomaly
+        hit = get_recent_anomaly(symbol, max_age_s=FLOW_MAX_AGE_S)
+    except Exception:
+        return False, None, None, False
+    if not hit:
+        return False, None, None, False
+    return True, hit.get("anomaly_type"), hit.get("severity"), True
+
+
 def compute_fuel(symbol: str, quote_data: Optional[dict] = None, history: Optional[list] = None,
                   raw_chain: Optional[dict] = None) -> FuelComponents:
     spot = float((quote_data or {}).get("price", 0) or 0)
@@ -272,12 +326,15 @@ def compute_fuel(symbol: str, quote_data: Optional[dict] = None, history: Option
     sv_fuel, sv_avail = _short_vol_fuel_score(symbol)
     gamma_amp, gamma_avail, gamma_regime = _gamma_amp_score(symbol, raw_chain, spot)
     rsi_confirmed, rsi_value, rsi_avail = _rsi_confirmation(history)
+    flow_confirmed, flow_type, flow_sev, flow_avail = _flow_confirmation(symbol)
     comp = FuelComponents(
         ignition=ignition, ignition_available=ign_avail,
         ftd_fuel=ftd_fuel, ftd_available=ftd_avail, on_threshold_list=on_list,
         short_vol_fuel=sv_fuel, short_vol_available=sv_avail,
         gamma_amp=gamma_amp, gamma_available=gamma_avail, gamma_regime=gamma_regime,
         rsi_value=rsi_value, rsi_available=rsi_avail, rsi_confirmed=rsi_confirmed,
+        flow_available=flow_avail, flow_confirmed=flow_confirmed,
+        flow_anomaly_type=flow_type, flow_severity=flow_sev,
     )
     comp._direction = direction  # stashed for analyze(); not part of the public dataclass fields
     return comp
@@ -290,7 +347,7 @@ def analyze(symbol: str, quote_data: Optional[dict] = None, history: Optional[li
     comp = compute_fuel(symbol, quote_data, history, raw_chain)
     direction = getattr(comp, "_direction", "NEUTRAL")
     action = "BUY" if (comp.composite >= ENTRY_THRESHOLD and direction == "BULLISH"
-                        and comp.rsi_confirmed) else None
+                        and comp.rsi_confirmed and comp.flow_confirmed) else None
     out = comp.as_dict()
     out["symbol"] = symbol.upper()
     out["direction"] = direction
@@ -299,6 +356,7 @@ def analyze(symbol: str, quote_data: Optional[dict] = None, history: Optional[li
     out["disclosure"] = (
         "No backtest evidence exists for this composite -- see module docstring. "
         "Weights are a transparent starting point, not curve-fit or validated. "
-        "RSI-cross-above-50 is a required additional gate (fails closed without real daily bars)."
+        "RSI-cross-above-50 and real options-flow-anomaly confirmation are both "
+        "required additional gates (each fails closed without real data)."
     )
     return out
