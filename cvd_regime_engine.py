@@ -12,10 +12,19 @@ ORIGIN: this is a corrected port of an operator-submitted Pine v6 script
 were found in that script during the port, one of them severe enough that the
 script could only form an opinion in a short burst after each higher-timeframe
 close, on a lookback it was never configured for, with an inert conviction filter
-and no position state. Backtest verdict for the CORRECTED strategy:
-docs/CVD_REGIME_BACKTEST_2026-07-30.md — NO DEMONSTRATED EDGE (PF 0.989 over 102
-trades, 8 sessions). Fixing the bugs made the script correct; it did not make it
-profitable, and nothing here should be read as claiming otherwise.
+and no position state.
+
+BACKTEST VERDICT for the CORRECTED strategy — read
+docs/CVD_REGIME_OPTIMIZATION_2026-07-30.md (which SUPERSEDES the verdict in
+docs/CVD_REGIME_BACKTEST_2026-07-30.md, whose conclusion came from only 8
+sessions). On 109 sessions x 8 symbols of real 5-min bars the shipped defaults are
+net positive (PF 1.090, +67.5% summed, 2222 trades) BUT: a 1000-config search
+produced zero configurations that survived out-of-sample (0 of 15), the edge
+decays monotonically Apr->Jul (PF 1.360 -> 0.916), and it averages just +0.030%
+of the underlying's move per trade — thinner than the bid/ask spread on the
+0.30-0.40 delta contracts this is meant to trade. DO NOT ARM LIVE. Fixing the
+bugs made the script correct; it did not make it profitable, and nothing here
+should be read as claiming otherwise.
 
 The bugs are listed here rather than silently corrected. Each claim below was measured, not assumed — the numbers
 come from tests/test_cvd_regime_engine_smoke.py, which reproduces the original

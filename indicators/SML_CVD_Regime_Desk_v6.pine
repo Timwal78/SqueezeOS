@@ -3,10 +3,16 @@
 // script (submitted 2026-07-30). Indicator only — draws signals, does not
 // backtest. Python twin (single source of truth): cvd_regime_engine.py.
 //
-// BACKTEST VERDICT — READ THIS BEFORE TRADING IT: NO DEMONSTRATED EDGE. Real
-// 5-minute bars, SPY/QQQ/IWM/NVDA/TSLA, 2026-07-20..29 (8 sessions): 102 trades,
-// 41.2% win rate, profit factor 0.989, -0.30% summed, 4 of 5 symbols lost money.
-// Method, sensitivity runs, limitations: docs/CVD_REGIME_BACKTEST_2026-07-30.md
+// BACKTEST VERDICT — READ THIS BEFORE TRADING IT: DO NOT ARM LIVE.
+// Real 5-min bars, 8 symbols (SPY QQQ IWM NVDA TSLA AMD AAPL MSFT), 109 sessions
+// 2026-02-23..07-29, 68k bars. Defaults are net positive over the whole span
+// (PF 1.090, +67.5% summed, 2222 trades) — BUT a 1000-config search produced ZERO
+// configurations that survived out-of-sample (0 of 15), the edge decays
+// monotonically Apr->Jul (PF 1.360 -> 1.225 -> 1.069 -> 0.916), and it averages
+// only +0.030% of the underlying's move per trade, which is thinner than the
+// bid/ask spread on the 0.30-0.40 delta contracts this is meant to trade.
+// Full method + numbers: docs/CVD_REGIME_OPTIMIZATION_2026-07-30.md
+// (supersedes the 8-session verdict in docs/CVD_REGIME_BACKTEST_2026-07-30.md)
 // Fixing the seven bugs below made this script CORRECT. It did not make it
 // profitable. Use it to watch regime and conviction, not as a proven signal.
 //
