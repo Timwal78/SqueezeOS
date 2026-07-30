@@ -433,10 +433,25 @@ class MMLeEngine:
             logger.warning(f"[MMLE] {symbol}: insufficient bars")
             return self._empty(symbol)
 
-        closes  = [float(b["close"])  for b in bars]
-        highs   = [float(b["high"])   for b in bars]
-        lows    = [float(b["low"])    for b in bars]
-        volumes = [float(b["volume"]) for b in bars]
+        # DataManager.get_bars() returns a DIFFERENT bar shape per provider:
+        # Tradier and Alpaca's raw REST bars use abbreviated keys (c/h/l/v),
+        # Polygon's wrapper translates to full words (close/high/low/volume) --
+        # see data_providers.py's get_bars() Tradier branch vs. get_aggregates().
+        # This hardcoded b["close"]/b["high"]/b["low"]/b["volume"] only ever
+        # worked when Polygon happened to be the active source; on any
+        # deployment where Tradier or Alpaca actually serves the bars (this
+        # one: sources_tradier=True), every single call raised KeyError:
+        # 'close', silently degrading _fetch_mmle() to {} and vpin to 0.0 on
+        # every symbol -- a real, live information-quality defect (bounded,
+        # not the AVTR-class garbage-price bug: 0.0 is a valid in-range VPIN
+        # value, so no price/quantity was corrupted, but the dark-pool-
+        # toxicity term of every "Stress: X%" in the live IAM rationale was
+        # silently missing with no disclosure). Same dual-key defensive read
+        # already used by core/api/triple_lock_bp.py's _fetch_bars().
+        closes  = [float(b.get("close") if b.get("close") is not None else b.get("c", 0))  for b in bars]
+        highs   = [float(b.get("high")  if b.get("high")  is not None else b.get("h", 0))  for b in bars]
+        lows    = [float(b.get("low")   if b.get("low")   is not None else b.get("l", 0))  for b in bars]
+        volumes = [float(b.get("volume") if b.get("volume") is not None else b.get("v", 0)) for b in bars]
 
         # ── VPIN ──────────────────────────────────────────────
         vpin_engine = self._get_vpin(symbol)
