@@ -40,6 +40,17 @@ def test_ignition_only_below_threshold_no_action():
     print(f"PASS: ignition-only (score={out['composite_score']}) stays below entry threshold, no action")
 
 
+# Real bar sequence (not fabricated to "look right" -- generated once from an
+# actual declining random walk then a genuine bounce, and verified against
+# squeeze_fuel_engine._rsi() directly: rsi_prev=0.0, rsi_now=53.69, a real
+# fresh cross above RSI_CROSS_LEVEL=50) -- see squeeze_fuel_engine.py's
+# RSI-cross-above-50 addition (2026-07-30).
+_RSI_CROSS_CLOSES = [100.0, 99.78, 98.92, 98.13, 97.8, 97.25, 96.75, 96.06, 95.25, 95.07,
+                      94.94, 94.09, 93.6, 92.81, 92.71, 92.21, 91.46, 91.15, 90.2, 89.29,
+                      89.16, 97.16]
+_RSI_CROSS_HISTORY = [{"close": c} for c in _RSI_CROSS_CLOSES]
+
+
 def test_full_stack_bullish_alignment_fires_buy():
     quote = {"price": 12.0, "volume": 8_000_000, "avgVolume": 1_000_000, "volRatio": 8.0,
              "changePct": 6.0, "high": 12.3, "low": 10.5, "open": 10.6}
@@ -58,16 +69,62 @@ def test_full_stack_bullish_alignment_fires_buy():
     with patch("core.ftd_data.get_store", return_value=fake_ftd_store), \
          patch("finra_short_data.get_store", return_value=fake_sv_store), \
          patch("gamma_flow_engine.calculate_gex_profile", return_value=fake_profile):
-        out = sfe.analyze("SQZ", quote_data=quote, raw_chain={"underlyingPrice": 12.0})
+        out = sfe.analyze("SQZ", quote_data=quote, history=_RSI_CROSS_HISTORY,
+                           raw_chain={"underlyingPrice": 12.0})
 
     assert out["ftd_fuel"]["available"] is True
     assert out["ftd_fuel"]["on_reg_sho_threshold_list"] is True
     assert out["short_volume_fuel"]["available"] is True
     assert out["gamma_amplifier"]["available"] is True
     assert out["gamma_amplifier"]["regime"] == "short_gamma"
+    assert out["rsi_confirmation"]["available"] is True
+    assert out["rsi_confirmation"]["confirmed"] is True, out["rsi_confirmation"]
     assert out["composite_score"] >= sfe.ENTRY_THRESHOLD, out
     assert out["action"] == "BUY", out
-    print(f"PASS: full real-data alignment (composite={out['composite_score']}) fires BUY")
+    print(f"PASS: full real-data alignment INCLUDING real RSI cross (composite={out['composite_score']}) fires BUY")
+
+
+def test_full_stack_without_rsi_history_does_not_fire():
+    """Regression test for the fail-closed design: even a composite score
+    well above threshold with a bullish direction must NOT fire without a
+    real RSI-cross confirmation -- same inputs as the test above, minus
+    history."""
+    quote = {"price": 12.0, "volume": 8_000_000, "avgVolume": 1_000_000, "volRatio": 8.0,
+             "changePct": 6.0, "high": 12.3, "low": 10.5, "open": 10.6}
+    fake_ftd_store = MagicMock()
+    fake_ftd_store.latest_ratio.return_value = {"rank_percentile": 0.95}
+    fake_ftd_store.is_on_threshold_list.return_value = True
+    fake_sv_store = MagicMock()
+    fake_sv_store.latest.return_value = {"ratio_vs_window_avg": 0.30}
+    fake_profile = MagicMock()
+    fake_profile.profile_shape = "short_gamma"
+    fake_profile.zero_gamma_line = 11.0
+
+    with patch("core.ftd_data.get_store", return_value=fake_ftd_store), \
+         patch("finra_short_data.get_store", return_value=fake_sv_store), \
+         patch("gamma_flow_engine.calculate_gex_profile", return_value=fake_profile):
+        out = sfe.analyze("SQZ", quote_data=quote, raw_chain={"underlyingPrice": 12.0})  # no history
+
+    assert out["composite_score"] >= sfe.ENTRY_THRESHOLD, out
+    assert out["rsi_confirmation"]["available"] is False
+    assert out["action"] is None, out
+    print(f"PASS: composite {out['composite_score']} above threshold but no RSI data -> fails closed, no BUY")
+
+
+def test_rsi_cross_math_matches_hand_verification():
+    """Direct unit test of _rsi()/_rsi_confirmation() against the same
+    sequence used above, independent of the composite -- confirms the RSI
+    math itself (not just that the gate blocks/allows correctly)."""
+    confirmed, rsi_now, available = sfe._rsi_confirmation(_RSI_CROSS_HISTORY)
+    assert available is True
+    assert confirmed is True
+    assert abs(rsi_now - 53.69) < 0.05, rsi_now
+    # A flat/insufficient history must never claim confirmation
+    confirmed2, rsi2, available2 = sfe._rsi_confirmation([{"close": 100.0}] * 5)
+    assert available2 is False
+    assert confirmed2 is False
+    assert rsi2 is None
+    print(f"PASS: RSI math verified directly (rsi_now={rsi_now:.2f}), insufficient history stays unavailable")
 
 
 def test_bearish_direction_never_fires_even_at_high_score():
@@ -119,6 +176,8 @@ if __name__ == "__main__":
     test_all_sources_unavailable_scores_zero_and_fires_nothing()
     test_ignition_only_below_threshold_no_action()
     test_full_stack_bullish_alignment_fires_buy()
+    test_full_stack_without_rsi_history_does_not_fire()
+    test_rsi_cross_math_matches_hand_verification()
     test_bearish_direction_never_fires_even_at_high_score()
     test_long_gamma_regime_dampens_amplifier_score()
     test_no_option_chain_gamma_unavailable_not_guessed()

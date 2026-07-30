@@ -32,6 +32,10 @@ _INTERVAL        = int(float(os.environ.get("SQUEEZE_FUEL_SCAN_INTERVAL", "300")
 _SCAN_TOP_N      = int(os.environ.get("SQUEEZE_FUEL_SCAN_TOP_N", "10"))
 _MAX_EXPIRATIONS = int(os.environ.get("SQUEEZE_FUEL_MAX_EXPIRATIONS", "8"))
 _PULL_CHAIN      = os.environ.get("SQUEEZE_FUEL_PULL_CHAIN", "true").strip().lower() == "true"
+# Real daily bars for the RSI-cross-above-50 confirmation gate added
+# 2026-07-30 to squeeze_fuel_engine.py -- previously this scanner never
+# fetched/passed `history` at all, so that gate could never be satisfied.
+_BARS_LIMIT      = int(os.environ.get("SQUEEZE_FUEL_BARS_LIMIT", "60"))
 
 _started = False
 _lock = threading.Lock()
@@ -80,6 +84,17 @@ def _fetch_chain(symbol: str):
         return None
 
 
+def _fetch_history(symbol: str):
+    try:
+        from core.legacy import get_service
+        dm = get_service("dm")
+        if not dm:
+            return None
+        return dm.get_bars(symbol, "1D", _BARS_LIMIT) or None
+    except Exception:
+        return None
+
+
 def scan_once() -> int:
     from squeeze_fuel_engine import analyze
     from core.state import state
@@ -97,7 +112,8 @@ def scan_once() -> int:
                 continue
 
             raw_chain = _fetch_chain(sym)
-            result = analyze(sym, quote_data=quote, raw_chain=raw_chain)
+            history = _fetch_history(sym)
+            result = analyze(sym, quote_data=quote, history=history, raw_chain=raw_chain)
 
             try:
                 import core.signal_history as signal_history
@@ -129,7 +145,9 @@ def scan_once() -> int:
                                          f"{' [ON THRESHOLD LIST]' if result['ftd_fuel']['on_reg_sho_threshold_list'] else ''}, "
                                          f"short-vol pressure {result['short_volume_fuel']['score']}/20, "
                                          f"gamma amp {result['gamma_amplifier']['score']}/20 "
-                                         f"[{result['gamma_amplifier']['regime'] or 'no chain'}]) — "
+                                         f"[{result['gamma_amplifier']['regime'] or 'no chain'}]), "
+                                         f"RSI {result['rsi_confirmation']['value']} crossed above "
+                                         f"{result['rsi_confirmation']['cross_level']} — "
                                          f"NO BACKTEST EVIDENCE, see squeeze_fuel_engine.py docstring",
                 "vehicle":               sym,
                 "resolution_confidence": conf,

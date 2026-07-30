@@ -64,6 +64,30 @@ breakout_engine.py's and mm_intel_scanner.py's docstrings for their own
 narrower live-signal mappings). Downside protection on any live position
 this fires comes from iam_executor's own real stop-loss order
 (IAM_STOP_LOSS_PCT), exactly like every other entry-only engine here.
+
+RSI-CROSS-ABOVE-50 CONFIRMATION (added 2026-07-30, operator directive):
+a free-data-only re-implementation of a real 3-tier short-squeeze
+screener the operator uses in another app (Ortex short-interest + Unusual
+Whales options-flow paid feeds, which the operator explicitly does not
+have and does not want to pay for). Ortex/UW have no free equivalent
+anywhere in this codebase -- not faked. This composite already covers the
+"fuel" side for free (FTD + FINRA short-volume + gamma, real regulatory/
+market data). The pasted bot's third tier-2 trigger -- RSI crossing above
+50, a real, free momentum-confirmation signal computable from ordinary
+daily bars -- is added here as a REQUIRED additional gate on top of the
+existing composite/direction check, using the exact same
+average-gain/average-loss RSI formula as the operator's pasted reference
+implementation (not Wilder's smoothed variant, to match what they're used
+to seeing). Requires the scanner to actually pass real daily `history` bars
+(previously it did not -- see squeeze_fuel_scanner.py's fetch addition);
+fails CLOSED (no BUY) when history is missing or too short to compute RSI,
+consistent with this being an added selectivity filter, not a soft hint --
+a silent fail-open here would quietly remove the exact protection it was
+added for. Earnings-blackout and IV-rank exclusions from the pasted bot are
+NOT implemented -- no free, live earnings-calendar or IV-rank data source
+exists anywhere in this codebase (the Robinhood MCP earnings tools used
+elsewhere this session are only reachable from an interactive chat session,
+not from the deployed server), and none was fabricated to fill that gap.
 """
 from __future__ import annotations
 
@@ -78,6 +102,9 @@ SHORT_VOL_WEIGHT = 20.0
 GAMMA_WEIGHT = 20.0
 
 ENTRY_THRESHOLD = 70.0  # composite score (0-100) required to fire a BUY
+
+RSI_PERIOD = 14
+RSI_CROSS_LEVEL = 50.0
 
 
 def _sigmoid(x: float, center: float, steepness: float) -> float:
@@ -99,6 +126,9 @@ class FuelComponents:
     gamma_amp: float
     gamma_available: bool
     gamma_regime: Optional[str]
+    rsi_value: Optional[float] = None
+    rsi_available: bool = False
+    rsi_confirmed: bool = False
 
     @property
     def composite(self) -> float:
@@ -115,6 +145,12 @@ class FuelComponents:
                                    "note": "FINRA short VOLUME proxy, not short INTEREST -- see finra_short_data.py docstring"},
             "gamma_amplifier": {"score": round(self.gamma_amp, 2), "max": GAMMA_WEIGHT,
                                  "available": self.gamma_available, "regime": self.gamma_regime},
+            "rsi_confirmation": {
+                "value": round(self.rsi_value, 2) if self.rsi_value is not None else None,
+                "available": self.rsi_available, "confirmed": self.rsi_confirmed,
+                "period": RSI_PERIOD, "cross_level": RSI_CROSS_LEVEL,
+                "note": "required gate, not a score component -- fails CLOSED (blocks BUY) when unavailable",
+            },
         }
 
 
@@ -180,6 +216,54 @@ def _gamma_amp_score(symbol: str, raw_chain: Optional[dict], spot: float) -> tup
     return round(score, 2), True, profile.profile_shape
 
 
+def _bar_close(bar: dict) -> Optional[float]:
+    v = bar.get("close")
+    if v is None:
+        v = bar.get("c")
+    try:
+        return float(v) if v is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _rsi(closes: list, period: int = RSI_PERIOD) -> Optional[float]:
+    """Simple average-gain/average-loss RSI (not Wilder's smoothed variant) --
+    matches the exact formula in the operator's pasted reference bot, so the
+    number means the same thing they're used to seeing elsewhere."""
+    if len(closes) < period + 1:
+        return None
+    gains, losses = [], []
+    for i in range(1, len(closes)):
+        d = closes[i] - closes[i - 1]
+        gains.append(max(d, 0.0))
+        losses.append(max(-d, 0.0))
+    if len(gains) < period:
+        return None
+    avg_gain = sum(gains[-period:]) / period
+    avg_loss = sum(losses[-period:]) / period
+    if avg_loss == 0:
+        return 100.0
+    rs = avg_gain / avg_loss
+    return 100.0 - (100.0 / (1.0 + rs))
+
+
+def _rsi_confirmation(history: Optional[list]) -> tuple:
+    """Returns (confirmed, rsi_now, available). Fresh cross only: RSI was
+    below RSI_CROSS_LEVEL on the prior bar and at/above it on the latest bar
+    -- same semantics as the pasted reference bot's rsi_crossed_above()."""
+    if not history:
+        return False, None, False
+    closes = [c for c in (_bar_close(b) for b in history) if c is not None]
+    if len(closes) < RSI_PERIOD + 2:
+        return False, None, False
+    rsi_prev = _rsi(closes[:-1])
+    rsi_now = _rsi(closes)
+    if rsi_prev is None or rsi_now is None:
+        return False, None, False
+    confirmed = rsi_prev < RSI_CROSS_LEVEL <= rsi_now
+    return confirmed, rsi_now, True
+
+
 def compute_fuel(symbol: str, quote_data: Optional[dict] = None, history: Optional[list] = None,
                   raw_chain: Optional[dict] = None) -> FuelComponents:
     spot = float((quote_data or {}).get("price", 0) or 0)
@@ -187,11 +271,13 @@ def compute_fuel(symbol: str, quote_data: Optional[dict] = None, history: Option
     ftd_fuel, ftd_avail, on_list = _ftd_fuel_score(symbol)
     sv_fuel, sv_avail = _short_vol_fuel_score(symbol)
     gamma_amp, gamma_avail, gamma_regime = _gamma_amp_score(symbol, raw_chain, spot)
+    rsi_confirmed, rsi_value, rsi_avail = _rsi_confirmation(history)
     comp = FuelComponents(
         ignition=ignition, ignition_available=ign_avail,
         ftd_fuel=ftd_fuel, ftd_available=ftd_avail, on_threshold_list=on_list,
         short_vol_fuel=sv_fuel, short_vol_available=sv_avail,
         gamma_amp=gamma_amp, gamma_available=gamma_avail, gamma_regime=gamma_regime,
+        rsi_value=rsi_value, rsi_available=rsi_avail, rsi_confirmed=rsi_confirmed,
     )
     comp._direction = direction  # stashed for analyze(); not part of the public dataclass fields
     return comp
@@ -203,7 +289,8 @@ def analyze(symbol: str, quote_data: Optional[dict] = None, history: Optional[li
     engine's analyze() in this codebase (druck_engine.py, orb_engine.py)."""
     comp = compute_fuel(symbol, quote_data, history, raw_chain)
     direction = getattr(comp, "_direction", "NEUTRAL")
-    action = "BUY" if (comp.composite >= ENTRY_THRESHOLD and direction == "BULLISH") else None
+    action = "BUY" if (comp.composite >= ENTRY_THRESHOLD and direction == "BULLISH"
+                        and comp.rsi_confirmed) else None
     out = comp.as_dict()
     out["symbol"] = symbol.upper()
     out["direction"] = direction
@@ -211,6 +298,7 @@ def analyze(symbol: str, quote_data: Optional[dict] = None, history: Optional[li
     out["entry_threshold"] = ENTRY_THRESHOLD
     out["disclosure"] = (
         "No backtest evidence exists for this composite -- see module docstring. "
-        "Weights are a transparent starting point, not curve-fit or validated."
+        "Weights are a transparent starting point, not curve-fit or validated. "
+        "RSI-cross-above-50 is a required additional gate (fails closed without real daily bars)."
     )
     return out

@@ -91,3 +91,15 @@ def test_exit_mode_atr_target_sets_stop_and_target_on_entry():
     # under this mode and produce a well-formed output for every bar.
     assert len(out["live_signal"]) == len(bars)
     assert all(sig in (None, "BUY", "SELL") for sig in out["live_signal"])
+    print("PASS: atr_target exit mode sets stop/target and runs clean end-to-end")
+
+
+if __name__ == "__main__":
+    test_no_crash_on_empty_and_short_series()
+    print("PASS: no crash on empty/short series")
+    test_no_duplicate_zone_spam_on_synthetic_data()
+    print("PASS: no duplicate zone spam (regression fix verified)")
+    test_detect_patterns_needs_two_prior_bars()
+    print("PASS: pattern detection needs 2 prior bars")
+    test_exit_mode_atr_target_sets_stop_and_target_on_entry()
+    print("\nAll tests passed.")

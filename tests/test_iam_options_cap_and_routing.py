@@ -113,6 +113,7 @@ def test_chain_fetch_uses_real_functions_not_nonexistent_get_option_chain():
 def test_options_systems_override_forces_calls_even_in_equity_mode():
     with patch.dict(os.environ, {"IAM_INSTRUMENT": "equity", "IAM_OPTIONS_SYSTEMS": "SML_SR_MATRIX"}), \
          patch.object(iam_executor, "claim_entry", return_value=True), \
+         patch.object(iam_executor, "_is_extended_hours", return_value=False), \
          patch.object(iam_executor, "_execute_tradier_options", return_value={"status": "success"}) as mock_opt, \
          patch.object(iam_executor, "_execute_tradier_equity") as mock_eq:
         resolution = {"system": "SML_SR_MATRIX"}
@@ -125,6 +126,7 @@ def test_options_systems_override_forces_calls_even_in_equity_mode():
 def test_non_listed_system_stays_on_global_equity_setting():
     with patch.dict(os.environ, {"IAM_INSTRUMENT": "equity", "IAM_OPTIONS_SYSTEMS": "SML_SR_MATRIX"}), \
          patch.object(iam_executor, "claim_entry", return_value=True), \
+         patch.object(iam_executor, "_is_extended_hours", return_value=False), \
          patch.object(iam_executor, "_execute_tradier_options") as mock_opt, \
          patch.object(iam_executor, "_execute_tradier_equity", return_value={"status": "success"}) as mock_eq:
         resolution = {"system": "SML_CASCADE"}
@@ -142,6 +144,7 @@ def test_comma_list_instrument_value_does_not_parse_as_options():
     single value (\"options\" or \"auto\"), not a comma list."""
     with patch.dict(os.environ, {"IAM_INSTRUMENT": "equity,options", "IAM_OPTIONS_SYSTEMS": ""}), \
          patch.object(iam_executor, "claim_entry", return_value=True), \
+         patch.object(iam_executor, "_is_extended_hours", return_value=False), \
          patch.object(iam_executor, "_execute_tradier_options") as mock_opt, \
          patch.object(iam_executor, "_execute_tradier_equity", return_value={"status": "success"}) as mock_eq:
         resolution = {"system": "SML_CASCADE"}
