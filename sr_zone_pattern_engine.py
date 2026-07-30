@@ -24,6 +24,7 @@ Candlestick pattern formulas are ported byte-for-byte from the Pine source
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Optional
 
@@ -36,6 +37,34 @@ class ZonePatternParams:
     exit_mode: str = "opposite_zone"  # "opposite_zone" | "atr_target"
     atr_stop_mult: float = 1.5
     atr_target_mult: float = 3.0
+    # Proximity buffer around a zone's [l, h] band, as a fraction of the
+    # zone's own height (e.g. 3.0 = extend the zone by 3x its own height on
+    # each side). Requiring the close to land EXACTLY inside a zone's narrow
+    # candle-body range (buffer=0) turned out to almost never coincide with a
+    # qualifying candlestick pattern on real data -- measured on 7 real
+    # symbols / 4.5 years: patterns fire on ~8-9% of bars, zones exist for
+    # a meaningful fraction of time too, but their exact-overlap is only 1-3
+    # trades total (docs/SR_ZONE_PATTERN_BACKTEST_2026-07-30.md). A small
+    # proximity buffer -- "near a zone" rather than "exactly inside its
+    # narrow candle-body band" -- is a real, common S/R-tool convention (the
+    # original Pine script itself has separate "near zone" proximity alerts
+    # distinct from its containment logic), not a parameter tuned to force a
+    # result. Default kept conservative (3x zone height, not the most
+    # aggressive value tested) -- see docs/SR_ZONE_PATTERN_BACKTEST_2026-07-30.md
+    # for the sensitivity sweep this default was chosen from.
+    zone_buffer_pct: float = 3.0
+
+    @classmethod
+    def from_env(cls) -> "ZonePatternParams":
+        return cls(
+            bars=int(os.environ.get("SR_ZONE_PATTERN_BARS", "10")),
+            no_of_pivots=int(os.environ.get("SR_ZONE_PATTERN_NO_OF_PIVOTS", "2")),
+            zone_expiry=int(os.environ.get("SR_ZONE_PATTERN_ZONE_EXPIRY", "200")),
+            exit_mode=os.environ.get("SR_ZONE_PATTERN_EXIT_MODE", "atr_target"),
+            atr_stop_mult=float(os.environ.get("SR_ZONE_PATTERN_ATR_STOP_MULT", "1.5")),
+            atr_target_mult=float(os.environ.get("SR_ZONE_PATTERN_ATR_TARGET_MULT", "3.0")),
+            zone_buffer_pct=float(os.environ.get("SR_ZONE_PATTERN_ZONE_BUFFER_PCT", "3.0")),
+        )
 
 
 def _bar_val(bar: dict, *keys, default=0.0) -> float:
@@ -51,6 +80,10 @@ def _bar_val(bar: dict, *keys, default=0.0) -> float:
 
 def _true_range(h, l, pc):
     return max(h - l, abs(h - pc), abs(l - pc))
+
+
+def _bar_key(bar: dict, idx: int) -> str:
+    return str(bar.get("date") or bar.get("t") or bar.get("timestamp") or idx)
 
 
 def _detect_patterns(o, h, l, c, i):
@@ -192,12 +225,18 @@ def compute_series(bars: list, p: ZonePatternParams = None) -> dict:
 
         if bull_pat:
             for z in sup_zones:
-                if not z["broken"] and z["l"] <= c[i] <= z["h"]:
+                if z["broken"]:
+                    continue
+                buf = (z["h"] - z["l"]) * p.zone_buffer_pct
+                if z["l"] - buf <= c[i] <= z["h"] + buf:
                     bullish_at_support = True
                     break
         if bear_pat:
             for z in res_zones:
-                if not z["broken"] and z["l"] <= c[i] <= z["h"]:
+                if z["broken"]:
+                    continue
+                buf = (z["h"] - z["l"]) * p.zone_buffer_pct
+                if z["l"] - buf <= c[i] <= z["h"] + buf:
                     bearish_at_resistance = True
                     break
 
@@ -244,3 +283,20 @@ def compute_series(bars: list, p: ZonePatternParams = None) -> dict:
                     target_price = close + p.atr_target_mult * atr
 
     return {"events": events, "live_signal": live_signal, "pnl_pct": pnl_pct}
+
+
+def analyze(symbol: str, bars: list, p: ZonePatternParams = None) -> dict:
+    """On-demand latest-bar wrapper, same convention as breakout_engine.py/
+    sr_matrix_engine.py -- used by both the scanner and the status blueprint."""
+    p = p or ZonePatternParams.from_env()
+    if not bars or len(bars) < p.bars * 2 + 2:
+        return {"status": "error", "message": "insufficient daily bars", "symbol": symbol}
+    out = compute_series(bars, p)
+    last = len(bars) - 1
+    return {
+        "status": "success",
+        "symbol": symbol,
+        "event": out["events"][last],
+        "live_signal": out["live_signal"][last],
+        "bars": len(bars),
+    }
