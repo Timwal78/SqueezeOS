@@ -429,6 +429,17 @@ def _poll_patents():
     Fails safe already (caught, logged, retried every poll_interval_s); this
     poller doesn't touch trading. Revisit once someone has an ODP API key and
     has confirmed which new endpoint actually serves this data.
+
+    UPDATE 2026-07-30 (later same night): operator obtained a real
+    USPTO_ODP_API_KEY (see .env.example) -- but the rebuild is still deferred,
+    not done. This dev sandbox has api.uspto.gov network-policy-blocked
+    (confirmed via $HTTPS_PROXY/__agentproxy/status), so nothing could be
+    tested end-to-end, and the ODP transition-guide page shows BULK DATA
+    DOWNLOADS (periodic files), not an obvious live search endpoint -- the
+    real fix is likely a different poller shape (fetch + diff periodic bulk
+    files) rather than a URL swap. Key is stored and ready; do not wire a
+    guessed endpoint against it without verifying from an environment that can
+    actually reach api.uspto.gov (e.g. Render itself).
     """
     seen: set = set()
     while True:
