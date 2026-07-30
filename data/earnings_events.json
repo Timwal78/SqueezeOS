@@ -1,0 +1,130 @@
+{
+"AAPL": [
+{"symbol":"AAPL","year":2025,"quarter":1,"eps":{"estimate":"2.340000","actual":"2.400000"},"report":{"date":"2025-01-30","timing":"pm","verified":true}},
+{"symbol":"AAPL","year":2025,"quarter":2,"eps":{"estimate":"1.630000","actual":"1.650000"},"report":{"date":"2025-05-01","timing":"pm","verified":true}},
+{"symbol":"AAPL","year":2025,"quarter":3,"eps":{"estimate":"1.420000","actual":"1.570000"},"report":{"date":"2025-07-31","timing":"pm","verified":true}},
+{"symbol":"AAPL","year":2025,"quarter":4,"eps":{"estimate":"1.750000","actual":"1.850000"},"report":{"date":"2025-10-30","timing":"pm","verified":true}},
+{"symbol":"AAPL","year":2026,"quarter":1,"eps":{"estimate":"2.660000","actual":"2.840000"},"report":{"date":"2026-01-29","timing":"pm","verified":true}},
+{"symbol":"AAPL","year":2026,"quarter":2,"eps":{"estimate":"1.940000","actual":"2.010000"},"report":{"date":"2026-04-30","timing":"pm","verified":true}},
+{"symbol":"AAPL","year":2026,"quarter":3,"eps":{"estimate":"1.890000","actual":null},"report":{"date":"2026-07-30","timing":"pm","verified":true}}
+],
+"MSFT": [
+{"symbol":"MSFT","year":2025,"quarter":2,"eps":{"estimate":"3.100000","actual":"3.230000"},"report":{"date":"2025-01-29","timing":"pm","verified":true}},
+{"symbol":"MSFT","year":2025,"quarter":3,"eps":{"estimate":"3.220000","actual":"3.460000"},"report":{"date":"2025-04-30","timing":"pm","verified":true}},
+{"symbol":"MSFT","year":2025,"quarter":4,"eps":{"estimate":"3.370000","actual":"3.650000"},"report":{"date":"2025-07-30","timing":"pm","verified":true}},
+{"symbol":"MSFT","year":2026,"quarter":1,"eps":{"estimate":"3.660000","actual":"4.130000"},"report":{"date":"2025-10-29","timing":"pm","verified":true}},
+{"symbol":"MSFT","year":2026,"quarter":2,"eps":{"estimate":"3.860000","actual":"4.140000"},"report":{"date":"2026-01-28","timing":"pm","verified":true}},
+{"symbol":"MSFT","year":2026,"quarter":3,"eps":{"estimate":"4.070000","actual":"4.270000"},"report":{"date":"2026-04-29","timing":"pm","verified":true}},
+{"symbol":"MSFT","year":2026,"quarter":4,"eps":{"estimate":"4.230000","actual":"4.740000"},"report":{"date":"2026-07-29","timing":"pm","verified":true}}
+],
+"NVDA": [
+{"symbol":"NVDA","year":2025,"quarter":4,"eps":{"estimate":"0.840000","actual":"0.890000"},"report":{"date":"2025-02-26","timing":"pm","verified":true}},
+{"symbol":"NVDA","year":2026,"quarter":1,"eps":{"estimate":"0.750000","actual":"0.960000"},"report":{"date":"2025-05-28","timing":"pm","verified":true}},
+{"symbol":"NVDA","year":2026,"quarter":2,"eps":{"estimate":"0.980000","actual":"1.040000"},"report":{"date":"2025-08-27","timing":"pm","verified":true}},
+{"symbol":"NVDA","year":2026,"quarter":3,"eps":{"estimate":"1.220000","actual":"1.300000"},"report":{"date":"2025-11-19","timing":"pm","verified":true}},
+{"symbol":"NVDA","year":2026,"quarter":4,"eps":{"estimate":"1.500000","actual":"1.620000"},"report":{"date":"2026-02-25","timing":"pm","verified":true}},
+{"symbol":"NVDA","year":2027,"quarter":1,"eps":{"estimate":"1.760000","actual":"1.870000"},"report":{"date":"2026-05-20","timing":"pm","verified":true}}
+],
+"TSLA": [
+{"symbol":"TSLA","year":2024,"quarter":4,"eps":{"estimate":"0.770000","actual":"0.730000"},"report":{"date":"2025-01-29","timing":"pm","verified":true}},
+{"symbol":"TSLA","year":2025,"quarter":1,"eps":{"estimate":"0.410000","actual":"0.270000"},"report":{"date":"2025-04-22","timing":"pm","verified":true}},
+{"symbol":"TSLA","year":2025,"quarter":2,"eps":{"estimate":"0.350000","actual":"0.400000"},"report":{"date":"2025-07-23","timing":"pm","verified":true}},
+{"symbol":"TSLA","year":2025,"quarter":3,"eps":{"estimate":"0.500000","actual":"0.500000"},"report":{"date":"2025-10-22","timing":"pm","verified":true}},
+{"symbol":"TSLA","year":2025,"quarter":4,"eps":{"estimate":"0.400000","actual":"0.500000"},"report":{"date":"2026-01-28","timing":"pm","verified":true}},
+{"symbol":"TSLA","year":2026,"quarter":1,"eps":{"estimate":"0.300000","actual":"0.410000"},"report":{"date":"2026-04-22","timing":"pm","verified":true}},
+{"symbol":"TSLA","year":2026,"quarter":2,"eps":{"estimate":"0.440000","actual":"0.330000"},"report":{"date":"2026-07-22","timing":"pm","verified":true}}
+],
+"AMZN": [
+{"symbol":"AMZN","year":2024,"quarter":4,"eps":{"estimate":"1.480000","actual":"1.860000"},"report":{"date":"2025-02-06","timing":"pm","verified":true}},
+{"symbol":"AMZN","year":2025,"quarter":1,"eps":{"estimate":"1.360000","actual":"1.590000"},"report":{"date":"2025-05-01","timing":"pm","verified":true}},
+{"symbol":"AMZN","year":2025,"quarter":2,"eps":{"estimate":"1.330000","actual":"1.680000"},"report":{"date":"2025-07-31","timing":"pm","verified":true}},
+{"symbol":"AMZN","year":2025,"quarter":3,"eps":{"estimate":"1.570000","actual":"1.950000"},"report":{"date":"2025-10-30","timing":"pm","verified":true}},
+{"symbol":"AMZN","year":2025,"quarter":4,"eps":{"estimate":"1.970000","actual":"1.950000"},"report":{"date":"2026-02-05","timing":"pm","verified":true}},
+{"symbol":"AMZN","year":2026,"quarter":1,"eps":{"estimate":"1.640000","actual":"2.780000"},"report":{"date":"2026-04-29","timing":"pm","verified":true}}
+],
+"GOOGL": [
+{"symbol":"GOOGL","year":2024,"quarter":4,"eps":{"estimate":"2.130000","actual":"2.150000"},"report":{"date":"2025-02-04","timing":"pm","verified":true}},
+{"symbol":"GOOGL","year":2025,"quarter":1,"eps":{"estimate":"2.020000","actual":"2.810000"},"report":{"date":"2025-04-24","timing":"pm","verified":true}},
+{"symbol":"GOOGL","year":2025,"quarter":2,"eps":{"estimate":"2.160000","actual":"2.310000"},"report":{"date":"2025-07-23","timing":"pm","verified":true}},
+{"symbol":"GOOGL","year":2025,"quarter":3,"eps":{"estimate":"2.270000","actual":"2.870000"},"report":{"date":"2025-10-29","timing":"pm","verified":true}},
+{"symbol":"GOOGL","year":2025,"quarter":4,"eps":{"estimate":"2.610000","actual":"2.820000"},"report":{"date":"2026-02-04","timing":"pm","verified":true}},
+{"symbol":"GOOGL","year":2026,"quarter":1,"eps":{"estimate":"2.660000","actual":"5.110000"},"report":{"date":"2026-04-29","timing":"pm","verified":true}},
+{"symbol":"GOOGL","year":2026,"quarter":2,"eps":{"estimate":"2.870000","actual":"9.110000"},"report":{"date":"2026-07-22","timing":"pm","verified":true}}
+],
+"META": [
+{"symbol":"META","year":2024,"quarter":4,"eps":{"estimate":"6.760000","actual":"8.020000"},"report":{"date":"2025-01-29","timing":"pm","verified":true}},
+{"symbol":"META","year":2025,"quarter":1,"eps":{"estimate":"5.280000","actual":"6.430000"},"report":{"date":"2025-04-30","timing":"pm","verified":true}},
+{"symbol":"META","year":2025,"quarter":2,"eps":{"estimate":"5.870000","actual":"7.140000"},"report":{"date":"2025-07-30","timing":"pm","verified":true}},
+{"symbol":"META","year":2025,"quarter":3,"eps":{"estimate":"6.660000","actual":"7.250000"},"report":{"date":"2025-10-29","timing":"pm","verified":true}},
+{"symbol":"META","year":2025,"quarter":4,"eps":{"estimate":"8.190000","actual":"8.880000"},"report":{"date":"2026-01-28","timing":"pm","verified":true}},
+{"symbol":"META","year":2026,"quarter":1,"eps":{"estimate":"6.670000","actual":"7.310000"},"report":{"date":"2026-04-29","timing":"pm","verified":true}},
+{"symbol":"META","year":2026,"quarter":2,"eps":{"estimate":"7.180000","actual":"6.180000"},"report":{"date":"2026-07-29","timing":"pm","verified":true}}
+],
+"AMD": [
+{"symbol":"AMD","year":2024,"quarter":4,"eps":{"estimate":"1.080000","actual":"1.090000"},"report":{"date":"2025-02-04","timing":"pm","verified":true}},
+{"symbol":"AMD","year":2025,"quarter":1,"eps":{"estimate":"0.930000","actual":"0.960000"},"report":{"date":"2025-05-06","timing":"pm","verified":true}},
+{"symbol":"AMD","year":2025,"quarter":2,"eps":{"estimate":"0.400000","actual":"0.480000"},"report":{"date":"2025-08-05","timing":"pm","verified":true}},
+{"symbol":"AMD","year":2025,"quarter":3,"eps":{"estimate":"1.090000","actual":"1.200000"},"report":{"date":"2025-11-04","timing":"pm","verified":true}},
+{"symbol":"AMD","year":2025,"quarter":4,"eps":{"estimate":"1.240000","actual":"1.530000"},"report":{"date":"2026-02-03","timing":"pm","verified":true}},
+{"symbol":"AMD","year":2026,"quarter":1,"eps":{"estimate":"1.250000","actual":"1.370000"},"report":{"date":"2026-05-05","timing":"pm","verified":true}}
+],
+"NFLX": [
+{"symbol":"NFLX","year":2024,"quarter":4,"eps":{"estimate":"0.420000","actual":"0.427000"},"report":{"date":"2025-01-21","timing":"pm","verified":true}},
+{"symbol":"NFLX","year":2025,"quarter":1,"eps":{"estimate":"0.572000","actual":"0.661000"},"report":{"date":"2025-04-17","timing":"pm","verified":true}},
+{"symbol":"NFLX","year":2025,"quarter":2,"eps":{"estimate":"0.706000","actual":"0.719000"},"report":{"date":"2025-07-17","timing":"pm","verified":true}},
+{"symbol":"NFLX","year":2025,"quarter":3,"eps":{"estimate":"0.694000","actual":"0.587000"},"report":{"date":"2025-10-21","timing":"pm","verified":true}},
+{"symbol":"NFLX","year":2025,"quarter":4,"eps":{"estimate":"0.550000","actual":"0.560000"},"report":{"date":"2026-01-20","timing":"pm","verified":true}},
+{"symbol":"NFLX","year":2026,"quarter":1,"eps":{"estimate":"0.760000","actual":"0.700000"},"report":{"date":"2026-04-16","timing":"pm","verified":true}},
+{"symbol":"NFLX","year":2026,"quarter":2,"eps":{"estimate":"0.790000","actual":"0.800000"},"report":{"date":"2026-07-16","timing":"pm","verified":true}}
+],
+"CRM": [
+{"symbol":"CRM","year":2025,"quarter":4,"eps":{"estimate":"2.610000","actual":"2.780000"},"report":{"date":"2025-02-26","timing":"pm","verified":true}},
+{"symbol":"CRM","year":2026,"quarter":1,"eps":{"estimate":"2.550000","actual":"2.580000"},"report":{"date":"2025-05-28","timing":"pm","verified":true}},
+{"symbol":"CRM","year":2026,"quarter":2,"eps":{"estimate":"2.520000","actual":"2.910000"},"report":{"date":"2025-09-03","timing":"pm","verified":true}},
+{"symbol":"CRM","year":2026,"quarter":3,"eps":{"estimate":"2.580000","actual":"3.250000"},"report":{"date":"2025-12-03","timing":"pm","verified":true}},
+{"symbol":"CRM","year":2026,"quarter":4,"eps":{"estimate":"2.690000","actual":"3.810000"},"report":{"date":"2026-02-25","timing":"pm","verified":true}},
+{"symbol":"CRM","year":2027,"quarter":1,"eps":{"estimate":"2.960000","actual":"3.880000"},"report":{"date":"2026-05-27","timing":"pm","verified":true}}
+],
+"ADBE": [
+{"symbol":"ADBE","year":2025,"quarter":1,"eps":{"estimate":"4.970000","actual":"5.080000"},"report":{"date":"2025-03-12","timing":"pm","verified":true}},
+{"symbol":"ADBE","year":2025,"quarter":2,"eps":{"estimate":"4.970000","actual":"5.060000"},"report":{"date":"2025-06-12","timing":"pm","verified":true}},
+{"symbol":"ADBE","year":2025,"quarter":3,"eps":{"estimate":"4.790000","actual":"5.310000"},"report":{"date":"2025-09-11","timing":"pm","verified":true}},
+{"symbol":"ADBE","year":2025,"quarter":4,"eps":{"estimate":"4.990000","actual":"5.500000"},"report":{"date":"2025-12-10","timing":"pm","verified":true}},
+{"symbol":"ADBE","year":2026,"quarter":1,"eps":{"estimate":"5.460000","actual":"6.060000"},"report":{"date":"2026-03-12","timing":"pm","verified":true}},
+{"symbol":"ADBE","year":2026,"quarter":2,"eps":{"estimate":"5.600000","actual":"5.960000"},"report":{"date":"2026-06-11","timing":"pm","verified":true}}
+],
+"PYPL": [
+{"symbol":"PYPL","year":2024,"quarter":4,"eps":{"estimate":"1.120000","actual":"1.190000"},"report":{"date":"2025-02-04","timing":"am","verified":true}},
+{"symbol":"PYPL","year":2025,"quarter":1,"eps":{"estimate":"1.160000","actual":"1.330000"},"report":{"date":"2025-04-29","timing":"am","verified":true}},
+{"symbol":"PYPL","year":2025,"quarter":2,"eps":{"estimate":"1.300000","actual":"1.400000"},"report":{"date":"2025-07-29","timing":"am","verified":true}},
+{"symbol":"PYPL","year":2025,"quarter":3,"eps":{"estimate":"1.200000","actual":"1.340000"},"report":{"date":"2025-10-28","timing":"am","verified":true}},
+{"symbol":"PYPL","year":2025,"quarter":4,"eps":{"estimate":"1.290000","actual":"1.230000"},"report":{"date":"2026-02-03","timing":"am","verified":true}},
+{"symbol":"PYPL","year":2026,"quarter":1,"eps":{"estimate":"1.270000","actual":"1.340000"},"report":{"date":"2026-05-05","timing":"am","verified":true}},
+{"symbol":"PYPL","year":2026,"quarter":2,"eps":{"estimate":"1.280000","actual":"1.380000"},"report":{"date":"2026-07-28","timing":"am","verified":true}}
+],
+"SBUX": [
+{"symbol":"SBUX","year":2025,"quarter":1,"eps":{"estimate":"0.670000","actual":"0.690000"},"report":{"date":"2025-01-28","timing":"pm","verified":true}},
+{"symbol":"SBUX","year":2025,"quarter":2,"eps":{"estimate":"0.500000","actual":"0.410000"},"report":{"date":"2025-04-29","timing":"pm","verified":true}},
+{"symbol":"SBUX","year":2025,"quarter":3,"eps":{"estimate":"0.650000","actual":"0.500000"},"report":{"date":"2025-07-29","timing":"pm","verified":true}},
+{"symbol":"SBUX","year":2025,"quarter":4,"eps":{"estimate":"0.550000","actual":"0.520000"},"report":{"date":"2025-10-29","timing":"pm","verified":true}},
+{"symbol":"SBUX","year":2026,"quarter":1,"eps":{"estimate":"0.580000","actual":"0.560000"},"report":{"date":"2026-01-28","timing":"am","verified":true}},
+{"symbol":"SBUX","year":2026,"quarter":2,"eps":{"estimate":"0.440000","actual":"0.500000"},"report":{"date":"2026-04-28","timing":"pm","verified":true}}
+],
+"DIS": [
+{"symbol":"DIS","year":2025,"quarter":1,"eps":{"estimate":"1.430000","actual":"1.760000"},"report":{"date":"2025-02-05","timing":"am","verified":true}},
+{"symbol":"DIS","year":2025,"quarter":2,"eps":{"estimate":"1.210000","actual":"1.450000"},"report":{"date":"2025-05-07","timing":"am","verified":true}},
+{"symbol":"DIS","year":2025,"quarter":3,"eps":{"estimate":"1.450000","actual":"1.610000"},"report":{"date":"2025-08-06","timing":"am","verified":true}},
+{"symbol":"DIS","year":2025,"quarter":4,"eps":{"estimate":"1.030000","actual":"1.110000"},"report":{"date":"2025-11-13","timing":"am","verified":true}},
+{"symbol":"DIS","year":2026,"quarter":1,"eps":{"estimate":"1.570000","actual":"1.630000"},"report":{"date":"2026-02-02","timing":"am","verified":true}},
+{"symbol":"DIS","year":2026,"quarter":2,"eps":{"estimate":"1.490000","actual":"1.570000"},"report":{"date":"2026-05-06","timing":"am","verified":true}}
+],
+"INTC": [
+{"symbol":"INTC","year":2024,"quarter":4,"eps":{"estimate":"0.120000","actual":"0.130000"},"report":{"date":"2025-01-30","timing":"pm","verified":true}},
+{"symbol":"INTC","year":2025,"quarter":1,"eps":{"estimate":"0.010000","actual":"0.130000"},"report":{"date":"2025-04-24","timing":"pm","verified":true}},
+{"symbol":"INTC","year":2025,"quarter":2,"eps":{"estimate":"-0.050000","actual":"-0.100000"},"report":{"date":"2025-07-24","timing":"pm","verified":true}},
+{"symbol":"INTC","year":2025,"quarter":3,"eps":{"estimate":"-0.040000","actual":"0.230000"},"report":{"date":"2025-10-23","timing":"pm","verified":true}},
+{"symbol":"INTC","year":2025,"quarter":4,"eps":{"estimate":"0.040000","actual":"0.150000"},"report":{"date":"2026-01-22","timing":"pm","verified":true}},
+{"symbol":"INTC","year":2026,"quarter":1,"eps":{"estimate":"-0.010000","actual":"0.290000"},"report":{"date":"2026-04-23","timing":"pm","verified":true}},
+{"symbol":"INTC","year":2026,"quarter":2,"eps":{"estimate":"0.190000","actual":"0.420000"},"report":{"date":"2026-07-23","timing":"pm","verified":true}}
+]
+}
