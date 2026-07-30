@@ -174,7 +174,8 @@ def breaker_status() -> dict:
 def _pdt_check_and_record() -> bool:
     """
     Returns True if trade is allowed under PDT rules.
-    Enforces PDT when Tradier balance < $2,100: max 3 day trades per 5 days.
+    Enforces PDT when Tradier balance < _PDT_BALANCE_LIMIT (default $2,000):
+    max 3 day trades per 5 days. See that constant's comment before changing it.
     Always records the trade if allowed.
     """
     import tradier_api as _t
@@ -214,7 +215,7 @@ def _fire_execution(symbol: str, result: dict, dm=None) -> None:
     Routes to:
       1. Tradier (cloud, 24/7) — equity market order
       2. Robinhood Windows executor — webhook POST (if ROBINHOOD_EXECUTOR_URL set)
-    PDT shield active when Tradier balance < $2,100.
+    PDT shield active when Tradier balance < _PDT_BALANCE_LIMIT (default $2,000).
     """
     import tradier_api as _t
 
