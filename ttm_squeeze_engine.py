@@ -50,6 +50,20 @@ class SqueezeParams:
     mom_length: int = 20
     atr_stop_mult: float = 1.5
     atr_target_mult: float = 3.0
+    # Mechanical-rule refinements (operator-specified 2026-07-30): "wait for
+    # at least 5-6 consecutive red dots", "momentum above zero AND rising"
+    # (not just non-zero sign), optional HTF trend filter, optional
+    # momentum-flip exit instead of a fixed ATR target. All additive/
+    # togglable so the original simpler engine's behavior is reproducible
+    # by setting min_squeeze_bars=1, require_momentum_slope=False,
+    # use_htf_filter=False, exit_mode="atr_target" (the defaults tested in
+    # docs/TTM_SQUEEZE_BACKTEST_2026-07-30.md).
+    min_squeeze_bars: int = 5
+    require_momentum_slope: bool = True
+    use_htf_filter: bool = False
+    htf_length: int = 50
+    exit_mode: str = "atr_target"  # "atr_target" | "momentum_flip"
+    momentum_flip_bars: int = 2
 
     @classmethod
     def from_env(cls) -> "SqueezeParams":
@@ -61,6 +75,12 @@ class SqueezeParams:
             mom_length=int(os.environ.get("TTM_MOM_LENGTH", "20")),
             atr_stop_mult=float(os.environ.get("TTM_ATR_STOP_MULT", "1.5")),
             atr_target_mult=float(os.environ.get("TTM_ATR_TARGET_MULT", "3.0")),
+            min_squeeze_bars=int(os.environ.get("TTM_MIN_SQUEEZE_BARS", "5")),
+            require_momentum_slope=os.environ.get("TTM_REQUIRE_MOM_SLOPE", "true").lower() == "true",
+            use_htf_filter=os.environ.get("TTM_USE_HTF_FILTER", "false").lower() == "true",
+            htf_length=int(os.environ.get("TTM_HTF_LENGTH", "50")),
+            exit_mode=os.environ.get("TTM_EXIT_MODE", "atr_target"),
+            momentum_flip_bars=int(os.environ.get("TTM_MOMENTUM_FLIP_BARS", "2")),
         )
 
 
@@ -124,7 +144,7 @@ def compute_series(bars: list, p: SqueezeParams = None) -> dict:
     # value per bar in the window), so the true warmup is 2x mom_length, not
     # just mom_length -- otherwise the earliest points in mom_src slice with
     # a negative/out-of-range start.
-    win = max(p.bb_length, p.kc_length, 2 * p.mom_length) + 1
+    win = max(p.bb_length, p.kc_length, 2 * p.mom_length, p.htf_length if p.use_htf_filter else 0) + 1
 
     in_squeeze  = [None] * n
     fired       = [False] * n
@@ -153,6 +173,19 @@ def compute_series(bars: list, p: SqueezeParams = None) -> dict:
     entry_price: Optional[float] = None
     stop_price: Optional[float] = None
     target_price: Optional[float] = None
+    flip_count = 0
+    squeeze_streak = 0  # consecutive squeeze-ON bars counted INTO this bar
+
+    htf_sma_cache: dict = {}
+
+    def htf_sma_at(i: int) -> Optional[float]:
+        if i < p.htf_length - 1:
+            return None
+        if i in htf_sma_cache:
+            return htf_sma_cache[i]
+        val = _sma(closes[i - p.htf_length + 1:i + 1])
+        htf_sma_cache[i] = val
+        return val
 
     for i in range(n):
         if i < win:
@@ -174,8 +207,16 @@ def compute_series(bars: list, p: SqueezeParams = None) -> dict:
         in_squeeze[i] = squeeze_on
 
         prev_on = in_squeeze[i - 1] if i > 0 else None
-        just_fired = bool(prev_on) and not squeeze_on
+        # "Wait for at least min_squeeze_bars consecutive red dots" -- prior
+        # to updating the streak counter for THIS bar, squeeze_streak holds
+        # the consecutive-ON count that just ended at bar i-1 (the actual
+        # compression length that preceded this expansion). That's what the
+        # minimum must be checked against, not the running count including
+        # this (already-expanded) bar.
+        prior_streak = squeeze_streak
+        just_fired = bool(prev_on) and not squeeze_on and prior_streak >= p.min_squeeze_bars
         fired[i] = just_fired
+        squeeze_streak = squeeze_streak + 1 if squeeze_on else 0
 
         hh = max(highs[i - p.mom_length + 1:i + 1])
         ll = min(lows[i - p.mom_length + 1:i + 1])
@@ -196,29 +237,71 @@ def compute_series(bars: list, p: SqueezeParams = None) -> dict:
                 pnl = (entry_price - close) / entry_price
             pnl_pct[i] = round(pnl * 100, 4)
 
-            hit_target = (direction == "up" and close >= target_price) or \
-                         (direction == "down" and close <= target_price)
             hit_stop = (direction == "up" and close <= stop_price) or \
                        (direction == "down" and close >= stop_price)
 
-            if hit_target:
-                events[i] = "EXIT_TARGET"
-                if direction == "up":
-                    live_signal[i] = "SELL"
-                in_pos = False
-                direction = entry_price = stop_price = target_price = None
-                continue
             if hit_stop:
                 events[i] = "EXIT_STOP"
                 if direction == "up":
                     live_signal[i] = "SELL"
                 in_pos = False
                 direction = entry_price = stop_price = target_price = None
+                flip_count = 0
                 continue
+
+            if p.exit_mode == "momentum_flip":
+                # "Exit when the momentum histogram flips color for two
+                # consecutive bars" -- opposite sign from the position's own
+                # direction, held for momentum_flip_bars bars in a row.
+                opposite = (direction == "up" and mom < 0) or (direction == "down" and mom > 0)
+                flip_count = flip_count + 1 if opposite else 0
+                if flip_count >= p.momentum_flip_bars:
+                    events[i] = "EXIT_TARGET" if pnl > 0 else "EXIT_STOP"
+                    if direction == "up":
+                        live_signal[i] = "SELL"
+                    in_pos = False
+                    direction = entry_price = stop_price = target_price = None
+                    flip_count = 0
+                    continue
+            else:
+                hit_target = (direction == "up" and close >= target_price) or \
+                             (direction == "down" and close <= target_price)
+                if hit_target:
+                    events[i] = "EXIT_TARGET"
+                    if direction == "up":
+                        live_signal[i] = "SELL"
+                    in_pos = False
+                    direction = entry_price = stop_price = target_price = None
+                    continue
+
             state_dir[i] = direction
             continue
 
         if just_fired and mom != 0.0:
+            # "Momentum above zero and rising -> long only; below zero and
+            # falling -> short only" -- not just non-zero sign at the fire
+            # bar, but the histogram must also be accelerating in that
+            # direction (mom[i] vs mom[i-1]).
+            prev_mom = momentum[i - 1] if i > 0 and momentum[i - 1] is not None else 0.0
+            mom_rising = mom > prev_mom
+            mom_falling = mom < prev_mom
+            if p.require_momentum_slope:
+                if mom > 0 and not mom_rising:
+                    continue
+                if mom < 0 and not mom_falling:
+                    continue
+
+            if p.use_htf_filter:
+                htf_now = htf_sma_at(i)
+                htf_prev = htf_sma_at(i - 1)
+                if htf_now is None or htf_prev is None:
+                    continue
+                htf_rising = htf_now > htf_prev
+                if mom > 0 and not (close > htf_now and htf_rising):
+                    continue
+                if mom < 0 and not (close < htf_now and not htf_rising):
+                    continue
+
             entry_atr = atr_at(i, p.kc_length)
             if entry_atr <= 0:
                 continue
@@ -238,6 +321,7 @@ def compute_series(bars: list, p: SqueezeParams = None) -> dict:
             entry_price = close
             state_dir[i] = direction
             pnl_pct[i] = 0.0
+            flip_count = 0
 
     return {
         "events": events, "live_signal": live_signal,

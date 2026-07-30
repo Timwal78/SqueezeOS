@@ -85,14 +85,80 @@ counted, wins and losses alike.
   own separate, already-live role in `squeeze_fuel_engine.py`'s Ignition
   score — not re-litigated here.
 
+## Correctness verification (operator asked "make sure you're writing these backtests correctly")
+
+Before the refinement below, the arithmetic itself was independently checked
+two ways, both against real NVDA data:
+
+1. **Momentum isn't degenerate.** 1,105 real readings, range -17.84 to
+   +25.27, 669 positive / 436 negative / zero exactly-zero — real variance,
+   not the "flat/near-no-op formula" bug class that wrecked CVD Regime
+   earlier this session.
+2. **A real closed trade was hand-verified independent of the engine.**
+   First NVDA trade: entered 2022-03-18 at $26.453 (long), exited
+   2022-04-07 at $24.208 (stop). Manually recomputed
+   `(24.208 - 26.453) / 26.453 = -8.4868%` matches the engine's own
+   `pnl_pct` output exactly.
+
+Also worth noting: the entry-fill assumption (filling at the signal bar's
+own close) is mildly *generous*, not harsh — same convention already used by
+`breakout_engine.py`. A stricter next-bar-open fill would likely make results
+look *worse*, not better, so this isn't a source of false-negative bias.
+
+## Mechanical-rule refinement (operator-specified, 2026-07-30)
+
+The operator provided a much more specific, disciplined mechanical rule set
+than the naive "any fire, any nonzero momentum" version above: require a
+minimum squeeze duration before a fire counts (5-6+ consecutive "red dots"),
+require momentum to be both directionally aligned **and accelerating** (not
+just non-zero sign), an optional higher-timeframe trend filter, and an
+optional momentum-flip exit instead of a fixed R:R target. All four were
+implemented as togglable `SqueezeParams` (default: `min_squeeze_bars=5`,
+`require_momentum_slope=True`, `use_htf_filter=False`,
+`exit_mode="atr_target"` — the original less-selective behavior above is
+still reachable by setting `min_squeeze_bars=1, require_momentum_slope=False`).
+
+10 smoke tests confirm each new gate/exit actually behaves as specified
+(`tests/test_ttm_squeeze_engine_smoke.py`) — including one case where the
+first version of a test was itself wrong (assumed a 2-bar compression when
+the real `in_squeeze[]` output showed a 47-bar streak from an earlier tight
+period bleeding into the test's window) and was fixed by verifying the real
+engine output rather than assuming bar counts, not by weakening the assertion.
+
+### Results, same 7 symbols/window, 4 configurations
+
+| Configuration | Trades | Win% | Avg Trade | PF |
+|---|---|---|---|---|
+| Naive (original, no filters) | 134 | 34.3% | -0.578% | 0.901 |
+| **Refined: 5-bar min squeeze + momentum slope, ATR target exit** | 68 | 33.8% | +0.199% | **1.042** |
+| Refined + momentum-flip exit (instead of ATR target) | 68 | 27.9% | -1.060% | 0.781 |
+| Refined + HTF 50-SMA trend filter, ATR target exit | 43 | 34.9% | +0.171% | 1.035 |
+| Refined + HTF filter + momentum-flip exit | 43 | 30.2% | -0.295% | 0.939 |
+
+**Verdict stands: still not a real edge, but the mechanical rules genuinely
+help.** The best configuration (5-bar minimum compression + momentum-slope
+confirmation, keeping the ATR target exit) moves PF from 0.901 to 1.042 and
+average trade from -0.578% to +0.199% — a real, measured improvement, not
+noise in the wrong direction. But at 68 trades and PF barely above 1.0, this
+is well within statistical noise for a real edge claim (see the CVD Regime
+section of `CLAUDE.md` for what happens to numbers like this under an
+out-of-sample split — apparent edges at this trade count and PF level
+routinely don't survive). The momentum-flip exit made things WORSE in both
+tests, not better — cutting winners short without the ATR target's larger
+per-trade payoff hurt more than the tighter exit helped. The HTF filter
+mainly reduced trade count (more selective) without meaningfully changing
+the per-trade edge.
+
+**Still not wired to any scanner or `IAM_PRIMARY_SYSTEM`.** PF ~1.04 on 43-68
+trades is "roughly breakeven, maybe slightly positive" — not "sure fire,"
+and not enough to clear the bar every other live-wired engine in this
+codebase (CASCADE, Breakout, S/R Matrix) cleared with real trade counts.
+
 ## If this is revisited
 
-- No scanner/live-wiring without a materially different result on a fresh
-  test — do not re-run the same params expecting a different answer.
-- Worth trying if pursued further: an out-of-sample train/valid split (same
-  methodology as `tests/optimize_cvd_regime.py`) before concluding any
-  parameter change actually helps rather than just fitting this specific
-  window's noise.
-- Squeeze duration / tightness filtering (only fire after a longer squeeze,
-  not any squeeze) was not tested — a real, testable next lever, not done
-  here.
+- **Next real step, not yet done: an out-of-sample train/valid split** (same
+  methodology as `tests/optimize_cvd_regime.py`) on the refined-rules
+  configuration specifically, before concluding the 1.042 PF is real signal
+  rather than this particular window's noise. This is the honest next lever,
+  not another naive parameter sweep.
+- No scanner/live-wiring without that split clearing out-of-sample.
