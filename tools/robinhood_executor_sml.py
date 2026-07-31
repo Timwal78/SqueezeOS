@@ -1503,7 +1503,6 @@ def _poll_iam_primary() -> int:
             continue
 
         side = "buy" if direction == "BUY" else "sell"
-        logger.info(f"[IAM-POLL] {system} → {direction} {symbol} @ ${price:.2f} (Robinhood leg, Tradier already placed server-side)")
 
         sml_proxy = {
             "god_stacked":   MIN_GOD_STACKED,
@@ -1512,6 +1511,52 @@ def _poll_iam_primary() -> int:
             "signal":        f"{system}_{direction}",
             "confidence":    sig.get("confidence", 80.0),
         }
+
+        # ── Options leg ──────────────────────────────────────────────────────
+        # When the server's Tradier leg routed this signal to options it now
+        # forwards the EXACT contract it selected. Placing that same contract
+        # here is what stops the long-standing inconsistency where one signal
+        # bought a CALL on Tradier and SHARES on Robinhood.
+        #
+        # Options are exchange-standardized: same underlying + expiration +
+        # strike + type is literally the same contract on both brokers, which
+        # is why _execute_option() deliberately never re-derives it. If each
+        # side picked independently they could silently diverge.
+        #
+        # No contract in the payload means the server traded equity (or an
+        # older server that predates this field) -- fall through to the equity
+        # path unchanged, so this is fully backward compatible in both
+        # directions.
+        contract = sig.get("contract") or {}
+        option_type = str(contract.get("option_type") or "").lower()
+
+        if contract and option_type in ("call", "put"):
+            logger.info(
+                f"[IAM-POLL] {system} → {direction} {symbol} "
+                f"{option_type.upper()} {contract.get('strike')} "
+                f"exp {contract.get('expiration')} "
+                f"(Robinhood options leg, Tradier already placed server-side)"
+            )
+
+            # A SELL is COMPOUND on the server side (iam_executor's
+            # "bear_protect_and_put"): it closes any existing long AND buys a
+            # put. Both legs have to happen here too. Routing a SELL straight
+            # to the put would silently drop the close and leave a Robinhood
+            # long open that Tradier had already exited -- the two accounts
+            # would diverge in the one direction that actually costs money.
+            # _execute() refuses to short, so with no position held this is a
+            # logged no-op rather than a new short.
+            if direction == "SELL":
+                _execute(symbol, "sell", sml_proxy, scan_counter)
+
+            # _execute_option applies the full risk stack itself: circuit
+            # breaker, blocklist, per-scan cap, the 0.30-0.40 delta band,
+            # direction gates for calls, PDT and the shared cooldown. It is
+            # buy_to_open only -- there is no path here that sells to open.
+            _execute_option(symbol, option_type, sml_proxy, dict(contract), scan_counter)
+            continue
+
+        logger.info(f"[IAM-POLL] {system} → {direction} {symbol} @ ${price:.2f} (Robinhood equity leg, Tradier already placed server-side)")
         _execute(symbol, side, sml_proxy, scan_counter)
 
     return scan_counter[0]
