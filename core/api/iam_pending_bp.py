@@ -33,21 +33,41 @@ _QUEUE_LOCK = threading.Lock()
 _SIGNAL_TTL = 600  # 10 minutes, same as tv_pending
 
 
-def push_iam_primary_signal(sym: str, action: str, system: str, price: float, confidence: float):
+def push_iam_primary_signal(sym: str, action: str, system: str, price: float,
+                            confidence: float, contract: dict = None):
     """Called by iam_executor.execute_from_resolution() for primary-system,
     non-paper BUY/SELL resolutions -- after the real Tradier order, so
-    Robinhood gets the same directive independent of Tradier's fill result."""
+    Robinhood gets the same directive independent of Tradier's fill result.
+
+    `contract`, when present, is the EXACT option contract the Tradier leg just
+    selected (see iam_executor._contract_from_result). Passing it through is
+    what closes the long-standing inconsistency where a signal that bought a
+    CALL on Tradier bought SHARES on Robinhood: options are
+    exchange-standardized, so the same underlying + expiration + strike + type
+    is literally the same contract on both brokers. The Robinhood executor
+    deliberately never re-derives it (see _execute_option's docstring) -- if
+    each side picked its own contract they could silently diverge.
+
+    Omitted/None keeps the previous equity behaviour exactly, so an older PC
+    executor that doesn't understand the field is unaffected.
+    """
     if action not in ("BUY", "SELL") or not sym:
         return
+    signal = {
+        "symbol":     sym.upper().strip(),
+        "action":     action,
+        "system":     system,
+        "price":      float(price or 0.0),
+        "confidence": float(confidence or 0.0),
+        "ts":         time.time(),
+    }
+    if contract:
+        signal["contract"] = contract
+        signal["instrument"] = "option"
+    else:
+        signal["instrument"] = "equity"
     with _QUEUE_LOCK:
-        _QUEUE.append({
-            "symbol":     sym.upper().strip(),
-            "action":     action,
-            "system":     system,
-            "price":      float(price or 0.0),
-            "confidence": float(confidence or 0.0),
-            "ts":         time.time(),
-        })
+        _QUEUE.append(signal)
 
 
 def _pop_all() -> list:

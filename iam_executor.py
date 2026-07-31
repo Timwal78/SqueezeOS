@@ -751,6 +751,41 @@ def _untrack(sym: str):
         logger.debug(f"[IAM-EXEC] untrack {sym} failed (non-fatal): {e}")
 
 
+def _contract_from_result(broker_result: Optional[dict]) -> Optional[dict]:
+    """
+    Pull the option contract the Tradier leg actually selected out of its
+    result, so the Robinhood leg can place the SAME contract instead of
+    falling back to shares.
+
+    Handles both result shapes:
+      • BUY  → _execute_tradier_options returns the contract at the top level.
+      • SELL → _execute_tradier returns {"mode": "bear_protect_and_put",
+               "close": ..., "put": {...}}, so the contract is nested under
+               "put" (the close leg is an equity sell and has no contract).
+
+    Returns None when this signal did not route to options at all — the
+    caller then queues an equity signal exactly as before.
+    """
+    if not isinstance(broker_result, dict):
+        return None
+    contract = broker_result.get("contract")
+    if not contract:
+        put_leg = broker_result.get("put")
+        if isinstance(put_leg, dict):
+            contract = put_leg.get("contract")
+    if not isinstance(contract, dict):
+        return None
+    # Only forward a contract we can actually place: the Robinhood executor
+    # refuses an incomplete sniper dict anyway, and forwarding a half-populated
+    # one would silently downgrade that refusal into a skipped trade with a
+    # confusing reason.
+    if not contract.get("strike") or not contract.get("expiration"):
+        logger.warning(f"[IAM-EXEC] option contract incomplete {contract} — "
+                       f"queuing Robinhood leg as equity instead")
+        return None
+    return contract
+
+
 _OCC_OPTION_RE = re.compile(r'^[A-Z]{1,6}\d{6}([CP])\d{8}$')
 
 
@@ -918,17 +953,45 @@ def _execute_tradier_options(sym: str, action: str, resolution: dict, price: flo
         # position. The mid is the honest mark; the limit is what we might pay.
         premium = (bid + ask) / 2.0 if (bid and ask) else limit
 
+        # The exact contract this leg selected, in the shape the Robinhood PC
+        # executor's _execute_option() sniper dict expects. Options are
+        # exchange-standardized, so underlying + expiration + strike + type is
+        # literally the same contract on both brokers -- passing this through
+        # the pending queue is what stops a signal buying a CALL on Tradier and
+        # SHARES on Robinhood. Robinhood deliberately never re-derives it.
+        chosen_delta = None
+        try:
+            raw_d = (best.get("greeks") or {}).get("delta")
+            chosen_delta = abs(float(raw_d)) if raw_d is not None else None
+        except (TypeError, ValueError):
+            chosen_delta = None
+
+        contract = {
+            "option_type": option_type,
+            "strike":      float(best.get("strike") or 0),
+            "expiration":  expiry_str,
+            "bid":         bid,
+            "ask":         ask,
+            "premium":     premium,
+            "limit_price": limit,
+            "delta":       chosen_delta,
+            "occ":         option_symbol,
+            "source":      f"iam_executor:{system_tag}",
+        }
+
         if PAPER_MODE():
             logger.info(f"[IAM-EXEC][PAPER] Would BTO {qty}x {option_symbol} @ ${limit:.2f} limit")
             _track_option(option_symbol, sym, qty, premium, system_tag, expiry_str)
             return {"mode": "paper", "option_symbol": option_symbol,
-                    "qty": qty, "limit": limit, "premium": premium, "placed": False}
+                    "qty": qty, "limit": limit, "premium": premium,
+                    "contract": contract, "placed": False}
 
         result = place_option_order(option_symbol, qty, "buy_to_open", limit_price=limit)
         result["option_symbol"] = option_symbol
         result["qty"]           = qty
         result["limit"]         = limit
         result["premium"]       = premium
+        result["contract"]      = contract
         if result.get("status") == "success":
             # THE fix for "no options position was ever sold by this executor."
             # Nothing in the IAM path had a sell_to_close anywhere — this hands
@@ -1164,8 +1227,17 @@ def execute_from_resolution(sym: str, resolution: dict,
         if mode in ("tradier", "both") and broker_allowed and not PAPER_MODE():
             try:
                 from core.api.iam_pending_bp import push_iam_primary_signal
-                push_iam_primary_signal(sym, action, signal_system, price or 0.0, confidence)
-                logger.info(f"[IAM-EXEC] {sym} {action} queued for Robinhood pickup (system={signal_system})")
+                # Forward the exact contract the Tradier leg selected, when it
+                # routed to options. Without this the Robinhood leg falls back
+                # to shares -- the long-standing inconsistency where one signal
+                # bought a CALL on one broker and SHARES on the other.
+                contract = _contract_from_result(broker_result)
+                push_iam_primary_signal(sym, action, signal_system, price or 0.0,
+                                        confidence, contract=contract)
+                leg = (f"{contract['option_type'].upper()} {contract['strike']} "
+                       f"{contract['expiration']}") if contract else "equity"
+                logger.info(f"[IAM-EXEC] {sym} {action} queued for Robinhood pickup "
+                            f"(system={signal_system}, leg={leg})")
             except Exception as e:
                 logger.debug(f"[IAM-EXEC] Robinhood queue push failed for {sym}: {e}")
 
