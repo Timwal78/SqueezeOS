@@ -43,7 +43,21 @@ class ExecutionEngine:
 
         # ── LIVE MODE ──
         self.live_mode = os.environ.get('TRADIER_LIVE', 'false').lower() == 'true'
-        self.max_order_value = float(os.environ.get('BEAST_MAX_PRICE', '25.0'))
+        # Per-order dollar cap for THIS engine. Previously read BEAST_MAX_PRICE
+        # directly -- which core/api/convergence_bp.py also reads, but as a
+        # NOTIONAL BUDGET (`quantity = BEAST_MAX_PRICE // price`) with a 500.0
+        # default against this file's 25.0. One env var, two meanings, defaults
+        # 20x apart, so whatever is set on Render silently governs both at once.
+        # Same collision class as the MACRO_STACK_WARMUP bug (see CLAUDE.md).
+        #
+        # Falls back to BEAST_MAX_PRICE so an existing deployment's effective
+        # cap is completely unchanged until EXECUTION_MAX_ORDER_VALUE is set --
+        # this disambiguates going forward without silently retightening or
+        # loosening a live risk limit as a side effect of a rename.
+        self.max_order_value = float(
+            os.environ.get('EXECUTION_MAX_ORDER_VALUE',
+                           os.environ.get('BEAST_MAX_PRICE', '25.0'))
+        )
 
         # ── BROKER REFERENCE (Tradier preferred) ──
         # Set after DataManager is available via set_broker()

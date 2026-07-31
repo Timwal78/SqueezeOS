@@ -555,6 +555,31 @@ This is a strong candidate for the operator's long-standing "says buy or sell bu
 - Tests: `tests/test_live_surface_exit_coverage.py` — 27 assertions. Notably it drives the **real** `_fire_execution()` end to end past every gate (arm switch, PDT, breaker, cross-engine claim) and asserts the order is a LIMIT with a bounded price and that the fill lands in the exit registry with a real stop; plus the dead-`update_live_prices` fact as a standing grep assertion, live-vs-shadow close behaviour, and the never-roll-back-an-order guarantee.
 - **Sandbox note for future agents:** `pandas`, `flask`, `flask-cors`, `python-dotenv`, `openai`, `stripe` and `redis` are all installable here with `pip install --ignore-installed <pkg>` (the plain install fails on a debian-managed `blinker` whose RECORD file is missing). Doing so makes `tests/test_convergence_daily_loss_breaker.py`, `tests/test_execution_engine_gex_fix.py` and most wiring tests runnable in-sandbox — several CLAUDE.md entries claim these "cannot run here," which is now only true of `tests/test_paper_trade_ledger.py`, blocked by a genuinely broken system `cryptography` (pyo3 `PanicException`), confirmed pre-existing against a clean stash.
 
+## CEOTrader DISARMED — now requires `AUTOPILOT_ENABLED=true` (operator decision, 2026-07-31)
+
+Operator asked directly for a recommendation on the CEOTrader situation and accepted it. **This engine no longer starts unless `AUTOPILOT_ENABLED=true` is set. It defaults OFF.**
+
+**Why this one, and not the others.** Four findings from this session, together:
+1. **It auto-starts on every boot** whenever `TRADIER_LIVE=true` (`core/legacy.py`: `if exec_eng.live_mode: ceo.start()`), placing real Kelly-sized Tradier orders — and CLAUDE.md claimed it was "not auto-started," **wrongly, twice**. Nobody knew it was live.
+2. **It is the only live surface that never went through this codebase's own evidence-then-explicit-decision process.** No backtest exists anywhere for its pathway (OracleEngine verdict → Kelly sizing → Tradier order), unlike CASCADE / Breakout / S-R Matrix which each cleared a real backtest or an explicitly informed operator decision.
+3. **It answers to none of the documented kill switches** — `IAM_PAPER_MODE`, `IAM_AUTO_TRADING`, `IAM_PRIMARY_SYSTEM`, `LIVE_TRADING_ENABLED`, `ROBINHOOD_PAPER_MODE`, `KILL_SWITCH` all leave it running. **This is the property that actually decided it.** An engine that keeps trading after the operator has flipped every switch they believe controls the desk is an operational hazard independent of whether it has an edge.
+4. **`_kelly_qty()` uses Oracle's confidence score directly as the win probability `p`.** That number has never been validated against realized outcomes. Kelly is only well-behaved when `p` is measured, not assumed; fed an assumed `p` it systematically oversizes. Per-trade exposure is still bounded (`AUTOPILOT_MAX_POSITION_PCT` 5% of equity, `AUTOPILOT_MAX_ORDER_VALUE` $500, `AUTOPILOT_MAX_CONCURRENT` 3), so this was never a blow-up-the-account risk — but position sizes were arbitrary rather than risk-calibrated.
+   - Secondary, not decisive: default `AUTOPILOT_SYMBOLS` is the fixed 9-name list `GME,AMC,IWM,SPY,QQQ,MSTR,NVDA,TSLA,PLTR`. It IS env-overridable (so not strictly hardcoded), but if unset it runs exactly the fixed universe Prime Directive #1 forbids, including the GME/AMC/MSTR names `docs/ENGINE_SCOREBOARD_2026-07-17.md` says no engine earned.
+
+- **The gate lives inside `CEOTrader.start()`, not at either call site** — deliberately, so it covers BOTH the boot auto-start in `core/legacy.py` AND the manual `POST /api/autopilot/start` endpoint. Off means off from every direction; there is no path that starts this engine without the operator setting the variable. A refusal logs loudly and pushes to the terminal feed, so a disarmed engine is visible rather than silently absent.
+- **To re-arm:** set `AUTOPILOT_ENABLED=true` on Render. Nothing else needs changing — the disarm touches no other flag, and `TRADIER_LIVE` was deliberately NOT used for this (it would also drop `ExecutionEngine` into shadow mode globally, a much wider blast radius than intended).
+- **This is a disarm, not a verdict that the strategy is bad.** No backtest was run for it; the honest status is still "unmeasured," exactly as before. If it's ever wanted live, the right sequence is the same one every other engine followed: backtest it, state the evidence plainly, then decide.
+
+### `BEAST_MAX_PRICE` — a second env-var collision, found alongside this
+
+Same bug class as the `MACRO_STACK_WARMUP` collision documented above. One env var, two unrelated meanings, defaults 20x apart:
+- `core/api/convergence_bp.py` reads it as a **notional budget** — `quantity = _BEAST_MAX_PRICE // price`, default `500.0`
+- `execution_engine.py` read the **same name** as a hard **per-order dollar cap**, default `25.0`
+
+Whatever is set on Render silently governs both at once. **Fixed:** `execution_engine.py` now reads its own `EXECUTION_MAX_ORDER_VALUE`, **falling back to `BEAST_MAX_PRICE`** so an existing deployment's effective cap is completely unchanged until the new var is set — this disambiguates going forward without silently retightening or loosening a live risk limit as a side effect of a rename. `convergence_bp.py`'s own meaning is untouched.
+
+- Tests: `tests/test_ceotrader_arm_switch.py` — 29 assertions (defaults-off, explicit re-arm, truthy-spelling parsing, boot-autostart path covered, manual-endpoint path covered, other engines' arm switches unaffected, and the `BEAST_MAX_PRICE` fallback preserving today's cap exactly). All pass against real, unmodified code.
+
 ## CEOTrader "Sovereign Autopilot" actually DOES auto-start on boot — CLAUDE.md's own prior claim was wrong (found 2026-07-31)
 
 The "CEOTrader / `execution_engine.py` (v5.0 legacy engine)" section elsewhere in this file claims: *"Not auto-started. Unlike every scanner in the IAM ecosystem... CEOTrader's autopilot loop only ever runs after an explicit `POST /api/autopilot/start` call. If nothing calls that endpoint, this entire engine is idle."* **This is wrong, found by actually reading `core/legacy.py` rather than trusting that prior claim.** `core/legacy.py`'s `init_services()` has, unconditionally on every boot:
