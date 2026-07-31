@@ -2168,6 +2168,29 @@ def main():
     logger.info(f"  Kill switch : {KILL_SWITCH}")
     logger.info("=" * 60)
 
+    # Build + stale-env integrity check. Added after stale executor behaviour
+    # returned for the fifth time: the banner above is easy to misread (a
+    # missing row is invisible unless you know it should be there), and a
+    # leftover tools/executor.env survives every `git reset --hard` by design.
+    # This prints a source fingerprint and names any risk setting the live env
+    # is overriding. See tools/executor_integrity.py.
+    try:
+        import executor_integrity
+    except ImportError:  # running from repo root rather than tools/
+        try:
+            from tools import executor_integrity  # type: ignore
+        except Exception:
+            executor_integrity = None  # type: ignore
+    except Exception:
+        executor_integrity = None  # type: ignore
+
+    if executor_integrity is not None:
+        _integrity_ok = executor_integrity.report(logger)
+        if not _integrity_ok and executor_integrity.strict_mode():
+            logger.error("[STARTUP] FATAL: EXECUTOR_STRICT_INTEGRITY=true and the live "
+                         "environment diverges from repo intent (see above) — refusing to start.")
+            raise SystemExit(1)
+
     # Fail loud if somehow still slow (should be impossible without ALLOW_SLOW_POLL)
     if POLL_INTERVAL_S > 90:
         logger.error(f"[STARTUP] FATAL: POLL_INTERVAL_S={POLL_INTERVAL_S} — refusing to run slow desk")
