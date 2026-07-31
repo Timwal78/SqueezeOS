@@ -6,7 +6,8 @@ Position Manager status — free, read-only.
 
 Exists so "what is the desk actually holding, and what will close it?" is
 answerable without reading logs. Returns real registry state only — an empty
-`tracked` map means nothing is being managed, never a placeholder.
+`tracked` map means nothing is currently being managed, and is reported as
+exactly that rather than being filled in with invented rows.
 """
 
 from flask import Blueprint, jsonify
