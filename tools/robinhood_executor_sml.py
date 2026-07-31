@@ -745,18 +745,28 @@ def _direction_gates_pass(symbol: str, side: str, log_prefix: str = "EXEC") -> b
     """
     # ── 741 Pure Macro Matrix gate (BUY only) ────────────────────────────────
     if side == "buy":
+        # `UNKNOWN` here does NOT mean "checked and fine" -- when
+        # MACRO_GATE_SECRET is unset both of these gates return UNKNOWN
+        # immediately without querying anything, so they are INERT rather than
+        # passing. Saying "BUY allowed" for that case reads as a green light
+        # for a check that never ran, which is how it went unnoticed on every
+        # buy in a live session. The suffix below makes the difference visible
+        # at the point of decision; executor_integrity.py also reports it once
+        # at startup.
+        _gate_note = "" if _MACRO_GATE_SECRET else "  [GATE INERT — MACRO_GATE_SECRET not set]"
+
         macro = _get_macro_regime(symbol)
         if macro == "PERFECT_BEARISH_REGIME":
             logger.warning(f"[{log_prefix}] {symbol} BUY blocked — 741 macro regime is PERFECT_BEARISH_REGIME")
             return False
-        logger.info(f"[{log_prefix}] {symbol} macro regime={macro} — BUY allowed")
+        logger.info(f"[{log_prefix}] {symbol} macro regime={macro} — BUY allowed{_gate_note}")
 
         # ── 365-day EMA anchor gate (BUY only) ───────────────────────────────
         anchor365 = _get_365_anchor(symbol)
         if anchor365 == "BELOW":
             logger.warning(f"[{log_prefix}] {symbol} BUY blocked — price is BELOW the 365-day EMA anchor")
             return False
-        logger.info(f"[{log_prefix}] {symbol} 365-day anchor={anchor365} — BUY allowed")
+        logger.info(f"[{log_prefix}] {symbol} 365-day anchor={anchor365} — BUY allowed{_gate_note}")
 
     # ── Proprietary 5-EMA Stack + Dark-Pool Volume (321) Guardrails ─────────
     try:
@@ -2205,6 +2215,15 @@ def main():
         executor_integrity = None  # type: ignore
 
     if executor_integrity is not None:
+        # Single-instance lock FIRST — before login, before any poll. Two
+        # executors were observed live on the same Robinhood account (one on
+        # current code at 6/6, one stale at 4/6), each enforcing its own
+        # cooldowns and daily caps in isolation while the account took double
+        # the position. Refusing to start is the only reliable fix; a human
+        # noticing a duplicate in a process list is not.
+        if not executor_integrity.acquire_single_instance_lock(logger):
+            raise SystemExit(1)
+
         _integrity_ok = executor_integrity.report(logger)
         if not _integrity_ok and executor_integrity.strict_mode():
             logger.error("[STARTUP] FATAL: EXECUTOR_STRICT_INTEGRITY=true and the live "

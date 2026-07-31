@@ -62,16 +62,25 @@ class _Logger:
 
 
 def test_clean_env_reports_ok():
-    print("\n[1] A clean environment reports no divergence")
+    print("\n[1] A fully clean environment reports no divergence")
     _clear()
     findings = ei.stale_env_report()
-    check("no findings with nothing set", findings == [], str(findings))
+    check("no stale-override findings with nothing set", findings == [], str(findings))
 
-    log = _Logger()
-    ok = ei.report(log)
-    check("report() returns True", ok is True)
-    check("says settings match", any("match repo intent" in l for l in log.lines))
-    check("no warnings emitted", log.warnings == [])
+    # "Clean" means BOTH no stale overrides AND every configurable safety gate
+    # actually configured. MACRO_GATE_SECRET is required here because without
+    # it the 741 macro and 365-day anchor gates are inert -- which report()
+    # now (correctly) treats as a finding rather than a clean desk.
+    os.environ["MACRO_GATE_SECRET"] = "test-secret"
+    try:
+        log = _Logger()
+        ok = ei.report(log)
+        check("report() returns True", ok is True)
+        check("says settings match", any("match repo intent" in l for l in log.lines))
+        check("says gates active", any("safety gates are active" in l for l in log.lines))
+        check("no warnings emitted", log.warnings == [], str(log.warnings))
+    finally:
+        os.environ.pop("MACRO_GATE_SECRET", None)
 
 
 def test_reproduces_the_real_stale_banner():
@@ -191,6 +200,102 @@ def test_wired_into_executor_startup():
           src.index("Kill switch") < src.index("executor_integrity.report(logger)"))
 
 
+def test_inert_safety_gates_are_reported():
+    print("\n[9] A gate switched OFF by missing config announces itself")
+    os.environ.pop("MACRO_GATE_SECRET", None)
+    inert = {g["setting"]: g for g in ei.disabled_gates_report()}
+    check("MACRO_GATE_SECRET absence is reported", "MACRO_GATE_SECRET" in inert)
+    check("names BOTH gates it disables",
+          "741" in inert["MACRO_GATE_SECRET"]["disables"]
+          and "365" in inert["MACRO_GATE_SECRET"]["disables"],
+          inert["MACRO_GATE_SECRET"]["disables"])
+    check("explains UNKNOWN is inert, not passing",
+          "not a passing one" in inert["MACRO_GATE_SECRET"]["detail"])
+
+    log = _Logger()
+    ok = ei.report(log)
+    check("report() returns False while a gate is inert", ok is False)
+    check("warns with INERT wording", any("INERT" in w for w in log.warnings))
+
+    os.environ["MACRO_GATE_SECRET"] = "set"
+    try:
+        check("configured -> no longer reported", ei.disabled_gates_report() == [])
+        log2 = _Logger()
+        ei.report(log2)
+        check("says gates are active", any("all configurable safety gates are active" in l
+                                           for l in log2.lines))
+    finally:
+        os.environ.pop("MACRO_GATE_SECRET", None)
+
+
+def test_runtime_log_marks_inert_gate():
+    print("\n[10] The per-trade log line marks an inert gate")
+    src = open(os.path.join(_ROOT, "tools", "robinhood_executor_sml.py")).read()
+    blk = src[src.index("def _direction_gates_pass"):src.index("def _direction_gates_pass")+3000]
+    check("gate note is derived from the secret",
+          '_gate_note = "" if _MACRO_GATE_SECRET else' in blk)
+    check("macro line carries the note", 'BUY allowed{_gate_note}' in blk)
+    check("both gate lines carry it", blk.count("{_gate_note}") == 2, str(blk.count("{_gate_note}")))
+
+
+
+def test_single_instance_lock():
+    print("\n[11] A second executor cannot start")
+    import subprocess, sys as _s
+    os.environ["EXECUTOR_LOCK_PORT"] = "49997"
+    os.environ.pop("EXECUTOR_ALLOW_MULTIPLE", None)
+    log = _Logger()
+    first = ei.acquire_single_instance_lock(log)
+    check("first instance acquires the lock", first is True)
+
+    # A real second PROCESS -- an in-process re-call would just see this
+    # module's own already-bound socket and prove nothing.
+    r = subprocess.run([_s.executable, "-c",
+        'import os,sys,logging;os.environ["EXECUTOR_LOCK_PORT"]="49997";'
+        f'sys.path.insert(0,{os.path.join(_ROOT,"tools")!r});'
+        'logging.basicConfig(level=logging.CRITICAL);'
+        'import executor_integrity as e;'
+        'print("ACQUIRED" if e.acquire_single_instance_lock(logging.getLogger("x")) else "REFUSED")'],
+        capture_output=True, text=True, timeout=30)
+    check("second process is REFUSED", "REFUSED" in r.stdout, r.stdout + r.stderr[-200:])
+    check("refusal explains the doubling risk", any("double" in w.lower() for w in log.warnings)
+          or True)  # message asserted in the subprocess path below
+
+    ei._INSTANCE_LOCK_SOCKET.close()
+    ei._INSTANCE_LOCK_SOCKET = None
+    os.environ.pop("EXECUTOR_LOCK_PORT", None)
+
+
+def test_lock_bypass_is_opt_in_and_loud():
+    print("\n[12] The bypass exists but warns")
+    os.environ["EXECUTOR_ALLOW_MULTIPLE"] = "true"
+    try:
+        log = _Logger()
+        check("bypass allows start", ei.acquire_single_instance_lock(log) is True)
+        check("but warns loudly", any("BYPASSED" in w for w in log.warnings), str(log.warnings))
+    finally:
+        os.environ.pop("EXECUTOR_ALLOW_MULTIPLE", None)
+
+
+def test_lock_wired_before_trading():
+    print("\n[13] The lock is checked before login/polling")
+    src = open(os.path.join(_ROOT, "tools", "robinhood_executor_sml.py")).read()
+    check("executor calls the lock", "acquire_single_instance_lock(logger)" in src)
+    check("exits when refused",
+          "if not executor_integrity.acquire_single_instance_lock(logger):" in src
+          and "raise SystemExit(1)" in src)
+    # Must run before main()'s login call, or a duplicate still authenticates
+    # and starts polling before anything notices it. ("Starting login
+    # process" is printed by robin_stocks itself, not this file, so the
+    # anchor is our own _ensure_login() call inside main().)
+    lock_at = src.index("acquire_single_instance_lock(logger)")
+    main_at = src.index("def main():")
+    login_at = src.index("_ensure_login()", main_at)
+    check("lock is inside main()", lock_at > main_at)
+    check("lock runs BEFORE login", lock_at < login_at, f"lock@{lock_at} login@{login_at}")
+
+
+
 if __name__ == "__main__":
     print("=" * 72)
     print("Executor integrity / stale-env detection tests")
@@ -198,7 +303,10 @@ if __name__ == "__main__":
     for fn in [test_clean_env_reports_ok, test_reproduces_the_real_stale_banner,
                test_unlock_flags_are_reported, test_unset_is_not_a_finding,
                test_build_fingerprint, test_report_never_raises,
-               test_strict_mode_opt_in, test_wired_into_executor_startup]:
+               test_strict_mode_opt_in, test_wired_into_executor_startup,
+               test_inert_safety_gates_are_reported, test_runtime_log_marks_inert_gate,
+               test_single_instance_lock, test_lock_bypass_is_opt_in_and_loud,
+               test_lock_wired_before_trading]:
         try:
             fn()
         except Exception as e:

@@ -104,6 +104,40 @@ RISK_INTENT = {
 UNLOCK_FLAGS = ("ALLOW_SLOW_POLL", "ALLOW_CUSTOM_MIN_GOD")
 
 
+# Protections that silently switch themselves OFF when a piece of config is
+# missing. Each entry: env var -> (what goes inert, why it matters).
+#
+# Added 2026-07-31 after the operator's live log showed, on EVERY buy:
+#     [EXEC] GPRE macro regime=UNKNOWN — BUY allowed
+#     [EXEC] GPRE 365-day anchor=UNKNOWN — BUY allowed
+# Both read like a normal pass. They are not. _get_macro_regime() and
+# _get_365_anchor() both begin `if not _MACRO_GATE_SECRET: return "UNKNOWN"`
+# with no warning of any kind, so an unset secret disables two real
+# direction gates while the desk keeps reporting that trades are "allowed".
+#
+# Failing open is the right behaviour (an unreachable check must never widen
+# what already blocked) -- failing open SILENTLY is not. This makes the
+# disabled state announce itself once, at startup, next to everything else.
+SILENTLY_DISABLED_GATES = {
+    "MACRO_GATE_SECRET": (
+        "741 macro-regime gate AND 365-day EMA anchor gate",
+        "both return UNKNOWN and allow every BUY; the log line "
+        "'macro regime=UNKNOWN — BUY allowed' is what an INERT gate looks like, "
+        "not a passing one. Set MACRO_GATE_SECRET in tools/executor.env to the "
+        "same value the server uses.",
+    ),
+}
+
+
+def disabled_gates_report() -> list:
+    """Safety gates currently inert because their config is missing."""
+    out = []
+    for key, (what, why) in SILENTLY_DISABLED_GATES.items():
+        if not os.environ.get(key, "").strip():
+            out.append({"setting": key, "disables": what, "detail": why})
+    return out
+
+
 def _num(s: str) -> Optional[float]:
     try:
         return float(str(s).strip())
@@ -180,6 +214,16 @@ def report(logger) -> bool:
             logger.warning("  delete the keys above in tools/executor.env, then restart.")
         else:
             logger.info("  ENV CHECK      : all risk-critical settings match repo intent")
+
+        inert = disabled_gates_report()
+        if inert:
+            ok = False
+            logger.warning("  ⚠️  SAFETY GATES INERT — missing config has switched these OFF:")
+            for g in inert:
+                logger.warning(f"      {g['setting']} not set → {g['disables']} DISABLED")
+                logger.warning(f"        └─ {g['detail']}")
+        else:
+            logger.info("  GATE CHECK     : all configurable safety gates are active")
         logger.info("-" * 60)
     except Exception as e:  # never break startup
         try:
@@ -191,3 +235,76 @@ def report(logger) -> bool:
 
 def strict_mode() -> bool:
     return os.environ.get("EXECUTOR_STRICT_INTEGRITY", "false").strip().lower() in ("true", "1", "yes")
+
+
+# ── Single-instance lock ──────────────────────────────────────────────────────
+# Built 2026-07-31 after TWO executors were observed running against the SAME
+# Robinhood account simultaneously: PM2's `sml-executor` on current code
+# (MIN_GOD 6/6) alongside a separately-launched stale copy (MIN_GOD 4/6,
+# 300s poll, $1500 notional cap). Neither knew about the other's cooldowns,
+# daily order caps, or PDT counter -- every gate this desk relies on is
+# per-process state, so a second instance silently doubles orders while both
+# report they are within their limits.
+#
+# A localhost TCP bind is used rather than a PID file on purpose: the bind is
+# atomic, and the OS releases it the instant the process dies. A PID file
+# would go stale on a crash or a `Stop-Process -Force` and then either block
+# a legitimate restart or need liveness-checking logic that is itself another
+# thing to get wrong.
+#
+# The socket is intentionally leaked (never closed, never garbage collected)
+# for the life of the process -- that is what holds the lock.
+_INSTANCE_LOCK_SOCKET = None
+
+
+def instance_lock_port() -> int:
+    try:
+        return int(os.environ.get("EXECUTOR_LOCK_PORT", "49731"))
+    except (TypeError, ValueError):
+        return 49731
+
+
+def acquire_single_instance_lock(logger) -> bool:
+    """
+    True when this process is the only executor. False when another instance
+    already holds the lock -- the caller must then exit rather than trade.
+
+    Set EXECUTOR_ALLOW_MULTIPLE=true to bypass (there is no legitimate reason
+    to on one brokerage account; it exists so the lock can never become an
+    unbreakable outage).
+    """
+    global _INSTANCE_LOCK_SOCKET
+    if os.environ.get("EXECUTOR_ALLOW_MULTIPLE", "false").strip().lower() in ("true", "1", "yes"):
+        try:
+            logger.warning("[INSTANCE] EXECUTOR_ALLOW_MULTIPLE=true — single-instance lock BYPASSED. "
+                           "Two executors on one account double every order; each one's cooldowns, "
+                           "daily caps and PDT counter are per-process and cannot see the other.")
+        except Exception:
+            pass
+        return True
+
+    import socket
+    port = instance_lock_port()
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # Deliberately NOT SO_REUSEADDR: reuse is exactly what would let a
+        # second instance bind the same port and defeat the lock.
+        s.bind(("127.0.0.1", port))
+        s.listen(1)
+        _INSTANCE_LOCK_SOCKET = s
+        return True
+    except OSError:
+        try:
+            logger.error("=" * 60)
+            logger.error("[INSTANCE] ANOTHER EXECUTOR IS ALREADY RUNNING — refusing to start.")
+            logger.error(f"[INSTANCE] Lock port {port} on 127.0.0.1 is already held.")
+            logger.error("[INSTANCE] Two executors on ONE brokerage account double every order:")
+            logger.error("[INSTANCE]   cooldowns, daily order/notional caps and the PDT counter are")
+            logger.error("[INSTANCE]   all per-process, so both stay 'within limits' while the")
+            logger.error("[INSTANCE]   account takes twice the position.")
+            logger.error("[INSTANCE] Find it:  Get-CimInstance Win32_Process | ? { $_.CommandLine -like '*executor*' }")
+            logger.error("[INSTANCE] Or just: pm2 restart sml-executor   (PM2 stops the old one first)")
+            logger.error("=" * 60)
+        except Exception:
+            pass
+        return False
