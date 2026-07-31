@@ -2215,6 +2215,15 @@ def main():
         executor_integrity = None  # type: ignore
 
     if executor_integrity is not None:
+        # Single-instance lock FIRST — before login, before any poll. Two
+        # executors were observed live on the same Robinhood account (one on
+        # current code at 6/6, one stale at 4/6), each enforcing its own
+        # cooldowns and daily caps in isolation while the account took double
+        # the position. Refusing to start is the only reliable fix; a human
+        # noticing a duplicate in a process list is not.
+        if not executor_integrity.acquire_single_instance_lock(logger):
+            raise SystemExit(1)
+
         _integrity_ok = executor_integrity.report(logger)
         if not _integrity_ok and executor_integrity.strict_mode():
             logger.error("[STARTUP] FATAL: EXECUTOR_STRICT_INTEGRITY=true and the live "

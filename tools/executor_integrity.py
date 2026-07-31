@@ -235,3 +235,76 @@ def report(logger) -> bool:
 
 def strict_mode() -> bool:
     return os.environ.get("EXECUTOR_STRICT_INTEGRITY", "false").strip().lower() in ("true", "1", "yes")
+
+
+# ── Single-instance lock ──────────────────────────────────────────────────────
+# Built 2026-07-31 after TWO executors were observed running against the SAME
+# Robinhood account simultaneously: PM2's `sml-executor` on current code
+# (MIN_GOD 6/6) alongside a separately-launched stale copy (MIN_GOD 4/6,
+# 300s poll, $1500 notional cap). Neither knew about the other's cooldowns,
+# daily order caps, or PDT counter -- every gate this desk relies on is
+# per-process state, so a second instance silently doubles orders while both
+# report they are within their limits.
+#
+# A localhost TCP bind is used rather than a PID file on purpose: the bind is
+# atomic, and the OS releases it the instant the process dies. A PID file
+# would go stale on a crash or a `Stop-Process -Force` and then either block
+# a legitimate restart or need liveness-checking logic that is itself another
+# thing to get wrong.
+#
+# The socket is intentionally leaked (never closed, never garbage collected)
+# for the life of the process -- that is what holds the lock.
+_INSTANCE_LOCK_SOCKET = None
+
+
+def instance_lock_port() -> int:
+    try:
+        return int(os.environ.get("EXECUTOR_LOCK_PORT", "49731"))
+    except (TypeError, ValueError):
+        return 49731
+
+
+def acquire_single_instance_lock(logger) -> bool:
+    """
+    True when this process is the only executor. False when another instance
+    already holds the lock -- the caller must then exit rather than trade.
+
+    Set EXECUTOR_ALLOW_MULTIPLE=true to bypass (there is no legitimate reason
+    to on one brokerage account; it exists so the lock can never become an
+    unbreakable outage).
+    """
+    global _INSTANCE_LOCK_SOCKET
+    if os.environ.get("EXECUTOR_ALLOW_MULTIPLE", "false").strip().lower() in ("true", "1", "yes"):
+        try:
+            logger.warning("[INSTANCE] EXECUTOR_ALLOW_MULTIPLE=true — single-instance lock BYPASSED. "
+                           "Two executors on one account double every order; each one's cooldowns, "
+                           "daily caps and PDT counter are per-process and cannot see the other.")
+        except Exception:
+            pass
+        return True
+
+    import socket
+    port = instance_lock_port()
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # Deliberately NOT SO_REUSEADDR: reuse is exactly what would let a
+        # second instance bind the same port and defeat the lock.
+        s.bind(("127.0.0.1", port))
+        s.listen(1)
+        _INSTANCE_LOCK_SOCKET = s
+        return True
+    except OSError:
+        try:
+            logger.error("=" * 60)
+            logger.error("[INSTANCE] ANOTHER EXECUTOR IS ALREADY RUNNING — refusing to start.")
+            logger.error(f"[INSTANCE] Lock port {port} on 127.0.0.1 is already held.")
+            logger.error("[INSTANCE] Two executors on ONE brokerage account double every order:")
+            logger.error("[INSTANCE]   cooldowns, daily order/notional caps and the PDT counter are")
+            logger.error("[INSTANCE]   all per-process, so both stay 'within limits' while the")
+            logger.error("[INSTANCE]   account takes twice the position.")
+            logger.error("[INSTANCE] Find it:  Get-CimInstance Win32_Process | ? { $_.CommandLine -like '*executor*' }")
+            logger.error("[INSTANCE] Or just: pm2 restart sml-executor   (PM2 stops the old one first)")
+            logger.error("=" * 60)
+        except Exception:
+            pass
+        return False
