@@ -1,0 +1,160 @@
+//@version=6
+strategy("ScriptMaster - Sovereign Squeeze Setup Finder v6", overlay=true, initial_capital=100000, default_qty_type=strategy.percent_of_equity, default_qty_value=10, commission_type=strategy.commission.percent, commission_value=0.03, slippage=1)
+
+// ==========================================
+// COLOR PALETTE (JET BLACK & NEON - NO GREY)
+// ==========================================
+color C_BLACK     = #000000 // Absolute Jet Black
+color C_WHITE     = #FFFFFF // Pure Bright White
+color C_CALL_NEON = #00FF66 // Full Shield Neon Green
+color C_PUT_NEON  = #FF0055 // Full Shield Neon Red
+color C_ORANGE    = #FF9900 // Macro EMA Orange
+color C_CYAN      = #00E5FF // Cyan Highlight
+
+bgcolor(C_BLACK, title="Jet Black Background")
+
+// ==========================================
+// INPUTS & CONFIGURATION
+// ==========================================
+var string G_SQUEEZE = "Squeeze Parameters"
+bbLength             = input.int(20, "Bollinger Band Length", minval=5, group=G_SQUEEZE)
+bbMult               = input.float(2.0, "BB Multiplier", minval=0.1, step=0.1, group=G_SQUEEZE)
+kcLength             = input.int(20, "Keltner Channel Length", minval=5, group=G_SQUEEZE)
+kcMult               = input.float(1.5, "KC Multiplier", minval=0.1, step=0.1, group=G_SQUEEZE)
+minSqzBars           = input.int(3, "Min Squeeze Compression Bars", minval=1, group=G_SQUEEZE)
+
+var string G_FILTERS = "Quality Filters"
+useRvol              = input.bool(true, "Require Volume Spike (RVOL >= 1.5x)?", group=G_FILTERS)
+minRvol              = input.float(1.5, "Min Relative Volume", minval=1.0, step=0.1, group=G_FILTERS)
+useMacroEma          = input.bool(true, "Require 200 EMA Trend Filter?", group=G_FILTERS)
+macroEmaLen          = input.int(200, "Macro EMA Length", minval=10, group=G_FILTERS)
+
+var string G_RISK    = "Risk & Execution Rules"
+rrRatio              = input.float(2.5, "Risk/Reward Ratio (R-Target)", minval=0.5, step=0.1, group=G_RISK)
+
+// ==========================================
+// SQUEEZE & MOMENTUM CALCULATIONS
+// ==========================================
+source   = close
+basisBB  = ta.sma(source, bbLength)
+devBB    = bbMult * ta.stdev(source, bbLength)
+upperBB  = basisBB + devBB
+lowerBB  = basisBB - devBB
+
+maKC     = ta.sma(source, kcLength)
+rangeKC  = ta.sma(ta.tr, kcLength)
+upperKC  = maKC + rangeKC * kcMult
+lowerKC  = maKC - rangeKC * kcMult
+
+// Squeeze States (Strict Bool Series)
+bool sqzOn  = (lowerBB > lowerKC) and (upperBB < upperKC)
+bool sqzOff = (lowerBB < lowerKC) and (upperBB > upperKC)
+
+// Linear Regression Momentum
+val     = ta.linreg(source - math.avg(math.avg(ta.highest(high, kcLength), ta.lowest(low, kcLength)), ta.sma(close, kcLength)), kcLength, 0)
+valPrev = ta.valuewhen(true, val[1], 0)
+
+// Relative Volume & Trend Filter
+macroEma = ta.ema(close, macroEmaLen)
+volEma   = ta.ema(volume, 20)
+rvol     = volEma > 0 ? (volume / volEma) : 1.0
+
+// Tracking Compression Duration
+var int sqzBarCount = 0
+if sqzOn
+    sqzBarCount += 1
+else if sqzOff
+    sqzBarCount := 0
+
+// ==========================================
+// ROOT-SCOPE CALCULATIONS & SIGNAL CONDITIONS
+// ==========================================
+// Strict Pine v6 Boolean & Integer History Check
+bool prevSqzOn      = sqzOn[1] == true
+int  prevSqzBars    = sqzBarCount[1]
+
+bool sqzFired       = sqzOff and prevSqzOn
+bool validSqzLength = prevSqzBars >= minSqzBars
+bool rvolPass       = not useRvol or (rvol >= minRvol)
+
+// Long Signal: Squeeze fires off, momentum accelerating upward, close above 200 EMA
+bool callSetup = sqzFired and validSqzLength and (val > valPrev) and (val > 0) and rvolPass and (not useMacroEma or close > macroEma)
+
+// Short Signal: Squeeze fires off, momentum accelerating downward, close below 200 EMA
+bool putSetup  = sqzFired and validSqzLength and (val < valPrev) and (val < 0) and rvolPass and (not useMacroEma or close < macroEma)
+
+// ==========================================
+// SETUP QUALITY SCORE (0 - 100)
+// ==========================================
+int sqzScore = 0
+if callSetup or putSetup
+    int scoreLen   = math.min(prevSqzBars * 10, 40)       // Max 40 pts for squeeze compression length
+    int scoreVol   = math.min(math.round(rvol * 20), 40)   // Max 40 pts for RVOL spike
+    int scoreTrend = (useMacroEma and ((callSetup and close > macroEma) or (putSetup and close < macroEma))) ? 20 : 10
+    sqzScore      := math.min(scoreLen + scoreVol + scoreTrend, 100)
+
+// ==========================================
+// TRADE EXECUTION & AUTO-TRADER ALERTS
+// ==========================================
+var string activeBias = "SEARCHING..."
+var float stopPrice   = na
+var float targetPrice = na
+
+if callSetup and strategy.position_size == 0
+    activeBias  := "CALL (LONG)"
+    stopPrice   := ta.lowest(low, 3)
+    targetPrice := close + ((close - stopPrice) * rrRatio)
+    strategy.entry("Sqz_Call", strategy.long)
+    strategy.exit("Exit_Call", "Sqz_Call", stop=stopPrice, limit=targetPrice)
+
+    // Webhook JSON Payload for Broker Engine / Automated Bot Router
+    alert('{"action": "BUY", "symbol": "' + syminfo.ticker + '", "type": "CALL", "score": ' + str.tostring(sqzScore) + ', "stop": ' + str.tostring(stopPrice, "#.##") + ', "target": ' + str.tostring(targetPrice, "#.##") + '}', alert.freq_once_per_bar_close)
+
+if putSetup and strategy.position_size == 0
+    activeBias  := "PUT (SHORT)"
+    stopPrice   := ta.highest(high, 3)
+    targetPrice := close - ((stopPrice - close) * rrRatio)
+    strategy.entry("Sqz_Put", strategy.short)
+    strategy.exit("Exit_Put", "Sqz_Put", stop=stopPrice, limit=targetPrice)
+
+    // Webhook JSON Payload for Broker Engine / Automated Bot Router
+    alert('{"action": "SELL", "symbol": "' + syminfo.ticker + '", "type": "PUT", "score": ' + str.tostring(sqzScore) + ', "stop": ' + str.tostring(stopPrice, "#.##") + ', "target": ' + str.tostring(targetPrice, "#.##") + '}', alert.freq_once_per_bar_close)
+
+if ta.change(time("D")) != 0 and timeframe.isintraday
+    activeBias  := "SEARCHING..."
+    stopPrice   := na
+    targetPrice := na
+
+// ==========================================
+// ON-CHART VISUALS (TINY ARROWS & HIGH-CONTRAST)
+// ==========================================
+plotchar(callSetup, title="CALL Squeeze Trigger", char="▲", location=location.belowbar, color=C_CALL_NEON, size=size.tiny)
+plotchar(putSetup, title="PUT Squeeze Trigger", char="▼", location=location.abovebar, color=C_PUT_NEON, size=size.tiny)
+
+plot(useMacroEma ? macroEma : na, "Macro 200 EMA", color=C_ORANGE, linewidth=2)
+
+// ==========================================
+// SMART HUD TABLE (JET BLACK / BRIGHT WHITE TEXT)
+// ==========================================
+var table hud = table.new(position = position.top_right, columns = 2, rows = 6, bgcolor = C_BLACK, border_color = C_BLACK, border_width = 1)
+
+if barstate.islast
+    color statusColor = activeBias == "CALL (LONG)" ? C_CALL_NEON : activeBias == "PUT (SHORT)" ? C_PUT_NEON : C_WHITE
+
+    table.cell(hud, 0, 0, "SOVEREIGN FINDER", bgcolor=C_BLACK, text_color=C_WHITE, text_size=size.normal)
+    table.cell(hud, 1, 0, "METRIC", bgcolor=C_BLACK, text_color=C_WHITE, text_size=size.normal)
+
+    table.cell(hud, 0, 1, "SQUEEZE STATE", bgcolor=C_BLACK, text_color=C_WHITE, text_size=size.normal)
+    table.cell(hud, 1, 1, sqzOn ? "COILING (" + str.tostring(sqzBarCount) + "b)" : "RELEASED", bgcolor=C_BLACK, text_color=sqzOn ? C_ORANGE : C_CYAN, text_size=size.normal)
+
+    table.cell(hud, 0, 2, "SETUP BIAS", bgcolor=C_BLACK, text_color=C_WHITE, text_size=size.normal)
+    table.cell(hud, 1, 2, activeBias, bgcolor=C_BLACK, text_color=statusColor, text_size=size.normal)
+
+    table.cell(hud, 0, 3, "SETUP SCORE", bgcolor=C_BLACK, text_color=C_WHITE, text_size=size.normal)
+    table.cell(hud, 1, 3, str.tostring(sqzScore) + " / 100", bgcolor=C_BLACK, text_color=sqzScore >= 70 ? C_CALL_NEON : C_WHITE, text_size=size.normal)
+
+    table.cell(hud, 0, 4, "RVOL EXPANSION", bgcolor=C_BLACK, text_color=C_WHITE, text_size=size.normal)
+    table.cell(hud, 1, 4, str.tostring(rvol, "#.##") + "x", bgcolor=C_BLACK, text_color=rvol >= 1.5 ? C_CALL_NEON : C_WHITE, text_size=size.normal)
+
+    table.cell(hud, 0, 5, "TARGET LEVEL", bgcolor=C_BLACK, text_color=C_WHITE, text_size=size.normal)
+    table.cell(hud, 1, 5, na(targetPrice) ? "SEARCHING" : str.tostring(targetPrice, "#.##"), bgcolor=C_BLACK, text_color=C_CALL_NEON, text_size=size.normal)
