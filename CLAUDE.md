@@ -523,6 +523,38 @@ Operator directive: full audit of the Robinhood/Tradier execution pipeline again
 
 **Env vars added (all optional, all with safe defaults — nothing must be set for this to work):** `IAM_LIMIT_OFFSET_BPS` (10), `IAM_MAX_SPREAD_PCT_EQUITY` (0.60), `IAM_MAX_SPREAD_PCT_OPTION` (8.0), `IAM_MAX_ENTRY_EXTENSION_ATR` (1.0), `IAM_MAX_BAR_EXTENSION_ATR` (2.0), `IAM_BAR_POS_PCT` (0.80), `POSITION_MANAGER_ENABLED` (true), `POSITION_MANAGER_INTERVAL` (15), `IAM_TRAIL_ATR_MULT` (2.0), `IAM_TRAIL_ARM_PCT` (1.0), `IAM_TARGET_PCT` (0=off), `IAM_GIVEBACK_ARM_PCT` (8.0), `IAM_GIVEBACK_PCT` (40.0), `IAM_OPTION_TIME_STOP_MIN` (30), `IAM_OPTION_HARD_STOP_PCT` (35.0). Setting `REDIS_URL` (already set for CASCADE/AEO) is what makes the position registry survive a redeploy.
 
+## The other TWO live-order surfaces had no working exit at all — CEOTrader was announcing closes that never happened (2026-07-31, follow-up to the execution-layer audit)
+
+Follow-up to the audit above. That work gave the IAM path real exits; this extends the same coverage to the two *other* surfaces that place real Tradier orders. Both were verified by reading the code and by grep against the real tree, not inferred.
+
+**State before this change, across all three live surfaces:**
+
+| Surface | Real orders | Stop placed | Exit management |
+|---|---|---|---|
+| `iam_executor.py` | yes | GTC stop + ATR trail + giveback | ✅ (fixed in PR #421) |
+| `core/api/convergence_bp.py` GOD_MODE | yes | **none, of any kind** | **none** |
+| `execution_engine.py` / CEOTrader | yes, Kelly-sized, auto-starts on boot | **none placed** (levels computed, stored, never sent) | **dead code** |
+
+**The worst finding — CEOTrader reported closes that never occurred.** `execution_engine.py` computes real ATR stop/target levels and stores them on each trade, but:
+1. `update_live_prices()` is the only function that reads those levels, and **nothing in this repo calls it** (confirmed by grep — the definition is its only occurrence). So the stop never even evaluated.
+2. Even if it had, the closer it calls — `_close_trade_unsafe()` — **places no broker order whatsoever**. It pops the tracking row, computes P&L from `current_price`, feeds `daily_pnl`, records a PDT day-trade, and fires a `💰 TRADE CLOSED — PnL: $X` Discord alert. The real Tradier position stays open indefinitely and the reported P&L is modelled, not a fill.
+
+This is a strong candidate for the operator's long-standing "says buy or sell but I can't find it in Robinhood" complaint, which the CEOTrader section elsewhere in this file explicitly notes was never fully root-caused. **A Discord "TRADE CLOSED" from this engine was not evidence that anything was sold.** (It is not the whole story — the Oracle-poll confidence gate in `robinhood_executor_sml.py` remains a separate real candidate, and that one is still not root-caused.)
+
+**Fixes:**
+- `execution_engine._register_for_exit_management()` — every real LIVE fill is registered with `position_manager` using the **verified** fill price (`poll_order_fill`'s average, not the signal price), the ATR-derived stop, and a real ATR for the trail. Tagged `CEO_TRADER`. Best-effort: a registration failure never rolls back an order that already reached the broker, but logs at ERROR since an unregistered live position is the exact unmanaged state this prevents.
+- `execution_engine._close_trade_unsafe()` — a LIVE close now routes the real broker order through `position_manager.close_position()`, which verifies held quantity against the live account first and self-heals if something already closed it, so it stays correct whether or not the exit manager got there first and **can never double-sell**. SHADOW closes are untouched and still never reach a broker.
+- `convergence_bp._fire_execution()` — the bare `place_equity_order(symbol, quantity, side)` defaulted to `order_type="market"` in `tradier_api` (unbounded slippage on a deliberately wide $1-$50 universe). Now a bounded marketable limit with an entry-only spread guard, exits falling back to market if nothing is quotable. Real BUY fills register with `position_manager` tagged `GOD_MODE`.
+- New `GOD_MODE_STOP_PCT` env var, **defaulting to `IAM_STOP_LOSS_PCT`** so both live surfaces share one stop policy unless deliberately split. Read at call time, so it changes without a redeploy.
+
+**What this does NOT do:**
+- **`update_live_prices()` was deliberately NOT wired up.** `position_manager` already does that job on a 15s loop with better logic (ratcheting trail, giveback lock, real position verification). Wiring a second exit loop over the same positions would risk double-sells. It remains dormant legacy code — but `_close_trade_unsafe` is now safe if anything ever does call it.
+- **No live-arming flag touched** — `TRADIER_LIVE`, `LIVE_TRADING_ENABLED`, `IAM_*`, `ROBINHOOD_PAPER_MODE`, `KILL_SWITCH` all unchanged. Whether CEOTrader *should* be live at all is still the separate, undiscussed question flagged in its own section; this only makes it survivable if it is.
+- **Still no backtest evidence** for the CEOTrader (OracleEngine → Kelly) pathway or for GOD_MODE. Real exits are not profitability evidence.
+- **Manually-opened positions are never touched** — `position_manager` only ever manages what was explicitly registered, and only ever places closing sells.
+- Tests: `tests/test_live_surface_exit_coverage.py` — 27 assertions. Notably it drives the **real** `_fire_execution()` end to end past every gate (arm switch, PDT, breaker, cross-engine claim) and asserts the order is a LIMIT with a bounded price and that the fill lands in the exit registry with a real stop; plus the dead-`update_live_prices` fact as a standing grep assertion, live-vs-shadow close behaviour, and the never-roll-back-an-order guarantee.
+- **Sandbox note for future agents:** `pandas`, `flask`, `flask-cors`, `python-dotenv`, `openai`, `stripe` and `redis` are all installable here with `pip install --ignore-installed <pkg>` (the plain install fails on a debian-managed `blinker` whose RECORD file is missing). Doing so makes `tests/test_convergence_daily_loss_breaker.py`, `tests/test_execution_engine_gex_fix.py` and most wiring tests runnable in-sandbox — several CLAUDE.md entries claim these "cannot run here," which is now only true of `tests/test_paper_trade_ledger.py`, blocked by a genuinely broken system `cryptography` (pyo3 `PanicException`), confirmed pre-existing against a clean stash.
+
 ## CEOTrader "Sovereign Autopilot" actually DOES auto-start on boot — CLAUDE.md's own prior claim was wrong (found 2026-07-31)
 
 The "CEOTrader / `execution_engine.py` (v5.0 legacy engine)" section elsewhere in this file claims: *"Not auto-started. Unlike every scanner in the IAM ecosystem... CEOTrader's autopilot loop only ever runs after an explicit `POST /api/autopilot/start` call. If nothing calls that endpoint, this entire engine is idle."* **This is wrong, found by actually reading `core/legacy.py` rather than trusting that prior claim.** `core/legacy.py`'s `init_services()` has, unconditionally on every boot:
