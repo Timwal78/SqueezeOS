@@ -71,7 +71,7 @@ VALID profit factor is higher than TRAIN at every single split point — the opp
 
 ## Live-arming
 
-**Not armed by this build.** `sovereign_squeeze_scanner.py` still feeds `iam_executor` under the default `IAM_PAPER_MODE=true` — it trades on paper out of the box, same as every scanner in this codebase. This evidence is now comparable in strength to what CASCADE/Breakout/S/R-Matrix cleared before those went live (each had a real, multi-trade, positive-PF backtest) — if the operator wants to add `SML_SOVEREIGN_SQUEEZE` to `IAM_PRIMARY_SYSTEM`, that is now a defensible decision on the evidence, but it is still the operator's decision to make and apply directly on Render, not something set here.
+**⚠️ UPDATE, same day: the operator gave the explicit go-ahead ("FLIP TO REAL MONEY YES") right after this evidence was disclosed.** See CLAUDE.md's "LIVE-ARMED for real trading" subsection under the Sovereign Squeeze Finder entry for the exact Render env var change (`IAM_PRIMARY_SYSTEM` needs `SML_SOVEREIGN_SQUEEZE` appended) — that edit still has to happen directly on Render by the operator, no sandbox here has ever had that access, so this remains paper-only until it's actually made.
 
 ## Reproducing this
 
