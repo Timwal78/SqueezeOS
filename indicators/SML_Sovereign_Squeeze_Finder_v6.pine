@@ -150,9 +150,16 @@ var float targetPrice = na
 f_whJson(_act) =>
     '{"passphrase":"' + whPass + '","system":"SML_SOVEREIGN_SQUEEZE","ticker":"' + syminfo.ticker + '","action":"' + _act + '","price":' + str.tostring(close, "#.####") + ',"score":' + str.tostring(sqzScore) + '}'
 
+// ta.lowest/ta.highest called unconditionally on every bar (Pine style rule
+// CW10003 — these must be called in the same scope on every calculation for
+// consistent internal state), then referenced conditionally below instead of
+// calling ta.* directly inside an if block.
+lowest3  = ta.lowest(low, 3)
+highest3 = ta.highest(high, 3)
+
 if callSetup and strategy.position_size == 0
     activeBias  := "CALL (LONG)"
-    stopPrice   := ta.lowest(low, 3)
+    stopPrice   := lowest3
     targetPrice := close + ((close - stopPrice) * rrRatio)
     strategy.entry("Sqz_Call", strategy.long)
     strategy.exit("Exit_Call", "Sqz_Call", stop=stopPrice, limit=targetPrice)
@@ -162,7 +169,7 @@ if callSetup and strategy.position_size == 0
 
 if putSetup and strategy.position_size == 0
     activeBias  := "PUT (SHORT)"
-    stopPrice   := ta.highest(high, 3)
+    stopPrice   := highest3
     targetPrice := close - ((stopPrice - close) * rrRatio)
     strategy.entry("Sqz_Put", strategy.short)
     strategy.exit("Exit_Put", "Sqz_Put", stop=stopPrice, limit=targetPrice)
@@ -196,7 +203,7 @@ bgcolor(showSqzBg and sqzOn ? C_GREY_DIM : na, title="Squeeze Compression Highli
 plot(showMomHist ? val : na, "Squeeze Momentum", style=plot.style_columns,
      color=val > 0 ? (val > valPrev ? C_CALL_NEON : color.new(C_CALL_NEON, 60)) : (val < valPrev ? C_PUT_NEON : color.new(C_PUT_NEON, 60)),
      display=display.pane)
-hline(0, "Zero Line", color=color.new(C_WHITE, 70), linestyle=hline.style_dotted, display=display.pane)
+hline(0, "Zero Line", color=color.new(C_WHITE, 70), linestyle=hline.style_dotted)
 
 // ==========================================
 // SMART HUD TABLE (JET BLACK / BRIGHT WHITE TEXT)
