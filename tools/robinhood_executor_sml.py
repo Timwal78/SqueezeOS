@@ -147,13 +147,33 @@ if os.environ.get("ALLOW_SLOW_POLL", "false").lower() == "true":
 else:
     POLL_INTERVAL_S = 45  # LOCKED
 
-MIN_GOD_STACKED = 3  # LOCKED — gate is god_stacked >= 3; stale env had 4/5
+# LOCKED — gate is god_stacked >= MIN_GOD_STACKED.
+#
+# Raised 3 -> 6 on 2026-07-31 (operator directive: "MINIMUM GOD SHOULD BE
+# 6/6"). Context for why this drifted: the operator had been unknowingly
+# running a v2.1 copy of this executor out of a DIFFERENT repository
+# (Timwal78/Omega-Swarm), resurrected on every boot by a stale PM2 entry, so
+# no edit to this file had reached the live desk in weeks. That copy's own
+# default was 6, which is where the operator's expectation came from; this
+# file had separately been locked at 3. Once PM2 was repointed here, the
+# live desk immediately began firing at 3/6 -- looser than the 4/6 it had
+# been running and much looser than intended -- e.g. a real CSMD buy at
+# SET9 3/6 with daily order/notional caps now uncapped.
+#
+# 6/6 is a full-convergence requirement: strictly fewer trades, higher bar
+# per trade. That is the operator's explicit call, not a tuned or backtested
+# value -- no evidence exists here that 6 outperforms 3.
+#
+# NOTE: core/api/convergence_bp.py has its OWN _MIN_GOD_STACKED (server-side
+# GOD MODE Tradier execution, default 5). It is a separate gate on a separate
+# broker and is deliberately NOT changed here.
+MIN_GOD_STACKED = 6
 # Allow explicit unlock only for research
 if os.environ.get("ALLOW_CUSTOM_MIN_GOD", "false").lower() == "true":
     try:
-        MIN_GOD_STACKED = max(1, min(6, int(os.environ.get("MIN_GOD_STACKED", "3"))))
+        MIN_GOD_STACKED = max(1, min(6, int(os.environ.get("MIN_GOD_STACKED", "6"))))
     except Exception:
-        MIN_GOD_STACKED = 3
+        MIN_GOD_STACKED = 6
 PDT_BALANCE_LIMIT  = float(os.environ.get("PDT_BALANCE_LIMIT", "2000.0"))  # SEC/FINRA eliminated the $25,000 PDT minimum + the 4-trade counter entirely, effective 2026-06-04 -- see core/api/convergence_bp.py's _PDT_BALANCE_LIMIT for the full citation/history. $25,000 was briefly hardcoded here the same day based on stale pre-2026 info. $2,000 matches the operator's directly-confirmed current Robinhood account behavior.
 PDT_MAX_TRADES     = int(os.environ.get("PDT_MAX_TRADES", "3"))  # 0 = uncapped (same 0-means-uncapped convention as MAX_ORDERS_PER_DAY/MAX_DAILY_NOTIONAL below). This is a voluntary internal shield, not the real PDT rule -- see PDT_BALANCE_LIMIT's comment above: the actual SEC/FINRA $25k/4-trade PDT rule was eliminated 2026-06-04. Set PDT_MAX_TRADES=0 in your local executor env to remove this shield entirely (operator directive 2026-07-30).
 PAPER_MODE           = os.environ.get("ROBINHOOD_PAPER_MODE", "false").lower() == "true"
