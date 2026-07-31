@@ -59,6 +59,7 @@ from core.api.sr_zone_pattern_bp import sr_zone_pattern_bp
 from core.api.gamma_pin_bp import gamma_pin_bp
 from core.api.squeeze_fuel_bp import squeeze_fuel_bp
 from core.api.mm_intel_bp import mm_intel_bp
+from core.api.sovereign_squeeze_bp import sovereign_squeeze_bp
 from core.api.paper_trades_bp import paper_trades_bp
 from core.api.position_manager_bp import position_manager_bp
 from core.api.vapl_bp import vapl_bp
@@ -205,6 +206,7 @@ def create_app():
     app.register_blueprint(gamma_pin_bp,     url_prefix='/api/gamma-pin')
     app.register_blueprint(squeeze_fuel_bp,  url_prefix='/api/squeeze-fuel')
     app.register_blueprint(mm_intel_bp,      url_prefix='/api/mm-intel')
+    app.register_blueprint(sovereign_squeeze_bp, url_prefix='/api/sovereign-squeeze')
     app.register_blueprint(paper_trades_bp,  url_prefix='/api/paper-trades')
     app.register_blueprint(position_manager_bp, url_prefix='/api/positions/managed')
     app.register_blueprint(vapl_bp)
@@ -312,6 +314,9 @@ def create_app():
 
                 from squeeze_fuel_scanner import start_squeeze_fuel_scanner
                 start_squeeze_fuel_scanner()
+
+                from sovereign_squeeze_scanner import start_sovereign_squeeze_scanner
+                start_sovereign_squeeze_scanner()
 
                 # Active exit manager. Runs far faster than any scanner (15s vs
                 # 300s) because an EXIT is time-critical in a way an entry is
