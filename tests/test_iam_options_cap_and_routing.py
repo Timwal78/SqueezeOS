@@ -92,12 +92,17 @@ def test_chain_fetch_uses_real_functions_not_nonexistent_get_option_chain():
     every single options order via this path has been raising AttributeError
     since it was written. Confirms the real get_expirations()/get_chain()
     functions are called and a full order can be placed end-to-end (paper)."""
+    # Fixture carries real BIDs as well as asks. A real Tradier chain always
+    # quotes both sides; the original fixture had ask-only, which the executor
+    # tolerated back when it priced blindly at ask x 1.05 with no reference to
+    # the bid at all. It now requires a two-sided quote (see the dead-contract
+    # test below), so the fixture has to look like a real chain.
     fake_expirations = ["2026-08-01", "2026-08-08"]
     fake_contracts = [
         {"symbol": "SPY260801C00450000", "option_type": "call", "strike": 450.0,
-         "ask": 2.50, "last": 2.45, "greeks": {"delta": 0.35}},
+         "bid": 2.45, "ask": 2.50, "last": 2.45, "greeks": {"delta": 0.35}},
         {"symbol": "SPY260801C00460000", "option_type": "call", "strike": 460.0,
-         "ask": 1.10, "last": 1.05, "greeks": {"delta": 0.15}},
+         "bid": 1.05, "ask": 1.10, "last": 1.05, "greeks": {"delta": 0.15}},
     ]
     with patch.dict(os.environ, {"IAM_PAPER_MODE": "true"}), \
          patch("tradier_api.get_expirations", return_value=fake_expirations) as mock_exp, \
@@ -154,6 +159,39 @@ def test_comma_list_instrument_value_does_not_parse_as_options():
     print("PASS: confirmed IAM_INSTRUMENT='equity,options' falls through to equity (must be a single value)")
 
 
+def test_dead_contract_with_no_bid_is_refused():
+    """2026-07-31 audit: the executor priced every option entry at ask x 1.05
+    with no reference to the bid, so it would happily buy a contract quoted
+    0.00 x 2.50 -- a contract nobody will buy back, i.e. no exit at any price.
+    core/api/delta_explosion_bp.py already excluded these from its rankings;
+    the executor never did. It must now refuse to open."""
+    fake_expirations = ["2026-08-01"]
+    dead = [{"symbol": "SPY260801C00450000", "option_type": "call", "strike": 450.0,
+             "bid": 0.0, "ask": 2.50, "last": 2.45, "greeks": {"delta": 0.35}}]
+    with patch.dict(os.environ, {"IAM_PAPER_MODE": "true"}), \
+         patch("tradier_api.get_expirations", return_value=fake_expirations), \
+         patch("tradier_api.get_chain", return_value=dead):
+        result = iam_executor._execute_tradier_options("SPY", "BUY", {}, 450.0)
+    assert result["status"] == "skipped", result
+    assert "dead contract" in result["message"], result["message"]
+    print("PASS: option with no bid is refused instead of bought at ask x 1.05")
+
+
+def test_excessively_wide_option_spread_is_refused():
+    """A 1.00 x 1.40 contract is a 33% round-trip spread -- routine on the wide
+    scan universe this desk runs. The old code would have paid 1.47 for it."""
+    fake_expirations = ["2026-08-01"]
+    wide = [{"symbol": "SPY260801C00450000", "option_type": "call", "strike": 450.0,
+             "bid": 1.00, "ask": 1.40, "last": 1.20, "greeks": {"delta": 0.35}}]
+    with patch.dict(os.environ, {"IAM_PAPER_MODE": "true", "IAM_MAX_SPREAD_PCT_OPTION": "8.0"}), \
+         patch("tradier_api.get_expirations", return_value=fake_expirations), \
+         patch("tradier_api.get_chain", return_value=wide):
+        result = iam_executor._execute_tradier_options("SPY", "BUY", {}, 450.0)
+    assert result["status"] == "skipped", result
+    assert "spread" in result["message"].lower(), result["message"]
+    print("PASS: 33% option spread refuses the entry")
+
+
 if __name__ == "__main__":
     test_occ_option_regex_classifies_call_and_put()
     test_count_open_option_positions_filters_by_type_and_qty()
@@ -165,4 +203,6 @@ if __name__ == "__main__":
     test_options_systems_override_forces_calls_even_in_equity_mode()
     test_non_listed_system_stays_on_global_equity_setting()
     test_comma_list_instrument_value_does_not_parse_as_options()
+    test_dead_contract_with_no_bid_is_refused()
+    test_excessively_wide_option_spread_is_refused()
     print("ALL PASS")
