@@ -247,6 +247,32 @@ class ExecutionEngine:
             return {"sl": round(price * (1 - fallback_sl_pct), 4), "tp": round(price * (1 + fallback_tp_pct), 4)}
         return {"sl": round(price * (1 + fallback_sl_pct), 4), "tp": round(price * (1 - fallback_tp_pct), 4)}
 
+    def _register_for_exit_management(self, symbol: str, quantity: int,
+                                       fill_price: float, stop_price=None):
+        """
+        Register a real LIVE fill with position_manager, which owns every
+        automated exit for it from that point on (hard stop, ATR trailing
+        stop, giveback lock, real broker sell with a live position check).
+
+        Best effort by design: a registration failure must never roll back an
+        order that already reached the broker. It is logged at ERROR because
+        an unregistered live position is exactly the unmanaged state this
+        exists to prevent.
+        """
+        try:
+            import position_manager
+            atr = self.calculate_atr(symbol)
+            position_manager.register_equity(
+                symbol, quantity, fill_price, "CEO_TRADER",
+                atr_value=(atr if atr and atr > 0 else None),
+                stop_price=stop_price,
+            )
+        except Exception as e:
+            logger.error(
+                f"[EXEC] ⚠️ {symbol} filled but could NOT be registered with "
+                f"position_manager ({e}) — this live position has no active exit management"
+            )
+
     def execute_shadow_trade(self, symbol: str, side: str, quantity: int, price: float = 0.0, reason: str = "Signal"):
         validation = self.should_execute(symbol, side)
         if not validation['allow']:
@@ -397,6 +423,19 @@ class ExecutionEngine:
                 with self.lock:
                     self.active_trades[trade_id] = trade
                 self.save_trades()
+
+                # Hand the real fill to the active exit manager. Before this,
+                # a CEOTrader/ExecutionEngine live position had NO working exit
+                # of any kind: the sl/tp above are computed and stored, but the
+                # only code that reads them (update_live_prices) is called by
+                # nothing in this repo, and _close_trade_unsafe -- the function
+                # it would call -- places no broker order at all, it just drops
+                # the bookkeeping row and posts a "TRADE CLOSED" Discord alert
+                # for a position that is in fact still open. Registering here
+                # gives these positions the same real hard stop / ATR trail /
+                # giveback lock every IAM position already gets.
+                self._register_for_exit_management(symbol, quantity, fill_price, levels.get('sl'))
+
                 if self.discord:
                     try:
                         self.discord.fire_beast_trade_alert_full(trade, is_live=True)
@@ -496,6 +535,29 @@ class ExecutionEngine:
         trade = self.active_trades.pop(trade_id)
         trade['status'] = 'CLOSED'
         trade['closed_at'] = time.time()
+
+        # A LIVE trade closing here used to be pure fiction: this function
+        # never placed a broker order, so it dropped the tracking row, booked
+        # a P&L number off `current_price`, and fired a "TRADE CLOSED" Discord
+        # alert while the real Tradier position stayed open indefinitely. Route
+        # the real close through position_manager, which verifies the held
+        # quantity against the live account before selling and self-heals if
+        # something already closed it — so this stays correct whether or not
+        # the exit manager got there first, and can never double-sell.
+        if trade.get('mode') == 'LIVE':
+            try:
+                import position_manager
+                close_result = position_manager.close_position(
+                    trade['symbol'], f"execution_engine close of {trade_id}"
+                )
+                trade['broker_close'] = close_result
+            except Exception as e:
+                logger.error(
+                    f"[EXECUTION] ⚠️ {trade_id} bookkeeping closed but the real broker "
+                    f"close FAILED ({e}) — the live position may still be open; "
+                    f"the P&L below is modelled, not a confirmed fill"
+                )
+                trade['broker_close'] = {"status": "error", "message": str(e)}
 
         # PDT tracking for live trades opened today
         if trade.get('mode') == 'LIVE':

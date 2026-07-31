@@ -102,6 +102,22 @@ _MIN_GOD_STACKED     = int(os.environ.get("MIN_GOD_STACKED", "5"))  # min SET9 c
 _BEAST_MAX_SHARES    = int(os.environ.get("BEAST_MAX_SHARES", "5"))
 _BEAST_MAX_PRICE     = float(os.environ.get("BEAST_MAX_PRICE", "500.0"))
 
+
+def _GOD_MODE_STOP_PCT() -> float:
+    """Hard protective stop % below a GOD MODE entry, handed to
+    position_manager. Read at call time (not import time) so it can be changed
+    without a redeploy, matching iam_executor's env-lambda convention. Defaults
+    to IAM_STOP_LOSS_PCT so both live surfaces share one stop policy unless
+    deliberately split via GOD_MODE_STOP_PCT."""
+    try:
+        default = float(os.environ.get("IAM_STOP_LOSS_PCT", "3.0"))
+    except (TypeError, ValueError):
+        default = 3.0
+    try:
+        return float(os.environ.get("GOD_MODE_STOP_PCT", default))
+    except (TypeError, ValueError):
+        return default
+
 # ── MASTER ARM SWITCH ────────────────────────────────────────────────────────
 # Decouples live DATA (TRADIER_ENV=production) from live EXECUTION.
 # Live trades ONLY fire when LIVE_TRADING_ENABLED is explicitly "true".
@@ -393,9 +409,54 @@ def _fire_execution(symbol: str, result: dict, dm=None) -> None:
     )
 
     # ── 1. Tradier cloud execution ───────────────────────────────────────────
+    # Previously a bare place_equity_order(), which defaults to order_type
+    # "market" in tradier_api -- unbounded slippage on both sides, on a
+    # deliberately wide $1-$50 universe. Now a bounded marketable limit, with
+    # an entry-only spread guard, matching what iam_executor already does.
+    # Exits are never spread-blocked and fall back to a market order if
+    # nothing is quotable: getting flat outranks the fill.
     try:
-        tradier_result = _t.place_equity_order(symbol, quantity, side)
+        import execution_quality
+        q = execution_quality.live_nbbo(symbol) or {}
+        bid, ask = q.get("bid"), q.get("ask")
+        book = execution_quality.have_book(bid, ask)
+        is_entry = side.lower() == "buy"
+
+        if book and is_entry:
+            ok, why = execution_quality.spread_ok(bid, ask, is_option=False, is_entry=True)
+            if not ok:
+                logger.info(f"[EXEC] {symbol} GOD MODE entry skipped — {why}")
+                return
+
+        limit_px = (execution_quality.marketable_limit(bid, ask, side.lower())
+                    or execution_quality.fallback_limit(price, side.lower()))
+        if limit_px:
+            tradier_result = _t.place_equity_order(symbol, quantity, side,
+                                                   order_type="limit", duration="day",
+                                                   limit_price=limit_px)
+        elif not is_entry:
+            logger.warning(f"[EXEC] {symbol} nothing priceable — exiting with a MARKET order (fail open)")
+            tradier_result = _t.place_equity_order(symbol, quantity, side)
+        else:
+            logger.info(f"[EXEC] {symbol} GOD MODE entry skipped — no price to bound the order")
+            return
         logger.info(f"[EXEC] Tradier → {tradier_result.get('status')} order_id={tradier_result.get('order_id','')}")
+
+        # Hand a real BUY fill to the active exit manager. GOD MODE placed no
+        # stop-loss of any kind and had no exit path whatsoever -- a position
+        # it opened was held until something else happened to sell it.
+        if is_entry and tradier_result.get("status") == "success":
+            try:
+                import position_manager
+                fill_px = limit_px or price
+                position_manager.register_equity(
+                    symbol, quantity, fill_px, "GOD_MODE",
+                    atr_value=None,
+                    stop_price=round(fill_px * (1.0 - _GOD_MODE_STOP_PCT() / 100.0), 2),
+                )
+            except Exception as e:
+                logger.error(f"[EXEC] ⚠️ {symbol} filled but could NOT be registered with "
+                             f"position_manager ({e}) — no active exit management on this position")
     except Exception as e:
         logger.error(f"[EXEC] Tradier error: {e}")
 
