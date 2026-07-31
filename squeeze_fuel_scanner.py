@@ -167,6 +167,22 @@ def scan_once() -> int:
             except Exception:
                 pass
 
+            # Funnel diagnostics — record WHICH gate blocked this evaluation.
+            # This engine needs seven conditions to align before it fires, and
+            # nothing previously measured how often that happens, so an engine
+            # that never fires looks identical to a quiet market. Pure
+            # observation: it cannot change the decision below. See
+            # squeeze_funnel.py.
+            try:
+                import squeeze_funnel
+                from squeeze_fuel_engine import ENTRY_THRESHOLD as _THRESH
+                row = squeeze_funnel.record(sym, result, _THRESH)
+                if row and not row["fired"]:
+                    logger.debug(f"[SQUEEZE-FUEL] {sym} blocked by {row['gate']} "
+                                 f"(composite {row['composite']}/{_THRESH})")
+            except Exception as e:
+                logger.debug(f"[SQUEEZE-FUEL] funnel record failed for {sym} (non-fatal): {e}")
+
             if result.get("action") != "BUY":
                 continue
 
