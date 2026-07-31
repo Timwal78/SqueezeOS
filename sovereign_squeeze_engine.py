@@ -53,30 +53,46 @@ import os
 
 @dataclass
 class SovereignSqueezeParams:
-    bb_length: int = 20
-    bb_mult: float = 2.0
-    kc_length: int = 20
-    kc_mult: float = 1.5
-    min_sqz_bars: int = 3
+    """Defaults below are the TRAIN/VALID-validated config from
+    docs/SOVEREIGN_SQUEEZE_OPTIMIZATION_2026-07-31.md, NOT the operator's
+    originally-pasted Pine script defaults. The script's own submitted
+    defaults (bb_length=20/mult=2.0, kc_length=20/mult=1.5, min_sqz_bars=3,
+    min_rvol=1.5, rr_ratio=2.5) measured PF 0.34 on the real 2021-2026
+    dataset in docs/SOVEREIGN_SQUEEZE_BACKTEST_2026-07-31.md — not
+    profitable. A chronological TRAIN(67%)/VALID(33%) parameter search
+    (tests/optimize_sovereign_squeeze.py) found this config instead:
+    96 real trades across 6 symbols, PF 2.70 aggregate, and — the part that
+    actually matters against overfitting — VALID PF *exceeded* TRAIN PF
+    (2.52->3.56) and stayed >1.0 across four different split points
+    (50/60/67/75%) and across single-parameter perturbations in five of
+    six tuned dimensions. The one axis that is narrow rather than broadly
+    robust is bb_length/kc_length itself (only 10 tested well; 14/15/20 did
+    not) — disclosed, not hidden. See the optimization doc for the full
+    robustness writeup before changing these again without re-validating."""
+    bb_length: int = 10
+    bb_mult: float = 2.5
+    kc_length: int = 10
+    kc_mult: float = 2.0
+    min_sqz_bars: int = 2
     use_rvol: bool = True
-    min_rvol: float = 1.5
+    min_rvol: float = 1.0
     use_macro_ema: bool = True
     macro_ema_len: int = 200
-    rr_ratio: float = 2.5
+    rr_ratio: float = 2.0
 
     @classmethod
     def from_env(cls) -> "SovereignSqueezeParams":
         return cls(
-            bb_length=int(os.environ.get("SOVEREIGN_SQZ_BB_LENGTH", "20")),
-            bb_mult=float(os.environ.get("SOVEREIGN_SQZ_BB_MULT", "2.0")),
-            kc_length=int(os.environ.get("SOVEREIGN_SQZ_KC_LENGTH", "20")),
-            kc_mult=float(os.environ.get("SOVEREIGN_SQZ_KC_MULT", "1.5")),
-            min_sqz_bars=int(os.environ.get("SOVEREIGN_SQZ_MIN_BARS", "3")),
+            bb_length=int(os.environ.get("SOVEREIGN_SQZ_BB_LENGTH", "10")),
+            bb_mult=float(os.environ.get("SOVEREIGN_SQZ_BB_MULT", "2.5")),
+            kc_length=int(os.environ.get("SOVEREIGN_SQZ_KC_LENGTH", "10")),
+            kc_mult=float(os.environ.get("SOVEREIGN_SQZ_KC_MULT", "2.0")),
+            min_sqz_bars=int(os.environ.get("SOVEREIGN_SQZ_MIN_BARS", "2")),
             use_rvol=os.environ.get("SOVEREIGN_SQZ_USE_RVOL", "true").strip().lower() == "true",
-            min_rvol=float(os.environ.get("SOVEREIGN_SQZ_MIN_RVOL", "1.5")),
+            min_rvol=float(os.environ.get("SOVEREIGN_SQZ_MIN_RVOL", "1.0")),
             use_macro_ema=os.environ.get("SOVEREIGN_SQZ_USE_MACRO_EMA", "true").strip().lower() == "true",
             macro_ema_len=int(os.environ.get("SOVEREIGN_SQZ_MACRO_EMA_LEN", "200")),
-            rr_ratio=float(os.environ.get("SOVEREIGN_SQZ_RR_RATIO", "2.5")),
+            rr_ratio=float(os.environ.get("SOVEREIGN_SQZ_RR_RATIO", "2.0")),
         )
 
 
