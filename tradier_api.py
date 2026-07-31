@@ -304,6 +304,17 @@ def get_timesales(symbol: str, interval: str = "15min", days_back: int = 35) -> 
     return result
 
 
+def _extract_error(resp: Optional[Dict[str, Any]]) -> str:
+    """Tradier's error shape isn't fully consistent -- 'error' is sometimes a
+    single string, sometimes a list of strings (multiple validation errors on
+    one request). Handles both instead of silently falling back to
+    'unknown error' whenever the shape isn't the single-string case."""
+    err = (resp or {}).get("errors", {}).get("error", "unknown error")
+    if isinstance(err, list):
+        return "; ".join(str(e) for e in err) if err else "unknown error"
+    return str(err)
+
+
 def _post(path: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     headers = _headers()
     if not headers:
@@ -319,6 +330,16 @@ def _post(path: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             logger.error("[TRADIER] 401 Unauthorized — TRADIER_API_KEY rejected")
             return None
         logger.warning(f"[TRADIER] POST {path} HTTP {r.status_code}: {r.text[:400]}")
+        # Tradier's 4xx error bodies are real JSON with an "errors" key -- return
+        # it (instead of None) so callers can surface the REAL rejection reason.
+        # Before this, every order failure here fell back to a generic "unknown
+        # error" downstream, discarding exactly the text an operator needs to
+        # debug a rejected order (e.g. "Invalid parameter, duration: post market
+        # no longer available.").
+        try:
+            return r.json()
+        except ValueError:
+            return None
     except requests.RequestException as e:
         logger.warning(f"[TRADIER] POST {path} network error: {e}")
     return None
@@ -443,9 +464,9 @@ def place_equity_order(symbol: str, quantity: int, side: str,
         order_id = resp["order"]["id"]
         logger.info(f"[TRADIER] Order placed ✅ order_id={order_id}")
         return {"status": "success", "order_id": order_id, "raw": resp}
-    err = (resp or {}).get("errors", {}).get("error", "unknown error")
+    err = _extract_error(resp)
     logger.error(f"[TRADIER] Order failed: {err}")
-    return {"status": "error", "message": str(err)}
+    return {"status": "error", "message": err}
 
 
 def place_option_order(option_symbol: str, quantity: int, side: str,
@@ -480,9 +501,9 @@ def place_option_order(option_symbol: str, quantity: int, side: str,
         order_id = resp["order"]["id"]
         logger.info(f"[TRADIER] Option order placed ✅ order_id={order_id}")
         return {"status": "success", "order_id": order_id, "raw": resp}
-    err = (resp or {}).get("errors", {}).get("error", "unknown error")
+    err = _extract_error(resp)
     logger.error(f"[TRADIER] Option order failed: {err}")
-    return {"status": "error", "message": str(err)}
+    return {"status": "error", "message": err}
 
 
 def get_order_status(order_id) -> Optional[Dict[str, Any]]:

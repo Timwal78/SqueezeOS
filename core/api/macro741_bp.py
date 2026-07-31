@@ -232,7 +232,7 @@ def _fire_discord(results: list[dict]) -> None:
 
 
 def _run_warmup() -> None:
-    """Pre-warm cache for MACRO_STACK_WARMUP symbols after a short startup delay."""
+    """Pre-warm cache for MACRO_STACK_WARMUP_SYMBOLS symbols after a short startup delay."""
     if not _WARMUP_SYMBOLS or not MACRO_PERIODS:
         return
     time.sleep(8)

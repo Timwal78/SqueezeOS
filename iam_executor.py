@@ -58,7 +58,8 @@ logger = logging.getLogger("IAM-EXEC")
 
 def _get_macro_regime(symbol: str) -> str:
     """
-    Returns the 741 Pure Macro regime for a symbol.
+    Returns the Pure Macro regime for a symbol (core/api/macro_bp.py -- anchor
+    period is whatever MACRO_STACK_CSV's last value is, not necessarily 741).
     Direct Python import — no HTTP call, no public exposure of the paid product.
     Fails open: UNKNOWN / INSUFFICIENT_DATA never block a trade.
     Only PERFECT_BEARISH_REGIME blocks BUY orders.
@@ -286,6 +287,37 @@ def _ext_hours_duration() -> str:
     return "pre" if t < _dtime(9, 30) else "post"
 
 
+# Real, observed 2026-07-30: Tradier started rejecting duration="post" equity
+# orders ("Invalid parameter, duration: post market no longer available.") --
+# apparently a Tradier-side change, not confirmable from this sandbox since
+# docs.tradier.com/api.tradier.com are both network-blocked here. Rather than
+# guess a replacement duration value on a live-money order parameter (the
+# exact kind of unverified fabrication this codebase's golden rule forbids),
+# this tracks per-value failures in-process and skips straight to the
+# Robinhood-queue fallback (already a real, working safety net -- confirmed
+# in production logs) instead of repeatedly re-attempting a call already
+# known broken this run. Resets on every restart/redeploy so it always
+# retries fresh in case Tradier restores support or this was transient.
+_EXT_HOURS_DURATION_BROKEN: set = set()  # {"pre", "post"} as confirmed broken this run
+
+
+def _is_ext_hours_duration_broken(duration: str) -> bool:
+    return duration in _EXT_HOURS_DURATION_BROKEN
+
+
+def _mark_ext_hours_duration_broken(duration: str, tradier_message: str) -> None:
+    if duration not in _EXT_HOURS_DURATION_BROKEN:
+        _EXT_HOURS_DURATION_BROKEN.add(duration)
+        logger.error(
+            f"[IAM-EXEC] Tradier rejected duration='{duration}' extended-hours equity "
+            f"orders this run ({tradier_message!r}) -- Tradier's actual current "
+            f"requirement couldn't be verified from this sandbox. Skipping further "
+            f"Tradier attempts with this duration for the rest of this process's "
+            f"uptime; falling straight to the Robinhood queue instead. Will retry "
+            f"fresh on next restart/redeploy."
+        )
+
+
 # ── Safety gate stack ──────────────────────────────────────────────────────────
 def _gate_check(sym: str, resolution: dict, time_window: str,
                 confidence: float) -> Optional[str]:
@@ -484,10 +516,16 @@ def _execute_tradier_equity(sym: str, action: str, price: float, system: str = "
                     "stop_loss": stop_px, "placed": False}
 
         if _is_extended_hours():
-            limit_px = round(price * 1.002, 2) if side == "buy" else round(price * 0.998, 2)
             duration = _ext_hours_duration()
-            result = place_equity_order(sym, qty, side, order_type="limit",
-                                        duration=duration, limit_price=limit_px)
+            if _is_ext_hours_duration_broken(duration):
+                result = {"status": "skipped",
+                          "message": f"Tradier duration='{duration}' known broken this run — see log; falling to Robinhood"}
+            else:
+                limit_px = round(price * 1.002, 2) if side == "buy" else round(price * 0.998, 2)
+                result = place_equity_order(sym, qty, side, order_type="limit",
+                                            duration=duration, limit_price=limit_px)
+                if result.get("status") != "success" and "duration" in str(result.get("message", "")).lower():
+                    _mark_ext_hours_duration_broken(duration, result.get("message", ""))
         else:
             result = place_equity_order(sym, qty, side, order_type="market", duration="day")
         result["qty"]   = qty
@@ -750,12 +788,12 @@ def execute_from_resolution(sym: str, resolution: dict,
             logger.info(f"[IAM-EXEC] {sym} blocked: {block_reason}")
             return
 
-        # 741 Pure Macro Matrix gate — only blocks BUY; SELL/exits always proceed
+        # Pure Macro Matrix gate — only blocks BUY; SELL/exits always proceed
         if action == "BUY":
             macro = _get_macro_regime(sym)
             if macro == "PERFECT_BEARISH_REGIME":
                 logger.warning(
-                    f"[IAM-EXEC] {sym} BUY blocked — 741 macro regime is PERFECT_BEARISH_REGIME"
+                    f"[IAM-EXEC] {sym} BUY blocked — macro regime is PERFECT_BEARISH_REGIME"
                 )
                 return
             logger.info(f"[IAM-EXEC] {sym} macro regime={macro} — BUY allowed")
