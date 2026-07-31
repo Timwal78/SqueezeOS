@@ -9,7 +9,7 @@ GET /api/squeeze-fuel/<symbol>  Free — on-demand composite read using the
 """
 import logging
 
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 
 from core.legacy import clean_data
 
@@ -23,6 +23,37 @@ def squeeze_fuel_status():
     try:
         import squeeze_fuel_scanner
         return jsonify(clean_data({"status": "success", "scanner": squeeze_fuel_scanner.status()}))
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# Registered BEFORE the /<symbol> catch-all below. Flask does rank static
+# rules above converter rules, but relying on that implicitly is how a
+# diagnostic endpoint quietly becomes a lookup for a ticker named "funnel".
+@squeeze_fuel_bp.route("/funnel", methods=["GET"])
+def squeeze_fuel_funnel():
+    """
+    Which gate is actually blocking squeeze entries.
+
+    This engine requires seven conditions to align before it fires a BUY, and
+    nothing measured how often that happens -- so an engine that never fires
+    is indistinguishable from a quiet market. Free/read-only.
+
+      ?hours=24        limit to the last N hours (0/omitted = whole window)
+      ?near_miss=5     points below threshold that count as a near miss
+    """
+    try:
+        import squeeze_funnel
+        try:
+            hours = float(request.args.get("hours", 0) or 0)
+        except (TypeError, ValueError):
+            hours = 0.0
+        try:
+            near = float(request.args.get("near_miss", 5) or 5)
+        except (TypeError, ValueError):
+            near = 5.0
+        return jsonify(clean_data(squeeze_funnel.summary(window_hours=hours,
+                                                         near_miss_points=near)))
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
