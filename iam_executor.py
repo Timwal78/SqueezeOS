@@ -320,10 +320,23 @@ def _mark_ext_hours_duration_broken(duration: str, tradier_message: str) -> None
 
 # ── Safety gate stack ──────────────────────────────────────────────────────────
 def _gate_check(sym: str, resolution: dict, time_window: str,
-                confidence: float) -> Optional[str]:
+                confidence: float, is_exit: bool = False) -> Optional[str]:
     """
     Returns None if all gates pass, or a reason string if blocked.
     All checks are fast — no network calls.
+
+    `is_exit=True` runs the EXIT-SAFE subset. This distinction is a real bug
+    fix, not a refactor: this function previously applied every gate to every
+    action, so a SELL — the signal that protects capital — could be silently
+    refused by the daily order cap, the per-symbol cooldown, the confidence
+    floor, the time-window filter, or the daily-loss breaker. The breaker case
+    was the worst: once a bad day tripped it, the executor stopped closing
+    losing positions at exactly the moment it most needed to. CLAUDE.md's
+    "exits never blocked" was only ever true of the symbol allowlist.
+
+    Gates that still apply to an exit are the ones that make an exit
+    impossible rather than merely unwanted: the master arm switch, a valid
+    execution mode, and market hours.
     """
     _roll_day()
 
@@ -334,11 +347,16 @@ def _gate_check(sym: str, resolution: dict, time_window: str,
     if mode not in ("alert", "tradier", "both"):
         return f"unknown IAM_EXECUTION_MODE={mode}"
 
-    if _state["breaker_tripped"]:
-        return f"daily-loss breaker tripped (realized={_state['realized_pnl']:.2f})"
-
     if not _is_market_hours() and mode != "alert":
         return "outside market hours"
+
+    if is_exit:
+        # Everything below this line is an ENTRY-quality filter — "should we
+        # open this?" — and none of it should ever stop us getting flat.
+        return None
+
+    if _state["breaker_tripped"]:
+        return f"daily-loss breaker tripped (realized={_state['realized_pnl']:.2f})"
 
     # Allowlist blocks ENTRIES only — a SELL on an open position must always
     # be free to protect capital, even if the symbol was later delisted here.
@@ -364,6 +382,17 @@ def _gate_check(sym: str, resolution: dict, time_window: str,
     return None  # all gates passed
 
 
+def _entry_gate_check(sym: str, resolution: dict, time_window: str,
+                      confidence: float) -> Optional[str]:
+    """
+    The entry-only subset, callable independently. Used by the SELL branch's
+    PUT leg: a bearish resolution's "close the long" half is an exit and must
+    always run, but its "buy a put" half is a brand-new position opening real
+    risk and still has to clear every entry gate.
+    """
+    return _gate_check(sym, resolution, time_window, confidence, is_exit=False)
+
+
 # Symbols that must NEVER be held overnight — 0DTE options only, no equity route
 # regardless of IAM_INSTRUMENT/IAM_OPTION_EXPIRY_DAYS. Still fully eligible for the
 # dynamic scan universe (iam_scanner.py) — this only constrains execution, not discovery.
@@ -372,8 +401,55 @@ ODTE_ONLY_SYMBOLS = lambda: {
 }
 
 
+# ── Preflight: live quote + ATR, fetched once per decision ─────────────────────
+def _preflight(sym: str) -> tuple:
+    """
+    (quote, atr_value) — both real or both honestly None. Never fabricates a
+    price. Failures here degrade to the previous behaviour (signal price, no
+    chase guard) rather than blocking the trade, and are logged.
+    """
+    quote = None
+    atr_value = None
+    try:
+        import execution_quality
+        quote = execution_quality.live_nbbo(sym)
+    except Exception as e:
+        logger.warning(f"[IAM-EXEC] {sym} live quote unavailable ({e}) — falling back to signal price")
+    try:
+        import execution_quality
+        from core.legacy import get_service
+        dm = get_service("dm")
+        if dm:
+            bars = dm.get_bars(sym, "1D", 40) or []
+            atr_value = execution_quality.atr(bars, 14)
+            _bars_cache[sym] = bars
+    except Exception as e:
+        logger.warning(f"[IAM-EXEC] {sym} ATR unavailable ({e}) — chase guard degraded")
+    return quote, atr_value
+
+
+_bars_cache: dict = {}   # sym -> most recent bars pulled by _preflight this pass
+
+
+def _chase_check(sym: str, action: str, signal_price: float, current_price: float) -> tuple:
+    """(allowed, reason) — anti-chase entry guard. Fails OPEN when the real
+    bar history needed to measure extension is unavailable, since refusing
+    every entry on missing data would silently disable the live systems."""
+    try:
+        import execution_quality
+        bars = _bars_cache.get(sym) or []
+        if not bars or not signal_price or signal_price <= 0:
+            return True, "no bars/signal price — chase guard not applied"
+        return execution_quality.chase_guard(action, signal_price, current_price, bars)
+    except Exception as e:
+        logger.warning(f"[IAM-EXEC] {sym} chase guard error ({e}) — allowing")
+        return True, f"chase guard error: {e}"
+
+
 # ── Tradier execution ──────────────────────────────────────────────────────────
-def _execute_tradier(sym: str, action: str, resolution: dict, price: float) -> dict:
+def _execute_tradier(sym: str, action: str, resolution: dict, price: float,
+                     quote: Optional[dict] = None,
+                     atr_value: Optional[float] = None) -> dict:
     instrument = INSTRUMENT()
     is_odte = sym.upper() in ODTE_ONLY_SYMBOLS()
     # Same system-tag resolution execute_from_resolution() already uses for
@@ -404,6 +480,15 @@ def _execute_tradier(sym: str, action: str, resolution: dict, price: float) -> d
             # claimed this leg this window.
             logger.info(f"[IAM-EXEC] {sym} PUT entry already claimed by another engine this window — skipping")
             results["put"] = {"status": "skipped", "message": "claimed by another engine"}
+        elif (entry_block := _entry_gate_check(sym, resolution,
+                                               resolution.get("_time_window", "NEAR_TERM"),
+                                               float(resolution.get("resolution_confidence") or 0.0))):
+            # The close above ran under the relaxed EXIT gate (capital
+            # protection must never be blocked). This put buy is a NEW
+            # position, so it independently re-clears the full entry stack —
+            # daily order cap, cooldown, loss breaker, allowlist and all.
+            logger.info(f"[IAM-EXEC] {sym} long closed, but PUT entry blocked: {entry_block}")
+            results["put"] = {"status": "skipped", "message": f"entry gate: {entry_block}"}
         else:
             expiry_override = 0 if is_odte else None
             results["put"] = _execute_tradier_options(sym, action, resolution, price, expiry_days_override=expiry_override)
@@ -438,7 +523,7 @@ def _execute_tradier(sym: str, action: str, resolution: dict, price: float) -> d
     # Tradier does not support options orders in extended hours — fall back to equity
     if _is_extended_hours():
         logger.info(f"[IAM-EXEC] Extended hours: routing {sym} to equity (options unavailable)")
-        return _execute_tradier_equity(sym, action, price, system)
+        return _execute_tradier_equity(sym, action, price, system, quote=quote, atr_value=atr_value)
     # auto mode: try options on any symbol — chain availability is the natural gate.
     # BUY signal → calls; SELL signal → puts. Falls back gracefully if no chain exists.
     # IAM_OPTIONS_SYSTEMS forces options for specific systems regardless of the
@@ -448,7 +533,7 @@ def _execute_tradier(sym: str, action: str, resolution: dict, price: float) -> d
     if instrument in ("options", "auto") or system in OPTIONS_SYSTEMS():
         return _execute_tradier_options(sym, action, resolution, price)
     else:
-        return _execute_tradier_equity(sym, action, price, system)
+        return _execute_tradier_equity(sym, action, price, system, quote=quote, atr_value=atr_value)
 
 
 def _close_equity_position(sym: str, price: float, system: str = "IAM") -> Optional[dict]:
@@ -470,24 +555,39 @@ def _close_equity_position(sym: str, price: float, system: str = "IAM") -> Optio
         if PAPER_MODE():
             logger.info(f"[IAM-EXEC][PAPER] Would close long: SELL {qty}x {sym} @ ${price:.2f} (protect gains)")
             _ledger_sell(sym, qty, price, system)
+            _untrack(sym)
             return {"mode": "paper", "side": "sell", "qty": qty, "price": price, "placed": False}
+
+        import execution_quality
+        q = execution_quality.live_nbbo(sym) or {}
 
         if _is_extended_hours():
             if price <= 0:
                 logger.warning(f"[IAM-EXEC] {sym} close skipped — extended hours requires a live price for the limit order")
                 return {"status": "skipped", "message": "no live price for extended-hours limit close"}
-            limit_px = round(price * 0.998, 2)
+            limit_px = (execution_quality.marketable_limit(q.get("bid"), q.get("ask"), "sell")
+                        or round(price * 0.998, 2))
             duration = _ext_hours_duration()
             result = place_equity_order(sym, qty, "sell", order_type="limit",
                                         duration=duration, limit_price=limit_px)
         else:
-            result = place_equity_order(sym, qty, "sell", order_type="market", duration="day")
+            # Bounded exit price when the book supports one; a raw market
+            # order otherwise. Exits FAIL OPEN — getting flat outranks the
+            # fill, so a missing quote must never leave the position on.
+            limit_px = execution_quality.marketable_limit(q.get("bid"), q.get("ask"), "sell")
+            if limit_px:
+                result = place_equity_order(sym, qty, "sell", order_type="limit",
+                                            duration="day", limit_price=limit_px)
+            else:
+                logger.warning(f"[IAM-EXEC] {sym} no two-sided quote — closing with a MARKET order (fail open)")
+                result = place_equity_order(sym, qty, "sell", order_type="market", duration="day")
 
         result["qty"]   = qty
         result["price"] = price
         result["side"]  = "sell"
         if result.get("status") == "success":
             _ledger_sell(sym, qty, price, system)
+            _untrack(sym)
         logger.info(f"[IAM-EXEC] 🔻 Closed long to protect gains — SELL {qty}x {sym} @ ${price:.2f}")
         return result
     except Exception as e:
@@ -495,24 +595,54 @@ def _close_equity_position(sym: str, price: float, system: str = "IAM") -> Optio
         return {"status": "error", "message": str(e)}
 
 
-def _execute_tradier_equity(sym: str, action: str, price: float, system: str = "IAM") -> dict:
+def _execute_tradier_equity(sym: str, action: str, price: float, system: str = "IAM",
+                            quote: Optional[dict] = None,
+                            atr_value: Optional[float] = None) -> dict:
     try:
         from tradier_api import place_equity_order
+        import execution_quality
         side = "buy" if action == "BUY" else "sell"
-        qty  = max(1, min(MAX_SHARES(), int(MAX_ORDER_USD() / price))) if price > 0 else 1
+
+        # Price basis: the LIVE quote when we have one, not the signal price.
+        # Every scanner in this repo hands the executor its signal bar's close
+        # (breakout_scanner passes bars[-1]["c"], etc.). On a daily-bar engine
+        # that can be a full session stale, and it was being used for BOTH
+        # position sizing AND the protective stop level — so the "3% stop" was
+        # 3% below a price that no longer existed.
+        q = quote if quote is not None else execution_quality.live_nbbo(sym)
+        exec_price = (q or {}).get("reference") or price
+        if exec_price <= 0:
+            return {"status": "error", "message": f"no usable price for {sym}"}
+
+        qty  = max(1, min(MAX_SHARES(), int(MAX_ORDER_USD() / exec_price)))
 
         # Hard protective stop level for entries (0 disables)
-        stop_px = round(price * (1.0 - STOP_LOSS_PCT() / 100.0), 2) if (side == "buy" and price > 0 and STOP_LOSS_PCT() > 0) else None
+        stop_px = round(exec_price * (1.0 - STOP_LOSS_PCT() / 100.0), 2) if (side == "buy" and STOP_LOSS_PCT() > 0) else None
+
+        bid, ask = (q or {}).get("bid"), (q or {}).get("ask")
+        book = execution_quality.have_book(bid, ask)
+
+        # Spread guard — entries only, and only when we actually HAVE a book to
+        # judge. A book too wide to trade is an immediate, guaranteed loss on a
+        # position we chose to open. A MISSING quote is a different situation
+        # and must not halt the desk: it degrades to a bounded fallback limit
+        # below rather than blocking (a Tradier quote outage silently stopping
+        # every entry would be its own outage).
+        if book and side == "buy":
+            ok, why = execution_quality.spread_ok(bid, ask, is_option=False, is_entry=True)
+            if not ok:
+                logger.info(f"[IAM-EXEC] {sym} equity entry skipped — {why}")
+                return {"status": "skipped", "message": why}
 
         if PAPER_MODE():
-            mode_label = f"EXT-HOURS limit" if _is_extended_hours() else "market"
             stop_note  = f" | hard stop ${stop_px:.2f}" if stop_px else ""
-            logger.info(f"[IAM-EXEC][PAPER] Would {side.upper()} {qty}x {sym} @ ${price:.2f} ({mode_label}){stop_note}")
+            logger.info(f"[IAM-EXEC][PAPER] Would {side.upper()} {qty}x {sym} @ ${exec_price:.2f}{stop_note}")
             if side == "buy":
-                _ledger_buy(sym, qty, price, system)
+                _ledger_buy(sym, qty, exec_price, system)
+                _track_equity(sym, qty, exec_price, system, atr_value, stop_px)
             else:
-                _ledger_sell(sym, qty, price, system)
-            return {"mode": "paper", "side": side, "qty": qty, "price": price,
+                _ledger_sell(sym, qty, exec_price, system)
+            return {"mode": "paper", "side": side, "qty": qty, "price": exec_price,
                     "stop_loss": stop_px, "placed": False}
 
         if _is_extended_hours():
@@ -521,20 +651,50 @@ def _execute_tradier_equity(sym: str, action: str, price: float, system: str = "
                 result = {"status": "skipped",
                           "message": f"Tradier duration='{duration}' known broken this run — see log; falling to Robinhood"}
             else:
-                limit_px = round(price * 1.002, 2) if side == "buy" else round(price * 0.998, 2)
+                limit_px = (execution_quality.marketable_limit(bid, ask, side)
+                            or execution_quality.fallback_limit(exec_price, side))
                 result = place_equity_order(sym, qty, side, order_type="limit",
                                             duration=duration, limit_price=limit_px)
                 if result.get("status") != "success" and "duration" in str(result.get("message", "")).lower():
                     _mark_ext_hours_duration_broken(duration, result.get("message", ""))
         else:
-            result = place_equity_order(sym, qty, side, order_type="market", duration="day")
+            # Marketable LIMIT, not a raw market order. A market order accepts
+            # any print the book offers — on a thin symbol (and the scan
+            # universe is deliberately wide, "no cap, many tickers") that is
+            # unbounded slippage on entry AND on exit. This crosses the spread
+            # by a bounded IAM_LIMIT_OFFSET_BPS so it still fills promptly.
+            #
+            # With no live book, fall back to a bounded limit off the reference
+            # price rather than a market order — degraded, but never unbounded.
+            limit_px = (execution_quality.marketable_limit(bid, ask, side)
+                        or execution_quality.fallback_limit(exec_price, side))
+            if limit_px:
+                if not book:
+                    logger.warning(f"[IAM-EXEC] {sym} no live book — bounded fallback limit "
+                                   f"${limit_px:.2f} off reference ${exec_price:.2f}")
+                result = place_equity_order(sym, qty, side, order_type="limit",
+                                            duration="day", limit_price=limit_px)
+            elif side == "sell":
+                # Nothing priceable at all and we need to be flat. Exits fail
+                # OPEN — an unmanaged position outranks a bad fill.
+                logger.warning(f"[IAM-EXEC] {sym} nothing priceable — exiting with a MARKET order (fail open)")
+                result = place_equity_order(sym, qty, side, order_type="market", duration="day")
+            else:
+                return {"status": "skipped",
+                        "message": "no price at all to bound an entry — refused (fail closed)"}
         result["qty"]   = qty
-        result["price"] = price
+        result["price"] = exec_price
         result["side"]  = side
 
         if result.get("status") == "success":
             if side == "buy":
-                _ledger_buy(sym, qty, price, system)
+                _ledger_buy(sym, qty, exec_price, system)
+                # Hand the fill to the active exit manager. The GTC stop below
+                # is a static floor that never moves once placed — it is what
+                # let a position run up and give the whole gain back before
+                # stopping out at the original level. position_manager adds the
+                # ratcheting ATR trail / giveback lock on top of it.
+                _track_equity(sym, qty, exec_price, system, atr_value, stop_px)
                 # Attach the hard stop as a real GTC stop order — this is the
                 # "sell before it loses big" wire. Regular-hours only: Tradier
                 # rejects stop orders with pre/post durations.
@@ -550,11 +710,45 @@ def _execute_tradier_equity(sym: str, action: str, price: float, system: str = "
                     result["stop_order"] = {"status": "skipped", "message": "extended hours — place stop at next open"}
                     logger.warning(f"[IAM-EXEC] {sym} extended-hours entry — protective stop ${stop_px:.2f} NOT placed (Tradier restriction)")
             else:
-                _ledger_sell(sym, qty, price, system)
+                _ledger_sell(sym, qty, exec_price, system)
+                _untrack(sym)
         return result
     except Exception as e:
         logger.error(f"[IAM-EXEC] Tradier equity error for {sym}: {e}")
         return {"status": "error", "message": str(e)}
+
+
+# ── position_manager bridge ────────────────────────────────────────────────────
+# Every call is best-effort: a failure to register a position with the exit
+# manager must never abort or roll back an order that already reached the
+# broker. It is logged loudly instead, because an untracked position is
+# precisely the unmanaged state this whole layer exists to prevent.
+def _track_equity(sym: str, qty: int, price: float, system: str,
+                  atr_value: Optional[float], stop_px: Optional[float]):
+    try:
+        import position_manager
+        position_manager.register_equity(sym, qty, price, system, atr_value, stop_px)
+    except Exception as e:
+        logger.error(f"[IAM-EXEC] ⚠️ {sym} filled but could NOT be registered with "
+                     f"position_manager ({e}) — this position has no active exit management")
+
+
+def _track_option(option_symbol: str, underlying: str, qty: int, premium: float,
+                  system: str, expiry: Optional[str]):
+    try:
+        import position_manager
+        position_manager.register_option(option_symbol, underlying, qty, premium, system, expiry)
+    except Exception as e:
+        logger.error(f"[IAM-EXEC] ⚠️ {option_symbol} filled but could NOT be registered with "
+                     f"position_manager ({e}) — this option has no active exit management")
+
+
+def _untrack(sym: str):
+    try:
+        import position_manager
+        position_manager.untrack(sym)
+    except Exception as e:
+        logger.debug(f"[IAM-EXEC] untrack {sym} failed (non-fatal): {e}")
 
 
 _OCC_OPTION_RE = re.compile(r'^[A-Z]{1,6}\d{6}([CP])\d{8}$')
@@ -596,9 +790,13 @@ def _execute_tradier_options(sym: str, action: str, resolution: dict, price: flo
     try:
         from tradier_api import place_option_order
         import tradier_api as tradier
+        import execution_quality
 
         option_type = "call" if action == "BUY" else "put"
         qty         = OPTION_QTY()
+        # Same tag resolution _execute_tradier already does, so position_manager
+        # can attribute an option exit to the engine that opened it.
+        system_tag  = (resolution.get("system") or "IAM").strip().upper()
 
         # Account-wide open-position comfort cap (2026-07-30 operator directive:
         # "1 call 1 put at a time till i get comfortable"). Real-money only —
@@ -677,23 +875,65 @@ def _execute_tradier_options(sym: str, action: str, resolution: dict, price: flo
             best = min(filtered, key=lambda o: abs(float(o.get("strike", 0)) - price))
 
         option_symbol = best["symbol"]
-        ask_price     = float(best.get("ask") or best.get("last") or 0)
 
-        if ask_price <= 0:
-            return {"status": "error", "message": f"No valid ask for {option_symbol}"}
+        def _f(key):
+            try:
+                v = best.get(key)
+                return float(v) if v is not None else None
+            except (TypeError, ValueError):
+                return None
 
-        # Limit order at ask + 5% slippage
-        limit = round(ask_price * 1.05, 2)
+        bid, ask = _f("bid"), _f("ask")
+
+        # Spread guard on the CONTRACT, which never existed here. The old code
+        # priced every entry at ask × 1.05 with no reference to the bid at all,
+        # so on a 0.32-0.40Δ contract quoted 1.00 x 1.40 (a 33% spread, routine
+        # on the wide scan universe this desk runs) it bought at 1.47 — a
+        # position that must gain ~47% just to reach the mid it was worth at
+        # the moment of purchase. That single line is a plausible contributor
+        # to the "flat entries" symptom on its own.
+        # Dead-contract check FIRST. Unlike the equity path (where a missing
+        # quote degrades to a bounded fallback), an option with no bid is not a
+        # data outage — it is a contract nobody will buy back, so there is no
+        # exit at any price. core/api/delta_explosion_bp.py already excludes
+        # these from its rankings for exactly this reason; the executor never
+        # did. This one refuses to open, and that is deliberate.
+        if not execution_quality.have_book(bid, ask):
+            msg = (f"{option_symbol} has no real two-sided quote "
+                   f"(bid={bid}, ask={ask}) — dead contract, entry refused")
+            logger.info(f"[IAM-EXEC] {sym} {option_type} skipped — {msg}")
+            return {"status": "skipped", "message": msg}
+
+        ok, why = execution_quality.spread_ok(bid, ask, is_option=True, is_entry=True)
+        if not ok:
+            logger.info(f"[IAM-EXEC] {sym} {option_type} {option_symbol} skipped — {why}")
+            return {"status": "skipped", "message": why}
+
+        limit = execution_quality.marketable_limit(bid, ask, "buy")
+        if not limit or limit <= 0:
+            return {"status": "skipped",
+                    "message": f"could not price {option_symbol} — entry refused (fail closed)"}
+
+        # Premium basis for every downstream stop/trail/target on this
+        # position. The mid is the honest mark; the limit is what we might pay.
+        premium = (bid + ask) / 2.0 if (bid and ask) else limit
 
         if PAPER_MODE():
             logger.info(f"[IAM-EXEC][PAPER] Would BTO {qty}x {option_symbol} @ ${limit:.2f} limit")
+            _track_option(option_symbol, sym, qty, premium, system_tag, expiry_str)
             return {"mode": "paper", "option_symbol": option_symbol,
-                    "qty": qty, "limit": limit, "placed": False}
+                    "qty": qty, "limit": limit, "premium": premium, "placed": False}
 
         result = place_option_order(option_symbol, qty, "buy_to_open", limit_price=limit)
         result["option_symbol"] = option_symbol
         result["qty"]           = qty
         result["limit"]         = limit
+        result["premium"]       = premium
+        if result.get("status") == "success":
+            # THE fix for "no options position was ever sold by this executor."
+            # Nothing in the IAM path had a sell_to_close anywhere — this hands
+            # the contract to position_manager, which owns every exit from here.
+            _track_option(option_symbol, sym, qty, premium, system_tag, expiry_str)
         return result
 
     except Exception as e:
@@ -782,11 +1022,28 @@ def execute_from_resolution(sym: str, resolution: dict,
             logger.debug(f"[IAM-EXEC] {sym} resolved HOLD — no execution")
             return
 
+        # A SELL is treated as an EXIT for gating purposes: its primary job is
+        # closing an existing long. Its secondary put-buy leg re-checks the
+        # full entry gate separately inside _execute_tradier, so relaxing the
+        # gate here never lets an un-vetted new position through.
+        is_exit = (action == "SELL")
+
         # Gate check
-        block_reason = _gate_check(sym, resolution, time_window, confidence)
+        block_reason = _gate_check(sym, resolution, time_window, confidence, is_exit=is_exit)
         if block_reason:
             logger.info(f"[IAM-EXEC] {sym} blocked: {block_reason}")
             return
+
+        # Instant reversal exit — flatten any tracked position that opposes
+        # this signal BEFORE doing anything else, rather than waiting for the
+        # exit manager's next pass or (worse) the next 300s scanner cycle.
+        try:
+            import position_manager
+            reversed_n = position_manager.on_reversal(sym, action)
+            if reversed_n:
+                logger.info(f"[IAM-EXEC] {sym} {action} — flattened {reversed_n} opposing position(s) first")
+        except Exception as e:
+            logger.warning(f"[IAM-EXEC] reversal check failed for {sym} (non-fatal): {e}")
 
         # Pure Macro Matrix gate — only blocks BUY; SELL/exits always proceed
         if action == "BUY":
@@ -842,9 +1099,42 @@ def execute_from_resolution(sym: str, resolution: dict,
             if not _is_market_hours():
                 logger.warning(f"[IAM-EXEC] {sym} Tradier skipped — outside market hours")
             else:
-                # Use price from resolution if caller didn't provide live price
-                exec_price = price or 0.0
-                broker_result = _execute_tradier(sym, action, resolution, exec_price)
+                # One preflight fetch: live NBBO + ATR, reused by the anti-chase
+                # guard and by the equity sizing/stop calc below so we don't hit
+                # the API twice for the same decision.
+                quote, atr_value = _preflight(sym)
+
+                # ANTI-CHASE. The reported symptom is "the bot buys AFTER the
+                # move, resulting in flat entries." Structurally that is what
+                # these engines do: a daily Donchian break is only knowable at
+                # the close of the breakout day, and an S/R pivot is confirmed
+                # `bars` bars AFTER the pivot by design (no lookahead). By the
+                # time an order is placed, part of the move has already
+                # happened. This guard refuses the tail of it.
+                #
+                # It is a RISK FILTER, not a backtested edge — the published
+                # backtests for these systems assumed entry at the signal bar's
+                # close, so skipping extended entries makes live behaviour
+                # closer to what was measured, not further from it. Entries
+                # only; exits are never chase-guarded.
+                if action == "BUY" and quote and quote.get("reference"):
+                    allowed, why = _chase_check(sym, action, price, quote["reference"])
+                    if not allowed:
+                        logger.info(f"[IAM-EXEC] {sym} BUY refused — {why}")
+                        return
+
+                # Prefer the LIVE price over the scanner's (possibly stale)
+                # signal-bar close for everything downstream.
+                exec_price = (quote or {}).get("reference") or price or 0.0
+                # Carry the gate inputs on a COPY (never mutate the caller's
+                # dict) so the SELL branch's put leg can re-run the full entry
+                # gate with the same window/confidence this signal arrived on.
+                exec_resolution = {**resolution,
+                                   "_time_window": time_window,
+                                   "resolution_confidence": resolution.get(
+                                       "resolution_confidence", confidence)}
+                broker_result = _execute_tradier(sym, action, exec_resolution, exec_price,
+                                                 quote=quote, atr_value=atr_value)
 
                 if broker_result.get("status") == "success" or broker_result.get("placed") or broker_result.get("mode") == "paper":
                     with _lock:

@@ -60,6 +60,7 @@ from core.api.gamma_pin_bp import gamma_pin_bp
 from core.api.squeeze_fuel_bp import squeeze_fuel_bp
 from core.api.mm_intel_bp import mm_intel_bp
 from core.api.paper_trades_bp import paper_trades_bp
+from core.api.position_manager_bp import position_manager_bp
 from core.api.vapl_bp import vapl_bp
 from core.vapl.middleware import install_vapl_middleware
 from core.api.macro741_bp import macro741_bp
@@ -205,6 +206,7 @@ def create_app():
     app.register_blueprint(squeeze_fuel_bp,  url_prefix='/api/squeeze-fuel')
     app.register_blueprint(mm_intel_bp,      url_prefix='/api/mm-intel')
     app.register_blueprint(paper_trades_bp,  url_prefix='/api/paper-trades')
+    app.register_blueprint(position_manager_bp, url_prefix='/api/positions/managed')
     app.register_blueprint(vapl_bp)
     app.register_blueprint(macro741_bp,        url_prefix='/api')
     app.register_blueprint(macro_bp,           url_prefix='/api')
@@ -310,6 +312,15 @@ def create_app():
 
                 from squeeze_fuel_scanner import start_squeeze_fuel_scanner
                 start_squeeze_fuel_scanner()
+
+                # Active exit manager. Runs far faster than any scanner (15s vs
+                # 300s) because an EXIT is time-critical in a way an entry is
+                # not — and because before this existed nothing in the IAM path
+                # could close an options position at all. Manages only
+                # positions iam_executor itself opened; never adopts a
+                # manually-opened one.
+                from position_manager import start_position_manager
+                start_position_manager()
 
                 start_webhook_engine()
                 start_anomaly_engine()
