@@ -62,16 +62,25 @@ class _Logger:
 
 
 def test_clean_env_reports_ok():
-    print("\n[1] A clean environment reports no divergence")
+    print("\n[1] A fully clean environment reports no divergence")
     _clear()
     findings = ei.stale_env_report()
-    check("no findings with nothing set", findings == [], str(findings))
+    check("no stale-override findings with nothing set", findings == [], str(findings))
 
-    log = _Logger()
-    ok = ei.report(log)
-    check("report() returns True", ok is True)
-    check("says settings match", any("match repo intent" in l for l in log.lines))
-    check("no warnings emitted", log.warnings == [])
+    # "Clean" means BOTH no stale overrides AND every configurable safety gate
+    # actually configured. MACRO_GATE_SECRET is required here because without
+    # it the 741 macro and 365-day anchor gates are inert -- which report()
+    # now (correctly) treats as a finding rather than a clean desk.
+    os.environ["MACRO_GATE_SECRET"] = "test-secret"
+    try:
+        log = _Logger()
+        ok = ei.report(log)
+        check("report() returns True", ok is True)
+        check("says settings match", any("match repo intent" in l for l in log.lines))
+        check("says gates active", any("safety gates are active" in l for l in log.lines))
+        check("no warnings emitted", log.warnings == [], str(log.warnings))
+    finally:
+        os.environ.pop("MACRO_GATE_SECRET", None)
 
 
 def test_reproduces_the_real_stale_banner():
@@ -191,6 +200,45 @@ def test_wired_into_executor_startup():
           src.index("Kill switch") < src.index("executor_integrity.report(logger)"))
 
 
+def test_inert_safety_gates_are_reported():
+    print("\n[9] A gate switched OFF by missing config announces itself")
+    os.environ.pop("MACRO_GATE_SECRET", None)
+    inert = {g["setting"]: g for g in ei.disabled_gates_report()}
+    check("MACRO_GATE_SECRET absence is reported", "MACRO_GATE_SECRET" in inert)
+    check("names BOTH gates it disables",
+          "741" in inert["MACRO_GATE_SECRET"]["disables"]
+          and "365" in inert["MACRO_GATE_SECRET"]["disables"],
+          inert["MACRO_GATE_SECRET"]["disables"])
+    check("explains UNKNOWN is inert, not passing",
+          "not a passing one" in inert["MACRO_GATE_SECRET"]["detail"])
+
+    log = _Logger()
+    ok = ei.report(log)
+    check("report() returns False while a gate is inert", ok is False)
+    check("warns with INERT wording", any("INERT" in w for w in log.warnings))
+
+    os.environ["MACRO_GATE_SECRET"] = "set"
+    try:
+        check("configured -> no longer reported", ei.disabled_gates_report() == [])
+        log2 = _Logger()
+        ei.report(log2)
+        check("says gates are active", any("all configurable safety gates are active" in l
+                                           for l in log2.lines))
+    finally:
+        os.environ.pop("MACRO_GATE_SECRET", None)
+
+
+def test_runtime_log_marks_inert_gate():
+    print("\n[10] The per-trade log line marks an inert gate")
+    src = open(os.path.join(_ROOT, "tools", "robinhood_executor_sml.py")).read()
+    blk = src[src.index("def _direction_gates_pass"):src.index("def _direction_gates_pass")+3000]
+    check("gate note is derived from the secret",
+          '_gate_note = "" if _MACRO_GATE_SECRET else' in blk)
+    check("macro line carries the note", 'BUY allowed{_gate_note}' in blk)
+    check("both gate lines carry it", blk.count("{_gate_note}") == 2, str(blk.count("{_gate_note}")))
+
+
+
 if __name__ == "__main__":
     print("=" * 72)
     print("Executor integrity / stale-env detection tests")
@@ -198,7 +246,8 @@ if __name__ == "__main__":
     for fn in [test_clean_env_reports_ok, test_reproduces_the_real_stale_banner,
                test_unlock_flags_are_reported, test_unset_is_not_a_finding,
                test_build_fingerprint, test_report_never_raises,
-               test_strict_mode_opt_in, test_wired_into_executor_startup]:
+               test_strict_mode_opt_in, test_wired_into_executor_startup,
+               test_inert_safety_gates_are_reported, test_runtime_log_marks_inert_gate]:
         try:
             fn()
         except Exception as e:

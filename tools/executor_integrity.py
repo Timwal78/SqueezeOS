@@ -104,6 +104,40 @@ RISK_INTENT = {
 UNLOCK_FLAGS = ("ALLOW_SLOW_POLL", "ALLOW_CUSTOM_MIN_GOD")
 
 
+# Protections that silently switch themselves OFF when a piece of config is
+# missing. Each entry: env var -> (what goes inert, why it matters).
+#
+# Added 2026-07-31 after the operator's live log showed, on EVERY buy:
+#     [EXEC] GPRE macro regime=UNKNOWN — BUY allowed
+#     [EXEC] GPRE 365-day anchor=UNKNOWN — BUY allowed
+# Both read like a normal pass. They are not. _get_macro_regime() and
+# _get_365_anchor() both begin `if not _MACRO_GATE_SECRET: return "UNKNOWN"`
+# with no warning of any kind, so an unset secret disables two real
+# direction gates while the desk keeps reporting that trades are "allowed".
+#
+# Failing open is the right behaviour (an unreachable check must never widen
+# what already blocked) -- failing open SILENTLY is not. This makes the
+# disabled state announce itself once, at startup, next to everything else.
+SILENTLY_DISABLED_GATES = {
+    "MACRO_GATE_SECRET": (
+        "741 macro-regime gate AND 365-day EMA anchor gate",
+        "both return UNKNOWN and allow every BUY; the log line "
+        "'macro regime=UNKNOWN — BUY allowed' is what an INERT gate looks like, "
+        "not a passing one. Set MACRO_GATE_SECRET in tools/executor.env to the "
+        "same value the server uses.",
+    ),
+}
+
+
+def disabled_gates_report() -> list:
+    """Safety gates currently inert because their config is missing."""
+    out = []
+    for key, (what, why) in SILENTLY_DISABLED_GATES.items():
+        if not os.environ.get(key, "").strip():
+            out.append({"setting": key, "disables": what, "detail": why})
+    return out
+
+
 def _num(s: str) -> Optional[float]:
     try:
         return float(str(s).strip())
@@ -180,6 +214,16 @@ def report(logger) -> bool:
             logger.warning("  delete the keys above in tools/executor.env, then restart.")
         else:
             logger.info("  ENV CHECK      : all risk-critical settings match repo intent")
+
+        inert = disabled_gates_report()
+        if inert:
+            ok = False
+            logger.warning("  ⚠️  SAFETY GATES INERT — missing config has switched these OFF:")
+            for g in inert:
+                logger.warning(f"      {g['setting']} not set → {g['disables']} DISABLED")
+                logger.warning(f"        └─ {g['detail']}")
+        else:
+            logger.info("  GATE CHECK     : all configurable safety gates are active")
         logger.info("-" * 60)
     except Exception as e:  # never break startup
         try:
