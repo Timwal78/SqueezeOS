@@ -139,6 +139,26 @@ def _ema(vals: list, length: int) -> list:
     return out
 
 
+def _rolling_max(vals: list, length: int) -> list:
+    n = len(vals)
+    out = [None] * n
+    for i in range(n):
+        if i < length - 1:
+            continue
+        out[i] = max(vals[i - length + 1:i + 1])
+    return out
+
+
+def _rolling_min(vals: list, length: int) -> list:
+    n = len(vals)
+    out = [None] * n
+    for i in range(n):
+        if i < length - 1:
+            continue
+        out[i] = min(vals[i - length + 1:i + 1])
+    return out
+
+
 def _true_range(highs: list, lows: list, closes: list, i: int) -> float:
     if i == 0:
         return highs[i] - lows[i]
@@ -210,19 +230,40 @@ def compute_series(bars: list, p: SovereignSqueezeParams = None) -> dict:
             running = 0
         sqz_bar_count[i] = running
 
-    # val[i] = linreg over the trailing kc_length window of
-    # (close - avg(avg(highest(high,kc_length), lowest(low,kc_length)), sma(close,kc_length)))
+    # BUG FIX (2026-07-31, found after the operator reported real TradingView
+    # backtests looking far better than this engine's first port): Pine's
+    # `source - math.avg(math.avg(ta.highest(high,kcLength), ta.lowest(low,
+    # kcLength)), ta.sma(close,kcLength))` is a SERIES expression — at every
+    # bar k, ta.highest/ta.lowest/ta.sma are each evaluated using THEIR OWN
+    # rolling kc_length window ending at k. `ta.linreg(that_series,
+    # kcLength, 0)` then regresses the trailing kc_length values of that
+    # already-per-bar-computed deviation series.
+    #
+    # The original port instead computed one "mid" reference level ONLY at
+    # the current bar i (using hh/ll/sma_c as of i) and subtracted that SAME
+    # constant from every raw close in the window before regressing. That is
+    # a materially different, wrong quantity: it regresses (close[j] - a
+    # constant) rather than the correct per-bar deviation dev[j], which
+    # flattens/distorts the momentum term's real slope and mislabeled
+    # otherwise-good setups. Fixed by building the real `dev` series first
+    # (using rolling highest/lowest/sma at every bar, matching Pine's own
+    # per-bar evaluation), then regressing the trailing kc_length window of
+    # THAT series — exactly what ta.linreg(dev, kcLength, 0) computes.
+    highest_kc = _rolling_max(highs, p.kc_length)
+    lowest_kc = _rolling_min(lows, p.kc_length)
+    dev = [None] * n
+    for i in range(n):
+        if highest_kc[i] is None or ma_kc[i] is None:
+            continue
+        mid = ((highest_kc[i] + lowest_kc[i]) / 2.0 + ma_kc[i]) / 2.0
+        dev[i] = closes[i] - mid
+
     val = [None] * n
     for i in range(n):
-        if i < p.kc_length - 1:
+        if i < 2 * p.kc_length - 2 or dev[i - p.kc_length + 1] is None:
             continue
-        window = range(i - p.kc_length + 1, i + 1)
-        hh = max(highs[j] for j in window)
-        ll = min(lows[j] for j in window)
-        sma_c = ma_kc[i]
-        mid = (((hh + ll) / 2.0) + sma_c) / 2.0
-        series = [closes[j] - mid for j in window]
-        val[i] = _linreg_endpoint(series)
+        window = dev[i - p.kc_length + 1:i + 1]
+        val[i] = _linreg_endpoint(window)
 
     events      = [None] * n   # "ENTER_CALL" | "ENTER_PUT" | "EXIT_TARGET" | "EXIT_STOP" | None
     live_signal = [None] * n   # "BUY" | "SELL" | None
