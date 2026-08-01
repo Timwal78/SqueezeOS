@@ -203,11 +203,20 @@ def alerts():
     from ftd_anomaly_engine import get_feed, SCAN_INTERVAL_S, SPIKE_THRESHOLD
 
     limit = max(1, min(int(request.args.get("limit", 25)), 100))
-    items = get_feed(limit)
+    ticker = request.args.get("ticker", "").strip() or None
+    min_spike_raw = request.args.get("min_spike_multiplier", "").strip()
+    min_spike = None
+    if min_spike_raw:
+        try:
+            min_spike = float(min_spike_raw)
+        except ValueError:
+            min_spike = None
+    items = get_feed(limit, symbol=ticker, min_spike_multiplier=min_spike)
     return jsonify({
         "tier": "SHORTSQUEEZE_SWARM",
         "count": len(items),
         "alerts": items,
+        "filters_applied": {"ticker": ticker, "min_spike_multiplier": min_spike},
         "scan_interval_seconds": SCAN_INTERVAL_S,
         "spike_threshold": SPIKE_THRESHOLD,
         "unlock_detail": "/api/ftd/cycle/{symbol} — 0.05 RLUSD",
