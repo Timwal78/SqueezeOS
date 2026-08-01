@@ -1449,9 +1449,17 @@ def _poll_tv_pending() -> int:
     """
     Poll signals queued by TradingView Pine script alerts via the webhook.
     These come from SML_Sniper v1.1 (15m EMA) and MMLE Beast (65m).
+
+    BUG FIX (2026-08-01): same fix as _poll_iam_primary() below -- the
+    server used to pop-and-clear its ENTIRE queue on every GET regardless
+    of how many of the returned signals this loop actually executes (capped
+    at MAX_PER_SCAN via scan_counter). Requesting `?limit=MAX_PER_SCAN`
+    means the server only pops what this cycle could possibly place,
+    leaving genuine overflow queued for the next 45s poll instead of
+    discarding it.
     Returns number of orders placed.
     """
-    url = f"{SQUEEZEOS_API_URL}/api/webhooks/tv_pending"
+    url = f"{SQUEEZEOS_API_URL}/api/webhooks/tv_pending?limit={MAX_PER_SCAN}"
     try:
         req = URLRequest(url, headers={"User-Agent": "SqueezeOS-RH-Executor/2.0"})
         with urlopen(req, timeout=30) as resp:
