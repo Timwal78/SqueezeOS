@@ -87,7 +87,15 @@ def _fire_discord_batch(discord, alerts: List[dict]) -> None:
     the webhook itself getting throttled. Chunks into multiple embeds only
     if a single scan surfaces more than _MAX_ALERTS_PER_EMBED alerts.
     """
-    if not discord or not getattr(discord, "enabled", False) or not alerts:
+    # NOTE: deliberately does NOT gate on discord.enabled — that property
+    # only reflects DISCORD_WEBHOOK_SQUEEZE/FLOW/ALL/BEAST, four unrelated
+    # webhooks. Gating FTD's own alert on those being set was a real bug:
+    # it silently suppressed every FTD alert whenever none of those four
+    # happened to be configured, even with DISCORD_WEBHOOK_FTD correctly
+    # set. avg_down_engine.py's _fire_discord() never had this gate — this
+    # now matches that same, correct convention (check only this feature's
+    # own webhook URL).
+    if not discord or not alerts:
         return
     url = _os.environ.get("DISCORD_WEBHOOK_FTD", "")
     if not url:
