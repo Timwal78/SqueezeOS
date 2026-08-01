@@ -130,6 +130,49 @@ def test_atr_length_greater_than_1_produces_real_smoothing():
     print("PASS: atr_length>1 produces genuine smoothing, not a no-op")
 
 
+def test_require_pattern_default_true_is_byte_identical_to_prior_shipped_behavior():
+    """require_pattern defaults to True and must not change any already-shipped
+    result -- this is the backward-compatibility guarantee for every live
+    config that predates the 2026-08-01 require_pattern option."""
+    bars = _synthetic_bars(300, seed=17)
+    p_explicit_true = ZonePatternParams(bars=10, no_of_pivots=2, exit_mode="atr_target", require_pattern=True)
+    p_default = ZonePatternParams(bars=10, no_of_pivots=2, exit_mode="atr_target")
+    assert compute_series(bars, p_explicit_true) == compute_series(bars, p_default)
+    print("PASS: require_pattern defaults to True, byte-identical to pre-2026-08-01 behavior")
+
+
+def test_require_pattern_false_fires_on_zone_touch_alone():
+    """require_pattern=False must produce at least as many ENTER_UP events as
+    require_pattern=True on the same data -- dropping the candlestick-pattern
+    half of the confluence can only relax the entry condition, never tighten
+    it (every bar require_pattern=True enters on, require_pattern=False also
+    enters on, since bull_pat/bear_pat being True satisfies `not require_pattern
+    or bull_pat` either way)."""
+    bars = _synthetic_bars(400, seed=19)
+    p_strict = ZonePatternParams(bars=10, no_of_pivots=2, exit_mode="atr_target", require_pattern=True)
+    p_touch_only = ZonePatternParams(bars=10, no_of_pivots=2, exit_mode="atr_target", require_pattern=False)
+    strict_entries = sum(1 for e in compute_series(bars, p_strict)["events"] if e == "ENTER_UP")
+    touch_entries = sum(1 for e in compute_series(bars, p_touch_only)["events"] if e == "ENTER_UP")
+    assert touch_entries >= strict_entries
+    print(f"PASS: require_pattern=False fires >= as often as require_pattern=True ({touch_entries} >= {strict_entries})")
+
+
+def test_require_pattern_env_var_parsing():
+    """SR_ZONE_PATTERN_REQUIRE_PATTERN env var must be honored by from_env(),
+    defaulting to True (unset) so no existing deployment's behavior changes
+    without an explicit opt-in."""
+    for raw, expected in (("false", False), ("False", False), ("true", True), (None, True)):
+        if raw is None:
+            os.environ.pop("SR_ZONE_PATTERN_REQUIRE_PATTERN", None)
+        else:
+            os.environ["SR_ZONE_PATTERN_REQUIRE_PATTERN"] = raw
+        try:
+            assert ZonePatternParams.from_env().require_pattern is expected, f"raw={raw!r} expected={expected}"
+        finally:
+            os.environ.pop("SR_ZONE_PATTERN_REQUIRE_PATTERN", None)
+    print("PASS: SR_ZONE_PATTERN_REQUIRE_PATTERN env var parses correctly and defaults to True unset")
+
+
 if __name__ == "__main__":
     test_no_crash_on_empty_and_short_series()
     print("PASS: no crash on empty/short series")
@@ -140,4 +183,7 @@ if __name__ == "__main__":
     test_exit_mode_atr_target_sets_stop_and_target_on_entry()
     test_atr_length_1_is_byte_identical_to_original_single_bar_true_range()
     test_atr_length_greater_than_1_produces_real_smoothing()
+    test_require_pattern_default_true_is_byte_identical_to_prior_shipped_behavior()
+    test_require_pattern_false_fires_on_zone_touch_alone()
+    test_require_pattern_env_var_parsing()
     print("\nAll tests passed.")

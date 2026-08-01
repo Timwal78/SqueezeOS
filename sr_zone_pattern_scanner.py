@@ -25,7 +25,13 @@ live_signal mapping mirrors sr_matrix_scanner.py exactly: ENTER_UP -> BUY,
 any EXIT_* -> SELL (closes the long, matching _close_equity_position).
 
 Env vars:
-  SR_ZONE_PATTERN_SCAN_ENABLED   = true    — master switch
+  SR_ZONE_PATTERN_SCAN_ENABLED   = false   — master switch. Defaulted OFF
+                                              2026-08-01 (operator directive:
+                                              "remove it altogether" from live
+                                              trading) -- see CLAUDE.md's
+                                              dated section for the full
+                                              reasoning. Set to "true" to
+                                              revive.
   SR_ZONE_PATTERN_SCAN_INTERVAL  = 300     — seconds between passes
   SR_ZONE_PATTERN_SCAN_SYMBOLS   = ""      — comma override; empty -> dynamic
                                               universe (IAM_SYMBOL_ALLOWLIST ->
@@ -46,7 +52,19 @@ import time
 
 logger = logging.getLogger("SR-ZONE-PATTERN-SCANNER")
 
-_ENABLED    = os.environ.get("SR_ZONE_PATTERN_SCAN_ENABLED", "true").strip().lower() == "true"
+# Default flipped false->true->false (2026-08-01, operator directive: "remove
+# it altogether" from live trading). This is the strongest evidence-quality
+# engine issue found this session -- 12-52 trades vs the 20-30+/symbol every
+# other live engine cleared, plus a same-day test showing the operator's own
+# "buy every zone touch" reading of the chart underperforms the already-thin
+# shipped config (docs/SR_ZONE_PATTERN_TOUCH_ONLY_BACKTEST_2026-08-01.md).
+# Disabling the scanner itself (not just excluding it from IAM_PRIMARY_SYSTEM)
+# means it stops generating signals altogether -- paper AND live -- without
+# requiring any Render env var edit; set SR_ZONE_PATTERN_SCAN_ENABLED=true to
+# revive it if ever wanted again. The engine/scanner/blueprint code is left
+# in place, not deleted, matching this codebase's "measure, don't delete"
+# convention for every other engine here.
+_ENABLED    = os.environ.get("SR_ZONE_PATTERN_SCAN_ENABLED", "false").strip().lower() == "true"
 _INTERVAL   = int(float(os.environ.get("SR_ZONE_PATTERN_SCAN_INTERVAL", "300")))
 _TIMEFRAME  = "1D"
 _BARS_LIMIT = int(os.environ.get("SR_ZONE_PATTERN_BARS_LIMIT", "300"))
