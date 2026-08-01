@@ -183,7 +183,7 @@ MAX_ORDER_USD        = float(os.environ.get("MAX_ORDER_USD", "150.0"))
 MAX_DAILY_LOSS_USD   = float(os.environ.get("MAX_DAILY_LOSS_USD", "100.0"))
 MAX_ORDERS_PER_DAY   = int(os.environ.get("MAX_ORDERS_PER_DAY", "0"))       # 0 = uncapped (operator directive 2026-07-29, semi-day-trading)
 MAX_DAILY_NOTIONAL   = float(os.environ.get("MAX_DAILY_NOTIONAL_USD", "0"))  # 0 = uncapped (operator directive 2026-07-29, semi-day-trading)
-MAX_PER_SCAN         = int(os.environ.get("MAX_PER_SCAN", "3"))
+MAX_PER_SCAN         = int(os.environ.get("MAX_PER_SCAN", "10"))  # was 3 -- raised 2026-08-01 alongside the iam_pending queue fix below, since 7 primary systems (CASCADE/SR-Matrix/Breakout/MM-V4/Sovereign-Squeeze/Quad-Score/SR-Zone+Pattern) now share one poll cycle and one counter
 STOP_LOSS_PCT        = float(os.environ.get("STOP_LOSS_PCT", "3.0"))    # fallback if no cached ATR: close if down this % from avg cost. Lowered from 5.0 -> 3.0 (operator, 2026-07-30) after a real LAD position realized -6.81% before this polling-based check fired and its market-order fill slipped past the trigger -- 3.0 gives that same lag/slippage room to land closer to the 4-5% the operator actually wants, instead of running further past a 5% trigger.
 TAKE_PROFIT_PCT      = float(os.environ.get("TAKE_PROFIT_PCT", "15.0")) # fallback if no cached ATR: close if up this % from avg cost
 # ATR-based stop/take-profit — same multiplier convention as execution_engine.py's
@@ -1506,9 +1506,24 @@ def _poll_iam_primary() -> int:
     endpoint so IAM-primary and raw TradingView-Pine fills stay separately
     attributable in this log, even though they're executed identically once
     popped here.
+
+    BUG FIX (2026-08-01): the server route used to pop-and-clear its ENTIRE
+    queue on every GET regardless of how many signals this function actually
+    went on to execute -- but the loop below only ever places up to
+    MAX_PER_SCAN orders via one shared scan_counter. Anything beyond that in
+    a single fetch was silently discarded forever, not "deferred to next
+    cycle" as the per-signal log lines below imply, since the server-side
+    queue backing it had already been wiped by the act of fetching it. Fixed
+    by requesting only `?limit=MAX_PER_SCAN` -- the server now leaves
+    anything beyond that queued (FIFO, original order) for the next 45s
+    poll, well within its 10-minute TTL. Slightly over-requesting relative
+    to what actually places is fine and expected: some fetched signals get
+    `continue`'d below (bad symbol/direction) without consuming a slot, so
+    limiting to exactly MAX_PER_SCAN gives this cycle a full shot at
+    reaching the cap rather than starving it by one.
     Returns number of orders placed.
     """
-    url = f"{SQUEEZEOS_API_URL}/api/webhooks/iam_pending"
+    url = f"{SQUEEZEOS_API_URL}/api/webhooks/iam_pending?limit={MAX_PER_SCAN}"
     try:
         req = URLRequest(url, headers={"User-Agent": "SqueezeOS-RH-Executor/2.0"})
         with urlopen(req, timeout=30) as resp:
