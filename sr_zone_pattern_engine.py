@@ -33,46 +33,45 @@ from typing import Optional
 class ZonePatternParams:
     bars: int = 10
     no_of_pivots: int = 2       # 2, 3, or 4 -- how many clustering pivots confirm a zone
-    zone_expiry: int = 200      # 0 = never expires
+    # 400 (was 200, 2026-08-01): a real chronological TRAIN/VALID search
+    # (docs/SR_ZONE_PATTERN_OPTIMIZATION_2026-08-01.md) found 400 combined
+    # with zone_buffer_pct=2.0/atr_length=21/atr_stop_mult=2.0 below produces
+    # 52 real trades (vs the prior 12) holding VALID PF >1.0 across all 4
+    # tested split points. Operator directive 2026-08-01: adopted for the
+    # already-live engine after the evidence was disclosed plainly, same
+    # "state the evidence, operator decides" pattern as every other engine.
+    # zone_expiry itself is one of the search's disclosed FRAGILE axes (0
+    # and 400 both hold, 100/200 do not) -- kept here because it's the one
+    # this search actually validated, not because the dimension is robust.
+    zone_expiry: int = 400      # 0 = never expires
     exit_mode: str = "opposite_zone"  # "opposite_zone" | "atr_target"
-    atr_stop_mult: float = 1.5
+    # 2.0 (was 1.5, 2026-08-01) -- part of the same validated config above.
+    atr_stop_mult: float = 2.0
     atr_target_mult: float = 3.0
-    # Real multi-bar Wilder ATR length for the atr_target exit's stop/target
-    # levels. Default 1 preserves the original behavior EXACTLY (a raw
-    # single-bar true range recomputed fresh every bar, not averaged) --
-    # kept as the default to avoid silently changing already-shipped
-    # behavior; see docs/SR_ZONE_PATTERN_OPTIMIZATION_2026-08-01.md for
-    # whether a genuine multi-bar ATR (matching every other engine's
-    # convention) tested better on real data.
-    atr_length: int = 1
-    # Proximity buffer around a zone's [l, h] band, as a fraction of the
-    # zone's own height (e.g. 3.0 = extend the zone by 3x its own height on
-    # each side). Requiring the close to land EXACTLY inside a zone's narrow
-    # candle-body range (buffer=0) turned out to almost never coincide with a
-    # qualifying candlestick pattern on real data -- measured on 7 real
-    # symbols / 4.5 years: patterns fire on ~8-9% of bars, zones exist for
-    # a meaningful fraction of time too, but their exact-overlap is only 1-3
-    # trades total (docs/SR_ZONE_PATTERN_BACKTEST_2026-07-30.md). A small
-    # proximity buffer -- "near a zone" rather than "exactly inside its
-    # narrow candle-body band" -- is a real, common S/R-tool convention (the
-    # original Pine script itself has separate "near zone" proximity alerts
-    # distinct from its containment logic), not a parameter tuned to force a
-    # result. Default kept conservative (3x zone height, not the most
-    # aggressive value tested) -- see docs/SR_ZONE_PATTERN_BACKTEST_2026-07-30.md
-    # for the sensitivity sweep this default was chosen from.
-    zone_buffer_pct: float = 3.0
+    # 21 (was 1, 2026-08-01): the 2026-08-01 search found a genuine multi-bar
+    # Wilder ATR (matching every other engine's convention) tested robustly
+    # positive across the ENTIRE range searched (1-28) -- one of only two
+    # dimensions (with zone_buffer_pct below) that held up everywhere tested,
+    # not just at this one value. See docs/SR_ZONE_PATTERN_OPTIMIZATION_2026-08-01.md.
+    atr_length: int = 21
+    # 2.0 (was 3.0, 2026-08-01): the search found 1.0-3.0 all hold VALID PF
+    # >1.0 (only the wide extreme, 4.0, breaks) -- one of the two genuinely
+    # robust dimensions in this search, not a single-point overfit. Original
+    # rationale for the concept (a real proximity buffer, not zero) unchanged
+    # from the 2026-07-30 note below -- only the specific value changed.
+    zone_buffer_pct: float = 2.0
 
     @classmethod
     def from_env(cls) -> "ZonePatternParams":
         return cls(
             bars=int(os.environ.get("SR_ZONE_PATTERN_BARS", "10")),
             no_of_pivots=int(os.environ.get("SR_ZONE_PATTERN_NO_OF_PIVOTS", "2")),
-            zone_expiry=int(os.environ.get("SR_ZONE_PATTERN_ZONE_EXPIRY", "200")),
+            zone_expiry=int(os.environ.get("SR_ZONE_PATTERN_ZONE_EXPIRY", "400")),
             exit_mode=os.environ.get("SR_ZONE_PATTERN_EXIT_MODE", "atr_target"),
-            atr_stop_mult=float(os.environ.get("SR_ZONE_PATTERN_ATR_STOP_MULT", "1.5")),
+            atr_stop_mult=float(os.environ.get("SR_ZONE_PATTERN_ATR_STOP_MULT", "2.0")),
             atr_target_mult=float(os.environ.get("SR_ZONE_PATTERN_ATR_TARGET_MULT", "3.0")),
-            zone_buffer_pct=float(os.environ.get("SR_ZONE_PATTERN_ZONE_BUFFER_PCT", "3.0")),
-            atr_length=int(os.environ.get("SR_ZONE_PATTERN_ATR_LENGTH", "1")),
+            zone_buffer_pct=float(os.environ.get("SR_ZONE_PATTERN_ZONE_BUFFER_PCT", "2.0")),
+            atr_length=int(os.environ.get("SR_ZONE_PATTERN_ATR_LENGTH", "21")),
         )
 
 

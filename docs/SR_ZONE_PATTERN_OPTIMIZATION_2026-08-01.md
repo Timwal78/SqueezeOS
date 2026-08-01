@@ -54,9 +54,11 @@ exit_mode=atr_target (unchanged), atr_length=21 (new), atr_stop_mult=2.0 (was 1.
 - No commission/slippage modeled.
 - Does not retroactively validate the `opposite_zone` exit mode or any `no_of_pivots` value other than 2 — both remain unproven/fragile.
 
-## Recommendation
+## Recommendation — and outcome
 
-This is a real, disclosed step up from the original 12-trade/PF-1.186 result — not noise, not fabricated, verified by inspecting the actual trade list. But it is **not** the same class of validated edge as Sovereign Squeeze/Quad-Score. **This engine is already live-armed on real money** (operator directive, 2026-07-30) — updating its shipped defaults changes what trades an already-running real-money engine takes on the next deploy. That is a different situation from Sovereign Squeeze/Quad-Score, where the improved config was adopted *before* going live. Whether to adopt this improved-but-imperfect config for the already-live engine is the operator's call, stated here plainly rather than applied silently.
+This is a real, disclosed step up from the original 12-trade/PF-1.186 result — not noise, not fabricated, verified by inspecting the actual trade list. But it is **not** the same class of validated edge as Sovereign Squeeze/Quad-Score. **This engine is already live-armed on real money** (operator directive, 2026-07-30) — updating its shipped defaults changes what trades an already-running real-money engine takes on the next deploy, a different situation from Sovereign Squeeze/Quad-Score (validated before going live).
+
+**Outcome: applied.** The evidence above was disclosed plainly and the operator directed "Yes, apply it" (2026-08-01). `sr_zone_pattern_engine.py`'s defaults now ship `zone_expiry=400, atr_stop_mult=2.0, atr_length=21, zone_buffer_pct=2.0` — reproduced end-to-end against the real dataset with these exact defaults: 52 trades, PF 2.516, +366.43%, matching the search. The disclosed fragility on `bars`/`no_of_pivots`/`zone_expiry` is unchanged by this decision.
 
 ## Reproducing this
 
