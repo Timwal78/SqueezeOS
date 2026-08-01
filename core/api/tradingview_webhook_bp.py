@@ -25,13 +25,28 @@ Webhook URL for TradingView alert dialog:
   https://squeezeos-api.onrender.com/api/webhooks/tradingview
 
 Robinhood executor polls:
-  GET https://squeezeos-api.onrender.com/api/webhooks/tv_pending
-  Returns and clears all signals queued in the last 10 minutes.
+  GET https://squeezeos-api.onrender.com/api/webhooks/tv_pending?limit=N
+  Returns and pops up to N (default: all) oldest non-expired signals,
+  FIFO. Anything not popped stays queued for the next poll.
 
 Optional per-system Discord routing:
   DISCORD_WEBHOOK_DRUCK — dedicated channel for system="SML_DRUCK"
   (Druckenmiller Liquidity Breakout) alerts. Falls back to the shared
   beast/all channel (discord_alerts.DiscordAlerts) if unset.
+
+BUG FIX (2026-08-01, found auditing core/api/iam_pending_bp.py's identical
+queue for the same defect): this route used to pop-and-clear the ENTIRE
+queue on every single GET, regardless of how many of the returned signals
+the client actually went on to execute. tools/robinhood_executor_sml.py's
+_poll_tv_pending() only executes up to MAX_PER_SCAN (default 10) per poll
+via one shared counter -- so any signal beyond that in a single 45s cycle
+was being permanently discarded, not deferred to the next cycle as that
+function's own log line implied, since the server-side queue backing it
+had already been wiped by the act of fetching it. Fixed the same way as
+iam_pending_bp.py: an optional `limit` query param -- the route only pops
+what it actually returns, leaving the remainder queued (in original order)
+for a later poll, safe within the existing 10-minute TTL given the 45s
+poll cadence.
 """
 import os
 import time
@@ -73,13 +88,25 @@ def _queue_push(sym: str, direction: str, system: str, price: float):
         })
 
 
-def _queue_pop_all() -> list:
-    """Return all non-expired signals and clear the queue."""
+def _queue_pop_all(limit: int = None) -> list:
+    """Return up to `limit` (default: all) oldest non-expired signals, FIFO.
+    Anything not returned this call stays queued -- in its original order --
+    for a later poll, instead of being discarded. Mirrors the 2026-08-01 fix
+    in core/api/iam_pending_bp.py's _pop_all() -- a consumer-side per-cycle
+    throttle (MAX_PER_SCAN) must never sit downstream of a queue that
+    unconditionally clears everything on every read, or unconsumed signals
+    are lost forever rather than merely delayed."""
     now = time.time()
     with _TV_QUEUE_LOCK:
         fresh = [s for s in _TV_QUEUE if now - s["ts"] < _TV_SIGNAL_TTL]
+        if limit is None or limit >= len(fresh):
+            _TV_QUEUE.clear()
+            return fresh
+        limit = max(limit, 0)
+        to_return, remaining = fresh[:limit], fresh[limit:]
         _TV_QUEUE.clear()
-    return fresh
+        _TV_QUEUE.extend(remaining)
+        return to_return
 
 
 def _fire_discord(sym: str, direction: str, system: str, price: float, result: dict):
@@ -192,11 +219,19 @@ def catch_tv_webhook():
 @tradingview_webhook_bp.route("/tv_pending", methods=["GET"])
 def tv_pending():
     """
-    Robinhood executor polls this to pick up Pine script signals.
-    Returns all pending signals queued since last poll, then clears them.
+    Robinhood executor polls this to pick up Pine script signals. Optional
+    ?limit=N pops only the oldest N fresh signals, leaving the rest queued;
+    omitted or invalid pops everything (prior behavior, still the default).
     Signals expire after 10 minutes if not fetched.
     """
-    signals = _queue_pop_all()
+    limit = None
+    raw = request.args.get("limit")
+    if raw:
+        try:
+            limit = int(raw)
+        except ValueError:
+            limit = None
+    signals = _queue_pop_all(limit)
     return jsonify({
         "status":  "success",
         "signals": signals,
