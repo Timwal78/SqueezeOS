@@ -41,12 +41,12 @@ _INTERVAL   = int(float(os.environ.get("QUAD_SCORE_SCAN_INTERVAL", "300")))
 _TIMEFRAME  = "1D"
 _BARS_LIMIT = int(os.environ.get("QUAD_SCORE_BARS_LIMIT", "1100"))
 
-# 25 (raised from 10, 2026-08-01) -- see breakout_scanner.py's identical
-# comment: tradier_api.py's global 1.05s/call rate limiter makes an actual
-# violation impossible regardless of this value; 25 across 5 Tradier-daily
-# scanners (+ CASCADE's 40) keeps worst-case queue-drain comfortably under
-# the shared 300s SCAN_INTERVAL. Full math in CLAUDE.md's scan-width section.
-_SCAN_TOP_N = int(os.environ.get("QUAD_SCORE_SCAN_TOP_N", "25"))
+# Dynamic (2026-08-01) -- see breakout_scanner.py's identical comment and
+# scan_budget.py's module docstring: this scanner's share of the safe
+# shared Tradier queue budget is computed live across whichever secondary
+# scanners are actually enabled; QUAD_SCORE_SCAN_TOP_N, if set, always wins.
+from scan_budget import dynamic_top_n
+_SCAN_TOP_N = dynamic_top_n("QUAD_SCORE", "QUAD_SCORE_SCAN_TOP_N")
 
 _started = False
 _lock = threading.Lock()

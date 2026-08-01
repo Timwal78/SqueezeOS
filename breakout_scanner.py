@@ -39,16 +39,14 @@ _INTERVAL   = int(float(os.environ.get("BREAKOUT_SCAN_INTERVAL", "300")))
 _TIMEFRAME  = "1D"
 _BARS_LIMIT = int(os.environ.get("BREAKOUT_BARS_LIMIT", "300"))
 
-# 25 (raised from 10, 2026-08-01): tradier_api.py's rate limiter is a global,
-# process-wide 1.05s/call floor shared by EVERY Tradier caller regardless of
-# which scanner makes the call -- this makes an actual rate-limit violation
-# structurally impossible no matter how high this goes; the only real cost of
-# going too wide is scan-cycle staleness (a slower pass, not an error). With
-# CASCADE's own AVG_DOWN_SCAN_TOP_N already at 40 and 5 Tradier-daily
-# scanners sharing this same global queue, 25 each (5*25=125 + CASCADE's 40
-# = 165 total * 1.05s ~= 173s worst-case queue-drain) leaves ~42% margin
-# under the shared 300s SCAN_INTERVAL -- see CLAUDE.md's scan-width section.
-_SCAN_TOP_N = int(os.environ.get("BREAKOUT_SCAN_TOP_N", "25"))
+# Dynamic (2026-08-01): scan_budget.py computes this scanner's share of the
+# safe shared Tradier-daily queue budget live, split across however many of
+# the 5 secondary scanners are ACTUALLY enabled right now (not a static
+# guess assuming a fixed sibling count) -- BREAKOUT_SCAN_TOP_N, if set,
+# still always wins outright. See scan_budget.py's module docstring and
+# CLAUDE.md's scan-width section for the full math.
+from scan_budget import dynamic_top_n
+_SCAN_TOP_N = dynamic_top_n("BREAKOUT", "BREAKOUT_SCAN_TOP_N")
 
 _started = False
 _lock = threading.Lock()
