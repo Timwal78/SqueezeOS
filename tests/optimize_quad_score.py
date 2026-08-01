@@ -9,7 +9,7 @@ candidates on TRAIN; each candidate is scored on VALID exactly once.
 Real daily bars, 16 symbols (AMC/GME/IWM/SPY/NVDA/QQQ/MSTR/TSLA/PLTR/HOOD/
 AMD/MSFT/AAPL/META/COIN/SMCI), 2018-01-02..2026-07-30 where available
 (PLTR/HOOD/COIN have shorter real history from their real IPO dates —
-their pre-IPO "interpolated" placeholder bars were dropped, not backfilled)
+their pre-IPO synthetic "interpolated" bars were excluded, never backfilled)
 — Robinhood MCP get_equity_historicals, same real-data channel as every
 other backtest in this codebase. Point QUAD_SCORE_OPTIMIZE_BARS_JSON at an
 equivalent {symbol: [bars]} JSON file to reproduce.
