@@ -9,7 +9,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from sr_zone_pattern_engine import ZonePatternParams, _detect_patterns, compute_series  # noqa: E402
+from sr_zone_pattern_engine import ZonePatternParams, _detect_patterns, compute_series, _atr_series, _true_range  # noqa: E402
 
 
 def _synthetic_bars(n=300, seed=3):
@@ -94,6 +94,42 @@ def test_exit_mode_atr_target_sets_stop_and_target_on_entry():
     print("PASS: atr_target exit mode sets stop/target and runs clean end-to-end")
 
 
+def test_atr_length_1_is_byte_identical_to_original_single_bar_true_range():
+    """atr_length=1 (the default) must reproduce EXACTLY the original
+    per-bar true-range-recomputed-fresh-every-bar behavior -- this is the
+    backward-compatibility guarantee for every already-shipped/live config
+    that doesn't set SR_ZONE_PATTERN_ATR_LENGTH."""
+    bars = _synthetic_bars(100, seed=11)
+    h = [b["high"] for b in bars]
+    l = [b["low"] for b in bars]
+    c = [b["close"] for b in bars]
+    out = _atr_series(h, l, c, length=1)
+    expected = [_true_range(h[i], l[i], c[i - 1] if i > 0 else c[i]) for i in range(len(bars))]
+    assert out == expected
+    print("PASS: atr_length=1 is byte-identical to the original single-bar true range")
+
+
+def test_atr_length_greater_than_1_produces_real_smoothing():
+    """A real multi-bar ATR should be smoother (lower variance bar-to-bar)
+    than the raw single-bar true range it replaces -- proves this isn't a
+    no-op wrapper around the same values."""
+    bars = _synthetic_bars(200, seed=13)
+    h = [b["high"] for b in bars]
+    l = [b["low"] for b in bars]
+    c = [b["close"] for b in bars]
+    raw_tr = _atr_series(h, l, c, length=1)
+    smoothed = _atr_series(h, l, c, length=14)
+
+    def _variance_of_diffs(vals):
+        clean = [v for v in vals if v is not None]
+        diffs = [abs(clean[i] - clean[i - 1]) for i in range(1, len(clean))]
+        return sum(diffs) / len(diffs)
+
+    assert _variance_of_diffs(smoothed) < _variance_of_diffs(raw_tr)
+    assert smoothed[0] is None and smoothed[12] is None and smoothed[13] is not None
+    print("PASS: atr_length>1 produces genuine smoothing, not a no-op")
+
+
 if __name__ == "__main__":
     test_no_crash_on_empty_and_short_series()
     print("PASS: no crash on empty/short series")
@@ -102,4 +138,6 @@ if __name__ == "__main__":
     test_detect_patterns_needs_two_prior_bars()
     print("PASS: pattern detection needs 2 prior bars")
     test_exit_mode_atr_target_sets_stop_and_target_on_entry()
+    test_atr_length_1_is_byte_identical_to_original_single_bar_true_range()
+    test_atr_length_greater_than_1_produces_real_smoothing()
     print("\nAll tests passed.")
