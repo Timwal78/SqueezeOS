@@ -51,7 +51,12 @@ _INTERVAL   = int(float(os.environ.get("SR_ZONE_PATTERN_SCAN_INTERVAL", "300")))
 _TIMEFRAME  = "1D"
 _BARS_LIMIT = int(os.environ.get("SR_ZONE_PATTERN_BARS_LIMIT", "300"))
 
-_SCAN_TOP_N = int(os.environ.get("SR_ZONE_PATTERN_SCAN_TOP_N", "10"))
+# Dynamic (2026-08-01) -- see breakout_scanner.py's identical comment and
+# scan_budget.py's module docstring: this scanner's share of the safe
+# shared Tradier queue budget is computed live across whichever secondary
+# scanners are actually enabled; SR_ZONE_PATTERN_SCAN_TOP_N, if set, always wins.
+from scan_budget import dynamic_top_n
+_SCAN_TOP_N = dynamic_top_n("SR_ZONE_PATTERN", "SR_ZONE_PATTERN_SCAN_TOP_N")
 
 _started = False
 _lock = threading.Lock()

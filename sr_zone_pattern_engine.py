@@ -33,37 +33,45 @@ from typing import Optional
 class ZonePatternParams:
     bars: int = 10
     no_of_pivots: int = 2       # 2, 3, or 4 -- how many clustering pivots confirm a zone
-    zone_expiry: int = 200      # 0 = never expires
+    # 400 (was 200, 2026-08-01): a real chronological TRAIN/VALID search
+    # (docs/SR_ZONE_PATTERN_OPTIMIZATION_2026-08-01.md) found 400 combined
+    # with zone_buffer_pct=2.0/atr_length=21/atr_stop_mult=2.0 below produces
+    # 52 real trades (vs the prior 12) holding VALID PF >1.0 across all 4
+    # tested split points. Operator directive 2026-08-01: adopted for the
+    # already-live engine after the evidence was disclosed plainly, same
+    # "state the evidence, operator decides" pattern as every other engine.
+    # zone_expiry itself is one of the search's disclosed FRAGILE axes (0
+    # and 400 both hold, 100/200 do not) -- kept here because it's the one
+    # this search actually validated, not because the dimension is robust.
+    zone_expiry: int = 400      # 0 = never expires
     exit_mode: str = "opposite_zone"  # "opposite_zone" | "atr_target"
-    atr_stop_mult: float = 1.5
+    # 2.0 (was 1.5, 2026-08-01) -- part of the same validated config above.
+    atr_stop_mult: float = 2.0
     atr_target_mult: float = 3.0
-    # Proximity buffer around a zone's [l, h] band, as a fraction of the
-    # zone's own height (e.g. 3.0 = extend the zone by 3x its own height on
-    # each side). Requiring the close to land EXACTLY inside a zone's narrow
-    # candle-body range (buffer=0) turned out to almost never coincide with a
-    # qualifying candlestick pattern on real data -- measured on 7 real
-    # symbols / 4.5 years: patterns fire on ~8-9% of bars, zones exist for
-    # a meaningful fraction of time too, but their exact-overlap is only 1-3
-    # trades total (docs/SR_ZONE_PATTERN_BACKTEST_2026-07-30.md). A small
-    # proximity buffer -- "near a zone" rather than "exactly inside its
-    # narrow candle-body band" -- is a real, common S/R-tool convention (the
-    # original Pine script itself has separate "near zone" proximity alerts
-    # distinct from its containment logic), not a parameter tuned to force a
-    # result. Default kept conservative (3x zone height, not the most
-    # aggressive value tested) -- see docs/SR_ZONE_PATTERN_BACKTEST_2026-07-30.md
-    # for the sensitivity sweep this default was chosen from.
-    zone_buffer_pct: float = 3.0
+    # 21 (was 1, 2026-08-01): the 2026-08-01 search found a genuine multi-bar
+    # Wilder ATR (matching every other engine's convention) tested robustly
+    # positive across the ENTIRE range searched (1-28) -- one of only two
+    # dimensions (with zone_buffer_pct below) that held up everywhere tested,
+    # not just at this one value. See docs/SR_ZONE_PATTERN_OPTIMIZATION_2026-08-01.md.
+    atr_length: int = 21
+    # 2.0 (was 3.0, 2026-08-01): the search found 1.0-3.0 all hold VALID PF
+    # >1.0 (only the wide extreme, 4.0, breaks) -- one of the two genuinely
+    # robust dimensions in this search, not a single-point overfit. Original
+    # rationale for the concept (a real proximity buffer, not zero) unchanged
+    # from the 2026-07-30 note below -- only the specific value changed.
+    zone_buffer_pct: float = 2.0
 
     @classmethod
     def from_env(cls) -> "ZonePatternParams":
         return cls(
             bars=int(os.environ.get("SR_ZONE_PATTERN_BARS", "10")),
             no_of_pivots=int(os.environ.get("SR_ZONE_PATTERN_NO_OF_PIVOTS", "2")),
-            zone_expiry=int(os.environ.get("SR_ZONE_PATTERN_ZONE_EXPIRY", "200")),
+            zone_expiry=int(os.environ.get("SR_ZONE_PATTERN_ZONE_EXPIRY", "400")),
             exit_mode=os.environ.get("SR_ZONE_PATTERN_EXIT_MODE", "atr_target"),
-            atr_stop_mult=float(os.environ.get("SR_ZONE_PATTERN_ATR_STOP_MULT", "1.5")),
+            atr_stop_mult=float(os.environ.get("SR_ZONE_PATTERN_ATR_STOP_MULT", "2.0")),
             atr_target_mult=float(os.environ.get("SR_ZONE_PATTERN_ATR_TARGET_MULT", "3.0")),
-            zone_buffer_pct=float(os.environ.get("SR_ZONE_PATTERN_ZONE_BUFFER_PCT", "3.0")),
+            zone_buffer_pct=float(os.environ.get("SR_ZONE_PATTERN_ZONE_BUFFER_PCT", "2.0")),
+            atr_length=int(os.environ.get("SR_ZONE_PATTERN_ATR_LENGTH", "21")),
         )
 
 
@@ -80,6 +88,28 @@ def _bar_val(bar: dict, *keys, default=0.0) -> float:
 
 def _true_range(h, l, pc):
     return max(h - l, abs(h - pc), abs(l - pc))
+
+
+def _atr_series(h: list, l: list, c: list, length: int) -> list:
+    """Wilder-smoothed ATR over `length` bars, same convention as every
+    other engine in this codebase. length=1 degenerates to exactly the
+    original single-bar true-range-per-bar behavior (no smoothing at all),
+    preserving backward compatibility with the shipped default."""
+    n = len(h)
+    tr = [_true_range(h[i], l[i], c[i - 1] if i > 0 else c[i]) for i in range(n)]
+    if length <= 1:
+        return tr
+    out = [None] * n
+    running = None
+    for i in range(n):
+        if running is None:
+            if i >= length - 1:
+                running = sum(tr[i - length + 1:i + 1]) / length
+                out[i] = running
+            continue
+        running = running - (running / length) + tr[i]
+        out[i] = running / length
+    return out
 
 
 def _bar_key(bar: dict, idx: int) -> str:
@@ -135,6 +165,7 @@ def compute_series(bars: list, p: ZonePatternParams = None) -> dict:
     events = [None] * n
     live_signal = [None] * n
     pnl_pct = [None] * n
+    atr_series = _atr_series(h, l, c, p.atr_length)
 
     # ── Pivot detection (no lookahead: known only Bars bars later) ──
     pivot_high_body = []  # list of (bar_idx, high, upper_body) in chronological order
@@ -253,7 +284,8 @@ def compute_series(bars: list, p: ZonePatternParams = None) -> dict:
                 if direction == "up" and bearish_at_resistance:
                     exit_now, reason = True, "EXIT_OPPOSITE_ZONE"
             else:
-                atr = _true_range(h[i], l[i], c[i - 1] if i > 0 else c[i])
+                # stop_price/target_price were already fixed at entry time
+                # from that bar's ATR -- no per-bar ATR recompute needed here.
                 hit_target = direction == "up" and close >= target_price
                 hit_stop = direction == "up" and close <= stop_price
                 if hit_target:
@@ -277,7 +309,7 @@ def compute_series(bars: list, p: ZonePatternParams = None) -> dict:
             live_signal[i] = "BUY"
             pnl_pct[i] = 0.0
             if p.exit_mode == "atr_target":
-                atr = _true_range(h[i], l[i], c[i - 1] if i > 0 else c[i])
+                atr = atr_series[i] if atr_series[i] is not None else _true_range(h[i], l[i], c[i - 1] if i > 0 else c[i])
                 if atr > 0:
                     stop_price = close - p.atr_stop_mult * atr
                     target_price = close + p.atr_target_mult * atr

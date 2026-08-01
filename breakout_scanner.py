@@ -39,7 +39,14 @@ _INTERVAL   = int(float(os.environ.get("BREAKOUT_SCAN_INTERVAL", "300")))
 _TIMEFRAME  = "1D"
 _BARS_LIMIT = int(os.environ.get("BREAKOUT_BARS_LIMIT", "300"))
 
-_SCAN_TOP_N = int(os.environ.get("BREAKOUT_SCAN_TOP_N", "10"))
+# Dynamic (2026-08-01): scan_budget.py computes this scanner's share of the
+# safe shared Tradier-daily queue budget live, split across however many of
+# the 5 secondary scanners are ACTUALLY enabled right now (not a static
+# guess assuming a fixed sibling count) -- BREAKOUT_SCAN_TOP_N, if set,
+# still always wins outright. See scan_budget.py's module docstring and
+# CLAUDE.md's scan-width section for the full math.
+from scan_budget import dynamic_top_n
+_SCAN_TOP_N = dynamic_top_n("BREAKOUT", "BREAKOUT_SCAN_TOP_N")
 
 _started = False
 _lock = threading.Lock()
