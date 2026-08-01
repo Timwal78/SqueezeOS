@@ -50,9 +50,20 @@ _SECONDARY_ENABLED_VARS = {
     "QUAD_SCORE": "QUAD_SCORE_SCAN_ENABLED",
 }
 
+# Per-scanner default when its own env var is unset. Every scanner here used
+# to default "true"; SR_ZONE_PATTERN's own module default flipped to "false"
+# (2026-08-01, operator directive to withdraw it from live trading entirely
+# given its own thin evidence) -- this map must agree with that module's
+# default or this allocator would keep budgeting a share for a scanner that
+# never actually starts, under-widening the ones that do.
+_DEFAULT_ENABLED = {
+    "SR_ZONE_PATTERN": "false",
+}
 
-def _is_enabled(env_var: str) -> bool:
-    return os.environ.get(env_var, "true").strip().lower() == "true"
+
+def _is_enabled(env_var: str, scanner_name: str = "") -> bool:
+    default = _DEFAULT_ENABLED.get(scanner_name, "true")
+    return os.environ.get(env_var, default).strip().lower() == "true"
 
 
 def _cascade_reserved() -> int:
@@ -65,7 +76,7 @@ def _cascade_reserved() -> int:
 def active_secondary_scanners() -> list:
     """Names of the secondary (non-CASCADE) Tradier-daily scanners that are
     currently enabled, per their own *_SCAN_ENABLED flags."""
-    return [name for name, var in _SECONDARY_ENABLED_VARS.items() if _is_enabled(var)]
+    return [name for name, var in _SECONDARY_ENABLED_VARS.items() if _is_enabled(var, name)]
 
 
 def shared_budget_total() -> int:
