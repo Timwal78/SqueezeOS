@@ -60,6 +60,16 @@ class ZonePatternParams:
     # rationale for the concept (a real proximity buffer, not zero) unchanged
     # from the 2026-07-30 note below -- only the specific value changed.
     zone_buffer_pct: float = 2.0
+    # True (default, byte-identical to every shipped/live behavior above) --
+    # a BUY/SELL still requires a qualifying candlestick reversal pattern
+    # AND an active buffered zone, together. False drops the pattern half of
+    # the confluence entirely: any bar whose close lands inside a buffered
+    # zone fires, matching the operator's "buy at green +, sell at red +"
+    # reading of the zone-touch markers on the chart. Added 2026-08-01 at
+    # the operator's explicit request to test that literal reading as a
+    # real strategy -- backtested before being made a live default, see
+    # docs/SR_ZONE_PATTERN_TOUCH_ONLY_BACKTEST_2026-08-01.md.
+    require_pattern: bool = True
 
     @classmethod
     def from_env(cls) -> "ZonePatternParams":
@@ -72,6 +82,7 @@ class ZonePatternParams:
             atr_target_mult=float(os.environ.get("SR_ZONE_PATTERN_ATR_TARGET_MULT", "3.0")),
             zone_buffer_pct=float(os.environ.get("SR_ZONE_PATTERN_ZONE_BUFFER_PCT", "2.0")),
             atr_length=int(os.environ.get("SR_ZONE_PATTERN_ATR_LENGTH", "21")),
+            require_pattern=os.environ.get("SR_ZONE_PATTERN_REQUIRE_PATTERN", "true").lower() == "true",
         )
 
 
@@ -254,7 +265,10 @@ def compute_series(bars: list, p: ZonePatternParams = None) -> dict:
 
         bull_pat, bear_pat = _detect_patterns(o, h, l, c, i)
 
-        if bull_pat:
+        # require_pattern=False drops the candlestick half of the confluence
+        # entirely -- a zone touch alone qualifies, matching a literal "buy
+        # at green +, sell at red +" reading of the zone-touch markers.
+        if not p.require_pattern or bull_pat:
             for z in sup_zones:
                 if z["broken"]:
                     continue
@@ -262,7 +276,7 @@ def compute_series(bars: list, p: ZonePatternParams = None) -> dict:
                 if z["l"] - buf <= c[i] <= z["h"] + buf:
                     bullish_at_support = True
                     break
-        if bear_pat:
+        if not p.require_pattern or bear_pat:
             for z in res_zones:
                 if z["broken"]:
                     continue
