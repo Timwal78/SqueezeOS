@@ -14,13 +14,28 @@ deque, TTL, lock) so tools/robinhood_executor_sml.py's polling convention
 stays consistent across every signal source it consumes.
 
 Robinhood executor polls:
-  GET https://squeezeos-api.onrender.com/api/webhooks/iam_pending
-  Returns and clears all signals queued in the last 10 minutes.
+  GET https://squeezeos-api.onrender.com/api/webhooks/iam_pending?limit=N
+  Returns and pops up to N (default: all) oldest non-expired signals,
+  FIFO. Anything not popped stays queued for the next poll.
+
+BUG FIX (2026-08-01, found during the 7-engine profitability audit): this
+route used to pop-and-clear the ENTIRE queue on every single GET,
+regardless of how many of the returned signals the client actually went on
+to execute. tools/robinhood_executor_sml.py's _poll_iam_primary() only
+executes up to MAX_PER_SCAN (default 3, shared across ALL 7 primary
+systems) per poll via one shared counter -- so any signal beyond the 3rd
+in a single 45s cycle was being permanently discarded, not "deferred to
+next cycle" as that function's own log message implied, since the
+server-side queue backing it had already been wiped by the act of fetching
+it. Fixed by adding an optional `limit` query param: the route only pops
+what it actually returns, leaving the remainder queued (in original order)
+for a later poll -- safe within the existing 10-minute TTL given the 45s
+poll cadence.
 """
 import time
 import threading
 from collections import deque
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 
 iam_pending_bp = Blueprint("iam_pending", __name__)
 
@@ -70,20 +85,42 @@ def push_iam_primary_signal(sym: str, action: str, system: str, price: float,
         _QUEUE.append(signal)
 
 
-def _pop_all() -> list:
-    """Return all non-expired signals and clear the queue."""
+def _pop_all(limit: int = None) -> list:
+    """Return up to `limit` (default: all) oldest non-expired signals, FIFO.
+    Anything not returned this call stays queued -- in its original order --
+    for a later poll, instead of being discarded. This is the crux of the
+    2026-08-01 fix: a consumer-side per-cycle throttle (MAX_PER_SCAN) must
+    never sit downstream of a queue that unconditionally clears everything
+    on every read, or unconsumed signals are lost forever rather than
+    merely delayed."""
     now = time.time()
     with _QUEUE_LOCK:
         fresh = [s for s in _QUEUE if now - s["ts"] < _SIGNAL_TTL]
+        if limit is None or limit >= len(fresh):
+            _QUEUE.clear()
+            return fresh
+        limit = max(limit, 0)
+        to_return, remaining = fresh[:limit], fresh[limit:]
         _QUEUE.clear()
-    return fresh
+        _QUEUE.extend(remaining)
+        return to_return
 
 
 @iam_pending_bp.route("/iam_pending", methods=["GET"])
 def iam_pending():
     """Robinhood executor polls this to pick up IAM primary-system signals
-    (CASCADE/SR-Matrix/Breakout/MM-V4). Clears on read; expires after 10 min."""
-    signals = _pop_all()
+    (CASCADE/SR-Matrix/Breakout/MM-V4/Sovereign Squeeze/Quad-Score/S-R Zone
+    +Pattern). Optional ?limit=N pops only the oldest N fresh signals,
+    leaving the rest queued; omitted or invalid pops everything (prior
+    behavior, still the default). Expires after 10 min regardless."""
+    limit = None
+    raw = request.args.get("limit")
+    if raw:
+        try:
+            limit = int(raw)
+        except ValueError:
+            limit = None
+    signals = _pop_all(limit)
     return jsonify({
         "status":  "success",
         "signals": signals,
