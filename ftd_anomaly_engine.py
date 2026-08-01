@@ -48,10 +48,29 @@ _known_init = False
 _spike_known_init = False   # mirrors _known_init, for the FTD_SPIKE seed-only first scan
 
 
-def get_feed(limit: int = 25) -> List[dict]:
-    """Return the most recent N alerts (newest first)."""
+def get_feed(
+    limit: int = 25,
+    symbol: str | None = None,
+    min_spike_multiplier: float | None = None,
+) -> List[dict]:
+    """Return the most recent N alerts (newest first), optionally filtered.
+
+    symbol: exact ticker match, case-insensitive. min_spike_multiplier: only
+    alerts whose spike_ratio is present AND >= this value (NEW_THRESHOLD_LIST_ENTRY
+    alerts always have spike_ratio=None, so they're excluded whenever a min is
+    given — they have no spike to compare, not a fabricated 0).
+    """
     with _feed_lock:
-        items = list(_feed)[-limit:]
+        items = list(_feed)
+    if symbol:
+        sym_upper = symbol.upper().strip()
+        items = [a for a in items if a.get("symbol") == sym_upper]
+    if min_spike_multiplier is not None:
+        items = [
+            a for a in items
+            if a.get("spike_ratio") is not None and a["spike_ratio"] >= min_spike_multiplier
+        ]
+    items = items[-limit:]
     items.reverse()
     return items
 
