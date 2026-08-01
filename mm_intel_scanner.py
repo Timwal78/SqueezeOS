@@ -67,7 +67,16 @@ _INTERVAL   = int(float(os.environ.get("MM_INTEL_SCAN_INTERVAL", "300")))
 _TIMEFRAME  = os.environ.get("MM_INTEL_TIMEFRAME", "5MIN").strip()
 _BARS_LIMIT = int(os.environ.get("MM_INTEL_BARS_LIMIT", "300"))
 
-_SCAN_TOP_N = int(os.environ.get("MM_INTEL_SCAN_TOP_N", "10"))
+# 15 (raised modestly from 10, 2026-08-01) -- deliberately NOT widened as
+# aggressively as the Tradier-daily scanners (breakout/sr_matrix/sr_zone_
+# pattern/sovereign_squeeze/quad_score, now 25 each). This engine's 5MIN
+# bars route through DataManager.get_bars() -> Polygon FIRST (data_providers.py),
+# which has a much tighter shared global limiter (PolygonRateGuard, 12s/call
+# = 5/min, real free-tier ceiling) than Tradier's 1.05s/call -- and that
+# quota is also shared with the market-scanner's own Polygon grouped-daily
+# discovery call. 15*12s=180s worst case still comfortably fits the 300s
+# SCAN_INTERVAL, without eating deeply into a much scarcer shared budget.
+_SCAN_TOP_N = int(os.environ.get("MM_INTEL_SCAN_TOP_N", "15"))
 
 _started = False
 _lock = threading.Lock()
