@@ -98,9 +98,19 @@ EXECUTION_MODE     = lambda: os.environ.get("IAM_EXECUTION_MODE", "both").strip(
 INSTRUMENT         = lambda: os.environ.get("IAM_INSTRUMENT",  "equity").strip().lower()
 MIN_CONFIDENCE     = lambda: _env_float("IAM_MIN_CONFIDENCE", 70.0)
 MAX_SHARES         = lambda: _env_int("IAM_MAX_SHARES", 5)
+# MAX_ORDERS_PER_DAY/MAX_NOTIONAL_PER_DAY raised 5->15 / $2000->$6000
+# (2026-08-01, operator directive after a 7-engine profitability audit
+# flagged these as unwidened since being set for ~1-2 systems). Both are
+# ACCOUNT-WIDE, shared by all 7 live IAM_PRIMARY_SYSTEM engines -- the old
+# 5-order/$2000 ceiling could be exhausted by literally 4-5 systems each
+# firing once, silently starving the rest for the remainder of the day.
+# 15 orders gives ~2/system/day average with real buffer for scale-ins;
+# $6000 is sized against MAX_ORDER_USD (500) so the notional cap doesn't
+# bottleneck before the order-count cap does (15*500=$7500 theoretical max,
+# $6000 covers ~12 full-size orders). See CLAUDE.md's caps-audit section.
 MAX_ORDER_USD      = lambda: _env_float("IAM_MAX_ORDER_USD", 500.0)
-MAX_ORDERS_PER_DAY = lambda: _env_int("IAM_MAX_ORDERS_PER_DAY", 5)
-MAX_NOTIONAL_PER_DAY = lambda: _env_float("IAM_MAX_NOTIONAL_PER_DAY", 2000.0)
+MAX_ORDERS_PER_DAY = lambda: _env_int("IAM_MAX_ORDERS_PER_DAY", 15)
+MAX_NOTIONAL_PER_DAY = lambda: _env_float("IAM_MAX_NOTIONAL_PER_DAY", 6000.0)
 DAILY_LOSS_LIMIT   = lambda: _env_float("IAM_DAILY_LOSS_LIMIT", 150.0)  # 7% of ~$2k account
 STOP_LOSS_PCT      = lambda: _env_float("IAM_STOP_LOSS_PCT", 3.0)  # hard protective stop below entry; 0 disables
 
@@ -143,8 +153,17 @@ OPTIONS_SYSTEMS    = lambda: {s.strip().upper() for s in
 # per-symbol/per-system count — an account-wide comfort limit while the
 # operator gets used to real options execution). 0 or negative = unlimited.
 # Only enforced live (PAPER_MODE has no real Tradier positions to count).
-MAX_OPEN_CALLS     = lambda: _env_int("IAM_MAX_OPEN_CALLS", 1)
-MAX_OPEN_PUTS      = lambda: _env_int("IAM_MAX_OPEN_PUTS", 1)
+# Raised 1->3 (2026-08-01, operator directive after the 7-engine
+# profitability audit): the original 1/1 was set 2026-07-30 when far fewer
+# systems traded options live. With 7 systems now sharing this ACCOUNT-WIDE
+# cap and no equity fallback on cap-hit (a blocked signal is just dropped),
+# whichever system opened a call first could silently starve every other
+# system's BUY signal until it closed, regardless of that signal's own
+# evidence quality. 3 is a deliberately measured step (not 7-for-7 parity,
+# which would be reckless given several of these engines still carry
+# disclosed evidence caveats) -- see CLAUDE.md's caps-audit section.
+MAX_OPEN_CALLS     = lambda: _env_int("IAM_MAX_OPEN_CALLS", 3)
+MAX_OPEN_PUTS      = lambda: _env_int("IAM_MAX_OPEN_PUTS", 3)
 
 REQUIRED_WINDOWS   = {"NEAR_TERM", "IMMEDIATE"}
 
