@@ -280,6 +280,7 @@ def x402_guard(price_usdc: str, description: str, discoverable: bool = True):
             passed_key = (
                 request.headers.get("X-Owner-Key")
                 or request.headers.get("X-API-Key")
+                or request.headers.get("X-Operator-Key")
                 or bearer_key
             )
             agent_keys = [k.strip() for k in os.environ.get("AGENT_API_KEYS", "").split(",") if k.strip()]
