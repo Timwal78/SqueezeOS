@@ -13,6 +13,7 @@ Routes (all under /api/swarm-mm):
   POST /sim/join
   POST /sim/trade
   GET  /sim/leaderboard
+  GET  /sim/account/<user_id>
   GET  /pricing
 """
 
@@ -39,6 +40,16 @@ _OP_KEY = (
     or ""
 )
 _UA = "SqueezeOS-SwarmMM-Proxy/1.0 (+https://swarmagentsintelligence.scriptmasterlabs.com)"
+
+# Desk origins allowed to iframe /api/swarm-mm/panel (also enforced in app.py CSP).
+_FRAME_ANCESTORS = (
+    "'self' "
+    "https://scriptmasterlabs.abacusai.app "
+    "https://swarmagentsintelligence.scriptmasterlabs.com "
+    "https://www.scriptmasterlabs.com "
+    "https://scriptmasterlabs.com "
+    "https://squeezeos-api.onrender.com"
+)
 
 
 def _upstream(method: str, path: str, query: dict | None = None, body: dict | None = None, paid: bool = False):
@@ -77,7 +88,18 @@ def _upstream(method: str, path: str, query: dict | None = None, body: dict | No
 @swarm_mm_bp.get("/health")
 def health():
     code, body = _upstream("GET", "/health")
-    return jsonify({"proxy": "ok", "upstream_status": code, "swarm_mm": body, "base": _SWARM_MM_BASE}), (200 if code == 200 else 502)
+    return jsonify({
+        "proxy": "ok",
+        "upstream_status": code,
+        "swarm_mm": body,
+        "base": _SWARM_MM_BASE,
+        "operator_key_configured": bool(_OP_KEY),
+        "panel_embed": {
+            "url": "/api/swarm-mm/panel",
+            "frame_ancestors": _FRAME_ANCESTORS,
+            "preferred_for_desk": True,
+        },
+    }), (200 if code == 200 else 502)
 
 
 @swarm_mm_bp.get("/pricing")
@@ -91,7 +113,6 @@ def levels():
     ticker = request.args.get("ticker") or request.args.get("symbol") or "IWM"
     side = request.args.get("side") or "buy"
     code, body = _upstream("GET", "/v1/signal/levels", {"ticker": ticker, "side": side}, paid=True)
-    # If unpaid 402 and no op key, still return challenge shape for UI
     return jsonify(body), code
 
 
@@ -146,6 +167,14 @@ def sim_leaderboard():
     return jsonify(body), code
 
 
+@swarm_mm_bp.get("/sim/account/<user_id>")
+def sim_account(user_id: str):
+    code, body = _upstream("GET", f"/v1/sim/account/{urllib.parse.quote(user_id)}")
+    return jsonify(body), code
+
+
+# Same-origin panel: all fetches hit /api/swarm-mm/* so CSP default-src 'self' works
+# and X-Operator-Key stays server-side on paid routes.
 _PANEL_HTML = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -153,7 +182,7 @@ _PANEL_HTML = r"""<!DOCTYPE html>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Swarm MM — Desk Panel</title>
 <style>
-  :root { --bg:#070b14; --card:#0f172a; --line:#1e293b; --tx:#e2e8f0; --mut:#94a3b8; --go:#22c55e; --accent:#38bdf8; --warn:#fbbf24; }
+  :root { --bg:#070b14; --card:#0f172a; --line:#1e293b; --tx:#e2e8f0; --mut:#94a3b8; --go:#22c55e; --accent:#38bdf8; }
   *{box-sizing:border-box} body{margin:0;font-family:ui-sans-serif,system-ui,sans-serif;background:var(--bg);color:var(--tx);padding:12px}
   h1{font-size:15px;margin:0 0 4px} .sub{color:var(--mut);font-size:12px;margin-bottom:12px}
   .row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:end}
@@ -167,13 +196,13 @@ _PANEL_HTML = r"""<!DOCTYPE html>
   .card h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:0 0 8px}
   pre{white-space:pre-wrap;word-break:break-word;font-size:11px;line-height:1.4;margin:0;max-height:280px;overflow:auto}
   .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#052e16;color:var(--go);font-size:11px;font-weight:700}
-  .err{color:#f87171} .ok{color:var(--go)}
+  .err{color:#f87171}
   a{color:var(--accent)}
 </style>
 </head>
 <body>
-  <h1>Swarm MM <span class="pill">INSIDE DESK</span></h1>
-  <div class="sub">Coordination without custody · free paper · signal levels for your broker · Script Master Labs</div>
+  <h1>Swarm MM <span class="pill">DESK PROXY</span></h1>
+  <div class="sub">Same-origin via SqueezeOS · operator key server-side · free paper · limit levels · your broker executes</div>
   <div class="row">
     <div><label>Ticker</label><input id="ticker" value="IWM" size="8"/></div>
     <div><label>Side</label><select id="side"><option>buy</option><option>sell</option></select></div>
@@ -187,46 +216,50 @@ _PANEL_HTML = r"""<!DOCTYPE html>
     <div class="card"><h2>Paper account</h2><pre id="sim">—</pre></div>
     <div class="card"><h2>Leaderboard</h2><pre id="lb">—</pre></div>
   </div>
-  <p class="sub" style="margin-top:12px">Upstream: __BASE__ · Full API: <a href="__BASE__/docs" target="_blank" rel="noopener">/docs</a> · Landing: <a href="__BASE__/landing" target="_blank" rel="noopener">/landing</a></p>
+  <p class="sub" style="margin-top:12px">
+    Proxy base: <code>/api/swarm-mm</code> · Upstream: __UPSTREAM__ ·
+    Direct panel fallback: <a href="__UPSTREAM__/panel" target="_blank" rel="noopener">swarm-mm/panel</a>
+  </p>
 <script>
-const BASE = '__BASE__';
-const OP = (window.SWARM_MM_OPERATOR_KEY || ''); // optional parent inject; prefer SqueezeOS proxy
+// Same-origin only — works under SqueezeOS CSP + keeps operator key off the browser.
+const API = '/api/swarm-mm';
 async function jget(path){
-  const h = {'Accept':'application/json'};
-  if (OP) h['X-Operator-Key'] = OP;
-  const r = await fetch(BASE + path, {headers:h});
-  const t = await r.text();
-  let b; try{b=JSON.parse(t)}catch(e){b={raw:t}}
+  const r = await fetch(API + path, {headers:{'Accept':'application/json'}});
+  const t = await r.text(); let b; try{b=JSON.parse(t)}catch(e){b={raw:t}}
   return {status:r.status, body:b};
 }
 async function jpost(path, body){
-  const r = await fetch(BASE + path, {method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json'}, body:JSON.stringify(body||{})});
+  const r = await fetch(API + path, {
+    method:'POST',
+    headers:{'Content-Type':'application/json','Accept':'application/json'},
+    body:JSON.stringify(body||{})
+  });
   const t = await r.text(); let b; try{b=JSON.parse(t)}catch(e){b={raw:t}}
   return {status:r.status, body:b};
 }
 function show(id, status, body){
   const el = document.getElementById(id);
-  el.textContent = (status?('HTTP '+status+'\n'):'') + JSON.stringify(body, null, 2);
-  el.className = status && status >= 400 ? 'err' : '';
+  el.textContent = 'HTTP '+status+'\n' + JSON.stringify(body, null, 2);
+  el.className = status >= 400 ? 'err' : '';
 }
 async function loadAll(){
-  const t = document.getElementById('ticker').value.trim().toUpperCase() || 'IWM';
+  const t = (document.getElementById('ticker').value||'IWM').trim().toUpperCase();
   const side = document.getElementById('side').value;
-  const uid = document.getElementById('uid').value.trim() || 'timothy_walton';
+  const uid = (document.getElementById('uid').value||'timothy_walton').trim();
   const [L,V,LB,A] = await Promise.all([
-    jget('/v1/signal/levels?ticker='+encodeURIComponent(t)+'&side='+side),
-    jget('/v1/signal/venue-map?ticker='+encodeURIComponent(t)),
-    jget('/v1/sim/leaderboard?timeframe=all_time'),
-    jget('/v1/sim/account/'+encodeURIComponent(uid)).catch(()=>({status:0,body:{}})),
+    jget('/levels?ticker='+encodeURIComponent(t)+'&side='+side),
+    jget('/venue-map?ticker='+encodeURIComponent(t)),
+    jget('/sim/leaderboard?timeframe=all_time'),
+    jget('/sim/account/'+encodeURIComponent(uid)),
   ]);
   show('levels', L.status, L.body);
   show('venue', V.status, V.body);
   show('lb', LB.status, LB.body);
-  if (A && A.status) show('sim', A.status, A.body);
+  show('sim', A.status, A.body);
 }
 async function joinSim(){
-  const uid = document.getElementById('uid').value.trim() || 'timothy_walton';
-  const r = await jpost('/v1/sim/join', {user_id: uid, starting_balance: 100000});
+  const uid = (document.getElementById('uid').value||'timothy_walton').trim();
+  const r = await jpost('/sim/join', {user_id: uid, starting_balance: 100000});
   show('sim', r.status, r.body);
   loadAll();
 }
@@ -239,5 +272,17 @@ loadAll();
 
 @swarm_mm_bp.get("/panel")
 def panel():
-    html = _PANEL_HTML.replace("__BASE__", _SWARM_MM_BASE)
-    return Response(html, mimetype="text/html; charset=utf-8")
+    html = _PANEL_HTML.replace("__UPSTREAM__", _SWARM_MM_BASE)
+    resp = Response(html, mimetype="text/html; charset=utf-8")
+    # Belt-and-suspenders: set embed headers on the response object too
+    # (global after_request also special-cases this path).
+    resp.headers.pop("X-Frame-Options", None)
+    resp.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "connect-src 'self'; "
+        f"frame-ancestors {_FRAME_ANCESTORS}"
+    )
+    return resp

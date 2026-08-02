@@ -384,7 +384,6 @@ def create_app():
     def add_security_headers(response):
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
         response.headers['X-Content-Type-Options'] = 'nosniff'
-        response.headers['X-Frame-Options'] = 'DENY'
         response.headers['X-XSS-Protection'] = '1; mode=block'
         response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
         # style-src allows 'unsafe-inline' because the FTD dashboard and Agent
@@ -396,7 +395,31 @@ def create_app():
         # SVG, which default-src 'self' also blocks. Script sources remain
         # restricted to 'self' only -- this does not affect XSS protection
         # against injected scripts.
-        response.headers['Content-Security-Policy'] = "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+        #
+        # Swarm MM desk panel is intentionally iframe-able from the Abacus
+        # Trade Desk + custom domain only. Global DENY stays for everything else.
+        path = (request.path or "").rstrip("/")
+        if path == "/api/swarm-mm/panel":
+            # ALLOW framing from desk origins; drop DENY so CSP frame-ancestors wins.
+            response.headers.pop("X-Frame-Options", None)
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; "
+                "style-src 'self' 'unsafe-inline'; "
+                "script-src 'self' 'unsafe-inline'; "
+                "img-src 'self' data:; "
+                "connect-src 'self'; "
+                "frame-ancestors 'self' "
+                "https://scriptmasterlabs.abacusai.app "
+                "https://swarmagentsintelligence.scriptmasterlabs.com "
+                "https://www.scriptmasterlabs.com "
+                "https://scriptmasterlabs.com "
+                "https://squeezeos-api.onrender.com"
+            )
+        else:
+            response.headers['X-Frame-Options'] = 'DENY'
+            response.headers['Content-Security-Policy'] = (
+                "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+            )
         response.headers['Link'] = '<https://squeezeos-api.onrender.com/.well-known/agents.json>; rel="payment"'
         if 'text/html' in response.content_type:
             response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
