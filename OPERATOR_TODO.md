@@ -24,6 +24,16 @@ Last compiled: 2026-07-19, from `CLAUDE.md`'s documented state. If it's been a w
 - [ ] **ScriptMaster DeltaForge™** — create operator ($49) and elite ($149) products in Stripe, then set the `DELTAFORGE_STRIPE_*` env vars (mirrors Trade Desk pattern).
 - [ ] **AEO Treasury webhook events** — in the Stripe dashboard, add `invoice.paid` and `invoice.payment_succeeded` to the `/api/aeo/stripe/webhook` endpoint's event list (they weren't in the original 4-event setup, so treasury accrual has been silently missing these).
 
+## 🟠 TUESDAY 2026-08-04 — parked wave ($200 compute refill + Abacus truth)
+
+Full checklist: `downloads` pack `TUESDAY_2026-08-04_TODO.md` / Hermes Downloads `swarm-mm/TUESDAY_2026-08-04_TODO.md`.
+
+- [ ] **Ads HOLD** until Abacus truth-wire (no fabrications) + Swarm MM embed + new screenshot + explicit go
+- [ ] **Blast only after screenshot** — gamechanging copy + real UI; 1 $cashtag max
+- [ ] **Swarm MM finish wave:** A polish · C B2B · B crypto (legal/geofence) · RLUSD if ready · agent402 re-list
+- [ ] **Trade Desk Stripe end-to-end** — price IDs on Render (missing as of 2026-08-02) + webhook + Abacus checkout prove
+- [ ] **Optional founder:** `TRADE_DESK_OWNER_KEY`
+
 ## 🟢 Founder/owner bypass keys — optional, set whenever convenient
 
 - [ ] `TRADE_DESK_OWNER_KEY` — guarantees your account always validates `tier: pro` regardless of dashboard bugs. Only takes effect once Abacus.AI actually calls the validate endpoint (not yet, as of 2026-07-10).
