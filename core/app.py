@@ -768,7 +768,8 @@ def create_app():
             # 2) Background batch cache (same data as GET /api/oracle) — never block
             batch = get_oracle_batch_cache()
             batch_hit = (batch.get("results") or {}).get(sym)
-            if batch_hit:
+            if batch_hit and not (batch_hit.get("warming") and not batch_hit.get("price")):
+                # Real (or at least non-seed) payload — serve instantly
                 _oracle_symbol_cache[sym] = {"ts": now, "data": batch_hit}
                 age = round(now - batch["ts"], 1) if batch.get("ts") else None
                 return jsonify({
@@ -777,6 +778,26 @@ def create_app():
                     "cache_age_s": age,
                     "stale": bool(batch.get("stale")),
                     "source": "batch_cache",
+                })
+            # Warming seed only — return it immediately BUT do not pin route cache;
+            # also kick a live analyze so the next poll can upgrade.
+            if batch_hit:
+                try:
+                    services = {
+                        "dm":            get_service("dm"),
+                        "whale_stalker": get_service("whale_stalker"),
+                        "sml":           get_service("sml"),
+                    }
+                    _oracle_live_pool.submit(OracleEngine(services).analyze, sym)
+                except Exception:
+                    pass
+                age = round(now - batch["ts"], 1) if batch.get("ts") else None
+                return jsonify({
+                    "status": "success",
+                    "oracle": batch_hit,
+                    "cache_age_s": age,
+                    "stale": True,
+                    "source": "batch_warming",
                 })
 
             # 3) Symbol not in batch — fire-and-forget bounded live analyze.
