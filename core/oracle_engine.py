@@ -506,7 +506,33 @@ _oracle_thread_started = False
 
 def _oracle_batch_refresh_loop():
     logger.info("[Oracle] Background batch refresh thread active (every %ss)", _ORACLE_BATCH_REFRESH_S)
-    time.sleep(8)  # let services init
+    # Seed last-good immediately so /api/oracle/{symbol} never cold-hangs waiting
+    # for the first full analyze cycle (can take 40s+/symbol when engines block).
+    seed_ts = time.time()
+    seed = {
+        s: {
+            "symbol": s,
+            "timestamp": datetime.now().isoformat(),
+            "directive": "SHIELD",
+            "confidence": 0,
+            "price": 0,
+            "reason": "Oracle batch warming — first live pass in progress.",
+            "sweet_spot": False,
+            "regime": "SHIELD",
+            "degraded": True,
+            "warming": True,
+        }
+        for s in ORACLE_SYMBOLS
+    }
+    with _oracle_lock:
+        if not _oracle_cache["results"]:
+            _oracle_cache["results"] = dict(seed)
+            _oracle_cache["universe_size"] = len(seed)
+            _oracle_cache["ts"] = seed_ts
+            _oracle_last_good["results"] = dict(seed)
+            _oracle_last_good["universe_size"] = len(seed)
+            _oracle_last_good["ts"] = seed_ts
+    time.sleep(2)  # brief services init — was 8s, cut so swarm gets seed faster
     while True:
         try:
             from core.legacy import get_service  # deferred — legacy.py imports this module at top level
@@ -525,18 +551,65 @@ def _oracle_batch_refresh_loop():
                 batch_symbols = list(dict.fromkeys(anchors + rest))[:_OB_CAP]
             else:
                 batch_symbols = list(ORACLE_SYMBOLS)
-            results = run_oracle_batch(batch_symbols, services)
+            # Analyze anchors first with a hard per-symbol budget so one hung
+            # engine call can't stall the whole batch for minutes.
+            results = {}
+            _per = float(os.environ.get("ORACLE_BATCH_PER_SYMBOL_S", "8"))
+            engine = OracleEngine(services)
+            import concurrent.futures as _cf
+            # Do NOT use `with ThreadPoolExecutor()` — on as_completed timeout its
+            # __exit__ shutdown(wait=True) blocks on hung analyze workers.
+            pool = _cf.ThreadPoolExecutor(max_workers=3, thread_name_prefix="oracle-batch")
+            try:
+                futs = {pool.submit(engine.analyze, sym): sym for sym in batch_symbols}
+                try:
+                    for fut in _cf.as_completed(futs, timeout=max(30.0, _per * min(10, len(futs)))):
+                        sym = futs[fut]
+                        try:
+                            results[sym] = fut.result(timeout=0.1)
+                        except Exception as e:
+                            logger.error("[Oracle] Batch error for %s: %s", sym, e)
+                            results[sym] = {
+                                "symbol": sym, "directive": "SHIELD", "confidence": 0,
+                                "price": 0, "reason": f"batch error: {e}", "degraded": True,
+                            }
+                except _cf.TimeoutError:
+                    logger.warning("[Oracle] batch pass partial timeout — keeping %s symbols", len(results))
+                    for fut, sym in futs.items():
+                        if sym in results:
+                            continue
+                        if fut.done():
+                            try:
+                                results[sym] = fut.result(timeout=0)
+                            except Exception as e:
+                                results[sym] = {
+                                    "symbol": sym, "directive": "SHIELD", "confidence": 0,
+                                    "price": 0, "reason": f"batch error: {e}", "degraded": True,
+                                }
+                        else:
+                            fut.cancel()
+                            with _oracle_lock:
+                                prev = (_oracle_last_good["results"] or {}).get(sym)
+                            if prev:
+                                results[sym] = prev
+            finally:
+                pool.shutdown(wait=False, cancel_futures=True)
             with _oracle_lock:
                 # Report effective market universe size for clients, not just batch len
                 mkt_n = len(live_universe) if live_universe else len(batch_symbols)
-                _oracle_cache["results"]      = results
-                _oracle_cache["universe_size"] = max(len(batch_symbols), mkt_n)
+                # Merge into cache so partial refresh doesn't wipe good symbols
+                merged = dict(_oracle_cache.get("results") or {})
+                merged.update(results)
+                _oracle_cache["results"]      = merged
+                _oracle_cache["universe_size"] = max(len(merged), mkt_n)
                 _oracle_cache["ts"]            = time.time()
                 if results:
-                    _oracle_last_good["results"]      = results
-                    _oracle_last_good["universe_size"] = max(len(batch_symbols), mkt_n)
+                    lg = dict(_oracle_last_good.get("results") or {})
+                    lg.update(results)
+                    _oracle_last_good["results"]      = lg
+                    _oracle_last_good["universe_size"] = max(len(lg), mkt_n)
                     _oracle_last_good["ts"]            = time.time()
-            logger.info(f"[Oracle] batch cache refreshed — {len(results)} symbols (mkt={mkt_n})")
+            logger.info(f"[Oracle] batch cache refreshed — {len(results)} new / {len(merged)} total (mkt={mkt_n})")
         except Exception as e:
             logger.error(f"[Oracle] batch refresh error: {e}")
         time.sleep(_ORACLE_BATCH_REFRESH_S)

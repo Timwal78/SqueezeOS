@@ -727,16 +727,31 @@ def create_app():
     _ORACLE_SYMBOL_TTL = 20
     # Live per-symbol analyze() fans out to gamma/regime/fractal/MMLE/etc and can
     # hang past swarm/dashboard timeouts (Abicus polls /api/oracle/AMC → infinite spin).
-    # Batch scanner already computes AMC/GME/IWM+ — serve that first; only attempt a
-    # bounded live refresh when the symbol is missing from batch cache.
-    _ORACLE_LIVE_ANALYZE_S = float(os.environ.get("ORACLE_LIVE_ANALYZE_S", "4"))
+    # CRITICAL: never use `with ThreadPoolExecutor()` here — on TimeoutError its
+    # __exit__ calls shutdown(wait=True) and blocks until the hung analyze finishes
+    # (40s+), which is exactly the spin bug. Use a process-lifetime pool + wait=False.
+    _ORACLE_LIVE_ANALYZE_S = float(os.environ.get("ORACLE_LIVE_ANALYZE_S", "3"))
+    import concurrent.futures as _cf
+    _oracle_live_pool = _cf.ThreadPoolExecutor(max_workers=4, thread_name_prefix="oracle-live")
+
+    def _oracle_degraded(sym: str, reason: str) -> dict:
+        return {
+            "symbol": sym,
+            "timestamp": datetime.now().isoformat(),
+            "directive": "SHIELD",
+            "confidence": 0,
+            "price": 0,
+            "reason": reason,
+            "sweet_spot": False,
+            "regime": "SHIELD",
+            "degraded": True,
+        }
 
     @app.route('/api/oracle', methods=['GET'])
     @app.route('/api/oracle/<symbol>', methods=['GET'])
     def oracle_signal(symbol=None):
         from core.oracle_engine import OracleEngine, ORACLE_SYMBOLS, get_oracle_batch_cache
         if symbol:
-            import concurrent.futures
             sym = symbol.upper().strip()
             now = time.time()
 
@@ -764,44 +779,37 @@ def create_app():
                     "source": "batch_cache",
                 })
 
-            # 3) Symbol not in batch — bounded live analyze (never hang the HTTP worker)
+            # 3) Symbol not in batch — fire-and-forget bounded live analyze.
+            #    Do NOT enter a context-managed executor (shutdown wait re-hangs).
             services = {
                 "dm":            get_service("dm"),
                 "whale_stalker": get_service("whale_stalker"),
                 "sml":           get_service("sml"),
             }
 
-            def _live():
-                return OracleEngine(services).analyze(sym)
-
             result = None
             try:
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    fut = pool.submit(_live)
+                fut = _oracle_live_pool.submit(OracleEngine(services).analyze, sym)
+                try:
                     result = fut.result(timeout=_ORACLE_LIVE_ANALYZE_S)
-            except concurrent.futures.TimeoutError:
-                logger.warning(
-                    "[Oracle] live analyze timeout %ss for %s — degraded SHIELD",
-                    _ORACLE_LIVE_ANALYZE_S, sym,
-                )
+                except _cf.TimeoutError:
+                    # Cancel if still queued; if running, abandon — pool keeps going.
+                    fut.cancel()
+                    logger.warning(
+                        "[Oracle] live analyze timeout %ss for %s — degraded SHIELD (no wait)",
+                        _ORACLE_LIVE_ANALYZE_S, sym,
+                    )
             except Exception as e:
                 logger.warning("[Oracle] live analyze error for %s: %s", sym, e)
 
             if result is None:
-                result = {
-                    "symbol": sym,
-                    "timestamp": datetime.now().isoformat(),
-                    "directive": "SHIELD",
-                    "confidence": 0,
-                    "price": 0,
-                    "reason": (
-                        f"Oracle live analyze timed out or failed for {sym}. "
-                        "Batch cache had no hit; retry shortly."
-                    ),
-                    "sweet_spot": False,
-                    "regime": "SHIELD",
-                    "degraded": True,
-                }
+                result = _oracle_degraded(
+                    sym,
+                    f"Oracle live analyze timed out or failed for {sym}. "
+                    "Batch cache had no hit; retry shortly.",
+                )
+                # Short negative cache so swarm polls don't stampede live analyze
+                _oracle_symbol_cache[sym] = {"ts": now, "data": result}
                 return jsonify({
                     "status": "success",
                     "oracle": result,
@@ -1042,41 +1050,76 @@ def create_app():
 
     _preview_cache: dict = {}
     _PREVIEW_TTL = 900
+    _PREVIEW_LIVE_S = float(os.environ.get("PREVIEW_LIVE_ANALYZE_S", "3"))
 
     @app.route('/api/preview', methods=['GET'])
     @app.route('/api/preview/<symbol>', methods=['GET'])
     def signal_preview(symbol='IWM'):
+        """Free bias/regime preview. Never hang — batch oracle first, then bounded live."""
+        from core.oracle_engine import OracleEngine, get_oracle_batch_cache
         symbol = symbol.upper().strip()
         now = time.time()
         cached = _preview_cache.get(symbol)
-        if cached and (now - cached['ts']) < _PREVIEW_TTL:
-            return jsonify(cached)
-        try:
-            from core.oracle_engine import OracleEngine
-            services = {
-                "dm":            get_service("dm"),
-                "whale_stalker": get_service("whale_stalker"),
-                "sml":           get_service("sml"),
-            }
-            engine = OracleEngine(services)
-            data   = engine.analyze(symbol)
-            bias   = data.get("bias") or data.get("directive", "NEUTRAL")
+        if cached and (now - cached.get('ts', 0)) < _PREVIEW_TTL:
+            out = dict(cached)
+            out.pop('ts', None)
+            return jsonify(out)
+
+        data = None
+        source = "unknown"
+
+        # 1) Reuse oracle route cache / batch cache (instant)
+        oc = _oracle_symbol_cache.get(symbol)
+        if oc and (now - oc['ts']) < _ORACLE_SYMBOL_TTL:
+            data = oc['data']
+            source = "oracle_route_cache"
+        if data is None:
+            batch_hit = (get_oracle_batch_cache().get("results") or {}).get(symbol)
+            if batch_hit:
+                data = batch_hit
+                source = "oracle_batch_cache"
+
+        # 2) Bounded live analyze — same non-blocking pool as /api/oracle/{symbol}
+        if data is None:
+            try:
+                services = {
+                    "dm":            get_service("dm"),
+                    "whale_stalker": get_service("whale_stalker"),
+                    "sml":           get_service("sml"),
+                }
+                fut = _oracle_live_pool.submit(OracleEngine(services).analyze, symbol)
+                try:
+                    data = fut.result(timeout=_PREVIEW_LIVE_S)
+                    source = "live"
+                except _cf.TimeoutError:
+                    fut.cancel()
+                    source = "degraded_timeout"
+                    logger.warning("[Preview] analyze timeout %ss for %s", _PREVIEW_LIVE_S, symbol)
+            except Exception as e:
+                source = "error"
+                logger.warning("[Preview] analyze error for %s: %s", symbol, e)
+
+        if data is None:
+            bias, regime, conviction, top_signals = "NEUTRAL", "UNKNOWN", "LOW", []
+            degraded = True
+        else:
+            bias = data.get("bias") or data.get("directive", "NEUTRAL")
             regime = data.get("regime", "UNKNOWN")
-            trend_score = data.get("trend_score", 0.0)
-            
-            # Determine Conviction Tier
-            if abs(trend_score) > 0.8: conviction = "EXTREME"
-            elif abs(trend_score) > 0.5: conviction = "HIGH"
-            elif abs(trend_score) > 0.2: conviction = "MODERATE"
-            else: conviction = "LOW"
-            
-            # Extract top signals
+            trend_score = float(data.get("trend_score") or data.get("confidence") or 0) / (
+                100.0 if float(data.get("confidence") or 0) > 1 else 1.0
+            )
+            if abs(trend_score) > 0.8:
+                conviction = "EXTREME"
+            elif abs(trend_score) > 0.5:
+                conviction = "HIGH"
+            elif abs(trend_score) > 0.2:
+                conviction = "MODERATE"
+            else:
+                conviction = "LOW"
             signals = data.get("signals", [])
             top_signals = signals[:3] if isinstance(signals, list) else []
-            
-        except Exception:
-            bias, regime, conviction, top_signals = "NEUTRAL", "UNKNOWN", "LOW", []
-            
+            degraded = bool(data.get("degraded"))
+
         result = {
             "symbol":  symbol,
             "bias":    bias,
@@ -1084,8 +1127,9 @@ def create_app():
             "conviction_tier": conviction,
             "top_signals_detected": len(top_signals),
             "top_signals_preview": top_signals,
-            "ts":      now,
             "preview": True,
+            "source": source,
+            "degraded": degraded,
             "upgrade": {
                 "full_verdict": "/api/council",
                 "price_rlusd":  "0.10",
@@ -1094,7 +1138,8 @@ def create_app():
                 "view_example": "/api/council/example"
             },
         }
-        _preview_cache[symbol] = result
+        # cache including ts for TTL (stripped on read above via copy)
+        _preview_cache[symbol] = {**result, "ts": now}
         return jsonify(result)
 
     @app.route('/api/council/example', methods=['GET'])
