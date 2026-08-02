@@ -725,31 +725,92 @@ def create_app():
 
     _oracle_symbol_cache: dict = {}
     _ORACLE_SYMBOL_TTL = 20
+    # Live per-symbol analyze() fans out to gamma/regime/fractal/MMLE/etc and can
+    # hang past swarm/dashboard timeouts (Abicus polls /api/oracle/AMC → infinite spin).
+    # Batch scanner already computes AMC/GME/IWM+ — serve that first; only attempt a
+    # bounded live refresh when the symbol is missing from batch cache.
+    _ORACLE_LIVE_ANALYZE_S = float(os.environ.get("ORACLE_LIVE_ANALYZE_S", "4"))
 
     @app.route('/api/oracle', methods=['GET'])
     @app.route('/api/oracle/<symbol>', methods=['GET'])
     def oracle_signal(symbol=None):
         from core.oracle_engine import OracleEngine, ORACLE_SYMBOLS, get_oracle_batch_cache
         if symbol:
+            import concurrent.futures
             sym = symbol.upper().strip()
             now = time.time()
+
+            # 1) Hot route-level cache (repeat polls 10–15s)
             cached = _oracle_symbol_cache.get(sym)
             if cached and (now - cached['ts']) < _ORACLE_SYMBOL_TTL:
-                return jsonify({"status": "success", "oracle": cached['data'], "cache_age_s": round(now - cached['ts'], 1)})
+                return jsonify({
+                    "status": "success",
+                    "oracle": cached['data'],
+                    "cache_age_s": round(now - cached['ts'], 1),
+                    "source": "route_cache",
+                })
 
-            # A fresh OracleEngine() is instantiated per request, so its internal
-            # per-field _cached() TTLs (core/oracle_engine.py) never actually persist
-            # across requests — this route-level cache is what makes repeated polls
-            # for the same symbol (dashboards typically poll every 10-15s) cheap.
+            # 2) Background batch cache (same data as GET /api/oracle) — never block
+            batch = get_oracle_batch_cache()
+            batch_hit = (batch.get("results") or {}).get(sym)
+            if batch_hit:
+                _oracle_symbol_cache[sym] = {"ts": now, "data": batch_hit}
+                age = round(now - batch["ts"], 1) if batch.get("ts") else None
+                return jsonify({
+                    "status": "success",
+                    "oracle": batch_hit,
+                    "cache_age_s": age,
+                    "stale": bool(batch.get("stale")),
+                    "source": "batch_cache",
+                })
+
+            # 3) Symbol not in batch — bounded live analyze (never hang the HTTP worker)
             services = {
                 "dm":            get_service("dm"),
                 "whale_stalker": get_service("whale_stalker"),
                 "sml":           get_service("sml"),
             }
-            engine = OracleEngine(services)
-            result = engine.analyze(sym)
+
+            def _live():
+                return OracleEngine(services).analyze(sym)
+
+            result = None
+            try:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    fut = pool.submit(_live)
+                    result = fut.result(timeout=_ORACLE_LIVE_ANALYZE_S)
+            except concurrent.futures.TimeoutError:
+                logger.warning(
+                    "[Oracle] live analyze timeout %ss for %s — degraded SHIELD",
+                    _ORACLE_LIVE_ANALYZE_S, sym,
+                )
+            except Exception as e:
+                logger.warning("[Oracle] live analyze error for %s: %s", sym, e)
+
+            if result is None:
+                result = {
+                    "symbol": sym,
+                    "timestamp": datetime.now().isoformat(),
+                    "directive": "SHIELD",
+                    "confidence": 0,
+                    "price": 0,
+                    "reason": (
+                        f"Oracle live analyze timed out or failed for {sym}. "
+                        "Batch cache had no hit; retry shortly."
+                    ),
+                    "sweet_spot": False,
+                    "regime": "SHIELD",
+                    "degraded": True,
+                }
+                return jsonify({
+                    "status": "success",
+                    "oracle": result,
+                    "source": "degraded_timeout",
+                    "timeout_s": _ORACLE_LIVE_ANALYZE_S,
+                }), 200
+
             _oracle_symbol_cache[sym] = {"ts": now, "data": result}
-            return jsonify({"status": "success", "oracle": result})
+            return jsonify({"status": "success", "oracle": result, "source": "live"})
         else:
             # Cached — see core/oracle_engine.py's background batch scanner. This used
             # to run run_oracle_batch() live on every request against the full dynamic
