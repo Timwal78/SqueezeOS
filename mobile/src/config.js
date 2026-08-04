@@ -9,7 +9,7 @@ export const ALCHEMY_KEY     = import.meta.env.VITE_ALCHEMY_KEY     || ''
 export const STRIPE_PK       = import.meta.env.VITE_STRIPE_PK       || 'pk_live_51S07wtQL50L4TFzsw97jG66buYDIPAO1C4LVPO30GbTCsUiq2nG257s138hpPaP2lxduzaYfUWStb1k2L3O9bGnX00SkdNCnct'
 
 // Recipient wallet for crypto subscription payments (Base USDC)
-export const BILLING_WALLET  = import.meta.env.VITE_BILLING_WALLET  || '0x4e14B249D9A4c9c9352D780eCEB508A8eB7a7700'
+export const BILLING_WALLET  = import.meta.env.VITE_BILLING_WALLET  || '0x72330994f379a71542e7bd5a4cf99a9d9743f4aa'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Owner & tester wallets — hardcoded access control (not localStorage-based).

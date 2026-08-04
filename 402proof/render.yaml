@@ -26,7 +26,7 @@ services:
       # TOKEN_SECRET          — openssl rand -hex 32
       # ADMIN_TOKEN           — openssl rand -hex 32
       # ── Multi-chain payment rails ─────────────────────────────────────────────
-      # GHOST_LAYER_ETH_ADDRESS  — EVM treasury for USDC on Base: 0x4e14B249D9A4c9c9352D780eCEB508A8eB7a7700
+      # GHOST_LAYER_ETH_ADDRESS  — EVM treasury for USDC on Base: 0x72330994f379a71542e7bd5a4cf99a9d9743f4aa
       # GATEWAY_SOLANA_ADDRESS   — Solana wallet for USDC on Solana (set when ready)
       # ── Optional: email receipt delivery ─────────────────────────────────────
       # SMTP_HOST             — e.g. smtp.sendgrid.net

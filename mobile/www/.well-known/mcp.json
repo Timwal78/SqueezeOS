@@ -9,7 +9,7 @@
     "type": "x402",
     "payment_chain": "base",
     "payment_asset": "USDC",
-    "billing_wallet": "0x4e14B249D9A4c9c9352D780eCEB508A8eB7a7700",
+    "billing_wallet": "0x72330994f379a71542e7bd5a4cf99a9d9743f4aa",
     "session_ttl_seconds": 3600
   },
   "tools": [
