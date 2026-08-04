@@ -1,0 +1,49 @@
+# Swarm Market Making — robots.txt
+# Canonical public SEO lives on www.scriptmasterlabs.com (never *.onrender for GSC).
+
+User-agent: *
+Allow: /
+Allow: /landing
+Allow: /v1/pricing
+Allow: /v1/ads/beastmode
+Allow: /mcp/tools
+Allow: /health
+Allow: /docs
+Allow: /openapi.json
+Allow: /llms.txt
+Allow: /sitemap.xml
+Allow: /robots.txt
+Allow: /.well-known/
+Allow: /.well-known/x402
+
+# AI / search crawlers welcome
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+Sitemap: https://www.scriptmasterlabs.com/sitemap.xml
+# Product-local sitemap (API host) — secondary; GSC should use www sitemap only
+Sitemap: /sitemap.xml

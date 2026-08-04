@@ -1,0 +1,79 @@
+# Swarm Market Making — Script Master Labs
+# https://www.scriptmasterlabs.com/swarm-market-making.html
+
+> Coordination without custody. Swarm compresses trader intent into maker-style limit levels + venue weights. Users keep their broker and capital.
+
+## Product
+- Name: Swarm Market Making (swarm-mm)
+- Company: Script Master Labs, LLC (SDVOSB)
+- Canonical: https://www.scriptmasterlabs.com/swarm-market-making.html
+- Category: FinanceApplication / market microstructure signals
+- Not a broker-dealer, ATS, or RIA. Not investment advice.
+
+## Benefits (retail)
+- Clear resting limit prices from shared intent
+- Venue guidance tilted to maker-rebate style venues
+- Rebate / spread estimates before submit
+- Broker-native order previews (Alpaca / Tradier / IBKR) — user submits
+- Free paper swarm + leaderboard before paying
+- No pooled capital on Signal path
+
+## Free portion
+- Sim Swarm: $0
+- Paper capital, simulated maker limits, leaderboard, upgrade funnel
+- Endpoints: POST /v1/sim/join, POST /v1/sim/trade, GET /v1/sim/leaderboard, WS /ws/signals
+
+## Pricing
+| Plan | Price | Notes |
+|------|-------|-------|
+| Sim Free | $0 | Paper forever-to-start |
+| Sim Premium | $9/mo | Analytics + backtest |
+| Signal Swarm | $19/mo | Default retail live signals |
+| B2B Platform | $5000/mo | + 2% incremental rebate lift |
+| Agent hot calls | $0.001 | levels, venue_map, rebate, broker_orders |
+| B2B optimize | $0.05 | per call |
+| B2B report | $0.10 | per call |
+
+## Crypto monthly rails
+- USDC on Base (8453) — primary — payTo 0x72330994f379a71542e7bd5a4cf99a9d9743f4aa
+- USDC on Solana — payTo E4d3JwcTjeqTRkkQS4moszcfa4R7G1NMgPSew4KBNFrB
+- USDG on Robinhood Chain 4663 (slang USCG = USDG)
+- RLUSD on XRPL when XRPL_PAYMENT_RECEIVER set
+
+## Agent pay-per-call
+1. Agent calls paid route (e.g. GET /v1/signal/levels)
+2. HTTP 402 with accepts[] multi-rail
+3. Pay stablecoin
+4. Retry with X-PAYMENT / X-Payment-Hash proof
+5. Receive ladder JSON
+
+MCP tools: signal_swarm.levels, signal_swarm.venue_map, signal_swarm.rebate_tracker, signal_swarm.broker_orders, sim_swarm.*, b2b_swarm.*, crypto_swarm.*
+
+## Mechanism (short)
+1. Intent aggregation
+2. Limit ladder around mid
+3. Venue weights
+4. Signal delivery (HTTP/WS/MCP)
+5. User executes at own broker (Variant A)
+
+## Variants
+- D Simulated — ship first, free
+- A Signal — retail $19/mo
+- C B2B — licensed entities
+- B Crypto vault — geofenced scaffold
+
+## Key URLs (www only for GSC)
+- https://www.scriptmasterlabs.com/swarm-market-making.html
+- https://www.scriptmasterlabs.com/sitemap.xml
+- https://www.scriptmasterlabs.com/llms.txt
+- API discovery: /v1/pricing, /.well-known/x402, /mcp/tools, /openapi.json
+
+## Keywords
+swarm market making, limit order signals, retail market making, maker rebate venues, paper trading swarm, x402 trading API, AI agent pay per call, coordination without custody, free paper trading leaderboard
+
+## Disclaimer
+Educational / research signals only. Not investment advice. Not a broker-dealer, ATS, or investment adviser. Users place orders through their own licensed brokerage accounts. Past simulated performance is not indicative of future results.
+
+## Robinhood USDG
+- https://www.scriptmasterlabs.com/rh-usdg.html
+- eip155:4663 · 0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168 · payTo 0x7233…

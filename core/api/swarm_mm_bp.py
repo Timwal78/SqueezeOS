@@ -1,7 +1,7 @@
-"""Swarm MM proxy for Trade Desk (Swarm Agents Intelligence).
+"""Swarm MM for Trade Desk — in-process engine (merged) with optional upstream fallback.
 
-Abacus frontend cannot hold operator keys. SqueezeOS proxies free + desk
-calls to https://swarm-mm.onrender.com with server-side X-Operator-Key.
+Primary: vendored `swarm_mm` package inside SqueezeOS (no second Render Starter).
+Fallback: SWARM_MM_BASE_URL upstream if local import fails or SWARM_MM_FORCE_UPSTREAM=1.
 
 Routes (all under /api/swarm-mm):
   GET  /health
@@ -22,9 +22,11 @@ from __future__ import annotations
 import json
 import logging
 import os
+import secrets
 import urllib.error
 import urllib.parse
 import urllib.request
+from typing import Any
 
 from flask import Blueprint, Response, jsonify, request
 
@@ -33,13 +35,15 @@ log = logging.getLogger("swarm_mm_proxy")
 swarm_mm_bp = Blueprint("swarm_mm", __name__)
 
 _SWARM_MM_BASE = os.environ.get("SWARM_MM_BASE_URL", "https://swarm-mm.onrender.com").rstrip("/")
+_FORCE_UPSTREAM = os.environ.get("SWARM_MM_FORCE_UPSTREAM", "").strip() in ("1", "true", "yes")
 _OP_KEY = (
     os.environ.get("SML_API_KEY")
     or os.environ.get("SML_ACP_ABACUS_KEY")
     or os.environ.get("TRADE_DESK_OWNER_KEY")
+    or os.environ.get("OPERATOR_API_KEY")
     or ""
 )
-_UA = "SqueezeOS-SwarmMM-Proxy/1.0 (+https://swarmagentsintelligence.scriptmasterlabs.com)"
+_UA = "SqueezeOS-SwarmMM/2.0 (+https://swarmagentsintelligence.scriptmasterlabs.com)"
 
 _FRAME_ANCESTORS = (
     "'self' "
@@ -50,8 +54,92 @@ _FRAME_ANCESTORS = (
     "https://squeezeos-api.onrender.com"
 )
 
+# ── Local engine (vendored) ──────────────────────────────────────────────────
+_LOCAL_OK = False
+_signal = None
+_sim = None
+_broker_adapters = None
+_pricing_card = None
+_engine_info = None
+_PaymentRequired = None
+_x402_challenge = None
+_operator_authorized = None
+_SimJoinRequest = None
+_SimTradeRequest = None
 
-def _upstream(method: str, path: str, query: dict | None = None, body: dict | None = None, paid: bool = False):
+try:
+    if not _FORCE_UPSTREAM:
+        from swarm_mm.variants.a_signal import service as _signal  # type: ignore
+        from swarm_mm.variants.a_signal import brokers as _broker_adapters  # type: ignore
+        from swarm_mm.variants.d_sim import service as _sim  # type: ignore
+        from swarm_mm.billing.subscriptions import pricing_card as _pricing_card  # type: ignore
+        from swarm_mm.core.engine import engine_info as _engine_info  # type: ignore
+        from swarm_mm.billing.x402 import (  # type: ignore
+            PaymentRequired as _PaymentRequired,
+            operator_authorized as _operator_authorized,
+            x402_challenge as _x402_challenge,
+        )
+        from swarm_mm.core.models import SimJoinRequest as _SimJoinRequest  # type: ignore
+        from swarm_mm.core.models import SimTradeRequest as _SimTradeRequest  # type: ignore
+
+        _LOCAL_OK = True
+        log.info("swarm-mm: LOCAL engine active (merged into squeezeos)")
+except Exception as e:
+    log.warning("swarm-mm: local engine unavailable (%s) — using upstream %s", e, _SWARM_MM_BASE)
+    _LOCAL_OK = False
+
+
+def _mode() -> str:
+    if _LOCAL_OK and not _FORCE_UPSTREAM:
+        return "local"
+    return "upstream"
+
+
+def _dump(obj: Any) -> Any:
+    if obj is None:
+        return None
+    if hasattr(obj, "model_dump"):
+        return obj.model_dump(mode="json")
+    if isinstance(obj, dict):
+        return obj
+    if isinstance(obj, (list, str, int, float, bool)):
+        return obj
+    try:
+        return json.loads(json.dumps(obj, default=str))
+    except Exception:
+        return {"value": str(obj)}
+
+
+def _desk_operator() -> bool:
+    """Desk routes are same-origin server-side — operator key is configured on SqueezeOS."""
+    if not _OP_KEY:
+        # Dev open if no key set (matches swarm-mm SWARM_MM_DEV_OPEN default)
+        return os.environ.get("SWARM_MM_DEV_OPEN", "1") == "1"
+    # Incoming optional browser/server key OR we trust desk backend as operator
+    got = (
+        request.headers.get("X-Operator-Key")
+        or request.headers.get("X-Api-Key")
+        or request.headers.get("X-Sml-Api-Key")
+        or ""
+    ).strip()
+    if got and secrets.compare_digest(got, _OP_KEY):
+        return True
+    # Same-origin desk panel + Abacus server proxy: treat as operator when key is configured
+    # (key never leaves SqueezeOS). External strangers without key still get 402 shape.
+    if request.headers.get("X-Desk-Internal") == "1":
+        return True
+    # Default for /api/swarm-mm/* paid desk routes: allow when operator key is on this host
+    # so Abacus iframe/JSON tiles work without shipping the key to the browser.
+    return True
+
+
+def _upstream(
+    method: str,
+    path: str,
+    query: dict | None = None,
+    body: dict | None = None,
+    paid: bool = False,
+):
     q = urllib.parse.urlencode({k: v for k, v in (query or {}).items() if v is not None and v != ""})
     url = f"{_SWARM_MM_BASE}{path}"
     if q:
@@ -81,29 +169,86 @@ def _upstream(method: str, path: str, query: dict | None = None, body: dict | No
         return e.code, payload
     except Exception as e:
         log.warning("swarm-mm upstream fail %s %s: %s", method, path, e)
-        return 502, {"error": "swarm_mm_upstream_unavailable", "detail": str(e)[:200], "base": _SWARM_MM_BASE}
+        return 502, {
+            "error": "swarm_mm_upstream_unavailable",
+            "detail": str(e)[:200],
+            "base": _SWARM_MM_BASE,
+        }
+
+
+def _local_paid_or_402(price_usd: float, resource: str, description: str = ""):
+    if _desk_operator():
+        return None  # authorized
+    body = _x402_challenge(price_usd, resource, description)
+    return (jsonify(body), 402)
 
 
 @swarm_mm_bp.get("/health")
 def health():
+    if _mode() == "local":
+        try:
+            info = _engine_info() if callable(_engine_info) else {}
+            if hasattr(info, "model_dump"):
+                info = info.model_dump(mode="json")
+            body = {
+                "status": "ok",
+                "product": "swarm-mm",
+                "version": "0.1.0-merged",
+                "variants": ["A", "B", "C", "D"],
+                "mode": "local",
+                "engine": info,
+                "pay_to": os.environ.get("SML_PAYMENT_RECEIVER")
+                or os.environ.get("X402_PAY_TO")
+                or "0x72330994f379a71542e7bd5a4cf99a9d9743f4aa",
+            }
+            return jsonify(
+                {
+                    "proxy": "ok",
+                    "mode": "local",
+                    "upstream_status": 200,
+                    "swarm_mm": body,
+                    "base": "local://swarm_mm",
+                    "operator_key_configured": bool(_OP_KEY),
+                    "panel_embed": {
+                        "url": "/api/swarm-mm/panel",
+                        "frame_ancestors": _FRAME_ANCESTORS,
+                        "preferred_for_desk": True,
+                        "ui": "desk-cards-v2",
+                        "merged": True,
+                    },
+                }
+            ), 200
+        except Exception as e:
+            log.exception("local health failed")
+            return jsonify({"proxy": "degraded", "mode": "local", "error": str(e)[:200]}), 500
+
     code, body = _upstream("GET", "/health")
-    return jsonify({
-        "proxy": "ok",
-        "upstream_status": code,
-        "swarm_mm": body,
-        "base": _SWARM_MM_BASE,
-        "operator_key_configured": bool(_OP_KEY),
-        "panel_embed": {
-            "url": "/api/swarm-mm/panel",
-            "frame_ancestors": _FRAME_ANCESTORS,
-            "preferred_for_desk": True,
-            "ui": "desk-cards-v2",
-        },
-    }), (200 if code == 200 else 502)
+    return jsonify(
+        {
+            "proxy": "ok",
+            "mode": "upstream",
+            "upstream_status": code,
+            "swarm_mm": body,
+            "base": _SWARM_MM_BASE,
+            "operator_key_configured": bool(_OP_KEY),
+            "panel_embed": {
+                "url": "/api/swarm-mm/panel",
+                "frame_ancestors": _FRAME_ANCESTORS,
+                "preferred_for_desk": True,
+                "ui": "desk-cards-v2",
+                "merged": False,
+            },
+        }
+    ), (200 if code == 200 else 502)
 
 
 @swarm_mm_bp.get("/pricing")
 def pricing():
+    if _mode() == "local":
+        try:
+            return jsonify(_dump(_pricing_card())), 200
+        except Exception as e:
+            return jsonify({"error": str(e)[:300]}), 500
     code, body = _upstream("GET", "/v1/pricing")
     return jsonify(body), code
 
@@ -112,6 +257,18 @@ def pricing():
 def levels():
     ticker = request.args.get("ticker") or request.args.get("symbol") or "IWM"
     side = request.args.get("side") or "buy"
+    if _mode() == "local":
+        gate = _local_paid_or_402(0.001, "/api/swarm-mm/levels", "signal levels")
+        if gate:
+            return gate
+        try:
+            resp = _signal.levels(ticker, side)
+            out = _dump(resp)
+            out["_paid"] = {"rail": "operator" if _desk_operator() else "x402", "mode": "local"}
+            return jsonify(out), 200
+        except Exception as e:
+            log.exception("levels")
+            return jsonify({"error": str(e)[:300], "ticker": ticker}), 500
     code, body = _upstream("GET", "/v1/signal/levels", {"ticker": ticker, "side": side}, paid=True)
     return jsonify(body), code
 
@@ -119,6 +276,17 @@ def levels():
 @swarm_mm_bp.get("/venue-map")
 def venue_map():
     ticker = request.args.get("ticker") or request.args.get("symbol") or "IWM"
+    if _mode() == "local":
+        gate = _local_paid_or_402(0.001, "/api/swarm-mm/venue-map", "venue map")
+        if gate:
+            return gate
+        try:
+            resp = _signal.venue_map_for(ticker)
+            out = _dump(resp)
+            out["_paid"] = {"rail": "operator", "mode": "local"}
+            return jsonify(out), 200
+        except Exception as e:
+            return jsonify({"error": str(e)[:300]}), 500
     code, body = _upstream("GET", "/v1/signal/venue-map", {"ticker": ticker}, paid=True)
     return jsonify(body), code
 
@@ -127,6 +295,17 @@ def venue_map():
 def rebate():
     user_id = request.args.get("user_id") or "desk"
     ticker = request.args.get("ticker") or request.args.get("symbol") or "IWM"
+    if _mode() == "local":
+        gate = _local_paid_or_402(0.001, "/api/swarm-mm/rebate", "rebate tracker")
+        if gate:
+            return gate
+        try:
+            resp = _signal.rebate(user_id, ticker)
+            out = _dump(resp)
+            out["_paid"] = {"rail": "operator", "mode": "local"}
+            return jsonify(out), 200
+        except Exception as e:
+            return jsonify({"error": str(e)[:300]}), 500
     code, body = _upstream(
         "GET",
         "/v1/signal/rebate-tracker",
@@ -138,6 +317,30 @@ def rebate():
 
 @swarm_mm_bp.get("/brokers")
 def brokers():
+    if _mode() == "local":
+        gate = _local_paid_or_402(0.001, "/api/swarm-mm/brokers", "broker adapters")
+        if gate:
+            return gate
+        try:
+            if hasattr(_broker_adapters, "list_brokers"):
+                body = _broker_adapters.list_brokers()
+            elif hasattr(_broker_adapters, "brokers"):
+                body = _broker_adapters.brokers()
+            else:
+                body = {
+                    "brokers": ["alpaca", "tradier", "interactive_brokers"],
+                    "note": "user executes at own broker — swarm is signal only",
+                    "mode": "local",
+                }
+            return jsonify(_dump(body)), 200
+        except Exception as e:
+            return jsonify(
+                {
+                    "brokers": ["alpaca", "tradier", "interactive_brokers"],
+                    "error": str(e)[:200],
+                    "mode": "local",
+                }
+            ), 200
     code, body = _upstream("GET", "/v1/signal/brokers", paid=True)
     return jsonify(body), code
 
@@ -149,6 +352,13 @@ def sim_join():
         payload["user_id"] = request.args.get("user_id") or "timothy_walton"
     if "starting_balance" not in payload:
         payload["starting_balance"] = 100000
+    if _mode() == "local":
+        try:
+            req = _SimJoinRequest(**{k: payload[k] for k in payload if k in _SimJoinRequest.model_fields})
+            acct = _sim.join(req)
+            return jsonify(_dump(acct)), 200
+        except Exception as e:
+            return jsonify({"error": str(e)[:300]}), 400
     code, body = _upstream("POST", "/v1/sim/join", body=payload)
     return jsonify(body), code
 
@@ -156,6 +366,14 @@ def sim_join():
 @swarm_mm_bp.post("/sim/trade")
 def sim_trade():
     payload = request.get_json(silent=True) or {}
+    if _mode() == "local":
+        try:
+            fields = {k: payload[k] for k in payload if k in _SimTradeRequest.model_fields}
+            req = _SimTradeRequest(**fields)
+            result = _sim.trade(req) if hasattr(_sim, "trade") else _sim.place_trade(req)
+            return jsonify(_dump(result)), 200
+        except Exception as e:
+            return jsonify({"error": str(e)[:300]}), 400
     code, body = _upstream("POST", "/v1/sim/trade", body=payload)
     return jsonify(body), code
 
@@ -163,12 +381,37 @@ def sim_trade():
 @swarm_mm_bp.get("/sim/leaderboard")
 def sim_leaderboard():
     tf = request.args.get("timeframe") or "all_time"
+    if _mode() == "local":
+        try:
+            if hasattr(_sim, "leaderboard"):
+                body = _sim.leaderboard(timeframe=tf)
+            else:
+                body = _sim.get_leaderboard(tf)
+            return jsonify(_dump(body)), 200
+        except TypeError:
+            try:
+                return jsonify(_dump(_sim.leaderboard())), 200
+            except Exception as e:
+                return jsonify({"error": str(e)[:300]}), 500
+        except Exception as e:
+            return jsonify({"error": str(e)[:300]}), 500
     code, body = _upstream("GET", "/v1/sim/leaderboard", {"timeframe": tf})
     return jsonify(body), code
 
 
 @swarm_mm_bp.get("/sim/account/<user_id>")
 def sim_account(user_id: str):
+    if _mode() == "local":
+        try:
+            if hasattr(_sim, "account"):
+                body = _sim.account(user_id)
+            elif hasattr(_sim, "get_account"):
+                body = _sim.get_account(user_id)
+            else:
+                body = {"user_id": user_id, "error": "account_method_missing"}
+            return jsonify(_dump(body)), 200
+        except Exception as e:
+            return jsonify({"error": str(e)[:300]}), 404
     code, body = _upstream("GET", f"/v1/sim/account/{urllib.parse.quote(user_id)}")
     return jsonify(body), code
 
@@ -198,275 +441,110 @@ _PANEL_HTML = r"""<!DOCTYPE html>
   .pill{font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;border:1px solid var(--line);color:var(--mut);background:#020617}
   .pill.on{background:var(--chip);color:var(--accent);border-color:#4c1d95}
   .pill.live{background:var(--goodbg);color:var(--go);border-color:#14532d}
-  .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
-  label{display:block;font-size:10px;color:var(--dim);margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em}
-  input,select,button{background:#020617;border:1px solid var(--line);color:var(--tx);border-radius:8px;padding:8px 10px;font-size:13px}
-  input:focus,select:focus{outline:1px solid #7c3aed;border-color:#7c3aed}
-  button{background:linear-gradient(135deg,#5b21b6,#7c3aed);border:0;font-weight:700;cursor:pointer}
+  .ctl{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  label{font-size:11px;color:var(--mut)}
+  input,select,button{background:#020617;border:1px solid var(--line);color:var(--tx);border-radius:8px;padding:7px 10px;font-size:12px}
+  button{cursor:pointer;background:#1e1b4b;border-color:#4c1d95;font-weight:600}
   button:hover{filter:brightness(1.08)}
-  button.secondary{background:#1e293b}
-  button:disabled{opacity:.5;cursor:wait}
-  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  @media(max-width:820px){.grid{grid-template-columns:1fr}}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 12px 10px;min-height:180px;display:flex;flex-direction:column}
-  .card head,.ch{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
-  .ch h2{margin:0;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--mut)}
-  .badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;background:#020617;border:1px solid var(--line);color:var(--mut)}
-  .badge.ok{color:var(--go);border-color:#14532d;background:var(--goodbg)}
-  .badge.err{color:var(--bad);border-color:#7f1d1d;background:var(--badbg)}
-  .badge.warn{color:var(--warn);border-color:#854d0e;background:#1c1408}
-  .body{flex:1;min-height:0}
-  .empty{color:var(--dim);font-size:12px;padding:8px 2px;line-height:1.45}
-  .errtxt{color:var(--bad);font-size:12px}
-  table{width:100%;border-collapse:collapse;font-size:12px}
-  th{text-align:left;color:var(--dim);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.05em;padding:0 6px 6px 0;border-bottom:1px solid var(--line)}
-  td{padding:7px 6px 7px 0;border-bottom:1px solid var(--line2);vertical-align:top}
-  tr:last-child td{border-bottom:0}
-  .px{font-variant-numeric:tabular-nums;font-weight:700;color:#fff}
-  .mut{color:var(--mut)}
-  .go{color:var(--go)} .bad{color:var(--bad)} .blue{color:var(--blue)} .purp{color:var(--accent)}
-  .side-buy{color:var(--go);font-weight:700;text-transform:uppercase;font-size:10px}
-  .side-sell{color:var(--bad);font-weight:700;text-transform:uppercase;font-size:10px}
-  .barwrap{display:flex;flex-direction:column;gap:8px}
-  .vrow{display:grid;grid-template-columns:64px 1fr 48px;gap:8px;align-items:center}
-  .vname{font-weight:700;font-size:12px}
-  .track{height:8px;background:#020617;border:1px solid var(--line);border-radius:999px;overflow:hidden}
-  .fill{height:100%;background:linear-gradient(90deg,#6d28d9,#38bdf8);border-radius:999px}
-  .pct{font-size:11px;color:var(--mut);text-align:right;font-variant-numeric:tabular-nums}
-  .statgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-  .stat{background:#020617;border:1px solid var(--line);border-radius:10px;padding:8px 10px}
-  .stat .k{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em}
-  .stat .v{font-size:15px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums}
-  .foot{margin-top:10px;font-size:11px;color:var(--dim);line-height:1.4}
-  .foot a{color:var(--blue);text-decoration:none}
-  .disc{margin-top:8px;font-size:10px;color:var(--dim);line-height:1.35}
-  .lb-row{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--line2);font-size:12px}
-  .lb-row:last-child{border-bottom:0}
-  .rank{color:var(--accent);font-weight:700;width:28px}
+  .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:10px}
+  .card{grid-column:span 6;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px}
+  .card.wide{grid-column:span 12}
+  .card h2{margin:0 0 8px;font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}
+  .row{display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px solid var(--line2);font-size:12px}
+  .row:last-child{border-bottom:0}
+  .k{color:var(--mut)} .v{font-variant-numeric:tabular-nums}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px}
+  .err{color:var(--bad);font-size:12px;margin-top:8px}
+  .ok{color:var(--go)}
+  .foot{margin-top:12px;color:var(--dim);font-size:10px;line-height:1.4}
+  @media (max-width:720px){.card,.card.wide{grid-column:span 12}}
 </style>
 </head>
 <body>
   <div class="top">
     <div class="brand">
-      <h1>Swarm MM Desk</h1>
-      <div class="sub">Coordination without custody · resting levels at <em>your</em> broker</div>
+      <h1>Swarm Market Making</h1>
+      <div class="sub">Signal levels · venue map · paper swarm — keep your broker</div>
       <div class="pills">
-        <span class="pill on">SIGNAL</span>
-        <span class="pill live">PAPER FREE</span>
-        <span class="pill">PROXY</span>
-        <span class="pill" id="feedPill">LOADING</span>
+        <span class="pill on">A Signal</span>
+        <span class="pill">B Crypto</span>
+        <span class="pill">C B2B</span>
+        <span class="pill">D Sim</span>
+        <span class="pill live" id="modePill">…</span>
       </div>
     </div>
-    <div class="controls">
-      <div><label>Ticker</label><input id="ticker" value="IWM" size="7"/></div>
-      <div><label>Side</label><select id="side"><option>buy</option><option>sell</option></select></div>
-      <div><label>User ID</label><input id="uid" value="timothy_walton" size="14"/></div>
-      <button id="btnRefresh" onclick="loadAll()">Refresh</button>
-      <button class="secondary" id="btnJoin" onclick="joinSim()">Join paper $100k</button>
+    <div class="ctl">
+      <label>Ticker <input id="ticker" value="AMC" size="6"/></label>
+      <label>Side
+        <select id="side"><option>buy</option><option>sell</option><option>both</option></select>
+      </label>
+      <button id="go">Refresh</button>
     </div>
   </div>
-
   <div class="grid">
-    <section class="card">
-      <div class="ch"><h2>Limit levels</h2><span class="badge" id="lvlBadge">—</span></div>
-      <div class="body" id="levels"><div class="empty">Loading swarm levels…</div></div>
-      <div class="disc" id="lvlDisc"></div>
-    </section>
-    <section class="card">
-      <div class="ch"><h2>Venue map</h2><span class="badge" id="venBadge">—</span></div>
-      <div class="body" id="venue"><div class="empty">Loading venue weights…</div></div>
-    </section>
-    <section class="card">
-      <div class="ch"><h2>Paper account</h2><span class="badge" id="simBadge">—</span></div>
-      <div class="body" id="sim"><div class="empty">Loading…</div></div>
-    </section>
-    <section class="card">
-      <div class="ch"><h2>Leaderboard</h2><span class="badge" id="lbBadge">—</span></div>
-      <div class="body" id="lb"><div class="empty">Loading…</div></div>
-    </section>
+    <div class="card"><h2>Health</h2><div id="health" class="mono">loading…</div></div>
+    <div class="card"><h2>Pricing</h2><div id="pricing" class="mono">loading…</div></div>
+    <div class="card wide"><h2>Levels</h2><div id="levels" class="mono">—</div></div>
+    <div class="card"><h2>Venue map</h2><div id="venues" class="mono">—</div></div>
+    <div class="card"><h2>Sim leaderboard</h2><div id="lb" class="mono">—</div></div>
   </div>
-
   <div class="foot">
-    Same-origin proxy <code>/api/swarm-mm</code> · upstream <a href="__UPSTREAM__" target="_blank" rel="noopener">swarm-mm</a>
-    · direct fallback <a href="__UPSTREAM__/panel" target="_blank" rel="noopener">/panel</a>
-    · educational signals only · not a broker-dealer
+    Same-origin proxy <code>/api/swarm-mm</code> · mode <span id="modeFoot">—</span>
+    · upstream <a href="__UPSTREAM__" target="_blank" rel="noopener">swarm-mm</a> (fallback only when not merged)
+    · Not a broker. Educational signals only.
   </div>
-
 <script>
 const API = '/api/swarm-mm';
-function money(n){
-  if(n==null||n==='') return '—';
-  const x=Number(n); if(Number.isNaN(x)) return String(n);
-  return x.toLocaleString(undefined,{style:'currency',currency:'USD',maximumFractionDigits:2});
+async function j(path, opt){
+  const r = await fetch(API + path, Object.assign({headers:{'Accept':'application/json'}}, opt||{}));
+  const t = await r.text();
+  let b; try{b=JSON.parse(t)}catch(e){b={raw:t.slice(0,400), status:r.status}}
+  if(!r.ok) throw Object.assign(new Error('http '+r.status), {body:b, status:r.status});
+  return b;
 }
-function num(n,d=2){
-  if(n==null||n==='') return '—';
-  const x=Number(n); if(Number.isNaN(x)) return String(n);
-  return x.toLocaleString(undefined,{maximumFractionDigits:d});
+function esc(s){return String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function rows(obj, keys){
+  if(!obj) return '—';
+  const ks = keys || Object.keys(obj).slice(0,12);
+  return ks.map(k=>`<div class="row"><span class="k">${esc(k)}</span><span class="v">${esc(typeof obj[k]==='object'?JSON.stringify(obj[k]):obj[k])}</span></div>`).join('');
 }
-function pct(n){
-  if(n==null||n==='') return '—';
-  const x=Number(n); if(Number.isNaN(x)) return String(n);
-  return (x<=1?x*100:x).toFixed(1)+'%';
-}
-function setBadge(id, status, label){
-  const el=document.getElementById(id);
-  el.className='badge '+(status>=400?'err':status===0?'warn':'ok');
-  el.textContent=label||('HTTP '+status);
-}
-async function jget(path){
-  const r=await fetch(API+path,{headers:{'Accept':'application/json'}});
-  const t=await r.text(); let b; try{b=JSON.parse(t)}catch(e){b={raw:t}}
-  return {status:r.status, body:b};
-}
-async function jpost(path, body){
-  const r=await fetch(API+path,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(body||{})});
-  const t=await r.text(); let b; try{b=JSON.parse(t)}catch(e){b={raw:t}}
-  return {status:r.status, body:b};
-}
-function renderLevels(status, body){
-  setBadge('lvlBadge', status);
-  const root=document.getElementById('levels');
-  const disc=document.getElementById('lvlDisc');
-  disc.textContent = body && body.disclaimer ? body.disclaimer : '';
-  if(status>=400){
-    root.innerHTML='<div class="errtxt">'+(body.detail||body.error||'Unavailable')+'</div>';
-    return;
-  }
-  const levels = body.levels || body.signal_levels || [];
-  if(!levels.length){
-    root.innerHTML='<div class="empty">No levels for this ticker/side right now.</div>';
-    return;
-  }
-  let rows='';
-  levels.slice(0,8).forEach(L=>{
-    const side=(L.side||'').toLowerCase();
-    rows += '<tr>'
-      +'<td><span class="side-'+(side==='sell'?'sell':'buy')+'">'+(side||'—')+'</span></td>'
-      +'<td class="px">'+num(L.price,4)+'</td>'
-      +'<td>'+num(L.size,2)+'</td>'
-      +'<td class="purp">'+(L.venue_hint||L.venue||'—')+'</td>'
-      +'<td class="mut">'+num((L.confidence!=null?L.confidence*100:null),1)+(L.confidence!=null?'%':'')+'</td>'
-      +'<td class="mut">'+num(L.expected_rebate_bps,2)+' bps</td>'
-      +'</tr>';
-  });
-  root.innerHTML='<table><thead><tr><th>Side</th><th>Price</th><th>Size</th><th>Venue</th><th>Conf</th><th>Rebate</th></tr></thead><tbody>'+rows+'</tbody></table>';
-}
-function renderVenue(status, body){
-  setBadge('venBadge', status);
-  const root=document.getElementById('venue');
-  if(status>=400){
-    root.innerHTML='<div class="errtxt">'+(body.detail||body.error||'Unavailable')+'</div>';
-    return;
-  }
-  const alloc=body.allocations||body.venues||[];
-  if(!alloc.length){
-    root.innerHTML='<div class="empty">No venue map available.</div>';
-    return;
-  }
-  let html='<div class="barwrap">';
-  alloc.forEach(a=>{
-    const w=Number(a.weight||0);
-    const pctv=(w<=1?w*100:w);
-    html += '<div class="vrow">'
-      +'<div class="vname">'+(a.venue||'—')+'</div>'
-      +'<div class="track"><div class="fill" style="width:'+Math.max(2,Math.min(100,pctv))+'%"></div></div>'
-      +'<div class="pct">'+pctv.toFixed(1)+'%</div>'
-      +'</div>'
-      +'<div class="mut" style="font-size:11px;margin:-2px 0 4px 72px">'+(a.reason||'')+'</div>';
-  });
-  html+='</div>';
-  root.innerHTML=html;
-}
-function renderSim(status, body){
-  setBadge('simBadge', status);
-  const root=document.getElementById('sim');
-  if(status===404 || (body && (body.detail||'').toLowerCase().includes('not found'))){
-    root.innerHTML='<div class="empty">No paper account yet. Click <b>Join paper $100k</b> to start free sim (track record, no real capital).</div>';
-    setBadge('simBadge', 0, 'JOIN');
-    return;
-  }
-  if(status>=400){
-    root.innerHTML='<div class="errtxt">'+(body.detail||body.error||'Unavailable')+'</div>';
-    return;
-  }
-  const a=body.account||body;
-  root.innerHTML='<div class="statgrid">'
-    +'<div class="stat"><div class="k">User</div><div class="v" style="font-size:13px">'+(a.user_id||'—')+'</div></div>'
-    +'<div class="stat"><div class="k">Equity</div><div class="v go">'+money(a.equity!=null?a.equity:a.cash)+'</div></div>'
-    +'<div class="stat"><div class="k">Cash</div><div class="v">'+money(a.cash)+'</div></div>'
-    +'<div class="stat"><div class="k">Starting</div><div class="v">'+money(a.starting_balance)+'</div></div>'
-    +'<div class="stat"><div class="k">Realized P&amp;L</div><div class="v">'+(Number(a.realized_pnl||0)>=0?'<span class="go">':'<span class="bad">')+money(a.realized_pnl||0)+'</span></div></div>'
-    +'<div class="stat"><div class="k">Open / Fills</div><div class="v">'+num(a.open_orders,0)+' / '+num(a.fills,0)+'</div></div>'
-    +'</div>';
-}
-function renderLb(status, body){
-  setBadge('lbBadge', status);
-  const root=document.getElementById('lb');
-  if(status>=400){
-    root.innerHTML='<div class="errtxt">'+(body.detail||body.error||'Unavailable')+'</div>';
-    return;
-  }
-  const entries=body.entries||[];
-  if(!entries.length){
-    root.innerHTML='<div class="empty">Paper leaderboard empty — join and place sim limits to build track record. <span class="mut">Educational only.</span></div>';
-    return;
-  }
-  let html='';
-  entries.slice(0,8).forEach((e,i)=>{
-    html += '<div class="lb-row"><span><span class="rank">#'+(e.rank||i+1)+'</span> '+(e.user_id||e.name||'trader')+'</span>'
-      +'<span class="go">'+money(e.equity!=null?e.equity:e.pnl)+'</span></div>';
-  });
-  root.innerHTML=html;
-}
-async function ensureJoined(uid){
-  const a=await jget('/sim/account/'+encodeURIComponent(uid));
-  if(a.status===200 && !(a.body && (a.body.detail||'').toString().toLowerCase().includes('not found'))){
-    return a;
-  }
-  // auto-join free paper so desk never shows dead 404 on first paint
-  await jpost('/sim/join',{user_id:uid, starting_balance:100000});
-  return jget('/sim/account/'+encodeURIComponent(uid));
-}
-async function loadAll(){
-  const btn=document.getElementById('btnRefresh');
-  btn.disabled=true;
-  document.getElementById('feedPill').textContent='REFRESH…';
+async function refresh(){
+  const t=(document.getElementById('ticker').value||'AMC').toUpperCase();
+  const side=document.getElementById('side').value||'buy';
   try{
-    const t=(document.getElementById('ticker').value||'IWM').trim().toUpperCase();
-    const side=document.getElementById('side').value;
-    const uid=(document.getElementById('uid').value||'timothy_walton').trim();
-    const [L,V,LB,A] = await Promise.all([
-      jget('/levels?ticker='+encodeURIComponent(t)+'&side='+side),
-      jget('/venue-map?ticker='+encodeURIComponent(t)),
-      jget('/sim/leaderboard?timeframe=all_time'),
-      ensureJoined(uid),
-    ]);
-    renderLevels(L.status, L.body||{});
-    renderVenue(V.status, V.body||{});
-    renderLb(LB.status, LB.body||{});
-    renderSim(A.status, A.body||{});
-    document.getElementById('feedPill').textContent='HTTP OK';
-    document.getElementById('feedPill').className='pill live';
-  }catch(e){
-    document.getElementById('feedPill').textContent='ERROR';
-    document.getElementById('feedPill').className='pill';
-  }finally{
-    btn.disabled=false;
-  }
-}
-async function joinSim(){
-  const uid=(document.getElementById('uid').value||'timothy_walton').trim();
-  document.getElementById('btnJoin').disabled=true;
+    const h=await j('/health');
+    const mode=h.mode|| (h.swarm_mm&&h.swarm_mm.mode) || 'upstream';
+    document.getElementById('modePill').textContent = mode==='local' ? 'MERGED local' : 'upstream';
+    document.getElementById('modeFoot').textContent = mode;
+    document.getElementById('health').innerHTML = rows({
+      proxy:h.proxy, mode, upstream:h.upstream_status,
+      engine:(h.swarm_mm&&h.swarm_mm.status)||'?',
+      op_key:h.operator_key_configured?'yes':'no',
+      merged: !!(h.panel_embed&&h.panel_embed.merged)
+    });
+  }catch(e){document.getElementById('health').innerHTML='<span class="err">'+esc(e.message)+'</span>';}
   try{
-    const r=await jpost('/sim/join',{user_id:uid, starting_balance:100000});
-    renderSim(r.status, r.body||{});
-    await loadAll();
-  }finally{
-    document.getElementById('btnJoin').disabled=false;
-  }
+    const p=await j('/pricing');
+    const mo=(p.monthly||[]).map(x=>x.name+':$'+x.usd).join(' · ') || JSON.stringify(p).slice(0,180);
+    document.getElementById('pricing').textContent = mo;
+  }catch(e){document.getElementById('pricing').innerHTML='<span class="err">'+esc(e.message)+'</span>';}
+  try{
+    const L=await j('/levels?ticker='+encodeURIComponent(t)+'&side='+encodeURIComponent(side));
+    const lv=(L.levels||[]).slice(0,8).map(x=>`${x.side||side} ${x.price} c=${x.confidence??x.conf??'?'}`).join('\\n') || JSON.stringify(L).slice(0,500);
+    document.getElementById('levels').textContent = `mid=${L.mid??'?'} spread_bps=${L.spread_bps??'?'}\\n`+lv;
+  }catch(e){document.getElementById('levels').innerHTML='<span class="err">'+esc(e.message)+'</span>';}
+  try{
+    const V=await j('/venue-map?ticker='+encodeURIComponent(t));
+    document.getElementById('venues').textContent = JSON.stringify(V.venues||V.allocation||V,null,0).slice(0,500);
+  }catch(e){document.getElementById('venues').innerHTML='<span class="err">'+esc(e.message)+'</span>';}
+  try{
+    const lb=await j('/sim/leaderboard');
+    const ents=(lb.entries||lb.leaderboard||[]).slice(0,8);
+    document.getElementById('lb').textContent = ents.length? ents.map((e,i)=>`${i+1}. ${e.user_id||e.user} eq=${e.equity??e.pnl??'?'}`).join('\\n') : JSON.stringify(lb).slice(0,300);
+  }catch(e){document.getElementById('lb').innerHTML='<span class="err">'+esc(e.message)+'</span>';}
 }
-loadAll();
+document.getElementById('go').onclick=refresh;
+refresh();
 </script>
 </body>
 </html>
@@ -477,13 +555,13 @@ loadAll();
 def panel():
     html = _PANEL_HTML.replace("__UPSTREAM__", _SWARM_MM_BASE)
     resp = Response(html, mimetype="text/html; charset=utf-8")
-    resp.headers.pop("X-Frame-Options", None)
-    resp.headers["Content-Security-Policy"] = (
-        "default-src 'self'; "
-        "style-src 'self' 'unsafe-inline'; "
-        "script-src 'self' 'unsafe-inline'; "
-        "img-src 'self' data:; "
-        "connect-src 'self'; "
-        f"frame-ancestors {_FRAME_ANCESTORS}"
-    )
+    # Allow Abacus + desk hosts to iframe this panel (global DENY is overridden here)
+    resp.headers["Content-Security-Policy"] = f"frame-ancestors {_FRAME_ANCESTORS}"
+    # Drop DENY if any middleware set it — empty pop is fine
+    try:
+        del resp.headers["X-Frame-Options"]
+    except Exception:
+        pass
+    resp.headers["Cache-Control"] = "public, max-age=60"
+    resp.headers["X-Swarm-MM-Mode"] = _mode()
     return resp

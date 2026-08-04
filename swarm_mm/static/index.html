@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Swarm Market Making — Limit Order Signals Without Giving Up Your Broker | ScriptMasterLabs</title>
+  <meta name="description" content="Swarm market making for retail: free paper swarm, $19/mo live limit-order levels + venue map, agents pay $0.001/call via x402. Keep your broker and capital. USDC, RLUSD, USDG monthly." />
+  <meta name="keywords" content="swarm market making, limit order signals, retail market making, maker rebate venues, paper trading swarm, x402 trading API, AI agent pay per call, coordination without custody, Alpaca limit orders, Tradier signals, free paper trading leaderboard, USDC monthly subscription trading tools" />
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
+  <meta name="author" content="Timothy Walton, Script Master Labs" />
+  <link rel="canonical" href="https://www.scriptmasterlabs.com/swarm-market-making.html" />
+  <link rel="icon" href="/favicon.ico" />
+  <link rel="alternate" type="text/plain" href="/llms.txt" title="LLM context" />
+  <link rel="alternate" type="application/xml" href="/sitemap.xml" title="Sitemap" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="ScriptMasterLabs" />
+  <meta property="og:url" content="https://www.scriptmasterlabs.com/swarm-market-making.html" />
+  <meta property="og:title" content="Swarm Market Making — Better Limit Prices. Your Broker. Your Money." />
+  <meta property="og:description" content="Free paper swarm to prove it. $19/mo live maker levels + venue weights. Agents $0.001/call. No pooled capital on the signal path." />
+  <meta property="og:image" content="https://www.scriptmasterlabs.com/og-image.png" />
+  <meta property="og:locale" content="en_US" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Swarm Market Making — Coordination Without Custody" />
+  <meta name="twitter:description" content="Free paper swarm. $19/mo signals at your broker. Agents pay per call in USDC/RLUSD/USDG." />
+  <meta name="twitter:image" content="https://www.scriptmasterlabs.com/og-image.png" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://www.scriptmasterlabs.com/#org",
+        "name": "Script Master Labs, LLC",
+        "url": "https://www.scriptmasterlabs.com",
+        "logo": "https://www.scriptmasterlabs.com/og-image.png",
+        "sameAs": [
+          "https://github.com/Timwal78/SML_Portfolio",
+          "https://x.com/TimmyCrypto78"
+        ],
+        "slogan": "Coordination without custody — x402-native market structure tools"
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://www.scriptmasterlabs.com/#website",
+        "url": "https://www.scriptmasterlabs.com",
+        "name": "ScriptMasterLabs",
+        "publisher": { "@id": "https://www.scriptmasterlabs.com/#org" }
+      },
+      {
+        "@type": "WebPage",
+        "@id": "https://www.scriptmasterlabs.com/swarm-market-making.html#webpage",
+        "url": "https://www.scriptmasterlabs.com/swarm-market-making.html",
+        "name": "Swarm Market Making",
+        "isPartOf": { "@id": "https://www.scriptmasterlabs.com/#website" },
+        "description": "Retail swarm market making: free paper tier, live limit-order signals, agent pay-per-call.",
+        "datePublished": "2026-08-02",
+        "dateModified": "2026-08-02",
+        "inLanguage": "en-US",
+        "primaryImageOfPage": "https://www.scriptmasterlabs.com/og-image.png"
+      },
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://www.scriptmasterlabs.com/swarm-market-making.html#app",
+        "name": "Swarm Market Making",
+        "applicationCategory": "FinanceApplication",
+        "operatingSystem": "Web",
+        "url": "https://www.scriptmasterlabs.com/swarm-market-making.html",
+        "description": "Swarm coordination for maker-style limit orders. Free paper swarm, $19/mo signal tier, x402 agent pay-per-call. Users keep their brokerage accounts.",
+        "offers": [
+          {
+            "@type": "Offer",
+            "name": "Sim Free",
+            "price": "0",
+            "priceCurrency": "USD",
+            "description": "Paper swarm, leaderboard, track record"
+          },
+          {
+            "@type": "Offer",
+            "name": "Sim Premium",
+            "price": "9.00",
+            "priceCurrency": "USD",
+            "billingDuration": "P1M",
+            "description": "Premium analytics and backtest"
+          },
+          {
+            "@type": "Offer",
+            "name": "Signal Swarm",
+            "price": "19.00",
+            "priceCurrency": "USD",
+            "billingDuration": "P1M",
+            "description": "Live levels, venue map, rebate tracker, broker previews"
+          },
+          {
+            "@type": "Offer",
+            "name": "Agent levels call",
+            "price": "0.001",
+            "priceCurrency": "USD",
+            "description": "x402 pay-per-call signal_swarm.levels"
+          },
+          {
+            "@type": "Offer",
+            "name": "B2B Platform",
+            "price": "5000.00",
+            "priceCurrency": "USD",
+            "billingDuration": "P1M",
+            "description": "White-label swarm engine for licensed entities"
+          }
+        ],
+        "publisher": { "@id": "https://www.scriptmasterlabs.com/#org" }
+      },
+      {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Home",
+            "item": "https://www.scriptmasterlabs.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Swarm Market Making",
+            "item": "https://www.scriptmasterlabs.com/swarm-market-making.html"
+          }
+        ]
+      },
+      {
+        "@type": "HowTo",
+        "name": "How swarm market making works for retail traders",
+        "description": "From free paper swarm to live limit-order signals at your own broker.",
+        "step": [
+          {
+            "@type": "HowToStep",
+            "position": 1,
+            "name": "Join free paper swarm",
+            "text": "Open a simulated account with virtual capital. No card. No deposit to SML."
+          },
+          {
+            "@type": "HowToStep",
+            "position": 2,
+            "name": "Trade simulated maker limits",
+            "text": "Place paper limit orders against market data. Track fills, rebates, and leaderboard rank."
+          },
+          {
+            "@type": "HowToStep",
+            "position": 3,
+            "name": "Read the swarm ladder",
+            "text": "Swarm intent compresses into resting price levels and venue weights (e.g. IEX/MEMX)."
+          },
+          {
+            "@type": "HowToStep",
+            "position": 4,
+            "name": "Go live at your broker",
+            "text": "Subscribe to Signal Swarm for live levels and broker-native order previews. You submit at Alpaca, Tradier, or IBKR."
+          }
+        ]
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What is swarm market making?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Swarm market making coordinates many traders' intent into shared maker-style limit price levels and venue weights. In Script Master Labs' Signal path, each user still places orders through their own brokerage account. There is no pooled capital and no broker-dealer custody."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is Swarm Market Making free?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. The Simulated Swarm is free: paper capital, simulated maker limits, leaderboard, and upgrade path. Paid options are Sim Premium at $9/month, Signal Swarm at $19/month, B2B at $5,000/month, and agent pay-per-call from $0.001."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Do I send trading capital to Script Master Labs?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No on the Signal path. You keep your broker and your money. Swarm MM sells coordination (levels, venues, rebate estimates, order previews). Variant A never submits orders on your behalf."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How do AI agents pay?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Agents call paid MCP/HTTP tools, receive HTTP 402 with multi-rail accepts (USDC on Base, USDC on Solana, USDG on Robinhood Chain, RLUSD on XRPL when configured), pay the stablecoin amount, and retry with a payment proof header. Floor price is $0.001 per hot call."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I pay the monthly subscription in crypto?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. Monthly plans settle in USDC (Base), USDC (Solana), USDG (Robinhood Chain 4663), and RLUSD (XRPL when payTo is configured). Same dollar prices: $9, $19, or $5,000."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is this investment advice or a broker-dealer?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. Educational and research signals only. Not investment advice. Not a broker-dealer, ATS, or investment adviser. Users place orders through their own licensed brokerage accounts. Past simulated performance is not indicative of future results."
+            }
+          }
+        ]
+      }
+    ]
+  }
+  </script>
+  <style>
+    :root {
+      --bg: #070b12; --panel: #0f1624; --line: #1e2a3f; --text: #e8eef9;
+      --muted: #8b9bb8; --accent: #3dff9a; --accent2: #4da3ff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: radial-gradient(1100px 520px at 12% -8%, #13233f 0%, var(--bg) 55%), var(--bg);
+      color: var(--text); line-height: 1.55;
+    }
+    .wrap { max-width: 920px; margin: 0 auto; padding: 28px 18px 72px; }
+    .brand { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+    h1 { margin: 10px 0 12px; font-size: clamp(28px, 5vw, 42px); line-height: 1.1; }
+    h2 { margin: 28px 0 12px; font-size: 22px; }
+    h3 { margin: 0 0 8px; font-size: 17px; }
+    p, li { color: var(--text); }
+    .muted { color: var(--muted); }
+    .sub { color: var(--muted); font-size: 17px; max-width: 62ch; }
+    .pill {
+      display: inline-block; margin-top: 10px; padding: 7px 12px; border-radius: 999px;
+      border: 1px solid rgba(61,255,154,.35); color: var(--accent); background: rgba(61,255,154,.08); font-size: 13px;
+    }
+    .panel, .card {
+      background: linear-gradient(180deg, rgba(255,255,255,.03), transparent 45%), var(--panel);
+      border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin: 14px 0;
+    }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+    .price { color: var(--accent); font-weight: 800; font-size: 20px; margin-top: 8px; }
+    .tag { color: var(--accent2); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+    a { color: var(--accent2); }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+    .btn {
+      display: inline-block; text-decoration: none; border-radius: 10px; padding: 10px 14px;
+      border: 1px solid var(--line); color: var(--text); background: #121b2c; font-size: 14px;
+    }
+    .btn.primary { border-color: rgba(61,255,154,.4); color: var(--accent); background: rgba(61,255,154,.12); }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+    details { border-bottom: 1px solid var(--line); padding: 10px 0; }
+    summary { cursor: pointer; font-weight: 600; }
+    footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
+    .ok { color: var(--accent); }
+    ol.plain { padding-left: 1.2rem; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.92em; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">Script Master Labs · SDVOSB</div>
+      <h1>Swarm Market Making for Retail Traders</h1>
+      <p class="sub">
+        Better <strong>resting limit prices</strong> from shared intent —
+        at <strong>your broker</strong>, with <strong>your money</strong>.
+        Free paper swarm to prove it. Live signals from $19/mo. AI agents pay $0.001/call.
+      </p>
+      <div class="pill">Coordination without custody · Free sim · Crypto monthly · x402 agents</div>
+      <div class="actions">
+        <a class="btn primary" href="#free">Start free (paper swarm)</a>
+        <a class="btn" href="#pricing">Pricing</a>
+        <a class="btn" href="#how-it-works">How it works</a>
+        <a class="btn" href="#faq">FAQ</a>
+      </div>
+    </header>
+
+    <section class="panel" id="benefits" aria-labelledby="benefits-title">
+      <h2 id="benefits-title">What you get</h2>
+      <ul>
+        <li><strong>Clear limit prices to rest on</strong> — less mid-chasing, more intentional maker-style tickets.</li>
+        <li><strong>Venue guidance</strong> — tilt posts toward maker-rebate style venues (e.g. IEX / MEMX weights).</li>
+        <li><strong>Rebate / spread estimates</strong> — see economics before you submit.</li>
+        <li><strong>Broker-ready previews</strong> — Alpaca / Tradier / IBKR-shaped payloads; <em>you</em> hit submit.</li>
+        <li><strong>No capital to SML on the signal path</strong> — keep custody at your licensed broker.</li>
+        <li><strong>Free paper swarm</strong> — leaderboard + track record before you pay.</li>
+      </ul>
+    </section>
+
+    <section class="panel" id="free" aria-labelledby="free-title">
+      <h2 id="free-title">Free portion (start here)</h2>
+      <p class="muted">Sim Swarm is $0. No card. No wallet required to paper trade.</p>
+      <ul>
+        <li>Join with virtual capital (10K–1M paper)</li>
+        <li>Simulated maker limit orders vs market data</li>
+        <li>Leaderboard and personal track record</li>
+        <li>Upgrade path to live Signal / B2B / Crypto when ready</li>
+      </ul>
+      <p><strong>Search intent match:</strong> free paper trading swarm, retail market making practice, limit order simulator with leaderboard.</p>
+    </section>
+
+    <section id="pricing" aria-labelledby="pricing-title">
+      <h2 id="pricing-title">Swarm market making pricing</h2>
+      <div class="grid">
+        <div class="card">
+          <div class="tag">Free</div>
+          <h3>Sim Swarm</h3>
+          <p class="muted">Paper capital, fills, leaderboard</p>
+          <div class="price">$0</div>
+        </div>
+        <div class="card">
+          <div class="tag">Monthly</div>
+          <h3>Sim Premium</h3>
+          <p class="muted">Analytics + backtest</p>
+          <div class="price">$9/mo</div>
+        </div>
+        <div class="card">
+          <div class="tag">Retail default</div>
+          <h3>Signal Swarm</h3>
+          <p class="muted">Live levels, venues, rebate, broker preview</p>
+          <div class="price">$19/mo</div>
+        </div>
+        <div class="card">
+          <div class="tag">Agents</div>
+          <h3>Pay per call</h3>
+          <p class="muted">x402 multi-rail stablecoins</p>
+          <div class="price">$0.001</div>
+        </div>
+      </div>
+      <div class="panel">
+        <table>
+          <thead><tr><th>Plan / call</th><th>Price</th><th>Who</th></tr></thead>
+          <tbody>
+            <tr><td class="ok">Sim Free</td><td class="ok">$0</td><td>Everyone starting out</td></tr>
+            <tr><td>Sim Premium</td><td>$9 / month</td><td>Serious paper traders</td></tr>
+            <tr><td>Signal Swarm</td><td>$19 / month</td><td>Retail live signals</td></tr>
+            <tr><td>B2B Platform</td><td>$5,000 / month</td><td>Licensed firms (+ 2% rebate lift share)</td></tr>
+            <tr><td>levels / venue / rebate / broker preview</td><td>$0.001 / call</td><td>AI agents &amp; API users</td></tr>
+            <tr><td>B2B optimize / report</td><td>$0.05 / $0.10</td><td>Enterprise API</td></tr>
+          </tbody>
+        </table>
+        <p class="muted" style="margin-top:12px">
+          <strong>Pay monthly in crypto:</strong> USDC (Base), USDC (Solana), USDG (Robinhood Chain), RLUSD (XRPL when configured).
+        </p>
+      </div>
+    </section>
+
+    <section class="panel" id="how-it-works" aria-labelledby="how-title">
+      <h2 id="how-title">How swarm market making works</h2>
+      <p>
+        Solo limit orders are lonely guesses. A <strong>swarm market making</strong> layer aggregates intent
+        across participants (live cohort or paper swarm) and publishes a <strong>maker-style ladder</strong>
+        plus <strong>venue weights</strong>. On the Signal path you still execute in
+        <strong>your</strong> Alpaca, Tradier, or Interactive Brokers account.
+      </p>
+      <ol class="plain">
+        <li><strong>Intent in</strong> — size/side pressure across the cohort.</li>
+        <li><strong>Ladder engine</strong> — resting limits around mid; confidence decays with depth.</li>
+        <li><strong>Venue map</strong> — weight maker-rebate oriented venues.</li>
+        <li><strong>Signal out</strong> — HTTP, WebSocket, MCP, broker-native previews.</li>
+        <li><strong>You execute</strong> — no pooled book; SML does not submit the live order for you on Variant A.</li>
+      </ol>
+      <p class="muted">Keywords people use: limit order signals, retail market making tools, maker rebate venues, coordination without custody, paper trading swarm leaderboard.</p>
+    </section>
+
+    <section class="panel" id="agents" aria-labelledby="agents-title">
+      <h2 id="agents-title">AI agent pay-per-call (x402)</h2>
+      <p>
+        Agents do not need a monthly seat. They call tools like <code>signal_swarm.levels</code>,
+        receive <strong>HTTP 402</strong>, pay stablecoins, and retry with proof.
+        Floor: <strong>$0.001/call</strong> on Base USDC (also Solana USDC, USDG, RLUSD rails).
+      </p>
+      <p class="muted">Related searches: x402 trading API, charge AI agents for market data, pay per call limit order API, MCP trading tools USDC.</p>
+    </section>
+
+    <section class="panel" id="faq" aria-labelledby="faq-title">
+      <h2 id="faq-title">Frequently asked questions</h2>
+      <details open>
+        <summary>What is swarm market making?</summary>
+        <p class="muted">Coordinating many traders' intent into shared maker-style limit levels and venue weights. Signal path = you keep your broker; no pooled capital at SML.</p>
+      </details>
+      <details>
+        <summary>Is there a free plan?</summary>
+        <p class="muted">Yes. Sim Swarm is free forever to start: paper capital, simulated limits, leaderboard, upgrade funnel.</p>
+      </details>
+      <details>
+        <summary>What does Signal Swarm cost?</summary>
+        <p class="muted">$19 per month, payable in USDC / Solana USDC / USDG / RLUSD. Agent hot calls remain $0.001 each.</p>
+      </details>
+      <details>
+        <summary>Do I deposit trading funds?</summary>
+        <p class="muted">No on Variant A (Signal). Previews only; you submit at your licensed broker. Crypto vault (Variant B) is a separate geofenced scaffold.</p>
+      </details>
+      <details>
+        <summary>Is this a broker or investment advice?</summary>
+        <p class="muted">No. Educational/research signals only. Not a BD, ATS, or RIA. Not investment advice. Simulated results are not future performance.</p>
+      </details>
+    </section>
+
+    <section class="panel">
+      <h2>Internal links</h2>
+      <ul>
+        <li><a href="https://www.scriptmasterlabs.com/">ScriptMasterLabs home</a></li>
+        <li><a href="https://www.scriptmasterlabs.com/how-to-charge-ai-agents-for-your-api.html">How to charge AI agents for your API</a></li>
+        <li><a href="https://www.scriptmasterlabs.com/http-402-payment-required-guide.html">HTTP 402 Payment Required guide</a></li>
+        <li><a href="https://www.scriptmasterlabs.com/x402-snacks.html">x402 snacks</a></li>
+        <li><a href="https://www.scriptmasterlabs.com/llms.txt">llms.txt</a> · <a href="https://www.scriptmasterlabs.com/sitemap.xml">sitemap.xml</a></li>
+      </ul>
+    </section>
+
+    <footer>
+      Educational / research signals only. Not investment advice. Not a broker-dealer, ATS, or investment adviser.
+      Users place orders through their own licensed brokerage accounts. Past simulated performance is not indicative of future results.
+      © Script Master Labs, LLC · <a href="https://www.scriptmasterlabs.com/swarm-market-making.html">www canonical</a>
+    </footer>
+  </div>
+</body>
+</html>
