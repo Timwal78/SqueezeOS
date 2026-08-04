@@ -69,18 +69,35 @@ _SimTradeRequest = None
 
 try:
     if not _FORCE_UPSTREAM:
+        # NOTE: do NOT import swarm_mm.billing.x402 — it pulls FastAPI.
+        # SqueezeOS is Flask-only; challenge body uses rails.py instead.
         from swarm_mm.variants.a_signal import service as _signal  # type: ignore
         from swarm_mm.variants.a_signal import brokers as _broker_adapters  # type: ignore
         from swarm_mm.variants.d_sim import service as _sim  # type: ignore
         from swarm_mm.billing.subscriptions import pricing_card as _pricing_card  # type: ignore
-        from swarm_mm.core.engine import engine_info as _engine_info  # type: ignore
-        from swarm_mm.billing.x402 import (  # type: ignore
-            PaymentRequired as _PaymentRequired,
-            operator_authorized as _operator_authorized,
-            x402_challenge as _x402_challenge,
+        from swarm_mm.billing.rails import (  # type: ignore
+            build_accepts as _build_accepts,
+            pay_to_by_network as _pay_to_by_network,
+            rails_public as _rails_public,
+            accepts_asset_map as _accepts_asset_map,
+            evm_pay_to as _evm_pay_to,
         )
+        from swarm_mm.core.engine import engine_info as _engine_info  # type: ignore
         from swarm_mm.core.models import SimJoinRequest as _SimJoinRequest  # type: ignore
         from swarm_mm.core.models import SimTradeRequest as _SimTradeRequest  # type: ignore
+
+        def _x402_challenge(price_usd: float, resource: str, description: str = "") -> dict:
+            return {
+                "x402Version": 1,
+                "error": "Payment required",
+                "accepts": _build_accepts(price_usd, resource, description),
+                "payToByNetwork": _pay_to_by_network(),
+                "acceptsAsset": _accepts_asset_map(),
+                "price_usd": price_usd,
+                "rails": _rails_public().get("rails"),
+                "settle_in": ["USDC", "USDG", "RLUSD"],
+                "pay_to": _evm_pay_to(),
+            }
 
         _LOCAL_OK = True
         log.info("swarm-mm: LOCAL engine active (merged into squeezeos)")
