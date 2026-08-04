@@ -35,7 +35,7 @@ CDP_API_KEY_SECRET = os.environ.get("CDP_API_KEY_SECRET", "")
 _CDP_CONFIGURED    = bool(CDP_API_KEY_ID and CDP_API_KEY_SECRET)
 
 NETWORK      = os.environ.get("X402_NETWORK", "base-sepolia").strip().lower()
-PAY_TO       = os.environ.get("X402_PAY_TO", "0x4e14B249D9A4c9c9352D780eCEB508A8eB7a7700")
+PAY_TO       = os.environ.get("X402_PAY_TO", "0x72330994f379a71542e7bd5a4cf99a9d9743f4aa")
 # Defaults to the CDP-hosted mainnet facilitator once CDP creds are present,
 # otherwise the public signup-free testnet facilitator. Explicit
 # X402_FACILITATOR always wins over both.
