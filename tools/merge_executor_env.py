@@ -25,8 +25,13 @@ DEFAULTS = {
     "COOLDOWN_S": "900",
     "MAX_ORDER_USD": "150.0",
     "MAX_EQUITY_SHARES": "25",
-    "MAX_ORDERS_PER_DAY": "25",
-    "MAX_DAILY_NOTIONAL_USD": "1500.0",
+    # 0 = uncapped -- matches the operator directive already baked into
+    # robinhood_executor_sml.py's own defaults ("operator directive
+    # 2026-07-29, semi-day-trading"). These used to default to 25/1500.0
+    # here, silently re-capping the executor every launch even though the
+    # Python script itself was already built to run uncapped. Fixed 2026-08-04.
+    "MAX_ORDERS_PER_DAY": "0",
+    "MAX_DAILY_NOTIONAL_USD": "0",
     "MAX_DAILY_LOSS_USD": "100.0",
     "MAX_PER_SCAN": "3",
     "PDT_BALANCE_LIMIT": "2100.0",
@@ -107,6 +112,8 @@ def main() -> None:
     # mirroring the same "LOCKED" convention already used elsewhere.
     kv["POLL_INTERVAL_S"] = "45"
     kv["MIN_GOD_STACKED"] = "6"
+    kv["MAX_ORDERS_PER_DAY"] = "0"       # uncapped -- corrects any stale 25 left from before 2026-08-04
+    kv["MAX_DAILY_NOTIONAL_USD"] = "0"   # uncapped -- corrects any stale 1500.0 left from before 2026-08-04
     kv["GAMMA_RAMP_POLL_ENABLED"] = "true"
     kv["POSITION_MONITOR_ENABLED"] = "true"
     kv["EXEC_BROKER"] = "robinhood"

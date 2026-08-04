@@ -177,7 +177,15 @@ if os.environ.get("ALLOW_CUSTOM_MIN_GOD", "false").lower() == "true":
 PDT_BALANCE_LIMIT  = float(os.environ.get("PDT_BALANCE_LIMIT", "2000.0"))  # SEC/FINRA eliminated the $25,000 PDT minimum + the 4-trade counter entirely, effective 2026-06-04 -- see core/api/convergence_bp.py's _PDT_BALANCE_LIMIT for the full citation/history. $25,000 was briefly hardcoded here the same day based on stale pre-2026 info. $2,000 matches the operator's directly-confirmed current Robinhood account behavior.
 PDT_MAX_TRADES     = int(os.environ.get("PDT_MAX_TRADES", "3"))  # 0 = uncapped (same 0-means-uncapped convention as MAX_ORDERS_PER_DAY/MAX_DAILY_NOTIONAL below). This is a voluntary internal shield, not the real PDT rule -- see PDT_BALANCE_LIMIT's comment above: the actual SEC/FINRA $25k/4-trade PDT rule was eliminated 2026-06-04. Set PDT_MAX_TRADES=0 in your local executor env to remove this shield entirely (operator directive 2026-07-30).
 PAPER_MODE           = os.environ.get("ROBINHOOD_PAPER_MODE", "false").lower() == "true"
-KILL_SWITCH          = os.environ.get("KILL_SWITCH", "false").lower() == "true"
+# KILL_SWITCH used to be a module-level constant baked in at import time via
+# load_dotenv() -- editing executor.env while the process was already running
+# had NO effect until restart, directly contradicting the "halts all execution
+# immediately" claim above. _kill_switch_active() re-reads the live env on
+# every call instead; combined with the periodic dotenv reload in the main
+# loop (search "live env refresh"), a KILL_SWITCH=true edit now takes effect
+# within one poll cycle without needing to kill the process. Fixed 2026-08-04.
+def _kill_switch_active() -> bool:
+    return os.environ.get("KILL_SWITCH", "false").lower() == "true"
 MAX_EQUITY_SHARES    = int(os.environ.get("MAX_EQUITY_SHARES", "500"))  # hard ceiling; real limit is MAX_ORDER_USD
 MAX_ORDER_USD        = float(os.environ.get("MAX_ORDER_USD", "150.0"))
 MAX_DAILY_LOSS_USD   = float(os.environ.get("MAX_DAILY_LOSS_USD", "100.0"))
@@ -579,7 +587,7 @@ def _pdt_record():
 
 # ── Circuit breaker ────────────────────────────────────────────────────────────
 def _circuit_open() -> bool:
-    if KILL_SWITCH:
+    if _kill_switch_active():
         logger.warning("[CIRCUIT] KILL_SWITCH=true — all execution halted")
         return True
     with _lock:
@@ -2218,7 +2226,7 @@ def main():
     logger.info(f"  Spread guard: skip BUY if bid-ask > {MAX_SPREAD_PCT}% of mid (exits exempt)")
     logger.info(f"  Fill monitor: alert if an order sits unfilled > {FILL_ALERT_MINUTES:.0f} min")
     logger.info(f"  Paper mode  : {PAPER_MODE}")
-    logger.info(f"  Kill switch : {KILL_SWITCH}")
+    logger.info(f"  Kill switch : {_kill_switch_active()}")
     logger.info("=" * 60)
 
     # Build + stale-env integrity check. Added after stale executor behaviour
@@ -2261,7 +2269,7 @@ def main():
         logger.error(f"[STARTUP] FATAL: poll not locked at 45 (got {POLL_INTERVAL_S})")
         raise SystemExit(2)
 
-    if KILL_SWITCH:
+    if _kill_switch_active():
         logger.warning("[STARTUP] KILL_SWITCH=true — executor will log but not trade")
 
     # Pre-warm login ONCE
@@ -2276,6 +2284,22 @@ def main():
 
     while True:
         try:
+            # Live env refresh -- re-reads executor.env every cycle so an
+            # operator setting KILL_SWITCH=true while this is already running
+            # actually takes effect within one poll instead of requiring a
+            # restart (see _kill_switch_active(), which reads os.environ
+            # fresh on every call rather than a value frozen at import time).
+            # override=True only affects os.environ for THIS process; it
+            # cannot retroactively change already-computed startup constants
+            # like POLL_INTERVAL_S or MIN_GOD_STACKED, so the startup locks
+            # stay locks -- this only unlocks KILL_SWITCH's live reactivity.
+            try:
+                load_dotenv(dotenv_path=os.environ.get("DOTENV_PATH",
+                            os.path.join(os.path.dirname(__file__), "executor.env")),
+                            override=True)
+            except Exception:
+                pass  # a reload failure should never crash a running desk
+
             _reset_daily_if_new_day()
 
             # Proactive session HEALTH CHECK every 30 min — verify only, no forced re-login
