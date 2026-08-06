@@ -101,7 +101,13 @@ def _fire_iam_discord(sym: str, result: dict):
             }]
         }
 
-        url = _discord.webhook_beast or _discord.webhook_all
+        # Prefer dedicated IAM Obligations channel, then beast, then all
+        url = (
+            __import__("os").environ.get("DISCORD_WEBHOOK_IAM_OBLIGATIONS")
+            or __import__("os").environ.get("DISCORD_WEBHOOK_IAM")
+            or _discord.webhook_beast
+            or _discord.webhook_all
+        )
         if url:
             _discord._post(url, payload)
     except Exception as e:
