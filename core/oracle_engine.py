@@ -394,9 +394,11 @@ class OracleEngine:
             action = "NO_TRADE"
         elif directive == "SHIELD" or conf < 5:
             action = "NO_TRADE"
-        elif directive == "BUY" and conf >= min_conf and "vpin_toxic" not in blockers:
+        elif "vpin_toxic" in blockers:
+            action = "NO_TRADE"
+        elif directive == "BUY" and conf >= min_conf:
             action = "BUY"
-        elif directive == "SELL" and conf >= min_conf and "vpin_toxic" not in blockers:
+        elif directive == "SELL" and conf >= min_conf:
             action = "SELL"
         elif directive in ("BUY", "SELL") and conf >= max(40.0, min_conf * 0.6):
             action = "WATCH"
