@@ -773,9 +773,93 @@ def create_app():
             "degraded": True,
         }
 
+
+    @app.route('/api/desk/trade-ready', methods=['GET'])
+    @app.route('/api/desk/trade-ready/<symbol>', methods=['GET'])
+    def desk_trade_ready(symbol=None):
+        """Real-money trade card(s) for Abacus desk — prefers Oracle trade_decision."""
+        from flask import request, jsonify
+        from core.oracle_engine import OracleEngine, ORACLE_SYMBOLS, get_oracle_batch_cache
+        syms = []
+        if symbol:
+            syms = [symbol.upper()]
+        else:
+            q = (request.args.get('symbols') or '').strip()
+            if q:
+                syms = [s.strip().upper() for s in q.split(',') if s.strip()][:24]
+            else:
+                # default desk watchlist
+                syms = list(ORACLE_SYMBOLS)[:12] if ORACLE_SYMBOLS else ['AMC','GME','IWM','NVDA','SPY']
+        out = []
+        batch = get_oracle_batch_cache() or {}
+        batch_data = batch.get('symbols') or batch.get('data') or batch
+        if not isinstance(batch_data, dict):
+            batch_data = {}
+        for sym in syms:
+            row = None
+            # prefer in-process symbol cache (closure from outer app factory)
+            try:
+                cached = _oracle_symbol_cache.get(sym)
+            except Exception:
+                cached = None
+            if cached and isinstance(cached, dict) and cached.get('data'):
+                row = cached['data']
+            elif isinstance(batch_data, dict) and isinstance(batch_data.get(sym), dict):
+                row = batch_data.get(sym)
+            if not row:
+                # lightweight degraded card
+                row = {
+                    'symbol': sym, 'directive': 'SHIELD', 'confidence': 0, 'price': 0,
+                    'reason': 'No oracle cache yet', 'degraded': True,
+                    'proprietary_ema': {'consensus': 'NEUTRAL'},
+                }
+            # ensure trade_decision
+            if 'trade_decision' not in row:
+                try:
+                    eng = OracleEngine({})
+                    row = dict(row)
+                    row['effective_bias'] = eng._ema_bias(row.get('proprietary_ema') or {})
+                    row['trade_decision'] = eng._build_trade_decision(row, row.get('proprietary_ema') or {})
+                    row['tradeable'] = row['trade_decision'].get('tradeable')
+                    row['action'] = row['trade_decision'].get('action')
+                except Exception as e:
+                    row = dict(row)
+                    row['trade_decision'] = {
+                        'action': 'NO_TRADE', 'tradeable': False, 'blockers': [f'enrich_error:{e}'],
+                        'headline': 'NO_TRADE · enrich failed', 'note': str(e),
+                    }
+            td = row.get('trade_decision') or {}
+            out.append({
+                'symbol': sym,
+                'price': row.get('price'),
+                'directive': row.get('directive'),
+                'confidence': row.get('confidence'),
+                'effective_bias': row.get('effective_bias') or td.get('effective_bias'),
+                'action': td.get('action') or row.get('action') or 'NO_TRADE',
+                'tradeable': bool(td.get('tradeable')),
+                'headline': td.get('headline'),
+                'note': td.get('note') or row.get('reason'),
+                'blockers': td.get('blockers') or [],
+                'levels': td.get('levels') or {
+                    'stop': row.get('stop'), 'tp1': row.get('tp1'), 'tp2': row.get('tp2'),
+                },
+                'reason': row.get('reason'),
+            })
+        tradeable = [x for x in out if x.get('tradeable')]
+        return jsonify({
+            'status': 'success',
+            'count': len(out),
+            'tradeable_count': len(tradeable),
+            'min_confidence_env': __import__('os').environ.get('ORACLE_MIN_CONFIDENCE', '70'),
+            'cards': out,
+            'tradeable': tradeable,
+            'note': 'Only tradeable=true cards clear real-money gates. Demo UI equity is not a broker fill feed unless Tradier is linked in Abacus.',
+        })
+
     @app.route('/api/oracle', methods=['GET'])
     @app.route('/api/oracle/<symbol>', methods=['GET'])
     def oracle_signal(symbol=None):
+
         from core.oracle_engine import OracleEngine, ORACLE_SYMBOLS, get_oracle_batch_cache
         if symbol:
             sym = symbol.upper().strip()

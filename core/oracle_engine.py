@@ -319,6 +319,145 @@ class OracleEngine:
             parts.append(f"composite score {round(score)}")
         return ". ".join(parts).capitalize() + "."
 
+
+    def _ema_bias(self, prop_ema: dict) -> str:
+        """Map proprietary EMA consensus to bullish/bearish/neutral bias."""
+        c = (prop_ema or {}).get("consensus") or "NEUTRAL"
+        c = str(c).upper()
+        if c in ("TRIPLE_LOCK_BULL", "BULL_LADDER", "BULLISH", "BULL"):
+            return "bullish"
+        if c in ("TRIPLE_LOCK_BEAR", "BEAR_LADDER", "BEARISH", "BEAR"):
+            return "bearish"
+        if "BULL" in c:
+            return "bullish"
+        if "BEAR" in c:
+            return "bearish"
+        return "neutral"
+
+    def _build_trade_decision(self, payload: dict, prop_ema=None) -> dict:
+        """
+        Real-money gate on top of Oracle directive.
+        Prevents UI from looking 'bullish' while directive is defensive HOLD at low confidence.
+        """
+        import os
+        min_conf = float(os.environ.get("ORACLE_MIN_CONFIDENCE", "70") or 70)
+        # hard floor for live money even if env mis-set low
+        min_conf = max(min_conf, 60.0)
+
+        directive = str(payload.get("directive") or "SHIELD").upper()
+        conf = float(payload.get("confidence") or 0)
+        price = float(payload.get("price") or 0)
+        degraded = bool(payload.get("degraded"))
+        stop = payload.get("stop")
+        tp1 = payload.get("tp1")
+        sweet = bool(payload.get("sweet_spot"))
+        gamma_flip = bool(payload.get("gamma_flip"))
+        triple = bool(payload.get("triple_lock"))
+        vpin = float(payload.get("vpin") or 0)
+        bias = self._ema_bias(prop_ema or payload.get("proprietary_ema") or {})
+
+        blockers = []
+        if degraded:
+            blockers.append("degraded_oracle")
+        if price <= 0:
+            blockers.append("no_price")
+        if conf < min_conf:
+            blockers.append(f"confidence_{conf:.0f}_lt_min_{min_conf:.0f}")
+        if directive in ("HOLD", "SHIELD"):
+            blockers.append(f"directive_{directive.lower()}")
+        if stop is None and directive == "BUY":
+            blockers.append("missing_stop")
+        if tp1 is None and directive == "BUY":
+            blockers.append("missing_tp1")
+        if vpin >= 0.75:
+            blockers.append("vpin_toxic")
+
+        # Alignment: EMA bias vs directive
+        dir_bias = {
+            "BUY": "bullish",
+            "SELL": "bearish",
+            "HOLD": "neutral",
+            "SHIELD": "neutral",
+        }.get(directive, "neutral")
+        aligned = (bias == dir_bias) or (directive in ("HOLD", "SHIELD") and bias == "neutral")
+        if bias != "neutral" and dir_bias == "neutral" and conf < min_conf:
+            blockers.append(f"ema_{bias}_but_directive_{directive.lower()}_low_conf")
+        if bias == "bullish" and directive == "SELL":
+            blockers.append("ema_bull_vs_directive_sell")
+            aligned = False
+        if bias == "bearish" and directive == "BUY":
+            blockers.append("ema_bear_vs_directive_buy")
+            aligned = False
+
+        # Action for real money
+        if "no_price" in blockers or "degraded_oracle" in blockers:
+            action = "NO_TRADE"
+        elif directive == "SHIELD" or conf < 5:
+            action = "NO_TRADE"
+        elif directive == "BUY" and conf >= min_conf and "vpin_toxic" not in blockers:
+            action = "BUY"
+        elif directive == "SELL" and conf >= min_conf and "vpin_toxic" not in blockers:
+            action = "SELL"
+        elif directive in ("BUY", "SELL") and conf >= max(40.0, min_conf * 0.6):
+            action = "WATCH"
+        elif conf >= 40 and directive == "HOLD":
+            action = "WATCH"
+        else:
+            action = "NO_TRADE"
+
+        tradeable = action in ("BUY", "SELL") and not degraded and price > 0
+
+        # UI-safe one-liner (fixes "Bullish 12/10" class confusion)
+        headline = (
+            f"{action} · directive {directive} · conf {conf:.0f}/{min_conf:.0f} · EMA {bias}"
+            + (" · ALIGNED" if aligned else " · DIVERGED")
+        )
+        if tradeable:
+            note = f"Tradeable {action} at confidence {conf:.0f} (min {min_conf:.0f})."
+        elif action == "WATCH":
+            note = "Watch only — not cleared for live size. Wait for confidence/alignment."
+        else:
+            note = "Do not trade live off this card. " + (
+                "Directive is defensive while EMA leans " + bias + "."
+                if bias != "neutral" and directive in ("HOLD", "SHIELD")
+                else "Failed real-money gates."
+            )
+
+        return {
+            "action": action,
+            "tradeable": tradeable,
+            "min_confidence": min_conf,
+            "confidence": conf,
+            "directive": directive,
+            "effective_bias": bias,
+            "aligned": aligned,
+            "blockers": blockers,
+            "headline": headline,
+            "note": note,
+            "size_hint": "flat" if not tradeable else ("starter" if conf < 82 else "full"),
+            "requires": {
+                "min_confidence": min_conf,
+                "directive_in": ["BUY", "SELL"],
+                "stop_and_tp": True,
+                "not_degraded": True,
+            },
+            "levels": {
+                "price": price,
+                "stop": stop,
+                "tp1": tp1,
+                "tp2": payload.get("tp2"),
+                "gamma_wall_above": payload.get("gamma_wall_above"),
+                "gamma_wall_below": payload.get("gamma_wall_below"),
+            },
+            "flags": {
+                "sweet_spot": sweet,
+                "gamma_flip": gamma_flip,
+                "triple_lock": triple,
+                "degraded": degraded,
+            },
+        }
+
+
     def analyze(self, symbol: str) -> dict:
         """
         Main Oracle entry point. Returns full Driver/Navigator payload.
@@ -466,7 +605,16 @@ class OracleEngine:
             "triple_lock": prop_ema.get("triple_lock_bull") or prop_ema.get("triple_lock_bear"),
         }
 
-        logger.info(f"[Oracle] {symbol} → {directive} | Score: {round(score)} | {reason}")
+        # Real-money decision layer (Abacus / desk UI must prefer this over raw EMA cosmetics)
+        payload["effective_bias"] = self._ema_bias(prop_ema)
+        payload["trade_decision"] = self._build_trade_decision(payload, prop_ema)
+        payload["tradeable"] = bool(payload["trade_decision"].get("tradeable"))
+        payload["action"] = payload["trade_decision"].get("action")
+
+        logger.info(
+            f"[Oracle] {symbol} → {directive} | Score: {round(score)} | "
+            f"action={payload.get('action')} tradeable={payload.get('tradeable')} | {reason}"
+        )
         return payload
 
 
