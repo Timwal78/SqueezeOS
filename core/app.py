@@ -761,7 +761,7 @@ def create_app():
     _oracle_live_pool = _cf.ThreadPoolExecutor(max_workers=4, thread_name_prefix="oracle-live")
 
     def _oracle_degraded(sym: str, reason: str) -> dict:
-        return {
+        row = {
             "symbol": sym,
             "timestamp": datetime.now().isoformat(),
             "directive": "SHIELD",
@@ -772,6 +772,39 @@ def create_app():
             "regime": "SHIELD",
             "degraded": True,
         }
+        return _oracle_enrich_trade_decision(row)
+
+    def _oracle_enrich_trade_decision(row: dict) -> dict:
+        """Attach real-money trade_decision to any oracle payload (live/cache/warming)."""
+        if not isinstance(row, dict):
+            return row
+        if row.get("trade_decision") and row.get("action") is not None:
+            return row
+        try:
+            from core.oracle_engine import OracleEngine
+            eng = OracleEngine({})
+            out = dict(row)
+            prop = out.get("proprietary_ema") or {}
+            out["effective_bias"] = eng._ema_bias(prop)
+            td = eng._build_trade_decision(out, prop)
+            out["trade_decision"] = td
+            out["tradeable"] = bool(td.get("tradeable"))
+            out["action"] = td.get("action") or "NO_TRADE"
+            return out
+        except Exception as e:
+            out = dict(row)
+            out["trade_decision"] = {
+                "action": "NO_TRADE",
+                "tradeable": False,
+                "blockers": [f"enrich_error:{type(e).__name__}"],
+                "headline": "NO_TRADE · enrich failed",
+                "note": str(e)[:200],
+                "effective_bias": "neutral",
+            }
+            out["tradeable"] = False
+            out["action"] = "NO_TRADE"
+            out["effective_bias"] = "neutral"
+            return out
 
 
     @app.route('/api/desk/trade-ready', methods=['GET'])
@@ -870,7 +903,7 @@ def create_app():
             if cached and (now - cached['ts']) < _ORACLE_SYMBOL_TTL:
                 return jsonify({
                     "status": "success",
-                    "oracle": cached['data'],
+                    "oracle": _oracle_enrich_trade_decision(cached['data']),
                     "cache_age_s": round(now - cached['ts'], 1),
                     "source": "route_cache",
                 })
@@ -880,6 +913,7 @@ def create_app():
             batch_hit = (batch.get("results") or {}).get(sym)
             if batch_hit and not (batch_hit.get("warming") and not batch_hit.get("price")):
                 # Real (or at least non-seed) payload — serve instantly
+                batch_hit = _oracle_enrich_trade_decision(batch_hit)
                 _oracle_symbol_cache[sym] = {"ts": now, "data": batch_hit}
                 age = round(now - batch["ts"], 1) if batch.get("ts") else None
                 return jsonify({
@@ -904,7 +938,7 @@ def create_app():
                 age = round(now - batch["ts"], 1) if batch.get("ts") else None
                 return jsonify({
                     "status": "success",
-                    "oracle": batch_hit,
+                    "oracle": _oracle_enrich_trade_decision(batch_hit),
                     "cache_age_s": age,
                     "stale": True,
                     "source": "batch_warming",
@@ -940,6 +974,7 @@ def create_app():
                     "Batch cache had no hit; retry shortly.",
                 )
                 # Short negative cache so swarm polls don't stampede live analyze
+                result = _oracle_enrich_trade_decision(result)
                 _oracle_symbol_cache[sym] = {"ts": now, "data": result}
                 return jsonify({
                     "status": "success",
@@ -948,6 +983,7 @@ def create_app():
                     "timeout_s": _ORACLE_LIVE_ANALYZE_S,
                 }), 200
 
+            result = _oracle_enrich_trade_decision(result)
             _oracle_symbol_cache[sym] = {"ts": now, "data": result}
             return jsonify({"status": "success", "oracle": result, "source": "live"})
         else:
