@@ -1,5 +1,7 @@
 # 🧠 SqueezeOS — Institutional AI Trading Intelligence MCP Server
 
+[![MCP Queen operational grade](https://mcpqueen.com/badge/io.github.Timwal78/squeezeos.svg)](https://mcpqueen.com/s/io.github.Timwal78/squeezeos)
+
 > **For AI agents:** 62 MCP tools. Pay-per-call in USDC on Base or RLUSD on XRPL via x402/HTTP-402.
 > SDVOSB | SAM.gov UEI: G24VZA4RLMK3 | CAGE: 21U51
 
