@@ -1,0 +1,600 @@
+// © Script Master Labs, LLC — SML Institutional Live Desk (Pine Script v6)
+// Professional multi-module institutional chart desk for live multi-asset TA.
+// Inspired by the capability class of 24/7 live chart desks (structure + liquidity
+// + OBs + FVGs + premium/discount + flow + adaptive bands + confluence signals).
+// ORIGINAL SML implementation — not a clone of any third-party closed script.
+//
+// WHAT THIS IS
+//   One overlay system that replaces stacking 8–14 separate indicators.
+//   Built for BTC / ETH / SOL / indices / equities on any TF.
+//   Signals only fire on barstate.isconfirmed (no mid-bar ghost prints).
+//
+// MODULES
+//   1. Market Structure   — swing pivots, BOS, CHOCH, protected high/low
+//   2. Order Blocks       — last opposite impulse candle before BOS (mitigation)
+//   3. Fair Value Gaps    — 3-candle imbalance zones with fill tracking
+//   4. Premium / Discount — equilibrium from active swing range
+//   5. Liquidity Map      — equal highs/lows + sweep detection
+//   6. Flow Trend         — volume-weighted directional flow + regime (ADX via ta.dmi)
+//   7. Adaptive Bands     — ATR/stdev hybrid bands (overextension)
+//   8. Confluence Engine  — scored long/short setups + ATR risk rails
+//   9. Live HUD           — bright operator table (bias, zone, score, levels)
+//
+// DISCLOSURES
+//   • Educational / research tooling. Not financial advice. Not auto-execution.
+//   • OHLCV structure proxies ≠ true order-book / footprint / tick delta.
+//   • Paper first. Size your own risk. Live only after your own validation.
+//
+//@version=6
+indicator("SML Institutional Live Desk", shorttitle="SML-ILD", overlay=true,
+     max_lines_count=500, max_labels_count=500, max_boxes_count=500,
+     max_bars_back=5000)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INPUTS
+// ═══════════════════════════════════════════════════════════════════════════
+grpStr  = "1 · Structure"
+swingLen     = input.int(5, "Swing pivot length", minval=2, maxval=50, group=grpStr)
+showStruct   = input.bool(true, "Show BOS / CHOCH labels", group=grpStr)
+showProt     = input.bool(true, "Show protected high / low", group=grpStr)
+
+grpOB   = "2 · Order Blocks"
+showOB       = input.bool(true, "Show order blocks", group=grpOB)
+obMax        = input.int(5, "Max active OBs each side", minval=1, maxval=20, group=grpOB)
+obMitigate   = input.bool(true, "Remove OB on full mitigation", group=grpOB)
+obATRPad     = input.float(0.0, "OB ATR pad (0=body only)", minval=0.0, step=0.1, group=grpOB)
+
+grpFVG  = "3 · Fair Value Gaps"
+showFVG      = input.bool(true, "Show FVGs", group=grpFVG)
+fvgMax       = input.int(8, "Max active FVGs", minval=1, maxval=30, group=grpFVG)
+fvgMinATR    = input.float(0.15, "Min FVG size (× ATR)", minval=0.0, step=0.05, group=grpFVG)
+fvgFillKill  = input.bool(true, "Remove FVG when filled", group=grpFVG)
+
+grpPD   = "4 · Premium / Discount"
+showPD       = input.bool(true, "Show premium / discount / EQ", group=grpPD)
+pdLookback   = input.int(50, "Range lookback (bars) if no swing", minval=10, group=grpPD)
+
+grpLiq  = "5 · Liquidity"
+showLiq      = input.bool(true, "Show equal H/L liquidity", group=grpLiq)
+eqTolATR     = input.float(0.15, "Equal level tolerance (× ATR)", minval=0.05, step=0.05, group=grpLiq)
+eqLookback   = input.int(40, "Equal H/L scan window", minval=10, group=grpLiq)
+showSweeps   = input.bool(true, "Mark liquidity sweeps", group=grpLiq)
+
+grpFlow = "6 · Flow / Regime"
+diLen        = input.int(14, "DI length", minval=5, group=grpFlow)
+adxLen       = input.int(14, "ADX smooth", minval=5, group=grpFlow)
+adxTrend     = input.float(22.0, "ADX trend threshold", minval=10, group=grpFlow)
+flowLen      = input.int(14, "Flow EMA length", minval=2, group=grpFlow)
+volMALen     = input.int(20, "Volume MA length", minval=5, group=grpFlow)
+
+grpBand = "7 · Adaptive Bands"
+showBands    = input.bool(true, "Show adaptive bands", group=grpBand)
+bandLen      = input.int(20, "Band basis length", minval=5, group=grpBand)
+bandMult     = input.float(2.0, "Band width (× ATR)", minval=0.5, step=0.1, group=grpBand)
+
+grpSig  = "8 · Confluence / Signals"
+minScore     = input.int(4, "Min confluence score (0–10)", minval=1, maxval=10, group=grpSig)
+rrTarget     = input.float(2.0, "Target R-multiple", minval=0.5, step=0.1, group=grpSig)
+stopATR      = input.float(1.5, "Stop distance (× ATR)", minval=0.5, step=0.1, group=grpSig)
+cooldownBars = input.int(5, "Signal cooldown (bars)", minval=0, group=grpSig)
+showSignals  = input.bool(true, "Show entry markers", group=grpSig)
+showRails    = input.bool(true, "Show stop / target rails", group=grpSig)
+
+grpHUD  = "9 · HUD"
+showHUD      = input.bool(true, "Show operator HUD", group=grpHUD)
+hudPos       = input.string("top_right", "HUD position",
+     options=["top_right", "top_left", "bottom_right", "bottom_left"], group=grpHUD)
+
+// Bright palette only (SML standard — no grey)
+cBull     = color.new(#00FF9C, 0)
+cBear     = color.new(#FF2D55, 0)
+cCyan     = color.new(#00E5FF, 0)
+cGold     = color.new(#FFD60A, 0)
+cMagenta  = color.new(#FF00E5, 0)
+cLime     = color.new(#B8FF00, 0)
+cObBull   = color.new(#00FF9C, 82)
+cObBear   = color.new(#FF2D55, 82)
+cFvgBull  = color.new(#00E5FF, 88)
+cFvgBear  = color.new(#FF00E5, 88)
+cPrem     = color.new(#FF2D55, 92)
+cDisc     = color.new(#00FF9C, 92)
+cEq       = color.new(#FFD60A, 0)
+cBand     = color.new(#B8FF00, 70)
+cHudBg    = color.new(#050510, 10)
+cHudTxt   = color.new(#F8FAFF, 0)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CORE SERIES
+// ═══════════════════════════════════════════════════════════════════════════
+atr = ta.atr(14)
+[diPlus, diMinus, adx] = ta.dmi(diLen, adxLen)
+basis = ta.ema(close, bandLen)
+upperBand = basis + bandMult * atr
+lowerBand = basis - bandMult * atr
+
+// Volume-weighted signed flow (bar-range proxy — not true bid/ask delta)
+barRange = math.max(high - low, syminfo.mintick)
+signedVol = volume * ((close - low) - (high - close)) / barRange
+flow = ta.ema(signedVol, flowLen)
+volMA = ta.sma(volume, volMALen)
+volSpike = volume > volMA * 1.5
+
+isTrend = adx >= adxTrend
+flowBull = flow > 0
+flowBear = flow < 0
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 1 · MARKET STRUCTURE (swing → BOS / CHOCH)
+// ═══════════════════════════════════════════════════════════════════════════
+ph = ta.pivothigh(high, swingLen, swingLen)
+pl = ta.pivotlow(low, swingLen, swingLen)
+
+var float lastSH = na
+var float lastSL = na
+var float prevSH = na
+var float prevSL = na
+var int   lastSHBar = na
+var int   lastSLBar = na
+var int   structDir = 0   // 1 bullish structure, -1 bearish, 0 init
+var float protHigh = na
+var float protLow  = na
+
+bosUp = false
+bosDn = false
+chochUp = false
+chochDn = false
+
+if not na(ph)
+    prevSH := lastSH
+    lastSH := ph
+    lastSHBar := bar_index - swingLen
+if not na(pl)
+    prevSL := lastSL
+    lastSL := pl
+    lastSLBar := bar_index - swingLen
+
+// Confirmed close breaks
+if barstate.isconfirmed and not na(lastSH) and not na(lastSL)
+    // Bullish BOS: close above last swing high while structure already bullish
+    if close > lastSH and close[1] <= lastSH
+        if structDir == 1
+            bosUp := true
+        else if structDir <= 0
+            chochUp := true
+        structDir := 1
+        protLow := lastSL
+        protHigh := lastSH
+    // Bearish BOS: close below last swing low
+    if close < lastSL and close[1] >= lastSL
+        if structDir == -1
+            bosDn := true
+        else if structDir >= 0
+            chochDn := true
+        structDir := -1
+        protHigh := lastSH
+        protLow := lastSL
+
+if showStruct and bosUp
+    label.new(bar_index, high, "BOS ▲", style=label.style_label_down, color=cBull, textcolor=#050510, size=size.tiny)
+if showStruct and bosDn
+    label.new(bar_index, low, "BOS ▼", style=label.style_label_up, color=cBear, textcolor=#050510, size=size.tiny)
+if showStruct and chochUp
+    label.new(bar_index, high, "CHoCH ▲", style=label.style_label_down, color=cCyan, textcolor=#050510, size=size.tiny)
+if showStruct and chochDn
+    label.new(bar_index, low, "CHoCH ▼", style=label.style_label_up, color=cMagenta, textcolor=#050510, size=size.tiny)
+
+plot(showProt ? protHigh : na, "Protected High", color=cBear, style=plot.style_linebr, linewidth=1)
+plot(showProt ? protLow  : na, "Protected Low",  color=cBull, style=plot.style_linebr, linewidth=1)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 2 · ORDER BLOCKS
+// ═══════════════════════════════════════════════════════════════════════════
+type OB
+    float top
+    float bot
+    int   startBar
+    int   dir          // 1 bullish OB (demand), -1 bearish OB (supply)
+    bool  active
+    box   bx
+
+var array<OB> obs = array.new<OB>()
+
+f_new_ob(int dir) =>
+    // Last opposite candle before the break bar
+    float t = dir == 1 ? high[1] : high[1]
+    float b = dir == 1 ? low[1]  : low[1]
+    // Prefer the last bearish candle for bullish OB, last bullish for bearish OB
+    float top_ = na
+    float bot_ = na
+    for i = 1 to 8
+        if dir == 1 and close[i] < open[i]
+            top_ := high[i] + obATRPad * atr
+            bot_ := low[i]
+            break
+        if dir == -1 and close[i] > open[i]
+            top_ := high[i]
+            bot_ := low[i] - obATRPad * atr
+            break
+    if na(top_)
+        top_ := t + obATRPad * atr
+        bot_ := b - (dir == -1 ? obATRPad * atr : 0.0)
+    col = dir == 1 ? cObBull : cObBear
+    bx = box.new(bar_index - 1, top_, bar_index + 25, bot_, border_color=dir == 1 ? cBull : cBear, bgcolor=col, border_width=1)
+    OB.new(top_, bot_, bar_index - 1, dir, true, bx)
+
+if barstate.isconfirmed and showOB and (bosUp or chochUp)
+    array.push(obs, f_new_ob(1))
+if barstate.isconfirmed and showOB and (bosDn or chochDn)
+    array.push(obs, f_new_ob(-1))
+
+// Cap + mitigate
+if array.size(obs) > 0
+    // mitigate
+    for i = array.size(obs) - 1 to 0
+        o = array.get(obs, i)
+        if o.active
+            box.set_right(o.bx, bar_index + 2)
+            mitigated = false
+            if o.dir == 1 and low <= o.bot and obMitigate
+                mitigated := true
+            if o.dir == -1 and high >= o.top and obMitigate
+                mitigated := true
+            // partial touch fades border
+            if o.dir == 1 and low <= o.top and low >= o.bot
+                box.set_border_color(o.bx, cGold)
+            if o.dir == -1 and high >= o.bot and high <= o.top
+                box.set_border_color(o.bx, cGold)
+            if mitigated
+                o.active := false
+                box.delete(o.bx)
+                array.remove(obs, i)
+    // cap count per side
+    bullN = 0
+    bearN = 0
+    for i = array.size(obs) - 1 to 0
+        o = array.get(obs, i)
+        if o.active
+            if o.dir == 1
+                bullN += 1
+                if bullN > obMax
+                    o.active := false
+                    box.delete(o.bx)
+                    array.remove(obs, i)
+            else
+                bearN += 1
+                if bearN > obMax
+                    o.active := false
+                    box.delete(o.bx)
+                    array.remove(obs, i)
+
+f_in_bull_ob() =>
+    ok = false
+    if array.size(obs) > 0
+        for i = 0 to array.size(obs) - 1
+            o = array.get(obs, i)
+            if o.active and o.dir == 1 and low <= o.top and high >= o.bot
+                ok := true
+                break
+    ok
+
+f_in_bear_ob() =>
+    ok = false
+    if array.size(obs) > 0
+        for i = 0 to array.size(obs) - 1
+            o = array.get(obs, i)
+            if o.active and o.dir == -1 and high >= o.bot and low <= o.top
+                ok := true
+                break
+    ok
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 3 · FAIR VALUE GAPS
+// ═══════════════════════════════════════════════════════════════════════════
+type FVG
+    float top
+    float bot
+    int   dir      // 1 bullish gap, -1 bearish gap
+    int   startBar
+    bool  active
+    box   bx
+
+var array<FVG> fvgs = array.new<FVG>()
+
+// Classic 3-candle FVG: bullish if low > high[2]; bearish if high < low[2]
+bullFvgGap = low > high[2] and close[1] > open[1]
+bearFvgGap = high < low[2] and close[1] < open[1]
+bullFvgSize = low - high[2]
+bearFvgSize = low[2] - high
+
+if barstate.isconfirmed and showFVG and bullFvgGap and bullFvgSize >= fvgMinATR * atr
+    top_ = low
+    bot_ = high[2]
+    bx = box.new(bar_index - 1, top_, bar_index + 20, bot_, border_color=cCyan, bgcolor=cFvgBull, border_width=1, border_style=line.style_dashed)
+    array.push(fvgs, FVG.new(top_, bot_, 1, bar_index - 1, true, bx))
+
+if barstate.isconfirmed and showFVG and bearFvgGap and bearFvgSize >= fvgMinATR * atr
+    top_ = low[2]
+    bot_ = high
+    bx = box.new(bar_index - 1, top_, bar_index + 20, bot_, border_color=cMagenta, bgcolor=cFvgBear, border_width=1, border_style=line.style_dashed)
+    array.push(fvgs, FVG.new(top_, bot_, -1, bar_index - 1, true, bx))
+
+if array.size(fvgs) > 0
+    for i = array.size(fvgs) - 1 to 0
+        g = array.get(fvgs, i)
+        if g.active
+            box.set_right(g.bx, bar_index + 2)
+            filled = false
+            if g.dir == 1 and low <= g.bot
+                filled := true
+            if g.dir == -1 and high >= g.top
+                filled := true
+            if filled and fvgFillKill
+                g.active := false
+                box.delete(g.bx)
+                array.remove(fvgs, i)
+    // cap
+    while array.size(fvgs) > fvgMax
+        g0 = array.get(fvgs, 0)
+        if g0.active
+            box.delete(g0.bx)
+        array.remove(fvgs, 0)
+
+f_in_bull_fvg() =>
+    ok = false
+    if array.size(fvgs) > 0
+        for i = 0 to array.size(fvgs) - 1
+            g = array.get(fvgs, i)
+            if g.active and g.dir == 1 and low <= g.top and high >= g.bot
+                ok := true
+                break
+    ok
+
+f_in_bear_fvg() =>
+    ok = false
+    if array.size(fvgs) > 0
+        for i = 0 to array.size(fvgs) - 1
+            g = array.get(fvgs, i)
+            if g.active and g.dir == -1 and high >= g.bot and low <= g.top
+                ok := true
+                break
+    ok
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4 · PREMIUM / DISCOUNT / EQUILIBRIUM
+// ═══════════════════════════════════════════════════════════════════════════
+swingHi = not na(lastSH) ? lastSH : ta.highest(high, pdLookback)
+swingLo = not na(lastSL) ? lastSL : ta.lowest(low, pdLookback)
+eqLevel = (swingHi + swingLo) / 2.0
+premTop = swingHi
+premBot = eqLevel
+discTop = eqLevel
+discBot = swingLo
+
+inPremium = close > eqLevel
+inDiscount = close < eqLevel
+inEQ = math.abs(close - eqLevel) <= 0.15 * atr
+
+var box premBox = na
+var box discBox = na
+var line eqLine = na
+
+if showPD and barstate.islast
+    if not na(premBox)
+        box.delete(premBox)
+    if not na(discBox)
+        box.delete(discBox)
+    if not na(eqLine)
+        line.delete(eqLine)
+    premBox := box.new(bar_index - pdLookback, premTop, bar_index + 5, premBot, bgcolor=cPrem, border_color=color.new(cBear, 60), border_width=1)
+    discBox := box.new(bar_index - pdLookback, discTop, bar_index + 5, discBot, bgcolor=cDisc, border_color=color.new(cBull, 60), border_width=1)
+    eqLine  := line.new(bar_index - pdLookback, eqLevel, bar_index + 5, eqLevel, color=cEq, width=2, style=line.style_dotted)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 5 · LIQUIDITY (equal highs / lows + sweeps)
+// ═══════════════════════════════════════════════════════════════════════════
+eqHigh = false
+eqLow  = false
+if not na(ph)
+    for i = swingLen + 1 to eqLookback
+        if not na(high[i]) and math.abs(ph - high[i]) <= eqTolATR * atr
+            // prior pivot-ish high nearby
+            eqHigh := true
+            break
+if not na(pl)
+    for i = swingLen + 1 to eqLookback
+        if not na(low[i]) and math.abs(pl - low[i]) <= eqTolATR * atr
+            eqLow := true
+            break
+
+// Sweep: wick beyond recent swing then close back inside
+sweepHigh = barstate.isconfirmed and not na(lastSH) and high > lastSH and close < lastSH and volSpike
+sweepLow  = barstate.isconfirmed and not na(lastSL) and low  < lastSL and close > lastSL and volSpike
+
+plotshape(showSweeps and sweepHigh, title="Sweep High", style=shape.triangledown, location=location.abovebar, color=cMagenta, size=size.tiny, text="SWEEP")
+plotshape(showSweeps and sweepLow,  title="Sweep Low",  style=shape.triangleup,   location=location.belowbar, color=cCyan,    size=size.tiny, text="SWEEP")
+
+if showLiq and eqHigh and not na(ph)
+    line.new(bar_index - swingLen - 5, ph, bar_index + 10, ph, color=color.new(cMagenta, 40), style=line.style_dashed, width=1)
+if showLiq and eqLow and not na(pl)
+    line.new(bar_index - swingLen - 5, pl, bar_index + 10, pl, color=color.new(cCyan, 40), style=line.style_dashed, width=1)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 6–7 · BANDS + FLOW VISUALS
+// ═══════════════════════════════════════════════════════════════════════════
+plot(showBands ? upperBand : na, "Upper Band", color=cBand, linewidth=1)
+plot(showBands ? lowerBand : na, "Lower Band", color=cBand, linewidth=1)
+plot(showBands ? basis     : na, "Basis",      color=color.new(cGold, 40), linewidth=1)
+
+overextUp = close > upperBand
+overextDn = close < lowerBand
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 8 · CONFLUENCE ENGINE
+// ═══════════════════════════════════════════════════════════════════════════
+var int lastSigBar = na
+var int lastSigDir = 0
+var float lastEntry = na
+var float lastStop  = na
+var float lastTgt   = na
+
+longScore = 0
+shortScore = 0
+
+// Structure
+if structDir == 1
+    longScore += 2
+if structDir == -1
+    shortScore += 2
+if chochUp or bosUp
+    longScore += 1
+if chochDn or bosDn
+    shortScore += 1
+
+// Zone
+if inDiscount
+    longScore += 2
+if inPremium
+    shortScore += 2
+if inEQ
+    longScore += 0
+    shortScore += 0
+
+// OB / FVG
+if f_in_bull_ob()
+    longScore += 2
+if f_in_bear_ob()
+    shortScore += 2
+if f_in_bull_fvg()
+    longScore += 1
+if f_in_bear_fvg()
+    shortScore += 1
+
+// Flow / regime
+if isTrend and flowBull and diPlus > diMinus
+    longScore += 2
+if isTrend and flowBear and diMinus > diPlus
+    shortScore += 2
+if not isTrend
+    // mean-revert tilt at bands
+    if overextDn
+        longScore += 1
+    if overextUp
+        shortScore += 1
+
+// Sweeps (stop-run reversals)
+if sweepLow
+    longScore += 2
+if sweepHigh
+    shortScore += 2
+
+// Volume
+if volSpike and close > open
+    longScore += 1
+if volSpike and close < open
+    shortScore += 1
+
+// Clamp 0–10
+longScore  := int(math.min(10, longScore))
+shortScore := int(math.min(10, shortScore))
+
+cooled = na(lastSigBar) or (bar_index - lastSigBar >= cooldownBars)
+
+longSetup  = barstate.isconfirmed and cooled and longScore  >= minScore and longScore >= shortScore and close > open
+shortSetup = barstate.isconfirmed and cooled and shortScore >= minScore and shortScore >  longScore and close < open
+
+// Avoid double fire same bar
+if longSetup and shortSetup
+    if longScore > shortScore
+        shortSetup := false
+    else
+        longSetup := false
+
+if longSetup
+    lastSigBar := bar_index
+    lastSigDir := 1
+    lastEntry := close
+    lastStop  := close - stopATR * atr
+    lastTgt   := close + stopATR * atr * rrTarget
+if shortSetup
+    lastSigBar := bar_index
+    lastSigDir := -1
+    lastEntry := close
+    lastStop  := close + stopATR * atr
+    lastTgt   := close - stopATR * atr * rrTarget
+
+plotshape(showSignals and longSetup,  title="Long",  style=shape.labelup,   location=location.belowbar, color=cBull, textcolor=#050510, size=size.tiny, text="LONG")
+plotshape(showSignals and shortSetup, title="Short", style=shape.labeldown, location=location.abovebar, color=cBear, textcolor=#050510, size=size.tiny, text="SHORT")
+
+plot(showRails and lastSigDir != 0 ? lastStop : na, "Stop", color=cBear, style=plot.style_linebr, linewidth=2)
+plot(showRails and lastSigDir != 0 ? lastTgt  : na, "Target", color=cBull, style=plot.style_linebr, linewidth=2)
+plot(showRails and lastSigDir != 0 ? lastEntry : na, "Entry", color=cGold, style=plot.style_linebr, linewidth=1)
+
+// Invalidate rails on stop/target touch
+if barstate.isconfirmed and lastSigDir == 1
+    if not na(lastStop) and low <= lastStop
+        lastSigDir := 0
+    if not na(lastTgt) and high >= lastTgt
+        lastSigDir := 0
+if barstate.isconfirmed and lastSigDir == -1
+    if not na(lastStop) and high >= lastStop
+        lastSigDir := 0
+    if not na(lastTgt) and low <= lastTgt
+        lastSigDir := 0
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ALERTS
+// ═══════════════════════════════════════════════════════════════════════════
+alertcondition(longSetup,  title="ILD Long",  message="SML-ILD LONG {{ticker}} {{interval}} score confluence — confirm on chart")
+alertcondition(shortSetup, title="ILD Short", message="SML-ILD SHORT {{ticker}} {{interval}} score confluence — confirm on chart")
+alertcondition(bosUp or chochUp, title="ILD Bull Structure", message="SML-ILD bullish structure event {{ticker}}")
+alertcondition(bosDn or chochDn, title="ILD Bear Structure", message="SML-ILD bearish structure event {{ticker}}")
+alertcondition(sweepHigh or sweepLow, title="ILD Liquidity Sweep", message="SML-ILD liquidity sweep {{ticker}}")
+
+// JSON webhook-friendly alert() on confirmed setups
+if longSetup
+    alert("SML_ILD|LONG|" + syminfo.ticker + "|" + str.tostring(close) + "|score=" + str.tostring(longScore) + "|stop=" + str.tostring(lastStop) + "|tgt=" + str.tostring(lastTgt), alert.freq_once_per_bar_close)
+if shortSetup
+    alert("SML_ILD|SHORT|" + syminfo.ticker + "|" + str.tostring(close) + "|score=" + str.tostring(shortScore) + "|stop=" + str.tostring(lastStop) + "|tgt=" + str.tostring(lastTgt), alert.freq_once_per_bar_close)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 9 · OPERATOR HUD
+// ═══════════════════════════════════════════════════════════════════════════
+f_pos() =>
+    switch hudPos
+        "top_left" => position.top_left
+        "bottom_right" => position.bottom_right
+        "bottom_left" => position.bottom_left
+        => position.top_right
+
+var table hud = table.new(f_pos(), 2, 12, bgcolor=cHudBg, border_color=cCyan, border_width=1, frame_color=cCyan, frame_width=1)
+
+f_cell(int r, string k, string v, color vc) =>
+    table.cell(hud, 0, r, k, text_color=cHudTxt, text_size=size.normal, bgcolor=cHudBg)
+    table.cell(hud, 1, r, v, text_color=vc, text_size=size.normal, bgcolor=cHudBg)
+
+if showHUD and barstate.islast
+    biasStr = structDir == 1 ? "BULL STRUCT" : structDir == -1 ? "BEAR STRUCT" : "INIT"
+    biasCol = structDir == 1 ? cBull : structDir == -1 ? cBear : cGold
+    zoneStr = inPremium ? "PREMIUM" : inDiscount ? "DISCOUNT" : "EQUILIBRIUM"
+    zoneCol = inPremium ? cBear : inDiscount ? cBull : cGold
+    regStr  = isTrend ? "TREND" : "RANGE"
+    flowStr = flowBull ? "FLOW+" : flowBear ? "FLOW-" : "FLOW~"
+    posStr  = lastSigDir == 1 ? "LONG RAILS" : lastSigDir == -1 ? "SHORT RAILS" : "FLAT"
+    posCol  = lastSigDir == 1 ? cBull : lastSigDir == -1 ? cBear : cGold
+
+    table.cell(hud, 0, 0, "SML ILD", text_color=cCyan, text_size=size.normal, bgcolor=cHudBg)
+    table.cell(hud, 1, 0, "LIVE DESK", text_color=cGold, text_size=size.normal, bgcolor=cHudBg)
+    f_cell(1, "Bias", biasStr, biasCol)
+    f_cell(2, "Zone", zoneStr, zoneCol)
+    f_cell(3, "Regime", regStr + " ADX " + str.tostring(adx, "#.0"), isTrend ? cLime : cGold)
+    f_cell(4, "Flow", flowStr, flowBull ? cBull : flowBear ? cBear : cGold)
+    f_cell(5, "Long score", str.tostring(longScore) + " / 10", longScore >= minScore ? cBull : cHudTxt)
+    f_cell(6, "Short score", str.tostring(shortScore) + " / 10", shortScore >= minScore ? cBear : cHudTxt)
+    f_cell(7, "EQ", str.tostring(eqLevel, format.mintick), cEq)
+    f_cell(8, "Prot H", na(protHigh) ? "—" : str.tostring(protHigh, format.mintick), cBear)
+    f_cell(9, "Prot L", na(protLow) ? "—" : str.tostring(protLow, format.mintick), cBull)
+    f_cell(10, "Position", posStr, posCol)
+    f_cell(11, "Min score", str.tostring(minScore), cCyan)
+
+// Background tint by zone (subtle)
+bgcolor(inPremium ? color.new(cBear, 94) : inDiscount ? color.new(cBull, 94) : na, title="Zone tint")
