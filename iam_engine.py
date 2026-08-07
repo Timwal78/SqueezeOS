@@ -307,7 +307,12 @@ class LiquidityObligationAnalyst:
         confidence = 70.0 if price > 0 and bid > 0 else 40.0
 
         return _ObligationResult(
-            "liquidity", pressure, implied_dir, 70.0, label, raw_stress,
+            # FIX: previously hardcoded 70.0 here instead of the `confidence`
+            # variable computed two lines above, so a missing/zero bid still
+            # reported full 70% confidence — overstating this analyst's
+            # reliability exactly when it's least reliable, and inflating its
+            # weight in ActionResolutionOracle's BUY/SELL tie-break vote.
+            "liquidity", pressure, implied_dir, confidence, label, raw_stress,
             detail={
                 "spread_pct":      round(spread_pct, 4),
                 "spread_stress":   round(spread_stress, 3),
@@ -895,13 +900,35 @@ class ActionResolutionOracle:
         return vehicle, invalidation, review_trigger
 
     def _resolution_confidence(self, stress_reduction, analyst_results, action) -> float:
-        aligned = sum(
-            1 for r in analyst_results.values()
-            if r.implied_direction == action or r.implied_direction == "NEUTRAL"
-        )
-        total = len(analyst_results)
-        alignment_score = (aligned / total) if total > 0 else 0
-        confidence = min(99, (stress_reduction / 30) * 50 + alignment_score * 50)
+        # FIX: this previously counted every analyst equally, and counted any
+        # NEUTRAL analyst as fully "aligned" with WHATEVER action was chosen
+        # (it can never disagree). Combined with a stress_reduction term that
+        # saturated past 30 — trivially true for nearly any real IMMEDIATE/
+        # NEAR_TERM BUY or SELL — both halves maxed out on almost every
+        # actionable signal, which is why resolution_confidence read ~99% on
+        # nearly every fired alert regardless of how strong or marginal the
+        # case actually was, and why IAM_MIN_CONFIDENCE=70 wasn't filtering
+        # anything in practice.
+        #
+        # This version weights alignment by each analyst's OWN confidence
+        # (data quality / sample sufficiency, already computed by every
+        # analyst and previously discarded here) instead of counting every
+        # analyst as equal regardless of how much real data backed it, and
+        # widens the stress_reduction denominator so only genuinely large,
+        # well-supported reductions reach the top of that half. Generic over
+        # however many analysts are actually in analyst_results.
+        total_conf = sum(r.confidence for r in analyst_results.values())
+        if total_conf <= 0:
+            alignment_score = 0.0
+        else:
+            aligned_conf = sum(
+                r.confidence for r in analyst_results.values()
+                if r.implied_direction == action or r.implied_direction == "NEUTRAL"
+            )
+            alignment_score = aligned_conf / total_conf
+
+        stress_term = min(50.0, (stress_reduction / 60.0) * 50.0)
+        confidence = min(99, stress_term + alignment_score * 50)
         return round(confidence, 1)
 
     def _no_action(self, symbol, price, truth, reason) -> dict:
