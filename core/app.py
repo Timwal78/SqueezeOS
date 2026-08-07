@@ -657,7 +657,20 @@ def create_app():
             mimetype='application/json'
         )
 
-
+    @app.route('/.well-known/amb.json')
+    def amb_json():
+        return jsonify({
+            'schema': 'amb/1.0',
+            'entity': 'scriptmasterlabs',
+            'pay_to': '0x72330994f379a71542e7bd5a4cf99a9d9743f4aa',
+            'beacons': [
+                {'tool_name': 'council_verdict', 'endpoint': 'https://squeezeos-api.onrender.com/x402/council-verdict', 'imp_score': 0.97, 'price_usdc': 0.001, 'network': 'base'},
+                {'tool_name': 'market_scan', 'endpoint': 'https://squeezeos-api.onrender.com/x402/market', 'imp_score': 0.95, 'price_usdc': 0.001, 'network': 'base'},
+                {'tool_name': 'options_intelligence', 'endpoint': 'https://squeezeos-api.onrender.com/x402/options-flow', 'imp_score': 0.94, 'price_usdc': 0.001, 'network': 'base'},
+                {'tool_name': 'fred_series', 'endpoint': 'https://squeezeos-api.onrender.com/x402/fred', 'imp_score': 0.93, 'price_usdc': 0.001, 'network': 'base'},
+                {'tool_name': 'rwa_scan', 'endpoint': 'https://squeezeos-api.onrender.com/x402/rwa-assets', 'imp_score': 0.92, 'price_usdc': 0.001, 'network': 'base'},
+            ]
+        })
 
     @app.route('/api/beast/events')
     def legacy_beast_events():
