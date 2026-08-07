@@ -182,25 +182,23 @@ def iam_resolve(symbol):
     except Exception:
         pass
 
-    # Fire Discord alert + auto-execution for actionable resolutions
+    # Fire Discord alert for actionable resolutions. INFO ONLY: confirmed with
+    # the account owner that a paying customer's query must never itself place
+    # a real order — that's the account owner's own iam_scanner.py background
+    # pass, gated through iam_executor.py's full safety stack. Previously this
+    # route also called execute_async() directly, so any paid query could
+    # trigger a real trade on this account regardless of who asked. Removed.
     try:
-        action     = result["resolution"]["action"]
-        window     = result["truth_layer"]["time_window"]
-        confidence = result["resolution"]["resolution_confidence"]
-        price      = float(result.get("price") or 0.0)
+        action = result["resolution"]["action"]
+        window = result["truth_layer"]["time_window"]
 
         if action in ("BUY", "SELL") and window in _URGENT_WINDOWS:
-            # Discord beast-channel alert
             threading.Thread(
                 target=_fire_iam_discord,
                 args=(sym, result),
                 daemon=True,
                 name=f"iam-discord-{sym}",
             ).start()
-
-            # Broker execution (Tradier + Robinhood alert) — gated by IAM_AUTO_TRADING
-            from iam_executor import execute_async
-            execute_async(sym, result["resolution"], window, confidence, price)
     except Exception:
         pass
 
