@@ -3,6 +3,7 @@
 // Inspired by the capability class of 24/7 live chart desks (structure + liquidity
 // + OBs + FVGs + premium/discount + flow + adaptive bands + confluence signals).
 // ORIGINAL SML implementation — not a clone of any third-party closed script.
+// FIX 2026-08-07: RE10045 empty-array guard on OB/FVG maintain loops (never array.get -1).
 //
 // WHAT THIS IS
 //   One overlay system that replaces stacking 8–14 separate indicators.
@@ -227,64 +228,74 @@ if barstate.isconfirmed and showOB and (bosUp or chochUp)
 if barstate.isconfirmed and showOB and (bosDn or chochDn)
     array.push(obs, f_new_ob(-1))
 
-// Cap + mitigate
-if array.size(obs) > 0
-    // mitigate
-    for i = array.size(obs) - 1 to 0
-        o = array.get(obs, i)
-        if o.active
-            box.set_right(o.bx, bar_index + 2)
-            mitigated = false
-            if o.dir == 1 and low <= o.bot and obMitigate
-                mitigated := true
-            if o.dir == -1 and high >= o.top and obMitigate
-                mitigated := true
-            // partial touch fades border
-            if o.dir == 1 and low <= o.top and low >= o.bot
-                box.set_border_color(o.bx, cGold)
-            if o.dir == -1 and high >= o.bot and high <= o.top
-                box.set_border_color(o.bx, cGold)
-            if mitigated
-                o.active := false
-                box.delete(o.bx)
-                array.remove(obs, i)
-    // cap count per side
-    bullN = 0
-    bearN = 0
-    for i = array.size(obs) - 1 to 0
-        o = array.get(obs, i)
-        if o.active
-            if o.dir == 1
-                bullN += 1
-                if bullN > obMax
-                    o.active := false
-                    box.delete(o.bx)
-                    array.remove(obs, i)
-            else
-                bearN += 1
-                if bearN > obMax
+// Cap + mitigate (re-check size every step — never index empty array)
+// RE10045 fix: after full mitigation, size can become 0; `for i = size-1 to 0`
+// becomes `for i = -1 to 0` and array.get(..., -1) crashes.
+obSize = array.size(obs)
+if obSize > 0
+    for i = obSize - 1 to 0
+        if i >= 0 and i < array.size(obs)
+            o = array.get(obs, i)
+            if o.active
+                box.set_right(o.bx, bar_index + 2)
+                mitigated = false
+                if o.dir == 1 and low <= o.bot and obMitigate
+                    mitigated := true
+                if o.dir == -1 and high >= o.top and obMitigate
+                    mitigated := true
+                if o.dir == 1 and low <= o.top and low >= o.bot
+                    box.set_border_color(o.bx, cGold)
+                if o.dir == -1 and high >= o.bot and high <= o.top
+                    box.set_border_color(o.bx, cGold)
+                if mitigated
                     o.active := false
                     box.delete(o.bx)
                     array.remove(obs, i)
 
+// Cap count per side — only if anything remains
+obSize := array.size(obs)
+if obSize > 0
+    bullN = 0
+    bearN = 0
+    for i = obSize - 1 to 0
+        if i >= 0 and i < array.size(obs)
+            o = array.get(obs, i)
+            if o.active
+                if o.dir == 1
+                    bullN += 1
+                    if bullN > obMax
+                        o.active := false
+                        box.delete(o.bx)
+                        array.remove(obs, i)
+                else
+                    bearN += 1
+                    if bearN > obMax
+                        o.active := false
+                        box.delete(o.bx)
+                        array.remove(obs, i)
+
 f_in_bull_ob() =>
     ok = false
-    if array.size(obs) > 0
-        for i = 0 to array.size(obs) - 1
-            o = array.get(obs, i)
-            if o.active and o.dir == 1 and low <= o.top and high >= o.bot
-                ok := true
-                break
+    sz = array.size(obs)
+    if sz > 0
+        for i = 0 to sz - 1
+            if i >= 0 and i < array.size(obs)
+                o = array.get(obs, i)
+                if o.active and o.dir == 1 and low <= o.top and high >= o.bot
+                    ok := true
+                    break
     ok
 
 f_in_bear_ob() =>
     ok = false
-    if array.size(obs) > 0
-        for i = 0 to array.size(obs) - 1
-            o = array.get(obs, i)
-            if o.active and o.dir == -1 and high >= o.bot and low <= o.top
-                ok := true
-                break
+    sz = array.size(obs)
+    if sz > 0
+        for i = 0 to sz - 1
+            if i >= 0 and i < array.size(obs)
+                o = array.get(obs, i)
+                if o.active and o.dir == -1 and high >= o.bot and low <= o.top
+                    ok := true
+                    break
     ok
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -318,45 +329,55 @@ if barstate.isconfirmed and showFVG and bearFvgGap and bearFvgSize >= fvgMinATR 
     bx = box.new(bar_index - 1, top_, bar_index + 20, bot_, border_color=cMagenta, bgcolor=cFvgBear, border_width=1, border_style=line.style_dashed)
     array.push(fvgs, FVG.new(top_, bot_, -1, bar_index - 1, true, bx))
 
-if array.size(fvgs) > 0
-    for i = array.size(fvgs) - 1 to 0
-        g = array.get(fvgs, i)
-        if g.active
-            box.set_right(g.bx, bar_index + 2)
-            filled = false
-            if g.dir == 1 and low <= g.bot
-                filled := true
-            if g.dir == -1 and high >= g.top
-                filled := true
-            if filled and fvgFillKill
-                g.active := false
-                box.delete(g.bx)
-                array.remove(fvgs, i)
-    // cap
-    while array.size(fvgs) > fvgMax
+// FVG maintain + cap (RE10045-safe — never array.get on empty)
+fvgSize = array.size(fvgs)
+if fvgSize > 0
+    for i = fvgSize - 1 to 0
+        if i >= 0 and i < array.size(fvgs)
+            g = array.get(fvgs, i)
+            if g.active
+                box.set_right(g.bx, bar_index + 2)
+                filled = false
+                if g.dir == 1 and low <= g.bot
+                    filled := true
+                if g.dir == -1 and high >= g.top
+                    filled := true
+                if filled and fvgFillKill
+                    g.active := false
+                    box.delete(g.bx)
+                    array.remove(fvgs, i)
+// cap oldest
+while array.size(fvgs) > fvgMax
+    if array.size(fvgs) > 0
         g0 = array.get(fvgs, 0)
         if g0.active
             box.delete(g0.bx)
         array.remove(fvgs, 0)
+    else
+        break
 
 f_in_bull_fvg() =>
     ok = false
-    if array.size(fvgs) > 0
-        for i = 0 to array.size(fvgs) - 1
-            g = array.get(fvgs, i)
-            if g.active and g.dir == 1 and low <= g.top and high >= g.bot
-                ok := true
-                break
+    sz = array.size(fvgs)
+    if sz > 0
+        for i = 0 to sz - 1
+            if i >= 0 and i < array.size(fvgs)
+                g = array.get(fvgs, i)
+                if g.active and g.dir == 1 and low <= g.top and high >= g.bot
+                    ok := true
+                    break
     ok
 
 f_in_bear_fvg() =>
     ok = false
-    if array.size(fvgs) > 0
-        for i = 0 to array.size(fvgs) - 1
-            g = array.get(fvgs, i)
-            if g.active and g.dir == -1 and high >= g.bot and low <= g.top
-                ok := true
-                break
+    sz = array.size(fvgs)
+    if sz > 0
+        for i = 0 to sz - 1
+            if i >= 0 and i < array.size(fvgs)
+                g = array.get(fvgs, i)
+                if g.active and g.dir == -1 and high >= g.bot and low <= g.top
+                    ok := true
+                    break
     ok
 
 // ═══════════════════════════════════════════════════════════════════════════
