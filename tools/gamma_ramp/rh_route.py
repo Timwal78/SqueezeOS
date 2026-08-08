@@ -303,6 +303,50 @@ def _post_queue_url(intent: RHOptionIntent) -> Dict[str, Any]:
         return {"ok": False, "reason": str(e)}
 
 
+
+# Anti-loop guards for the direct rh.login() call below -- this function
+# used to call rh.login() fresh on EVERY order with zero session reuse and
+# zero rate limiting, unlike tools/robinhood_executor_sml.py's carefully
+# guarded _ensure_login(). Each real rh.login() call is a real Robinhood
+# authentication attempt and can trigger the "trying to log in?" device
+# verification prompt -- with a signal firing per order, that produced a
+# real, repeated login-verification loop whenever GAMMA_RAMP_RH_DIRECT=1
+# was set. Mirrors _ensure_login()'s core rule: verify the existing shared
+# pickle session first (robin_stocks' store_session writes the SAME
+# pickle_name="rh_session" file both scripts use), only call rh.login()
+# when that verify actually fails, and rate-limit real login attempts.
+_DIRECT_LAST_LOGIN_TS = 0.0
+_DIRECT_LOGIN_COOLDOWN_S = int(os.environ.get("GAMMA_RAMP_RH_LOGIN_COOLDOWN_S", "60"))
+
+
+def _direct_rh_verify_session(rh) -> bool:
+    try:
+        profile = rh.profiles.load_account_profile()
+        return bool(profile and profile.get("account_number"))
+    except Exception:
+        return False
+
+
+def _direct_rh_ensure_login(rh, user: str, pw: str) -> bool:
+    global _DIRECT_LAST_LOGIN_TS
+    if _direct_rh_verify_session(rh):
+        return True
+    now = time.time()
+    if now - _DIRECT_LAST_LOGIN_TS < _DIRECT_LOGIN_COOLDOWN_S:
+        logging.warning(
+            "[GAMMA-RAMP-RH] Skipping rh.login() -- attempted <%ss ago, session still invalid",
+            _DIRECT_LOGIN_COOLDOWN_S,
+        )
+        return False
+    _DIRECT_LAST_LOGIN_TS = now
+    try:
+        rh.login(user, pw, store_session=True, pickle_name="rh_session")
+    except Exception as e:
+        logging.error("[GAMMA-RAMP-RH] rh.login() failed: %s", e)
+        return False
+    return _direct_rh_verify_session(rh)
+
+
 def _direct_rh_option(intent: RHOptionIntent) -> Dict[str, Any]:
     """Only if this host has RH creds and operator armed GAMMA_RAMP_RH_DIRECT=1."""
     if os.environ.get("GAMMA_RAMP_RH_DIRECT", "0") != "1":
@@ -313,7 +357,8 @@ def _direct_rh_option(intent: RHOptionIntent) -> Dict[str, Any]:
         return {"ok": False, "reason": "no RH user/pass on this host"}
     try:
         import robin_stocks.robinhood as rh  # type: ignore
-        rh.login(user, pw, store_session=True, pickle_name="rh_session")
+        if not _direct_rh_ensure_login(rh, user, pw):
+            return {"ok": False, "reason": "robinhood session unavailable (see [GAMMA-RAMP-RH] logs)"}
         if intent.action == "BUY_TO_OPEN":
             r = rh.orders.order_buy_option_limit(
                 positionEffect="open",
