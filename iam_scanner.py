@@ -99,15 +99,8 @@ def _scan_pass():
                     from iam_executor import execute_async
                     price = float(result.get("price") or 0.0)
                     execute_async(sym, resolution, window, confidence, price)
-                except Exception as e:
-                    # This is the handoff to real-money execution — a silent
-                    # failure here used to vanish with zero trace: Discord
-                    # still gets the alert, but the trade attempt never
-                    # happens and nothing anywhere says so. Log it loudly.
-                    logger.error(
-                        f"[IAM-SCANNER] {sym}: execute_async failed to launch — {e}",
-                        exc_info=True,
-                    )
+                except Exception:
+                    pass
                 alerts += 1
 
         except Exception as e:

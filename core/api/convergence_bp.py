@@ -9,7 +9,6 @@ import logging
 import os
 import threading
 import time
-from datetime import datetime, timezone
 from flask import Blueprint, jsonify, request
 from core.legacy import get_service, clean_data
 from core.convergence_engine import ConvergenceEngine, scan_beastmode_universe
@@ -95,28 +94,12 @@ def start_beastmode_scanner():
 _last_execution: dict = {}        # symbol → epoch of last executed trade
 _pdt_day_trades: list = []        # epoch timestamps of day trades (5-day window)
 _EXECUTION_COOLDOWN  = 300        # 5 min cooldown per symbol between executions
-_PDT_BALANCE_LIMIT   = float(os.environ.get("PDT_BALANCE_LIMIT", "2000.0"))  # SEC/FINRA eliminated the $25,000 PDT minimum + the 4-trade counter entirely, effective 2026-06-04 (SEC approved FINRA's Rule 4210 amendment 2026-04-14; brokers have until 2027-10 to fully implement the replacement "equity proportional to intraday exposure" framework). $25,000 was briefly hardcoded here 2026-07-29 based on stale pre-2026 info -- wrong the same day it was written. $2,000 matches the operator's directly-confirmed current Robinhood account behavior (2026-07-29) -- almost certainly the standard Reg T margin-account minimum now that the PDT-specific threshold is void, not a new universal legal figure. Revisit if Robinhood's actual enforcement changes as its phase-in progresses.
+_PDT_BALANCE_LIMIT   = 2100.0     # enforce PDT rule when account balance below this
 _PDT_MAX_DAY_TRADES  = 3          # max day trades in 5-day rolling window
 _PDT_WINDOW_SECS     = 5 * 86400  # 5 days in seconds
 _MIN_GOD_STACKED     = int(os.environ.get("MIN_GOD_STACKED", "5"))  # min SET9 configs stacked to execute (5 or 6)
 _BEAST_MAX_SHARES    = int(os.environ.get("BEAST_MAX_SHARES", "5"))
 _BEAST_MAX_PRICE     = float(os.environ.get("BEAST_MAX_PRICE", "500.0"))
-
-
-def _GOD_MODE_STOP_PCT() -> float:
-    """Hard protective stop % below a GOD MODE entry, handed to
-    position_manager. Read at call time (not import time) so it can be changed
-    without a redeploy, matching iam_executor's env-lambda convention. Defaults
-    to IAM_STOP_LOSS_PCT so both live surfaces share one stop policy unless
-    deliberately split via GOD_MODE_STOP_PCT."""
-    try:
-        default = float(os.environ.get("IAM_STOP_LOSS_PCT", "3.0"))
-    except (TypeError, ValueError):
-        default = 3.0
-    try:
-        return float(os.environ.get("GOD_MODE_STOP_PCT", default))
-    except (TypeError, ValueError):
-        return default
 
 # ── MASTER ARM SWITCH ────────────────────────────────────────────────────────
 # Decouples live DATA (TRADIER_ENV=production) from live EXECUTION.
@@ -128,70 +111,10 @@ def _live_trading_armed() -> bool:
     return (os.environ.get("LIVE_TRADING_ENABLED", "false").strip().lower() == "true")
 
 
-# ── DAILY-LOSS CIRCUIT BREAKER ────────────────────────────────────────────────
-# GOD MODE previously had the master arm switch, PDT shield, per-symbol
-# cooldown, and cross-engine claim — but nothing capped cumulative daily
-# realized loss, unlike iam_executor.py's IAM_DAILY_LOSS_LIMIT/record_fill/
-# breaker_tripped. On a small live account that meant GOD MODE could keep
-# re-entering and losing, trade after trade, all day with no circuit breaker
-# at all. Mirrors IAM's already-proven pattern: track realized P&L from real
-# closes, trip once the daily loss limit is hit, refuse new entries for the
-# rest of the day (existing-position protection — the bear-close leg — is
-# never blocked, same "exits always proceed" policy as IAM).
-#
-# Scope: only equity closes in the bear-protect leg below have both a known
-# entry cost basis (Tradier's own cost_basis) and a known exit price, so
-# that's what this breaker tracks. PUT P&L isn't fed in — this file has no
-# visibility into when/how those get closed, same measurement gap already
-# documented for options-flow engines in docs/ENGINE_SCOREBOARD_2026-07-17.md.
-_GOD_MODE_DAILY_LOSS_LIMIT = float(os.environ.get("GOD_MODE_DAILY_LOSS_LIMIT", "200"))
-_breaker_lock  = threading.Lock()
-_breaker_state = {"date": None, "realized_pnl": 0.0, "tripped": False}
-
-
-def _breaker_roll_day() -> None:
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    if _breaker_state["date"] != today:
-        with _breaker_lock:
-            _breaker_state.update(date=today, realized_pnl=0.0, tripped=False)
-        logger.info(f"[GOD-MODE-BREAKER] New trading day {today} — realized P&L reset.")
-
-
-def _breaker_tripped() -> bool:
-    _breaker_roll_day()
-    return _breaker_state["tripped"]
-
-
-def _record_realized_pnl(pnl_delta: float) -> None:
-    _breaker_roll_day()
-    with _breaker_lock:
-        _breaker_state["realized_pnl"] += pnl_delta
-        tripped_now = (not _breaker_state["tripped"]) and _breaker_state["realized_pnl"] <= -abs(_GOD_MODE_DAILY_LOSS_LIMIT)
-        if tripped_now:
-            _breaker_state["tripped"] = True
-    if tripped_now:
-        logger.error(
-            f"[GOD-MODE-BREAKER] 🛑 DAILY-LOSS BREAKER — realized {_breaker_state['realized_pnl']:.2f} "
-            f"≤ -{_GOD_MODE_DAILY_LOSS_LIMIT:.2f}. GOD MODE new entries halted for the rest of {_breaker_state['date']}."
-        )
-
-
-def breaker_status() -> dict:
-    _breaker_roll_day()
-    return {
-        "daily_loss_limit": _GOD_MODE_DAILY_LOSS_LIMIT,
-        "realized_pnl_today": round(_breaker_state["realized_pnl"], 2),
-        "tripped": _breaker_state["tripped"],
-        "date": _breaker_state["date"],
-        "pnl_basis": "quote_price_x_qty_minus_tradier_cost_basis (equity closes only; PUT P&L not tracked)",
-    }
-
-
 def _pdt_check_and_record() -> bool:
     """
     Returns True if trade is allowed under PDT rules.
-    Enforces PDT when Tradier balance < _PDT_BALANCE_LIMIT (default $2,000):
-    max 3 day trades per 5 days. See that constant's comment before changing it.
+    Enforces PDT when Tradier balance < $2,100: max 3 day trades per 5 days.
     Always records the trade if allowed.
     """
     import tradier_api as _t
@@ -231,7 +154,7 @@ def _fire_execution(symbol: str, result: dict, dm=None) -> None:
     Routes to:
       1. Tradier (cloud, 24/7) — equity market order
       2. Robinhood Windows executor — webhook POST (if ROBINHOOD_EXECUTOR_URL set)
-    PDT shield active when Tradier balance < _PDT_BALANCE_LIMIT (default $2,000).
+    PDT shield active when Tradier balance < $2,100.
     """
     import tradier_api as _t
 
@@ -309,27 +232,10 @@ def _fire_execution(symbol: str, result: dict, dm=None) -> None:
             try:
                 tradier_result = _t.place_equity_order(symbol, close_qty, "sell")
                 logger.info(f"[EXEC] Tradier close → {tradier_result.get('status')} order_id={tradier_result.get('order_id','')}")
-                if tradier_result.get("status") == "success":
-                    # Realized P&L feeds the daily-loss breaker — proceeds use the
-                    # live quote price fetched above (not a confirmed fill), same
-                    # approximation basis IAM's own ledger uses; Tradier's
-                    # cost_basis is the real total cost of the position being closed.
-                    cost_basis = float(position.get("cost_basis", 0) or 0)
-                    realized   = (price * close_qty) - cost_basis
-                    _record_realized_pnl(realized)
-                    logger.info(f"[GOD-MODE-BREAKER] {symbol} close realized ≈{realized:+.2f} (quote-price basis)")
             except Exception as e:
                 logger.error(f"[EXEC] Tradier close error: {e}")
         else:
             logger.info(f"[EXEC] {symbol} GOD MODE BEAR fired but no existing long to close — skipping close leg")
-
-        # ── Daily-loss breaker: exits above always proceed regardless (same
-        # "protect capital first" policy as IAM's allowlist) — only the fresh
-        # PUT entry below is gated.
-        if _breaker_tripped():
-            logger.warning(f"[EXEC] {symbol} PUT entry blocked — daily-loss breaker tripped (realized={_breaker_state['realized_pnl']:.2f})")
-            _fire_robinhood_webhook(symbol, "SELL", sml, {"mode": "protect_only"})
-            return
 
         # ── Opportunistic PUT buy on the bearish signal ──────────────────────
         # Cross-engine claim: unlike the equity close above (self-correcting —
@@ -351,27 +257,15 @@ def _fire_execution(symbol: str, result: dict, dm=None) -> None:
         if contract.get("error"):
             logger.warning(f"[EXEC] {symbol} PUT scan failed — {contract['error']}")
         else:
-            # Must be the OCC-formatted contract symbol scan_options() returns
-            # (e.g. "IWM250720P00293000") — never the human-readable
-            # "description" (e.g. "IWM Jul 20 2026 $293.00 Put"). Tradier's
-            # order endpoint rejects anything else with HTTP 400 "Invalid
-            # parameter, symbol: is not valid.", which was silently eating
-            # every live PUT hedge on a bearish GOD MODE signal.
-            option_symbol = contract.get("symbol")
-            option_desc   = contract.get("description") or option_symbol
+            option_symbol = contract.get("description") or contract.get("symbol")
             ask = contract.get("ask") or contract.get("premium") or 0
             try:
                 ask = float(ask or 0)
             except (TypeError, ValueError):
                 ask = 0.0
-            # OCC symbols are root(>=1 char) + YYMMDD(6) + C/P(1) + strike(8) —
-            # the C/P marker sits at a fixed offset from the end regardless of
-            # root length, so this check works for any real ticker. Reject
-            # anything that isn't at least that shape before it ever reaches Tradier.
-            valid_symbol = bool(option_symbol) and len(option_symbol) >= 16 and option_symbol[-9] in ("C", "P")
-            if valid_symbol and ask > 0:
+            if option_symbol and ask > 0:
                 logger.info(
-                    f"[EXEC] 🚀 GOD MODE BEAR — buying PUT {option_desc} ({option_symbol}) "
+                    f"[EXEC] 🚀 GOD MODE BEAR — buying PUT {option_symbol} "
                     f"strike={contract.get('strike')} delta={contract.get('delta')} @ ${ask:.2f}"
                 )
                 try:
@@ -379,20 +273,13 @@ def _fire_execution(symbol: str, result: dict, dm=None) -> None:
                     logger.info(f"[EXEC] Tradier PUT → {opt_result.get('status')} order_id={opt_result.get('order_id','')}")
                 except Exception as e:
                     logger.error(f"[EXEC] Tradier PUT error: {e}")
-            elif not valid_symbol:
-                logger.warning(f"[EXEC] {symbol} PUT contract symbol missing/malformed ({option_symbol!r}) — skipping rather than sending a doomed order")
             else:
-                logger.warning(f"[EXEC] {symbol} PUT contract missing ask — skipping")
+                logger.warning(f"[EXEC] {symbol} PUT contract missing symbol/ask — skipping")
 
         _fire_robinhood_webhook(symbol, "SELL", sml, {"mode": "protect_and_put"})
         return
 
     # ── bull_fired: open/add long equity position ────────────────────────────
-    # Daily-loss breaker gates fresh entries only — see definition above.
-    if _breaker_tripped():
-        logger.warning(f"[EXEC] {symbol} LONG entry blocked — daily-loss breaker tripped (realized={_breaker_state['realized_pnl']:.2f})")
-        return
-
     # Cross-engine claim: a fresh equity buy has no natural cap the way a
     # sell-to-close does, so this is the leg that actually needs coordination
     # with iam_executor.py (same Tradier account, independent GOD_MODE gate).
@@ -409,54 +296,9 @@ def _fire_execution(symbol: str, result: dict, dm=None) -> None:
     )
 
     # ── 1. Tradier cloud execution ───────────────────────────────────────────
-    # Previously a bare place_equity_order(), which defaults to order_type
-    # "market" in tradier_api -- unbounded slippage on both sides, on a
-    # deliberately wide $1-$50 universe. Now a bounded marketable limit, with
-    # an entry-only spread guard, matching what iam_executor already does.
-    # Exits are never spread-blocked and fall back to a market order if
-    # nothing is quotable: getting flat outranks the fill.
     try:
-        import execution_quality
-        q = execution_quality.live_nbbo(symbol) or {}
-        bid, ask = q.get("bid"), q.get("ask")
-        book = execution_quality.have_book(bid, ask)
-        is_entry = side.lower() == "buy"
-
-        if book and is_entry:
-            ok, why = execution_quality.spread_ok(bid, ask, is_option=False, is_entry=True)
-            if not ok:
-                logger.info(f"[EXEC] {symbol} GOD MODE entry skipped — {why}")
-                return
-
-        limit_px = (execution_quality.marketable_limit(bid, ask, side.lower())
-                    or execution_quality.fallback_limit(price, side.lower()))
-        if limit_px:
-            tradier_result = _t.place_equity_order(symbol, quantity, side,
-                                                   order_type="limit", duration="day",
-                                                   limit_price=limit_px)
-        elif not is_entry:
-            logger.warning(f"[EXEC] {symbol} nothing priceable — exiting with a MARKET order (fail open)")
-            tradier_result = _t.place_equity_order(symbol, quantity, side)
-        else:
-            logger.info(f"[EXEC] {symbol} GOD MODE entry skipped — no price to bound the order")
-            return
+        tradier_result = _t.place_equity_order(symbol, quantity, side)
         logger.info(f"[EXEC] Tradier → {tradier_result.get('status')} order_id={tradier_result.get('order_id','')}")
-
-        # Hand a real BUY fill to the active exit manager. GOD MODE placed no
-        # stop-loss of any kind and had no exit path whatsoever -- a position
-        # it opened was held until something else happened to sell it.
-        if is_entry and tradier_result.get("status") == "success":
-            try:
-                import position_manager
-                fill_px = limit_px or price
-                position_manager.register_equity(
-                    symbol, quantity, fill_px, "GOD_MODE",
-                    atr_value=None,
-                    stop_price=round(fill_px * (1.0 - _GOD_MODE_STOP_PCT() / 100.0), 2),
-                )
-            except Exception as e:
-                logger.error(f"[EXEC] ⚠️ {symbol} filled but could NOT be registered with "
-                             f"position_manager ({e}) — no active exit management on this position")
     except Exception as e:
         logger.error(f"[EXEC] Tradier error: {e}")
 
@@ -663,7 +505,6 @@ def exec_status():
                 "max_price_per_share": _BEAST_MAX_PRICE,
                 "cooldown_secs": _EXECUTION_COOLDOWN,
                 "pdt_shield_below": _PDT_BALANCE_LIMIT,
-                "daily_loss_breaker": breaker_status(),
             },
             "kill_switch": "Set LIVE_TRADING_ENABLED=false (or unset) and redeploy to halt all execution.",
         })
@@ -729,7 +570,7 @@ def exec_test_alert():
                 "type": "CALL",
                 "strike": 3.50,
                 "expiration": "2026-06-12",
-                "delta": 0.35,  # MM forced-move target
+                "delta": 0.42,
                 "gamma": 0.18,
                 "theta": -0.03,
                 "iv": 0.95,

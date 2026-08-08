@@ -71,8 +71,8 @@ SML_PROFILE = {
     "tagline":     "Institutional-grade AI trading intelligence & autonomous agent infrastructure — pay-per-call via x402",
     "description": (
         "Script Master Labs provides a sovereign AI infrastructure stack for autonomous agents and developers: "
-        "183 x402 pay-per-call API endpoints (SEC filings, FDA warnings, federal grants, compliance, market signals), "
-        "a 62-tool MCP server (SqueezeOS) for real-time institutional market intelligence, "
+        "44 x402 pay-per-call API endpoints (SEC filings, FDA warnings, federal grants, compliance, market signals), "
+        "a 52-tool MCP server (SqueezeOS) for real-time institutional market intelligence, "
         "Ghost Layer (private XRP routing), RLUSD Rails (Xahau remittance), "
         "a CASCADE ACCUMULATOR for institutional squeeze signal delivery, "
         "an AEO/GEO Intelligence Suite (AgentRank citation scoring, provider trust scores, semantic gap detection), "

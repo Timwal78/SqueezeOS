@@ -73,7 +73,7 @@ def preview(series_id: str):
 
 @fred_bp.route('/series/<series_id>', methods=['GET'])
 @dual_payment(
-    price_usdc="0.001",
+    price_usdc="0.01",
     description=(
         "FRED — any Federal Reserve Economic Data series, latest real "
         "observation plus full series metadata (title, units, frequency, "

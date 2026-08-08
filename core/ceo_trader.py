@@ -60,43 +60,6 @@ def _market_open() -> bool:
 
 # ── Config from env (resolved once per run) ──────────────────────────────────
 
-def _autopilot_enabled() -> bool:
-    """
-    MASTER ARM SWITCH for this engine — defaults to OFF.
-
-    Operator decision (Timothy, 2026-07-31), after the execution-layer audit
-    established all of the following about this engine:
-
-      1. It auto-starts on every boot whenever TRADIER_LIVE=true
-         (core/legacy.py's init_services: `if exec_eng.live_mode: ceo.start()`)
-         and has been placing real Kelly-sized Tradier orders unnoticed --
-         CLAUDE.md claimed it was "not auto-started" and was wrong, twice.
-      2. It is the ONLY live surface that never went through this codebase's
-         own evidence-then-explicit-decision process. There is no backtest
-         anywhere for its pathway (OracleEngine verdict -> Kelly sizing ->
-         Tradier order), unlike CASCADE / Breakout / S-R Matrix.
-      3. It answers to NONE of the documented kill switches -- IAM_PAPER_MODE,
-         IAM_AUTO_TRADING, IAM_PRIMARY_SYSTEM, LIVE_TRADING_ENABLED,
-         ROBINHOOD_PAPER_MODE and KILL_SWITCH all leave it running. That is
-         the property that actually decided this: an engine that keeps
-         trading after the operator has flipped every switch they believe
-         controls the desk is an operational hazard regardless of its edge.
-      4. _kelly_qty() uses Oracle's confidence score directly as the win
-         probability `p`. That number has never been validated against
-         realized outcomes, and Kelly is only well-behaved when `p` is
-         measured rather than assumed.
-
-    This gate is deliberately inside start() rather than at the boot call
-    site, so it covers BOTH the automatic start in core/legacy.py AND the
-    manual POST /api/autopilot/start endpoint. Off means off, from every
-    direction -- there is no path that starts this engine without the
-    operator setting this variable.
-
-    To re-arm:  AUTOPILOT_ENABLED=true
-    """
-    return os.environ.get("AUTOPILOT_ENABLED", "false").strip().lower() in ("true", "1", "yes")
-
-
 def _symbols() -> List[str]:
     raw = os.environ.get(
         "AUTOPILOT_SYMBOLS",
@@ -258,23 +221,6 @@ class CEOTrader:
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     def start(self):
-        # MASTER ARM SWITCH — checked before anything else, and before the
-        # lock, so neither the boot auto-start (core/legacy.py) nor the manual
-        # POST /api/autopilot/start can bring this engine up without an
-        # explicit opt-in. See _autopilot_enabled() for why this defaults off.
-        if not _autopilot_enabled():
-            msg = ("CEO TRADER DISARMED — AUTOPILOT_ENABLED is not set. "
-                   "This engine places real Kelly-sized Tradier orders and is "
-                   "not covered by IAM_PAPER_MODE / IAM_PRIMARY_SYSTEM / "
-                   "LIVE_TRADING_ENABLED / KILL_SWITCH, so it now requires its "
-                   "own explicit arm. Set AUTOPILOT_ENABLED=true to re-enable.")
-            logger.warning(f"[CEO] {msg}")
-            try:
-                state.push_terminal("SYSTEM", msg)
-            except Exception:
-                pass
-            return
-
         with self.lock:
             if not self.active:
                 self.active = True

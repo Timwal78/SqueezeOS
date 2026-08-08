@@ -20,7 +20,6 @@ import logging
 from flask import Blueprint, request, jsonify, redirect
 from core.legacy import clean_data
 from proof402_integration import require_payment
-from core.stripe_idempotency import already_processed
 
 logger = logging.getLogger("CASCADE")
 
@@ -33,7 +32,6 @@ _STRIPE_SECRET_KEY     = os.environ.get("STRIPE_SECRET_KEY", "")
 _STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 _CASCADE_PRICE_ID      = os.environ.get("CASCADE_STRIPE_PRICE_ID", "")
 _REDIS_URL             = os.environ.get("REDIS_URL", "redis://localhost:6379")
-_CASCADE_ADMIN_SECRET  = os.environ.get("CASCADE_ADMIN_SECRET", "")
 
 _SIGNAL_COLORS = {
     "ENTER": "#00CC44",
@@ -94,7 +92,7 @@ def cascade_status():
     status["product"]    = "CASCADE ACCUMULATOR"
     status["version"]    = "1.0.0"
     status["tier"]       = "execution"
-    status["asset_class"] = "equities"
+    status["asset_class"] = "crypto"
     status["payment"]    = {"x402": "0.25 RLUSD/call", "stripe": "$149/mo"}
     return jsonify(clean_data(status))
 
@@ -111,7 +109,7 @@ def cascade_info():
             "Generates ENTER, ADD, EXIT, and STOP directives based on a "
             "proprietary multi-layer EMA ribbon. Operates in both ACCUMULATE "
             "(downside averaging) and PYRAMID (upside scaling) modes. "
-            "Equities-native (real-time via Tradier). AI-agent compatible via x402 micropayment."
+            "Crypto-native. AI-agent compatible via x402 micropayment."
         ),
         "modes": {
             "ACCUMULATE": "Price drops through EMA layers — average down with controlled tranches",
@@ -119,7 +117,7 @@ def cascade_info():
             "EXIT":       "Recovery target hit — close position, realize gains",
             "STOP":       "Anchor layer broken — hard stop, protect capital",
         },
-        "asset_class":     "equities (options + crypto tiers launching soon)",
+        "asset_class":     "crypto (equities + options tiers launching soon)",
         "pricing": {
             "ai_agents":      "0.25 RLUSD per call via x402 on XRP Ledger",
             "humans_monthly": "$149/mo via Stripe — unlimited calls",
@@ -179,7 +177,7 @@ def cascade_signal():
         "position":       position or {},
         "signal_data":    sig_data,
         "recent_signals": all_signals[:5],
-        "asset_class":    "equities",
+        "asset_class":    "crypto",
         "timestamp":      time.time(),
         "powered_by":     "ScriptMaster Labs — CASCADE ACCUMULATOR v1.0",
     }))
@@ -232,22 +230,8 @@ def cascade_stripe_webhook():
         logger.warning("Stripe webhook validation failed: %s", exc)
         return jsonify({"error": "invalid signature"}), 400
 
-    if already_processed(_get_redis(), event.get("id")):
-        return jsonify({"received": True})
-
     if event["type"] == "checkout.session.completed":
         session  = event["data"]["object"]
-        # This webhook receives every checkout.session.completed event on the
-        # whole Stripe account, not just CASCADE's -- e.g. an AEO Suite or
-        # Trade Desk signup fires the same event type. Only issue a CASCADE
-        # key for sessions this blueprint actually created (cascade_stripe_checkout
-        # always stamps metadata.product); anything else is ignored so it
-        # doesn't hand out free CASCADE access to a customer of another product.
-        product = (session.get("metadata") or {}).get("product")
-        if product != "CASCADE_ACCUMULATOR":
-            logger.info("CASCADE webhook: ignoring checkout session %s -- not a CASCADE purchase (product=%r)", session.get("id"), product)
-            return jsonify({"received": True})
-
         customer = session.get("customer_email") or session.get("customer", "unknown")
         sub_id   = session.get("subscription", "")
         api_key  = f"sml_live_cascade_{uuid.uuid4().hex[:24]}"
@@ -261,126 +245,14 @@ def cascade_stripe_webhook():
                 "sub_id":   sub_id,
                 "created":  int(time.time()),
             }))
-            # Reverse index by subscription ID -- customer.subscription.deleted/
-            # paused events below carry the subscription ID but NOT the api_key,
-            # so without this the key issued here can never be found again to
-            # revoke it. (This is the exact bug this fix closes: previously the
-            # webhook only logged on cancellation and never actually revoked the
-            # key, so a single $149 payment granted permanent free access via
-            # require_payment's sml_live_ bypass -- see proof402_integration.py.)
-            if sub_id:
-                r.set(f"cascade:sub:{sub_id}", api_key)
             logger.info("CASCADE key issued for %s", customer)
         else:
             logger.error("Redis unavailable — CASCADE key NOT stored for %s", customer)
 
     elif event["type"] in ("customer.subscription.deleted", "customer.subscription.paused"):
-        sub_id = event["data"]["object"].get("id")
-        r = _get_redis()
-        if sub_id and r:
-            api_key = r.get(f"cascade:sub:{sub_id}")
-            if api_key:
-                r.delete(f"apikey:{api_key}")
-                r.delete(f"cascade:sub:{sub_id}")
-                logger.info("CASCADE key revoked for cancelled/paused subscription %s", sub_id)
-            else:
-                logger.warning(
-                    "CASCADE subscription %s ended but no matching api_key found to revoke "
-                    "(key predates this reverse-index fix, or was already revoked)", sub_id
-                )
-        else:
-            logger.warning("CASCADE subscription-ended event missing subscription id or Redis unavailable")
+        logger.info("CASCADE subscription ended: %s", event["data"]["object"].get("id"))
 
     return jsonify({"received": True})
-
-
-# ── Admin: retroactive reconciliation against Stripe ─────────────────────────
-
-@cascade_bp.route("/admin/reconcile", methods=["POST"])
-def cascade_admin_reconcile():
-    """
-    Retroactive fix for keys issued before the cascade:sub:{sub_id} reverse
-    index existed (see checkout.session.completed above, fixed 2026-07-24):
-    those keys can never be found by the cancellation/pause webhook, so a
-    customer who already cancelled before that fix shipped keeps a permanent,
-    free, account-wide require_payment bypass (proof402_integration.py's
-    sml_live_ prefix check) indefinitely.
-
-    This does not guess at who should be revoked -- it reconciles Redis
-    against Stripe's real, current subscription list. A key is kept only if
-    it positively matches a currently active/trialing CASCADE subscription,
-    by sub_id (post-fix keys) or by customer email (pre-fix keys, which have
-    a customer field but no sub_id). Anything that can't be positively
-    matched is revoked and returned in the response for manual review.
-    """
-    if not _CASCADE_ADMIN_SECRET:
-        return jsonify({"error": "CASCADE_ADMIN_SECRET not configured"}), 503
-    if request.headers.get("X-Cascade-Admin-Secret") != _CASCADE_ADMIN_SECRET:
-        return jsonify({"error": "unauthorized"}), 401
-    if not _STRIPE_SECRET_KEY or not _CASCADE_PRICE_ID:
-        return jsonify({"error": "Stripe not configured"}), 503
-
-    r = _get_redis()
-    if not r:
-        return jsonify({"error": "Redis unavailable"}), 503
-
-    import stripe
-    stripe.api_key = _STRIPE_SECRET_KEY
-
-    active_sub_ids = set()
-    active_emails  = set()
-    try:
-        for status in ("active", "trialing"):
-            subs = stripe.Subscription.list(
-                price=_CASCADE_PRICE_ID, status=status, limit=100, expand=["data.customer"]
-            )
-            for sub in subs.auto_paging_iter():
-                active_sub_ids.add(sub["id"])
-                customer = sub.get("customer")
-                email = customer.get("email") if isinstance(customer, dict) else None
-                if email:
-                    active_emails.add(email.lower())
-    except Exception as exc:
-        logger.error("CASCADE reconcile: Stripe subscription list failed: %s", exc)
-        return jsonify({"error": f"Stripe error: {exc}"}), 502
-
-    revoked = []
-    kept = 0
-    checked = 0
-    for key in r.scan_iter(match="apikey:sml_live_cascade_*"):
-        checked += 1
-        raw = r.get(key)
-        if not raw:
-            continue
-        try:
-            data = json.loads(raw)
-        except (TypeError, ValueError):
-            continue
-
-        sub_id   = data.get("sub_id")
-        customer = (data.get("customer") or "").lower()
-        matched  = (sub_id and sub_id in active_sub_ids) or (customer and customer in active_emails)
-        if matched:
-            kept += 1
-            continue
-
-        api_key = key.split(":", 1)[1] if ":" in key else key
-        r.delete(key)
-        if sub_id:
-            r.delete(f"cascade:sub:{sub_id}")
-        revoked.append({"api_key": api_key, "sub_id": sub_id, "customer": data.get("customer")})
-        logger.info(
-            "CASCADE reconcile: revoked %s (sub_id=%s, customer=%s) -- no matching active Stripe subscription",
-            api_key, sub_id, data.get("customer"),
-        )
-
-    return jsonify({
-        "checked":                        checked,
-        "kept":                           kept,
-        "revoked_count":                  len(revoked),
-        "revoked":                        revoked,
-        "active_subscriptions_in_stripe": len(active_sub_ids),
-    })
 
 
 # ── Stripe: success confirmation page ────────────────────────────────────────

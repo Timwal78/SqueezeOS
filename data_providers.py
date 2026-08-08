@@ -12,8 +12,6 @@ QUOTES (get real-time data for discovered tickers):
   3. Polygon prev-day bars (free 5/min tier)
   4. Alpha Vantage (free 25/day, last-resort fallback)
 """
-import csv
-import io
 import os
 import sys
 import time
@@ -342,10 +340,7 @@ class AlpacaProvider:
             r = requests.get(f"{self.data_base}/v2/stocks/{symbol}/bars", headers=self._headers(), params=params, timeout=20)
             if r.status_code == 200:
                 data = r.json()
-                # Alpaca sometimes returns {"bars": null} (explicit JSON null,
-                # not an omitted key or []) for a symbol with no bars in range
-                # -- .get('bars', []) doesn't catch that since the key exists.
-                bars = data.get('bars') or []
+                bars = data.get('bars', [])
                 # Return in chronological order
                 return sorted(bars, key=lambda x: x.get('t', ''))
             else:
@@ -541,44 +536,6 @@ class PolygonProvider:
             logger.warning(f"[POLYGON] Last trade {symbol}: {e}")
         return {}
 
-    def get_recent_trades(self, symbol: str, limit: int = 50) -> List[dict]:
-        """
-        Real individual trade prints (time & sales) via Polygon's v3 trades
-        endpoint — needed for order-flow-imbalance / block-trade analysis,
-        which cannot be derived from OHLCV bars. Requires a Stocks Advanced
-        plan; a free/Starter key gets a 403 here, handled the same honest
-        way as get_grouped_daily's 403 case (no fallback fabrication).
-        """
-        if not self.available:
-            return []
-        self._rate_limit()
-        try:
-            r = requests.get(f"{self.base}/v3/trades/{symbol}", params={
-                'apiKey': self.api_key,
-                'limit': limit,
-                'sort': 'timestamp',
-                'order': 'desc',
-            }, timeout=10)
-            if r.status_code == 200:
-                results = r.json().get('results', [])
-                trades = [{
-                    'price': t.get('price', 0),
-                    'size': t.get('size', 0),
-                    'timestamp': t.get('participant_timestamp') or t.get('sip_timestamp', 0),
-                } for t in results]
-                # tick-rule classification (see calculate_ofi) needs chronological order
-                trades.sort(key=lambda t: t['timestamp'])
-                return trades
-            elif r.status_code == 429:
-                PolygonRateGuard.emergency_backoff()
-            elif r.status_code == 403:
-                logger.warning(f"[POLYGON] Recent trades {symbol}: 403 — plan likely doesn't include tick data")
-            else:
-                logger.warning(f"[POLYGON] Recent trades {symbol}: {r.status_code}: {r.text[:200]}")
-        except Exception as e:
-            logger.warning(f"[POLYGON] Recent trades {symbol}: {e}")
-        return []
-
     def get_aggregates(self, symbol: str, multiplier: int = 1, timespan: str = 'minute', limit: int = 30, days_back: int = 2) -> List[dict]:
         """Get aggregate bars for a symbol."""
         if not self.available:
@@ -641,8 +598,6 @@ class PolygonProvider:
 # ALPHA VANTAGE — last resort quotes
 # ============================================================
 class AlphaVantageProvider:
-    _EARNINGS_CACHE_TTL_S = 20 * 3600  # a symbol's next earnings date doesn't change intraday
-
     def __init__(self):
         self.api_key = os.environ.get('ALPHA_VANTAGE_API_KEY', '').strip()
         self.base = 'https://www.alphavantage.co/query'
@@ -704,44 +659,6 @@ class AlphaVantageProvider:
             except Exception as e:
                 logger.warning(f"[ALPHAV] {sym}: {e}")
         return results
-
-    def get_earnings_calendar(self, horizon: str = "3month") -> Dict[str, str]:
-        """Real, free EARNINGS_CALENDAR endpoint -- ONE call returns every
-        upcoming earnings date industry-wide (CSV, not JSON -- this is the
-        one Alpha Vantage endpoint that isn't), so building an earnings-
-        blackout gate off this doesn't burn into the strict per-symbol
-        daily_calls budget the way GLOBAL_QUOTE would. Cached in-process for
-        _EARNINGS_CACHE_TTL_S (default 20h) since a symbol's next earnings
-        date doesn't change intraday. Returns {} (never fabricated dates)
-        when unconfigured or the request fails."""
-        now = time.time()
-        cache = getattr(self, "_earnings_cache", None)
-        if cache and now - cache["ts"] < self._EARNINGS_CACHE_TTL_S and cache["horizon"] == horizon:
-            return cache["by_symbol"]
-        if not self.available:
-            return {}
-        self._rate_limit()
-        by_symbol: Dict[str, str] = {}
-        try:
-            r = requests.get(self.base, params={
-                "function": "EARNINGS_CALENDAR", "horizon": horizon, "apikey": self.api_key,
-            }, timeout=15)
-            if r.status_code == 200 and r.text:
-                reader = csv.DictReader(io.StringIO(r.text))
-                for row in reader:
-                    sym = (row.get("symbol") or "").strip().upper()
-                    report_date = (row.get("reportDate") or "").strip()
-                    if not sym or not report_date:
-                        continue
-                    # Keep the SOONEST reportDate per symbol (a symbol can
-                    # appear more than once across horizon windows/updates).
-                    if sym not in by_symbol or report_date < by_symbol[sym]:
-                        by_symbol[sym] = report_date
-        except Exception as e:
-            logger.warning(f"[ALPHAV] earnings calendar fetch failed: {e}")
-            return getattr(self, "_earnings_cache", {}).get("by_symbol", {}) if cache else {}
-        self._earnings_cache = {"ts": now, "horizon": horizon, "by_symbol": by_symbol}
-        return by_symbol
 
 
 # ============================================================
@@ -1283,18 +1200,7 @@ class DataManager:
         if timeframe.upper() in ('1D', '1DAY', 'DAY', 'DAILY'):
             try:
                 from tradier_api import get_history_df
-                # get_history_df's `days` param is CALENDAR days, but `limit` here
-                # is a TRADING-day count (callers ask for N daily bars). Passing
-                # limit straight through under-fetches by ~30% (weekends + market
-                # holidays) -- e.g. limit=300 only returned ~200-215 actual bars,
-                # silently giving every daily-bar caller (breakout/sr_matrix/cie
-                # scanners, etc.) less history than requested with no error (same
-                # root-cause bug class found in avg_down_engine._fetch_closes,
-                # where an exact-threshold guard turned this into CASCADE's live
-                # scanner never firing at all). Convert with the NYSE trading-day
-                # ratio (~252/365) plus a buffer.
-                calendar_days = max(int((limit + 10) * 365 / 252) + 20, 30)
-                df = get_history_df(symbol, days=calendar_days, interval="daily")
+                df = get_history_df(symbol, days=max(limit + 10, 30), interval="daily")
                 if df is not None and not df.empty:
                     bars = [
                         {

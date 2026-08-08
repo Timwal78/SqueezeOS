@@ -164,11 +164,11 @@ def info():
         ],
         "endpoints": {
             "GET /api/ftd/alerts": {"price_rlusd": "0.00", "endpoint_id": None, "note": "ShortSqueeze Swarm public alert feed (free teaser)"},
-            "GET /api/ftd/threshold-list": {"price_rlusd": "0.001", "endpoint_id": FTD_READ_ENDPOINT_ID},
-            "GET /api/ftd/series/{symbol}": {"price_rlusd": "0.001", "endpoint_id": FTD_READ_ENDPOINT_ID},
-            "GET /api/ftd/ratio/{symbol}": {"price_rlusd": "0.001", "endpoint_id": FTD_RATIO_ENDPOINT_ID},
-            "GET /api/ftd/etf-basket/{etf}": {"price_rlusd": "0.001", "endpoint_id": FTD_DEEP_ENDPOINT_ID},
-            "GET /api/ftd/cycle/{symbol}": {"price_rlusd": "0.001", "price_usdc": "0.001", "endpoint_id": FTD_DEEP_ENDPOINT_ID, "rails": ["RLUSD/XRPL (X-Payment-Token)", "USDC/Base (x402 X-PAYMENT)"]},
+            "GET /api/ftd/threshold-list": {"price_rlusd": "0.02", "endpoint_id": FTD_READ_ENDPOINT_ID},
+            "GET /api/ftd/series/{symbol}": {"price_rlusd": "0.02", "endpoint_id": FTD_READ_ENDPOINT_ID},
+            "GET /api/ftd/ratio/{symbol}": {"price_rlusd": "0.03", "endpoint_id": FTD_RATIO_ENDPOINT_ID},
+            "GET /api/ftd/etf-basket/{etf}": {"price_rlusd": "0.05", "endpoint_id": FTD_DEEP_ENDPOINT_ID},
+            "GET /api/ftd/cycle/{symbol}": {"price_rlusd": "0.05", "price_usdc": "0.05", "endpoint_id": FTD_DEEP_ENDPOINT_ID, "rails": ["RLUSD/XRPL (X-Payment-Token)", "USDC/Base (x402 X-PAYMENT)"]},
         },
         "etf_baskets_supported": sorted(ETF_BASKETS.keys()),
         "window_days": WINDOW_DAYS,
@@ -203,20 +203,11 @@ def alerts():
     from ftd_anomaly_engine import get_feed, SCAN_INTERVAL_S, SPIKE_THRESHOLD
 
     limit = max(1, min(int(request.args.get("limit", 25)), 100))
-    ticker = request.args.get("ticker", "").strip() or None
-    min_spike_raw = request.args.get("min_spike_multiplier", "").strip()
-    min_spike = None
-    if min_spike_raw:
-        try:
-            min_spike = float(min_spike_raw)
-        except ValueError:
-            min_spike = None
-    items = get_feed(limit, symbol=ticker, min_spike_multiplier=min_spike)
+    items = get_feed(limit)
     return jsonify({
         "tier": "SHORTSQUEEZE_SWARM",
         "count": len(items),
         "alerts": items,
-        "filters_applied": {"ticker": ticker, "min_spike_multiplier": min_spike},
         "scan_interval_seconds": SCAN_INTERVAL_S,
         "spike_threshold": SPIKE_THRESHOLD,
         "unlock_detail": "/api/ftd/cycle/{symbol} — 0.05 RLUSD",

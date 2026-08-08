@@ -72,7 +72,7 @@ def _rate_limit_premium():
 # ── /api/council ─────────────────────────────────────────────────────────────
 
 @premium_bp.route('/council', methods=['POST', 'GET'])
-@dual_payment(price_usdc="0.001", description="AI Council Verdict — multi-engine signal aggregate. Returns regime (EXECUTION/STEALTH/CONFLICT/COLLAPSE), directional bias, confidence (0-100), and full institutional thesis for any equity symbol.")
+@dual_payment(price_usdc="0.10", description="AI Council Verdict — multi-engine signal aggregate. Returns regime (EXECUTION/STEALTH/CONFLICT/COLLAPSE), directional bias, confidence (0-100), and full institutional thesis for any equity symbol.")
 def council():
     """
     AI Council Verdict — multi-engine signal aggregate.
@@ -206,7 +206,7 @@ def council():
 # ── /api/scan ─────────────────────────────────────────────────────────────────
 
 @premium_bp.route('/scan', methods=['GET', 'POST'])
-@dual_payment(price_usdc="0.001", description="Full universe market scan — squeeze signals and grade-A options picks across the $1-$50 universe (up to 250 symbols).")
+@dual_payment(price_usdc="0.05", description="Full universe market scan — squeeze signals and grade-A options picks across the $1-$50 universe (up to 250 symbols).")
 def scan():
     """
     Full $1-$50 market scanner — live squeeze + options picks.
@@ -233,7 +233,7 @@ def scan():
 # ── /api/options ──────────────────────────────────────────────────────────────
 
 @premium_bp.route('/options', methods=['GET', 'POST'])
-@dual_payment(price_usdc="0.001", description="Institutional options flow scanner — sweeps, whale detection, unusual volume, dark-pool prints. Tradier brokerage-grade feed.")
+@dual_payment(price_usdc="0.05", description="Institutional options flow scanner — sweeps, whale detection, unusual volume, dark-pool prints. Tradier brokerage-grade feed.")
 def options_flow():
     """
     Options intelligence — sweeps, whales, unusual volume for requested symbol.
@@ -268,7 +268,7 @@ def options_flow():
 # ── /api/iwm ──────────────────────────────────────────────────────────────────
 
 @premium_bp.route('/iwm', methods=['GET', 'POST'])
-@dual_payment(price_usdc="0.001", description="IWM 0DTE contract scorer — scored by delta/gamma profile, parity watch, realized vol, expiry-day institutional activity.")
+@dual_payment(price_usdc="0.03", description="IWM 0DTE contract scorer — scored by delta/gamma profile, parity watch, realized vol, expiry-day institutional activity.")
 def iwm():
     """
     IWM 0DTE institutional scanner — scored contracts, parity watch, regime.

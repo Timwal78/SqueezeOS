@@ -1,27 +1,11 @@
 """
-Pure Macro Matrix — Multi-Layer EMA Structural Alignment Engine
-=================================================================
+741 Pure Macro Matrix — Multi-Layer EMA Structural Alignment Engine
+===================================================================
 x402-gated premium endpoint. Cost: 0.04 RLUSD per call.
 
-EMA periods configured via MACRO_STACK_CSV (server env only, not in source)
--- the anchor (last/slowest period in that list) determines both the
-regime math and the minimum bar history required. Originally shipped with
-anchor=741 (hence this module's historical filename/route -- the number was
-never itself load-bearing, just the configured anchor at the time); renamed
-in comments/logs 2026-07-30 after the operator shortened the anchor to 190
-via MACRO_STACK_CSV, per the fixed rule "no fake/stale info" -- do not
-re-hardcode a period number into any log/doc text again, since it will
-drift the next time MACRO_STACK_CSV changes. The route path (/741macro),
-the MCP tool name (macro_741_scan), its payment UUID/price, and the public
-"741" JSON key in signal_products_bp.py's /api/signals/full response are
-UNCHANGED -- those are live paid-product identifiers already in use by
-real callers, and renaming them is a breaking API change requiring its own
-separate, explicit decision (deprecation path, registry updates), not
-bundled into this internal-naming cleanup.
-
+EMA periods configured via MACRO_STACK_CSV (server env only, not in source).
 Secondary gate: X-Macro-Gate header validated against MACRO_GATE_SECRET.
-Cache pre-warm: MACRO_STACK_WARMUP_SYMBOLS computed on startup (a
-DIFFERENT env var than MACRO_STACK_WARMUP -- see the collision note below).
+Cache pre-warm: MACRO_STACK_WARMUP symbols computed on startup.
 
   PERFECT_BULLISH_REGIME  — full ascending EMA stack (fast → slow)
   PERFECT_BEARISH_REGIME  — full descending EMA stack (fast → slow)
@@ -35,22 +19,6 @@ Squeeze Alert: CONSOLIDATION_CHOP with low |matrix_spread_pct| (<5%) means
 price is coiling against the anchor — a macro breakout is building.
 
 Discord webhook fires automatically on every PERFECT_BULLISH or PERFECT_BEARISH hit.
-
-ENV VAR COLLISION FIXED (2026-07-30): this module used to read the SAME
-env var name, MACRO_STACK_WARMUP, as a comma-separated SYMBOL list --
-except core/api/macro_bp.py (the internal regime engine that actually
-gates live iam_executor.py BUY signals) reads that identical name as a
-plain INTEGER bar-count buffer (`int(os.environ.get("MACRO_STACK_WARMUP",
-"50"))`). The operator's real Render value, MACRO_STACK_WARMUP=50, is
-CORRECT for macro_bp.py's purpose and must not be changed or cleared --
-doing so would make macro_bp.py's bare int() call raise ValueError at
-import time on the next deploy. This module now reads a distinct name,
-MACRO_STACK_WARMUP_SYMBOLS, for its own unrelated cache-prewarm feature --
-unset by default (no warmup, same as leaving it empty), set it to a real
-comma-separated ticker list (e.g. "SPY,QQQ,IWM") only if warmup caching is
-wanted. The stray "50" symbol-warmup failure this fixes
-(`[ALPACA] Stock bars 400: invalid symbol: 50`) was this collision, not a
-typo in what the operator entered.
 """
 
 import hmac
@@ -63,7 +31,7 @@ from flask import Blueprint, request, jsonify
 from proof402_integration import require_payment
 from core.legacy import clean_data
 
-logger = logging.getLogger("SqueezeOS-MacroMatrix")
+logger = logging.getLogger("SqueezeOS-741")
 
 macro741_bp = Blueprint("macro741", __name__)
 
@@ -75,7 +43,7 @@ def _load_periods() -> list[int] | None:
     try:
         return [int(x.strip()) for x in raw.split(",") if x.strip()]
     except ValueError:
-        logger.error("[MACRO] MACRO_STACK_CSV contains non-integer values — endpoint disabled")
+        logger.error("[741] MACRO_STACK_CSV contains non-integer values — endpoint disabled")
         return None
 
 
@@ -83,7 +51,7 @@ MACRO_PERIODS: list[int] | None = _load_periods()
 _GATE_SECRET: str = os.environ.get("MACRO_GATE_SECRET", "")
 _WARMUP_SYMBOLS: list[str] = [
     s.strip().upper()
-    for s in os.environ.get("MACRO_STACK_WARMUP_SYMBOLS", "").split(",")
+    for s in os.environ.get("MACRO_STACK_WARMUP", "").split(",")
     if s.strip()
 ]
 
@@ -125,7 +93,7 @@ def _fetch_closes(symbol: str) -> tuple[list[float], str]:
             closes = df["Close"].dropna().tolist()
             return closes, "tradier"
     except Exception as e:
-        logger.warning("[MACRO] Tradier fetch failed for %s: %s", symbol, e)
+        logger.warning("[741] Tradier fetch failed for %s: %s", symbol, e)
 
     # --- Alpaca fallback ---
     try:
@@ -138,7 +106,7 @@ def _fetch_closes(symbol: str) -> tuple[list[float], str]:
                 if len(closes) > 10:
                     return closes, "alpaca"
     except Exception as e:
-        logger.warning("[MACRO] Alpaca fetch failed for %s: %s", symbol, e)
+        logger.warning("[741] Alpaca fetch failed for %s: %s", symbol, e)
 
     return [], "unavailable"
 
@@ -209,7 +177,7 @@ def _fire_discord(results: list[dict]) -> None:
     if not perfect:
         return
 
-    lines = ["**Pure Macro Matrix — Trend Lock Alert** 🔒"]
+    lines = ["**741 Pure Macro Matrix — Trend Lock Alert** 🔒"]
     for r in perfect:
         alignment = r["structural_alignment"]
         emoji = "🟢" if "BULLISH" in alignment else "🔴"
@@ -217,7 +185,7 @@ def _fire_discord(results: list[dict]) -> None:
             f"{emoji} **{r['ticker']}** → `{alignment}` | spread={r['matrix_spread_pct']}% | close={r['current_close']}"
         )
 
-    payload = {"content": "\n".join(lines), "username": "SqueezeOS-MacroMatrix"}
+    payload = {"content": "\n".join(lines), "username": "SqueezeOS-741"}
 
     def _post():
         try:
@@ -226,13 +194,13 @@ def _fire_discord(results: list[dict]) -> None:
             req = urllib.request.Request(webhook_url, data=data, headers={"Content-Type": "application/json"})
             urllib.request.urlopen(req, timeout=10)
         except Exception as e:
-            logger.warning("[MACRO] Discord notify failed: %s", e)
+            logger.warning("[741] Discord notify failed: %s", e)
 
     threading.Thread(target=_post, daemon=True).start()
 
 
 def _run_warmup() -> None:
-    """Pre-warm cache for MACRO_STACK_WARMUP_SYMBOLS symbols after a short startup delay."""
+    """Pre-warm cache for MACRO_STACK_WARMUP symbols after a short startup delay."""
     if not _WARMUP_SYMBOLS or not MACRO_PERIODS:
         return
     time.sleep(8)
@@ -241,9 +209,9 @@ def _run_warmup() -> None:
             data = _calculate_matrix_stack(sym)
             data["_cached_at"] = time.time()
             _cache[sym] = data
-            logger.info("[MACRO] Warmed %s → %s", sym, data.get("structural_alignment", "ERROR"))
+            logger.info("[741] Warmed %s → %s", sym, data.get("structural_alignment", "ERROR"))
         except Exception as e:
-            logger.warning("[MACRO] Warmup failed for %s: %s", sym, e)
+            logger.warning("[741] Warmup failed for %s: %s", sym, e)
 
 
 threading.Thread(target=_run_warmup, daemon=True).start()
@@ -253,7 +221,7 @@ threading.Thread(target=_run_warmup, daemon=True).start()
 @require_payment
 def macro_741_scan():
     """
-    Pure Macro Matrix scan — x402 premium endpoint (0.04 RLUSD).
+    741 Pure Macro Matrix scan — x402 premium endpoint (0.04 RLUSD).
 
     Query params / JSON body:
       symbols (str) — comma-separated list of tickers, e.g. "SPY,QQQ,NVDA,GME"
@@ -328,7 +296,7 @@ def macro_741_scan():
 
     return jsonify(clean_data({
         "status": "success",
-        "product": "Pure Macro Matrix",
+        "product": "741 Pure Macro Matrix",
         "description": (
             "Multi-layer EMA structural alignment engine. "
             "PERFECT_BULLISH_REGIME: institutional uptrend highway. "

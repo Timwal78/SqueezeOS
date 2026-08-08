@@ -1,28 +1,4 @@
-"""
-SML Autonomous Market Intelligence Agent
-=========================================
-Self-funding agent that pays for its own signals via x402, synthesizes
-a market brief with Claude, lists it on the Signal Marketplace, and pushes
-to all webhook subscribers. Tracks its own P&L.
-
-Schedule:
-  Pre-market  : 08:45 ET
-  Market open : 09:35 ET
-  Midday      : 12:00 ET
-  Power hour  : 15:00 ET
-  Close       : 16:15 ET
-
-Environment:
-  AGENT_XRPL_SEED          - agent hot wallet seed (s...)
-  AGENT_XRPL_ADDRESS       - agent XRPL address (r...)
-  AGENT_DOMAIN             - identity domain (agent.scriptmasterlabs.com)
-  ANTHROPIC_API_KEY        - Claude API key
-  SQUEEZEOS_BASE_URL       - SqueezeOS API (default: Railway URL)
-  PROOF402_BASE_URL        - 402Proof (default: Render URL)
-  BRIEF_PRICE_RLUSD        - price to list brief (default: 0.01)
-  BRIEF_TTL_HOURS          - listing TTL (default: 6)
-  RUN_ONCE                 - set to \"true\" to run once and exit (for cron)
-"""
+"""\nSML Autonomous Market Intelligence Agent\n=========================================\nSelf-funding agent that pays for its own signals via x402, synthesizes\na market brief with Claude, lists it on the Signal Marketplace, and pushes\nto all webhook subscribers. Tracks its own P&L.\n\nSchedule:\n  Pre-market  : 08:45 ET\n  Market open : 09:35 ET\n  Midday      : 12:00 ET\n  Power hour  : 15:00 ET\n  Close       : 16:15 ET\n\nEnvironment:\n  AGENT_XRPL_SEED          - agent hot wallet seed (s...)\n  AGENT_XRPL_ADDRESS       - agent XRPL address (r...)\n  AGENT_DOMAIN             - identity domain (agent.scriptmasterlabs.com)\n  ANTHROPIC_API_KEY        - Claude API key\n  SQUEEZEOS_BASE_URL       - SqueezeOS API (default: Railway URL)\n  PROOF402_BASE_URL        - 402Proof (default: Render URL)\n  BRIEF_PRICE_RLUSD        - price to list brief (default: 0.01)\n  BRIEF_TTL_HOURS          - listing TTL (default: 6)\n  RUN_ONCE                 - set to \"true\" to run once and exit (for cron)\n\"\"\"
 
 import os
 import sys
@@ -41,8 +17,7 @@ import anthropic
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-# ── XRPL ──────────────────────────────────────────────────────────────────────────────
-from xrpl.wallet import Wallet
+# ── XRPL ──────────────────────────────────────────────────────────────────────────────\nfrom xrpl.wallet import Wallet
 from xrpl.clients import JsonRpcClient
 from xrpl.models.transactions import Payment, Memo
 from xrpl.models.amounts import IssuedCurrencyAmount
@@ -77,8 +52,7 @@ ENDPOINT_SCAN    = "160cf28d-b364-44eb-adbd-2489c5cc2cf8"
 ENDPOINT_IWM     = "60f48ce0-6002-4385-9b60-03a0d2bbebab"
 ENDPOINT_OPTIONS = "c951a374-2424-4064-ab80-35afe8053d29"
 
-# ── P&L Tracker ───────────────────────────────────────────────────────────────────────────
-class PnL:
+# ── P&L Tracker ───────────────────────────────────────────────────────────────────────────\nclass PnL:
     def __init__(self):
         self.spent   = 0.0
         self.earned  = 0.0
@@ -90,21 +64,10 @@ class PnL:
         with self._lock:
             self.spent = round(self.spent + amount, 6)
 
-    def record_listing(self):
-        """A brief was listed on the marketplace — real, unfakeable (the
-        listing POST succeeded). Does NOT touch `earned`: listing is free
-        (core/api/marketplace_bp.py's /list route isn't payment-gated),
-        only a later /read by some other agent actually pays the seller."""
+    def record_earn(self, amount: float):
         with self._lock:
+            self.earned = round(self.earned + amount, 6)
             self.listings += 1
-
-    def refresh_earned(self, real_total_rlusd: float):
-        """Overwrites `earned` with the real, server-tracked lifetime seller
-        balance (GET /api/marketplace/balance/<wallet>'s revenue_rlusd — 90%
-        of each real 0.02 RLUSD /read sale). This is a SET, not an
-        increment, since the server already reports a cumulative total."""
-        with self._lock:
-            self.earned = round(real_total_rlusd, 6)
 
     def summary(self) -> dict:
         with self._lock:
@@ -118,8 +81,7 @@ class PnL:
 
 pnl = PnL()
 
-# ── XRPL Payment ────────────────────────────────────────────────────────────────────────────
-
+# ── XRPL Payment ────────────────────────────────────────────────────────────────────────────\n
 def pay_invoice(invoice: dict) -> str:
     """Send RLUSD on XRPL for an invoice. Returns tx hash."""
     if not AGENT_SEED:
@@ -150,8 +112,7 @@ def pay_invoice(invoice: dict) -> str:
     pnl.record_spend(float(amount_str))
     return tx_hash
 
-# ── x402 Full Flow ────────────────────────────────────────────────────────────────────────────
-
+# ── x402 Full Flow ────────────────────────────────────────────────────────────────────────────\n
 def pay_and_call(endpoint_id: str, method: str, url: str, body: Optional[dict] = None) -> dict:
     """Complete x402 flow: invoice → pay XRPL → verify → call endpoint."""
 
@@ -197,8 +158,7 @@ def pay_and_call(endpoint_id: str, method: str, url: str, body: Optional[dict] =
     resp.raise_for_status()
     return resp.json()
 
-# ── Free endpoints (no payment) ───────────────────────────────────────────────────────────────────────────
-
+# ── Free endpoints (no payment) ───────────────────────────────────────────────────────────────────────────\n
 def get_free(path: str) -> dict:
     resp = requests.get(f"{SQUEEZEOS}{path}", timeout=20)
     resp.raise_for_status()
@@ -390,8 +350,7 @@ def collect_market_data() -> dict:
 
     return data
 
-# ── Brief synthesis (Claude) ──────────────────────────────────────────────────────────────────────────
-
+# ── Brief synthesis (Claude) ──────────────────────────────────────────────────────────────────────────\n
 def synthesize_brief(data: dict) -> dict:
     if not ANTHROPIC_KEY:
         raise RuntimeError("ANTHROPIC_API_KEY not set")
@@ -450,8 +409,7 @@ Return ONLY the JSON. No markdown. No explanation."""
     logger.info(f"[AGENT] Brief: {brief.get('master_bias')} | {brief.get('regime')} | conf={brief.get('confidence')}")
     return brief
 
-# ── List brief on marketplace ──────────────────────────────────────────────────────────────────────────
-
+# ── List brief on marketplace ──────────────────────────────────────────────────────────────────────────\n
 def list_brief(brief: dict) -> Optional[str]:
     if not AGENT_ADDR:
         logger.warning("[AGENT] No AGENT_XRPL_ADDRESS — skipping marketplace listing")
@@ -478,31 +436,11 @@ def list_brief(brief: dict) -> Optional[str]:
     resp.raise_for_status()
     result     = resp.json()
     listing_id = result.get("listing_id")
-    pnl.record_listing()
+    pnl.record_earn(BRIEF_PRICE)
     logger.info(f"[AGENT] Listed on marketplace: {listing_id} — {symbol} {brief.get('master_bias')}")
     return listing_id
 
-
-def refresh_earnings():
-    """
-    Pulls this agent's REAL accrued seller balance from the marketplace
-    server (90% of each actual 0.02 RLUSD /read sale — see
-    core/api/marketplace_bp.py's balance()) and syncs it into local pnl
-    bookkeeping. Listing a brief is free and never itself earns anything;
-    only a later paid /read by some other agent does.
-    """
-    if not AGENT_ADDR:
-        return
-    try:
-        resp = requests.get(f"{SQUEEZEOS}/api/marketplace/balance/{AGENT_ADDR}", timeout=15)
-        resp.raise_for_status()
-        real_total = float(resp.json().get("revenue_rlusd", 0.0) or 0.0)
-        pnl.refresh_earned(real_total)
-    except Exception as e:
-        logger.warning(f"[AGENT] Could not refresh real marketplace earnings: {e}")
-
-# ── Post to Slack ────────────────────────────────────────────────────────────────────────────
-
+# ── Post to Slack ────────────────────────────────────────────────────────────────────────────\n
 # PROPRIETARY DATA POLICY: key_levels (price numbers) and raw indicator values
 # are never included in Slack output. Only direction labels, confidence %, and
 # text thesis are posted.
@@ -572,8 +510,7 @@ def post_to_slack(brief: dict):
         logger.warning(f"[SLACK] Webhook post failed: {e}")
 
 
-# ── Push to webhooks ────────────────────────────────────────────────────────────────────────────
-
+# ── Push to webhooks ────────────────────────────────────────────────────────────────────────────\n
 def push_to_webhooks(brief: dict, listing_id: Optional[str]):
     event = {
         "type":       "COUNCIL_VERDICT",
@@ -598,8 +535,7 @@ def push_to_webhooks(brief: dict, listing_id: Optional[str]):
     except Exception as e:
         logger.warning(f"[AGENT] Webhook push failed: {e}")
 
-# ── Log P&L to 402Proof Agent Passport ───────────────────────────────────────────────────────────────────
-
+# ── Log P&L to 402Proof Agent Passport ───────────────────────────────────────────────────────────────────\n
 def log_passport():
     if not AGENT_ADDR:
         return
@@ -615,8 +551,7 @@ def log_passport():
     except Exception:
         pass
 
-# ── Main run cycle ────────────────────────────────────────────────────────────────────────────
-
+# ── Main run cycle ────────────────────────────────────────────────────────────────────────────\n
 def run_cycle():
     pnl.runs += 1
     run_id = f"run-{pnl.runs}-{int(time.time())}"
@@ -629,13 +564,11 @@ def run_cycle():
         push_to_webhooks(brief, listing_id)
         post_to_slack(brief)
         log_passport()
-        refresh_earnings()
 
         summary = pnl.summary()
         logger.info(
             f"[AGENT] ═══ Cycle {pnl.runs} complete ═══ "
             f"spent={summary['spent_rlusd']} RLUSD | "
-            f"earned={summary['earned_rlusd']} RLUSD | "
             f"listings={summary['listings']} | "
             f"net={summary['net_rlusd']} RLUSD"
         )
@@ -645,8 +578,7 @@ def run_cycle():
         logger.error(f"[AGENT] Cycle {pnl.runs} FAILED: {e}", exc_info=True)
         return None
 
-# ── Entry point ────────────────────────────────────────────────────────────────────────────
-
+# ── Entry point ────────────────────────────────────────────────────────────────────────────\n
 def main():
     logger.info("═" * 60)
     logger.info("SML AUTONOMOUS MARKET INTELLIGENCE AGENT")

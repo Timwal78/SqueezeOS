@@ -33,6 +33,3 @@ __pycache__/
 # Rust build artifacts
 target/
 pne/gateway/target/
-
-# Position manager local-JSON fallback state (used only when REDIS_URL is unset)
-position_manager_state.json

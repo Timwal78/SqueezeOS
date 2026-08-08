@@ -1,12 +1,12 @@
 """
-Pure Macro Matrix — Internal Regime Engine
+741 Pure Macro Matrix — Internal Regime Engine
 ===============================================
 _compute_regime() is the primary interface — call it directly from server-side code.
 
 The single HTTP route (/api/macro/<symbol>) is secret-gated via X-Macro-Secret header.
 It exists ONLY for the Windows Robinhood executor (which can't import Python modules).
 
-Public regime data is a paid product — use GET /api/741macro (x402, 0.04 RLUSD).
+Public 741 regime data is a paid product — use GET /api/741macro (x402, 0.04 RLUSD).
 
 Data source: Tradier intraday OHLCV (default 15min) — DEVELOPER_MANIFESTO §3 compliant.
 Cache: 5 minutes (one 15-min bar interval).
@@ -43,12 +43,12 @@ _DAYS_BACK = max(35, int(_REQUIRED_BARS / _BARS_PER_DAY.get(_TIMEFRAME, 26)) + 5
 
 def _compute_regime(symbol: str) -> Dict[str, Any]:
     """
-    Compute Pure Macro regime for a symbol using intraday bars.
+    Compute 741 Pure Macro regime for a symbol using intraday bars.
     Importable directly by server-side code — no HTTP call needed.
     Returns regime + opaque layer values (L1–L5, short to long).
     """
     if not _STACK:
-        logger.warning("[MACRO] MACRO_STACK_CSV not configured")
+        logger.warning("[741-MACRO] MACRO_STACK_CSV not configured")
         return {"symbol": symbol, "regime": "UNKNOWN", "status": "NOT_CONFIGURED"}
 
     cached = _cache.get(symbol)
@@ -63,7 +63,7 @@ def _compute_regime(symbol: str) -> Dict[str, Any]:
             return {"symbol": symbol, "regime": "UNKNOWN", "status": "DATA_ERROR"}
         df = pd.DataFrame(bars)
     except Exception as e:
-        logger.warning(f"[MACRO] {symbol} data fetch error: {e}")
+        logger.warning(f"[741-MACRO] {symbol} data fetch error: {e}")
         return {"symbol": symbol, "regime": "UNKNOWN", "status": "DATA_ERROR"}
 
     if len(df) < _REQUIRED_BARS:
@@ -99,7 +99,7 @@ def _compute_regime(symbol: str) -> Dict[str, Any]:
         "timestamp":         datetime.now(timezone.utc).isoformat(),
     }
     _cache[symbol] = {"ts": time.time(), "data": result}
-    logger.info(f"[MACRO] {symbol} → {regime} (spread={spread:+.1f}%, tf={_TIMEFRAME}, bars={len(df)})")
+    logger.info(f"[741-MACRO] {symbol} → {regime} (spread={spread:+.1f}%, tf={_TIMEFRAME}, bars={len(df)})")
     return result
 
 

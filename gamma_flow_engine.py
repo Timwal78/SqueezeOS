@@ -292,79 +292,6 @@ def calculate_gex_profile(raw_chain, spot_price, ticker=""):
 
 
 # ═══════════════════════════════════════════════════════════════
-# PIN RISK — synchronous, testable restatement of
-# GammaFlowEngine._check_pin_risk() below, for consumers that need a
-# resolved directional signal (gamma_pin_scanner.py) rather than an
-# async alert dispatch. Same thresholds, not a re-derivation — this
-# must never disagree with the async engine already live in production
-# via core/oracle_engine.py's gamma-flow read.
-# ═══════════════════════════════════════════════════════════════
-
-def find_near_expiry(raw_chain: Dict, max_dte: int = 2) -> Optional[Dict]:
-    """
-    Locate the first expiry within the pin-risk DTE window (0..max_dte days),
-    scanning callExpDateMap then putExpDateMap in dict-iteration order —
-    identical traversal to GammaFlowEngine._check_pin_risk() below. Returns
-    {"expiry": "YYYY-MM-DD", "dte": int} for the first matching expiry, or
-    None if no expiry in either map falls within the window.
-    """
-    today = datetime.now()
-    for m in (raw_chain.get('callExpDateMap', {}), raw_chain.get('putExpDateMap', {})):
-        if not isinstance(m, dict):
-            continue
-        for exp in m:
-            if ':' not in str(exp):
-                continue
-            try:
-                exp_str = str(exp).split(':')[0]
-                dt = datetime.strptime(exp_str, '%Y-%m-%d')
-                dte = (dt - today).days
-                if 0 <= dte <= max_dte:
-                    return {"expiry": exp_str, "dte": dte}
-            except (ValueError, TypeError):
-                continue
-    return None
-
-
-def detect_pin_risk(raw_chain: Dict, profile: GEXProfile) -> Optional[Dict]:
-    """
-    Real, mechanical constraint: within 2 days of expiry, dealers hedging a
-    strike with concentrated open interest must trade against moves away
-    from it, which tends to pin price near that strike into expiry. Fires
-    only when both conditions GammaFlowEngine._check_pin_risk() already
-    requires in production hold: an expiry 0-2 DTE out, AND spot within 0.5%
-    of profile.max_oi_strike.
-
-    Adds a directional resolution the async alert-only engine never needed:
-    sign(max_oi_strike - spot) — a disclosed proxy for "price gravitates
-    toward the OI-concentrated strike," not a backtested edge. See
-    gamma_pin_scanner.py's module docstring for why no historical backtest
-    exists for this constraint (no historical options-chain data source is
-    reachable from this codebase or this sandbox).
-
-    Returns None if there's no expiry in the 0-2 DTE window, the window
-    exists but price isn't within the pin-risk proximity band, or spot <= 0.
-    """
-    near = find_near_expiry(raw_chain)
-    if near is None:
-        return None
-    spot = profile.spot_price
-    if spot <= 0:
-        return None
-    if abs(spot - profile.max_oi_strike) / spot >= 0.005:
-        return None
-    diff = profile.max_oi_strike - spot
-    direction = "BUY" if diff > 0 else ("SELL" if diff < 0 else None)
-    return {
-        "expiry": near["expiry"],
-        "dte": near["dte"],
-        "spot": spot,
-        "max_oi_strike": profile.max_oi_strike,
-        "direction": direction,
-    }
-
-
-# ═══════════════════════════════════════════════════════════════
 # GEX ENGINE
 # ═══════════════════════════════════════════════════════════════
 
@@ -410,48 +337,30 @@ class GammaFlowEngine:
                     logger.error(f"[GAMMA] Error {ticker}: {e}")
             await asyncio.sleep(20)  # RELAXED: 20 seconds (was 60s) for faster gamma scanning
 
-    async def process_ticker(self, ticker: str) -> Optional[Dict]:
-        """
-        Returns {"gamma_flip": bool, "regime": str, "score": float 0-100} built
-        from this call's real, freshly-computed GEXProfile — or None on any
-        early-out (no spot, no chain, no profile). core/oracle_engine.py's
-        _get_gamma_flow() is the only consumer and always got None before this
-        fix (no path here ever returned anything), which meant gamma_score/
-        gamma_flip silently contributed nothing to every Oracle directive.
-
-        "score" is deliberately derived only from the GEXProfile fields this
-        method already computes for its own alert-dispatch logic below (zero-
-        gamma-line proximity + long/short-gamma dealer positioning) — not from
-        FlowSignal.urgency_score, since dispatch_signal() below has its own
-        5-minute per-signal-type cooldown and may legitimately skip dispatching
-        an alert on a call where the underlying gamma condition is still real
-        and unchanged; tying the score to whether an alert happened to fire
-        would make it flicker for reasons unrelated to actual gamma pressure.
-        """
+    async def process_ticker(self, ticker: str):
         # 1. Get spot price
         spot_data = self.polygon.get_last_trade(ticker)
         spot = float(spot_data.get('price', 0))
         if spot <= 0:
-            return None
+            return
 
         # 2. Get GEX Profile via Tradier adapter (Schwab-shape format)
         if not self._get_chain:
-            return None
+            return
         raw_chain = self._get_chain(ticker)
         if not raw_chain or 'error' in raw_chain:
-            return None
+            return
 
         profile = calculate_gex_profile(raw_chain, spot, ticker)
         if not profile:
-            return None
+            return
 
         # 3. MM Intel v3 Core: Kalman + HJB
         self._update_mm_intel(ticker, raw_chain, spot)
 
         # 4. Check for gamma flip
         old_profile = self.gex_cache.get(ticker)
-        gamma_flip = bool(old_profile and old_profile.profile_shape != profile.profile_shape)
-        if gamma_flip:
+        if old_profile and old_profile.profile_shape != profile.profile_shape:
             await self._signal_gamma_flip(ticker, spot, profile, old_profile)
 
         self.gex_cache[ticker] = profile
@@ -464,27 +373,6 @@ class GammaFlowEngine:
 
         # 6. Check pin risk
         await self._check_pin_risk(ticker, spot, profile, raw_chain)
-
-        # 7. Score for Oracle — a real GEX-structure read.
-        # Dealers in a short-gamma regime must chase price (buy rises, sell
-        # dips), amplifying moves; long-gamma dealers dampen them. Realized
-        # vol also tends to expand near the zero-gamma line (the pivot where
-        # dealer hedging flips sign) — so proximity to it, weighted by the
-        # current regime, is a defensible 0-100 "gamma pressure" read using
-        # only fields this method already computed above.
-        zgl = profile.zero_gamma_line
-        if zgl and zgl > 0 and spot > 0:
-            zgl_proximity = max(0.0, 1.0 - (abs(spot - zgl) / spot) / 0.03)  # 1.0 at ZGL, 0 by 3% away
-        else:
-            zgl_proximity = 0.0
-        regime_mult = 1.0 if profile.profile_shape == 'short_gamma' else 0.5
-        score = round(min(100.0, zgl_proximity * 100.0 * regime_mult), 1)
-
-        return {
-            "gamma_flip": gamma_flip,
-            "regime": profile.profile_shape.upper(),
-            "score": score,
-        }
 
     def _update_mm_intel(self, ticker: str, raw_chain: Dict, spot: float):
         """Implement MM Intel v3 institutional logic."""

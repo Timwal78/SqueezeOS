@@ -48,7 +48,7 @@ FEEDS = {
             "executive changes, bankruptcy filings, material agreements. Moves stocks before "
             "Bloomberg publishes. Polled every 60 s from EDGAR."
         ),
-        "price_rlusd": "0.001",
+        "price_rlusd": "0.02",
         "poll_interval_s": 60,
         "source_url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=8-K&output=atom",
     },
@@ -58,7 +58,7 @@ FEEDS = {
             "IPO registration statements and S-1/A amendments the moment they hit EDGAR. "
             "Early signal on new equity supply — priced weeks before IPO day."
         ),
-        "price_rlusd": "0.001",
+        "price_rlusd": "0.02",
         "poll_interval_s": 300,
         "source_url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=S-1&output=atom",
     },
@@ -69,7 +69,7 @@ FEEDS = {
             "stocks move 50–200% on approval or rejection. Sub-second delivery vs Bloomberg's "
             "5–10 minute lag. Polled every 5 min."
         ),
-        "price_rlusd": "0.001",
+        "price_rlusd": "0.02",
         "poll_interval_s": 300,
         "source_url": "https://api.fda.gov/drug/drugsfda.json",
     },
@@ -80,7 +80,7 @@ FEEDS = {
             "technology moats — granted patents indicate R&D direction and IP defensibility "
             "before analyst coverage."
         ),
-        "price_rlusd": "0.001",
+        "price_rlusd": "0.02",
         "poll_interval_s": 3600,
         "source_url": "https://api.patentsview.org/patents/query",
     },
@@ -415,32 +415,7 @@ def _poll_fda():
 
 
 def _poll_patents():
-    """Poll PatentsView for recent USPTO patent grants (last 14 days).
-
-    BROKEN as of 2026-07-30, confirmed root cause (not guessed): the legacy
-    open api.patentsview.org/patents/query endpoint this hits was
-    decommissioned 2026-06-05 -- USPTO migrated to the Open Data Portal
-    (data.uspto.gov), which requires a USPTO.gov account + MFA + a
-    self-generated API key ("Manage API Key" in the ODP nav). That account
-    creation is a manual step, not something fixable from code alone. The
-    ODP's API menu (Patent File Wrapper / Bulk Datasets / PTAB / Office
-    Actions) has no obvious 1:1 replacement for "recent grants search" either
-    -- picking one without checking would trade one wrong URL for another.
-    Fails safe already (caught, logged, retried every poll_interval_s); this
-    poller doesn't touch trading. Revisit once someone has an ODP API key and
-    has confirmed which new endpoint actually serves this data.
-
-    UPDATE 2026-07-30 (later same night): operator obtained a real
-    USPTO_ODP_API_KEY (see .env.example) -- but the rebuild is still deferred,
-    not done. This dev sandbox has api.uspto.gov network-policy-blocked
-    (confirmed via $HTTPS_PROXY/__agentproxy/status), so nothing could be
-    tested end-to-end, and the ODP transition-guide page shows BULK DATA
-    DOWNLOADS (periodic files), not an obvious live search endpoint -- the
-    real fix is likely a different poller shape (fetch + diff periodic bulk
-    files) rather than a URL swap. Key is stored and ready; do not wire a
-    guessed endpoint against it without verifying from an environment that can
-    actually reach api.uspto.gov (e.g. Render itself).
-    """
+    """Poll PatentsView for recent USPTO patent grants (last 14 days)."""
     seen: set = set()
     while True:
         try:

@@ -3,7 +3,6 @@ import json
 import queue
 import logging
 import time
-import threading
 from datetime import datetime
 from flask import Flask, Response, jsonify, redirect, url_for, send_from_directory, request
 from flask_cors import CORS
@@ -22,7 +21,6 @@ from core.api.premium_bp import premium_bp
 from core.api.relay_bp import relay_bp
 from core.api.webhook_bp import webhook_bp, start_webhook_engine
 from core.api.tradingview_webhook_bp import tradingview_webhook_bp
-from core.api.iam_pending_bp import iam_pending_bp
 from core.api.marketplace_bp import marketplace_bp
 from core.api.hiring_bp import hiring_bp
 from core.api.mcp_bp import mcp_bp
@@ -49,20 +47,6 @@ from core.api.sml_alert_bp import sml_alert_bp
 from core.api.smithery_bp import smithery_bp
 from core.api.oracle_engine_bp import oracle_engine_bp
 from core.api.iam_bp import iam_bp
-from core.api.imo_bp import imo_bp
-from core.api.orb_bp import orb_bp
-from core.api.druck_bp import druck_bp
-from core.api.cie_bp import cie_bp
-from core.api.breakout_bp import breakout_bp
-from core.api.sr_matrix_bp import sr_matrix_bp
-from core.api.sr_zone_pattern_bp import sr_zone_pattern_bp
-from core.api.gamma_pin_bp import gamma_pin_bp
-from core.api.squeeze_fuel_bp import squeeze_fuel_bp
-from core.api.mm_intel_bp import mm_intel_bp
-from core.api.sovereign_squeeze_bp import sovereign_squeeze_bp
-from core.api.quad_score_bp import quad_score_bp
-from core.api.paper_trades_bp import paper_trades_bp
-from core.api.position_manager_bp import position_manager_bp
 from core.api.vapl_bp import vapl_bp
 from core.vapl.middleware import install_vapl_middleware
 from core.api.macro741_bp import macro741_bp
@@ -81,18 +65,10 @@ from core.api.agent_economy_bp import agent_economy_bp
 from core.api.aeo_stripe_bp import aeo_stripe_bp
 from core.api.aeo_treasury_bp import aeo_treasury_bp
 from core.api.trade_desk_stripe_bp import trade_desk_stripe_bp
-from core.api.swarm_mm_bp import swarm_mm_bp
 from core.api.marketing_activity_bp import marketing_activity_bp
 from core.api.truth_bp import truth_bp
 from core.api.memory_bp import memory_bp
 from core.api.fred_bp import fred_bp
-from core.api.aws_marketplace_bp import aws_marketplace_bp, run_entitlements_self_check
-from core.api.grants_bp import grants_bp
-from core.api.gap_proposals_bp import gap_proposals_bp
-from core.api.outreach_bp import outreach_bp
-from core.api.settlement_router_bp import settlement_router_bp
-from core.api.delta_explosion_bp import delta_explosion_bp
-from core.api.deltaforge_bp import deltaforge_bp
 import core.signal_history as signal_history
 from core.legacy import start_whale_stalker, init_services, get_service, clean_data
 from core.market_graph import get_graph
@@ -144,8 +120,7 @@ def create_app():
     _cors_origins_env = os.environ.get(
         "CORS_ORIGINS",
         "https://scriptmasterlabs.com,https://www.scriptmasterlabs.com,"
-        "https://signal-auction-loom.vercel.app,https://squeezeos-api.onrender.com,"
-        "https://swarmagentsintelligence.scriptmasterlabs.com",
+        "https://signal-auction-loom.vercel.app,https://squeezeos-api.onrender.com",
     )
     _cors_origins = [o.strip() for o in _cors_origins_env.split(",") if o.strip()]
     CORS(app, origins=_cors_origins, supports_credentials=False)
@@ -174,7 +149,6 @@ def create_app():
     app.register_blueprint(relay_bp, url_prefix='/api/relay')
     app.register_blueprint(webhook_bp,     url_prefix='/api/webhooks')
     app.register_blueprint(tradingview_webhook_bp, url_prefix='/api/webhooks')
-    app.register_blueprint(iam_pending_bp, url_prefix='/api/webhooks')
     app.register_blueprint(marketplace_bp, url_prefix='/api/marketplace')
     app.register_blueprint(hiring_bp,     url_prefix='/api/hiring')
     app.register_blueprint(mcp_bp,        url_prefix='/mcp')
@@ -198,20 +172,6 @@ def create_app():
     app.register_blueprint(v2_bp, url_prefix='/api/v1', name='v2_bridge_v1')
     app.register_blueprint(oracle_engine_bp, url_prefix='/api/engine')
     app.register_blueprint(iam_bp,           url_prefix='/api/iam')
-    app.register_blueprint(imo_bp,           url_prefix='/api/imo')
-    app.register_blueprint(orb_bp,           url_prefix='/api/orb')
-    app.register_blueprint(druck_bp,         url_prefix='/api/druck')
-    app.register_blueprint(cie_bp,           url_prefix='/api/cie')
-    app.register_blueprint(breakout_bp,      url_prefix='/api/breakout')
-    app.register_blueprint(sr_matrix_bp,     url_prefix='/api/sr-matrix')
-    app.register_blueprint(sr_zone_pattern_bp, url_prefix='/api/sr-zone-pattern')
-    app.register_blueprint(gamma_pin_bp,     url_prefix='/api/gamma-pin')
-    app.register_blueprint(squeeze_fuel_bp,  url_prefix='/api/squeeze-fuel')
-    app.register_blueprint(mm_intel_bp,      url_prefix='/api/mm-intel')
-    app.register_blueprint(sovereign_squeeze_bp, url_prefix='/api/sovereign-squeeze')
-    app.register_blueprint(quad_score_bp,    url_prefix='/api/quad-score')
-    app.register_blueprint(paper_trades_bp,  url_prefix='/api/paper-trades')
-    app.register_blueprint(position_manager_bp, url_prefix='/api/positions/managed')
     app.register_blueprint(vapl_bp)
     app.register_blueprint(macro741_bp,        url_prefix='/api')
     app.register_blueprint(macro_bp,           url_prefix='/api')
@@ -230,19 +190,10 @@ def create_app():
     app.register_blueprint(aeo_stripe_bp)
     app.register_blueprint(aeo_treasury_bp,    url_prefix='/api/aeo')
     app.register_blueprint(trade_desk_stripe_bp)
-    # Swarm MM embed/proxy for Trade Desk (Swarm Agents Intelligence)
-    app.register_blueprint(swarm_mm_bp, url_prefix="/api/swarm-mm")
     app.register_blueprint(marketing_activity_bp, url_prefix='/api/marketing')
     app.register_blueprint(truth_bp,           url_prefix='/api/truth')
     app.register_blueprint(memory_bp,          url_prefix='/api/memory')
     app.register_blueprint(fred_bp,            url_prefix='/api/fred')
-    app.register_blueprint(aws_marketplace_bp, url_prefix='/api/aws-marketplace')
-    app.register_blueprint(grants_bp,          url_prefix='/api/grants')
-    app.register_blueprint(gap_proposals_bp,   url_prefix='/api/gap-proposals')
-    app.register_blueprint(outreach_bp,        url_prefix='/api/outreach')
-    app.register_blueprint(settlement_router_bp, url_prefix='/api/settlement-router')
-    app.register_blueprint(delta_explosion_bp, url_prefix='/api/delta-explosion')
-    app.register_blueprint(deltaforge_bp, url_prefix='/api/deltaforge')
 
     # Stellar Forge growth engine — feature-flagged, dormant unless enabled.
     # Registers the affiliate/loyalty/payout surface only when explicitly turned
@@ -259,118 +210,65 @@ def create_app():
         hit = any(r.startswith(kr) for r in registered)
         logger.info("[routes] %s → %s", kr, "REGISTERED" if hit else "MISSING ⚠")
 
-    # One-shot AWS Marketplace Entitlements self-check — fires a real
-    # GetEntitlements call at boot (once credentials are configured) so the
-    # first deploy after adding them produces the CloudTrail-visible
-    # successful call AWS's listing audit requires. No-ops (with a logged
-    # reason) until AWS_MARKETPLACE_* env vars are set. Runs in a background
-    # thread so a slow/unreachable AWS call never blocks startup.
-    threading.Thread(target=run_entitlements_self_check, daemon=True).start()
-
     if not _IS_SERVERLESS:
-        # CRITICAL: do NOT start scanners inline in create_app().
-        # Render healthCheckPath=/api/status times out after 5s. Starting
-        # 15+ scanners + pollers before return app blocks gunicorn bind and
-        # causes server_failed → restart thrash (looks like "cold start" on
-        # starter plan even though the service never sleeps).
-        # Defer all heavy boot into a daemon thread after a short settle so
-        # /api/status answers immediately on catalyst days (Fed/BOJ/JPY/Korea).
-        def _deferred_engine_boot():
-            try:
-                time.sleep(2.0)  # let gunicorn accept health checks first
-                logger.info("[boot] deferred engine start — health path already live")
+        # Start background market scanner
+        start_market_scanner()
 
-                start_market_scanner()
-                start_beastmode_scanner()
-                start_oracle_batch_scanner()
+        # Start background beastmode convergence scanner (cached, non-blocking)
+        start_beastmode_scanner()
 
-                from iam_scanner import start_iam_scanner
-                start_iam_scanner()
+        # Start background oracle batch scanner (cached, non-blocking — see
+        # core/oracle_engine.py for why /api/oracle needs this same treatment)
+        start_oracle_batch_scanner()
 
-                from imo_scanner import start_imo_scanner
-                start_imo_scanner()
+        # Start IAM background obligation scanner — dynamic top-N from market scanner
+        from iam_scanner import start_iam_scanner
+        start_iam_scanner()
 
-                from orb_scanner import start_orb_scanner
-                start_orb_scanner()
+        # Start webhook delivery engine (SSE tap + delivery workers)
+        start_webhook_engine()
 
-                from druck_scanner import start_druck_scanner
-                start_druck_scanner()
+        # Start 24/7 options anomaly crime solver
+        start_anomaly_engine()
 
-                from cie_scanner import start_cie_scanner
-                start_cie_scanner()
+        # Start institutional telemetry rotator (Goal 3)
+        start_telemetry_rotator()
 
-                from breakout_scanner import start_breakout_scanner
-                start_breakout_scanner()
+        # AEO/GEO background engines
+        start_citation_scout()
+        start_gap_detector()
 
-                from sr_matrix_scanner import start_sr_matrix_scanner
-                start_sr_matrix_scanner()
+        # Start Real-World Data Oracle pollers (SEC EDGAR, FDA, USPTO)
+        start_oracle_pollers()
 
-                from sr_zone_pattern_scanner import start_sr_zone_pattern_scanner
-                start_sr_zone_pattern_scanner()
+        # Start FTD Data Oracle pollers (SEC Reg SHO FTD + Threshold list)
+        start_ftd_pollers()
 
-                from gamma_pin_scanner import start_gamma_pin_scanner
-                start_gamma_pin_scanner()
+        # Start ShortSqueeze Swarm — FTD/Reg SHO anomaly detection + Discord alerts
+        from ftd_anomaly_engine import start_ftd_anomaly_engine
+        try:
+            from discord_alerts import DiscordAlerts
+            _discord_for_ftd = DiscordAlerts()
+        except Exception:
+            _discord_for_ftd = None
+        start_ftd_anomaly_engine(_discord_for_ftd)
 
-                from mm_intel_scanner import start_mm_intel_scanner
-                start_mm_intel_scanner()
+        # SML Triple Lock Scanner — market-wide 15-min bar scanner (GEO/ARI/MAC stacks)
+        from core.sml_tl_scanner import start_tl_scanner
+        start_tl_scanner()
 
-                from finra_short_data import start_finra_short_vol_poller
-                start_finra_short_vol_poller()
+        # SML Avg-Down Engine — automated pyramid builder on 5-layer EMA ribbon
+        from avg_down_engine import start_avg_down_engine
+        start_avg_down_engine()
 
-                from squeeze_fuel_scanner import start_squeeze_fuel_scanner
-                start_squeeze_fuel_scanner()
+        # SML Vault Engine — same pyramid strategy on crypto via CCXT, zero
+        # custody (operator's own exchange account only). No-ops with a log
+        # line if SML_EMA_PERIODS / SML_VAULT_SYMBOLS aren't configured.
+        from sml_vault_engine import start_vault_engine
+        start_vault_engine()
 
-                from sovereign_squeeze_scanner import start_sovereign_squeeze_scanner
-                start_sovereign_squeeze_scanner()
-
-                from quad_score_scanner import start_quad_score_scanner
-                start_quad_score_scanner()
-
-                # Active exit manager. Runs far faster than any scanner (15s vs
-                # 300s) because an EXIT is time-critical in a way an entry is
-                # not — and because before this existed nothing in the IAM path
-                # could close an options position at all. Manages only
-                # positions iam_executor itself opened; never adopts a
-                # manually-opened one.
-                from position_manager import start_position_manager
-                start_position_manager()
-
-                start_webhook_engine()
-                start_anomaly_engine()
-                start_telemetry_rotator()
-                start_citation_scout()
-                start_gap_detector()
-                start_oracle_pollers()
-                start_ftd_pollers()
-
-                from ftd_anomaly_engine import start_ftd_anomaly_engine
-                try:
-                    from discord_alerts import DiscordAlerts
-                    _discord_for_ftd = DiscordAlerts()
-                except Exception:
-                    _discord_for_ftd = None
-                start_ftd_anomaly_engine(_discord_for_ftd)
-
-                from core.sml_tl_scanner import start_tl_scanner
-                start_tl_scanner()
-
-                from avg_down_engine import start_avg_down_engine
-                start_avg_down_engine()
-
-                from sml_vault_engine import start_vault_engine
-                start_vault_engine()
-
-                _start_self_pinger()
-                logger.info("[boot] deferred engines online")
-            except Exception as e:
-                logger.critical("[boot] deferred engine start failed: %s", e, exc_info=True)
-
-        threading.Thread(
-            target=_deferred_engine_boot,
-            daemon=True,
-            name="deferred-engine-boot",
-        ).start()
-        logger.info("[boot] create_app returning — scanners deferred (health-check safe)")
+        # Self-pinger — keeps Render free-tier warm; pings own /api/status every 10 min
+        _start_self_pinger()
     
     @app.after_request
     def run_analytics(response):
@@ -384,6 +282,7 @@ def create_app():
     def add_security_headers(response):
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
         response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'DENY'
         response.headers['X-XSS-Protection'] = '1; mode=block'
         response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
         # style-src allows 'unsafe-inline' because the FTD dashboard and Agent
@@ -395,31 +294,7 @@ def create_app():
         # SVG, which default-src 'self' also blocks. Script sources remain
         # restricted to 'self' only -- this does not affect XSS protection
         # against injected scripts.
-        #
-        # Swarm MM desk panel is intentionally iframe-able from the Abacus
-        # Trade Desk + custom domain only. Global DENY stays for everything else.
-        path = (request.path or "").rstrip("/")
-        if path == "/api/swarm-mm/panel":
-            # ALLOW framing from desk origins; drop DENY so CSP frame-ancestors wins.
-            response.headers.pop("X-Frame-Options", None)
-            response.headers["Content-Security-Policy"] = (
-                "default-src 'self'; "
-                "style-src 'self' 'unsafe-inline'; "
-                "script-src 'self' 'unsafe-inline'; "
-                "img-src 'self' data:; "
-                "connect-src 'self'; "
-                "frame-ancestors 'self' "
-                "https://scriptmasterlabs.abacusai.app "
-                "https://swarmagentsintelligence.scriptmasterlabs.com "
-                "https://www.scriptmasterlabs.com "
-                "https://scriptmasterlabs.com "
-                "https://squeezeos-api.onrender.com"
-            )
-        else:
-            response.headers['X-Frame-Options'] = 'DENY'
-            response.headers['Content-Security-Policy'] = (
-                "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
-            )
+        response.headers['Content-Security-Policy'] = "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
         response.headers['Link'] = '<https://squeezeos-api.onrender.com/.well-known/agents.json>; rel="payment"'
         if 'text/html' in response.content_type:
             response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
@@ -435,49 +310,9 @@ def create_app():
     def internal_error(e):
         return jsonify({"error": "INTERNAL_ERROR", "message": "Server error"}), 500
 
-    # Root: browsers get the trading UI. Machine/agent clients get HTTP 402
-    # (or ?x402=1) so x402scan/Bazaar stop labeling bare / as "not paid".
-    # HTML must NEVER be locked behind a paywall — that bricks the product site.
     @app.route('/')
     def serve_index():
-        from flask import request, jsonify, make_response
-        accept = (request.headers.get('Accept') or '').lower()
-        ua = (request.headers.get('User-Agent') or '').lower()
-        want_html = 'text/html' in accept or ('mozilla' in ua and 'application/json' not in accept)
-        want_402 = str(request.args.get('x402', '')).strip() in ('1', 'true', 'yes')
-        if want_html and not want_402:
-            return send_from_directory(app.static_folder, 'index.html')
-        # Machine path — real x402 challenge (same guard as paid tools)
-        try:
-            from x402_flask import x402_guard
-            @x402_guard(
-                price_usdc="0.001",
-                description=(
-                    "SqueezeOS root discovery challenge — 62+ institutional MCP tools. "
-                    "Prefer live paid routes under /api and /mcp. "
-                    "x402 USDC on Base. SDVOSB | UEI G24VZA4RLMK3 | CAGE 21U51"
-                ),
-            )
-            def _root_402():
-                return jsonify({
-                    "service": "squeezeos-api",
-                    "paid": True,
-                    "mcp": "https://squeezeos-api.onrender.com/mcp",
-                    "discovery": "https://squeezeos-api.onrender.com/.well-known/x402",
-                    "note": "Payment verified. Use /mcp for tools.",
-                })
-            return _root_402()
-        except Exception:
-            # Fallback catalog if guard import fails — still points scanners correctly
-            return jsonify({
-                "service": "squeezeos-api",
-                "x402": True,
-                "price_floor_usdc": "0.001",
-                "mcp": "https://squeezeos-api.onrender.com/mcp",
-                "discovery": "https://squeezeos-api.onrender.com/.well-known/x402",
-                "paid_demo_url": "https://squeezeos-api.onrender.com/?x402=1",
-                "scanner_hint": "GET /?x402=1 or Accept: application/json → HTTP 402",
-            }), 200
+        return send_from_directory(app.static_folder, 'index.html')
 
     @app.route('/terminal')
     @app.route('/beastmode')
@@ -657,20 +492,7 @@ def create_app():
             mimetype='application/json'
         )
 
-    @app.route('/.well-known/amb.json')
-    def amb_json():
-        return jsonify({
-            'schema': 'amb/1.0',
-            'entity': 'scriptmasterlabs',
-            'pay_to': '0x72330994f379a71542e7bd5a4cf99a9d9743f4aa',
-            'beacons': [
-                {'tool_name': 'council_verdict', 'endpoint': 'https://squeezeos-api.onrender.com/x402/council-verdict', 'imp_score': 0.97, 'price_usdc': 0.001, 'network': 'base'},
-                {'tool_name': 'market_scan', 'endpoint': 'https://squeezeos-api.onrender.com/x402/market', 'imp_score': 0.95, 'price_usdc': 0.001, 'network': 'base'},
-                {'tool_name': 'options_intelligence', 'endpoint': 'https://squeezeos-api.onrender.com/x402/options-flow', 'imp_score': 0.94, 'price_usdc': 0.001, 'network': 'base'},
-                {'tool_name': 'fred_series', 'endpoint': 'https://squeezeos-api.onrender.com/x402/fred', 'imp_score': 0.93, 'price_usdc': 0.001, 'network': 'base'},
-                {'tool_name': 'rwa_scan', 'endpoint': 'https://squeezeos-api.onrender.com/x402/rwa-assets', 'imp_score': 0.92, 'price_usdc': 0.001, 'network': 'base'},
-            ]
-        })
+
 
     @app.route('/api/beast/events')
     def legacy_beast_events():
@@ -764,241 +586,31 @@ def create_app():
 
     _oracle_symbol_cache: dict = {}
     _ORACLE_SYMBOL_TTL = 20
-    # Live per-symbol analyze() fans out to gamma/regime/fractal/MMLE/etc and can
-    # hang past swarm/dashboard timeouts (Abicus polls /api/oracle/AMC → infinite spin).
-    # CRITICAL: never use `with ThreadPoolExecutor()` here — on TimeoutError its
-    # __exit__ calls shutdown(wait=True) and blocks until the hung analyze finishes
-    # (40s+), which is exactly the spin bug. Use a process-lifetime pool + wait=False.
-    _ORACLE_LIVE_ANALYZE_S = float(os.environ.get("ORACLE_LIVE_ANALYZE_S", "3"))
-    import concurrent.futures as _cf
-    _oracle_live_pool = _cf.ThreadPoolExecutor(max_workers=4, thread_name_prefix="oracle-live")
-
-    def _oracle_degraded(sym: str, reason: str) -> dict:
-        row = {
-            "symbol": sym,
-            "timestamp": datetime.now().isoformat(),
-            "directive": "SHIELD",
-            "confidence": 0,
-            "price": 0,
-            "reason": reason,
-            "sweet_spot": False,
-            "regime": "SHIELD",
-            "degraded": True,
-        }
-        return _oracle_enrich_trade_decision(row)
-
-    def _oracle_enrich_trade_decision(row: dict) -> dict:
-        """Attach real-money trade_decision to any oracle payload (live/cache/warming)."""
-        if not isinstance(row, dict):
-            return row
-        if row.get("trade_decision") and row.get("action") is not None:
-            return row
-        try:
-            from core.oracle_engine import OracleEngine
-            eng = OracleEngine({})
-            out = dict(row)
-            prop = out.get("proprietary_ema") or {}
-            out["effective_bias"] = eng._ema_bias(prop)
-            td = eng._build_trade_decision(out, prop)
-            out["trade_decision"] = td
-            out["tradeable"] = bool(td.get("tradeable"))
-            out["action"] = td.get("action") or "NO_TRADE"
-            return out
-        except Exception as e:
-            out = dict(row)
-            out["trade_decision"] = {
-                "action": "NO_TRADE",
-                "tradeable": False,
-                "blockers": [f"enrich_error:{type(e).__name__}"],
-                "headline": "NO_TRADE · enrich failed",
-                "note": str(e)[:200],
-                "effective_bias": "neutral",
-            }
-            out["tradeable"] = False
-            out["action"] = "NO_TRADE"
-            out["effective_bias"] = "neutral"
-            return out
-
-
-    @app.route('/api/desk/trade-ready', methods=['GET'])
-    @app.route('/api/desk/trade-ready/<symbol>', methods=['GET'])
-    def desk_trade_ready(symbol=None):
-        """Real-money trade card(s) for Abacus desk — prefers Oracle trade_decision."""
-        from flask import request, jsonify
-        from core.oracle_engine import OracleEngine, ORACLE_SYMBOLS, get_oracle_batch_cache
-        syms = []
-        if symbol:
-            syms = [symbol.upper()]
-        else:
-            q = (request.args.get('symbols') or '').strip()
-            if q:
-                syms = [s.strip().upper() for s in q.split(',') if s.strip()][:24]
-            else:
-                # default desk watchlist
-                syms = list(ORACLE_SYMBOLS)[:12] if ORACLE_SYMBOLS else ['AMC','GME','IWM','NVDA','SPY']
-        out = []
-        batch = get_oracle_batch_cache() or {}
-        batch_data = batch.get('symbols') or batch.get('data') or batch
-        if not isinstance(batch_data, dict):
-            batch_data = {}
-        for sym in syms:
-            row = None
-            # prefer in-process symbol cache (closure from outer app factory)
-            try:
-                cached = _oracle_symbol_cache.get(sym)
-            except Exception:
-                cached = None
-            if cached and isinstance(cached, dict) and cached.get('data'):
-                row = cached['data']
-            elif isinstance(batch_data, dict) and isinstance(batch_data.get(sym), dict):
-                row = batch_data.get(sym)
-            if not row:
-                # lightweight degraded card
-                row = {
-                    'symbol': sym, 'directive': 'SHIELD', 'confidence': 0, 'price': 0,
-                    'reason': 'No oracle cache yet', 'degraded': True,
-                    'proprietary_ema': {'consensus': 'NEUTRAL'},
-                }
-            # ensure trade_decision
-            if 'trade_decision' not in row:
-                try:
-                    eng = OracleEngine({})
-                    row = dict(row)
-                    row['effective_bias'] = eng._ema_bias(row.get('proprietary_ema') or {})
-                    row['trade_decision'] = eng._build_trade_decision(row, row.get('proprietary_ema') or {})
-                    row['tradeable'] = row['trade_decision'].get('tradeable')
-                    row['action'] = row['trade_decision'].get('action')
-                except Exception as e:
-                    row = dict(row)
-                    row['trade_decision'] = {
-                        'action': 'NO_TRADE', 'tradeable': False, 'blockers': [f'enrich_error:{e}'],
-                        'headline': 'NO_TRADE · enrich failed', 'note': str(e),
-                    }
-            td = row.get('trade_decision') or {}
-            out.append({
-                'symbol': sym,
-                'price': row.get('price'),
-                'directive': row.get('directive'),
-                'confidence': row.get('confidence'),
-                'effective_bias': row.get('effective_bias') or td.get('effective_bias'),
-                'action': td.get('action') or row.get('action') or 'NO_TRADE',
-                'tradeable': bool(td.get('tradeable')),
-                'headline': td.get('headline'),
-                'note': td.get('note') or row.get('reason'),
-                'blockers': td.get('blockers') or [],
-                'levels': td.get('levels') or {
-                    'stop': row.get('stop'), 'tp1': row.get('tp1'), 'tp2': row.get('tp2'),
-                },
-                'reason': row.get('reason'),
-            })
-        tradeable = [x for x in out if x.get('tradeable')]
-        return jsonify({
-            'status': 'success',
-            'count': len(out),
-            'tradeable_count': len(tradeable),
-            'min_confidence_env': __import__('os').environ.get('ORACLE_MIN_CONFIDENCE', '70'),
-            'cards': out,
-            'tradeable': tradeable,
-            'note': 'Only tradeable=true cards clear real-money gates. Demo UI equity is not a broker fill feed unless Tradier is linked in Abacus.',
-        })
 
     @app.route('/api/oracle', methods=['GET'])
     @app.route('/api/oracle/<symbol>', methods=['GET'])
     def oracle_signal(symbol=None):
-
         from core.oracle_engine import OracleEngine, ORACLE_SYMBOLS, get_oracle_batch_cache
         if symbol:
             sym = symbol.upper().strip()
             now = time.time()
-
-            # 1) Hot route-level cache (repeat polls 10–15s)
             cached = _oracle_symbol_cache.get(sym)
             if cached and (now - cached['ts']) < _ORACLE_SYMBOL_TTL:
-                return jsonify({
-                    "status": "success",
-                    "oracle": _oracle_enrich_trade_decision(cached['data']),
-                    "cache_age_s": round(now - cached['ts'], 1),
-                    "source": "route_cache",
-                })
+                return jsonify({"status": "success", "oracle": cached['data'], "cache_age_s": round(now - cached['ts'], 1)})
 
-            # 2) Background batch cache (same data as GET /api/oracle) — never block
-            batch = get_oracle_batch_cache()
-            batch_hit = (batch.get("results") or {}).get(sym)
-            if batch_hit and not (batch_hit.get("warming") and not batch_hit.get("price")):
-                # Real (or at least non-seed) payload — serve instantly
-                batch_hit = _oracle_enrich_trade_decision(batch_hit)
-                _oracle_symbol_cache[sym] = {"ts": now, "data": batch_hit}
-                age = round(now - batch["ts"], 1) if batch.get("ts") else None
-                return jsonify({
-                    "status": "success",
-                    "oracle": batch_hit,
-                    "cache_age_s": age,
-                    "stale": bool(batch.get("stale")),
-                    "source": "batch_cache",
-                })
-            # Warming seed only — return it immediately BUT do not pin route cache;
-            # also kick a live analyze so the next poll can upgrade.
-            if batch_hit:
-                try:
-                    services = {
-                        "dm":            get_service("dm"),
-                        "whale_stalker": get_service("whale_stalker"),
-                        "sml":           get_service("sml"),
-                    }
-                    _oracle_live_pool.submit(OracleEngine(services).analyze, sym)
-                except Exception:
-                    pass
-                age = round(now - batch["ts"], 1) if batch.get("ts") else None
-                return jsonify({
-                    "status": "success",
-                    "oracle": _oracle_enrich_trade_decision(batch_hit),
-                    "cache_age_s": age,
-                    "stale": True,
-                    "source": "batch_warming",
-                })
-
-            # 3) Symbol not in batch — fire-and-forget bounded live analyze.
-            #    Do NOT enter a context-managed executor (shutdown wait re-hangs).
+            # A fresh OracleEngine() is instantiated per request, so its internal
+            # per-field _cached() TTLs (core/oracle_engine.py) never actually persist
+            # across requests — this route-level cache is what makes repeated polls
+            # for the same symbol (dashboards typically poll every 10-15s) cheap.
             services = {
                 "dm":            get_service("dm"),
                 "whale_stalker": get_service("whale_stalker"),
                 "sml":           get_service("sml"),
             }
-
-            result = None
-            try:
-                fut = _oracle_live_pool.submit(OracleEngine(services).analyze, sym)
-                try:
-                    result = fut.result(timeout=_ORACLE_LIVE_ANALYZE_S)
-                except _cf.TimeoutError:
-                    # Cancel if still queued; if running, abandon — pool keeps going.
-                    fut.cancel()
-                    logger.warning(
-                        "[Oracle] live analyze timeout %ss for %s — degraded SHIELD (no wait)",
-                        _ORACLE_LIVE_ANALYZE_S, sym,
-                    )
-            except Exception as e:
-                logger.warning("[Oracle] live analyze error for %s: %s", sym, e)
-
-            if result is None:
-                result = _oracle_degraded(
-                    sym,
-                    f"Oracle live analyze timed out or failed for {sym}. "
-                    "Batch cache had no hit; retry shortly.",
-                )
-                # Short negative cache so swarm polls don't stampede live analyze
-                result = _oracle_enrich_trade_decision(result)
-                _oracle_symbol_cache[sym] = {"ts": now, "data": result}
-                return jsonify({
-                    "status": "success",
-                    "oracle": result,
-                    "source": "degraded_timeout",
-                    "timeout_s": _ORACLE_LIVE_ANALYZE_S,
-                }), 200
-
-            result = _oracle_enrich_trade_decision(result)
+            engine = OracleEngine(services)
+            result = engine.analyze(sym)
             _oracle_symbol_cache[sym] = {"ts": now, "data": result}
-            return jsonify({"status": "success", "oracle": result, "source": "live"})
+            return jsonify({"status": "success", "oracle": result})
         else:
             # Cached — see core/oracle_engine.py's background batch scanner. This used
             # to run run_oracle_batch() live on every request against the full dynamic
@@ -1008,13 +620,6 @@ def create_app():
             cache = get_oracle_batch_cache()
             results = cache["results"]
             batch_size = cache["universe_size"] or len(ORACLE_SYMBOLS)
-            # Money-path truth: live market quotes size (beastmode feed). Oracle
-            # batch can lag on ORACLE_SYMBOLS=3 while state.quotes is already 100+.
-            try:
-                live_quote_n = len(state.quotes) if state.quotes else 0
-            except Exception:
-                live_quote_n = 0
-            reported_universe = max(batch_size, live_quote_n)
             ranked = sorted(
                 [v for v in results.values() if v.get("directive") != "SHIELD"],
                 key=lambda x: x.get("confidence", 0), reverse=True
@@ -1024,9 +629,7 @@ def create_app():
                 "status": "success",
                 "master": master,
                 "symbols": results,
-                "universe_size": reported_universe,
-                "oracle_batch_size": batch_size,
-                "market_quote_size": live_quote_n,
+                "universe_size": batch_size,
                 "cache_age_s": round(time.time() - cache["ts"], 1) if cache["ts"] else None,
                 "stale": cache["stale"],
                 "timestamp": datetime.now().isoformat(),
@@ -1115,24 +718,14 @@ def create_app():
 
     _demo_cache: dict = {}
     _DEMO_TTL = 300
-    _DEMO_RETRY_TTL = 20   # short cache for the timeout-fallback path, so we retry soon instead of waiting a full 5 min
-    _DEMO_BUDGET_SEC = 15  # OracleEngine.analyze() shares a single rate-limited Tradier
-                            # client with the background market scanner (up to ~160 calls
-                            # per scan cycle, ~0.5s apart) — under contention analyze() can
-                            # block 60-120s+. The free demo endpoint must stay responsive
-                            # regardless, so it never waits past this budget.
-    import concurrent.futures
-    _demo_executor = concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix="demo-council")
 
     @app.route('/api/demo', methods=['GET'])
     @app.route('/api/demo/council', methods=['GET'])
     def demo_council():
         now = time.time()
         cached = _demo_cache.get('council')
-        if cached:
-            cache_ttl = cached.get('_cache_ttl_override', _DEMO_TTL)
-            if (now - cached.get('_cached_at', 0)) < cache_ttl:
-                return jsonify(cached)
+        if cached and (now - cached.get('_cached_at', 0)) < _DEMO_TTL:
+            return jsonify(cached)
         try:
             from core.oracle_engine import OracleEngine
             services = {
@@ -1141,43 +734,7 @@ def create_app():
                 "sml":           get_service("sml"),
             }
             engine = OracleEngine(services)
-            try:
-                data = _demo_executor.submit(engine.analyze, 'IWM').result(timeout=_DEMO_BUDGET_SEC)
-            except concurrent.futures.TimeoutError:
-                logger.warning(
-                    f"[DEMO] OracleEngine.analyze('IWM') exceeded {_DEMO_BUDGET_SEC}s budget "
-                    "(likely queued behind the background scanner's Tradier calls) — "
-                    "returning AWAITING_DATA instead of blocking the demo endpoint"
-                )
-                result = {
-                    "demo":       True,
-                    "status":     "AWAITING_DATA",
-                    "symbol":     "IWM",
-                    "verdict": {
-                        "symbol":     "IWM",
-                        "bias":       "NEUTRAL",
-                        "regime":     "UNKNOWN",
-                        "confidence": 0,
-                        "thesis":     ("Live engines are busy refreshing full-universe market data right now. "
-                                       "This is a transient state, not an outage — retry in ~20 seconds. The paid "
-                                       "/api/council endpoint returns AWAITING_DATA in the same shape — no charge "
-                                       "applies if data is not yet ready."),
-                        "timestamp":  now,
-                    },
-                    "engines": {},
-                    "note":       "Demo data — fixed symbol IWM, refreshed every 5 min. Real paid calls accept any symbol.",
-                    "next_refresh_seconds": _DEMO_RETRY_TTL,
-                    "upgrade": {
-                        "any_symbol":  "/api/council",
-                        "price_rlusd": "0.10",
-                        "gateway":     "https://four02proof.onrender.com",
-                        "includes":    ["any symbol", "live data", "full engine breakdown", "battle computer consensus"],
-                    },
-                    "_cached_at": now,
-                    "_cache_ttl_override": _DEMO_RETRY_TTL,
-                }
-                _demo_cache['council'] = result
-                return jsonify(result)
+            data   = engine.analyze('IWM')
             trend  = data.get('trend_score', 0) or 0
             regime = data.get('regime', 'UNKNOWN')
             bias   = 'BULLISH' if trend > 0.2 else 'BEARISH' if trend < -0.2 else 'NEUTRAL'
@@ -1230,76 +787,41 @@ def create_app():
 
     _preview_cache: dict = {}
     _PREVIEW_TTL = 900
-    _PREVIEW_LIVE_S = float(os.environ.get("PREVIEW_LIVE_ANALYZE_S", "3"))
 
     @app.route('/api/preview', methods=['GET'])
     @app.route('/api/preview/<symbol>', methods=['GET'])
     def signal_preview(symbol='IWM'):
-        """Free bias/regime preview. Never hang — batch oracle first, then bounded live."""
-        from core.oracle_engine import OracleEngine, get_oracle_batch_cache
         symbol = symbol.upper().strip()
         now = time.time()
         cached = _preview_cache.get(symbol)
-        if cached and (now - cached.get('ts', 0)) < _PREVIEW_TTL:
-            out = dict(cached)
-            out.pop('ts', None)
-            return jsonify(out)
-
-        data = None
-        source = "unknown"
-
-        # 1) Reuse oracle route cache / batch cache (instant)
-        oc = _oracle_symbol_cache.get(symbol)
-        if oc and (now - oc['ts']) < _ORACLE_SYMBOL_TTL:
-            data = oc['data']
-            source = "oracle_route_cache"
-        if data is None:
-            batch_hit = (get_oracle_batch_cache().get("results") or {}).get(symbol)
-            if batch_hit:
-                data = batch_hit
-                source = "oracle_batch_cache"
-
-        # 2) Bounded live analyze — same non-blocking pool as /api/oracle/{symbol}
-        if data is None:
-            try:
-                services = {
-                    "dm":            get_service("dm"),
-                    "whale_stalker": get_service("whale_stalker"),
-                    "sml":           get_service("sml"),
-                }
-                fut = _oracle_live_pool.submit(OracleEngine(services).analyze, symbol)
-                try:
-                    data = fut.result(timeout=_PREVIEW_LIVE_S)
-                    source = "live"
-                except _cf.TimeoutError:
-                    fut.cancel()
-                    source = "degraded_timeout"
-                    logger.warning("[Preview] analyze timeout %ss for %s", _PREVIEW_LIVE_S, symbol)
-            except Exception as e:
-                source = "error"
-                logger.warning("[Preview] analyze error for %s: %s", symbol, e)
-
-        if data is None:
-            bias, regime, conviction, top_signals = "NEUTRAL", "UNKNOWN", "LOW", []
-            degraded = True
-        else:
-            bias = data.get("bias") or data.get("directive", "NEUTRAL")
+        if cached and (now - cached['ts']) < _PREVIEW_TTL:
+            return jsonify(cached)
+        try:
+            from core.oracle_engine import OracleEngine
+            services = {
+                "dm":            get_service("dm"),
+                "whale_stalker": get_service("whale_stalker"),
+                "sml":           get_service("sml"),
+            }
+            engine = OracleEngine(services)
+            data   = engine.analyze(symbol)
+            bias   = data.get("bias") or data.get("directive", "NEUTRAL")
             regime = data.get("regime", "UNKNOWN")
-            trend_score = float(data.get("trend_score") or data.get("confidence") or 0) / (
-                100.0 if float(data.get("confidence") or 0) > 1 else 1.0
-            )
-            if abs(trend_score) > 0.8:
-                conviction = "EXTREME"
-            elif abs(trend_score) > 0.5:
-                conviction = "HIGH"
-            elif abs(trend_score) > 0.2:
-                conviction = "MODERATE"
-            else:
-                conviction = "LOW"
+            trend_score = data.get("trend_score", 0.0)
+            
+            # Determine Conviction Tier
+            if abs(trend_score) > 0.8: conviction = "EXTREME"
+            elif abs(trend_score) > 0.5: conviction = "HIGH"
+            elif abs(trend_score) > 0.2: conviction = "MODERATE"
+            else: conviction = "LOW"
+            
+            # Extract top signals
             signals = data.get("signals", [])
             top_signals = signals[:3] if isinstance(signals, list) else []
-            degraded = bool(data.get("degraded"))
-
+            
+        except Exception:
+            bias, regime, conviction, top_signals = "NEUTRAL", "UNKNOWN", "LOW", []
+            
         result = {
             "symbol":  symbol,
             "bias":    bias,
@@ -1307,9 +829,8 @@ def create_app():
             "conviction_tier": conviction,
             "top_signals_detected": len(top_signals),
             "top_signals_preview": top_signals,
+            "ts":      now,
             "preview": True,
-            "source": source,
-            "degraded": degraded,
             "upgrade": {
                 "full_verdict": "/api/council",
                 "price_rlusd":  "0.10",
@@ -1318,8 +839,7 @@ def create_app():
                 "view_example": "/api/council/example"
             },
         }
-        # cache including ts for TTL (stripped on read above via copy)
-        _preview_cache[symbol] = {**result, "ts": now}
+        _preview_cache[symbol] = result
         return jsonify(result)
 
     @app.route('/api/council/example', methods=['GET'])

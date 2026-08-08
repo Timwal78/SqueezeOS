@@ -101,13 +101,7 @@ def _fire_iam_discord(sym: str, result: dict):
             }]
         }
 
-        # Prefer dedicated IAM Obligations channel, then beast, then all
-        url = (
-            __import__("os").environ.get("DISCORD_WEBHOOK_IAM_OBLIGATIONS")
-            or __import__("os").environ.get("DISCORD_WEBHOOK_IAM")
-            or _discord.webhook_beast
-            or _discord.webhook_all
-        )
+        url = _discord.webhook_beast or _discord.webhook_all
         if url:
             _discord._post(url, payload)
     except Exception as e:
@@ -130,7 +124,7 @@ def _redact_obligation(block: dict) -> dict:
 
 @iam_bp.route("/<symbol>", methods=["GET"])
 @dual_payment(
-    price_usdc="0.001",
+    price_usdc="0.05",
     description=(
         "IAM Full Resolution — mandatory action the market is forced to take. "
         "Obligation committee (5 independent analysts) + Truth Layer + Action Resolution Oracle. "
@@ -182,23 +176,25 @@ def iam_resolve(symbol):
     except Exception:
         pass
 
-    # Fire Discord alert for actionable resolutions. INFO ONLY: confirmed with
-    # the account owner that a paying customer's query must never itself place
-    # a real order — that's the account owner's own iam_scanner.py background
-    # pass, gated through iam_executor.py's full safety stack. Previously this
-    # route also called execute_async() directly, so any paid query could
-    # trigger a real trade on this account regardless of who asked. Removed.
+    # Fire Discord alert + auto-execution for actionable resolutions
     try:
-        action = result["resolution"]["action"]
-        window = result["truth_layer"]["time_window"]
+        action     = result["resolution"]["action"]
+        window     = result["truth_layer"]["time_window"]
+        confidence = result["resolution"]["resolution_confidence"]
+        price      = float(result.get("price") or 0.0)
 
         if action in ("BUY", "SELL") and window in _URGENT_WINDOWS:
+            # Discord beast-channel alert
             threading.Thread(
                 target=_fire_iam_discord,
                 args=(sym, result),
                 daemon=True,
                 name=f"iam-discord-{sym}",
             ).start()
+
+            # Broker execution (Tradier + Robinhood alert) — gated by IAM_AUTO_TRADING
+            from iam_executor import execute_async
+            execute_async(sym, result["resolution"], window, confidence, price)
     except Exception:
         pass
 
@@ -252,7 +248,7 @@ def iam_truth(symbol):
         "iam_truth": result,
         "upgrade": {
             "full_resolution": f"/api/iam/{sym}",
-            "price_rlusd":     "0.001",
+            "price_rlusd":     "0.05",
             "includes":        [
                 "mandatory action (BUY/SELL/HOLD)",
                 "obligation committee breakdown",
@@ -394,7 +390,7 @@ def iam_stress_test():
         "timestamp": time.time(),
         "upgrade": {
             "full_resolution": "/api/iam/<symbol>",
-            "price_rlusd":     "0.001",
+            "price_rlusd":     "0.05",
             "gateway":         "https://four02proof.onrender.com",
         },
     }))

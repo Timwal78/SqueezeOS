@@ -324,60 +324,20 @@ def _fetch_closes(symbol: str) -> List[float]:
     """Pull daily closes for this symbol via Tradier. Returns [] on failure."""
     try:
         import tradier_api as ta
-        # tradier_api.get_history_df()'s `days` param is CALENDAR days, not
-        # trading days. BARS_NEEDED is a trading-day count (400, for the
-        # default 365-period L5 EMA) — passing it straight through as `days`
-        # under-fetched by ~30% (weekends + market holidays): a 420-calendar-day
-        # window only returns ~296-307 actual trading closes, which never
-        # satisfies _compute_layers()'s `len(closes) >= layers[-1]` (365) guard.
-        # That meant this engine's live scanner could never produce a single
-        # signal in production — _evaluate() always saw `lv is None` and
-        # returned early. tests/backtest_engines.py never caught this because
-        # it calls _evaluate() directly with real CSV bars, bypassing this
-        # fetch entirely. Convert with the NYSE trading-day ratio (~252/365)
-        # plus a buffer so the requested window reliably contains enough bars.
-        calendar_days = int((BARS_NEEDED + 20) * 365 / 252) + 30
-        df = ta.get_history_df(symbol, days=calendar_days)
+        df = ta.get_history_df(symbol, days=BARS_NEEDED + 20)
         if df is None or df.empty:
             return []
-        # tradier_api.get_history_df() renames the raw "close" column to
-        # "Close" (capitalized) before returning. The lowercase check here
-        # never matched, so this silently fell back to df.columns[-1] --
-        # which is "Volume", not price. Every close this engine ever read
-        # was actually a share-volume count (routinely in the millions),
-        # producing garbage EMAs and, once _fetch_closes() started
-        # returning enough bars (see the calendar/trading-day fix above),
-        # real live entries priced at literal millions of dollars per share
-        # (confirmed in production logs 2026-07-29: e.g. "ENTER AMIX @
-        # 69739502.0000"). This bug predates that fix and was dormant only
-        # because _compute_layers() never had enough bars to run before.
-        col = "Close" if "Close" in df.columns else ("close" if "close" in df.columns else df.columns[-1])
+        col = "close" if "close" in df.columns else df.columns[-1]
         return df[col].dropna().tolist()
     except Exception as e:
         logger.debug(f"[AVG-DOWN] fetch_closes failed {symbol}: {e}")
         return []
 
 
-def _scan_top_n() -> int:
-    """
-    Max symbols pulled from the market scanner's top-volume universe when
-    AVG_DOWN_SYMBOLS isn't set. 0 or negative = unlimited (every quoted
-    symbol the scanner currently has). Default 40 preserved for anyone who
-    hasn't set this — same "configurable, not hardcoded" pattern as every
-    other scanner's *_SCAN_TOP_N (breakout/cie/druck/gamma_pin/imo/
-    mm_intel/orb/sr_matrix).
-    """
-    try:
-        return int(os.environ.get("AVG_DOWN_SCAN_TOP_N", "40"))
-    except ValueError:
-        return 40
-
-
 def _get_symbols() -> List[str]:
     """
     Symbol universe: AVG_DOWN_SYMBOLS env var (comma-separated) takes priority.
-    Falls back to market scanner's top-volume universe, capped by
-    AVG_DOWN_SCAN_TOP_N (default 40, 0/negative = unlimited).
+    Falls back to market scanner's top-volume universe.
     """
     raw = os.environ.get("AVG_DOWN_SYMBOLS", "").strip()
     if raw:
@@ -387,8 +347,7 @@ def _get_symbols() -> List[str]:
         with _scan_lock:
             quotes = dict(_scan_cache.get("quotes", {}))
         ranked = sorted(quotes.items(), key=lambda kv: kv[1].get("volRatio", 0), reverse=True)
-        top_n = _scan_top_n()
-        return [sym for sym, _ in (ranked if top_n <= 0 else ranked[:top_n])]
+        return [sym for sym, _ in ranked[:40]]
     except Exception:
         return []
 
@@ -463,14 +422,11 @@ def _route_iam(symbol: str, sig: dict):
         ftd_suffix = f" | FTD ECHO {echo_src}" if ftd_echo else ""
 
         # FTD settlement echo in the deploy zone raises conviction +10
-        # Floor 76 so CASCADE clears IAM_MIN_CONFIDENCE=75 on thin align;
-        # align_score 0..4 still scales conviction up to 95.
-        base_conf  = 76.0 + sig["align_score"] * 4.0
+        base_conf  = 65.0 + sig["align_score"] * 5.0
         confidence = min(95.0, base_conf + (10.0 if ftd_echo else 0.0))
 
         resolution = {
             "action":    "BUY",
-            "system":    "SML_CASCADE",
             "rationale": (
                 f"[AVG-DOWN {sig['action']} L{sig['level']} align={sig['align_score']}/4"
                 f"{ftd_suffix}] "

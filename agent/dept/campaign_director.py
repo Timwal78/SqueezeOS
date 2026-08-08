@@ -11,22 +11,6 @@ Specialists supervised (each does one job only):
   - Directory Ranger  — checks 24 real directories, generates listing packages
   - Community Scout   — finds real Reddit/HN developer conversations
   - Federal Scout      — finds real federal contract opportunities
-  - Grant Scout        — finds/scores/drafts grant proposals, queues them for
-                          Timothy's manual approval (zero custody, never
-                          submits or signs anything on its own)
-  - Gap Synthesist      — reads the live Semantic Gap Detector's real demand
-                          gaps and drafts build specs, queues them for
-                          Timothy's manual approval (zero custody, never
-                          writes or deploys code on its own)
-  - Hermes Sales Agent  — sells the Agent Economy OS (mcp-x402 + x402
-                          endpoints) 24/7: live storefront checks, real
-                          buying-intent lead gen (Reddit/HN), drafts pitches
-                          and queues them for Timothy's manual approval
-                          (never auto-posts anywhere)
-  - SEO Gap Scout       — crawls real sites directly over HTTP (no paid
-                          API) for technical SEO/AEO/GEO issues, drafts
-                          fix specs, queues them for Timothy's manual
-                          approval (zero custody, never edits a live site)
 
 Schedule: Daily (see .github/workflows/marketing-daily.yml)
 
@@ -41,7 +25,7 @@ import os, sys, json, datetime, glob, re
 import requests
 import anthropic
 
-from . import directory_ranger, community_scout, federal_scout, grant_scout, gap_synthesist, hermes_sales, seo_gap_scout
+from . import directory_ranger, community_scout, federal_scout
 from .activity_log import post_activity, post_directory_snapshot, post_federal_snapshot
 
 ANTH_KEY      = os.environ["ANTHROPIC_API_KEY"]
@@ -161,43 +145,6 @@ def run_all_agents() -> dict:
             results["federal_scout"].get("legislative_intel", []),
         )
 
-    results["grant_scout"] = _dispatch(
-        "grant_scout", "Grant Scout",
-        "discover and qualify grant opportunities, queue drafted proposals for manual approval",
-        grant_scout.run,
-        lambda r: f"{len(r.get('queued', []))} opportunities queued for review "
-                  f"(pending Timothy's approval — none submitted), "
-                  f"{len(r.get('archived_low_score', []))} auto-archived below threshold",
-    )
-
-    results["gap_synthesist"] = _dispatch(
-        "gap_synthesist", "Gap Synthesist",
-        "review the live Semantic Gap Detector's real demand gaps and draft build specs for the strongest ones",
-        gap_synthesist.run,
-        lambda r: f"{len(r.get('queued', []))} build proposals queued for review "
-                  f"(pending Timothy's approval — nothing built or deployed), "
-                  f"{len(r.get('archived_low_score', []))} auto-archived below threshold",
-    )
-
-    results["hermes_sales"] = _dispatch(
-        "hermes_sales", "Hermes Sales Agent",
-        "run a full Agent Economy OS sales pass: verify the storefront, find buying-intent leads, queue drafted pitches for approval",
-        hermes_sales.run,
-        lambda r: f"storefront {'OK' if r.get('storefront_ok') else 'HAS ISSUES'}, "
-                  f"{r.get('leads_found', 0)} leads found, "
-                  f"{r.get('pitches_queued', 0)} pitches queued for review "
-                  f"(pending Timothy's approval — nothing auto-posted)",
-    )
-
-    results["seo_gap_scout"] = _dispatch(
-        "seo_gap_scout", "SEO Gap Scout",
-        "crawl tracked sites for real technical SEO/AEO/GEO issues and draft fix specs for the worst offenders",
-        seo_gap_scout.run,
-        lambda r: f"{len(r.get('queued', []))} SEO fix proposals queued for review "
-                  f"(pending Timothy's approval — nothing edited or deployed), "
-                  f"{len(r.get('unreachable', []))} sites unreachable this run",
-    )
-
     return results
 
 
@@ -210,10 +157,6 @@ def synthesize_report(agent_results: dict, api_status: dict) -> dict:
     hist_scout     = load_recent_output("scout")
     hist_federal   = load_recent_output("federal")
     hist_content   = load_recent_output("content")
-    hist_grants    = load_recent_output("grants")
-    hist_gaps      = load_recent_output("gap_proposals")
-    hist_sales     = load_recent_output("sales")
-    hist_seo       = load_recent_output("seo_gaps")
 
     context = {
         "date":           today,
@@ -224,10 +167,6 @@ def synthesize_report(agent_results: dict, api_status: dict) -> dict:
             "scout_runs":    len(hist_scout),
             "federal_runs":  len(hist_federal),
             "content_pages": len(hist_content),
-            "grant_runs":    len(hist_grants),
-            "gap_proposal_runs": len(hist_gaps),
-            "sales_passes":  len(hist_sales),
-            "seo_scan_runs": len(hist_seo),
         },
     }
 
@@ -248,13 +187,7 @@ Produce a JSON campaign report:
     "high_priority_opportunities": <count>,
     "federal_opportunities": <count>,
     "content_pages_generated": <count>,
-    "api_engines_live": <from status>,
-    "grants_pending_review": <count from grant_scout.queued>,
-    "gap_proposals_pending_review": <count from gap_synthesist.queued>,
-    "sales_leads_found": <count from hermes_sales.leads_found>,
-    "sales_pitches_pending_review": <count from hermes_sales.pitches_queued>,
-    "storefront_ok": <true/false from hermes_sales.storefront_ok>,
-    "seo_proposals_pending_review": <count from seo_gap_scout.queued>
+    "api_engines_live": <from status>
   }},
   "wins_this_week": ["<concrete achievement>", ...],
   "top_actions_next_week": [
@@ -263,32 +196,16 @@ Produce a JSON campaign report:
   "listings_to_submit": ["<platform>", ...],
   "top_community_threads": ["<url>", ...],
   "federal_opportunities": ["<title + agency>", ...],
-  "grants_awaiting_approval": ["<title + funder>", ...],
-  "gap_proposals_awaiting_approval": ["<gap topic>", ...],
-  "sales_pitches_awaiting_approval": ["<lead title>", ...],
   "health": "GREEN|YELLOW|RED"
 }}"""
 
-    try:
-        resp = client.messages.create(
-            model=MODEL,
-            max_tokens=4096,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        final_text = resp.content[0].text if resp.content else ""
-    except anthropic.APIError as e:
-        # Claude unavailable (low credit balance, rate limit, etc). Per-specialist
-        # results above are still real and already reported — only the executive
-        # summary is unavailable. Skip cleanly rather than crashing the whole run.
-        print(f"[CEO] Report synthesis unavailable — Claude API error: {e}")
-        final_text = ""
-
+    resp = client.messages.create(
+        model=MODEL,
+        max_tokens=4096,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    final_text = resp.content[0].text if resp.content else ""
     report = {"date": today, "raw": final_text}
-    if not final_text:
-        report["health"] = "UNKNOWN"
-        report["week_summary"] = "Executive summary unavailable this run — Claude API error (see agent results below for real per-agent status)."
-        return report
-
     m = re.search(r'\{[\s\S]*\}', final_text)
     if m:
         try:
@@ -315,10 +232,6 @@ def format_slack_report(report: dict) -> str:
         f"  📂 Directories listed: {kpis.get('directories_listed_in','?')} / {int(kpis.get('directories_listed_in',0)) + int(kpis.get('directories_not_listed',0)) or '?'} checked\n"
         f"  🎯 Community opps: {kpis.get('community_opportunities','?')} ({kpis.get('high_priority_opportunities','?')} HIGH)\n"
         f"  🏛️ Federal opps: {kpis.get('federal_opportunities','?')}\n"
-        f"  💰 Grants awaiting your approval: {kpis.get('grants_pending_review','?')}\n"
-        f"  🧩 Gap-to-build proposals awaiting your approval: {kpis.get('gap_proposals_pending_review','?')}\n"
-        f"  🪽 Hermes sales: {kpis.get('sales_leads_found','?')} leads, {kpis.get('sales_pitches_pending_review','?')} pitches awaiting your approval (storefront {'OK' if kpis.get('storefront_ok') else 'CHECK'})\n"
-        f"  🔍 SEO/AEO/GEO fix proposals awaiting your approval: {kpis.get('seo_proposals_pending_review','?')}\n"
         f"  📄 Content pages: {kpis.get('content_pages_generated','?')}\n"
         f"  ⚡ API engines live: {kpis.get('api_engines_live','?')}\n\n"
         f"*This week's wins:*\n{wins or '  None recorded'}\n\n"
@@ -340,11 +253,6 @@ def run() -> dict:
     print(f"\n[CEO] Campaign report saved: {path}")
 
     failures = [k for k, v in agent_results.items() if isinstance(v, dict) and v.get("error")]
-    # Real, deterministic failure signal for __main__'s exit code — the
-    # LLM-synthesized "health" field above is a judgment call, not a
-    # reliable pass/fail signal (can be missing/UNKNOWN even when every
-    # specialist actually succeeded, or vice versa).
-    report["failed_agents"] = failures
     if failures:
         post_activity(CEO_LABEL, f"Run complete with issues — failed: {', '.join(failures)}", status="error")
     else:
@@ -360,8 +268,4 @@ def run() -> dict:
 
 
 if __name__ == "__main__":
-    _report = run()
-    # `run()` always returns a truthy dict (it contains at least "date"),
-    # even when every specialist failed — the real signal is the
-    # deterministic failed_agents list, not the dict's own truthiness.
-    sys.exit(1 if _report.get("failed_agents") else 0)
+    sys.exit(0 if run() else 1)

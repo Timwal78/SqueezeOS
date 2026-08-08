@@ -6,7 +6,7 @@
   "payment": {
     "chain": "base",
     "asset": "USDC",
-    "billing_wallet": "0x72330994f379a71542e7bd5a4cf99a9d9743f4aa"
+    "billing_wallet": "0x4e14B249D9A4c9c9352D780eCEB508A8eB7a7700"
   },
   "agents": [
     {

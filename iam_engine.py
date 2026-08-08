@@ -44,13 +44,11 @@ _AMM_EPS = 1e-6
 # Liquidity + Dealer dominate (74%) — matches market microstructure reality.
 # Volatility de-weighted (lagging indicator; release follows, not leads, action).
 _COMMITTEE_WEIGHTS = {
-    "volatility":        0.10,   # vol compression/release — leading but noisy
-    "liquidity":         0.28,   # bid/ask + order flow imbalance
-    "dealer":            0.28,   # gamma wall proximity + VPIN toxicity
-    "mean_reversion":    0.10,   # z-score distance from SMA — reversion pull
-    "structural":        0.06,   # 52-week boundary proximity
-    "market_maker":      0.18,   # MMLE: TNT state + VPIN z + Axis Collapse + walls
-    # Total = 1.00
+    "volatility":     0.08,
+    "liquidity":      0.35,
+    "dealer":         0.38,
+    "mean_reversion": 0.12,
+    "structural":     0.07,
 }
 
 # Stress reduction projections: how much each action reduces each obligation.
@@ -65,7 +63,6 @@ _STRESS_REDUCTION_MAP = {
         "dealer":         0.82,   # resolves short-gamma dealer hedge obligation
         "mean_reversion": 0.92,   # maximally effective when price is below EMA
         "structural":     0.72,   # resolves floor structural accumulation
-        "market_maker":   0.90,   # TNT_LONG fire = full MM obligation discharged
     },
     "SELL": {
         "volatility":     0.55,
@@ -73,7 +70,6 @@ _STRESS_REDUCTION_MAP = {
         "dealer":         0.80,   # resolves long-gamma dealer hedge obligation
         "mean_reversion": 0.90,   # maximally effective when price is above EMA
         "structural":     0.70,   # resolves ceiling structural distribution
-        "market_maker":   0.90,   # TNT_SHORT fire = full MM obligation discharged
     },
     "HOLD": {
         "volatility":     0.12,   # time decay slowly releases minor compression
@@ -81,7 +77,6 @@ _STRESS_REDUCTION_MAP = {
         "dealer":         0.30,   # passive gamma decay reduces hedge urgency
         "mean_reversion": 0.38,   # time-based drift allows partial reversion
         "structural":     0.28,   # gradual structural normalization
-        "market_maker":   0.15,   # compressed MM state partially self-resolves over time
     },
 }
 
@@ -307,12 +302,7 @@ class LiquidityObligationAnalyst:
         confidence = 70.0 if price > 0 and bid > 0 else 40.0
 
         return _ObligationResult(
-            # FIX: previously hardcoded 70.0 here instead of the `confidence`
-            # variable computed two lines above, so a missing/zero bid still
-            # reported full 70% confidence — overstating this analyst's
-            # reliability exactly when it's least reliable, and inflating its
-            # weight in ActionResolutionOracle's BUY/SELL tie-break vote.
-            "liquidity", pressure, implied_dir, confidence, label, raw_stress,
+            "liquidity", pressure, implied_dir, 70.0, label, raw_stress,
             detail={
                 "spread_pct":      round(spread_pct, 4),
                 "spread_stress":   round(spread_stress, 3),
@@ -569,93 +559,6 @@ class StructuralBoundsAnalyst:
         )
 
 
-class MarketMakerObligationAnalyst:
-    """
-    Measures Market Maker (MM) positioning obligation via SML Market Maker Intelligence™ v4.
-
-    Core insight: Market Makers are never neutral. Their hedging book creates
-    a structural obligation that can be read via:
-      - Kalman Inventory Z (inv_z) → Kalman-filtered inventory absorption (Q & R independent)
-      - Flow Quality              → Institutional absorption (0.9) vs conviction flow (0.8)
-      - HJB Optimal Hedge Z       → Riccati steady-state optimal hedge rate
-      - Total Gamma Pressure      → Dealer gamma proxy & strike pin detection
-      - MM v4 Critical Signals    → Forced MM long/short hedge signals with confidence & invalidation level
-
-    Inputs (live):
-      - bars:        OHLCV list
-      - quote:       live quote dict for price
-      - mmle_result: optional precomputed dict
-    """
-
-    def analyze(
-        self,
-        symbol: str,
-        bars: list,
-        quote: dict,
-        mmle_result: dict = None,
-    ) -> _ObligationResult:
-        price = float(quote.get("price") or 0)
-
-        # Execute MM v4 Engine
-        mm_v4_res = {}
-        try:
-            from mm_v4_engine import MMv4Engine
-            v4_engine = MMv4Engine(sensitivity="Normal")
-            mm_v4_res = v4_engine.analyze(symbol, bars)
-        except Exception as e:
-            logger.warning(f"[IAM-MMv4] MM v4 engine error for {symbol}: {e}")
-
-        # Extract v4 indicators
-        inv_z = mm_v4_res.get("inv_z", 0.0)
-        abs_inv_z = mm_v4_res.get("abs_inv_z", 0.0)
-        flow_quality = mm_v4_res.get("flow_quality", 0.3)
-        total_gamma_pressure = mm_v4_res.get("total_gamma_pressure", 0.0)
-        long_signal = mm_v4_res.get("long_signal", False)
-        short_signal = mm_v4_res.get("short_signal", False)
-        control_action = mm_v4_res.get("control_action", False)
-        signal_confidence = mm_v4_res.get("signal_confidence", 0.0)
-        invalidation_level = mm_v4_res.get("invalidation_level")
-        nearest_strike = mm_v4_res.get("nearest_strike")
-
-        # ── Raw Stress Computation (MM v4 Formula) ─────────────────────────
-        # Combines inventory Z-score, gamma pressure, and flow quality
-        if long_signal or short_signal:
-            raw_stress = 0.95  # Maximum forced hedging obligation active
-            label = "MM_V4_FORCED_BUY" if long_signal else "MM_V4_FORCED_SELL"
-            implied_dir = "BUY" if long_signal else "SELL"
-        elif control_action:
-            raw_stress = 0.85
-            label = "MM_V4_CONTROL_ACTION"
-            implied_dir = "SELL" if inv_z > 0 else "BUY"
-        elif abs_inv_z > 1.5:
-            raw_stress = min(1.0, (abs_inv_z / 3.0) * 0.7 + (total_gamma_pressure / 2.0) * 0.3)
-            label = "MM_V4_STRESS_BUILDING"
-            implied_dir = "SELL" if inv_z > 0 else "BUY"
-        else:
-            raw_stress = min(1.0, (abs_inv_z / 3.0) * 0.5)
-            label = "MM_V4_BALANCED"
-            implied_dir = "NEUTRAL"
-
-        pressure = _amm_pressure(raw_stress)
-        confidence = max(50.0, min(99.0, signal_confidence if (long_signal or short_signal) else (50.0 + flow_quality * 30.0)))
-
-        return _ObligationResult(
-            "market_maker", pressure, implied_dir, confidence, label, raw_stress,
-            detail={
-                "engine_version": "SML_MM_v4",
-                "inv_z": inv_z,
-                "flow_quality": flow_quality,
-                "total_gamma_pressure": total_gamma_pressure,
-                "long_signal": long_signal,
-                "short_signal": short_signal,
-                "control_action": control_action,
-                "signal_confidence": signal_confidence,
-                "invalidation_level": invalidation_level,
-                "nearest_strike": nearest_strike,
-            }
-        )
-
-
 # ── Truth Layer ───────────────────────────────────────────────────────────────
 
 class TruthLayer:
@@ -828,16 +731,8 @@ class ActionResolutionOracle:
             action, symbol, price, dominant, analyst_results
         )
 
-        # Tag MM-v4-dominated resolutions so IAM_PRIMARY_SYSTEM=SML_MM_V4
-        # can broker-execute them (untagged defaults to "IAM" and gets blocked).
-        sys_tag = "SML_MM_V4" if (
-            getattr(dominant, "name", "") == "market_maker"
-            or "MM_V4" in str(getattr(dominant, "label", "") or "")
-        ) else "IAM"
-
         return {
             "action":          action,
-            "system":          sys_tag,
             "rationale":       rationale,
             "vehicle":         vehicle,
             "invalidation":    invalidation,
@@ -860,7 +755,6 @@ class ActionResolutionOracle:
             "dealer":         "Dealer inventory neutralization",
             "mean_reversion": "Mean reversion",
             "structural":     "Structural boundary resolution",
-            "market_maker":   "Market Maker repositioning",
         }
         obligation_name = name_map.get(dominant.name, dominant.name)
 
@@ -900,35 +794,13 @@ class ActionResolutionOracle:
         return vehicle, invalidation, review_trigger
 
     def _resolution_confidence(self, stress_reduction, analyst_results, action) -> float:
-        # FIX: this previously counted every analyst equally, and counted any
-        # NEUTRAL analyst as fully "aligned" with WHATEVER action was chosen
-        # (it can never disagree). Combined with a stress_reduction term that
-        # saturated past 30 — trivially true for nearly any real IMMEDIATE/
-        # NEAR_TERM BUY or SELL — both halves maxed out on almost every
-        # actionable signal, which is why resolution_confidence read ~99% on
-        # nearly every fired alert regardless of how strong or marginal the
-        # case actually was, and why IAM_MIN_CONFIDENCE=70 wasn't filtering
-        # anything in practice.
-        #
-        # This version weights alignment by each analyst's OWN confidence
-        # (data quality / sample sufficiency, already computed by every
-        # analyst and previously discarded here) instead of counting every
-        # analyst as equal regardless of how much real data backed it, and
-        # widens the stress_reduction denominator so only genuinely large,
-        # well-supported reductions reach the top of that half. Generic over
-        # however many analysts are actually in analyst_results.
-        total_conf = sum(r.confidence for r in analyst_results.values())
-        if total_conf <= 0:
-            alignment_score = 0.0
-        else:
-            aligned_conf = sum(
-                r.confidence for r in analyst_results.values()
-                if r.implied_direction == action or r.implied_direction == "NEUTRAL"
-            )
-            alignment_score = aligned_conf / total_conf
-
-        stress_term = min(50.0, (stress_reduction / 60.0) * 50.0)
-        confidence = min(99, stress_term + alignment_score * 50)
+        aligned = sum(
+            1 for r in analyst_results.values()
+            if r.implied_direction == action or r.implied_direction == "NEUTRAL"
+        )
+        total = len(analyst_results)
+        alignment_score = (aligned / total) if total > 0 else 0
+        confidence = min(99, (stress_reduction / 30) * 50 + alignment_score * 50)
         return round(confidence, 1)
 
     def _no_action(self, symbol, price, truth, reason) -> dict:
@@ -971,14 +843,13 @@ class IAMEngine:
         self._cache: dict = {}
         self._cache_ttl = 45  # seconds — faster than OracleEngine for time-sensitive obligations
 
-        self._vol_analyst    = VolatilityObligationAnalyst()
-        self._liq_analyst    = LiquidityObligationAnalyst()
+        self._vol_analyst   = VolatilityObligationAnalyst()
+        self._liq_analyst   = LiquidityObligationAnalyst()
         self._dealer_analyst = DealerInventoryAnalyst()
-        self._mr_analyst     = MeanReversionAnalyst()
+        self._mr_analyst    = MeanReversionAnalyst()
         self._struct_analyst = StructuralBoundsAnalyst()
-        self._mm_analyst     = MarketMakerObligationAnalyst()   # 6th analyst — MMLE bridge
-        self._truth_layer    = TruthLayer()
-        self._oracle         = ActionResolutionOracle()
+        self._truth_layer   = TruthLayer()
+        self._oracle        = ActionResolutionOracle()
 
     def _get_service(self, name):
         return self.services.get(name)
@@ -1039,22 +910,16 @@ class IAMEngine:
             logger.warning(f"[IAM] Gamma walls unavailable for {symbol}: {e}")
             return {}
 
-    def _fetch_mmle(self, symbol: str, bars: list) -> dict:
-        """Fetch full MMLE result — used by both DealerAnalyst (VPIN) and MarketMakerAnalyst."""
+    def _fetch_vpin(self, symbol: str, bars: list) -> float:
         try:
             from mmle_engine import MMLeEngine
             if not bars:
-                return {}
+                return 0.0
             mmle = MMLeEngine()
-            return mmle.analyze(symbol, bars[-60:] if len(bars) > 60 else bars)
-        except Exception as e:
-            logger.warning(f"[IAM] MMLE fetch failed for {symbol}: {e}")
-            return {}
-
-    def _fetch_vpin(self, symbol: str, bars: list) -> float:
-        """Extract VPIN float from cached MMLE result."""
-        mmle = self._cache.get(f"mmle_{symbol}", {}).get("data", {})
-        return float(mmle.get("vpin") or 0.0)
+            result = mmle.analyze(symbol, bars[-60:] if len(bars) > 60 else bars)
+            return float(result.get("vpin", 0.0))
+        except Exception:
+            return 0.0
 
     def resolve(self, symbol: str) -> dict:
         """
@@ -1090,10 +955,9 @@ class IAMEngine:
                 }
             }
 
-        # 2. Fetch supporting data (MMLE full result → VPIN, gamma walls)
-        mmle_result = self._cached(f"mmle_{symbol}",  lambda: self._fetch_mmle(symbol, bars),            ttl=60)
-        gamma_walls = self._cached(f"gamma_{symbol}", lambda: self._fetch_gamma_walls(symbol, price),    ttl=90)
-        vpin        = float(mmle_result.get("vpin") or 0.0)
+        # 2. Fetch supporting data (gamma walls, VPIN)
+        gamma_walls = self._cached(f"gamma_{symbol}", lambda: self._fetch_gamma_walls(symbol, price), ttl=90)
+        vpin        = self._cached(f"vpin_{symbol}",  lambda: self._fetch_vpin(symbol, bars),         ttl=60)
 
         # 3. Run independent obligation analysts (NO cross-communication)
         vol_result    = self._vol_analyst.analyze(symbol, bars, quote)
@@ -1101,7 +965,6 @@ class IAMEngine:
         dealer_result = self._dealer_analyst.analyze(symbol, bars, quote, gamma_walls, vpin)
         mr_result     = self._mr_analyst.analyze(symbol, bars, quote)
         struct_result = self._struct_analyst.analyze(symbol, bars, quote)
-        mm_result     = self._mm_analyst.analyze(symbol, bars, quote, mmle_result)   # 6th analyst
 
         analyst_results = {
             "volatility":     vol_result,
@@ -1109,7 +972,6 @@ class IAMEngine:
             "dealer":         dealer_result,
             "mean_reversion": mr_result,
             "structural":     struct_result,
-            "market_maker":   mm_result,   # MMLE: TNT + VPIN-z + Axis Collapse + walls
         }
 
         # 4. Truth Layer — neutral aggregation (no direction)
@@ -1129,15 +991,14 @@ class IAMEngine:
             "symbol":    symbol,
             "price":     price,
             "timestamp": ts,
-            "engine":    "IAM-1.1",   # bumped for MM analyst addition
+            "engine":    "IAM-1.0",
             "truth_layer": {
                 "total_system_stress":  truth["total_system_stress"],
-                "volatility_release":   truth["obligations"].get("volatility",     {}).get("pressure"),
-                "liquidity_refill":     truth["obligations"].get("liquidity",      {}).get("pressure"),
-                "dealer_hedge":         truth["obligations"].get("dealer",         {}).get("pressure"),
+                "volatility_release":   truth["obligations"].get("volatility", {}).get("pressure"),
+                "liquidity_refill":     truth["obligations"].get("liquidity", {}).get("pressure"),
+                "dealer_hedge":         truth["obligations"].get("dealer", {}).get("pressure"),
                 "mean_reversion_pull":  truth["obligations"].get("mean_reversion", {}).get("pressure"),
-                "structural_pressure":  truth["obligations"].get("structural",     {}).get("pressure"),
-                "mm_reposition":        truth["obligations"].get("market_maker",   {}).get("pressure"),
+                "structural_pressure":  truth["obligations"].get("structural", {}).get("pressure"),
                 "directional_bias":     "NONE",
                 "time_window":          truth["time_window"],
                 "data_quality":         truth["data_quality"],
@@ -1170,8 +1031,7 @@ class IAMEngine:
         quote = self._cached(f"quote_{symbol}", lambda: self._fetch_quote(symbol), ttl=20)
         price = float(quote.get("price") or 0)
 
-        mmle_result = self._cached(f"mmle_{symbol}", lambda: self._fetch_mmle(symbol, bars), ttl=60)
-        vpin        = float(mmle_result.get("vpin") or 0.0)
+        vpin = self._cached(f"vpin_{symbol}", lambda: self._fetch_vpin(symbol, bars), ttl=60)
         gamma_walls = {}
 
         analyst_results = {
@@ -1180,7 +1040,6 @@ class IAMEngine:
             "dealer":         self._dealer_analyst.analyze(symbol, bars, quote, gamma_walls, vpin),
             "mean_reversion": self._mr_analyst.analyze(symbol, bars, quote),
             "structural":     self._struct_analyst.analyze(symbol, bars, quote),
-            "market_maker":   self._mm_analyst.analyze(symbol, bars, quote, mmle_result),
         }
 
         truth = self._truth_layer.aggregate(analyst_results)
@@ -1191,12 +1050,11 @@ class IAMEngine:
             "timestamp": ts,
             "engine":    "IAM-1.0-TruthOnly",
             "next_required_action": {
-                "volatility_release":   truth["obligations"].get("volatility",     {}).get("pressure"),
-                "liquidity_refill":     truth["obligations"].get("liquidity",      {}).get("pressure"),
-                "dealer_hedge":         truth["obligations"].get("dealer",         {}).get("pressure"),
+                "volatility_release":   truth["obligations"].get("volatility", {}).get("pressure"),
+                "liquidity_refill":     truth["obligations"].get("liquidity", {}).get("pressure"),
+                "dealer_hedge":         truth["obligations"].get("dealer", {}).get("pressure"),
                 "mean_reversion_pull":  truth["obligations"].get("mean_reversion", {}).get("pressure"),
-                "structural_pressure":  truth["obligations"].get("structural",     {}).get("pressure"),
-                "mm_reposition":        truth["obligations"].get("market_maker",   {}).get("pressure"),
+                "structural_pressure":  truth["obligations"].get("structural", {}).get("pressure"),
                 "directional_bias":     "NONE",
                 "time_window":          truth["time_window"],
                 "total_system_stress":  truth["total_system_stress"],

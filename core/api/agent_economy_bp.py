@@ -31,7 +31,7 @@ agent_economy_bp = Blueprint("agent_economy", __name__)
 
 # Endpoint UUID for premium report (register in proof402_integration as needed)
 _AEIN_ENDPOINT_ID = "c8d9e0f1-a2b3-4c5d-6e7f-890123456789"
-_AEIN_PRICE       = 0.001  # RLUSD
+_AEIN_PRICE       = 0.25  # RLUSD
 
 
 def _build_summary(hours: int = 24) -> dict:

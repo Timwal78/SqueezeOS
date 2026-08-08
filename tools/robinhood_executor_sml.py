@@ -7,9 +7,7 @@ Executes equity orders on Robinhood when GOD_MODE confirmed.
 
 Safety gates:
   - GOD_MODE tier + god_stacked >= MIN_GOD_STACKED (default 5)
-  - PDT shield: checks Robinhood portfolio value; if < PDT_BALANCE_LIMIT (default $2,000)
-    → max 3 day trades / 5 days. See that constant's comment before changing the number:
-    the $25,000 PDT minimum was eliminated 2026-06-04 and must NOT be reinstated here.
+  - PDT shield: checks Robinhood portfolio value; if < $2,100 → max 3 day trades / 5 days
   - 5-min per-symbol cooldown
   - KILL_SWITCH env var halts all execution immediately
   - PAPER_MODE logs orders without sending to Robinhood
@@ -44,17 +42,9 @@ load_dotenv(dotenv_path=os.environ.get("DOTENV_PATH",
             override=True)
 
 # ── Logging ────────────────────────────────────────────────────────────────────
-# Prefer env; else local tools\logs next to this script (never hard-require C:\SqueezeOS —
-# that path triggers "The system cannot find the path specified" on some Windows setups).
-_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-_DEFAULT_LOG_DIR = os.path.join(_SCRIPT_DIR, "logs")
-LOG_DIR = os.environ.get("LOG_DIR") or _DEFAULT_LOG_DIR
-try:
-    os.makedirs(LOG_DIR, exist_ok=True)
-except OSError:
-    LOG_DIR = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "SqueezeOS", "logs")
-    os.makedirs(LOG_DIR, exist_ok=True)
+LOG_DIR  = os.environ.get("LOG_DIR", r"C:\SqueezeOS")
 LOG_FILE = os.path.join(LOG_DIR, "robinhood_executor.log")
+os.makedirs(LOG_DIR, exist_ok=True)
 
 _handler = RotatingFileHandler(LOG_FILE, maxBytes=5_000_000, backupCount=3, encoding='utf-8')
 _handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s — %(message)s"))
@@ -131,91 +121,21 @@ def _get_365_anchor(symbol: str) -> str:
 
 ROBINHOOD_USER     = os.environ.get("ROBINHOOD_USERNAME", "")
 ROBINHOOD_PASS     = os.environ.get("ROBINHOOD_PASSWORD", "")
-# ═══════════════════════════════════════════════════════════════════════════
-# DESK LOCK — POLL is NOT env-configurable on the money path.
-# Stale PC executor.env (POLL=300) + load_dotenv(override=True) kept beating
-# START_EXECUTOR.bat and put the desk back on a 5-minute loop after every
-# restart. Only ALLOW_SLOW_POLL=true may unlock a custom interval.
-# ═══════════════════════════════════════════════════════════════════════════
-if os.environ.get("ALLOW_SLOW_POLL", "false").lower() == "true":
-    try:
-        POLL_INTERVAL_S = int(str(os.environ.get("POLL_INTERVAL_S", "45")).strip())
-    except Exception:
-        POLL_INTERVAL_S = 45
-    if POLL_INTERVAL_S < 15:
-        POLL_INTERVAL_S = 15
-else:
-    POLL_INTERVAL_S = 45  # LOCKED
-
-# LOCKED — gate is god_stacked >= MIN_GOD_STACKED.
-#
-# Raised 3 -> 6 on 2026-07-31 (operator directive: "MINIMUM GOD SHOULD BE
-# 6/6"). Context for why this drifted: the operator had been unknowingly
-# running a v2.1 copy of this executor out of a DIFFERENT repository
-# (Timwal78/Omega-Swarm), resurrected on every boot by a stale PM2 entry, so
-# no edit to this file had reached the live desk in weeks. That copy's own
-# default was 6, which is where the operator's expectation came from; this
-# file had separately been locked at 3. Once PM2 was repointed here, the
-# live desk immediately began firing at 3/6 -- looser than the 4/6 it had
-# been running and much looser than intended -- e.g. a real CSMD buy at
-# SET9 3/6 with daily order/notional caps now uncapped.
-#
-# 6/6 is a full-convergence requirement: strictly fewer trades, higher bar
-# per trade. That is the operator's explicit call, not a tuned or backtested
-# value -- no evidence exists here that 6 outperforms 3.
-#
-# NOTE: core/api/convergence_bp.py has its OWN _MIN_GOD_STACKED (server-side
-# GOD MODE Tradier execution, default 5). It is a separate gate on a separate
-# broker and is deliberately NOT changed here.
-MIN_GOD_STACKED = 6
-# Allow explicit unlock only for research
-if os.environ.get("ALLOW_CUSTOM_MIN_GOD", "false").lower() == "true":
-    try:
-        MIN_GOD_STACKED = max(1, min(6, int(os.environ.get("MIN_GOD_STACKED", "6"))))
-    except Exception:
-        MIN_GOD_STACKED = 6
-PDT_BALANCE_LIMIT  = float(os.environ.get("PDT_BALANCE_LIMIT", "2000.0"))  # SEC/FINRA eliminated the $25,000 PDT minimum + the 4-trade counter entirely, effective 2026-06-04 -- see core/api/convergence_bp.py's _PDT_BALANCE_LIMIT for the full citation/history. $25,000 was briefly hardcoded here the same day based on stale pre-2026 info. $2,000 matches the operator's directly-confirmed current Robinhood account behavior.
-PDT_MAX_TRADES     = int(os.environ.get("PDT_MAX_TRADES", "3"))  # 0 = uncapped (same 0-means-uncapped convention as MAX_ORDERS_PER_DAY/MAX_DAILY_NOTIONAL below). This is a voluntary internal shield, not the real PDT rule -- see PDT_BALANCE_LIMIT's comment above: the actual SEC/FINRA $25k/4-trade PDT rule was eliminated 2026-06-04. Set PDT_MAX_TRADES=0 in your local executor env to remove this shield entirely (operator directive 2026-07-30).
+POLL_INTERVAL_S    = int(os.environ.get("POLL_INTERVAL_S", "180"))     # poll every 3 minutes
+MIN_GOD_STACKED    = int(os.environ.get("MIN_GOD_STACKED", "3"))       # min SET9 stacked to execute (3/6 = 50% convergence, max signal flow)
+PDT_BALANCE_LIMIT  = float(os.environ.get("PDT_BALANCE_LIMIT", "2100.0"))
+PDT_MAX_TRADES     = int(os.environ.get("PDT_MAX_TRADES", "3"))
 PAPER_MODE           = os.environ.get("ROBINHOOD_PAPER_MODE", "false").lower() == "true"
-# KILL_SWITCH used to be a module-level constant baked in at import time via
-# load_dotenv() -- editing executor.env while the process was already running
-# had NO effect until restart, directly contradicting the "halts all execution
-# immediately" claim above. _kill_switch_active() re-reads the live env on
-# every call instead; combined with the periodic dotenv reload in the main
-# loop (search "live env refresh"), a KILL_SWITCH=true edit now takes effect
-# within one poll cycle without needing to kill the process. Fixed 2026-08-04.
-def _kill_switch_active() -> bool:
-    return os.environ.get("KILL_SWITCH", "false").lower() == "true"
+KILL_SWITCH          = os.environ.get("KILL_SWITCH", "false").lower() == "true"
 MAX_EQUITY_SHARES    = int(os.environ.get("MAX_EQUITY_SHARES", "500"))  # hard ceiling; real limit is MAX_ORDER_USD
 MAX_ORDER_USD        = float(os.environ.get("MAX_ORDER_USD", "150.0"))
 MAX_DAILY_LOSS_USD   = float(os.environ.get("MAX_DAILY_LOSS_USD", "100.0"))
-MAX_ORDERS_PER_DAY   = int(os.environ.get("MAX_ORDERS_PER_DAY", "0"))       # 0 = uncapped (operator directive 2026-07-29, semi-day-trading)
-MAX_DAILY_NOTIONAL   = float(os.environ.get("MAX_DAILY_NOTIONAL_USD", "0"))  # 0 = uncapped (operator directive 2026-07-29, semi-day-trading)
-MAX_PER_SCAN         = int(os.environ.get("MAX_PER_SCAN", "10"))  # was 3 -- raised 2026-08-01 alongside the iam_pending queue fix below, since 7 primary systems (CASCADE/SR-Matrix/Breakout/MM-V4/Sovereign-Squeeze/Quad-Score/SR-Zone+Pattern) now share one poll cycle and one counter
-STOP_LOSS_PCT        = float(os.environ.get("STOP_LOSS_PCT", "3.0"))    # fallback if no cached ATR: close if down this % from avg cost. Lowered from 5.0 -> 3.0 (operator, 2026-07-30) after a real LAD position realized -6.81% before this polling-based check fired and its market-order fill slipped past the trigger -- 3.0 gives that same lag/slippage room to land closer to the 4-5% the operator actually wants, instead of running further past a 5% trigger.
-TAKE_PROFIT_PCT      = float(os.environ.get("TAKE_PROFIT_PCT", "15.0")) # fallback if no cached ATR: close if up this % from avg cost
-# ATR-based stop/take-profit — same multiplier convention as execution_engine.py's
-# atr_multiplier (1.5x ATR stop, 2.5x that for target = same ~1:2.5 risk:reward).
-# ATR comes from the harmonic matrix engine's sml_matrix.atr on the signal that
-# opened the position (see _symbol_atr below) — used in place of the fixed
-# STOP_LOSS_PCT/TAKE_PROFIT_PCT whenever a real ATR reading is cached for that
-# symbol, since a fixed percentage is either too tight or too loose depending on
-# how volatile a given $1-$50 name actually is.
-ATR_STOP_MULTIPLIER  = float(os.environ.get("ATR_STOP_MULTIPLIER", "1.5"))
-ATR_TP_MULTIPLIER    = float(os.environ.get("ATR_TP_MULTIPLIER", "3.75"))
+MAX_ORDERS_PER_DAY   = int(os.environ.get("MAX_ORDERS_PER_DAY", "25"))
+MAX_DAILY_NOTIONAL   = float(os.environ.get("MAX_DAILY_NOTIONAL_USD", "1500.0"))
+MAX_PER_SCAN         = int(os.environ.get("MAX_PER_SCAN", "3"))
+STOP_LOSS_PCT        = float(os.environ.get("STOP_LOSS_PCT", "5.0"))    # close position if down this % from avg cost
+TAKE_PROFIT_PCT      = float(os.environ.get("TAKE_PROFIT_PCT", "15.0")) # close position if up this % from avg cost
 POSITION_MONITOR_ENABLED = os.environ.get("POSITION_MONITOR_ENABLED", "true").lower() == "true"
-# Options sleeve continuous harvest (MM forced-move 50–500%)
-OPT_HARD_STOP = float(os.environ.get("OPT_HARD_STOP", "-0.20"))
-OPT_SCALE_1 = float(os.environ.get("OPT_SCALE_1", "0.50"))
-OPT_SCALE_2 = float(os.environ.get("OPT_SCALE_2", "1.50"))
-OPT_BANK_300 = float(os.environ.get("OPT_BANK_300", "3.00"))
-OPT_BANK_500 = float(os.environ.get("OPT_BANK_500", "5.00"))
-OPT_GIVEBACK_ARM = float(os.environ.get("OPT_GIVEBACK_ARM", "0.50"))
-OPT_GIVEBACK_FRAC = float(os.environ.get("OPT_GIVEBACK_FRAC", "0.35"))
-OPT_TRAIL = float(os.environ.get("OPT_TRAIL", "0.22"))
-OPT_TRAIL_LATE = float(os.environ.get("OPT_TRAIL_LATE", "0.18"))
-OPT_DELTA_EXIT = float(os.environ.get("OPT_DELTA_EXIT", "0.60"))
-_OPT_BOOK_FILE = os.path.join(LOG_DIR, "option_book.json")
 # Skip a BUY when the bid-ask spread is wider than this % of the midpoint —
 # a market/marketable order into a thin $1-$50 name eats the whole spread as
 # instant slippage. Applies to entries only, NEVER to exits. 0 disables.
@@ -265,30 +185,10 @@ def _save_pdt_trades(trades: list) -> None:
     except Exception as e:
         logger.warning(f"[PDT] save failed: {e}")
 
-_ATR_FILE = os.path.join(LOG_DIR, "symbol_atr.json")
-
-def _load_symbol_atr() -> dict:
-    try:
-        with open(_ATR_FILE, "r") as f:
-            data = json.load(f)
-        return {k: float(v) for k, v in data.items()} if isinstance(data, dict) else {}
-    except Exception:
-        return {}
-
-def _save_symbol_atr(d: dict) -> None:
-    try:
-        with open(_ATR_FILE, "w") as f:
-            json.dump(d, f)
-    except Exception as e:
-        logger.warning(f"[ATR] save failed: {e}")
-
 _last_execution     = _load_last_execution()  # symbol → epoch, persisted across restarts
 _pdt_trades         = _load_pdt_trades()      # epoch timestamps of day trades — persisted:
                                               # the 5-day PDT window must survive NSSM restarts,
                                               # otherwise every crash/reboot silently disarms the shield
-_symbol_atr         = _load_symbol_atr()      # symbol → last known real ATR (from sml_matrix.atr
-                                              # on the signal that triggered a BUY), persisted so
-                                              # the position monitor still has it after a restart
 _daily_loss_usd     = 0.0
 _orders_today       = 0
 _daily_notional_usd = 0.0
@@ -324,18 +224,7 @@ _BLOCKLIST = {
 
 
 # ── Robinhood login ────────────────────────────────────────────────────────────
-# Anti-loop rules (the "Trying to log in..." spam):
-#  1) NEVER call rh.login() if the existing session still verifies.
-#  2) NEVER wipe the pickle on a soft failure (that forces full MFA loop).
-#  3) On hard failure, cool down for AUTH_COOLDOWN_S — do not hammer RH.
-#  4) Health check only VERIFIES; it does not invalidate a good session.
-_AUTH_FAILURE_ALERTED = False
-_LAST_LOGIN_ATTEMPT_TS = 0.0
-_AUTH_COOLDOWN_S = int(os.environ.get("RH_AUTH_COOLDOWN_S", "900"))  # 15 min default
-_AUTH_HARD_FAIL_UNTIL = 0.0  # epoch — skip all login attempts until this time
-_LOGIN_ATTEMPTS_WINDOW = []  # timestamps of rh.login() calls
-_MAX_LOGINS_PER_HOUR = int(os.environ.get("RH_MAX_LOGINS_PER_HOUR", "4"))
-
+_AUTH_FAILURE_ALERTED = False   # only alert Discord once per process until recovered
 
 def _rh_verify_session() -> bool:
     """Return True only if the active session can actually read account data."""
@@ -347,48 +236,38 @@ def _rh_verify_session() -> bool:
         return False
 
 
-def _pickle_paths():
-    home = os.path.expanduser("~")
-    # robin_stocks pickle_name="rh_session" → various path conventions
-    return [
-        os.path.join(home, ".tokens", "robinhoodrh_session.pickle"),
-        os.path.join(home, ".tokens", "rh_session.pickle"),
-        os.path.join(home, ".tokens", "robinhood.pickle"),
-    ]
+def _rh_force_reauth() -> bool:
+    """
+    Hard re-authentication using the stored device_token to bypass MFA.
+    Works headlessly as long as the device_token pickle exists.
+    Deletes the stale pickle and re-logs in from scratch using device_token.
+    """
+    import pickle, os, requests
+    import robin_stocks.robinhood as rh
 
+    pickle_path = os.path.join(os.path.expanduser("~"), ".tokens", "robinhoodrh_session.pickle")
 
-def _load_device_token():
-    import pickle
-    for pickle_path in _pickle_paths():
-        if not os.path.exists(pickle_path):
-            continue
+    device_token = None
+    if os.path.exists(pickle_path):
         try:
             with open(pickle_path, "rb") as f:
                 stored = pickle.load(f)
-            if isinstance(stored, dict) and stored.get("device_token"):
-                return stored.get("device_token"), pickle_path
+            device_token = stored.get("device_token")
         except Exception:
-            continue
-    return None, None
+            pass
 
-
-def _rh_force_reauth() -> bool:
-    """
-    Hard re-auth using stored device_token. Does NOT delete pickle first
-    (deleting pickle is what restarts the MFA / 'Trying to log in' loop).
-    """
-    import robin_stocks.robinhood as rh
-
-    device_token, pickle_path = _load_device_token()
     if not device_token:
-        logger.error(
-            "[RH-AUTH] No device_token in pickle — MFA required. "
-            "On the PC: stop executor, delete only if corrupt, run once interactively to complete MFA, then restart."
-        )
+        logger.error("[RH-AUTH] No device_token in pickle — MFA required. Run executor manually once to complete MFA.")
         return False
 
+    # Delete stale pickle so robin_stocks does a clean login
     try:
-        logger.info("[RH-AUTH] Soft re-auth with existing device_token (pickle kept)")
+        os.remove(pickle_path)
+    except Exception:
+        pass
+
+    try:
+        # Pass device_token explicitly so Robinhood skips MFA challenge
         rh.login(
             ROBINHOOD_USER,
             ROBINHOOD_PASS,
@@ -397,127 +276,56 @@ def _rh_force_reauth() -> bool:
             device_token=device_token,
         )
         if _rh_verify_session():
-            logger.info("[RH-AUTH] Re-auth OK via device_token")
+            logger.info("[RH-AUTH] Force re-auth succeeded via device_token")
             return True
-        logger.error("[RH-AUTH] Re-auth returned but session still invalid")
-        return False
+        else:
+            logger.error("[RH-AUTH] Force re-auth: login returned no exception but session invalid")
+            return False
     except Exception as e:
-        logger.error(f"[RH-AUTH] Re-auth failed: {e}")
+        logger.error(f"[RH-AUTH] Force re-auth failed: {e}")
         return False
-
-
-def _login_rate_limited() -> bool:
-    """True if we already hit rh.login too many times this hour."""
-    global _LOGIN_ATTEMPTS_WINDOW
-    now = time.time()
-    _LOGIN_ATTEMPTS_WINDOW = [t for t in _LOGIN_ATTEMPTS_WINDOW if now - t < 3600]
-    return len(_LOGIN_ATTEMPTS_WINDOW) >= _MAX_LOGINS_PER_HOUR
-
-
-def _note_login_attempt():
-    global _LAST_LOGIN_ATTEMPT_TS, _LOGIN_ATTEMPTS_WINDOW
-    now = time.time()
-    _LAST_LOGIN_ATTEMPT_TS = now
-    _LOGIN_ATTEMPTS_WINDOW.append(now)
 
 
 def _ensure_login() -> bool:
-    """
-    Idempotent session ensure. Prefer verify-only; call rh.login sparingly.
-    """
-    global _rh_logged_in, _AUTH_FAILURE_ALERTED, _AUTH_HARD_FAIL_UNTIL
-
-    # Already good this process
-    if _rh_logged_in and _rh_verify_session():
+    global _rh_logged_in, _AUTH_FAILURE_ALERTED
+    if _rh_logged_in:
         return True
-
-    # Session may still be valid even if flag is false (e.g. after soft invalidate)
-    if _rh_verify_session():
-        _rh_logged_in = True
-        _AUTH_FAILURE_ALERTED = False
-        return True
-
-    now = time.time()
-    if now < _AUTH_HARD_FAIL_UNTIL:
-        left = int(_AUTH_HARD_FAIL_UNTIL - now)
-        logger.warning(f"[RH] Auth cooldown active — {left}s left (not calling rh.login)")
-        return False
-
     if not ROBINHOOD_USER or not ROBINHOOD_PASS:
         logger.error("[RH] ROBINHOOD_USERNAME / ROBINHOOD_PASSWORD not set in executor.env")
         return False
 
-    if _login_rate_limited():
-        logger.error(
-            f"[RH] Login rate limit ({_MAX_LOGINS_PER_HOUR}/hour) — stopping login spam. "
-            "Fix MFA/device_token on PC, then restart executor."
-        )
-        _AUTH_HARD_FAIL_UNTIL = now + _AUTH_COOLDOWN_S
-        return False
-
-    # Cooldown between attempts
-    if _LAST_LOGIN_ATTEMPT_TS and (now - _LAST_LOGIN_ATTEMPT_TS) < 60:
-        logger.info("[RH] Skipping login — attempted <60s ago")
-        return False
-
     import robin_stocks.robinhood as rh
 
-    # Step 1: normal login (uses cached pickle / refresh_token) — ONE try
-    _note_login_attempt()
+    # Step 1: try normal login (uses cached pickle / refresh_token)
     try:
-        logger.info("[RH] Attempting session restore (rh.login once)…")
         rh.login(ROBINHOOD_USER, ROBINHOOD_PASS, store_session=True, pickle_name="rh_session")
         if _rh_verify_session():
             _rh_logged_in = True
             _AUTH_FAILURE_ALERTED = False
-            _AUTH_HARD_FAIL_UNTIL = 0.0
             logger.info("[RH] Session verified — logged in OK")
             return True
-        logger.warning("[RH] Login returned but session invalid — trying device_token path once")
+        logger.warning("[RH] Normal login returned no error but session invalid — forcing re-auth")
     except Exception as e:
-        logger.warning(f"[RH] Login error: {e} — trying device_token path once")
+        logger.warning(f"[RH] Normal login error: {e} — forcing re-auth")
 
-    # Step 2: device_token path (still keeps pickle)
-    _note_login_attempt()
+    # Step 2: hard re-auth via stored device_token (no MFA required)
     if _rh_force_reauth():
         _rh_logged_in = True
         _AUTH_FAILURE_ALERTED = False
-        _AUTH_HARD_FAIL_UNTIL = 0.0
         return True
 
-    # Step 3: hard fail — long cooldown so we do NOT loop "Trying to log in…"
+    # Step 3: complete failure — alert and back off
     _rh_logged_in = False
-    _AUTH_HARD_FAIL_UNTIL = time.time() + _AUTH_COOLDOWN_S
     if not _AUTH_FAILURE_ALERTED:
         _AUTH_FAILURE_ALERTED = True
-        _discord_critical(
-            f"[RH] ❌ Auth failed — cooling down {_AUTH_COOLDOWN_S}s. "
-            "Manual MFA on PC required if device_token expired. Executor will NOT spam login."
-        )
-    logger.error(f"[RH] Auth failed — cooldown {_AUTH_COOLDOWN_S}s (no more login spam)")
+        _discord_critical("[RH] ❌ Authentication failed — executor is OFFLINE. Manual MFA re-auth required.")
     return False
 
 
 def _invalidate_login():
-    """Soft flag only — does NOT delete pickle or call rh.login."""
     global _rh_logged_in
     _rh_logged_in = False
-    logger.info("[RH] Soft session flag cleared — next cycle will VERIFY before any login")
-
-
-def _healthcheck_session() -> bool:
-    """
-    Periodic health check: verify only. Login only if verify fails.
-    This replaces the old pattern of invalidate+login every 30 min (login loop).
-    """
-    if _rh_verify_session():
-        global _rh_logged_in, _AUTH_FAILURE_ALERTED
-        _rh_logged_in = True
-        _AUTH_FAILURE_ALERTED = False
-        logger.info("[RH] Health check OK — session still valid (no re-login)")
-        return True
-    logger.warning("[RH] Health check failed — will attempt ensure_login once")
-    return _ensure_login()
+    logger.warning("[RH] Session invalidated — will re-auth on next cycle")
 
 
 def _discord_critical(message: str):
@@ -560,16 +368,13 @@ def _pdt_allowed() -> bool:
     with _lock:
         _pdt_trades[:] = [t for t in _pdt_trades if t > cutoff]
         if balance < PDT_BALANCE_LIMIT:
-            if PDT_MAX_TRADES > 0 and len(_pdt_trades) >= PDT_MAX_TRADES:
+            if len(_pdt_trades) >= PDT_MAX_TRADES:
                 logger.warning(
                     f"[PDT] BLOCKED — balance ${balance:.2f} < ${PDT_BALANCE_LIMIT} "
                     f"and {len(_pdt_trades)}/{PDT_MAX_TRADES} day trades used"
                 )
                 return False
-            if PDT_MAX_TRADES <= 0:
-                logger.info(f"[PDT] Balance ${balance:.2f} — PDT_MAX_TRADES=0, shield disabled, full trading allowed")
-            else:
-                logger.info(f"[PDT] Balance ${balance:.2f} — PDT active: {len(_pdt_trades)}/{PDT_MAX_TRADES} used")
+            logger.info(f"[PDT] Balance ${balance:.2f} — PDT active: {len(_pdt_trades)}/{PDT_MAX_TRADES} used")
         else:
             logger.info(f"[PDT] Balance ${balance:.2f} — above PDT limit, full trading allowed")
     return True
@@ -587,20 +392,17 @@ def _pdt_record():
 
 # ── Circuit breaker ────────────────────────────────────────────────────────────
 def _circuit_open() -> bool:
-    if _kill_switch_active():
+    if KILL_SWITCH:
         logger.warning("[CIRCUIT] KILL_SWITCH=true — all execution halted")
         return True
     with _lock:
         if _daily_loss_usd >= MAX_DAILY_LOSS_USD:
             logger.warning(f"[CIRCUIT] Daily loss ${_daily_loss_usd:.2f} >= limit ${MAX_DAILY_LOSS_USD}")
             return True
-        # MAX_ORDERS_PER_DAY == 0 means uncapped -- operator directive 2026-07-29
-        # for semi-day-trading throughput. MAX_DAILY_LOSS_USD above stays the
-        # real circuit breaker (loss-based, not count/notional-based).
-        if MAX_ORDERS_PER_DAY > 0 and _orders_today >= MAX_ORDERS_PER_DAY:
+        if _orders_today >= MAX_ORDERS_PER_DAY:
             logger.warning(f"[CIRCUIT] Daily order cap reached: {_orders_today}/{MAX_ORDERS_PER_DAY} — no more orders today")
             return True
-        if MAX_DAILY_NOTIONAL > 0 and _daily_notional_usd >= MAX_DAILY_NOTIONAL:
+        if _daily_notional_usd >= MAX_DAILY_NOTIONAL:
             logger.warning(f"[CIRCUIT] Daily notional ${_daily_notional_usd:.2f} >= cap ${MAX_DAILY_NOTIONAL} — halted")
             return True
     return False
@@ -753,28 +555,18 @@ def _direction_gates_pass(symbol: str, side: str, log_prefix: str = "EXEC") -> b
     """
     # ── 741 Pure Macro Matrix gate (BUY only) ────────────────────────────────
     if side == "buy":
-        # `UNKNOWN` here does NOT mean "checked and fine" -- when
-        # MACRO_GATE_SECRET is unset both of these gates return UNKNOWN
-        # immediately without querying anything, so they are INERT rather than
-        # passing. Saying "BUY allowed" for that case reads as a green light
-        # for a check that never ran, which is how it went unnoticed on every
-        # buy in a live session. The suffix below makes the difference visible
-        # at the point of decision; executor_integrity.py also reports it once
-        # at startup.
-        _gate_note = "" if _MACRO_GATE_SECRET else "  [GATE INERT — MACRO_GATE_SECRET not set]"
-
         macro = _get_macro_regime(symbol)
         if macro == "PERFECT_BEARISH_REGIME":
             logger.warning(f"[{log_prefix}] {symbol} BUY blocked — 741 macro regime is PERFECT_BEARISH_REGIME")
             return False
-        logger.info(f"[{log_prefix}] {symbol} macro regime={macro} — BUY allowed{_gate_note}")
+        logger.info(f"[{log_prefix}] {symbol} macro regime={macro} — BUY allowed")
 
         # ── 365-day EMA anchor gate (BUY only) ───────────────────────────────
         anchor365 = _get_365_anchor(symbol)
         if anchor365 == "BELOW":
             logger.warning(f"[{log_prefix}] {symbol} BUY blocked — price is BELOW the 365-day EMA anchor")
             return False
-        logger.info(f"[{log_prefix}] {symbol} 365-day anchor={anchor365} — BUY allowed{_gate_note}")
+        logger.info(f"[{log_prefix}] {symbol} 365-day anchor={anchor365} — BUY allowed")
 
     # ── Proprietary 5-EMA Stack + Dark-Pool Volume (321) Guardrails ─────────
     try:
@@ -833,35 +625,10 @@ def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
         logger.info(f"[EXEC] {symbol} BUY cooldown — {int(COOLDOWN_S-(now-last))}s left")
         return
 
-    # Bearish signals from the real beastmode poll carry their stack count in
-    # bear_god_stacked, not god_stacked (which stays 0 on a genuine bear
-    # setup) — reading god_stacked unconditionally here meant a real, fully
-    # confirmed bearish GOD_MODE signal (side="sell") was silently skipped as
-    # "0 < MIN_GOD_STACKED" every time, since its bull count is naturally ~0.
-    # The STOP_LOSS/TAKE_PROFIT and TV-webhook sml_proxy dicts don't carry a
-    # bear_god_stacked key at all (they set god_stacked directly to bypass
-    # this gate for risk exits / already-scored external signals), so the
-    # "in sml" check keeps their existing behavior unchanged.
-    if side == "sell" and "bear_god_stacked" in sml:
-        god_count = sml.get("bear_god_stacked", 0)
-    else:
-        god_count = sml.get("god_stacked", 0)
+    god_count = sml.get("god_stacked", 0)
     if god_count < MIN_GOD_STACKED:
         logger.info(f"[EXEC] {symbol} god_stacked={god_count} < {MIN_GOD_STACKED} — skip")
         return
-
-    # Cache the real ATR this BUY signal was scored on — the position monitor
-    # (_check_stop_losses) uses it for volatility-adaptive stops instead of a
-    # fixed percentage. Only real signals carry an ATR; the STOP_LOSS/TAKE_PROFIT
-    # proxy sml built by _check_stop_losses itself never overwrites this.
-    if side == "buy":
-        try:
-            atr_val = float(sml.get("atr") or 0)
-        except (TypeError, ValueError):
-            atr_val = 0.0
-        if atr_val > 0:
-            _symbol_atr[symbol] = atr_val
-            _save_symbol_atr(_symbol_atr)
 
     # Stop-loss/take-profit closes are risk exits, not signal trades — an
     # entry-quality gate (e.g. dark-pool "accumulation" vetoing a SELL) must
@@ -957,15 +724,11 @@ def _execute(symbol: str, side: str, sml: dict, scan_counter: list):
     else:
         qty = max(1, int(MAX_ORDER_USD // price))
         qty = min(qty, MAX_EQUITY_SHARES)
-        # Never exceed what's left of today's notional budget.
-        # MAX_DAILY_NOTIONAL == 0 means uncapped (operator directive 2026-07-29
-        # for semi-day-trading) -- skip the budget clamp entirely rather than
-        # let `0 - _daily_notional_usd` go negative and wrongly floor qty to 1.
-        if MAX_DAILY_NOTIONAL > 0:
-            with _lock:
-                remaining_notional = MAX_DAILY_NOTIONAL - _daily_notional_usd
-            budget_qty = max(1, int(remaining_notional // price))
-            qty = min(qty, budget_qty)
+        # Never exceed what's left of today's notional budget
+        with _lock:
+            remaining_notional = MAX_DAILY_NOTIONAL - _daily_notional_usd
+        budget_qty = max(1, int(remaining_notional // price))
+        qty = min(qty, budget_qty)
         if qty <= 0:
             logger.warning(f"[EXEC] {symbol} BUY — daily notional budget exhausted, skipping")
             return
@@ -1081,23 +844,12 @@ def _check_stop_losses() -> int:
                 continue
             pct_move = (price - avg_cost) / avg_cost * 100.0
 
-            # ATR-based stop/target when this symbol has a cached real ATR from
-            # the signal that opened it; otherwise fall back to the fixed
-            # STOP_LOSS_PCT/TAKE_PROFIT_PCT (unchanged previous behavior).
-            atr = _symbol_atr.get(symbol, 0.0)
-            if atr > 0:
-                stop_pct = (atr * ATR_STOP_MULTIPLIER / avg_cost) * 100.0
-                tp_pct   = (atr * ATR_TP_MULTIPLIER   / avg_cost) * 100.0
-            else:
-                stop_pct = STOP_LOSS_PCT
-                tp_pct   = TAKE_PROFIT_PCT
-
-            if pct_move <= -stop_pct:
-                logger.warning(f"[STOP-LOSS] {symbol} down {pct_move:.1f}% (avg ${avg_cost:.2f} -> ${price:.2f}, stop {stop_pct:.1f}%{' ATR-based' if atr > 0 else ''}) — closing position")
+            if pct_move <= -STOP_LOSS_PCT:
+                logger.warning(f"[STOP-LOSS] {symbol} down {pct_move:.1f}% (avg ${avg_cost:.2f} -> ${price:.2f}) — closing position")
                 sml_proxy = {"god_stacked": MIN_GOD_STACKED, "tier": "GOD_MODE", "signal": "STOP_LOSS"}
                 _execute(symbol, "sell", sml_proxy, scan_counter)
-            elif pct_move >= tp_pct:
-                logger.info(f"[TAKE-PROFIT] {symbol} up {pct_move:.1f}% (avg ${avg_cost:.2f} -> ${price:.2f}, target {tp_pct:.1f}%{' ATR-based' if atr > 0 else ''}) — closing position")
+            elif pct_move >= TAKE_PROFIT_PCT:
+                logger.info(f"[TAKE-PROFIT] {symbol} up {pct_move:.1f}% (avg ${avg_cost:.2f} -> ${price:.2f}) — closing position")
                 sml_proxy = {"god_stacked": MIN_GOD_STACKED, "tier": "GOD_MODE", "signal": "TAKE_PROFIT"}
                 _execute(symbol, "sell", sml_proxy, scan_counter)
         except Exception as e:
@@ -1144,9 +896,9 @@ def _discord_option(symbol: str, option_type: str, sniper: dict, qty: int, limit
 def _execute_option(symbol: str, option_type: str, sml: dict, sniper: dict, scan_counter: list):
     """
     Buy-to-open a single option contract on Robinhood using the contract already
-    selected server-side / gamma-ramp desk (scan_options + contract_selector —
-    MM forced-move band abs(Δ) ∈ [0.30, 0.40], target 0.35). We never re-derive
-    strike/expiration/delta locally: the upstream picked one specific listed
+    selected server-side (core/convergence_engine.py's scan_options() — same
+    0.35-0.45 delta bracket logic Tradier execution uses). We never re-derive
+    strike/expiration/delta locally: the server picked one specific listed
     contract, and that's the one we place on Robinhood — same underlying,
     same exchange-standardized strike/expiration, different broker.
 
@@ -1179,24 +931,6 @@ def _execute_option(symbol: str, option_type: str, sml: dict, sniper: dict, scan
         logger.warning(f"[EXEC-OPT] {symbol} {option_type} — incomplete contract from server (strike={strike} exp={expiration} ask={ask}) — skip")
         return
 
-    # MM forced-move delta band (shared with gamma_ramp contract_selector / scan_options)
-    try:
-        _ad = abs(float(sniper.get("delta") or 0))
-    except (TypeError, ValueError):
-        _ad = 0.0
-    _src = str(sniper.get("source") or sml.get("signal") or "")
-    _is_gamma = bool(sml.get("gamma_ramp")) or "gamma" in _src.lower()
-    # Hard reject out-of-band deltas for options sleeve (0.30–0.40). Soft allow
-    # if delta missing (legacy pack) unless gamma_ramp which always stamps Δ.
-    if _ad > 0 and not (0.30 <= _ad <= 0.40):
-        logger.warning(
-            f"[EXEC-OPT] {symbol} {option_type} Δ={_ad:.3f} outside MM band 0.30–0.40 — skip"
-        )
-        return
-    if _is_gamma and _ad <= 0:
-        logger.warning(f"[EXEC-OPT] {symbol} gamma_ramp intent missing delta — skip")
-        return
-
     # Same direction gates as the equity path (741 macro / 365 anchor / 5-EMA /
     # 321 dark-pool volume). A call is a bullish bet same as a share buy, so it
     # goes through the "buy" gates. A put is the bearish/protective side — those
@@ -1213,40 +947,14 @@ def _execute_option(symbol: str, option_type: str, sml: dict, sniper: dict, scan
     _save_last_execution(_last_execution)
 
     qty         = ROBINHOOD_OPTION_QTY
-    # Prefer desk NBBO pin (bid+0.01 / explicit limit_price) for MM sleeve —
-    # ask*1.05 was a legacy slippage buffer that overpays gamma entries.
-    bid = 0.0
-    try:
-        bid = float(sniper.get("bid") or 0)
-    except (TypeError, ValueError):
-        bid = 0.0
-    limit_price = None
-    for cand in (sniper.get("limit_price"), sniper.get("nbbo_buy")):
-        try:
-            if cand is not None and float(cand) > 0:
-                limit_price = round(float(cand), 2)
-                break
-        except (TypeError, ValueError):
-            pass
-    if limit_price is None:
-        if bid > 0 and ask > 0:
-            limit_price = round(min(ask, bid + 0.01), 2)
-        elif ask > 0:
-            # tiny buffer only when no bid — not 5% blowout
-            limit_price = round(ask * 1.01, 2)
-        else:
-            limit_price = 0.0
-    if ask > 0 and limit_price > ask * 1.05:
-        limit_price = round(ask * 1.05, 2)  # hard cap
+    limit_price = round(ask * 1.05, 2)   # 5% above ask, matches Tradier route's slippage buffer
     cost        = limit_price * 100 * qty
 
-    # MAX_DAILY_NOTIONAL == 0 means uncapped (operator directive 2026-07-29).
-    if MAX_DAILY_NOTIONAL > 0:
-        with _lock:
-            remaining_notional = MAX_DAILY_NOTIONAL - _daily_notional_usd
-        if cost > remaining_notional:
-            logger.warning(f"[EXEC-OPT] {symbol} {option_type} — ${cost:.2f} would exceed remaining daily notional budget (${remaining_notional:.2f} left), skipping")
-            return
+    with _lock:
+        remaining_notional = MAX_DAILY_NOTIONAL - _daily_notional_usd
+    if cost > remaining_notional:
+        logger.warning(f"[EXEC-OPT] {symbol} {option_type} — ${cost:.2f} would exceed remaining daily notional budget (${remaining_notional:.2f} left), skipping")
+        return
 
     logger.info(
         f"[EXEC-OPT] RH GOD MODE — BUY {qty}x {symbol} {strike}{option_type[0].upper()} "
@@ -1262,10 +970,6 @@ def _execute_option(symbol: str, option_type: str, sml: dict, sniper: dict, scan
         with _lock:
             _orders_today += 1
             _daily_notional_usd += cost
-        try:
-            _track_option_entry(symbol, option_type, sniper, qty, limit_price)
-        except Exception:
-            pass
     else:
         if not _ensure_login():
             result = {"error": "login_failed"}
@@ -1312,22 +1016,6 @@ def _execute_option(symbol: str, option_type: str, sml: dict, sniper: dict, scan
     _discord_option(symbol, option_type, sniper, qty, limit_price, sml, result)
 
 
-def _classify_tier(tier_val: str, dual_val: bool, sig_val: str) -> str:
-    """
-    Returns the executor-facing tier label ('GOD_MODE'/'DUAL_GRID_LOCK'/
-    'GRID_LOCK') for one side (bull or bear) of a symbol's harmonic result, or
-    "" if that side doesn't qualify at all. Module-level (not a poll-local
-    closure) so it's independently testable.
-    """
-    if dual_val:
-        return "DUAL_GRID_LOCK"
-    if tier_val == "GOD_MODE":
-        return "GOD_MODE"
-    if "GRID" in (sig_val or "").upper():
-        return "GRID_LOCK"
-    return ""
-
-
 # ── Beastmode poll (server-side SET9 convergence scanner) ─────────────────────
 def _poll_beastmode() -> int:
     """Returns number of orders placed this poll. 0 = no signals or all filtered."""
@@ -1365,41 +1053,24 @@ def _poll_beastmode() -> int:
     for hit in signals:
         symbol  = (hit.get("symbol") or "").upper().strip()
         sml     = hit.get("sml_matrix") or {}
-        grid369 = hit.get("grid369") or {}
         sniper  = hit.get("options_sniper") or {}
-
-        # sml_matrix.signal/tier only ever reflect the BULL ladder, and
-        # bear_signal/bear_tier the BEAR ladder — two separate fields, not one
-        # field that flips to a "_BEAR"-suffixed value on a bearish setup.
-        # Checking "BEAR" in sml.get("signal") (the bull-only field) could
-        # never match anything real, which meant every plain bearish signal
-        # (bear_tier=GOD_MODE but tier=NONE since god_stacked=0) was silently
-        # dropped as "no_tier" before ever reaching _execute() — this poll
-        # loop could effectively never detect a real bearish opportunity.
-        # Classify both sides independently instead and pick whichever
-        # actually qualifies (or the stronger one if, rarely, both do).
-        bull_stacked = sml.get("god_stacked", 0)
-        bear_stacked = sml.get("bear_god_stacked", 0)
-        bull_class = _classify_tier(sml.get("tier", ""),
-                                     grid369.get("dual_grid_lock", False), sml.get("signal", ""))
-        bear_class = _classify_tier(sml.get("bear_tier", ""),
-                                     grid369.get("dual_grid_lock_bear", False), sml.get("bear_signal", ""))
-
-        if bull_class and bear_class:
-            is_bear = bear_stacked > bull_stacked
-        else:
-            is_bear = bool(bear_class) and not bull_class
-
-        effective_tier = bear_class if is_bear else bull_class
-        stacked        = bear_stacked if is_bear else bull_stacked
-
+        tier    = sml.get("tier", "")
+        stacked = sml.get("god_stacked", 0)
+        signal  = sml.get("signal", "")
+        # Infer tier from signal name when tier field is absent/unknown
+        if tier not in _VALID_TIERS:
+            if "DUAL" in signal.upper():
+                tier = "DUAL_GRID_LOCK"
+            elif "GRID" in signal.upper():
+                tier = "GRID_LOCK"
+        effective_tier = tier
         if effective_tier not in _VALID_TIERS:
             skipped["no_tier"] += 1
             continue
         min_stack = _TIER_MIN_STACK.get(effective_tier, MIN_GOD_STACKED)
         if stacked < min_stack:
             skipped["low_stack"] += 1
-            logger.debug(f"[POLL] {symbol} {effective_tier} stacked={stacked} < {min_stack} — skip")
+            logger.debug(f"[POLL] {symbol} {tier} stacked={stacked} < {min_stack} — skip")
             continue
         if symbol in _BLOCKLIST:
             skipped["blocklist"] += 1
@@ -1409,7 +1080,7 @@ def _poll_beastmode() -> int:
             skipped["cooldown"] += 1
             logger.info(f"[POLL] {symbol} {effective_tier} {stacked}/6 — cooldown {int(cooldown_remaining)}s left")
             continue
-        god_hits.append((symbol, sml, effective_tier, sniper, is_bear))
+        god_hits.append((symbol, sml, effective_tier, sniper))
 
     logger.info(
         f"[POLL] beastmode: {len(signals)} raw | {len(god_hits)} ready | "
@@ -1423,13 +1094,19 @@ def _poll_beastmode() -> int:
 
     scan_counter = [0]
     deferred     = 0
-    for symbol, sml, tier_label, sniper, is_bear in god_hits:
-        side = "sell" if is_bear else "buy"
+    for symbol, sml, tier_label, sniper in god_hits:
+        signal = sml.get("signal", "")
+        # Explicit bear check rather than an incomplete bull allowlist: the
+        # harmonic engine's 3-stack bull label ("INSTITUTIONAL_CONVERGENCE")
+        # has no "_BULL" suffix unlike the 4/6-stack labels, so checking for
+        # "BULL in signal or signal in (...)" silently misread it as bearish.
+        # Every bear label is consistently suffixed "_BEAR" — check that instead.
+        is_bear = "BEAR" in signal
+        side    = "sell" if is_bear else "buy"
         if scan_counter[0] >= MAX_PER_SCAN:
             deferred += 1
             continue
-        side_stacked = sml.get('bear_god_stacked', 0) if is_bear else sml.get('god_stacked', 0)
-        logger.info(f"[POLL] {tier_label}: {symbol} {side.upper()} stacked={side_stacked}/6")
+        logger.info(f"[POLL] {tier_label}: {symbol} {side.upper()} stacked={sml.get('god_stacked',0)}/6")
 
         if symbol in ODTE_ONLY_SYMBOLS:
             # 0DTE-only symbols (IWM) never get an equity order — the sniper
@@ -1457,17 +1134,9 @@ def _poll_tv_pending() -> int:
     """
     Poll signals queued by TradingView Pine script alerts via the webhook.
     These come from SML_Sniper v1.1 (15m EMA) and MMLE Beast (65m).
-
-    BUG FIX (2026-08-01): same fix as _poll_iam_primary() below -- the
-    server used to pop-and-clear its ENTIRE queue on every GET regardless
-    of how many of the returned signals this loop actually executes (capped
-    at MAX_PER_SCAN via scan_counter). Requesting `?limit=MAX_PER_SCAN`
-    means the server only pops what this cycle could possibly place,
-    leaving genuine overflow queued for the next 45s poll instead of
-    discarding it.
     Returns number of orders placed.
     """
-    url = f"{SQUEEZEOS_API_URL}/api/webhooks/tv_pending?limit={MAX_PER_SCAN}"
+    url = f"{SQUEEZEOS_API_URL}/api/webhooks/tv_pending"
     try:
         req = URLRequest(url, headers={"User-Agent": "SqueezeOS-RH-Executor/2.0"})
         with urlopen(req, timeout=30) as resp:
@@ -1506,123 +1175,6 @@ def _poll_tv_pending() -> int:
     return scan_counter[0]
 
 
-def _poll_iam_primary() -> int:
-    """
-    Poll signals queued by iam_executor.execute_from_resolution() for the IAM
-    primary systems (CASCADE / SR-Matrix / Breakout / MM-V4 -- whatever
-    IAM_PRIMARY_SYSTEM lists on the server). These are the SAME signals that
-    already placed a real Tradier order server-side; this queue exists so
-    Robinhood places the trade too, independently, on its own account.
-    Explicit operator decision (2026-07-29): both brokers execute the same
-    signal -- Robinhood holds the funds and has no PDT rule, doubled exposure
-    across the two accounts is intended, not a bug.
-
-    Same queue/poll shape as _poll_tv_pending() (core/api/iam_pending_bp.py
-    mirrors tradingview_webhook_bp.py's queue exactly), kept as a distinct
-    endpoint so IAM-primary and raw TradingView-Pine fills stay separately
-    attributable in this log, even though they're executed identically once
-    popped here.
-
-    BUG FIX (2026-08-01): the server route used to pop-and-clear its ENTIRE
-    queue on every GET regardless of how many signals this function actually
-    went on to execute -- but the loop below only ever places up to
-    MAX_PER_SCAN orders via one shared scan_counter. Anything beyond that in
-    a single fetch was silently discarded forever, not "deferred to next
-    cycle" as the per-signal log lines below imply, since the server-side
-    queue backing it had already been wiped by the act of fetching it. Fixed
-    by requesting only `?limit=MAX_PER_SCAN` -- the server now leaves
-    anything beyond that queued (FIFO, original order) for the next 45s
-    poll, well within its 10-minute TTL. Slightly over-requesting relative
-    to what actually places is fine and expected: some fetched signals get
-    `continue`'d below (bad symbol/direction) without consuming a slot, so
-    limiting to exactly MAX_PER_SCAN gives this cycle a full shot at
-    reaching the cap rather than starving it by one.
-    Returns number of orders placed.
-    """
-    url = f"{SQUEEZEOS_API_URL}/api/webhooks/iam_pending?limit={MAX_PER_SCAN}"
-    try:
-        req = URLRequest(url, headers={"User-Agent": "SqueezeOS-RH-Executor/2.0"})
-        with urlopen(req, timeout=30) as resp:
-            data = json.loads(resp.read())
-    except Exception as e:
-        logger.warning(f"[IAM-POLL] iam_pending fetch failed: {e}")
-        return 0
-
-    signals = data.get("signals") or []
-    if not signals:
-        return 0
-
-    logger.info(f"[IAM-POLL] {len(signals)} IAM primary-system signal(s) from webhook queue (CASCADE/SR-Matrix/Breakout/MM-V4)")
-    scan_counter = [0]
-    for sig in signals:
-        symbol    = (sig.get("symbol") or "").upper().strip()
-        direction = (sig.get("action") or "").upper().strip()
-        system    = sig.get("system", "IAM")
-        price     = float(sig.get("price") or 0.0)
-
-        if not symbol or direction not in ("BUY", "SELL"):
-            continue
-
-        side = "buy" if direction == "BUY" else "sell"
-
-        sml_proxy = {
-            "god_stacked":   MIN_GOD_STACKED,
-            "tier":          "GOD_MODE",
-            "execute_gate":  True,
-            "signal":        f"{system}_{direction}",
-            "confidence":    sig.get("confidence", 80.0),
-        }
-
-        # ── Options leg ──────────────────────────────────────────────────────
-        # When the server's Tradier leg routed this signal to options it now
-        # forwards the EXACT contract it selected. Placing that same contract
-        # here is what stops the long-standing inconsistency where one signal
-        # bought a CALL on Tradier and SHARES on Robinhood.
-        #
-        # Options are exchange-standardized: same underlying + expiration +
-        # strike + type is literally the same contract on both brokers, which
-        # is why _execute_option() deliberately never re-derives it. If each
-        # side picked independently they could silently diverge.
-        #
-        # No contract in the payload means the server traded equity (or an
-        # older server that predates this field) -- fall through to the equity
-        # path unchanged, so this is fully backward compatible in both
-        # directions.
-        contract = sig.get("contract") or {}
-        option_type = str(contract.get("option_type") or "").lower()
-
-        if contract and option_type in ("call", "put"):
-            logger.info(
-                f"[IAM-POLL] {system} → {direction} {symbol} "
-                f"{option_type.upper()} {contract.get('strike')} "
-                f"exp {contract.get('expiration')} "
-                f"(Robinhood options leg, Tradier already placed server-side)"
-            )
-
-            # A SELL is COMPOUND on the server side (iam_executor's
-            # "bear_protect_and_put"): it closes any existing long AND buys a
-            # put. Both legs have to happen here too. Routing a SELL straight
-            # to the put would silently drop the close and leave a Robinhood
-            # long open that Tradier had already exited -- the two accounts
-            # would diverge in the one direction that actually costs money.
-            # _execute() refuses to short, so with no position held this is a
-            # logged no-op rather than a new short.
-            if direction == "SELL":
-                _execute(symbol, "sell", sml_proxy, scan_counter)
-
-            # _execute_option applies the full risk stack itself: circuit
-            # breaker, blocklist, per-scan cap, the 0.30-0.40 delta band,
-            # direction gates for calls, PDT and the shared cooldown. It is
-            # buy_to_open only -- there is no path here that sells to open.
-            _execute_option(symbol, option_type, sml_proxy, dict(contract), scan_counter)
-            continue
-
-        logger.info(f"[IAM-POLL] {system} → {direction} {symbol} @ ${price:.2f} (Robinhood equity leg, Tradier already placed server-side)")
-        _execute(symbol, side, sml_proxy, scan_counter)
-
-    return scan_counter[0]
-
-
 # ── Oracle watchlist poll (direct BUY/SELL from multi-engine oracle) ───────────
 # Polls the free /api/oracle endpoint for any symbol it's actively tracking.
 # Fires on BUY or BUY (IGNITION) with confidence >= ORACLE_MIN_CONFIDENCE.
@@ -1638,42 +1190,18 @@ _UNIVERSE_WARN_FLOOR   = 25
 _universe_last_warn_ts = 0.0
 
 def _warn_if_universe_degraded(universe_size: int):
-    """Warn only when BOTH oracle batch AND live market scan look tiny.
-
-    /api/oracle universe_size can stick at 3 (ORACLE_SYMBOLS seed) while
-    /api/market/scan already has 100+ quotes powering beastmode — that is NOT
-    degraded money-path. Prefer market scan size when available.
-    """
     global _universe_last_warn_ts
-    live_mkt = 0
-    try:
-        req = URLRequest(f"{SQUEEZEOS_API_URL}/api/market/scan",
-                         headers={"User-Agent": "SqueezeOS-RH-Executor/2.0"})
-        with urlopen(req, timeout=12) as resp:
-            m = json.loads(resp.read())
-        live_mkt = int(m.get("universe_size") or len(m.get("quotes") or {}) or 0)
-    except Exception:
-        live_mkt = 0
-    effective = max(int(universe_size or 0), live_mkt)
-    if effective <= 0:
+    if universe_size <= 0:   # server didn't report — nothing to judge
         return
     now = time.time()
-    if effective <= _UNIVERSE_WARN_FLOOR and now - _universe_last_warn_ts > 3600:
+    if universe_size <= _UNIVERSE_WARN_FLOOR and now - _universe_last_warn_ts > 3600:
         _universe_last_warn_ts = now
         logger.warning(
-            f"[ORACLE] Effective scan universe is only {effective} tickers "
-            f"(oracle_batch={universe_size}, market_scan={live_mkt}) — discovery DEGRADED. "
-            f"Check ALPACA/POLYGON/TRADIER on squeezeos-api and "
-            f"{SQUEEZEOS_API_URL}/api/truth/providers + /api/market/scan."
+            f"[ORACLE] Server scan universe is only {universe_size} tickers — full-market "
+            f"discovery is DEGRADED (seed list only). Check ALPACA_API_KEY/ALPACA_API_SECRET "
+            f"and POLYGON_API_KEY on the squeezeos-api Render service, and "
+            f"{SQUEEZEOS_API_URL}/api/truth/providers for live provider status."
         )
-    elif live_mkt > _UNIVERSE_WARN_FLOOR and int(universe_size or 0) <= _UNIVERSE_WARN_FLOOR:
-        # Quiet info once/hour — money path is fine via market/beastmode
-        if now - _universe_last_warn_ts > 3600:
-            _universe_last_warn_ts = now
-            logger.info(
-                f"[ORACLE] batch seed={universe_size} but market scan={live_mkt} — "
-                f"beastmode universe healthy (not degraded)"
-            )
 
 
 def _poll_oracle() -> int:
@@ -1797,538 +1325,69 @@ def _poll_oracle() -> int:
     return scan_counter[0]
 
 
-
-
-# ── Options continuous harvest book (50–500%, sell before giveback) ───────────
-def _load_option_book() -> dict:
-    try:
-        with open(_OPT_BOOK_FILE, "r") as f:
-            d = json.load(f)
-        return d if isinstance(d, dict) else {"positions": {}}
-    except Exception:
-        return {"positions": {}}
-
-
-def _save_option_book(book: dict) -> None:
-    try:
-        with open(_OPT_BOOK_FILE, "w") as f:
-            json.dump(book, f, indent=2)
-    except Exception as e:
-        logger.warning(f"[OPT-BOOK] save failed: {e}")
-
-
-def _option_book_key(symbol: str, strike, expiration: str, option_type: str) -> str:
-    return f"{symbol.upper()}|{float(strike):.4f}|{str(expiration)[:10]}|{(option_type or 'call').lower()}"
-
-
-def _track_option_entry(symbol: str, option_type: str, sniper: dict, qty: int, limit_price: float):
-    """Record BTO so continuous manage can scale/trail/giveback-lock."""
-    book = _load_option_book()
-    pos = book.setdefault("positions", {})
-    k = _option_book_key(symbol, sniper.get("strike"), sniper.get("expiration"), option_type)
-    prev = pos.get(k) or {}
-    prev_qty = int(prev.get("qty") or 0)
-    prev_entry = float(prev.get("entry") or 0)
-    new_qty = prev_qty + max(1, int(qty))
-    # VWAP entry if adding
-    if prev_qty > 0 and prev_entry > 0:
-        entry = (prev_entry * prev_qty + float(limit_price) * qty) / new_qty
-    else:
-        entry = float(limit_price)
-    pos[k] = {
-        "symbol": symbol.upper(),
-        "option_type": (option_type or "call").lower(),
-        "strike": float(sniper.get("strike") or 0),
-        "expiration": str(sniper.get("expiration") or "")[:10],
-        "occ": sniper.get("symbol") or sniper.get("occ") or "",
-        "qty": new_qty,
-        "entry": entry,
-        "peak": max(float(prev.get("peak") or 0), entry),
-        "scaled": bool(prev.get("scaled") or False),
-        "scale_frac": float(prev.get("scale_frac") or 0),
-        "entry_delta": abs(float(sniper.get("delta") or prev.get("entry_delta") or 0.35)),
-        "entry_ts": prev.get("entry_ts") or time.time(),
-        "source": sniper.get("source") or prev.get("source") or "options_sleeve",
-    }
-    book["positions"] = pos
-    _save_option_book(book)
-    logger.info(f"[OPT-BOOK] track {k} qty={new_qty} entry={entry:.2f} Δ={pos[k]['entry_delta']}")
-
-
-def _execute_option_sell(symbol: str, option_type: str, strike, expiration: str, qty: int, limit_price: float, reason: str) -> dict:
-    """Sell-to-close option contracts on RH — bank gains / stop / trail."""
-    if qty <= 0:
-        return {"error": "qty<=0"}
-    if PAPER_MODE:
-        logger.info(f"[PAPER] Would SELL_TO_CLOSE {qty}x {symbol} {strike}{option_type[0].upper()} {expiration} @ ${limit_price:.2f} ({reason})")
-        return {"paper": True, "placed": True}
-    if not _ensure_login():
-        return {"error": "login_failed"}
-    try:
-        import robin_stocks.robinhood as rh
-        # Prefer bid-side pin for exits (sell); limit_price already computed
-        r = rh.orders.order_sell_option_limit(
-            positionEffect="close",
-            creditOrDebit="credit",
-            price=float(limit_price),
-            symbol=symbol,
-            quantity=int(qty),
-            expirationDate=str(expiration)[:10],
-            strike=float(strike),
-            optionType=(option_type or "call").lower(),
-            timeInForce="gfd",
-        )
-        logger.info(f"[RH] Raw option SELL response {symbol}: {r}")
-        rh_state = (r or {}).get("state", "") if isinstance(r, dict) else ""
-        order_id = str((r or {}).get("id", "") or "") if isinstance(r, dict) else ""
-        good = {"confirmed", "queued", "unconfirmed", "partially_filled", "filled"}
-        if rh_state in good or (isinstance(r, dict) and "id" in r):
-            logger.info(f"[RH] Option SELL ok {symbol} x{qty} {reason} id={order_id} state={rh_state}")
-            return {"placed": True, "raw": r, "reason": reason}
-        err = (r or {}).get("detail", "") if isinstance(r, dict) else str(r)
-        logger.error(f"[RH] Option SELL failed {symbol}: {err}")
-        return {"error": err or "unknown", "raw": r}
-    except Exception as e:
-        err = str(e)
-        logger.error(f"[RH] Option SELL error: {err}")
-        if "logged in" in err.lower():
-            _invalidate_login()
-        return {"error": err}
-
-
-def _option_mark_from_rh(symbol: str, option_type: str, strike, expiration: str) -> dict:
-    """Best-effort mark for open option: last/bid/ask from robin_stocks."""
-    out = {"bid": 0.0, "ask": 0.0, "last": 0.0, "mark": 0.0, "delta": 0.0}
-    try:
-        import robin_stocks.robinhood as rh
-        if not _ensure_login():
-            return out
-        # get_option_market_data_by_id needs id; use find_options / market data helper
-        data = None
-        try:
-            data = rh.options.get_option_market_data(
-                symbol,
-                str(expiration)[:10],
-                str(strike),
-                (option_type or "call").lower(),
-            )
-        except Exception:
-            data = None
-        if isinstance(data, list) and data:
-            data = data[0]
-        if isinstance(data, dict):
-            bid = float(data.get("bid_price") or data.get("bid") or 0) or 0.0
-            ask = float(data.get("ask_price") or data.get("ask") or 0) or 0.0
-            last = float(data.get("last_trade_price") or data.get("mark_price") or 0) or 0.0
-            mark = last if last > 0 else ((bid + ask) / 2.0 if bid and ask else bid or ask)
-            g = data.get("delta") or (data.get("greeks") or {}).get("delta")
-            out = {"bid": bid, "ask": ask, "last": last, "mark": float(mark or 0), "delta": abs(float(g or 0))}
-    except Exception as e:
-        logger.debug(f"[OPT-BOOK] mark fail {symbol}: {e}")
-    return out
-
-
-def _manage_option_book() -> int:
-    """
-    Continuous options harvest loop:
-      hard stop -20% · scale +50% · scale +150% · bank +300/+500 ·
-      giveback lock (sell before loss of gains) · peak trail · Δ≥0.60 exit
-    Returns number of sell orders placed.
-    """
-    if not POSITION_MONITOR_ENABLED:
-        return 0
-    book = _load_option_book()
-    positions = book.get("positions") or {}
-    if not positions:
-        return 0
-    placed = 0
-    keep = {}
-    for k, pos in list(positions.items()):
-        try:
-            symbol = pos["symbol"]
-            otype = pos.get("option_type") or "call"
-            strike = pos.get("strike")
-            exp = pos.get("expiration")
-            qty = int(pos.get("qty") or 0)
-            entry = float(pos.get("entry") or 0)
-            if qty <= 0 or entry <= 0:
-                continue
-            md = _option_mark_from_rh(symbol, otype, strike, exp)
-            mark = float(md.get("mark") or 0)
-            bid = float(md.get("bid") or 0)
-            if mark <= 0:
-                keep[k] = pos
-                continue
-            peak = max(float(pos.get("peak") or entry), mark)
-            pos["peak"] = peak
-            ret = (mark - entry) / entry
-            peak_ret = (peak - entry) / entry if entry > 0 else 0.0
-            scaled = bool(pos.get("scaled"))
-            scale_frac = float(pos.get("scale_frac") or 0)
-            exit_qty = 0
-            reason = ""
-
-            if ret <= OPT_HARD_STOP:
-                exit_qty, reason = qty, "hard_stop"
-            elif ret >= OPT_BANK_500:
-                exit_qty, reason = qty, "bank_500"
-            elif (not scaled) and ret >= OPT_SCALE_1:
-                exit_qty, reason = max(1, qty // 2), "scale_50"
-            elif scaled and scale_frac < 0.75 and ret >= OPT_SCALE_2:
-                exit_qty, reason = max(1, qty // 2), "scale_150"
-            elif scaled and ret >= OPT_BANK_300 and qty > 1:
-                exit_qty, reason = max(1, qty - 1), "bank_300"
-            elif peak_ret >= OPT_GIVEBACK_ARM and peak_ret > 0:
-                giveback = (peak - mark) / entry
-                frac_lost = giveback / peak_ret if peak_ret > 0 else 0.0
-                if frac_lost >= OPT_GIVEBACK_FRAC and ret > 0:
-                    exit_qty, reason = qty, "giveback_lock"
-                elif ret <= 0:
-                    exit_qty, reason = qty, "giveback_to_red"
-            if not reason and scaled:
-                trail = OPT_TRAIL_LATE if scale_frac >= 0.75 else OPT_TRAIL
-                if peak > 0 and (mark - peak) / peak <= -trail:
-                    exit_qty, reason = qty, "trail"
-            dlt = float(md.get("delta") or pos.get("entry_delta") or 0)
-            if not reason and dlt >= OPT_DELTA_EXIT and ret >= 0.50:
-                exit_qty, reason = qty, "delta_expansion"
-
-            if exit_qty > 0:
-                # sell pin: ask-0.01 or bid
-                ask = float(md.get("ask") or 0)
-                if bid > 0 and ask > 0:
-                    px = round(max(bid, ask - 0.01), 2)
-                elif bid > 0:
-                    px = round(bid, 2)
-                else:
-                    px = round(mark * 0.98, 2)
-                logger.info(
-                    f"[OPT-BOOK] EXIT {reason} {symbol} {otype} K={strike} exp={exp} "
-                    f"qty={exit_qty} ret={ret*100:.1f}% peak_ret={peak_ret*100:.1f}% mark={mark:.2f}"
-                )
-                res = _execute_option_sell(symbol, otype, strike, exp, exit_qty, px, reason)
-                if res.get("placed") or res.get("paper"):
-                    placed += 1
-                    qty_left = qty - exit_qty
-                    if reason.startswith("scale") and qty_left > 0:
-                        pos["qty"] = qty_left
-                        pos["scaled"] = True
-                        pos["scale_frac"] = 0.5 if reason == "scale_50" else 0.75
-                        pos["peak"] = mark
-                        keep[k] = pos
-                    elif reason == "bank_300" and qty_left > 0:
-                        pos["qty"] = qty_left
-                        pos["scaled"] = True
-                        pos["scale_frac"] = max(scale_frac, 0.9)
-                        keep[k] = pos
-                    # else fully closed — drop
-                else:
-                    keep[k] = pos  # retry next tick
-            else:
-                keep[k] = pos
-        except Exception as e:
-            logger.warning(f"[OPT-BOOK] manage error {k}: {e}")
-            keep[k] = pos
-    book["positions"] = keep
-    book["last_manage_ts"] = time.time()
-    _save_option_book(book)
-    if placed:
-        logger.info(f"[OPT-BOOK] harvest sells placed={placed} open_left={len(keep)}")
-    return placed
-
-
-# ── Gamma Ramp outbox poll (Tradier data → RH funded exec) ─────────────────────
-# Reads RH-ready option intents written by tools/gamma_ramp/live_engine.py via
-# rh_route.py. Same sniper contract shape as beastmode options path.
-GAMMA_RAMP_OUTBOX_DIR = os.environ.get(
-    "GAMMA_RAMP_OUTBOX_DIR",
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "gamma_ramp", "rh_outbox"),
-)
-GAMMA_RAMP_POLL_ENABLED = os.environ.get("GAMMA_RAMP_POLL_ENABLED", "true").lower() == "true"
-
-
-def _poll_gamma_ramp() -> int:
-    """Consume pending gamma-ramp option intents from the shared outbox."""
-    if not GAMMA_RAMP_POLL_ENABLED:
-        return 0
-    try:
-        from pathlib import Path as _P
-        outbox = _P(GAMMA_RAMP_OUTBOX_DIR)
-    except Exception:
-        return 0
-    if not outbox.is_dir():
-        return 0
-
-    files = sorted(outbox.glob("gr_*.json"), key=lambda f: f.stat().st_mtime)
-    if not files:
-        return 0
-
-    scan_counter = [0]
-    done_dir = outbox / "done"
-    done_dir.mkdir(exist_ok=True)
-
-    for fpath in files:
-        if scan_counter[0] >= MAX_PER_SCAN:
-            break
-        try:
-            intent = json.loads(fpath.read_text())
-        except Exception as e:
-            logger.warning(f"[GAMMA-RAMP] bad intent file {fpath.name}: {e}")
-            continue
-
-        status = (intent.get("status") or "pending").lower()
-        if status in ("acked", "done", "error"):
-            continue
-        action = (intent.get("action") or "BUY_TO_OPEN").upper()
-        # `symbol` is needed by both branches below -- must be extracted
-        # before the action check. It used to only be assigned in the
-        # BUY_TO_OPEN path (further down), so every SELL_TO_CLOSE (i.e.
-        # every exit this desk ever generates -- hard stop, scale, bank,
-        # giveback lock, trail, everything) referenced it before assignment
-        # and crashed with UnboundLocalError. The crash was swallowed by the
-        # run_loop()'s outer try/except, so the process kept running, but no
-        # gamma-ramp option position could ever be automatically closed --
-        # every position sat open with no stop-loss, no profit-taking, until
-        # expiration or manual intervention.
-        symbol = (intent.get("underlying") or "").upper().strip()
-        if action != "BUY_TO_OPEN":
-            if action == "SELL_TO_CLOSE":
-                # Continuous harvest path — actually sell on RH, don't park exits
-                otype = (intent.get("option_type") or ("call" if intent.get("side") == "CALL" else "put")).lower()
-                qty_e = max(1, int(intent.get("qty") or 1))
-                strike_e = intent.get("strike")
-                exp_e = intent.get("expiration")
-                bid_e = float(intent.get("bid") or intent.get("limit_price") or intent.get("mid") or 0)
-                ask_e = float(intent.get("ask") or 0)
-                if bid_e > 0 and ask_e > 0:
-                    px_e = round(max(bid_e, ask_e - 0.01), 2)
-                elif bid_e > 0:
-                    px_e = round(bid_e, 2)
-                else:
-                    px_e = round(float(intent.get("limit_price") or intent.get("mid") or 0.01), 2)
-                reason_e = str(intent.get("reason") or "gamma_exit")
-                logger.info(
-                    f"[GAMMA-RAMP] EXIT {reason_e} {symbol} {otype} K={strike_e} exp={exp_e} qty={qty_e} @ {px_e}"
-                )
-                res_e = _execute_option_sell(symbol, otype, strike_e, exp_e, qty_e, px_e, reason_e)
-                intent["status"] = "acked" if res_e.get("placed") or res_e.get("paper") else "error"
-                intent["sell_result"] = {k2: res_e.get(k2) for k2 in ("placed", "paper", "error", "reason") if k2 in res_e or res_e.get(k2) is not None}
-                intent["acked_ts"] = time.time()
-                if res_e.get("placed") or res_e.get("paper"):
-                    scan_counter[0] += 1
-                    # shrink book if tracked
-                    try:
-                        book = _load_option_book()
-                        kk = _option_book_key(symbol, strike_e, exp_e, otype)
-                        if kk in (book.get("positions") or {}):
-                            left = int(book["positions"][kk].get("qty") or 0) - qty_e
-                            if left > 0:
-                                book["positions"][kk]["qty"] = left
-                            else:
-                                book["positions"].pop(kk, None)
-                            _save_option_book(book)
-                    except Exception:
-                        pass
-                try:
-                    fpath.write_text(json.dumps(intent, indent=2))
-                    fpath.rename(done_dir / fpath.name)
-                except Exception:
-                    pass
-            continue
-
-        option_type = (intent.get("option_type") or ("call" if intent.get("side") == "CALL" else "put")).lower()
-        if option_type not in ("call", "put"):
-            option_type = "call"
-
-        sniper = {
-            "strike": intent.get("strike"),
-            "expiration": intent.get("expiration"),
-            "ask": intent.get("ask") or intent.get("limit_price") or intent.get("mid"),
-            "premium": intent.get("mid") or intent.get("ask") or intent.get("limit_price"),
-            "bid": intent.get("bid"),
-            "delta": intent.get("delta"),
-            "gamma": intent.get("gamma"),
-            "symbol": intent.get("occ"),
-            "dte": intent.get("dte"),
-            "source": "gamma_ramp",
-            "limit_price": intent.get("limit_price"),
-        }
-        sml = intent.get("sml") or {
-            "god_stacked": 6,
-            "tier": "GOD_MODE",
-            "execute_gate": True,
-            "signal": f"GAMMA_RAMP_{intent.get('side')}",
-            "confidence": 90.0,
-            "gamma_ramp": True,
-            "reason": intent.get("reason"),
-        }
-
-        # Optional qty override for this intent
-        prev_qty = None
-        if intent.get("qty"):
-            try:
-                global ROBINHOOD_OPTION_QTY
-                prev_qty = ROBINHOOD_OPTION_QTY
-                ROBINHOOD_OPTION_QTY = max(1, int(intent["qty"]))
-            except Exception:
-                prev_qty = None
-
-        logger.info(
-            f"[GAMMA-RAMP] RH route → {option_type.upper()} {symbol} "
-            f"Δ={sniper.get('delta')} K={sniper.get('strike')} exp={sniper.get('expiration')} "
-            f"id={intent.get('id')}"
-        )
-        before = scan_counter[0]
-        try:
-            _execute_option(symbol, option_type, sml, sniper, scan_counter)
-        finally:
-            if prev_qty is not None:
-                ROBINHOOD_OPTION_QTY = prev_qty
-
-        # Mark consumed so we don't re-fire (whether placed or gated)
-        intent["status"] = "acked" if scan_counter[0] > before else "acked_no_fill"
-        intent["acked_ts"] = time.time()
-        intent["placed"] = scan_counter[0] > before
-        try:
-            fpath.write_text(json.dumps(intent, indent=2))
-            fpath.rename(done_dir / fpath.name)
-        except Exception as e:
-            logger.warning(f"[GAMMA-RAMP] could not archive {fpath.name}: {e}")
-
-    if scan_counter[0]:
-        logger.info(f"[GAMMA-RAMP] placed {scan_counter[0]} option order(s) from outbox")
-    return scan_counter[0]
-
-
 # ── Main loop ──────────────────────────────────────────────────────────────────
 def main():
     global _rh_logged_in  # explicitly declare global so Python never creates a local shadow
     logger.info("=" * 60)
     logger.info("SqueezeOS Robinhood Executor v3.7 — spread guard on entries + open-order fill reconciliation + holiday calendar")
     logger.info(f"  API         : {SQUEEZEOS_API_URL}")
-    logger.info(f"  Poll every  : {POLL_INTERVAL_S}s  [DESK-LOCKED — env cannot set 300]")
+    logger.info(f"  Poll every  : {POLL_INTERVAL_S}s")
     logger.info(f"  Hours       : 4:00 AM–8:00 PM ET (pre-market + regular + after-hours)")
     logger.info(f"  Ext hours   : LIMIT orders (buy +0.2% / sell -0.2% from last price)")
-    logger.info(f"  Sources     : beastmode | TV webhook | oracle | gamma_ramp outbox→RH ({GAMMA_RAMP_OUTBOX_DIR})")
-    logger.info(f"  Options Δ   : 0.30–0.40 target 0.35 | MM short-GEX forced-move | C+P")
-    logger.info(f"  Options exit: stop -20% | scale +50%/+150% | bank +300/+500 | giveback lock | trail | Δ-exit 0.60")
-    logger.info(f"  Options loop: CONTINUOUS harvest every poll — sell before loss of gains")
+    logger.info(f"  Sources     : beastmode (GOD_MODE+DUAL_LOCK) | TV webhook (Pine) | oracle+history (live universe)")
     logger.info(f"  Oracle      : 100% FETCH — uses live scan universe, no hardcoded watchlist")
-    logger.info(f"  MIN_GOD     : {MIN_GOD_STACKED}/6 stacked (GRID_LOCK: {max(2,MIN_GOD_STACKED-1)}) [LOCKED]  |  ORACLE_MIN_CONF: {ORACLE_MIN_CONFIDENCE}%")
-    _pdt_trades_label = "UNCAPPED" if PDT_MAX_TRADES <= 0 else f"{PDT_MAX_TRADES} trades/5-day"
-    logger.info(f"  PDT limit   : ${PDT_BALANCE_LIMIT} balance floor | {_pdt_trades_label}")
+    logger.info(f"  MIN_GOD     : {MIN_GOD_STACKED}/6 stacked (GRID_LOCK: {max(2,MIN_GOD_STACKED-1)})  |  ORACLE_MIN_CONF: {ORACLE_MIN_CONFIDENCE}%")
+    logger.info(f"  PDT limit   : ${PDT_BALANCE_LIMIT}")
     logger.info(f"  Max order   : ${MAX_ORDER_USD} / {MAX_EQUITY_SHARES} shares")
-    _orders_cap_label   = "UNCAPPED" if MAX_ORDERS_PER_DAY <= 0 else f"{MAX_ORDERS_PER_DAY} orders"
-    _notional_cap_label = "UNCAPPED" if MAX_DAILY_NOTIONAL <= 0 else f"${MAX_DAILY_NOTIONAL:.0f} notional"
-    logger.info(f"  Daily cap   : {_orders_cap_label} / {_notional_cap_label} / ${MAX_DAILY_LOSS_USD:.0f} loss limit")
+    logger.info(f"  Daily cap   : {MAX_ORDERS_PER_DAY} orders / ${MAX_DAILY_NOTIONAL:.0f} notional / ${MAX_DAILY_LOSS_USD:.0f} loss limit")
     logger.info(f"  Per-scan    : max {MAX_PER_SCAN} orders per poll cycle")
     logger.info(f"  Position mon: stop-loss {STOP_LOSS_PCT}% / take-profit {TAKE_PROFIT_PCT}% (enabled={POSITION_MONITOR_ENABLED})")
     logger.info(f"  Spread guard: skip BUY if bid-ask > {MAX_SPREAD_PCT}% of mid (exits exempt)")
     logger.info(f"  Fill monitor: alert if an order sits unfilled > {FILL_ALERT_MINUTES:.0f} min")
     logger.info(f"  Paper mode  : {PAPER_MODE}")
-    logger.info(f"  Kill switch : {_kill_switch_active()}")
+    logger.info(f"  Kill switch : {KILL_SWITCH}")
     logger.info("=" * 60)
 
-    # Build + stale-env integrity check. Added after stale executor behaviour
-    # returned for the fifth time: the banner above is easy to misread (a
-    # missing row is invisible unless you know it should be there), and a
-    # leftover tools/executor.env survives every `git reset --hard` by design.
-    # This prints a source fingerprint and names any risk setting the live env
-    # is overriding. See tools/executor_integrity.py.
-    try:
-        import executor_integrity
-    except ImportError:  # running from repo root rather than tools/
-        try:
-            from tools import executor_integrity  # type: ignore
-        except Exception:
-            executor_integrity = None  # type: ignore
-    except Exception:
-        executor_integrity = None  # type: ignore
-
-    if executor_integrity is not None:
-        # Single-instance lock FIRST — before login, before any poll. Two
-        # executors were observed live on the same Robinhood account (one on
-        # current code at 6/6, one stale at 4/6), each enforcing its own
-        # cooldowns and daily caps in isolation while the account took double
-        # the position. Refusing to start is the only reliable fix; a human
-        # noticing a duplicate in a process list is not.
-        if not executor_integrity.acquire_single_instance_lock(logger):
-            raise SystemExit(1)
-
-        _integrity_ok = executor_integrity.report(logger)
-        if not _integrity_ok and executor_integrity.strict_mode():
-            logger.error("[STARTUP] FATAL: EXECUTOR_STRICT_INTEGRITY=true and the live "
-                         "environment diverges from repo intent (see above) — refusing to start.")
-            raise SystemExit(1)
-
-    # Fail loud if somehow still slow (should be impossible without ALLOW_SLOW_POLL)
-    if POLL_INTERVAL_S > 90:
-        logger.error(f"[STARTUP] FATAL: POLL_INTERVAL_S={POLL_INTERVAL_S} — refusing to run slow desk")
-        raise SystemExit(2)
-    if POLL_INTERVAL_S != 45 and os.environ.get("ALLOW_SLOW_POLL", "false").lower() != "true":
-        logger.error(f"[STARTUP] FATAL: poll not locked at 45 (got {POLL_INTERVAL_S})")
-        raise SystemExit(2)
-
-    if _kill_switch_active():
+    if KILL_SWITCH:
         logger.warning("[STARTUP] KILL_SWITCH=true — executor will log but not trade")
 
-    # Pre-warm login ONCE
+    # Pre-warm login
     if not PAPER_MODE:
         _ensure_login()
 
     _last_login_check  = time.time()
-    _LOGIN_RECHECK_S   = int(os.environ.get("RH_LOGIN_RECHECK_S", "1800"))  # verify only every 30 min
+    _LOGIN_RECHECK_S   = 1800   # verify session every 30 min
     _auth_retry_count  = 0
-    # Longer backoff — never sub-minute hammering that triggers RH "Trying to log in" loop
-    _AUTH_BACKOFF      = [300, 600, 900, 1800, 3600]
+    _AUTH_BACKOFF      = [60, 120, 300, 600, 1800]  # escalating retry delays on repeated failure
 
     while True:
         try:
-            # Live env refresh -- re-reads executor.env every cycle so an
-            # operator setting KILL_SWITCH=true while this is already running
-            # actually takes effect within one poll instead of requiring a
-            # restart (see _kill_switch_active(), which reads os.environ
-            # fresh on every call rather than a value frozen at import time).
-            # override=True only affects os.environ for THIS process; it
-            # cannot retroactively change already-computed startup constants
-            # like POLL_INTERVAL_S or MIN_GOD_STACKED, so the startup locks
-            # stay locks -- this only unlocks KILL_SWITCH's live reactivity.
-            try:
-                load_dotenv(dotenv_path=os.environ.get("DOTENV_PATH",
-                            os.path.join(os.path.dirname(__file__), "executor.env")),
-                            override=True)
-            except Exception:
-                pass  # a reload failure should never crash a running desk
-
             _reset_daily_if_new_day()
 
-            # Proactive session HEALTH CHECK every 30 min — verify only, no forced re-login
+            # Proactive session health-check every 30 min
             if not PAPER_MODE and time.time() - _last_login_check > _LOGIN_RECHECK_S:
-                ok = _healthcheck_session()
+                _invalidate_login()
+                ok = _ensure_login()
                 _last_login_check = time.time()
                 if ok:
                     _auth_retry_count = 0
                 else:
                     delay = _AUTH_BACKOFF[min(_auth_retry_count, len(_AUTH_BACKOFF) - 1)]
                     _auth_retry_count += 1
-                    logger.error(f"[AUTH] Health/re-auth failed (attempt {_auth_retry_count}) — backing off {delay}s (no login spam)")
+                    logger.error(f"[AUTH] Re-auth failed (attempt {_auth_retry_count}) — backing off {delay}s")
                     time.sleep(delay)
                     continue
 
-            # If flag says logged out, VERIFY first; login only if verify fails
+            # If we lost auth mid-cycle, recover before scanning
             if not PAPER_MODE and not _rh_logged_in:
-                if _rh_verify_session():
-                    _rh_logged_in = True
-                    _auth_retry_count = 0
-                else:
-                    ok = _ensure_login()
-                    if not ok:
-                        delay = _AUTH_BACKOFF[min(_auth_retry_count, len(_AUTH_BACKOFF) - 1)]
-                        _auth_retry_count += 1
-                        logger.error(f"[AUTH] Cannot authenticate (attempt {_auth_retry_count}) — skip cycle, retry in {delay}s")
-                        time.sleep(delay)
-                        continue
-                    _auth_retry_count = 0
+                ok = _ensure_login()
+                if not ok:
+                    delay = _AUTH_BACKOFF[min(_auth_retry_count, len(_AUTH_BACKOFF) - 1)]
+                    _auth_retry_count += 1
+                    logger.error(f"[AUTH] Cannot authenticate (attempt {_auth_retry_count}) — skipping cycle, retry in {delay}s")
+                    time.sleep(delay)
+                    continue
+                _auth_retry_count = 0
 
             rh_status = "PAPER" if PAPER_MODE else "OK"
             if not _market_open():
@@ -2346,19 +1405,12 @@ def main():
             stop_placed   = _check_stop_losses()
             beast_placed  = _poll_beastmode()
             tv_placed     = _poll_tv_pending()
-            iam_placed    = _poll_iam_primary()
             oracle_placed = _poll_oracle()
-            gamma_placed  = _poll_gamma_ramp()
-            opt_book_placed = _manage_option_book()
-            total_placed  = stop_placed + beast_placed + tv_placed + iam_placed + oracle_placed + gamma_placed + opt_book_placed
+            total_placed  = stop_placed + beast_placed + tv_placed + oracle_placed
             if total_placed == 0:
                 logger.info("[POLL] No signals this cycle — waiting for next scan")
             else:
-                logger.info(
-                    f"[POLL] Cycle complete — {total_placed} order(s) placed "
-                    f"({stop_placed} stop/tp, {beast_placed} GOD, {tv_placed} Pine, "
-                    f"{iam_placed} IAM-Primary, {oracle_placed} Oracle, {gamma_placed} GammaRamp→RH)"
-                )
+                logger.info(f"[POLL] Cycle complete — {total_placed} order(s) placed ({stop_placed} stop/take-profit, {beast_placed} GOD MODE, {tv_placed} Pine, {oracle_placed} Oracle)")
         except Exception as e:
             logger.error(f"[LOOP] Unexpected error: {e}")
         logger.info(f"[POLL] Next scan in {POLL_INTERVAL_S}s")

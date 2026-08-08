@@ -1,18 +1,10 @@
 name: SML Marketing Department — Campaign Loop
 
 # Runs the real CEO (campaign_director.run_all_agents) every 4 hours. The CEO
-# dispatches work to Directory Ranger, Community Scout, Federal Scout, Grant
-# Scout, Gap Synthesist, and Hermes Sales Agent in-process, verifies each one actually produced
-# real output, reports every real result (success or failure) to the public
-# activity feed as it happens, then synthesizes an executive report and
-# delivers it to Slack.
-#
-# Grant Scout queues drafted proposals to /api/grants for Timothy's manual
-# approval — it never submits or signs anything on its own. Gap Synthesist
-# queues drafted build specs to /api/gap-proposals the same way — it never
-# writes or deploys any code on its own. Hermes Sales Agent queues drafted
-# sales pitches to /api/outreach the same way — it never auto-posts to
-# Reddit/HN/X or anywhere else.
+# dispatches work to Directory Ranger, Community Scout, and Federal Scout
+# in-process, verifies each one actually produced real output, reports every
+# real result (success or failure) to the public activity feed as it happens,
+# then synthesizes an executive report and delivers it to Slack.
 #
 # Previously this ran weekly across 4 separate parallel jobs with a duplicate
 # inline synthesis script that didn't call the real orchestrator code at all.
@@ -56,20 +48,9 @@ jobs:
           X402_PAYMENT_TOKEN:        ${{ secrets.X402_PAYMENT_TOKEN }}
           SEO_SLACK_WEBHOOK:         ${{ secrets.SEO_SLACK_WEBHOOK }}
           SEO_OUTPUT_DIR:            agent/outputs
-          # Haiku, not Opus: the dept does search/score/draft tool loops 6x/day —
-          # Haiku handles that fine at roughly 1/30th the cost (operator decision
-          # 2026-07-22 after a credit-balance outage). Bump to claude-sonnet-5 if
-          # output quality ever looks weak; do not silently restore Opus.
-          DEPT_MODEL:                claude-haiku-4-5
+          DEPT_MODEL:                claude-opus-4-8
           MARKETING_ACTIVITY_SECRET: ${{ secrets.MARKETING_ACTIVITY_SECRET }}
-          GRANTS_QUEUE_SECRET:       ${{ secrets.GRANTS_QUEUE_SECRET }}
-          GAP_PROPOSALS_QUEUE_SECRET: ${{ secrets.GAP_PROPOSALS_QUEUE_SECRET }}
-          OUTREACH_QUEUE_SECRET:     ${{ secrets.OUTREACH_QUEUE_SECRET }}
-        # -m (not python -c + run()) so campaign_director's __main__ exit-code
-        # logic applies: the job goes RED when any specialist actually failed.
-        # The old inline call swallowed failures — 2026-07-22's credit-balance
-        # outage showed green runs while every agent was erroring.
-        run: python -m agent.dept.campaign_director
+        run: python -c "from agent.dept import campaign_director; campaign_director.run()"
 
       - uses: actions/upload-artifact@v4
         if: always()

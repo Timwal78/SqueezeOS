@@ -304,17 +304,6 @@ def get_timesales(symbol: str, interval: str = "15min", days_back: int = 35) -> 
     return result
 
 
-def _extract_error(resp: Optional[Dict[str, Any]]) -> str:
-    """Tradier's error shape isn't fully consistent -- 'error' is sometimes a
-    single string, sometimes a list of strings (multiple validation errors on
-    one request). Handles both instead of silently falling back to
-    'unknown error' whenever the shape isn't the single-string case."""
-    err = (resp or {}).get("errors", {}).get("error", "unknown error")
-    if isinstance(err, list):
-        return "; ".join(str(e) for e in err) if err else "unknown error"
-    return str(err)
-
-
 def _post(path: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     headers = _headers()
     if not headers:
@@ -330,16 +319,6 @@ def _post(path: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             logger.error("[TRADIER] 401 Unauthorized — TRADIER_API_KEY rejected")
             return None
         logger.warning(f"[TRADIER] POST {path} HTTP {r.status_code}: {r.text[:400]}")
-        # Tradier's 4xx error bodies are real JSON with an "errors" key -- return
-        # it (instead of None) so callers can surface the REAL rejection reason.
-        # Before this, every order failure here fell back to a generic "unknown
-        # error" downstream, discarding exactly the text an operator needs to
-        # debug a rejected order (e.g. "Invalid parameter, duration: post market
-        # no longer available.").
-        try:
-            return r.json()
-        except ValueError:
-            return None
     except requests.RequestException as e:
         logger.warning(f"[TRADIER] POST {path} network error: {e}")
     return None
@@ -429,13 +408,11 @@ def get_position(symbol: str) -> Optional[Dict[str, Any]]:
 
 def place_equity_order(symbol: str, quantity: int, side: str,
                        order_type: str = "market", duration: str = "day",
-                       limit_price: Optional[float] = None,
-                       stop_price: Optional[float] = None) -> Dict[str, Any]:
+                       limit_price: Optional[float] = None) -> Dict[str, Any]:
     """
     Place a live equity order via Tradier.
     side: 'buy' | 'sell'
     limit_price: required when order_type='limit' (extended-hours orders)
-    stop_price:  required when order_type='stop' or 'stop_limit' (protective stops)
     Returns {'status': 'success', 'order_id': ...} or {'status': 'error', 'message': ...}
     """
     acct = _account_id()
@@ -443,8 +420,6 @@ def place_equity_order(symbol: str, quantity: int, side: str,
         return {"status": "error", "message": "TRADIER_ACCOUNT_ID not set"}
     if not _api_key():
         return {"status": "error", "message": "TRADIER_API_KEY not set"}
-    if order_type in ("stop", "stop_limit") and not stop_price:
-        return {"status": "error", "message": f"stop_price required for order_type={order_type}"}
 
     payload = {
         "class":    "equity",
@@ -454,19 +429,17 @@ def place_equity_order(symbol: str, quantity: int, side: str,
         "type":     order_type,
         "duration": duration,
     }
-    if limit_price and order_type in ("limit", "stop_limit"):
+    if limit_price and order_type == "limit":
         payload["price"] = f"{limit_price:.2f}"
-    if stop_price and order_type in ("stop", "stop_limit"):
-        payload["stop"] = f"{stop_price:.2f}"
     logger.info(f"[TRADIER] Placing equity order: {side.upper()} {quantity}x {symbol} ({order_type})")
     resp = _post(f"/accounts/{acct}/orders", payload)
     if resp and resp.get("order", {}).get("id"):
         order_id = resp["order"]["id"]
         logger.info(f"[TRADIER] Order placed ✅ order_id={order_id}")
         return {"status": "success", "order_id": order_id, "raw": resp}
-    err = _extract_error(resp)
+    err = (resp or {}).get("errors", {}).get("error", "unknown error")
     logger.error(f"[TRADIER] Order failed: {err}")
-    return {"status": "error", "message": err}
+    return {"status": "error", "message": str(err)}
 
 
 def place_option_order(option_symbol: str, quantity: int, side: str,
@@ -501,79 +474,9 @@ def place_option_order(option_symbol: str, quantity: int, side: str,
         order_id = resp["order"]["id"]
         logger.info(f"[TRADIER] Option order placed ✅ order_id={order_id}")
         return {"status": "success", "order_id": order_id, "raw": resp}
-    err = _extract_error(resp)
+    err = (resp or {}).get("errors", {}).get("error", "unknown error")
     logger.error(f"[TRADIER] Option order failed: {err}")
-    return {"status": "error", "message": err}
-
-
-def get_order_status(order_id) -> Optional[Dict[str, Any]]:
-    """
-    Fetch the current status of a previously placed order.
-    Returns Tradier's raw order dict — notable fields: status
-    ("open"/"partially_filled"/"filled"/"rejected"/"canceled"/"expired"/"error"),
-    avg_fill_price, exec_quantity. Returns None if unavailable.
-    """
-    acct = _account_id()
-    if not acct:
-        logger.error("[TRADIER] TRADIER_ACCOUNT_ID not set — cannot fetch order status")
-        return None
-    data = _get(f"/accounts/{acct}/orders/{order_id}", {"includeTags": "false"})
-    if not data:
-        return None
-    order = data.get("order")
-    return order if isinstance(order, dict) else None
-
-
-def poll_order_fill(order_id, timeout_s: float = 8.0, interval_s: float = 1.0) -> Dict[str, Any]:
-    """
-    Poll Tradier for fill confirmation on a just-placed order.
-    Returns {"filled": bool, "status": str, "avg_fill_price": float|None}.
-    Fails safe: on timeout or an error/rejected/canceled/expired terminal status,
-    "filled" is False and callers must not assume the entry_price they already
-    have is accurate — they placed an order whose true fill (if any) is unverified.
-    """
-    deadline = time.time() + max(0.0, timeout_s)
-    last_status = "unknown"
-    terminal_bad = {"rejected", "canceled", "expired", "error"}
-    while True:
-        order = get_order_status(order_id)
-        if order:
-            last_status = str(order.get("status", "unknown")).lower()
-            if last_status == "filled":
-                try:
-                    avg_price = float(order.get("avg_fill_price") or 0) or None
-                except (TypeError, ValueError):
-                    avg_price = None
-                return {"filled": True, "status": last_status, "avg_fill_price": avg_price}
-            if last_status in terminal_bad:
-                return {"filled": False, "status": last_status, "avg_fill_price": None}
-        if time.time() >= deadline:
-            break
-        time.sleep(interval_s)
-    return {"filled": False, "status": last_status, "avg_fill_price": None}
-
-
-def get_spread_pct(symbol: str) -> Optional[float]:
-    """
-    Return the current bid-ask spread as a percentage of the midpoint, or None
-    if a quote/valid bid+ask isn't available. Used to guard market-order entries
-    against thin, wide-spread names where a marketable order eats the whole
-    spread as instant slippage.
-    """
-    quote = get_quote(symbol)
-    if not quote:
-        return None
-    try:
-        bid = float(quote.get("bid") or 0)
-        ask = float(quote.get("ask") or 0)
-    except (TypeError, ValueError):
-        return None
-    if bid <= 0 or ask <= 0 or ask < bid:
-        return None
-    mid = (bid + ask) / 2.0
-    if mid <= 0:
-        return None
-    return round((ask - bid) / mid * 100.0, 4)
+    return {"status": "error", "message": str(err)}
 
 
 class TradierBroker:
@@ -670,9 +573,6 @@ __all__ = [
     "get_chain",
     "get_quote",
     "get_quotes_batch",
-    "get_order_status",
-    "poll_order_fill",
-    "get_spread_pct",
     "get_history_df",
     "get_history_batch",
     "get_option_chain_schwab_format",

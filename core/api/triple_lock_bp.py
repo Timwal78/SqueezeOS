@@ -147,7 +147,7 @@ def info():
     """Free discovery: what this tier is and what triggers it."""
     return jsonify({
         "tier":              "TRIPLE_LOCK_VERDICT",
-        "price_rlusd":       "0.001",
+        "price_rlusd":       0.25,
         "fires_on":          ["TRIPLE_LOCK_BULL", "TRIPLE_LOCK_BEAR"],
         "always_returns":    "NO_TRIPLE_LOCK with blocking engine when lock is not firing",
         "engines_required":  3,
@@ -191,7 +191,7 @@ def demo():
 
 @triple_lock_bp.route("", methods=["POST", "GET"])
 @triple_lock_bp.route("/", methods=["POST", "GET"])
-@dual_payment(price_usdc="0.001", description="TRIPLE_LOCK_VERDICT — the rarest premium signal in the SqueezeOS suite. Returns BULL or BEAR only when all three proprietary engines (PRICE stretch + VOLUME dark-pool kinetics + PRICE ribbon harmonics) agree on direction. When the lock is not firing, returns NO_TRIPLE_LOCK with the blocking engine identified — itself an actionable 'do not max-size' signal. 60-second per-symbol cache. Use POST body {symbol: 'TSLA'} or GET ?symbol=TSLA.")
+@dual_payment(price_usdc="0.25", description="TRIPLE_LOCK_VERDICT — the rarest premium signal in the SqueezeOS suite. Returns BULL or BEAR only when all three proprietary engines (PRICE stretch + VOLUME dark-pool kinetics + PRICE ribbon harmonics) agree on direction. When the lock is not firing, returns NO_TRIPLE_LOCK with the blocking engine identified — itself an actionable 'do not max-size' signal. 60-second per-symbol cache. Use POST body {symbol: 'TSLA'} or GET ?symbol=TSLA.")
 def triple_lock():
     body = request.get_json(silent=True) or {}
     symbol = (body.get("symbol") or request.args.get("symbol") or "IWM").upper().strip()

@@ -22,17 +22,4 @@ RUN adduser --system --no-create-home --group appuser \
 USER appuser
 
 EXPOSE 8182
-# Starter plan = 1 instance. Do not recycle the sole worker via request caps:
-# recycle = full 502 window → Render healthCheckPath /api/status times out at
-# 5s → server_failed → restart thrash (looks like "cold start").
-# More threads absorb beastmode/oracle/IAM scan concurrency on catalyst days
-# (Fed / BOJ / Korea / JPY risk).
-CMD ["gunicorn", \
-     "--bind", "0.0.0.0:8182", \
-     "--workers", "1", \
-     "--threads", "8", \
-     "--timeout", "120", \
-     "--graceful-timeout", "30", \
-     "--keep-alive", "5", \
-     "--worker-tmp-dir", "/dev/shm", \
-     "core.app:create_app()"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8182", "--workers", "1", "--threads", "2", "--timeout", "120", "--max-requests", "500", "--max-requests-jitter", "50", "core.app:create_app()"]

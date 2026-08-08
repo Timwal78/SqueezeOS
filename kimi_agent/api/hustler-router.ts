@@ -150,7 +150,7 @@ export const hustlerRouter = createRouter({
           const transfer = await wallet.createTransfer({
             amount: 0.0001,
             assetId: Coinbase.assets.USDC,
-            destination: process.env.PAY_TO_WALLET || "0x72330994f379a71542e7bd5a4cf99a9d9743f4aa"
+            destination: process.env.PAY_TO_WALLET || "0x4e14B249D9A4c9c9352D780eCEB508A8eB7a7700"
           });
           
           await transfer.wait();

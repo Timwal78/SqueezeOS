@@ -35,7 +35,7 @@ CDP_API_KEY_SECRET = os.environ.get("CDP_API_KEY_SECRET", "")
 _CDP_CONFIGURED    = bool(CDP_API_KEY_ID and CDP_API_KEY_SECRET)
 
 NETWORK      = os.environ.get("X402_NETWORK", "base-sepolia").strip().lower()
-PAY_TO       = os.environ.get("X402_PAY_TO", "0x72330994f379a71542e7bd5a4cf99a9d9743f4aa")
+PAY_TO       = os.environ.get("X402_PAY_TO", "0x4e14B249D9A4c9c9352D780eCEB508A8eB7a7700")
 # Defaults to the CDP-hosted mainnet facilitator once CDP creds are present,
 # otherwise the public signup-free testnet facilitator. Explicit
 # X402_FACILITATOR always wins over both.
@@ -280,7 +280,6 @@ def x402_guard(price_usdc: str, description: str, discoverable: bool = True):
             passed_key = (
                 request.headers.get("X-Owner-Key")
                 or request.headers.get("X-API-Key")
-                or request.headers.get("X-Operator-Key")
                 or bearer_key
             )
             agent_keys = [k.strip() for k in os.environ.get("AGENT_API_KEYS", "").split(",") if k.strip()]
@@ -352,15 +351,7 @@ def x402_guard(price_usdc: str, description: str, discoverable: bool = True):
 
 
 def register_x402_discovery(app):
-    """Idempotent — safe if create_app (or hot reload) calls this twice."""
-    if getattr(app, "_sml_x402_discovery_registered", False):
-        return app
-    # Also skip if endpoint already bound (failed half-register / double import)
-    if "_x402_discovery" in app.view_functions:
-        app._sml_x402_discovery_registered = True
-        return app
-
-    @app.route("/.well-known/x402", endpoint="_x402_discovery")
+    @app.route("/.well-known/x402")
     def _x402_discovery():
         cfg = USDC.get(NETWORK, USDC["base-sepolia"])
         return jsonify({
@@ -401,5 +392,4 @@ def register_x402_discovery(app):
                 for d in DISCOVERY
             ],
         })
-    app._sml_x402_discovery_registered = True
     return app

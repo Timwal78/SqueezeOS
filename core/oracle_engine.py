@@ -168,21 +168,8 @@ class OracleEngine:
                         pass
                         
             result = sml.compute_all(symbol, market_history=market_history)
-            # compute_all() never returns a "fractal_score" key — this used to
-            # always read 0 here, permanently zeroing this term's 30% weight
-            # in analyze()'s composite score. "confidence" is compute_all()'s
-            # real 0-100 composite (dep-alignment/HTF/separation/confirmation/
-            # regime blend, sml_engine.py:793) — the correct stand-in.
-            score = result.get("confidence", 0) if isinstance(result, dict) else 0
+            score = result.get("fractal_score", 0) if isinstance(result, dict) else 0
             lifecycle = result.get("lifecycle_text", "DORMANT") if isinstance(result, dict) else "DORMANT"
-            # The real Harmonic Convergence flag (stacked-EMA + compression +
-            # MTF-alignment + net-pressure, sml_engine.py:903) — NOT the same
-            # thing as `lifecycle`, which is only ever one of SMLLifecycle's
-            # enum values (Dormant/Early/.../Invalid) and can never equal the
-            # literal string "HARMONIC_CONVERGENCE".
-            harmonic_convergence = bool(
-                result.get("kinetic_matrix", {}).get("harmonic_convergence", False)
-            ) if isinstance(result, dict) else False
             anchors = FRACTAL_ANCHORS.get(symbol, [])
             best = max(anchors, key=lambda a: a["multiplier"] * score, default=None)
             return {
@@ -190,7 +177,6 @@ class OracleEngine:
                 "fractal_match": best["name"] if best else "None",
                 "target_pct": best["target_pct"] if best else 0,
                 "lifecycle": lifecycle,
-                "harmonic_convergence": harmonic_convergence,
             }
         except Exception as e:
             logger.warning(f"[Oracle] Fractal signal unavailable for {symbol}: {e}")
@@ -319,147 +305,6 @@ class OracleEngine:
             parts.append(f"composite score {round(score)}")
         return ". ".join(parts).capitalize() + "."
 
-
-    def _ema_bias(self, prop_ema: dict) -> str:
-        """Map proprietary EMA consensus to bullish/bearish/neutral bias."""
-        c = (prop_ema or {}).get("consensus") or "NEUTRAL"
-        c = str(c).upper()
-        if c in ("TRIPLE_LOCK_BULL", "BULL_LADDER", "BULLISH", "BULL"):
-            return "bullish"
-        if c in ("TRIPLE_LOCK_BEAR", "BEAR_LADDER", "BEARISH", "BEAR"):
-            return "bearish"
-        if "BULL" in c:
-            return "bullish"
-        if "BEAR" in c:
-            return "bearish"
-        return "neutral"
-
-    def _build_trade_decision(self, payload: dict, prop_ema=None) -> dict:
-        """
-        Real-money gate on top of Oracle directive.
-        Prevents UI from looking 'bullish' while directive is defensive HOLD at low confidence.
-        """
-        import os
-        min_conf = float(os.environ.get("ORACLE_MIN_CONFIDENCE", "70") or 70)
-        # hard floor for live money even if env mis-set low
-        min_conf = max(min_conf, 60.0)
-
-        directive = str(payload.get("directive") or "SHIELD").upper()
-        conf = float(payload.get("confidence") or 0)
-        price = float(payload.get("price") or 0)
-        degraded = bool(payload.get("degraded"))
-        stop = payload.get("stop")
-        tp1 = payload.get("tp1")
-        sweet = bool(payload.get("sweet_spot"))
-        gamma_flip = bool(payload.get("gamma_flip"))
-        triple = bool(payload.get("triple_lock"))
-        vpin = float(payload.get("vpin") or 0)
-        bias = self._ema_bias(prop_ema or payload.get("proprietary_ema") or {})
-
-        blockers = []
-        if degraded:
-            blockers.append("degraded_oracle")
-        if price <= 0:
-            blockers.append("no_price")
-        if conf < min_conf:
-            blockers.append(f"confidence_{conf:.0f}_lt_min_{min_conf:.0f}")
-        if directive in ("HOLD", "SHIELD"):
-            blockers.append(f"directive_{directive.lower()}")
-        if stop is None and directive == "BUY":
-            blockers.append("missing_stop")
-        if tp1 is None and directive == "BUY":
-            blockers.append("missing_tp1")
-        if vpin >= 0.75:
-            blockers.append("vpin_toxic")
-
-        # Alignment: EMA bias vs directive
-        dir_bias = {
-            "BUY": "bullish",
-            "SELL": "bearish",
-            "HOLD": "neutral",
-            "SHIELD": "neutral",
-        }.get(directive, "neutral")
-        aligned = (bias == dir_bias) or (directive in ("HOLD", "SHIELD") and bias == "neutral")
-        if bias != "neutral" and dir_bias == "neutral" and conf < min_conf:
-            blockers.append(f"ema_{bias}_but_directive_{directive.lower()}_low_conf")
-        if bias == "bullish" and directive == "SELL":
-            blockers.append("ema_bull_vs_directive_sell")
-            aligned = False
-        if bias == "bearish" and directive == "BUY":
-            blockers.append("ema_bear_vs_directive_buy")
-            aligned = False
-
-        # Action for real money
-        if "no_price" in blockers or "degraded_oracle" in blockers:
-            action = "NO_TRADE"
-        elif directive == "SHIELD" or conf < 5:
-            action = "NO_TRADE"
-        elif "vpin_toxic" in blockers:
-            action = "NO_TRADE"
-        elif directive == "BUY" and conf >= min_conf:
-            action = "BUY"
-        elif directive == "SELL" and conf >= min_conf:
-            action = "SELL"
-        elif directive in ("BUY", "SELL") and conf >= max(40.0, min_conf * 0.6):
-            action = "WATCH"
-        elif conf >= 40 and directive == "HOLD":
-            action = "WATCH"
-        else:
-            action = "NO_TRADE"
-
-        tradeable = action in ("BUY", "SELL") and not degraded and price > 0
-
-        # UI-safe one-liner (fixes "Bullish 12/10" class confusion)
-        headline = (
-            f"{action} · directive {directive} · conf {conf:.0f}/{min_conf:.0f} · EMA {bias}"
-            + (" · ALIGNED" if aligned else " · DIVERGED")
-        )
-        if tradeable:
-            note = f"Tradeable {action} at confidence {conf:.0f} (min {min_conf:.0f})."
-        elif action == "WATCH":
-            note = "Watch only — not cleared for live size. Wait for confidence/alignment."
-        else:
-            note = "Do not trade live off this card. " + (
-                "Directive is defensive while EMA leans " + bias + "."
-                if bias != "neutral" and directive in ("HOLD", "SHIELD")
-                else "Failed real-money gates."
-            )
-
-        return {
-            "action": action,
-            "tradeable": tradeable,
-            "min_confidence": min_conf,
-            "confidence": conf,
-            "directive": directive,
-            "effective_bias": bias,
-            "aligned": aligned,
-            "blockers": blockers,
-            "headline": headline,
-            "note": note,
-            "size_hint": "flat" if not tradeable else ("starter" if conf < 82 else "full"),
-            "requires": {
-                "min_confidence": min_conf,
-                "directive_in": ["BUY", "SELL"],
-                "stop_and_tp": True,
-                "not_degraded": True,
-            },
-            "levels": {
-                "price": price,
-                "stop": stop,
-                "tp1": tp1,
-                "tp2": payload.get("tp2"),
-                "gamma_wall_above": payload.get("gamma_wall_above"),
-                "gamma_wall_below": payload.get("gamma_wall_below"),
-            },
-            "flags": {
-                "sweet_spot": sweet,
-                "gamma_flip": gamma_flip,
-                "triple_lock": triple,
-                "degraded": degraded,
-            },
-        }
-
-
     def analyze(self, symbol: str) -> dict:
         """
         Main Oracle entry point. Returns full Driver/Navigator payload.
@@ -493,22 +338,9 @@ class OracleEngine:
         prop_ema = self._cached(f"prop_ema_{symbol}", lambda: self._get_proprietary_ema(symbol))
 
         # 3. Composite scoring
-        # VPIN (Volume-Synchronized Probability of Informed Trading) is a pure
-        # order-flow *imbalance magnitude* — confirmed direction-agnostic by
-        # its own implementation (mmle_engine.py's VPINEngine measures
-        # |buy_volume - sell_volume| / total, with no sign). It used to add
-        # up to 40 points here — the single largest weighted term in this
-        # composite — toward a BUY directive regardless of which side the
-        # imbalance was actually on, so heavy informed *selling* pressure
-        # inflated the BUY score exactly when it shouldn't have. This
-        # contradicted both _score_to_directive() below (which already
-        # treats vpin > 0.75 as bearish evidence under MACRO_COLLAPSE) and
-        # the sibling core/rdt_engine.py, which treats vpin > 0.75 as an
-        # immediate SHIELD ahead of every other check. VPIN now only
-        # participates through those existing risk gates, not as a BUY
-        # booster — operator-confirmed 2026-07-20.
         score = 0
         score += fractal.get("fractal_score", 0) * 0.30
+        score += mmle.get("vpin", 0) * 40  # VPIN 0–1 → 0–40 pts
         score += gflow.get("gamma_score", 0) * 0.30
         if gflow.get("gamma_flip"):
             score += 15
@@ -538,7 +370,7 @@ class OracleEngine:
         directive = self._score_to_directive(score, regime, gamma_flip, vpin)
         
         # [!!!] HARMONIC CONVERGENCE OVERRIDE [!!!]
-        if fractal.get("harmonic_convergence"):
+        if fractal.get("lifecycle") == "HARMONIC_CONVERGENCE":
             directive = "BUY"
             score = 100.0
             regime = "ALPHA_EXPANSION"  # Force through CEO regime gates
@@ -567,7 +399,7 @@ class OracleEngine:
             prop_consensus=prop_ema.get("consensus", "NEUTRAL"),
         )
         
-        if fractal.get("harmonic_convergence"):
+        if fractal.get("lifecycle") == "HARMONIC_CONVERGENCE":
             reason = f"[!!!] HARMONIC CONVERGENCE DETECTED [!!!] {reason}"
 
         payload = {
@@ -607,16 +439,7 @@ class OracleEngine:
             "triple_lock": prop_ema.get("triple_lock_bull") or prop_ema.get("triple_lock_bear"),
         }
 
-        # Real-money decision layer (Abacus / desk UI must prefer this over raw EMA cosmetics)
-        payload["effective_bias"] = self._ema_bias(prop_ema)
-        payload["trade_decision"] = self._build_trade_decision(payload, prop_ema)
-        payload["tradeable"] = bool(payload["trade_decision"].get("tradeable"))
-        payload["action"] = payload["trade_decision"].get("action")
-
-        logger.info(
-            f"[Oracle] {symbol} → {directive} | Score: {round(score)} | "
-            f"action={payload.get('action')} tradeable={payload.get('tradeable')} | {reason}"
-        )
+        logger.info(f"[Oracle] {symbol} → {directive} | Score: {round(score)} | {reason}")
         return payload
 
 
@@ -654,87 +477,9 @@ _oracle_lock = threading.Lock()
 _oracle_thread_started = False
 
 
-def _oracle_merge_result(sym: str, result: dict) -> None:
-    """Thread-safe merge of one symbol into batch cache. Never overwrite real data with warming stubs."""
-    if not isinstance(result, dict):
-        return
-    # Refuse to clobber a priced result with a warming/degraded seed
-    if result.get("warming") and not result.get("price"):
-        with _oracle_lock:
-            existing = (_oracle_cache.get("results") or {}).get(sym) or {}
-            if existing.get("price") and not existing.get("warming"):
-                return
-    with _oracle_lock:
-        merged = dict(_oracle_cache.get("results") or {})
-        prev = merged.get(sym) or {}
-        # Prefer non-warming, priced payloads
-        if prev.get("price") and not prev.get("warming") and result.get("warming"):
-            return
-        merged[sym] = result
-        _oracle_cache["results"] = merged
-        _oracle_cache["ts"] = time.time()
-        _oracle_cache["universe_size"] = max(_oracle_cache.get("universe_size") or 0, len(merged))
-        if result.get("price") or not result.get("warming"):
-            lg = dict(_oracle_last_good.get("results") or {})
-            if not (lg.get(sym) or {}).get("warming") or result.get("price"):
-                lg[sym] = result
-                _oracle_last_good["results"] = lg
-                _oracle_last_good["ts"] = time.time()
-                _oracle_last_good["universe_size"] = max(_oracle_last_good.get("universe_size") or 0, len(lg))
-
-
 def _oracle_batch_refresh_loop():
     logger.info("[Oracle] Background batch refresh thread active (every %ss)", _ORACLE_BATCH_REFRESH_S)
-    # Seed last-good immediately so /api/oracle/{symbol} never cold-hangs waiting
-    # for the first full analyze cycle (can take 40s+/symbol when engines block).
-    seed_ts = time.time()
-    seed = {
-        s: {
-            "symbol": s,
-            "timestamp": datetime.now().isoformat(),
-            "directive": "SHIELD",
-            "confidence": 0,
-            "price": 0,
-            "reason": "Oracle batch warming — first live pass in progress.",
-            "sweet_spot": False,
-            "regime": "SHIELD",
-            "degraded": True,
-            "warming": True,
-        }
-        for s in ORACLE_SYMBOLS
-    }
-    with _oracle_lock:
-        if not _oracle_cache["results"]:
-            _oracle_cache["results"] = dict(seed)
-            _oracle_cache["universe_size"] = len(seed)
-            _oracle_cache["ts"] = seed_ts
-            _oracle_last_good["results"] = dict(seed)
-            _oracle_last_good["universe_size"] = len(seed)
-            _oracle_last_good["ts"] = seed_ts
-    time.sleep(2)  # brief services init — was 8s, cut so swarm gets seed faster
-
-    import concurrent.futures as _cf
-    # Long-lived pool — never context-manage (shutdown wait re-hangs).
-    pool = _cf.ThreadPoolExecutor(max_workers=4, thread_name_prefix="oracle-batch")
-
-    def _submit_analyze(engine, sym: str):
-        def _done(fut, _sym=sym):
-            try:
-                if fut.cancelled():
-                    return
-                res = fut.result()
-                if isinstance(res, dict):
-                    res = dict(res)
-                    res.pop("warming", None)  # real result
-                    res["degraded"] = bool(res.get("degraded"))
-                    _oracle_merge_result(_sym, res)
-                    logger.info("[Oracle] batch late/ok merge %s → %s", _sym, res.get("directive"))
-            except Exception as e:
-                logger.error("[Oracle] Batch callback error for %s: %s", _sym, e)
-        fut = pool.submit(engine.analyze, sym)
-        fut.add_done_callback(_done)
-        return fut
-
+    time.sleep(8)  # let services init
     while True:
         try:
             from core.legacy import get_service  # deferred — legacy.py imports this module at top level
@@ -744,57 +489,17 @@ def _oracle_batch_refresh_loop():
                 "sml":           get_service("sml"),
             }
             live_universe = list(state.quotes.keys()) if state.quotes else None
-            # ALWAYS analyze anchors first (swarm desk), then a capped rest.
-            anchor_order = ["AMC", "GME", "IWM", "SPY", "QQQ", "NVDA", "TSLA", "AMD", "SOFI", "PLTR"]
-            if live_universe:
-                _OB_CAP = int(os.environ.get("ORACLE_BATCH_CAP", "20"))  # smaller — quality over breadth
-                anchors = [s for s in anchor_order if s in live_universe or s in ORACLE_SYMBOLS]
-                # Force ORACLE_SYMBOLS even if not yet in quotes
-                for s in ORACLE_SYMBOLS:
-                    if s not in anchors:
-                        anchors.insert(0, s)
-                rest = [s for s in live_universe if s not in anchors]
-                batch_symbols = list(dict.fromkeys(anchors + rest))[:_OB_CAP]
-            else:
-                batch_symbols = list(dict.fromkeys(list(ORACLE_SYMBOLS) + anchor_order[:4]))
-
-            engine = OracleEngine(services)
-            # Phase 1: anchors only — wait up to 45s and merge whatever finishes
-            anchors = [s for s in batch_symbols if s in set(ORACLE_SYMBOLS) | set(anchor_order[:6])]
-            rest = [s for s in batch_symbols if s not in anchors]
-            _anchor_budget = float(os.environ.get("ORACLE_ANCHOR_BUDGET_S", "45"))
-
-            futs = {}
-            for sym in anchors:
-                futs[_submit_analyze(engine, sym)] = sym
-
-            done_n = 0
-            try:
-                for fut in _cf.as_completed(futs, timeout=_anchor_budget):
-                    done_n += 1
-                    # result already merged via callback
-            except _cf.TimeoutError:
-                logger.warning(
-                    "[Oracle] anchor pass budget %.0fs — %s/%s callbacks will still merge late",
-                    _anchor_budget, done_n, len(futs),
-                )
-
-            # Phase 2: fire rest without waiting (callbacks merge when ready)
-            for sym in rest[: max(0, int(os.environ.get("ORACLE_BATCH_CAP", "20")) - len(anchors))]:
-                _submit_analyze(engine, sym)
-
+            batch_symbols = live_universe if live_universe else ORACLE_SYMBOLS
+            results = run_oracle_batch(batch_symbols, services)
             with _oracle_lock:
-                mkt_n = len(live_universe) if live_universe else len(batch_symbols)
-                n = len(_oracle_cache.get("results") or {})
-                _oracle_cache["universe_size"] = max(n, mkt_n)
-                priced = sum(
-                    1 for v in (_oracle_cache.get("results") or {}).values()
-                    if isinstance(v, dict) and v.get("price") and not v.get("warming")
-                )
-            logger.info(
-                "[Oracle] batch cycle submitted anchors=%s rest=%s cache=%s priced=%s mkt=%s",
-                len(anchors), len(rest), n, priced, mkt_n,
-            )
+                _oracle_cache["results"]      = results
+                _oracle_cache["universe_size"] = len(batch_symbols)
+                _oracle_cache["ts"]            = time.time()
+                if results:
+                    _oracle_last_good["results"]      = results
+                    _oracle_last_good["universe_size"] = len(batch_symbols)
+                    _oracle_last_good["ts"]            = time.time()
+            logger.info(f"[Oracle] batch cache refreshed — {len(results)} symbols")
         except Exception as e:
             logger.error(f"[Oracle] batch refresh error: {e}")
         time.sleep(_ORACLE_BATCH_REFRESH_S)
